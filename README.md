@@ -91,8 +91,23 @@ See [`.env.example`](.env.example) for the full list.
 | `npm run build` | Production build |
 | `npm run start` | Serve production build |
 | `npm run lint` | Lint (`next lint`) |
+| `npm run test:e2e` | Playwright smoke tests (add `:headed` to watch) |
 | `npx prisma db push` | Sync schema to DB |
 | `npx prisma db seed` | Seed first admin |
+
+## Testing
+
+End-to-end smoke tests live in [`e2e/`](e2e/) (Playwright). They cover the home page,
+sign-in, admin login, and that the admin pages render without server errors.
+
+```bash
+npm run test:e2e            # starts the app and runs headless
+npm run test:e2e:headed     # visible browser
+BASE_URL=https://crm-preview.ersah.in npm run test:e2e   # against a deployed env
+```
+
+CI runs these on every PR ([`.github/workflows/e2e.yml`](.github/workflows/e2e.yml)) against
+an isolated MySQL service, so a regression fails the check before merge.
 
 ## Deployment
 
