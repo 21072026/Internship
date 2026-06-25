@@ -1,0 +1,8 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Internship CRM">
+  <rect width="64" height="64" rx="14" fill="#1D4ED8"/>
+  <!-- graduation cap -->
+  <path d="M32 16 L52 25 L32 34 L12 25 Z" fill="#ffffff"/>
+  <path d="M22 30 L22 40 C22 43 41 43 41 40 L41 30 L32 34 Z" fill="#bfdbfe"/>
+  <path d="M52 25 L52 37" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="52" cy="39" r="2.5" fill="#ffffff"/>
+</svg>
