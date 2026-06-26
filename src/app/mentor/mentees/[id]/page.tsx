@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Plus, Trash2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { pipelineOptions } from '@/lib/pipeline';
 
 interface InteractionLog {
   id: string;
@@ -20,6 +21,7 @@ interface InteractionLog {
 interface RelationDetail {
   id: string;
   status: string;
+  pipelineStatus: string;
   startDate: string;
   mentee: {
     fullName: string;
@@ -51,6 +53,8 @@ export default function MenteeDetailPage() {
   const [formData, setFormData] = useState({ date: '', notes: '', type: 'Meeting' });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [savingStage, setSavingStage] = useState(false);
+  const [stageError, setStageError] = useState('');
 
   const fetchRelation = useCallback(async () => {
     const res = await fetch(`/api/mentorship/${id}`);
@@ -95,6 +99,27 @@ export default function MenteeDetailPage() {
     await fetchRelation();
   };
 
+  const handlePipelineChange = async (pipelineStatus: string) => {
+    setSavingStage(true);
+    setStageError('');
+    try {
+      const res = await fetch(`/api/mentorship/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pipelineStatus }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || 'Failed to update stage');
+      }
+      await fetchRelation();
+    } catch (err) {
+      setStageError(err instanceof Error ? err.message : 'Failed to update stage');
+    } finally {
+      setSavingStage(false);
+    }
+  };
+
   if (loading) return <div className="text-center py-12 text-gray-400">Loading...</div>;
   if (!relation) return <div className="text-center py-12 text-gray-400">Relation not found</div>;
 
@@ -110,7 +135,19 @@ export default function MenteeDetailPage() {
             <h1 className="text-2xl font-bold text-gray-900">{relation.mentee.fullName}</h1>
             <p className="text-gray-500">{relation.mentee.email}</p>
           </div>
-          <StatusBadge status={relation.status} />
+          <div className="flex flex-col items-end gap-2 min-w-[240px]">
+            <StatusBadge status={relation.status} />
+            <div className="w-full">
+              <Select
+                label="Pipeline aşaması"
+                options={pipelineOptions}
+                value={relation.pipelineStatus}
+                disabled={savingStage}
+                onChange={(e) => handlePipelineChange(e.target.value)}
+              />
+              {stageError && <p className="text-xs text-red-600 mt-1">{stageError}</p>}
+            </div>
+          </div>
         </div>
       </div>
 

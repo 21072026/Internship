@@ -2,10 +2,13 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { PIPELINE_STATUSES } from '@/lib/pipeline';
 
 const updateRelationSchema = z.object({
   status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
+  pipelineStatus: z.enum(PIPELINE_STATUSES).optional(),
   companyId: z.string().nullable().optional(),
 });
 
@@ -95,7 +98,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     const updated = await prisma.mentorshipRelation.update({
       where: { id },
-      data: parsed.data,
+      data: parsed.data as Prisma.MentorshipRelationUncheckedUpdateInput,
       include: {
         mentor: { select: { id: true, fullName: true, email: true } },
         mentee: { select: { id: true, fullName: true, email: true } },
