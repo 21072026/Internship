@@ -25,6 +25,22 @@ enum InteractionType {
   Email
 }
 
+enum PipelineStatus {
+  APPLIED_100
+  APPROVED_220
+  INTERVIEW_250
+  INTRODUCTION_270
+  INTERNSHIP_STARTING_300
+  INTERNSHIP_ONGOING_450
+  DROPPED_OUT_460
+  INTERNSHIP_COMPLETED_490
+  SEEKING_JOB_500
+  HIRABLE_600
+  HIRED_660
+  FOUND_JOB_700
+  INTERNSHIP_ELSEWHERE_800
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -68,16 +84,17 @@ model CompanyNeed {
 }
 
 model MentorshipRelation {
-  id        String           @id @default(cuid())
-  mentorId  String
-  menteeId  String
-  companyId String?
-  startDate DateTime         @default(now())
-  status    MentorshipStatus @default(ACTIVE)
+  id             String           @id @default(cuid())
+  mentorId       String
+  menteeId       String
+  companyId      String?
+  startDate      DateTime         @default(now())
+  status         MentorshipStatus @default(ACTIVE)
+  pipelineStatus PipelineStatus   @default(APPLIED_100)
 
-  mentor       User              @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee       User              @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company      Company?          @relation(fields: [companyId], references: [id])
+  mentor       User             @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee       User             @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company      Company?         @relation(fields: [companyId], references: [id])
   interactions InteractionLog[]
 }
 

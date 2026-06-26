@@ -72,10 +72,11 @@ flowchart LR
 
 ### Pipeline status (the core domain concept)
 `MentorshipRelation.pipelineStatus` mirrors the original spreadsheet's status column.
-Stages (enum `PipelineStatus`): `BASVURU_100` → `ONAY_220` → `GORUSME_250` →
-`TANISTIRMA_270` → `STAJ_BASLAYACAK_300` → `STAJ_DEVAM_450` → `STAJ_BITTI_490` →
-`IS_ARIYOR_500` → `ISE_ALINABILIR_600` → `ISE_ALINDI_660` → `IS_BULDU_700`
-(plus `YARIM_BIRAKTI_460`, `BASKA_YERDE_STAJ_800`). Default `BASVURU_100`.
+Stages (enum `PipelineStatus`): `APPLIED_100` → `APPROVED_220` → `INTERVIEW_250` →
+`INTRODUCTION_270` → `INTERNSHIP_STARTING_300` → `INTERNSHIP_ONGOING_450` →
+`INTERNSHIP_COMPLETED_490` → `SEEKING_JOB_500` → `HIRABLE_600` → `HIRED_660` →
+`FOUND_JOB_700` (plus `DROPPED_OUT_460`, `INTERNSHIP_ELSEWHERE_800`).
+Default `APPLIED_100`.
 
 ## Directory map
 
