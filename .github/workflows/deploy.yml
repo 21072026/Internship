@@ -79,6 +79,11 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
           ACTOR: ${{ github.actor }}
         run: |
           # Base64-encode secrets so special characters survive the SSH transport
@@ -86,6 +91,11 @@ jobs:
           B64_DB=$(printf '%s'  "$DATABASE_URL"    | base64 -w0)
           B64_SEC=$(printf '%s' "$NEXTAUTH_SECRET" | base64 -w0)
           B64_URL=$(printf '%s' "$NEXTAUTH_URL"    | base64 -w0)
+          B64_SMTP_HOST=$(printf '%s' "$SMTP_HOST" | base64 -w0)
+          B64_SMTP_PORT=$(printf '%s' "$SMTP_PORT" | base64 -w0)
+          B64_SMTP_USER=$(printf '%s' "$SMTP_USER" | base64 -w0)
+          B64_SMTP_PASS=$(printf '%s' "$SMTP_PASS" | base64 -w0)
+          B64_SMTP_FROM=$(printf '%s' "$SMTP_FROM" | base64 -w0)
 
           ssh -i ~/.ssh/deploy_key \
             -p "${SSH_PORT:-22}" \
@@ -96,6 +106,11 @@ jobs:
           DATABASE_URL=\$(printf '%s' '$B64_DB'  | base64 -d)
           NEXTAUTH_SECRET=\$(printf '%s' '$B64_SEC' | base64 -d)
           NEXTAUTH_URL=\$(printf '%s' '$B64_URL' | base64 -d)
+          SMTP_HOST=\$(printf '%s' '$B64_SMTP_HOST' | base64 -d)
+          SMTP_PORT=\$(printf '%s' '$B64_SMTP_PORT' | base64 -d)
+          SMTP_USER=\$(printf '%s' '$B64_SMTP_USER' | base64 -d)
+          SMTP_PASS=\$(printf '%s' '$B64_SMTP_PASS' | base64 -d)
+          SMTP_FROM=\$(printf '%s' '$B64_SMTP_FROM' | base64 -d)
           IMAGE='$IMAGE'
           ACTOR='$ACTOR'
 
@@ -123,6 +138,12 @@ jobs:
             -e DATABASE_URL="\$DATABASE_URL" \
             -e NEXTAUTH_SECRET="\$NEXTAUTH_SECRET" \
             -e NEXTAUTH_URL="\$NEXTAUTH_URL" \
+            -e NEXT_PUBLIC_APP_URL="\$NEXTAUTH_URL" \
+            -e SMTP_HOST="\$SMTP_HOST" \
+            -e SMTP_PORT="\$SMTP_PORT" \
+            -e SMTP_USER="\$SMTP_USER" \
+            -e SMTP_PASS="\$SMTP_PASS" \
+            -e SMTP_FROM="\$SMTP_FROM" \
             "\$IMAGE"
 
           docker image prune -f
@@ -140,12 +161,22 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL_PREVIEW }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           PREVIEW_URL: ${{ secrets.PREVIEW_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
           ACTOR: ${{ github.actor }}
         run: |
           B64_TOKEN=$(printf '%s' "$GH_TOKEN"        | base64 -w0)
           B64_DB=$(printf '%s'  "$DATABASE_URL"    | base64 -w0)
           B64_SEC=$(printf '%s' "$NEXTAUTH_SECRET" | base64 -w0)
           B64_URL=$(printf '%s' "$PREVIEW_URL"     | base64 -w0)
+          B64_SMTP_HOST=$(printf '%s' "$SMTP_HOST" | base64 -w0)
+          B64_SMTP_PORT=$(printf '%s' "$SMTP_PORT" | base64 -w0)
+          B64_SMTP_USER=$(printf '%s' "$SMTP_USER" | base64 -w0)
+          B64_SMTP_PASS=$(printf '%s' "$SMTP_PASS" | base64 -w0)
+          B64_SMTP_FROM=$(printf '%s' "$SMTP_FROM" | base64 -w0)
 
           ssh -i ~/.ssh/deploy_key \
             -p "${SSH_PORT:-22}" \
@@ -156,6 +187,11 @@ jobs:
           DATABASE_URL=\$(printf '%s' '$B64_DB'  | base64 -d)
           NEXTAUTH_SECRET=\$(printf '%s' '$B64_SEC' | base64 -d)
           PREVIEW_URL=\$(printf '%s' '$B64_URL' | base64 -d)
+          SMTP_HOST=\$(printf '%s' '$B64_SMTP_HOST' | base64 -d)
+          SMTP_PORT=\$(printf '%s' '$B64_SMTP_PORT' | base64 -d)
+          SMTP_USER=\$(printf '%s' '$B64_SMTP_USER' | base64 -d)
+          SMTP_PASS=\$(printf '%s' '$B64_SMTP_PASS' | base64 -d)
+          SMTP_FROM=\$(printf '%s' '$B64_SMTP_FROM' | base64 -d)
           IMAGE='$IMAGE'
           ACTOR='$ACTOR'
 
@@ -183,6 +219,12 @@ jobs:
             -e DATABASE_URL="\$CONTAINER_DB" \
             -e NEXTAUTH_SECRET="\$NEXTAUTH_SECRET" \
             -e NEXTAUTH_URL="\$PREVIEW_URL" \
+            -e NEXT_PUBLIC_APP_URL="\$PREVIEW_URL" \
+            -e SMTP_HOST="\$SMTP_HOST" \
+            -e SMTP_PORT="\$SMTP_PORT" \
+            -e SMTP_USER="\$SMTP_USER" \
+            -e SMTP_PASS="\$SMTP_PASS" \
+            -e SMTP_FROM="\$SMTP_FROM" \
             "\$IMAGE"
 
           docker image prune -f
