@@ -102,14 +102,7 @@ jobs:
           echo "\$GH_TOKEN" | docker login ghcr.io -u "\$ACTOR" --password-stdin
           docker pull "\$IMAGE"
 
-          # Replace localhost/127.0.0.1 with host.docker.internal so the container
-          # can reach MySQL running on the host (works on Linux with --add-host).
-          CONTAINER_DB=\$(echo "\$DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s|127\.0\.0\.1|host.docker.internal|g')
-
-          # Apply schema changes using host networking so localhost MySQL is reachable.
-          # (MySQL on Linux typically binds to 127.0.0.1 which is only reachable via
-          # --network=host; --add-host=host.docker.internal:host-gateway maps to the
-          # host's external IP which MySQL won't accept on a loopback-only binding.)
+          # Apply schema changes via host networking so 127.0.0.1 MySQL is reachable.
           docker run --rm \
             --network=host \
             -e DATABASE_URL="\$DATABASE_URL" \
@@ -118,12 +111,16 @@ jobs:
 
           docker stop internship-crm 2>/dev/null || true
           docker rm   internship-crm 2>/dev/null || true
+          # Run with host networking so the app reaches the host's MySQL over
+          # 127.0.0.1 — the same path the db push above uses. Bridge networking via
+          # host.docker.internal failed because the crm DB user is not granted from
+          # the Docker gateway IP, leaving the app unable to log in. See issue #45.
           docker run -d \
             --name internship-crm \
-            -p 3200:3000 \
-            --add-host=host.docker.internal:host-gateway \
+            --network=host \
             --restart=unless-stopped \
-            -e DATABASE_URL="\$CONTAINER_DB" \
+            -e PORT=3200 \
+            -e DATABASE_URL="\$DATABASE_URL" \
             -e NEXTAUTH_SECRET="\$NEXTAUTH_SECRET" \
             -e NEXTAUTH_URL="\$NEXTAUTH_URL" \
             "\$IMAGE"
