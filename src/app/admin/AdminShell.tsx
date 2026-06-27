@@ -83,6 +83,9 @@ function SidebarContent({
 
 export function AdminShell({ children, userName, userEmail }: AdminShellProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const mobileSidebarClassName = isMenuOpen
+    ? 'bg-white border-r border-gray-200 flex flex-col fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl md:hidden'
+    : 'hidden';
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -122,20 +125,13 @@ export function AdminShell({ children, userName, userEmail }: AdminShellProps) {
           aria-label="Close menu overlay"
           className="md:hidden fixed inset-0 z-30 bg-black/30"
           onClick={() => setIsMenuOpen(false)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
-              setIsMenuOpen(false);
-            }
-          }}
         />
       )}
 
       <aside
         id="admin-mobile-menu"
         aria-hidden={!isMenuOpen}
-        className={`bg-white border-r border-gray-200 flex flex-col md:hidden ${
-          isMenuOpen ? 'fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl' : 'hidden'
-        }`}
+        className={mobileSidebarClassName}
       >
         <SidebarContent
           onNavigate={() => setIsMenuOpen(false)}
