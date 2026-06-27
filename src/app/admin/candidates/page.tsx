@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Users, ExternalLink, Search, Filter } from 'lucide-react';
+import { Users, ExternalLink, Search, Filter, Download } from 'lucide-react';
 
 interface Candidate {
   id: string;
@@ -21,8 +21,11 @@ interface Candidate {
   skills: string[];
   cvUrl?: string;
   phone?: string;
+  whatsapp?: string;
+  city?: string;
   createdAt: string;
   menteeRelations: {
+    pipelineStatus?: string;
     mentor: { id: string; fullName: string };
     company: { id: string; name: string } | null;
   }[];
@@ -45,7 +48,29 @@ export default function CandidatesPage() {
   const [skillFilter, setSkillFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
   const [error, setError] = useState('');
+
+  const exportCsv = () => {
+    const cols = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = candidates.map((c) => {
+      const rel = c.menteeRelations[0];
+      return [
+        c.fullName, c.email, c.phone, c.whatsapp, c.city, c.university, c.department,
+        c.graduationYear, c.skills.join('; '),
+        rel?.pipelineStatus ? pipelineLabel(rel.pipelineStatus, locale) : '',
+        rel?.company?.name ?? '', rel?.mentor?.fullName ?? '',
+      ].map(esc).join(',');
+    });
+    const csv = [cols.join(','), ...rows].join('\n');
+    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Read an optional ?status= filter from the URL (e.g. from dashboard pipeline bars)
   useEffect(() => {
@@ -60,6 +85,7 @@ export default function CandidatesPage() {
       if (yearFilter) params.set('graduationYear', yearFilter);
       if (search) params.set('search', search);
       if (statusFilter) params.set('status', statusFilter);
+      if (cityFilter) params.set('city', cityFilter);
 
       const res = await fetch(`/api/candidates?${params}`);
       const data = await res.json();
@@ -69,7 +95,7 @@ export default function CandidatesPage() {
     } finally {
       setLoading(false);
     }
-  }, [skillFilter, yearFilter, search, statusFilter]);
+  }, [skillFilter, yearFilter, search, statusFilter, cityFilter]);
 
   useEffect(() => {
     const timeout = setTimeout(fetchCandidates, 300);
@@ -78,7 +104,8 @@ export default function CandidatesPage() {
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
         <h1 className="text-2xl font-bold text-gray-900">{t.candidates.title}</h1>
         <p className="text-gray-500 mt-1">{t.candidates.subtitle}</p>
         {statusFilter && (
@@ -97,6 +124,11 @@ export default function CandidatesPage() {
             </button>
           </div>
         )}
+        </div>
+        <Button variant="outline" onClick={exportCsv} disabled={candidates.length === 0}>
+          <Download className="h-4 w-4" />
+          {t.candidates.exportCsv}
+        </Button>
       </div>
 
       {error && (
@@ -111,7 +143,7 @@ export default function CandidatesPage() {
           <Filter className="h-4 w-4 text-gray-500" />
           <span className="text-sm font-medium text-gray-700">Filters</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
@@ -133,8 +165,13 @@ export default function CandidatesPage() {
             onChange={(e) => setYearFilter(e.target.value)}
             placeholder="All graduation years"
           />
+          <Input
+            placeholder={t.candidates.cityPlaceholder}
+            value={cityFilter}
+            onChange={(e) => setCityFilter(e.target.value)}
+          />
         </div>
-        {(search || skillFilter || yearFilter) && (
+        {(search || skillFilter || yearFilter || cityFilter) && (
           <Button
             variant="ghost"
             size="sm"
@@ -143,6 +180,7 @@ export default function CandidatesPage() {
               setSearch('');
               setSkillFilter('');
               setYearFilter('');
+              setCityFilter('');
             }}
           >
             Clear filters
