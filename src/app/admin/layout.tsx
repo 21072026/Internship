@@ -3,6 +3,8 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { GraduationCap, LayoutDashboard, Building2, Users, UserCheck, Mail, LogOut } from 'lucide-react';
+import { getServerDictionary } from '@/i18n/server';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -15,6 +17,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect('/');
   }
 
+  const { locale, t } = await getServerDictionary();
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
@@ -24,7 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <GraduationCap className="h-7 w-7 text-blue-600" />
             <span className="font-bold text-gray-900">InternshipCRM</span>
           </div>
-          <p className="text-xs text-gray-500 mt-1">Admin Panel</p>
+          <p className="text-xs text-gray-500 mt-1">{t.panel.admin}</p>
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
@@ -33,42 +37,42 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
           >
             <LayoutDashboard className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            Dashboard
+            {t.nav.dashboard}
           </Link>
           <Link
             href="/admin/companies"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
           >
             <Building2 className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            Companies
+            {t.nav.companies}
           </Link>
           <Link
             href="/admin/candidates"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
           >
             <Users className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            Candidates
+            {t.nav.candidates}
           </Link>
           <Link
             href="/admin/mentors"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
           >
             <UserCheck className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            Mentors
+            {t.nav.mentors}
           </Link>
           <Link
             href="/admin/mentorship"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
           >
             <Users className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            Mentorships
+            {t.nav.mentorships}
           </Link>
           <Link
             href="/admin/invite"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
           >
             <Mail className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            Davet Gönder
+            {t.nav.invite}
           </Link>
         </nav>
 
@@ -89,8 +93,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           >
             <LogOut className="h-4 w-4" />
-            Sign Out
+            {t.nav.signOut}
           </Link>
+          <div className="mt-3 px-3">
+            <LanguageSwitcher current={locale} />
+          </div>
         </div>
       </aside>
 

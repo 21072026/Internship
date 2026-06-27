@@ -35,7 +35,7 @@ test('admin sidebar links to the invite page', async ({ page }) => {
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
   await page.goto('/admin');
-  const inviteLink = page.getByRole('link', { name: /davet/i });
+  const inviteLink = page.getByRole('link', { name: 'Send Invitation', exact: true });
   await expect(inviteLink).toBeVisible();
   await inviteLink.click();
   await page.waitForURL((u) => u.pathname.includes('/admin/invite'), { timeout: 15_000 });
