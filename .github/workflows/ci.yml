@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint · Typecheck · Build
+    runs-on: ubuntu-latest
+    env:
+      # Prisma client instantiates lazily; build never connects, but a valid-format URL is required.
+      DATABASE_URL: 'mysql://user:pass@127.0.0.1:3306/db'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run build

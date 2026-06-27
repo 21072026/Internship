@@ -1,0 +1,17 @@
+name: Add to project
+
+# Automatically add newly opened issues and PRs to the project board.
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+jobs:
+  add-to-project:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/users/mersahin/projects/2
+          github-token: ${{ secrets.GH_PAT }}
