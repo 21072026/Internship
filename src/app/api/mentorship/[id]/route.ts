@@ -39,6 +39,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         },
         company: true,
         interactions: { orderBy: { date: 'desc' } },
+        statusChanges: {
+          orderBy: { createdAt: 'desc' },
+          include: { changedBy: { select: { fullName: true } } },
+        },
       },
     });
 
@@ -105,6 +109,18 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         company: { select: { id: true, name: true } },
       },
     });
+
+    // Record an audit entry when the pipeline stage actually changes.
+    if (parsed.data.pipelineStatus && parsed.data.pipelineStatus !== relation.pipelineStatus) {
+      await prisma.statusChange.create({
+        data: {
+          relationId: id,
+          fromStatus: relation.pipelineStatus,
+          toStatus: parsed.data.pipelineStatus,
+          changedById: session.user.id,
+        },
+      });
+    }
 
     return NextResponse.json({ relation: updated });
   } catch (error) {

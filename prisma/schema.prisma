@@ -59,6 +59,7 @@ model User {
 
   mentorRelations MentorshipRelation[] @relation("MentorRelations")
   menteeRelations MentorshipRelation[] @relation("MenteeRelations")
+  statusChanges   StatusChange[]       @relation("StatusChangedBy")
 }
 
 model Company {
@@ -93,10 +94,11 @@ model MentorshipRelation {
   status         MentorshipStatus @default(ACTIVE)
   pipelineStatus PipelineStatus   @default(APPLICATION_100)
 
-  mentor       User             @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee       User             @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company      Company?         @relation(fields: [companyId], references: [id])
-  interactions InteractionLog[]
+  mentor        User             @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee        User             @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company       Company?         @relation(fields: [companyId], references: [id])
+  interactions  InteractionLog[]
+  statusChanges StatusChange[]
 }
 
 model InteractionLog {
@@ -107,6 +109,19 @@ model InteractionLog {
   type       InteractionType
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+}
+
+// Audit trail of pipeline stage changes for a mentorship.
+model StatusChange {
+  id          String         @id @default(cuid())
+  relationId  String
+  fromStatus  PipelineStatus
+  toStatus    PipelineStatus
+  changedById String
+  createdAt   DateTime       @default(now())
+
+  relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  changedBy User               @relation("StatusChangedBy", fields: [changedById], references: [id])
 }
 
 model InvitationToken {

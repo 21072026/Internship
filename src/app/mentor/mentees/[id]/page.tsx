@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Plus, Trash2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
-import { pipelineOptions } from '@/lib/pipeline';
+import { pipelineOptions, pipelineLabel } from '@/lib/pipeline';
 
 interface InteractionLog {
   id: string;
@@ -35,6 +35,13 @@ interface RelationDetail {
   };
   company: { name: string; industry?: string } | null;
   interactions: InteractionLog[];
+  statusChanges: {
+    id: string;
+    fromStatus: string;
+    toStatus: string;
+    createdAt: string;
+    changedBy: { fullName: string };
+  }[];
 }
 
 const typeOptions = [
@@ -213,6 +220,31 @@ export default function MenteeDetailPage() {
               </div>
             )}
           </div>
+        </Card>
+
+        {/* Pipeline stage history */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Aşama Geçmişi ({relation.statusChanges.length})</CardTitle>
+          </CardHeader>
+          {relation.statusChanges.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">Henüz aşama değişikliği yok</p>
+          ) : (
+            <ol className="space-y-3">
+              {relation.statusChanges.map((sc) => (
+                <li key={sc.id} className="text-sm border-l-2 border-blue-100 pl-3">
+                  <p className="text-gray-700">
+                    <span className="text-gray-400">{pipelineLabel(sc.fromStatus)}</span>
+                    {' → '}
+                    <span className="font-medium text-gray-900">{pipelineLabel(sc.toStatus)}</span>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {sc.changedBy.fullName} · {new Date(sc.createdAt).toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
         </Card>
 
         {/* Interactions */}
