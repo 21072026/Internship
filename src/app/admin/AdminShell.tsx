@@ -83,7 +83,7 @@ function SidebarContent({
 
 export function AdminShell({ children, userName, userEmail }: AdminShellProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const mobileSidebarClassName = `bg-white border-r border-gray-200 flex-col fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl md:hidden ${
+  const mobileSidebarClassName = `bg-white border-r border-gray-200 flex-col fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl lg:hidden ${
     isMenuOpen ? 'flex' : 'hidden'
   }`;
 
@@ -99,8 +99,8 @@ export function AdminShell({ children, userName, userEmail }: AdminShellProps) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 md:flex">
-      <div className="md:hidden sticky top-0 z-30 bg-white border-b border-gray-200 px-4 py-3">
+    <div className="min-h-screen bg-gray-50 lg:flex">
+      <div className="lg:hidden sticky top-0 z-30 bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <GraduationCap className="h-6 w-6 text-blue-600 shrink-0" />
@@ -123,7 +123,7 @@ export function AdminShell({ children, userName, userEmail }: AdminShellProps) {
         <button
           type="button"
           aria-label="Close menu overlay"
-          className="md:hidden fixed inset-0 z-30 bg-black/30"
+          className="lg:hidden fixed inset-0 z-30 bg-black/30"
           onClick={() => setIsMenuOpen(false)}
         />
       )}
@@ -140,12 +140,12 @@ export function AdminShell({ children, userName, userEmail }: AdminShellProps) {
         />
       </aside>
 
-      <aside className="hidden md:flex md:w-64 bg-white border-r border-gray-200 flex-col">
+      <aside className="hidden lg:flex lg:w-64 bg-white border-r border-gray-200 flex-col">
         <SidebarContent userName={userName} userEmail={userEmail} />
       </aside>
 
       <main className="flex-1 overflow-auto">
-        <div className="p-4 md:p-8">{children}</div>
+        <div className="p-4 lg:p-8">{children}</div>
       </main>
     </div>
   );
