@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { GraduationCap, LayoutDashboard, Building2, Users, UserCheck, Mail, LogOut } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { ResponsiveShell } from '@/components/ResponsiveShell';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -20,9 +21,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { locale, t } = await getServerDictionary();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col sticky top-0 h-screen self-start">
+    <ResponsiveShell
+      sidebar={
+        <aside className="w-64 h-full bg-white border-r border-gray-200 flex flex-col">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <GraduationCap className="h-7 w-7 text-blue-600" />
@@ -103,12 +104,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <LanguageSwitcher current={locale} />
           </div>
         </div>
-      </aside>
-
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">{children}</div>
-      </main>
-    </div>
+        </aside>
+      }
+    >
+      {children}
+    </ResponsiveShell>
   );
 }
