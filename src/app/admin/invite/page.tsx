@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
-import { Send, Mail } from 'lucide-react';
+import { Send, Mail, Copy, Check } from 'lucide-react';
 
 const inviteSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -28,7 +28,20 @@ export default function InvitePage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sentInvites, setSentInvites] = useState<{ email: string; role: string; time: string }[]>([]);
+  const [sentInvites, setSentInvites] = useState<
+    { email: string; role: string; time: string; registerUrl: string; emailSent: boolean }[]
+  >([]);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(url);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
 
   const {
     register,
@@ -58,9 +71,19 @@ export default function InvitePage() {
         throw new Error(body.error || 'Failed to send invitation');
       }
 
-      setSuccess(`Invitation sent to ${data.email}`);
+      setSuccess(
+        body.emailSent
+          ? `Invitation emailed to ${data.email}`
+          : `Invitation created for ${data.email} — email not delivered, share the link below manually`
+      );
       setSentInvites((prev) => [
-        { email: data.email, role: data.role, time: new Date().toLocaleString() },
+        {
+          email: data.email,
+          role: data.role,
+          time: new Date().toLocaleString(),
+          registerUrl: body.registerUrl ?? '',
+          emailSent: !!body.emailSent,
+        },
         ...prev,
       ]);
       reset({ role: 'MENTEE' });
@@ -125,8 +148,8 @@ export default function InvitePage() {
             <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
               <li>Enter the recipient&apos;s email and select their role</li>
               <li>They receive an email with a registration link</li>
+              <li>If email isn&apos;t delivered, copy the link and share it manually</li>
               <li>The link expires in 7 days</li>
-              <li>They register using their email + the token</li>
             </ol>
           </div>
         </Card>
@@ -142,25 +165,50 @@ export default function InvitePage() {
           ) : (
             <div className="space-y-3">
               {sentInvites.map((invite, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{invite.email}</p>
-                    <p className="text-xs text-gray-400">{invite.time}</p>
+                <div key={idx} className="py-3 border-b border-gray-50 last:border-0">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{invite.email}</p>
+                      <p className="text-xs text-gray-400">
+                        {invite.time} · {invite.emailSent ? 'emailed' : 'not emailed'}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        invite.role === 'ADMIN'
+                          ? 'danger'
+                          : invite.role === 'MENTOR'
+                          ? 'info'
+                          : 'success'
+                      }
+                    >
+                      {invite.role}
+                    </Badge>
                   </div>
-                  <Badge
-                    variant={
-                      invite.role === 'ADMIN'
-                        ? 'danger'
-                        : invite.role === 'MENTOR'
-                        ? 'info'
-                        : 'success'
-                    }
-                  >
-                    {invite.role}
-                  </Badge>
+                  {invite.registerUrl && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={invite.registerUrl}
+                        className="flex-1 min-w-0 text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1.5 text-gray-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => copyLink(invite.registerUrl)}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 flex-shrink-0"
+                      >
+                        {copied === invite.registerUrl ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" /> Kopyalandı
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" /> Kopyala
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

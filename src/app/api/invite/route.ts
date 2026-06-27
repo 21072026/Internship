@@ -62,10 +62,27 @@ export async function POST(request: Request) {
       },
     });
 
-    await sendInvitationEmail({ to: email, token, role });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const registerUrl = `${appUrl}/auth/register?token=${token}`;
+
+    // The token is already persisted, so a failed/blocked email must not lose the
+    // invitation — the admin can still share registerUrl manually. Report delivery
+    // status instead of 500-ing.
+    let emailSent = false;
+    try {
+      await sendInvitationEmail({ to: email, token, role });
+      emailSent = !!process.env.SMTP_USER;
+    } catch (mailErr) {
+      console.error('Invitation email failed (token still valid):', mailErr);
+    }
 
     return NextResponse.json(
-      { message: 'Invitation sent successfully', invitationId: invitation.id },
+      {
+        message: emailSent ? 'Invitation sent' : 'Invitation created (share the link manually)',
+        invitationId: invitation.id,
+        registerUrl,
+        emailSent,
+      },
       { status: 201 }
     );
   } catch (error) {
