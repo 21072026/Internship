@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { GraduationCap, LayoutDashboard, Users, BookOpen, LogOut } from 'lucide-react';
+import { GraduationCap, LayoutDashboard, Columns3, Users, BookOpen, LogOut } from 'lucide-react';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -34,6 +34,13 @@ export default async function MentorLayout({ children }: { children: React.React
           >
             <LayoutDashboard className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
             Dashboard
+          </Link>
+          <Link
+            href="/mentor/board"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+          >
+            <Columns3 className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+            Pano
           </Link>
           <Link
             href="/mentor/mentees"
