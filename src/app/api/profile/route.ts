@@ -13,9 +13,9 @@ const updateProfileSchema = z.object({
   referralSource: z.string().optional(),
   university: z.string().optional(),
   department: z.string().optional(),
-  graduationYear: z.number().int().optional(),
+  graduationYear: z.number().int().nullable().optional(),
   skills: z.array(z.string()).optional(),
-  cvUrl: z.string().url().optional().or(z.literal('')),
+  cvUrl: z.string().url().or(z.literal('')).nullable().optional(),
 });
 
 export async function GET() {
