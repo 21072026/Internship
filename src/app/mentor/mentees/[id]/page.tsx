@@ -31,6 +31,10 @@ interface RelationDetail {
     graduationYear?: number;
     skills: string[];
     phone?: string;
+    whatsapp?: string;
+    city?: string;
+    birthDate?: string;
+    referralSource?: string;
     cvUrl?: string;
   };
   company: { name: string; industry?: string } | null;
@@ -187,6 +191,32 @@ export default function MenteeDetailPage() {
               <div>
                 <p className="text-xs text-gray-500">Phone</p>
                 <p className="text-sm text-gray-900">{relation.mentee.phone}</p>
+              </div>
+            )}
+            {relation.mentee.whatsapp && (
+              <div>
+                <p className="text-xs text-gray-500">WhatsApp</p>
+                <p className="text-sm text-gray-900">{relation.mentee.whatsapp}</p>
+              </div>
+            )}
+            {relation.mentee.city && (
+              <div>
+                <p className="text-xs text-gray-500">Şehir</p>
+                <p className="text-sm text-gray-900">{relation.mentee.city}</p>
+              </div>
+            )}
+            {relation.mentee.birthDate && (
+              <div>
+                <p className="text-xs text-gray-500">Doğum Tarihi</p>
+                <p className="text-sm text-gray-900">
+                  {new Date(relation.mentee.birthDate).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+            {relation.mentee.referralSource && (
+              <div>
+                <p className="text-xs text-gray-500">Referans</p>
+                <p className="text-sm text-gray-900">{relation.mentee.referralSource}</p>
               </div>
             )}
             {relation.mentee.skills.length > 0 && (

@@ -12,6 +12,9 @@ import { Select } from '@/components/ui/Select';
 const profileSchema = z.object({
   fullName: z.string().min(1, 'Full name is required'),
   phone: z.string().optional(),
+  whatsapp: z.string().optional(),
+  city: z.string().optional(),
+  birthDate: z.string().optional(),
   university: z.string().optional(),
   department: z.string().optional(),
   graduationYear: z.coerce.number().int().min(2020).max(2035).optional().or(z.literal(0)),
@@ -52,6 +55,9 @@ export default function ProfilePage() {
           reset({
             fullName: user.fullName,
             phone: user.phone || '',
+            whatsapp: user.whatsapp || '',
+            city: user.city || '',
+            birthDate: user.birthDate ? String(user.birthDate).slice(0, 10) : '',
             university: user.university || '',
             department: user.department || '',
             graduationYear: user.graduationYear || 0,
@@ -130,12 +136,23 @@ export default function ProfilePage() {
             {...register('fullName')}
             error={errors.fullName?.message}
           />
-          <Input
-            label="Phone Number"
-            type="tel"
-            {...register('phone')}
-            error={errors.phone?.message}
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Phone Number"
+              type="tel"
+              {...register('phone')}
+              error={errors.phone?.message}
+            />
+            <Input
+              label="WhatsApp"
+              type="tel"
+              placeholder="+49..."
+              {...register('whatsapp')}
+              error={errors.whatsapp?.message}
+            />
+            <Input label="City" placeholder="e.g. Monheim" {...register('city')} error={errors.city?.message} />
+            <Input label="Birth Date" type="date" {...register('birthDate')} error={errors.birthDate?.message} />
+          </div>
 
           <div className="border-t border-gray-100 pt-4">
             <p className="text-sm font-semibold text-gray-700 mb-4">Education</p>

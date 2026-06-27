@@ -7,6 +7,10 @@ import { z } from 'zod';
 const updateProfileSchema = z.object({
   fullName: z.string().min(1).optional(),
   phone: z.string().optional(),
+  whatsapp: z.string().optional(),
+  city: z.string().optional(),
+  birthDate: z.string().optional(),
+  referralSource: z.string().optional(),
   university: z.string().optional(),
   department: z.string().optional(),
   graduationYear: z.number().int().optional(),
@@ -30,6 +34,10 @@ export async function GET() {
         fullName: true,
         role: true,
         phone: true,
+        whatsapp: true,
+        city: true,
+        birthDate: true,
+        referralSource: true,
         university: true,
         department: true,
         graduationYear: true,
@@ -68,13 +76,16 @@ export async function PUT(request: Request) {
       );
     }
 
-    const { cvUrl, ...rest } = parsed.data;
+    const { cvUrl, birthDate, ...rest } = parsed.data;
 
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         ...rest,
         cvUrl: cvUrl || null,
+        ...(birthDate !== undefined
+          ? { birthDate: birthDate ? new Date(birthDate) : null }
+          : {}),
       },
       select: {
         id: true,
@@ -82,6 +93,10 @@ export async function PUT(request: Request) {
         fullName: true,
         role: true,
         phone: true,
+        whatsapp: true,
+        city: true,
+        birthDate: true,
+        referralSource: true,
         university: true,
         department: true,
         graduationYear: true,
