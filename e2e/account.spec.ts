@@ -36,3 +36,35 @@ test('admin can change their password from the account page', async ({ page }) =
     await cleanupByEmail(email);
   }
 });
+
+test('changing email updates the sidebar without a re-login', async ({ page }) => {
+  const email = uniqueEmail('acct-mail');
+  const newEmail = uniqueEmail('acct-mail-new');
+  const pw = 'MailPass123!';
+  await seedUser(email, pw, 'ADMIN', 'Mail Admin');
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', email);
+    await page.fill('input[type="password"]', pw);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    await page.goto('/admin/account');
+    // sidebar shows the original email
+    await expect(page.getByText(email, { exact: true })).toBeVisible();
+
+    await page.getByLabel(/Email address/).fill(newEmail);
+    const done = page.waitForResponse(
+      (r) => r.url().includes('/api/account') && r.request().method() === 'PUT'
+    );
+    await page.getByRole('button', { name: 'Update email' }).click();
+    await done;
+
+    // sidebar reflects the new email immediately (session refreshed, no re-login)
+    await expect(page.getByText(newEmail, { exact: true })).toBeVisible({ timeout: 10_000 });
+  } finally {
+    await cleanupByEmail(email);
+    await cleanupByEmail(newEmail);
+  }
+});

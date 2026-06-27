@@ -46,10 +46,21 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.role = (user as unknown as { role: string }).role;
+      }
+      // On a client-side session update() (e.g. after changing email/profile),
+      // re-read the user so the token — and thus the UI that reads the session,
+      // like the sidebar — reflects the latest values without a re-login.
+      if (trigger === 'update' && token.id) {
+        const fresh = await prisma.user.findUnique({ where: { id: token.id as string } });
+        if (fresh) {
+          token.email = fresh.email;
+          token.name = fresh.fullName;
+          token.role = fresh.role;
+        }
       }
       return token;
     },
@@ -57,6 +68,8 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
+        if (token.email) session.user.email = token.email as string;
+        if (token.name) session.user.name = token.name as string;
       }
       return session;
     },

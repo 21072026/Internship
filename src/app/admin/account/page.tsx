@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +10,8 @@ import { useT } from '@/i18n/client';
 
 export default function AccountPage() {
   const t = useT();
+  const { update } = useSession();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -45,7 +49,11 @@ export default function AccountPage() {
     setSavingEmail(true);
     try {
       await call({ email });
-      flash(`${t.account.updated}. ${t.account.reloginNote}`);
+      // Refresh the JWT (jwt callback re-reads the user) then re-render the
+      // server layout so the sidebar shows the new email immediately.
+      await update();
+      router.refresh();
+      flash(t.account.updated);
     } catch (e2) {
       flash(e2 instanceof Error ? e2.message : 'Failed', true);
     } finally {
