@@ -53,6 +53,8 @@ const en = {
     mentor: 'Mentor',
     viewCv: 'View CV',
     none: 'No candidates found',
+    exportCsv: 'Export CSV',
+    cityPlaceholder: 'Filter by city',
   },
   candidateDetail: {
     back: 'Back to candidates',
@@ -281,6 +283,8 @@ const tr: Dict = {
     mentor: 'Mentor',
     viewCv: 'CV’yi gör',
     none: 'Aday bulunamadı',
+    exportCsv: 'CSV indir',
+    cityPlaceholder: 'Şehre göre filtrele',
   },
   candidateDetail: {
     back: 'Adaylara dön',

@@ -16,14 +16,18 @@ export async function GET(request: Request) {
     const graduationYear = searchParams.get('graduationYear');
     const search = searchParams.get('search');
     const pipelineStatus = searchParams.get('status');
+    const city = searchParams.get('city');
+    const company = searchParams.get('company');
 
     const where: Record<string, unknown> = {
       role: 'MENTEE',
     };
 
-    if (pipelineStatus) {
-      where.menteeRelations = { some: { pipelineStatus } };
-    }
+    const relSome: Record<string, unknown> = {};
+    if (pipelineStatus) relSome.pipelineStatus = pipelineStatus;
+    if (company) relSome.company = { name: company };
+    if (Object.keys(relSome).length) where.menteeRelations = { some: relSome };
+    if (city) where.city = { contains: city };
 
     // skills filtering is applied in-memory after fetching (MySQL JSON arrays don't support hasSome)
     const skillList = skills
@@ -58,6 +62,8 @@ export async function GET(request: Request) {
         skills: true,
         cvUrl: true,
         phone: true,
+        whatsapp: true,
+        city: true,
         createdAt: true,
         menteeRelations: {
           where: { status: 'ACTIVE' },
