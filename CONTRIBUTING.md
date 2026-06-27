@@ -43,3 +43,10 @@ npm run test:e2e      # Playwright (starts the app; needs a DB)
 
 Push to `main` deploys production; every PR deploys a preview. See
 [CLAUDE.md](CLAUDE.md) for the full architecture and deploy topology.
+
+## Project board
+
+New issues/PRs should appear on the board automatically. If they don't, enable
+the built-in **Auto-add to project** workflow in the Project's *Workflows*
+settings (no token needed) — this is preferred over a GitHub Action (which would
+require a PAT with `project` scope).
