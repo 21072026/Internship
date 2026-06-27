@@ -21,7 +21,9 @@ export async function GET() {
         department: true,
         graduationYear: true,
         skills: true,
+        phone: true,
         createdAt: true,
+        _count: { select: { mentorRelations: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
