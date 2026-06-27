@@ -1,8 +1,8 @@
 'use client';
 import { useT } from "@/i18n/client";
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { useState, useEffect } from 'react';
+import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { GraduationCap } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { roleHome } from '@/lib/roleHome';
 
 const signinSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -22,8 +23,16 @@ type SignInData = z.infer<typeof signinSchema>;
 export default function SignInPage() {
   const t = useT();
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Already signed in → go straight to the role dashboard.
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace(roleHome(session?.user?.role));
+    }
+  }, [status, session, router]);
 
   const {
     register,
@@ -50,15 +59,8 @@ export default function SignInPage() {
     }
 
     const res = await fetch('/api/auth/session');
-    const session = await res.json();
-
-    if (session?.user?.role === 'ADMIN') {
-      router.push('/admin');
-    } else if (session?.user?.role === 'MENTOR') {
-      router.push('/mentor');
-    } else {
-      router.push('/portal');
-    }
+    const fresh = await res.json();
+    router.push(roleHome(fresh?.user?.role));
   });
 
   return (

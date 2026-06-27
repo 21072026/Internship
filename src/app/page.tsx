@@ -1,7 +1,14 @@
 import Link from 'next/link';
 import { GraduationCap, Users, Building2, ArrowRight, CheckCircle } from 'lucide-react';
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+import { authOptions } from '@/lib/auth';
+import { roleHome } from '@/lib/roleHome';
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await getServerSession(authOptions);
+  if (session) redirect(roleHome(session.user.role));
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Header */}
