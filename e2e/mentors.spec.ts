@@ -10,7 +10,8 @@ test.afterAll(async () => {
 
 test('admin can open the Mentors list and see a mentor', async ({ page }) => {
   const mentorEmail = uniqueEmail('mentor');
-  await seedUser(mentorEmail, 'MentorPass123!', 'MENTOR', 'Listed Mentor');
+  const menteeName = 'Listed Mentor ' + Date.now();
+  await seedUser(mentorEmail, 'MentorPass123!', 'MENTOR', menteeName);
 
   try {
     await page.goto('/auth/signin');
@@ -23,7 +24,7 @@ test('admin can open the Mentors list and see a mentor', async ({ page }) => {
     await page.getByRole('link', { name: 'Mentors', exact: true }).click();
     await page.waitForURL((u) => u.pathname.includes('/admin/mentors'), { timeout: 15_000 });
 
-    await expect(page.getByText('Listed Mentor')).toBeVisible();
+    await expect(page.getByText(menteeName)).toBeVisible();
     await expect(page.getByText(mentorEmail)).toBeVisible();
   } finally {
     await cleanupByEmail(mentorEmail);
