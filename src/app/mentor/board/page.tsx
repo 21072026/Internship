@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { GraduationCap } from 'lucide-react';
 import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 interface Mentee {
   id: string;
@@ -21,6 +21,7 @@ interface Relation {
 
 export default function MentorBoardPage() {
   const t = useT();
+  const locale = useLocale();
   const router = useRouter();
   const [relations, setRelations] = useState<Relation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +87,7 @@ export default function MentorBoardPage() {
               }`}
             >
               <div className="flex items-center justify-between mb-3 px-1">
-                <span className="text-xs font-semibold text-gray-700">{pipelineLabel(status)}</span>
+                <span className="text-xs font-semibold text-gray-700">{pipelineLabel(status, locale)}</span>
                 <span className="text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5">
                   {items.length}
                 </span>

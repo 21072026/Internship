@@ -29,7 +29,7 @@ test('admin can open a mentee detail page with profile + mentorship', async ({ p
     await expect(page.getByRole('heading', { name: 'Detail Mentee' })).toBeVisible();
     await expect(page.getByText('Köln')).toBeVisible();
     await expect(page.getByText('Detail Mentor')).toBeVisible();
-    await expect(page.getByText('450 · Staj devam ediyor').first()).toBeVisible();
+    await expect(page.getByText('450 · Internship in progress').first()).toBeVisible();
   } finally {
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(menteeEmail);

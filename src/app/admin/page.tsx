@@ -62,7 +62,7 @@ async function getStats() {
 export default async function AdminDashboard() {
   await getServerSession(authOptions);
   const stats = await getStats();
-  const { t } = await getServerDictionary();
+  const { locale, t } = await getServerDictionary();
 
   return (
     <div>
@@ -136,7 +136,7 @@ export default async function AdminDashboard() {
                 const count = stats.pipelineCounts[s] ?? 0;
                 return (
                   <div key={s} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-600 w-56 flex-shrink-0 truncate">{pipelineLabel(s)}</span>
+                    <span className="text-xs text-gray-600 w-56 flex-shrink-0 truncate">{pipelineLabel(s, locale)}</span>
                     <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
                       <div
                         className="bg-blue-500 h-full rounded-full"

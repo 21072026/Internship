@@ -26,8 +26,8 @@ test('mentor board groups a mentee under its pipeline stage', async ({ page }) =
     await page.getByRole('link', { name: 'Board', exact: true }).click();
     await page.waitForURL((u) => u.pathname.includes('/mentor/board'), { timeout: 15_000 });
 
-    // The mentee card sits inside the "450 · Staj devam ediyor" column
-    const column = page.locator('div.w-64', { hasText: '450 · Staj devam ediyor' });
+    // The mentee card sits inside the "450 · Internship in progress" column
+    const column = page.locator('div.w-64', { hasText: '450 · Internship in progress' });
     await expect(column.getByText('Board Mentee')).toBeVisible();
   } finally {
     await cleanupByEmail(mentorEmail);

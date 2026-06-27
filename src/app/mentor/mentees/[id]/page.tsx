@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Plus, Trash2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { pipelineOptions, pipelineLabel } from '@/lib/pipeline';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 interface InteractionLog {
   id: string;
@@ -59,6 +59,7 @@ export default function MenteeDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const t = useT();
+  const locale = useLocale();
 
   const [relation, setRelation] = useState<RelationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,7 +154,7 @@ export default function MenteeDetailPage() {
             <div className="w-full">
               <Select
                 label={t.mentor.pipelineStage}
-                options={pipelineOptions}
+                options={pipelineOptions(locale)}
                 value={relation.pipelineStatus}
                 disabled={savingStage}
                 onChange={(e) => handlePipelineChange(e.target.value)}
@@ -266,9 +267,9 @@ export default function MenteeDetailPage() {
               {relation.statusChanges.map((sc) => (
                 <li key={sc.id} className="text-sm border-l-2 border-blue-100 pl-3">
                   <p className="text-gray-700">
-                    <span className="text-gray-400">{pipelineLabel(sc.fromStatus)}</span>
+                    <span className="text-gray-400">{pipelineLabel(sc.fromStatus, locale)}</span>
                     {' → '}
-                    <span className="font-medium text-gray-900">{pipelineLabel(sc.toStatus)}</span>
+                    <span className="font-medium text-gray-900">{pipelineLabel(sc.toStatus, locale)}</span>
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {sc.changedBy.fullName} · {new Date(sc.createdAt).toLocaleString()}

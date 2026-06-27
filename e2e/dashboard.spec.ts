@@ -27,7 +27,7 @@ test('admin dashboard shows the pipeline distribution', async ({ page }) => {
 
     await page.goto('/admin');
     await expect(page.getByText('Mentees per stage')).toBeVisible();
-    await expect(page.getByText('450 · Staj devam ediyor')).toBeVisible();
+    await expect(page.getByText('450 · Internship in progress')).toBeVisible();
   } finally {
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(menteeEmail);

@@ -38,8 +38,8 @@ test('changing a stage records an entry in the status history', async ({ page })
     await page.reload();
     await expect(page.getByText('Stage history (1)')).toBeVisible();
     const entryItem = page.locator('ol li').first();
-    await expect(entryItem).toContainText('450 · Staj devam ediyor');
-    await expect(entryItem).toContainText('100 · İlk temas');
+    await expect(entryItem).toContainText('450 · Internship in progress');
+    await expect(entryItem).toContainText('100 · First contact');
   } finally {
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(menteeEmail);

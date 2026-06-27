@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { pipelineLabel } from '@/lib/pipeline';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
@@ -51,6 +51,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
 export default function AdminMenteeDetailPage() {
   const id = useParams().id as string;
   const t = useT();
+  const locale = useLocale();
   const [user, setUser] = useState<MenteeDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -82,7 +83,7 @@ export default function AdminMenteeDetailPage() {
             <h1 className="text-2xl font-bold text-gray-900">{user.fullName}</h1>
             <p className="text-gray-500">{user.email}</p>
           </div>
-          {rel && <Badge variant="info">{pipelineLabel(rel.pipelineStatus)}</Badge>}
+          {rel && <Badge variant="info">{pipelineLabel(rel.pipelineStatus, locale)}</Badge>}
         </div>
       </div>
 
@@ -129,7 +130,7 @@ export default function AdminMenteeDetailPage() {
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 <div><span className="text-gray-500">{t.candidateDetail.mentor}:</span> <span className="font-medium">{rel.mentor.fullName}</span></div>
                 {rel.company && <div><span className="text-gray-500">{t.candidateDetail.company}:</span> <span className="font-medium">{rel.company.name}</span></div>}
-                <div><span className="text-gray-500">{t.candidateDetail.stage}:</span> <span className="font-medium">{pipelineLabel(rel.pipelineStatus)}</span></div>
+                <div><span className="text-gray-500">{t.candidateDetail.stage}:</span> <span className="font-medium">{pipelineLabel(rel.pipelineStatus, locale)}</span></div>
               </div>
 
               <div>
@@ -140,9 +141,9 @@ export default function AdminMenteeDetailPage() {
                   <ol className="space-y-2">
                     {rel.statusChanges.map((sc) => (
                       <li key={sc.id} className="text-sm border-l-2 border-blue-100 pl-3">
-                        <span className="text-gray-400">{pipelineLabel(sc.fromStatus)}</span>
+                        <span className="text-gray-400">{pipelineLabel(sc.fromStatus, locale)}</span>
                         {' → '}
-                        <span className="font-medium">{pipelineLabel(sc.toStatus)}</span>
+                        <span className="font-medium">{pipelineLabel(sc.toStatus, locale)}</span>
                         <span className="text-xs text-gray-400"> · {sc.changedBy.fullName} · {new Date(sc.createdAt).toLocaleDateString()}</span>
                       </li>
                     ))}
