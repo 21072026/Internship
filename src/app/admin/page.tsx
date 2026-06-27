@@ -5,9 +5,10 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Ca
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Users, Building2, BookOpen, Bell } from 'lucide-react';
 import Link from 'next/link';
+import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
 
 async function getStats() {
-  const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates] =
+  const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups] =
     await Promise.all([
       prisma.user.count({ where: { role: 'MENTEE' } }),
       prisma.user.count({ where: { role: 'MENTOR' } }),
@@ -36,9 +37,25 @@ async function getStats() {
           createdAt: true,
         },
       }),
+      prisma.mentorshipRelation.groupBy({
+        by: ['pipelineStatus'],
+        _count: { _all: true },
+      }),
     ]);
 
-  return { menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates };
+  const pipelineCounts = Object.fromEntries(
+    pipelineGroups.map((g) => [g.pipelineStatus, g._count._all])
+  ) as Record<string, number>;
+
+  return {
+    menteeCount,
+    mentorCount,
+    companyCount,
+    activeRelations,
+    recentRelations,
+    recentCandidates,
+    pipelineCounts,
+  };
 }
 
 export default async function AdminDashboard() {
@@ -102,6 +119,36 @@ export default async function AdminDashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Pipeline distribution */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Pipeline</CardTitle>
+          <CardDescription>Mentees per stage</CardDescription>
+        </CardHeader>
+        {(() => {
+          const max = Math.max(1, ...PIPELINE_STATUSES.map((s) => stats.pipelineCounts[s] ?? 0));
+          return (
+            <div className="space-y-2">
+              {PIPELINE_STATUSES.map((s) => {
+                const count = stats.pipelineCounts[s] ?? 0;
+                return (
+                  <div key={s} className="flex items-center gap-3">
+                    <span className="text-xs text-gray-600 w-56 flex-shrink-0 truncate">{pipelineLabel(s)}</span>
+                    <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full rounded-full"
+                        style={{ width: `${(count / max) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 w-8 text-right flex-shrink-0">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Mentorships */}
