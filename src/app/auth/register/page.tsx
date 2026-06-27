@@ -14,7 +14,7 @@ import { Suspense } from 'react';
 
 const registerSchema = z
   .object({
-    token: z.string().min(1, 'Invitation token is required'),
+    token: z.string().optional(),
     email: z.string().email('Invalid email address'),
     fullName: z.string().min(1, 'Full name is required'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -98,7 +98,7 @@ function RegisterForm() {
           <form onSubmit={onSubmit} className="space-y-4">
             <Input
               label={t.auth.invitationToken}
-              required
+              hint={t.auth.tokenHint}
               placeholder="Paste your invitation token here"
               {...register('token')}
               error={errors.token?.message}

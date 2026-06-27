@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
 const registerSchema = z.object({
-  token: z.string().min(1, 'Invitation token is required'),
+  token: z.string().optional(),
   email: z.string().email('Invalid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   fullName: z.string().min(1, 'Full name is required'),
@@ -24,27 +24,25 @@ export async function POST(request: Request) {
 
     const { token, email, password, fullName } = parsed.data;
 
-    const invitation = await prisma.invitationToken.findUnique({
-      where: { token },
-    });
+    // With a token: validate the invitation and use its role.
+    // Without a token: open self-registration as a MENTOR.
+    let role: 'ADMIN' | 'MENTOR' | 'MENTEE' = 'MENTOR';
 
-    if (!invitation) {
-      return NextResponse.json({ error: 'Invalid invitation token' }, { status: 400 });
-    }
-
-    if (invitation.used) {
-      return NextResponse.json({ error: 'Invitation token has already been used' }, { status: 400 });
-    }
-
-    if (invitation.expiresAt < new Date()) {
-      return NextResponse.json({ error: 'Invitation token has expired' }, { status: 400 });
-    }
-
-    if (invitation.email.toLowerCase() !== email.toLowerCase()) {
-      return NextResponse.json(
-        { error: 'Email does not match the invitation' },
-        { status: 400 }
-      );
+    if (token) {
+      const invitation = await prisma.invitationToken.findUnique({ where: { token } });
+      if (!invitation) {
+        return NextResponse.json({ error: 'Invalid invitation token' }, { status: 400 });
+      }
+      if (invitation.used) {
+        return NextResponse.json({ error: 'Invitation token has already been used' }, { status: 400 });
+      }
+      if (invitation.expiresAt < new Date()) {
+        return NextResponse.json({ error: 'Invitation token has expired' }, { status: 400 });
+      }
+      if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+        return NextResponse.json({ error: 'Email does not match the invitation' }, { status: 400 });
+      }
+      role = invitation.role;
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -55,26 +53,13 @@ export async function POST(request: Request) {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        fullName,
-        role: invitation.role,
-        skills: [],
-      },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        createdAt: true,
-      },
+      data: { email, password: hashedPassword, fullName, role, skills: [] },
+      select: { id: true, email: true, fullName: true, role: true, createdAt: true },
     });
 
-    await prisma.invitationToken.update({
-      where: { token },
-      data: { used: true },
-    });
+    if (token) {
+      await prisma.invitationToken.update({ where: { token }, data: { used: true } });
+    }
 
     return NextResponse.json({ user }, { status: 201 });
   } catch (error) {

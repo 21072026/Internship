@@ -45,13 +45,21 @@ export default function MenteesPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">{t.mentor.myMentees}</h1>
-        <p className="text-gray-500 mt-1">{t.mentor.menteesSubtitle}</p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t.mentor.myMentees}</h1>
+          <p className="text-gray-500 mt-1">{t.mentor.menteesSubtitle}</p>
+        </div>
+        <Link href="/mentor/mentees/new">
+          <Button>
+            <Users className="h-4 w-4" />
+            {t.mentor.addMentee}
+          </Button>
+        </Link>
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400">Loading...</div>
+        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
       ) : relations.length === 0 ? (
         <Card className="text-center py-12">
           <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
