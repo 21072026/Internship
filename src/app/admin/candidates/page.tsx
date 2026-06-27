@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -144,7 +145,12 @@ export default function CandidatesPage() {
               <Card key={candidate.id}>
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="font-semibold text-gray-900">{candidate.fullName}</h3>
+                    <Link
+                      href={`/admin/candidates/${candidate.id}`}
+                      className="font-semibold text-gray-900 hover:text-blue-700 hover:underline"
+                    >
+                      {candidate.fullName}
+                    </Link>
                     <p className="text-sm text-gray-500">{candidate.email}</p>
                   </div>
                   {activeRelation ? (
