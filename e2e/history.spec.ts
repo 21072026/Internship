@@ -34,10 +34,12 @@ test('changing a stage records an entry in the status history', async ({ page })
     expect(entry?.toStatus).toBe('INTERNSHIP_IN_PROGRESS_450');
     expect(entry?.fromStatus).toBe('APPLICATION_100');
 
-    // And it shows in the UI timeline
+    // And it shows in the UI timeline (scope to the history list, not the select options)
     await page.reload();
-    const historyCard = page.locator('div', { hasText: /Aşama Geçmişi \(1\)/ }).last();
-    await expect(historyCard.getByText('450 · Staj devam ediyor')).toBeVisible();
+    await expect(page.getByText('Aşama Geçmişi (1)')).toBeVisible();
+    const entryItem = page.locator('ol li').first();
+    await expect(entryItem).toContainText('450 · Staj devam ediyor');
+    await expect(entryItem).toContainText('100 · İlk temas');
   } finally {
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(menteeEmail);
