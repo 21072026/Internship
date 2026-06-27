@@ -7,7 +7,7 @@ dashboards, and email reminders. Built to replace a spreadsheet-based mentoring 
 ## Features
 
 - **Role-based access** — Admin, Mentor, Mentee, each with its own dashboard.
-- **Mentorship pipeline** — granular status per mentee (`BASVURU_100` … `IS_BULDU_700`).
+- **Mentorship pipeline** — granular status per mentee (`APPLICATION_100` … `EMPLOYED_700`).
 - **Interaction logs** — meetings / feedback / emails per mentorship.
 - **Candidate browsing & matching** — search/filter mentees, assign mentors & companies.
 - **Invitation-based registration** — email tokens with role assignment.
@@ -35,21 +35,21 @@ flowchart LR
 
 ```mermaid
 stateDiagram-v2
-  [*] --> BASVURU_100
-  BASVURU_100 --> ONAY_220
-  ONAY_220 --> GORUSME_250
-  GORUSME_250 --> TANISTIRMA_270
-  TANISTIRMA_270 --> STAJ_BASLAYACAK_300
-  STAJ_BASLAYACAK_300 --> STAJ_DEVAM_450
-  STAJ_DEVAM_450 --> STAJ_BITTI_490
-  STAJ_DEVAM_450 --> YARIM_BIRAKTI_460
-  STAJ_DEVAM_450 --> BASKA_YERDE_STAJ_800
-  STAJ_BITTI_490 --> IS_ARIYOR_500
-  IS_ARIYOR_500 --> ISE_ALINABILIR_600
-  ISE_ALINABILIR_600 --> ISE_ALINDI_660
-  STAJ_BITTI_490 --> IS_BULDU_700
-  ISE_ALINDI_660 --> [*]
-  IS_BULDU_700 --> [*]
+  [*] --> APPLICATION_100
+  APPLICATION_100 --> APPROVAL_PENDING_220
+  APPROVAL_PENDING_220 --> INTERVIEW_PENDING_250
+  INTERVIEW_PENDING_250 --> INTRODUCTION_PENDING_270
+  INTRODUCTION_PENDING_270 --> INTERNSHIP_STARTING_300
+  INTERNSHIP_STARTING_300 --> INTERNSHIP_IN_PROGRESS_450
+  INTERNSHIP_IN_PROGRESS_450 --> INTERNSHIP_COMPLETED_490
+  INTERNSHIP_IN_PROGRESS_450 --> INTERNSHIP_DROPPED_460
+  INTERNSHIP_IN_PROGRESS_450 --> INTERNSHIP_FOUND_ELSEWHERE_800
+  INTERNSHIP_COMPLETED_490 --> JOB_SEEKING_500
+  JOB_SEEKING_500 --> HIREABLE_600
+  HIREABLE_600 --> HIRED_660
+  INTERNSHIP_COMPLETED_490 --> EMPLOYED_700
+  HIRED_660 --> [*]
+  EMPLOYED_700 --> [*]
 ```
 
 ## Local setup
