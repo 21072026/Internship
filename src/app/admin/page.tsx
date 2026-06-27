@@ -20,7 +20,7 @@ async function getStats() {
         orderBy: { startDate: 'desc' },
         include: {
           mentor: { select: { fullName: true } },
-          mentee: { select: { fullName: true } },
+          mentee: { select: { id: true, fullName: true } },
           company: { select: { name: true } },
         },
       }),
@@ -73,53 +73,61 @@ export default async function AdminDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Users className="h-6 w-6 text-blue-600" />
+        <Link href="/admin/candidates" className="block">
+          <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <Users className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{stats.menteeCount}</p>
+                <p className="text-sm text-gray-500">{t.dashboard.mentees}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{stats.menteeCount}</p>
-              <p className="text-sm text-gray-500">{t.dashboard.mentees}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </Link>
 
-        <Card>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <Users className="h-6 w-6 text-green-600" />
+        <Link href="/admin/mentors" className="block">
+          <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                <Users className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{stats.mentorCount}</p>
+                <p className="text-sm text-gray-500">{t.dashboard.mentors}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{stats.mentorCount}</p>
-              <p className="text-sm text-gray-500">{t.dashboard.mentors}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </Link>
 
-        <Card>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Building2 className="h-6 w-6 text-purple-600" />
+        <Link href="/admin/companies" className="block">
+          <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                <Building2 className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{stats.companyCount}</p>
+                <p className="text-sm text-gray-500">{t.dashboard.companies}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{stats.companyCount}</p>
-              <p className="text-sm text-gray-500">{t.dashboard.companies}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </Link>
 
-        <Card>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-              <BookOpen className="h-6 w-6 text-orange-600" />
+        <Link href="/admin/mentorship" className="block">
+          <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                <BookOpen className="h-6 w-6 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900">{stats.activeRelations}</p>
+                <p className="text-sm text-gray-500">{t.dashboard.activeMentorships}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{stats.activeRelations}</p>
-              <p className="text-sm text-gray-500">{t.dashboard.activeMentorships}</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </Link>
       </div>
 
       {/* Pipeline distribution */}
@@ -135,7 +143,11 @@ export default async function AdminDashboard() {
               {PIPELINE_STATUSES.map((s) => {
                 const count = stats.pipelineCounts[s] ?? 0;
                 return (
-                  <div key={s} className="flex items-center gap-3">
+                  <Link
+                    key={s}
+                    href={`/admin/candidates?status=${s}`}
+                    className="flex items-center gap-3 rounded-lg px-1 py-0.5 hover:bg-blue-50 transition-colors"
+                  >
                     <span className="text-xs text-gray-600 w-56 flex-shrink-0 truncate">{pipelineLabel(s, locale)}</span>
                     <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
                       <div
@@ -144,7 +156,7 @@ export default async function AdminDashboard() {
                       />
                     </div>
                     <span className="text-xs font-medium text-gray-700 w-8 text-right flex-shrink-0">{count}</span>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -174,7 +186,11 @@ export default async function AdminDashboard() {
               <div key={rel.id} className="flex items-center justify-between py-2">
                 <div>
                   <p className="text-sm font-medium text-gray-900">
-                    {rel.mentee.fullName} → {rel.mentor.fullName}
+                    <Link href={`/admin/candidates/${rel.mentee.id}`} className="hover:text-blue-700 hover:underline">
+                      {rel.mentee.fullName}
+                    </Link>
+                    {' → '}
+                    {rel.mentor.fullName}
                   </p>
                   {rel.company && (
                     <p className="text-xs text-gray-500">{rel.company.name}</p>
@@ -206,7 +222,9 @@ export default async function AdminDashboard() {
             {stats.recentCandidates.map((candidate) => (
               <div key={candidate.id} className="flex items-start justify-between py-2">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{candidate.fullName}</p>
+                  <Link href={`/admin/candidates/${candidate.id}`} className="text-sm font-medium text-gray-900 hover:text-blue-700 hover:underline">
+                    {candidate.fullName}
+                  </Link>
                   <p className="text-xs text-gray-500">{candidate.university || candidate.email}</p>
                 </div>
                 <div className="flex flex-wrap gap-1 max-w-[120px] justify-end">

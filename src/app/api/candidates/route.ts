@@ -15,10 +15,15 @@ export async function GET(request: Request) {
     const skills = searchParams.get('skills');
     const graduationYear = searchParams.get('graduationYear');
     const search = searchParams.get('search');
+    const pipelineStatus = searchParams.get('status');
 
     const where: Record<string, unknown> = {
       role: 'MENTEE',
     };
+
+    if (pipelineStatus) {
+      where.menteeRelations = { some: { pipelineStatus } };
+    }
 
     // skills filtering is applied in-memory after fetching (MySQL JSON arrays don't support hasSome)
     const skillList = skills

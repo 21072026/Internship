@@ -1,5 +1,6 @@
 'use client';
 import { useT } from "@/i18n/client";
+import Link from "next/link";
 
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
@@ -189,7 +190,7 @@ export default function MentorshipPage() {
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className="font-semibold text-gray-900">{rel.mentee.fullName}</span>
+                    <Link href={`/admin/candidates/${rel.mentee.id}`} className="font-semibold text-gray-900 hover:text-blue-700 hover:underline">{rel.mentee.fullName}</Link>
                     <span className="text-gray-400">→</span>
                     <span className="font-semibold text-gray-900">{rel.mentor.fullName}</span>
                     <StatusBadge status={rel.status} />

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from "next/link";
-import { useT } from "@/i18n/client";
+import { useT, useLocale } from "@/i18n/client";
+import { pipelineLabel } from '@/lib/pipeline';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -37,12 +38,19 @@ const graduationYearOptions = [
 
 export default function CandidatesPage() {
   const t = useT();
+  const locale = useLocale();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [skillFilter, setSkillFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [error, setError] = useState('');
+
+  // Read an optional ?status= filter from the URL (e.g. from dashboard pipeline bars)
+  useEffect(() => {
+    setStatusFilter(new URLSearchParams(window.location.search).get('status') || '');
+  }, []);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -51,6 +59,7 @@ export default function CandidatesPage() {
       if (skillFilter) params.set('skills', skillFilter);
       if (yearFilter) params.set('graduationYear', yearFilter);
       if (search) params.set('search', search);
+      if (statusFilter) params.set('status', statusFilter);
 
       const res = await fetch(`/api/candidates?${params}`);
       const data = await res.json();
@@ -60,7 +69,7 @@ export default function CandidatesPage() {
     } finally {
       setLoading(false);
     }
-  }, [skillFilter, yearFilter, search]);
+  }, [skillFilter, yearFilter, search, statusFilter]);
 
   useEffect(() => {
     const timeout = setTimeout(fetchCandidates, 300);
@@ -72,6 +81,22 @@ export default function CandidatesPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">{t.candidates.title}</h1>
         <p className="text-gray-500 mt-1">{t.candidates.subtitle}</p>
+        {statusFilter && (
+          <div className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm text-blue-700">
+            {pipelineLabel(statusFilter, locale)}
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('');
+                window.history.replaceState(null, '', '/admin/candidates');
+              }}
+              className="text-blue-500 hover:text-blue-800"
+              aria-label="clear filter"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
