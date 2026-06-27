@@ -83,9 +83,9 @@ function SidebarContent({
 
 export function AdminShell({ children, userName, userEmail }: AdminShellProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const mobileSidebarClassName = isMenuOpen
-    ? 'bg-white border-r border-gray-200 flex flex-col fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl md:hidden'
-    : 'hidden';
+  const mobileSidebarClassName = `bg-white border-r border-gray-200 flex-col fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] shadow-2xl md:hidden ${
+    isMenuOpen ? 'flex' : 'hidden'
+  }`;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -130,7 +130,7 @@ export function AdminShell({ children, userName, userEmail }: AdminShellProps) {
 
       <aside
         id="admin-mobile-menu"
-        aria-hidden={!isMenuOpen}
+        aria-hidden={isMenuOpen ? undefined : true}
         className={mobileSidebarClassName}
       >
         <SidebarContent
