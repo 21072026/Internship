@@ -27,3 +27,17 @@ test('authenticated admin sees a Sign Out control', async ({ page }) => {
   await page.goto('/admin');
   await expect(page.getByRole('link', { name: /sign out/i })).toBeVisible();
 });
+
+test('admin sidebar links to the invite page', async ({ page }) => {
+  await page.goto('/auth/signin');
+  await page.fill('input[type="email"], input[name="email"]', ADMIN_EMAIL);
+  await page.fill('input[type="password"]', ADMIN_PASSWORD);
+  await page.click('button[type="submit"]');
+  await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
+  await page.goto('/admin');
+  const inviteLink = page.getByRole('link', { name: /davet/i });
+  await expect(inviteLink).toBeVisible();
+  await inviteLink.click();
+  await page.waitForURL((u) => u.pathname.includes('/admin/invite'), { timeout: 15_000 });
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+});
