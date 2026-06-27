@@ -198,6 +198,22 @@ const en = {
     back: 'Back',
     complete: 'Complete Profile',
   },
+  account: {
+    title: 'Account',
+    subtitle: 'Manage your email and password',
+    nav: 'Account',
+    emailSection: 'Email',
+    email: 'Email address',
+    updateEmail: 'Update email',
+    passwordSection: 'Password',
+    currentPassword: 'Current password',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm new password',
+    updatePassword: 'Update password',
+    updated: 'Account updated',
+    reloginNote: 'Sign out and back in for changes to take full effect.',
+    passwordMismatch: 'New passwords do not match',
+  },
 };
 
 type Dict = typeof en;
@@ -397,6 +413,22 @@ const tr: Dict = {
     continue: 'Devam',
     back: 'Geri',
     complete: 'Profili Tamamla',
+  },
+  account: {
+    title: 'Hesap',
+    subtitle: 'E-posta ve parolanı yönet',
+    nav: 'Hesap',
+    emailSection: 'E-posta',
+    email: 'E-posta adresi',
+    updateEmail: 'E-postayı güncelle',
+    passwordSection: 'Parola',
+    currentPassword: 'Mevcut parola',
+    newPassword: 'Yeni parola',
+    confirmPassword: 'Yeni parolayı onayla',
+    updatePassword: 'Parolayı güncelle',
+    updated: 'Hesap güncellendi',
+    reloginNote: 'Değişikliklerin tam etkili olması için çıkış yapıp tekrar giriş yap.',
+    passwordMismatch: 'Yeni parolalar eşleşmiyor',
   },
 };
 
