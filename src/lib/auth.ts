@@ -1,9 +1,7 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { getToken } from 'next-auth/jwt';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import type { NextApiRequest } from 'next';
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -51,71 +49,39 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
-    // Admin "login as" — start impersonating another user. The current session
-    // must be an ADMIN (verified from the signed JWT, never trusting the client).
+    // Impersonation sign-in. The caller's admin rights are checked in the
+    // admin-guarded API route that mints the single-use grant; here we only
+    // consume that grant, so there's no need to read the session cookie.
+    // A START grant becomes the target (carrying impersonatorId); a STOP grant
+    // returns to the admin (no impersonatorId).
     CredentialsProvider({
       id: 'impersonate',
       name: 'impersonate',
-      credentials: { targetUserId: { label: 'targetUserId', type: 'text' } },
-      async authorize(credentials, req) {
-        const targetUserId = credentials?.targetUserId;
-        if (!targetUserId) throw new Error('targetUserId is required');
+      credentials: { grant: { label: 'grant', type: 'text' } },
+      async authorize(credentials) {
+        const grantToken = credentials?.grant;
+        if (!grantToken) throw new Error('grant is required');
 
-        const token = await getToken({
-          req: req as unknown as NextApiRequest,
-          secret: process.env.NEXTAUTH_SECRET,
-        });
-        if (!token || token.role !== 'ADMIN') {
-          throw new Error('Only admins can impersonate');
+        const grant = await prisma.impersonationGrant.findUnique({ where: { token: grantToken } });
+        if (!grant || grant.used || grant.expiresAt < new Date()) {
+          throw new Error('Invalid or expired grant');
         }
-        const adminId = token.id as string;
+        await prisma.impersonationGrant.update({ where: { id: grant.id }, data: { used: true } });
 
-        const target = await prisma.user.findUnique({ where: { id: targetUserId } });
-        if (!target) throw new Error('Target user not found');
+        const user = await prisma.user.findUnique({ where: { id: grant.targetId } });
+        if (!user) throw new Error('Target user not found');
 
-        const admin = await prisma.user.findUnique({ where: { id: adminId } });
-        await prisma.auditLog.create({
-          data: { actorId: adminId, action: 'IMPERSONATE_START', targetId: target.id },
-        });
+        const isStart = grant.kind === 'START';
+        const admin = isStart ? await prisma.user.findUnique({ where: { id: grant.adminId } }) : null;
 
         return {
-          id: target.id,
-          email: target.email,
-          name: target.fullName,
-          role: target.role,
-          emailVerified: target.emailVerified,
-          impersonatorId: adminId,
-          impersonatorName: admin?.fullName ?? 'Admin',
-        };
-      },
-    }),
-    // Return from an impersonated session back to the original admin. Allowed
-    // only when the signed JWT carries an impersonatorId (so it can't be forged).
-    CredentialsProvider({
-      id: 'stop-impersonate',
-      name: 'stop-impersonate',
-      credentials: {},
-      async authorize(_credentials, req) {
-        const token = await getToken({
-          req: req as unknown as NextApiRequest,
-          secret: process.env.NEXTAUTH_SECRET,
-        });
-        const impersonatorId = token?.impersonatorId as string | undefined;
-        if (!impersonatorId) throw new Error('Not impersonating');
-
-        const admin = await prisma.user.findUnique({ where: { id: impersonatorId } });
-        if (!admin) throw new Error('Original account not found');
-
-        await prisma.auditLog.create({
-          data: { actorId: admin.id, action: 'IMPERSONATE_STOP', targetId: (token?.id as string) ?? null },
-        });
-
-        return {
-          id: admin.id,
-          email: admin.email,
-          name: admin.fullName,
-          role: admin.role,
-          emailVerified: admin.emailVerified,
+          id: user.id,
+          email: user.email,
+          name: user.fullName,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          impersonatorId: isStart ? grant.adminId : undefined,
+          impersonatorName: isStart ? admin?.fullName ?? 'Admin' : undefined,
         };
       },
     }),
@@ -151,6 +117,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
         session.user.emailVerified = token.emailVerified as boolean;
+        session.user.impersonatorId = (token.impersonatorId as string) ?? null;
         session.user.impersonatorName = (token.impersonatorName as string) ?? null;
         if (token.email) session.user.email = token.email as string;
         if (token.name) session.user.name = token.name as string;
@@ -169,6 +136,7 @@ declare module 'next-auth' {
       image?: string | null;
       role: string;
       emailVerified?: boolean;
+      impersonatorId?: string | null;
       impersonatorName?: string | null;
     };
   }

@@ -18,9 +18,19 @@ export function ImpersonationBanner() {
 
   const stop = async () => {
     setBusy(true);
-    await signIn('stop-impersonate', { redirect: false });
-    router.push('/admin/users');
-    router.refresh();
+    try {
+      const res = await fetch('/api/impersonate/stop', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        await signIn('impersonate', { grant: data.grant, redirect: false });
+        router.push('/admin/users');
+        router.refresh();
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    setBusy(false);
   };
 
   return (

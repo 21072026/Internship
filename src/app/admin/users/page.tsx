@@ -36,13 +36,24 @@ export default function AdminUsersPage() {
 
   const loginAs = async (u: AdminUser) => {
     setBusyId(u.id);
-    const res = await signIn('impersonate', { targetUserId: u.id, redirect: false });
-    if (res?.ok) {
-      router.push(roleHome(u.role));
-      router.refresh();
-    } else {
-      setBusyId(null);
+    try {
+      const res = await fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: u.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const signed = await signIn('impersonate', { grant: data.grant, redirect: false });
+      if (signed?.ok) {
+        router.push(roleHome(u.role));
+        router.refresh();
+        return;
+      }
+    } catch {
+      // fall through to reset busy state
     }
+    setBusyId(null);
   };
 
   const load = useCallback(async () => {

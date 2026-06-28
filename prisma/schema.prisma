@@ -166,6 +166,20 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// Single-use, very short-lived grant that authorizes an impersonation sign-in.
+// Created by an admin-guarded API route, then consumed by the auth provider —
+// so the provider never has to re-check the caller's session itself.
+model ImpersonationGrant {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  adminId   String // the real admin
+  targetId  String // who to become (the target on START, the admin on STOP)
+  kind      String // START | STOP
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
 model AuditLog {
   id        String   @id @default(cuid())

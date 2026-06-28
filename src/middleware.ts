@@ -8,7 +8,13 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Endpoints a logged-in-but-unverified user must still be able to call:
 // the whole auth surface (sign in/out, forgot/reset, verify + resend).
 function isAllowlisted(pathname: string) {
-  return pathname.startsWith('/api/auth/') || pathname === '/api/register';
+  return (
+    pathname.startsWith('/api/auth/') ||
+    pathname === '/api/register' ||
+    // Returning from impersonation must work even if the impersonated user is
+    // unverified (the impersonated identity could be a read-only account).
+    pathname === '/api/impersonate/stop'
+  );
 }
 
 export async function middleware(req: NextRequest) {
