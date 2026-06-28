@@ -36,9 +36,17 @@ export async function POST(request: Request) {
 
     const hashed = await bcrypt.hash(password, 12);
 
-    // Set the new password and consume the token atomically.
+    // Set the new password and consume the token atomically. Following the
+    // emailed link proves ownership of the address, so a SET_INITIAL flow also
+    // marks the email verified.
     await prisma.$transaction([
-      prisma.user.update({ where: { id: record.userId }, data: { password: hashed } }),
+      prisma.user.update({
+        where: { id: record.userId },
+        data: {
+          password: hashed,
+          ...(record.purpose === 'SET_INITIAL' ? { emailVerified: true } : {}),
+        },
+      }),
       prisma.passwordResetToken.update({ where: { id: record.id }, data: { used: true } }),
     ]);
 

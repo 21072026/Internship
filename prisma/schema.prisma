@@ -58,13 +58,17 @@ model User {
   city           String?
   birthDate      DateTime?
   referralSource String?
+  // Default true so existing rows stay writable after the column is added;
+  // new self-registrations are created with false until they verify by email.
+  emailVerified  Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  mentorRelations     MentorshipRelation[] @relation("MentorRelations")
-  menteeRelations     MentorshipRelation[] @relation("MenteeRelations")
-  statusChanges       StatusChange[]       @relation("StatusChangedBy")
-  passwordResetTokens PasswordResetToken[]
+  mentorRelations         MentorshipRelation[]     @relation("MentorRelations")
+  menteeRelations         MentorshipRelation[]     @relation("MenteeRelations")
+  statusChanges           StatusChange[]           @relation("StatusChangedBy")
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
 }
 
 model Company {
@@ -153,6 +157,20 @@ model PasswordResetToken {
   purpose   PasswordResetPurpose @default(RESET)
   used      Boolean              @default(false)
   createdAt DateTime             @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Single-use, time-limited token to confirm a user's email address.
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
   expiresAt DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

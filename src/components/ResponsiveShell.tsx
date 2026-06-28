@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 
 // App shell: sidebar is a static column on desktop and an off-canvas drawer
 // (with a hamburger top bar) on mobile.
@@ -49,7 +50,10 @@ export function ResponsiveShell({
       </div>
 
       <main className="flex-1 overflow-auto min-w-0">
-        <div className="p-4 lg:p-8">{children}</div>
+        <div className="p-4 lg:p-8">
+          <EmailVerificationBanner />
+          {children}
+        </div>
       </main>
     </div>
   );
