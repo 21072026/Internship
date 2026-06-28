@@ -14,6 +14,8 @@ const en = {
     myMentees: 'My Mentees',
     board: 'Board',
     interactionLogs: 'Interaction Logs',
+    email: 'Email',
+    meetings: 'Meetings',
     myProfile: 'My Profile',
     signOut: 'Sign Out',
   },
@@ -221,6 +223,17 @@ const en = {
   adminBoard: {
     subtitle: 'All mentees across every mentor — drag a card to change its stage',
   },
+  mentorEmail: {
+    title: 'Email mentees',
+    subtitle: 'Send a message to one or more of your mentees',
+    recipients: 'Recipients',
+    selectAll: 'Select all',
+    compose: 'Compose',
+    subject: 'Subject',
+    message: 'Message',
+    send: 'Send email',
+    sentCount: 'Email sent to {n} mentee(s).',
+  },
   portal: {
     welcome: 'Welcome',
     dashSubtitle: 'Your internship dashboard',
@@ -298,6 +311,8 @@ const tr: Dict = {
     myMentees: 'Mentee’lerim',
     board: 'Pano',
     interactionLogs: 'Etkileşim Kayıtları',
+    email: 'E-posta',
+    meetings: 'Toplantılar',
     myProfile: 'Profilim',
     signOut: 'Çıkış Yap',
   },
@@ -504,6 +519,17 @@ const tr: Dict = {
   },
   adminBoard: {
     subtitle: 'Tüm mentorların tüm mentee’leri — aşamayı değiştirmek için kartı sürükle',
+  },
+  mentorEmail: {
+    title: 'Mentee’lere e-posta',
+    subtitle: 'Bir veya birden çok mentee’ne mesaj gönder',
+    recipients: 'Alıcılar',
+    selectAll: 'Tümünü seç',
+    compose: 'Oluştur',
+    subject: 'Konu',
+    message: 'Mesaj',
+    send: 'E-posta gönder',
+    sentCount: '{n} mentee’ye e-posta gönderildi.',
   },
   portal: {
     welcome: 'Hoş geldin',
