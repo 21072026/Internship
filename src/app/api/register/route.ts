@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { createEmailVerificationToken } from '@/lib/emailVerification';
+import { sendVerificationEmail } from '@/services/emailService';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -52,16 +54,28 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    // An invitation proves the email belongs to the registrant, so invited
+    // users are verified immediately. Open (token-less) self-registration must
+    // confirm the email — created unverified, then emailed a verification link.
+    const emailVerified = !!token;
+
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [] },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true },
     });
 
     if (token) {
       await prisma.invitationToken.update({ where: { token }, data: { used: true } });
+    } else {
+      const verifyToken = await createEmailVerificationToken(user.id);
+      try {
+        await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName });
+      } catch (e) {
+        console.error('Verification email failed:', e);
+      }
     }
 
-    return NextResponse.json({ user }, { status: 201 });
+    return NextResponse.json({ user, emailVerified }, { status: 201 });
   } catch (error) {
     console.error('Register error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

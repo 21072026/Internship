@@ -128,6 +128,48 @@ export async function sendPasswordResetEmail({
   });
 }
 
+export async function sendVerificationEmail({
+  to,
+  token,
+  fullName,
+}: {
+  to: string;
+  token: string;
+  fullName?: string | null;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const verifyUrl = `${appUrl}/auth/verify?token=${token}`;
+
+  await sendEmail({
+    to,
+    subject: 'Verify your Internship CRM email',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Confirm your email</h2>
+        ${fullName ? `<p>Hi ${fullName},</p>` : ''}
+        <p>Please confirm your email address to activate full access to your account.</p>
+        <a href="${verifyUrl}" style="
+          display: inline-block;
+          background-color: #2563eb;
+          color: white;
+          padding: 12px 24px;
+          text-decoration: none;
+          border-radius: 6px;
+          margin: 16px 0;
+        ">
+          Verify email
+        </a>
+        <p style="color: #6b7280; font-size: 14px;">
+          This link expires in 24 hours. Until you verify, your account has read-only access.
+        </p>
+        <p style="color: #6b7280; font-size: 12px;">
+          Or copy this link: ${verifyUrl}
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function checkMentorInteractionReminders() {
   const fourteenDaysAgo = new Date();
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);

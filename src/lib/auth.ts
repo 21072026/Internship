@@ -41,6 +41,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.fullName,
           role: user.role,
+          emailVerified: user.emailVerified,
         };
       },
     }),
@@ -50,6 +51,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as unknown as { role: string }).role;
+        token.emailVerified = (user as unknown as { emailVerified: boolean }).emailVerified;
       }
       // On a client-side session update() (e.g. after changing email/profile),
       // re-read the user so the token — and thus the UI that reads the session,
@@ -60,6 +62,7 @@ export const authOptions: NextAuthOptions = {
           token.email = fresh.email;
           token.name = fresh.fullName;
           token.role = fresh.role;
+          token.emailVerified = fresh.emailVerified;
         }
       }
       return token;
@@ -68,6 +71,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
+        session.user.emailVerified = token.emailVerified as boolean;
         if (token.email) session.user.email = token.email as string;
         if (token.name) session.user.name = token.name as string;
       }
@@ -84,6 +88,7 @@ declare module 'next-auth' {
       email?: string | null;
       image?: string | null;
       role: string;
+      emailVerified?: boolean;
     };
   }
 }
