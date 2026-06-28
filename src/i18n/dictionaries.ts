@@ -256,6 +256,15 @@ const en = {
     yes: "Yes, I'll attend",
     no: "Can't attend",
   },
+  cv: {
+    title: 'CV / Resume',
+    upload: 'Upload CV',
+    replace: 'Replace CV',
+    view: 'View CV',
+    delete: 'Delete',
+    none: 'No CV uploaded',
+    hint: 'PDF or Word, up to 5 MB.',
+  },
   portal: {
     welcome: 'Welcome',
     dashSubtitle: 'Your internship dashboard',
@@ -574,6 +583,15 @@ const tr: Dict = {
     declined: 'Katılamayacağını bildirdiğin için teşekkürler.',
     yes: 'Evet, katılacağım',
     no: 'Katılamam',
+  },
+  cv: {
+    title: 'CV / Özgeçmiş',
+    upload: 'CV yükle',
+    replace: 'CV’yi değiştir',
+    view: 'CV’yi gör',
+    delete: 'Sil',
+    none: 'CV yüklenmemiş',
+    hint: 'PDF veya Word, en fazla 5 MB.',
   },
   portal: {
     welcome: 'Hoş geldin',

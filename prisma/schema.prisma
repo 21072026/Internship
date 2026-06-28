@@ -71,6 +71,21 @@ model User {
   statusChanges           StatusChange[]           @relation("StatusChangedBy")
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  cvFile                  CvFile?
+}
+
+// A user's CV stored in the database (no external object storage needed, so it
+// survives container redeploys). Served via /api/cv/[userId].
+model CvFile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  uploadedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Company {

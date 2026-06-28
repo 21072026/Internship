@@ -7,8 +7,9 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, ExternalLink, KeyRound, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, KeyRound, Trash2, Plus } from 'lucide-react';
 import { pipelineLabel, pipelineOptions, PIPELINE_STATUSES } from '@/lib/pipeline';
+import { CvManager } from '@/components/CvManager';
 import { useT, useLocale } from '@/i18n/client';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
@@ -201,11 +202,9 @@ export default function AdminMenteeDetailPage() {
                 </div>
               </div>
             )}
-            {user.cvUrl && (
-              <a href={user.cvUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sm text-blue-600 hover:underline">
-                <ExternalLink className="h-3 w-3" /> {t.candidateDetail.viewCv}
-              </a>
-            )}
+            <div className="pt-1">
+              <CvManager targetUserId={user.id} initialCvUrl={user.cvUrl} />
+            </div>
           </div>
         </Card>
 

@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { CvManager } from '@/components/CvManager';
 
 const profileSchema = z.object({
   fullName: z.string().min(1, 'Full name is required'),
@@ -39,6 +40,8 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [userId, setUserId] = useState('');
+  const [initialCv, setInitialCv] = useState<string | null>(null);
 
   const {
     register,
@@ -54,6 +57,8 @@ export default function ProfilePage() {
       .then((res) => res.json())
       .then(({ user }) => {
         if (user) {
+          setUserId(user.id);
+          setInitialCv(user.cvUrl || null);
           reset({
             fullName: user.fullName,
             phone: user.phone || '',
@@ -198,6 +203,11 @@ export default function ProfilePage() {
                 {...register('cvUrl')}
                 error={errors.cvUrl?.message}
               />
+              {userId && (
+                <div className="border-t border-gray-100 pt-4">
+                  <CvManager targetUserId={userId} initialCvUrl={initialCv} />
+                </div>
+              )}
             </div>
           </div>
 
