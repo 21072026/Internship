@@ -150,6 +150,8 @@ const en = {
     notEmailed: 'not emailed',
     copy: 'Copy',
     copied: 'Copied',
+    companyHint: 'Need a company login? Companies are read-only accounts linked to a company — create one from',
+    companyHintLink: 'Companies →',
   },
   mentor: {
     welcomeBack: 'Welcome back',
@@ -675,6 +677,8 @@ const tr: Dict = {
     notEmailed: 'e-posta gönderilmedi',
     copy: 'Kopyala',
     copied: 'Kopyalandı',
+    companyHint: 'Şirket girişi mi lazım? Şirket hesapları bir şirkete bağlı salt-okunur hesaplardır — şuradan oluştur:',
+    companyHintLink: 'Şirketler →',
   },
   mentor: {
     welcomeBack: 'Tekrar hoş geldin',

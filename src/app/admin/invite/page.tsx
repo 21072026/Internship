@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -144,6 +145,13 @@ export default function InvitePage() {
               {t.invite.send}
             </Button>
           </form>
+
+          <p className="mt-4 text-xs text-gray-500">
+            {t.invite.companyHint}{' '}
+            <Link href="/admin/companies" className="text-blue-600 hover:underline font-medium">
+              {t.invite.companyHintLink}
+            </Link>
+          </p>
 
           <div className="mt-6 p-4 bg-blue-50 rounded-xl">
             <p className="text-sm font-medium text-blue-800 mb-2">{t.invite.howItWorks}</p>
