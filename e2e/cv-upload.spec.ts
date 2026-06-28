@@ -24,7 +24,7 @@ test('mentee can upload, view and delete their CV', async ({ page }) => {
     const uploaded = page.waitForResponse(
       (r) => r.url().endsWith('/api/cv') && r.request().method() === 'POST'
     );
-    await page.locator('input[type="file"]').setInputFiles({
+    await page.locator('input[type="file"][accept*="pdf"]').setInputFiles({
       name: 'cv.pdf',
       mimeType: 'application/pdf',
       buffer: PDF,

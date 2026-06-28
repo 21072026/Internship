@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { sendEmail } from '@/services/emailService';
+import { notify } from '@/lib/notify';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -52,6 +53,11 @@ export async function POST(request: Request) {
     await prisma.interactionLog.create({
       data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${subject} — ${body}` },
     });
+    // Mirror the email into the conversation thread + notify the mentee in-app.
+    await prisma.message.create({
+      data: { relationId: rel.id, senderId: session.user.id, channel: 'EMAIL', body: `${subject}\n\n${body}` },
+    });
+    await notify(rel.menteeId, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, `/messages/${rel.id}`);
     sent++;
   }
 

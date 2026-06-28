@@ -16,6 +16,7 @@ const en = {
     myMentees: 'My Mentees',
     board: 'Board',
     interactionLogs: 'Interaction Logs',
+    messages: 'Messages',
     email: 'Email',
     meetings: 'Meetings',
     myProfile: 'My Profile',
@@ -363,6 +364,15 @@ const en = {
     install: 'Install app',
     iosHint: 'Tap the Share button, then “Add to Home Screen”.',
   },
+  messages: {
+    title: 'Messages',
+    listSubtitle: 'Your conversations with your mentor',
+    threads: 'Conversations',
+    noThreads: 'No conversations yet',
+    empty: 'No messages yet. Say hello!',
+    replyPlaceholder: 'Write a reply…',
+    send: 'Send',
+  },
   checklist: {
     title: 'Get started',
     dismiss: 'Dismiss',
@@ -543,6 +553,7 @@ const tr: Dict = {
     myMentees: 'Mentee’lerim',
     board: 'Pano',
     interactionLogs: 'Etkileşim Kayıtları',
+    messages: 'Mesajlar',
     email: 'E-posta',
     meetings: 'Toplantılar',
     myProfile: 'Profilim',
@@ -889,6 +900,15 @@ const tr: Dict = {
   pwa: {
     install: 'Uygulamayı kur',
     iosHint: 'Paylaş düğmesine, sonra “Ana Ekrana Ekle”ye dokun.',
+  },
+  messages: {
+    title: 'Mesajlar',
+    listSubtitle: 'Mentorunla yazışmaların',
+    threads: 'Görüşmeler',
+    noThreads: 'Henüz görüşme yok',
+    empty: 'Henüz mesaj yok. Merhaba de!',
+    replyPlaceholder: 'Bir cevap yaz…',
+    send: 'Gönder',
   },
   checklist: {
     title: 'Başlayalım',

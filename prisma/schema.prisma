@@ -87,6 +87,26 @@ model User {
   company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
 }
 
+enum MessageChannel {
+  IN_APP
+  EMAIL
+}
+
+// A message in a mentorship thread (the thread is the MentorshipRelation).
+// Sent in-app or mirrored from an email; powers mentor ↔ mentee conversations.
+model Message {
+  id         String         @id @default(cuid())
+  relationId String
+  senderId   String
+  body       String         @db.Text
+  channel    MessageChannel @default(IN_APP)
+  createdAt  DateTime       @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
+}
+
 // In-app notification for a user.
 model Notification {
   id        String   @id @default(cuid())
@@ -167,6 +187,7 @@ model MentorshipRelation {
   interactions  InteractionLog[]
   statusChanges StatusChange[]
   meetings      Meeting[]
+  messages      Message[]
 }
 
 model InteractionLog {

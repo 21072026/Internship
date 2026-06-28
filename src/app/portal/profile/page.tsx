@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { CvManager } from '@/components/CvManager';
+import { AvatarManager } from '@/components/AvatarManager';
 
 const profileSchema = z.object({
   fullName: z.string().min(1, 'Full name is required'),
@@ -46,6 +47,8 @@ export default function ProfilePage() {
   const [initialCv, setInitialCv] = useState<string | null>(null);
   const [publicProfile, setPublicProfile] = useState(false);
   const [profileViews, setProfileViews] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [fullName, setFullName] = useState('');
 
   const {
     register,
@@ -65,6 +68,8 @@ export default function ProfilePage() {
           setInitialCv(user.cvUrl || null);
           setPublicProfile(!!user.publicProfile);
           setProfileViews(user.profileViews || 0);
+          setAvatarUrl(user.avatarUrl || null);
+          setFullName(user.fullName || '');
           reset({
             fullName: user.fullName,
             phone: user.phone || '',
@@ -118,7 +123,7 @@ export default function ProfilePage() {
     }
   });
 
-  if (loading) return <div className="text-center py-12 text-gray-400">Loading...</div>;
+  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
 
   return (
     <div>
@@ -126,6 +131,13 @@ export default function ProfilePage() {
         <h1 className="text-2xl font-bold text-gray-900">{t.profileForm.title}</h1>
         <p className="text-gray-500 mt-1">{t.profileForm.subtitle}</p>
       </div>
+
+      {userId && (
+        <Card className="max-w-2xl mb-6">
+          <CardHeader><CardTitle>{t.avatar.section}</CardTitle></CardHeader>
+          <AvatarManager targetUserId={userId} initialAvatarUrl={avatarUrl} name={fullName} />
+        </Card>
+      )}
 
       <Card className="max-w-2xl">
         <CardHeader>
