@@ -58,7 +58,7 @@ export function ResponsiveShell({
 
       <main className="flex-1 overflow-auto min-w-0">
         {/* Desktop-only top strip for search + notifications */}
-        <div className="hidden lg:flex items-center justify-end gap-3 px-8 pt-4">
+        <div className="hidden lg:flex items-center justify-end gap-3 px-8 pt-4 no-print">
           {headerExtra}
           <NotificationBell />
         </div>

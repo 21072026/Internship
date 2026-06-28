@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
 
@@ -41,11 +42,23 @@ export default function AdminAnalyticsPage() {
 
   const maxFunnel = Math.max(1, ...PIPELINE_STATUSES.map((s) => data.funnel[s] || 0));
 
+  const exportExcel = async () => {
+    const { exportXlsx } = await import('@/lib/excel');
+    const rows = PIPELINE_STATUSES.map((s) => [pipelineLabel(s, locale), data.funnel[s] || 0]);
+    await exportXlsx(`analytics-${new Date().toISOString().slice(0, 10)}`, ['Stage', 'Count'], rows, 'Funnel');
+  };
+
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t.analytics.title}</h1>
-        <p className="text-gray-500 mt-1">{t.analytics.subtitle}</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t.analytics.title}</h1>
+          <p className="text-gray-500 mt-1">{t.analytics.subtitle}</p>
+        </div>
+        <div className="flex gap-2 no-print">
+          <Button variant="outline" size="sm" onClick={exportExcel}>{t.analytics.exportExcel}</Button>
+          <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

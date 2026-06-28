@@ -52,25 +52,32 @@ export default function CandidatesPage() {
   const [cityFilter, setCityFilter] = useState('');
   const [error, setError] = useState('');
 
+  const COLS = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
+  const toRow = (c: Candidate) => {
+    const rel = c.menteeRelations[0];
+    return [
+      c.fullName, c.email, c.phone, c.whatsapp, c.city, c.university, c.department,
+      c.graduationYear, c.skills.join('; '),
+      rel?.pipelineStatus ? pipelineLabel(rel.pipelineStatus, locale) : '',
+      rel?.company?.name ?? '', rel?.mentor?.fullName ?? '',
+    ];
+  };
+
   const exportCsv = () => {
-    const cols = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = candidates.map((c) => {
-      const rel = c.menteeRelations[0];
-      return [
-        c.fullName, c.email, c.phone, c.whatsapp, c.city, c.university, c.department,
-        c.graduationYear, c.skills.join('; '),
-        rel?.pipelineStatus ? pipelineLabel(rel.pipelineStatus, locale) : '',
-        rel?.company?.name ?? '', rel?.mentor?.fullName ?? '',
-      ].map(esc).join(',');
-    });
-    const csv = [cols.join(','), ...rows].join('\n');
+    const rows = candidates.map((c) => toRow(c).map(esc).join(','));
+    const csv = [COLS.join(','), ...rows].join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url;
     a.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportExcel = async () => {
+    const { exportXlsx } = await import('@/lib/excel');
+    await exportXlsx(`candidates-${new Date().toISOString().slice(0, 10)}`, COLS, candidates.map(toRow), 'Candidates');
   };
 
   // Read an optional ?status= filter from the URL (e.g. from dashboard pipeline bars)
@@ -126,10 +133,16 @@ export default function CandidatesPage() {
           </div>
         )}
         </div>
-        <Button variant="outline" onClick={exportCsv} disabled={candidates.length === 0}>
-          <Download className="h-4 w-4" />
-          {t.candidates.exportCsv}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={exportCsv} disabled={candidates.length === 0}>
+            <Download className="h-4 w-4" />
+            {t.candidates.exportCsv}
+          </Button>
+          <Button variant="outline" onClick={exportExcel} disabled={candidates.length === 0}>
+            <Download className="h-4 w-4" />
+            {t.candidates.exportExcel}
+          </Button>
+        </div>
       </div>
 
       {error && (

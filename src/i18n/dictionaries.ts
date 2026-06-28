@@ -68,6 +68,7 @@ const en = {
     viewCv: 'View CV',
     none: 'No candidates found',
     exportCsv: 'Export CSV',
+    exportExcel: 'Export Excel',
     cityPlaceholder: 'Filter by city',
     filters: 'Filters',
     searchPlaceholder: 'Search by name, email, university...',
@@ -408,6 +409,8 @@ const en = {
     mentorWorkload: 'Mentor workload & outcomes',
     active: 'active',
     hired: 'hired',
+    print: 'Print / PDF',
+    exportExcel: 'Export Excel',
   },
   apply: {
     title: 'Apply for mentorship',
@@ -590,6 +593,7 @@ const tr: Dict = {
     viewCv: 'CV’yi gör',
     none: 'Aday bulunamadı',
     exportCsv: 'CSV indir',
+    exportExcel: 'Excel indir',
     cityPlaceholder: 'Şehre göre filtrele',
     filters: 'Filtreler',
     searchPlaceholder: 'Ad, e-posta, üniversite ara...',
@@ -930,6 +934,8 @@ const tr: Dict = {
     mentorWorkload: 'Mentor yükü & çıktılar',
     active: 'aktif',
     hired: 'işe alındı',
+    print: 'Yazdır / PDF',
+    exportExcel: 'Excel indir',
   },
   apply: {
     title: 'Mentorluk başvurusu',
