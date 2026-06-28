@@ -17,7 +17,9 @@ function isAllowlisted(pathname: string) {
     // Public meeting RSVP (the unguessable token is the credential).
     pathname === '/api/rsvp' ||
     // Public mentee application form.
-    pathname === '/api/apply'
+    pathname === '/api/apply' ||
+    // Public profile view counter.
+    pathname === '/api/profile-view'
   );
 }
 

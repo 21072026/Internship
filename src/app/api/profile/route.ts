@@ -47,6 +47,7 @@ export async function GET() {
         cvUrl: true,
         avatarUrl: true,
         publicProfile: true,
+        profileViews: true,
         createdAt: true,
       },
     });

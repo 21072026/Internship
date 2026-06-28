@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { GraduationCap } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
+import { ProfileViewPing } from '@/components/ProfileViewPing';
 
 // Public, PII-free profile. Only fields safe to share are selected — never
 // email, phone, whatsapp, or birth date.
@@ -29,6 +30,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
+      <ProfileViewPing userId={userId} />
       <div className="w-full max-w-lg">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <div className="flex items-center gap-4 mb-6">

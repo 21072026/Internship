@@ -69,6 +69,8 @@ model User {
   publicProfile  Boolean   @default(false)
   // For COMPANY-role users: which company they observe (read-only).
   companyId      String?
+  // How many times this user's public profile has been viewed.
+  profileViews   Int       @default(0)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
