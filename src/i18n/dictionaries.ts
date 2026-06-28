@@ -98,6 +98,9 @@ const en = {
     date: 'Date',
     addEntry: 'Add entry',
     deleteEntry: 'Delete entry',
+    nextAction: 'Next action',
+    suggestedMentors: 'Suggested mentors',
+    matchSkills: 'matching skills',
   },
   mentors: {
     title: 'Mentors',
@@ -522,6 +525,9 @@ const tr: Dict = {
     date: 'Tarih',
     addEntry: 'Kayıt ekle',
     deleteEntry: 'Kaydı sil',
+    nextAction: 'Sonraki aksiyon',
+    suggestedMentors: 'Önerilen mentorlar',
+    matchSkills: 'eşleşen yetenek',
   },
   mentors: {
     title: 'Mentorlar',
