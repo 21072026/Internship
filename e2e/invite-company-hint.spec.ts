@@ -17,7 +17,7 @@ test('invite page links to Companies for company logins and omits Company role',
 
     await page.goto('/admin/invite');
     // Hint links to the Companies page.
-    const link = page.getByRole('link', { name: /Companies/i });
+    const link = page.getByRole('link', { name: 'Companies →' });
     await expect(link).toBeVisible({ timeout: 10_000 });
     await expect(link).toHaveAttribute('href', '/admin/companies');
 
