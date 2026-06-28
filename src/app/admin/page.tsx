@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
@@ -66,6 +67,7 @@ export default async function AdminDashboard() {
 
   return (
     <div>
+      <OnboardingChecklist />
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.title}</h1>
         <p className="text-gray-500 mt-1">{t.dashboard.subtitle}</p>

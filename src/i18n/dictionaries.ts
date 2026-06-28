@@ -360,6 +360,25 @@ const en = {
     install: 'Install app',
     iosHint: 'Tap the Share button, then “Add to Home Screen”.',
   },
+  checklist: {
+    title: 'Get started',
+    dismiss: 'Dismiss',
+    steps: {
+      profile: 'Complete your profile',
+      cv: 'Upload your CV',
+      public: 'Make your profile public',
+      addMentee: 'Add your first mentee',
+      logInteraction: 'Log an interaction',
+      scheduleMeeting: 'Schedule a meeting',
+      addCompany: 'Add a company',
+      inviteUser: 'Invite a user',
+      assignMentorship: 'Assign a mentorship',
+    },
+  },
+  emptyState: {
+    candidates: 'No mentees match yet. Invite people or share a public application link.',
+    inviteCta: 'Send an invitation',
+  },
   search: {
     placeholder: 'Search people, companies…',
     company: 'Company',
@@ -862,6 +881,25 @@ const tr: Dict = {
   pwa: {
     install: 'Uygulamayı kur',
     iosHint: 'Paylaş düğmesine, sonra “Ana Ekrana Ekle”ye dokun.',
+  },
+  checklist: {
+    title: 'Başlayalım',
+    dismiss: 'Kapat',
+    steps: {
+      profile: 'Profilini tamamla',
+      cv: 'CV’ni yükle',
+      public: 'Profilini herkese açık yap',
+      addMentee: 'İlk mentee’ni ekle',
+      logInteraction: 'Bir etkileşim kaydet',
+      scheduleMeeting: 'Toplantı planla',
+      addCompany: 'Şirket ekle',
+      inviteUser: 'Kullanıcı davet et',
+      assignMentorship: 'Mentorluk ata',
+    },
+  },
+  emptyState: {
+    candidates: 'Henüz eşleşen mentee yok. Kişileri davet et veya public başvuru linki paylaş.',
+    inviteCta: 'Davet gönder',
   },
   search: {
     placeholder: 'Kişi, şirket ara…',

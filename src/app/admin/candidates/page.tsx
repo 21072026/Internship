@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { SavedViews } from '@/components/SavedViews';
+import { EmptyState } from '@/components/EmptyState';
 import Link from "next/link";
 import { useT, useLocale } from "@/i18n/client";
 import { pipelineLabel } from '@/lib/pipeline';
@@ -210,9 +211,14 @@ export default function CandidatesPage() {
       {loading ? (
         <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
       ) : candidates.length === 0 ? (
-        <Card className="text-center py-12">
-          <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">{t.candidates.none}</p>
+        <Card>
+          <EmptyState
+            icon={Users}
+            title={t.candidates.none}
+            description={t.emptyState.candidates}
+            actionLabel={t.emptyState.inviteCta}
+            actionHref="/admin/invite"
+          />
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

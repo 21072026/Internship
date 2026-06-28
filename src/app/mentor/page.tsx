@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -59,6 +60,7 @@ export default async function MentorDashboard() {
 
   return (
     <div>
+      <OnboardingChecklist />
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">
           {t.mentor.welcomeBack}, {session!.user.name}
