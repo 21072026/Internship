@@ -17,7 +17,6 @@ test('mentor suggestions rank by skill overlap; candidate detail shows next acti
   await prisma.user.update({ where: { id: mentee.id }, data: { skills: ['React', 'Node.js'] } });
   await prisma.user.update({ where: { id: mentorA.id }, data: { skills: ['React', 'Node.js', 'AWS'] } });
   await prisma.user.update({ where: { id: mentorB.id }, data: { skills: ['Java'] } });
-  await prisma.mentorshipRelation.create({ data: { mentorId: mentorA.id, menteeId: mentee.id } });
 
   try {
     await page.goto('/auth/signin');
@@ -31,6 +30,8 @@ test('mentor suggestions rank by skill overlap; candidate detail shows next acti
     const { suggestions } = await res.json();
     expect(suggestions[0].id).toBe(mentorA.id); // higher skill overlap ranks first
 
+    // Assign a mentor, then the candidate detail shows the next-action hint.
+    await prisma.mentorshipRelation.create({ data: { mentorId: mentorA.id, menteeId: mentee.id } });
     await page.goto(`/admin/candidates/${mentee.id}`);
     await expect(page.getByText('Next action:')).toBeVisible({ timeout: 10_000 });
   } finally {

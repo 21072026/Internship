@@ -17,7 +17,8 @@ export async function GET(request: Request) {
   if (!mentee) return NextResponse.json({ error: 'Mentee not found' }, { status: 404 });
 
   const mentors = await prisma.user.findMany({
-    where: { role: 'MENTOR', isActive: true },
+    // Exclude mentors already mentoring this mentee.
+    where: { role: 'MENTOR', isActive: true, NOT: { mentorRelations: { some: { menteeId } } } },
     select: { id: true, fullName: true, skills: true, _count: { select: { mentorRelations: true } } },
   });
 
