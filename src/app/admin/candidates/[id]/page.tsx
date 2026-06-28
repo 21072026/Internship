@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { ArrowLeft, KeyRound, Trash2, Plus } from 'lucide-react';
 import { pipelineLabel, pipelineOptions, PIPELINE_STATUSES } from '@/lib/pipeline';
 import { CvManager } from '@/components/CvManager';
+import { nextAction } from '@/lib/matching';
 import { useT, useLocale } from '@/i18n/client';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
@@ -60,6 +61,7 @@ export default function AdminMenteeDetailPage() {
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetUrl, setResetUrl] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<{ id: string; fullName: string; overlap: number; activeCount: number }[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -138,6 +140,13 @@ export default function AdminMenteeDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    fetch(`/api/admin/suggest-mentors?menteeId=${id}`)
+      .then((r) => (r.ok ? r.json() : { suggestions: [] }))
+      .then((d) => setSuggestions(d.suggestions ?? []))
+      .catch(() => {});
+  }, [id]);
 
   if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
   if (!user) return <div className="text-center py-12 text-gray-400">{t.common.notFound}</div>;
@@ -230,6 +239,30 @@ export default function AdminMenteeDetailPage() {
                   onChange={(e) => changeStage(rel.id, e.target.value)}
                 />
               </div>
+
+              {(() => {
+                const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.interactions[0]?.date });
+                const color = na.level === 'urgent' ? 'text-red-700 bg-red-50 border-red-200' : na.level === 'warn' ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-green-700 bg-green-50 border-green-200';
+                return (
+                  <div className={`inline-flex items-center gap-2 text-sm rounded-lg border px-3 py-1.5 ${color}`}>
+                    <span className="font-medium">{t.candidateDetail.nextAction}:</span> {na.text}
+                  </div>
+                );
+              })()}
+
+              {suggestions.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-2">{t.candidateDetail.suggestedMentors}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions.map((s) => (
+                      <span key={s.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 text-sm">
+                        {s.fullName}
+                        <span className="text-xs text-gray-400">· {s.overlap} {t.candidateDetail.matchSkills} · {s.activeCount}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">{t.candidateDetail.stageHistory} ({rel.statusChanges.length})</p>
