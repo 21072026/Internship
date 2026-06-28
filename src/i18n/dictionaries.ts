@@ -153,6 +153,11 @@ const en = {
     department: 'Department',
     referral: 'Referral',
     create: 'Create',
+    menteeCreated: 'Mentee created',
+    setPwLinkHint:
+      'We emailed the mentee a link to set their password and activate their account. If it doesn’t arrive, share this link with them directly:',
+    copyLink: 'Copy link',
+    copied: 'Copied!',
   },
   auth: {
     welcomeBack: 'Welcome back',
@@ -395,6 +400,11 @@ const tr: Dict = {
     department: 'Bölüm',
     referral: 'Referans',
     create: 'Oluştur',
+    menteeCreated: 'Mentee oluşturuldu',
+    setPwLinkHint:
+      'Mentee’ye parolasını belirleyip hesabını aktifleştirmesi için bir bağlantı e-postaladık. Ulaşmazsa bu bağlantıyı doğrudan onunla paylaşabilirsin:',
+    copyLink: 'Bağlantıyı kopyala',
+    copied: 'Kopyalandı!',
   },
   auth: {
     welcomeBack: 'Tekrar hoş geldin',

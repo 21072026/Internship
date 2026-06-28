@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { z } from 'zod';
+import { createPasswordResetToken } from '@/lib/passwordReset';
+import { sendPasswordResetEmail } from '@/services/emailService';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -32,11 +34,12 @@ export async function POST(request: Request) {
     }
     const { fullName, email, ...rest } = parsed.data;
 
-    // Use the given email, or a deterministic placeholder for non-login tracked mentees.
-    const finalEmail =
-      email && email.length > 0
-        ? email
-        : `mentee.${slug(fullName)}.${crypto.randomBytes(2).toString('hex')}@import.local`;
+    // A real email means the mentee can be invited to set a password and log in.
+    // No email → a deterministic placeholder for a tracking-only mentee (no login).
+    const hasRealEmail = !!(email && email.length > 0);
+    const finalEmail = hasRealEmail
+      ? email!
+      : `mentee.${slug(fullName)}.${crypto.randomBytes(2).toString('hex')}@import.local`;
 
     const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
     if (existing) {
@@ -63,7 +66,27 @@ export async function POST(request: Request) {
       data: { mentorId: session.user.id, menteeId: mentee.id },
     });
 
-    return NextResponse.json({ menteeId: mentee.id }, { status: 201 });
+    // If the mentee has a real email, send a "set your password" link so they
+    // can activate their account. The link is also returned so the UI can show
+    // it (and the mentor can share it manually) even if the email fails.
+    let setPasswordUrl: string | null = null;
+    if (hasRealEmail) {
+      const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
+      try {
+        await sendPasswordResetEmail({
+          to: mentee.email,
+          token,
+          fullName: mentee.fullName,
+          purpose: 'SET_INITIAL',
+        });
+      } catch (e) {
+        console.error('Mentee set-password email failed:', e);
+      }
+    }
+
+    return NextResponse.json({ menteeId: mentee.id, setPasswordUrl }, { status: 201 });
   } catch (error) {
     console.error('Create mentee error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

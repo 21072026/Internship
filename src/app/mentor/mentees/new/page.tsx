@@ -17,6 +17,8 @@ export default function NewMenteePage() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [setPasswordUrl, setSetPasswordUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -32,12 +34,58 @@ export default function NewMenteePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
-      router.push('/mentor/mentees');
+      // With a real email, show the set-password link so the mentor can share
+      // it if the email doesn't arrive; otherwise go straight to the list.
+      if (data.setPasswordUrl) {
+        setSetPasswordUrl(data.setPasswordUrl);
+        setSaving(false);
+      } else {
+        router.push('/mentor/mentees');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
       setSaving(false);
     }
   };
+
+  if (setPasswordUrl) {
+    return (
+      <div>
+        <Link href="/mentor/mentees" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4">
+          <ArrowLeft className="h-4 w-4" />
+          {t.mentor.backToMentees}
+        </Link>
+        <Card className="max-w-2xl">
+          <CardHeader><CardTitle>{t.mentor.menteeCreated}</CardTitle></CardHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">{t.mentor.setPwLinkHint}</p>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={setPasswordUrl}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 text-gray-700"
+                onFocus={(e) => e.target.select()}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard?.writeText(setPasswordUrl);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? t.mentor.copied : t.mentor.copyLink}
+              </Button>
+            </div>
+            <Button type="button" onClick={() => router.push('/mentor/mentees')}>
+              {t.mentor.backToMentees}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
