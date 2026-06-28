@@ -19,18 +19,20 @@ const profileSchema = z.object({
   birthDate: z.string().optional(),
   university: z.string().optional(),
   department: z.string().optional(),
-  graduationYear: z.coerce.number().int().min(2020).max(2035).optional().or(z.literal(0)),
+  graduationYear: z.coerce.number().int().min(2010).max(new Date().getFullYear() + 5).optional().or(z.literal(0)),
   skills: z.string().optional(),
   cvUrl: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
+const MIN_GRAD_YEAR = 2010;
+const MAX_GRAD_YEAR = new Date().getFullYear() + 5;
 const graduationYearOptions = [
   { value: '0', label: 'Not set' },
-  ...Array.from({ length: 16 }, (_, i) => ({
-    value: String(2020 + i),
-    label: String(2020 + i),
+  ...Array.from({ length: MAX_GRAD_YEAR - MIN_GRAD_YEAR + 1 }, (_, i) => ({
+    value: String(MIN_GRAD_YEAR + i),
+    label: String(MIN_GRAD_YEAR + i),
   })),
 ];
 

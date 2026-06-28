@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,7 +8,12 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { CvManager } from '@/components/CvManager';
 import { useT } from '@/i18n/client';
+
+// Graduation-year bounds: allow well before 2020, cap at this year + 5.
+const MIN_GRAD_YEAR = 2010;
+const MAX_GRAD_YEAR = new Date().getFullYear() + 5;
 
 const step1Schema = z.object({
   fullName: z.string().min(1, 'Full name is required'),
@@ -18,7 +23,7 @@ const step1Schema = z.object({
 const step2Schema = z.object({
   university: z.string().min(1, 'University is required'),
   department: z.string().min(1, 'Department is required'),
-  graduationYear: z.coerce.number().int().min(2020).max(2035),
+  graduationYear: z.coerce.number().int().min(MIN_GRAD_YEAR).max(MAX_GRAD_YEAR),
 });
 
 const step3Schema = z.object({
@@ -39,6 +44,8 @@ export function OnboardingForm() {
   const [allData, setAllData] = useState<Partial<Step1Data & Step2Data & Step3Data>>({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState('');
+  const [initialCv, setInitialCv] = useState<string | null>(null);
 
   const step1Form = useForm<Step1Data>({
     resolver: zodResolver(step1Schema),
@@ -54,6 +61,37 @@ export function OnboardingForm() {
     resolver: zodResolver(step3Schema),
     defaultValues: allData,
   });
+
+  // Prefill from the user's existing profile (e.g. the full name they entered
+  // at registration) so the wizard isn't blank.
+  useEffect(() => {
+    fetch('/api/profile')
+      .then((r) => r.json())
+      .then(({ user }) => {
+        if (!user) return;
+        setUserId(user.id);
+        setInitialCv(user.cvUrl || null);
+        const seed = {
+          fullName: user.fullName || '',
+          phone: user.phone || '',
+          university: user.university || '',
+          department: user.department || '',
+          graduationYear: user.graduationYear || undefined,
+          skills: Array.isArray(user.skills) ? user.skills.join(', ') : '',
+          cvUrl: user.cvUrl || '',
+        };
+        setAllData(seed);
+        step1Form.reset({ fullName: seed.fullName, phone: seed.phone });
+        step2Form.reset({
+          university: seed.university,
+          department: seed.department,
+          graduationYear: seed.graduationYear as number | undefined,
+        });
+        step3Form.reset({ skills: seed.skills, cvUrl: seed.cvUrl });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleStep1 = step1Form.handleSubmit((data) => {
     setAllData((prev) => ({ ...prev, ...data }));
@@ -95,10 +133,10 @@ export function OnboardingForm() {
     }
   });
 
-  const graduationYearOptions = Array.from({ length: 16 }, (_, i) => ({
-    value: String(2020 + i),
-    label: String(2020 + i),
-  }));
+  const graduationYearOptions = Array.from(
+    { length: MAX_GRAD_YEAR - MIN_GRAD_YEAR + 1 },
+    (_, i) => ({ value: String(MIN_GRAD_YEAR + i), label: String(MIN_GRAD_YEAR + i) })
+  );
 
   return (
     <div className="w-full max-w-lg">
@@ -226,6 +264,11 @@ export function OnboardingForm() {
             {...step3Form.register('cvUrl')}
             error={step3Form.formState.errors.cvUrl?.message}
           />
+          {userId && (
+            <div className="border-t border-gray-100 pt-4">
+              <CvManager targetUserId={userId} initialCvUrl={initialCv} />
+            </div>
+          )}
           <div className="flex gap-3">
             <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} className="flex-1" size="lg">
               {t.onboarding.back}
