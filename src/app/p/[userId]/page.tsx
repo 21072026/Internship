@@ -19,6 +19,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       graduationYear: true,
       city: true,
       skills: true,
+      avatarUrl: true,
     },
   });
 
@@ -31,9 +32,14 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       <div className="w-full max-w-lg">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center">
-              <span className="text-blue-700 font-bold text-2xl">{user.fullName?.[0] ?? '?'}</span>
-            </div>
+            {user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.avatarUrl} alt="" className="w-16 h-16 rounded-2xl object-cover border border-gray-200" />
+            ) : (
+              <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center">
+                <span className="text-blue-700 font-bold text-2xl">{user.fullName?.[0] ?? '?'}</span>
+              </div>
+            )}
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{user.fullName}</h1>
               {user.city && <p className="text-gray-500">{user.city}</p>}

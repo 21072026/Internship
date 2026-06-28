@@ -280,6 +280,13 @@ const en = {
     none: 'No CV uploaded',
     hint: 'PDF or Word, up to 5 MB.',
   },
+  avatar: {
+    section: 'Profile picture',
+    title: 'Profile picture',
+    upload: 'Upload photo',
+    replace: 'Replace',
+    remove: 'Remove',
+  },
   apply: {
     title: 'Apply for mentorship',
     subtitle: 'Your application goes directly to {mentor}.',
@@ -659,6 +666,13 @@ const tr: Dict = {
     delete: 'Sil',
     none: 'CV yüklenmemiş',
     hint: 'PDF veya Word, en fazla 5 MB.',
+  },
+  avatar: {
+    section: 'Profil fotoğrafı',
+    title: 'Profil fotoğrafı',
+    upload: 'Fotoğraf yükle',
+    replace: 'Değiştir',
+    remove: 'Kaldır',
   },
   apply: {
     title: 'Mentorluk başvurusu',

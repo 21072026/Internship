@@ -6,6 +6,8 @@ import { GraduationCap, LayoutDashboard, LogOut } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
+import { SidebarAvatar } from '@/components/SidebarAvatar';
+import { prisma } from '@/lib/prisma';
 
 export default async function CompanyLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -14,6 +16,7 @@ export default async function CompanyLayout({ children }: { children: React.Reac
   if (session.user.role !== 'COMPANY' && session.user.role !== 'ADMIN') redirect('/');
 
   const { locale, t } = await getServerDictionary();
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true } });
 
   return (
     <ResponsiveShell
@@ -39,9 +42,7 @@ export default async function CompanyLayout({ children }: { children: React.Reac
 
           <div className="p-4 border-t border-gray-200">
             <Link href="/account" title={t.account.nav} className="flex items-center gap-3 mb-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-              <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                <span className="text-indigo-700 font-semibold text-sm">{session.user.name?.[0] || 'C'}</span>
-              </div>
+              <SidebarAvatar avatarUrl={me?.avatarUrl} name={session.user.name} fallback="C" className="bg-indigo-100 text-indigo-700" />
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{session.user.name}</p>
                 <p className="text-xs text-gray-500 truncate">{session.user.email}</p>

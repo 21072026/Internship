@@ -44,6 +44,7 @@ export async function GET() {
         graduationYear: true,
         skills: true,
         cvUrl: true,
+        avatarUrl: true,
         publicProfile: true,
         createdAt: true,
       },

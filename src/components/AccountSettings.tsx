@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { AvatarManager } from '@/components/AvatarManager';
 import { useT } from '@/i18n/client';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
@@ -24,11 +25,16 @@ export function AccountSettings() {
   const [savingPw, setSavingPw] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null } | null>(null);
 
   useEffect(() => {
     fetch('/api/profile')
       .then((r) => r.json())
-      .then(({ user }) => user && setEmail(user.email));
+      .then(({ user }) => {
+        if (!user) return;
+        setEmail(user.email);
+        setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null });
+      });
   }, []);
 
   const flash = (m: string, isErr = false) => {
@@ -100,6 +106,13 @@ export function AccountSettings() {
 
       {msg && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">✓ {msg}</div>}
       {err && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{err}</div>}
+
+      {me && (
+        <Card className="mb-6 max-w-4xl">
+          <CardHeader><CardTitle>{t.avatar.section}</CardTitle></CardHeader>
+          <AvatarManager targetUserId={me.id} initialAvatarUrl={me.avatarUrl} name={me.fullName} />
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
         <Card>
