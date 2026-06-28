@@ -28,7 +28,7 @@ test('a new application notifies the mentor in-app', async ({ page }) => {
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
-    await page.getByLabel('Notifications').first().click();
+    await page.getByLabel('Notifications').last().click();
     await expect(page.getByText(/applied to be your mentee/i)).toBeVisible({ timeout: 10_000 });
   } finally {
     await cleanupByEmail(applicantEmail);
