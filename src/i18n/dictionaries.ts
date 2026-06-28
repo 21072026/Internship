@@ -356,6 +356,10 @@ const en = {
     title: 'Notifications',
     none: 'No notifications',
   },
+  pwa: {
+    install: 'Install app',
+    iosHint: 'Tap the Share button, then “Add to Home Screen”.',
+  },
   search: {
     placeholder: 'Search people, companies…',
     company: 'Company',
@@ -854,6 +858,10 @@ const tr: Dict = {
   notifications: {
     title: 'Bildirimler',
     none: 'Bildirim yok',
+  },
+  pwa: {
+    install: 'Uygulamayı kur',
+    iosHint: 'Paylaş düğmesine, sonra “Ana Ekrana Ekle”ye dokun.',
   },
   search: {
     placeholder: 'Kişi, şirket ara…',
