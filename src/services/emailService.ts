@@ -77,6 +77,57 @@ export async function sendInvitationEmail({
   });
 }
 
+export async function sendPasswordResetEmail({
+  to,
+  token,
+  fullName,
+  purpose = 'RESET',
+}: {
+  to: string;
+  token: string;
+  fullName?: string | null;
+  purpose?: 'RESET' | 'SET_INITIAL';
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const resetUrl = `${appUrl}/auth/reset?token=${token}`;
+  const isInitial = purpose === 'SET_INITIAL';
+
+  const heading = isInitial ? 'Set your password' : 'Reset your password';
+  const intro = isInitial
+    ? 'An account has been created for you on Internship CRM. Set a password to activate it and sign in.'
+    : 'We received a request to reset your password. Click the button below to choose a new one.';
+  const cta = isInitial ? 'Set password' : 'Reset password';
+
+  await sendEmail({
+    to,
+    subject: isInitial ? 'Activate your Internship CRM account' : 'Reset your Internship CRM password',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">${heading}</h2>
+        ${fullName ? `<p>Hi ${fullName},</p>` : ''}
+        <p>${intro}</p>
+        <a href="${resetUrl}" style="
+          display: inline-block;
+          background-color: #2563eb;
+          color: white;
+          padding: 12px 24px;
+          text-decoration: none;
+          border-radius: 6px;
+          margin: 16px 0;
+        ">
+          ${cta}
+        </a>
+        <p style="color: #6b7280; font-size: 14px;">
+          This link expires in ${isInitial ? '7 days' : '1 hour'}. If you did not expect this email, you can safely ignore it.
+        </p>
+        <p style="color: #6b7280; font-size: 12px;">
+          Or copy this link: ${resetUrl}
+        </p>
+      </div>
+    `,
+  });
+}
+
 export async function checkMentorInteractionReminders() {
   const fourteenDaysAgo = new Date();
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);

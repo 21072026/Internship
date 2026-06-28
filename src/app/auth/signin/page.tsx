@@ -105,6 +105,12 @@ export default function SignInPage() {
             </Button>
           </form>
 
+          <p className="text-center text-sm mt-4">
+            <Link href="/auth/forgot" className="text-blue-600 hover:underline">
+              {t.auth.forgotLink}
+            </Link>
+          </p>
+
           <p className="text-center text-sm text-gray-500 mt-6">
             Have an invitation?{' '}
             <Link href="/auth/register" className="text-blue-600 hover:underline font-medium">

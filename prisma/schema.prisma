@@ -61,9 +61,10 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  mentorRelations MentorshipRelation[] @relation("MentorRelations")
-  menteeRelations MentorshipRelation[] @relation("MenteeRelations")
-  statusChanges   StatusChange[]       @relation("StatusChangedBy")
+  mentorRelations     MentorshipRelation[] @relation("MentorRelations")
+  menteeRelations     MentorshipRelation[] @relation("MenteeRelations")
+  statusChanges       StatusChange[]       @relation("StatusChangedBy")
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Company {
@@ -136,4 +137,25 @@ model InvitationToken {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
+}
+
+// Single-use, time-limited token for self-service password reset and for the
+// "set your password" link sent to freshly-created mentees.
+enum PasswordResetPurpose {
+  RESET
+  SET_INITIAL
+}
+
+model PasswordResetToken {
+  id        String               @id @default(cuid())
+  token     String               @unique
+  userId    String
+  purpose   PasswordResetPurpose @default(RESET)
+  used      Boolean              @default(false)
+  createdAt DateTime             @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
