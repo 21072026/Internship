@@ -277,6 +277,92 @@ export async function checkMentorInteractionReminders() {
   };
 }
 
+// Email reminders for meetings happening within the next 24h that haven't been
+// reminded yet.
+export async function sendMeetingReminders() {
+  const now = new Date();
+  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const meetings = await prisma.meeting.findMany({
+    where: { scheduledAt: { gt: now, lte: in24h }, reminderSentAt: null },
+    include: { relation: { include: { mentee: { select: { email: true, fullName: true } } } } },
+  });
+
+  let reminded = 0;
+  for (const m of meetings) {
+    try {
+      await sendEmail({
+        to: m.relation.mentee.email,
+        subject: `Reminder: ${m.title}`,
+        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color:#2563eb;">Upcoming meeting</h2>
+          <p>Hi ${m.relation.mentee.fullName}, this is a reminder for <strong>${m.title}</strong> at ${m.scheduledAt.toLocaleString('en-GB')}.</p>
+          ${m.meetLink ? `<p><a href="${m.meetLink}">${m.meetLink}</a></p>` : ''}
+        </div>`,
+      });
+    } catch (e) {
+      console.error('Meeting reminder failed:', e);
+    }
+    await prisma.meeting.update({ where: { id: m.id }, data: { reminderSentAt: new Date() } });
+    reminded++;
+  }
+  return { checked: meetings.length, reminded };
+}
+
+// Weekly per-mentor digest: stale mentees, upcoming meetings, new applications.
+export async function sendWeeklyMentorDigests() {
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const mentors = await prisma.user.findMany({
+    where: { role: 'MENTOR', isActive: true },
+    select: {
+      id: true,
+      email: true,
+      fullName: true,
+      mentorRelations: {
+        select: {
+          startDate: true,
+          interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
+          meetings: { where: { scheduledAt: { gt: now, lte: in7d } }, select: { id: true } },
+        },
+      },
+    },
+  });
+
+  let sent = 0;
+  for (const m of mentors) {
+    if (m.mentorRelations.length === 0) continue;
+    const stale = m.mentorRelations.filter(
+      (r) => !r.interactions[0] || r.interactions[0].date < fourteenDaysAgo
+    ).length;
+    const upcoming = m.mentorRelations.reduce((n, r) => n + r.meetings.length, 0);
+    const newApplications = m.mentorRelations.filter((r) => r.startDate >= weekAgo).length;
+
+    try {
+      await sendEmail({
+        to: m.email,
+        subject: 'Your weekly mentoring summary',
+        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color:#2563eb;">Weekly summary</h2>
+          <p>Hi ${m.fullName}, here's your week at a glance:</p>
+          <ul>
+            <li><strong>${stale}</strong> mentee(s) with no interaction in 14+ days</li>
+            <li><strong>${upcoming}</strong> meeting(s) coming up this week</li>
+            <li><strong>${newApplications}</strong> new application(s) in the last 7 days</li>
+          </ul>
+          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/mentor" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Open dashboard</a>
+        </div>`,
+      });
+      sent++;
+    } catch (e) {
+      console.error('Mentor digest failed:', e);
+    }
+  }
+  return { mentors: mentors.length, sent };
+}
+
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
 export function initCronJobs() {
@@ -294,5 +380,28 @@ export function initCronJobs() {
   });
 
   scheduledTasks.set('mentor-reminders', task);
+
+  // Meeting reminders — hourly.
+  const meetingTask = cron.schedule('0 * * * *', async () => {
+    try {
+      const r = await sendMeetingReminders();
+      console.log(`[Cron] Meeting reminders. Reminded: ${r.reminded}`);
+    } catch (e) {
+      console.error('[Cron] Meeting reminder error:', e);
+    }
+  });
+  scheduledTasks.set('meeting-reminders', meetingTask);
+
+  // Weekly mentor digest — Mondays 8:00.
+  const digestTask = cron.schedule('0 8 * * 1', async () => {
+    try {
+      const r = await sendWeeklyMentorDigests();
+      console.log(`[Cron] Weekly digests sent: ${r.sent}`);
+    } catch (e) {
+      console.error('[Cron] Digest error:', e);
+    }
+  });
+  scheduledTasks.set('weekly-digest', digestTask);
+
   console.log('[Cron] Scheduled jobs initialized');
 }

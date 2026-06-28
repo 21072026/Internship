@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { checkMentorInteractionReminders } from '@/services/emailService';
+import {
+  checkMentorInteractionReminders,
+  sendMeetingReminders,
+  sendWeeklyMentorDigests,
+} from '@/services/emailService';
 
 export async function GET() {
   try {
@@ -11,11 +15,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await checkMentorInteractionReminders();
+    const [interactions, meetings, digests] = await Promise.all([
+      checkMentorInteractionReminders(),
+      sendMeetingReminders(),
+      sendWeeklyMentorDigests(),
+    ]);
 
     return NextResponse.json({
-      message: 'Reminder check completed',
-      ...result,
+      message: 'Scheduled jobs ran',
+      interactions,
+      meetings,
+      digests,
     });
   } catch (error) {
     console.error('Cron error:', error);

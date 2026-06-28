@@ -186,15 +186,16 @@ enum RsvpStatus {
 // A scheduled meeting between a mentor and a mentee, with a Google Meet link
 // and an emailed RSVP (responded to via a public token link).
 model Meeting {
-  id          String     @id @default(cuid())
-  relationId  String
-  title       String
-  scheduledAt DateTime
-  meetLink    String?
-  rsvp        RsvpStatus @default(PENDING)
-  rsvpToken   String     @unique
-  createdById String
-  createdAt   DateTime   @default(now())
+  id             String     @id @default(cuid())
+  relationId     String
+  title          String
+  scheduledAt    DateTime
+  meetLink       String?
+  rsvp           RsvpStatus @default(PENDING)
+  rsvpToken      String     @unique
+  createdById    String
+  reminderSentAt DateTime?
+  createdAt      DateTime   @default(now())
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
 
