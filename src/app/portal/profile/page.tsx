@@ -45,6 +45,7 @@ export default function ProfilePage() {
   const [userId, setUserId] = useState('');
   const [initialCv, setInitialCv] = useState<string | null>(null);
   const [publicProfile, setPublicProfile] = useState(false);
+  const [profileViews, setProfileViews] = useState(0);
 
   const {
     register,
@@ -63,6 +64,7 @@ export default function ProfilePage() {
           setUserId(user.id);
           setInitialCv(user.cvUrl || null);
           setPublicProfile(!!user.publicProfile);
+          setProfileViews(user.profileViews || 0);
           reset({
             fullName: user.fullName,
             phone: user.phone || '',
@@ -225,14 +227,17 @@ export default function ProfilePage() {
                 </label>
                 <p className="text-xs text-gray-400 mt-1">{t.profileForm.makePublicHint}</p>
                 {publicProfile && userId && (
-                  <a
-                    href={`/p/${userId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:underline mt-1 inline-block"
-                  >
-                    /p/{userId}
-                  </a>
+                  <div className="mt-1">
+                    <a
+                      href={`/p/${userId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline inline-block"
+                    >
+                      /p/{userId}
+                    </a>
+                    <p className="text-xs text-gray-500 mt-1">{t.profileForm.profileViews}: {profileViews}</p>
+                  </div>
                 )}
               </div>
             </div>
