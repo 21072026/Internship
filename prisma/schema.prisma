@@ -205,6 +205,16 @@ model Project {
   @@index([ownerCompanyId])
 }
 
+// A cohort groups mentees/internships by intake period for comparison.
+model Cohort {
+  id        String   @id @default(cuid())
+  name      String
+  term      String?
+  createdAt DateTime @default(now())
+
+  relations MentorshipRelation[]
+}
+
 model CompanyNeed {
   id        String @id @default(cuid())
   companyId String
@@ -221,6 +231,7 @@ model MentorshipRelation {
   menteeId       String
   companyId      String?
   projectId      String?
+  cohortId       String?
   startDate      DateTime         @default(now())
   status         MentorshipStatus @default(ACTIVE)
   pipelineStatus PipelineStatus   @default(APPLICATION_100)
@@ -229,6 +240,7 @@ model MentorshipRelation {
   mentee        User             @relation("MenteeRelations", fields: [menteeId], references: [id])
   company       Company?         @relation(fields: [companyId], references: [id])
   project       Project?         @relation(fields: [projectId], references: [id])
+  cohort        Cohort?          @relation(fields: [cohortId], references: [id])
   interactions  InteractionLog[]
   statusChanges StatusChange[]
   meetings      Meeting[]

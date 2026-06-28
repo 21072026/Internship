@@ -18,15 +18,15 @@ test('mobile: sidebar is behind a hamburger; opens as a drawer', async ({ page }
   const hamburger = page.getByRole('button', { name: 'Open menu' });
   await expect(hamburger).toBeVisible();
   // Nav link is off-canvas (not in viewport) until the drawer opens
-  await expect(page.getByRole('link', { name: 'Send Invitation', exact: true })).not.toBeInViewport();
+  await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).not.toBeInViewport();
 
   await hamburger.click();
-  await expect(page.getByRole('link', { name: 'Send Invitation', exact: true })).toBeInViewport();
+  await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toBeInViewport();
 });
 
 test('desktop: sidebar is visible, no hamburger', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await login(page);
   await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden();
-  await expect(page.getByRole('link', { name: 'Send Invitation', exact: true })).toBeInViewport();
+  await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toBeInViewport();
 });

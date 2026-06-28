@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     const city = searchParams.get('city');
     const company = searchParams.get('company');
     const project = searchParams.get('project');
+    const cohortId = searchParams.get('cohort');
 
     const where: Record<string, unknown> = {
       role: 'MENTEE',
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
     if (pipelineStatus) relSome.pipelineStatus = pipelineStatus;
     if (company) relSome.company = { name: company };
     if (project) relSome.project = { name: { contains: project } };
+    if (cohortId) relSome.cohortId = cohortId;
     if (Object.keys(relSome).length) where.menteeRelations = { some: relSome };
     if (city) where.city = { contains: city };
 

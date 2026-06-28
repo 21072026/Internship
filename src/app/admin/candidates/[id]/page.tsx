@@ -24,6 +24,7 @@ interface Relation {
   mentor: { fullName: string; email: string };
   company: { name: string; industry?: string } | null;
   project: { id: string; name: string } | null;
+  cohort: { id: string; name: string } | null;
   interactions: Interaction[];
   statusChanges: StatusChange[];
 }
@@ -65,6 +66,7 @@ export default function AdminMenteeDetailPage() {
   const [resetUrl, setResetUrl] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<{ id: string; fullName: string; overlap: number; activeCount: number }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -170,7 +172,26 @@ export default function AdminMenteeDetailPage() {
       .then((r) => (r.ok ? r.json() : { projects: [] }))
       .then((d) => setProjects(d.projects ?? []))
       .catch(() => {});
+    fetch('/api/cohorts')
+      .then((r) => (r.ok ? r.json() : { cohorts: [] }))
+      .then((d) => setCohorts(d.cohorts ?? []))
+      .catch(() => {});
   }, [id]);
+
+  const changeRelField = useCallback(
+    async (relationId: string, body: Record<string, unknown>) => {
+      setSaving(true);
+      try {
+        await fetch(`/api/mentorship/${relationId}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        await load();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [load]
+  );
 
   if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
   if (!user) return <div className="text-center py-12 text-gray-400">{t.common.notFound}</div>;
@@ -268,6 +289,13 @@ export default function AdminMenteeDetailPage() {
                   value={rel.project?.id ?? ''}
                   disabled={saving}
                   onChange={(e) => changeProject(rel.id, e.target.value)}
+                />
+                <Select
+                  label={t.candidateDetail.cohort}
+                  options={[{ value: '', label: t.candidateDetail.noCohort }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]}
+                  value={rel.cohort?.id ?? ''}
+                  disabled={saving}
+                  onChange={(e) => changeRelField(rel.id, { cohortId: e.target.value || null })}
                 />
               </div>
 
