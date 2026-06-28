@@ -96,6 +96,9 @@ export const authOptions: NextAuthOptions = {
           name: user.fullName,
           role: user.role,
           emailVerified: user.emailVerified,
+          // Carry the impersonated user's company so the company portal (and any
+          // companyId-scoped data) loads correctly while impersonating.
+          companyId: user.companyId,
           impersonatorId: isStart ? grant.adminId : undefined,
           impersonatorName: isStart ? admin?.fullName ?? 'Admin' : undefined,
         };
