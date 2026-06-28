@@ -39,7 +39,8 @@ export default async function CompanyLayout({ children }: { children: React.Reac
               <LayoutDashboard className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
               {t.nav.dashboard}
             </Link>
-          </nav>
+            <InstallAppButton />
+        </nav>
 
           <div className="p-4 border-t border-gray-200">
             <Link href="/account" title={t.account.nav} className="flex items-center gap-3 mb-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
@@ -56,8 +57,7 @@ export default async function CompanyLayout({ children }: { children: React.Reac
               <LogOut className="h-4 w-4" />
               {t.nav.signOut}
             </Link>
-            <div className="mt-3 px-3 space-y-1">
-              <InstallAppButton />
+            <div className="mt-3 px-3">
               <LanguageSwitcher current={locale} />
             </div>
           </div>

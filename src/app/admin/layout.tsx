@@ -109,6 +109,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Mail className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
             {t.nav.invite}
           </Link>
+          <InstallAppButton />
         </nav>
 
         <div className="p-4 border-t border-gray-200">
@@ -130,8 +131,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <LogOut className="h-4 w-4" />
             {t.nav.signOut}
           </Link>
-          <div className="mt-3 px-3 space-y-1">
-            <InstallAppButton />
+          <div className="mt-3 px-3">
             <LanguageSwitcher current={locale} />
           </div>
         </div>
