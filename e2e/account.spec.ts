@@ -20,10 +20,10 @@ test('admin can change their password from the account page', async ({ page }) =
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
     await page.goto('/admin/account');
-    const pwForm = page.locator('form', { has: page.getByRole('button', { name: 'Update password' }) });
-    await pwForm.getByLabel(/Current password/).fill(oldPw);
-    await pwForm.getByLabel(/^New password/).fill(newPw);
-    await pwForm.getByLabel(/Confirm new password/).fill(newPw);
+    // 'Current password' appears in both the email card (0) and password card (1).
+    await page.getByLabel(/Current password/).nth(1).fill(oldPw);
+    await page.getByLabel(/^New password/).fill(newPw);
+    await page.getByLabel(/Confirm new password/).fill(newPw);
     const done = page.waitForResponse(
       (r) => r.url().includes('/api/account') && r.request().method() === 'PUT'
     );

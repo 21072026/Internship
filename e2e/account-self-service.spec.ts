@@ -24,19 +24,19 @@ test('a mentee can change password from /account; weak passwords are rejected', 
     await signIn(page, email, oldPw, '/portal');
     await page.goto('/account');
     await expect(page.getByRole('heading', { name: 'Account', exact: true })).toBeVisible({ timeout: 10_000 });
-    const pwForm = page.locator('form', { has: page.getByRole('button', { name: 'Update password' }) });
 
+    // 'Current password' appears in the email card (0) and the password card (1).
     // Weak password (no uppercase) is rejected by the server policy.
-    await pwForm.getByLabel(/Current password/).fill(oldPw);
-    await pwForm.getByLabel(/^New password/).fill('weakpass');
-    await pwForm.getByLabel(/Confirm new password/).fill('weakpass');
+    await page.getByLabel(/Current password/).nth(1).fill(oldPw);
+    await page.getByLabel(/^New password/).fill('weakpass');
+    await page.getByLabel(/Confirm new password/).fill('weakpass');
     await page.getByRole('button', { name: 'Update password' }).click();
     await expect(page.getByText(/uppercase|at least 8/i)).toBeVisible({ timeout: 10_000 });
 
     // Valid password succeeds.
-    await pwForm.getByLabel(/Current password/).fill(oldPw);
-    await pwForm.getByLabel(/^New password/).fill(newPw);
-    await pwForm.getByLabel(/Confirm new password/).fill(newPw);
+    await page.getByLabel(/Current password/).nth(1).fill(oldPw);
+    await page.getByLabel(/^New password/).fill(newPw);
+    await page.getByLabel(/Confirm new password/).fill(newPw);
     const done = page.waitForResponse((r) => r.url().includes('/api/account') && r.request().method() === 'PUT');
     await page.getByRole('button', { name: 'Update password' }).click();
     await done;
@@ -81,8 +81,8 @@ test('a user can delete their own account', async ({ page }) => {
     await signIn(page, email, pw, '/portal');
     await page.goto('/account');
     await page.getByRole('button', { name: 'Delete my account' }).click();
-    const delBox = page.locator('div.space-y-3', { has: page.getByRole('button', { name: 'Yes, delete' }) });
-    await delBox.getByLabel(/Current password/).fill(pw); // re-auth required
+    // After opening the confirm box, the delete card adds a third 'Current password'.
+    await page.getByLabel(/Current password/).nth(2).fill(pw); // re-auth required
     const done = page.waitForResponse((r) => r.url().includes('/api/account') && r.request().method() === 'DELETE');
     await page.getByRole('button', { name: 'Yes, delete' }).click();
     await done;
