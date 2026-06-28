@@ -78,6 +78,8 @@ const en = {
     noChanges: 'No changes yet',
     interactions: 'Interactions',
     noInteractions: 'No interactions logged',
+    resetPassword: 'Reset password',
+    resetPwHint: 'A reset link was emailed to this user. You can also share it directly:',
   },
   mentors: {
     title: 'Mentors',
@@ -333,6 +335,8 @@ const tr: Dict = {
     noChanges: 'Henüz değişiklik yok',
     interactions: 'Etkileşimler',
     noInteractions: 'Henüz etkileşim yok',
+    resetPassword: 'Parolayı sıfırla',
+    resetPwHint: 'Bu kullanıcıya bir sıfırlama bağlantısı e-postalandı. İstersen doğrudan da paylaşabilirsin:',
   },
   mentors: {
     title: 'Mentorlar',

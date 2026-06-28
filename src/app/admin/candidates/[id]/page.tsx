@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { ArrowLeft, ExternalLink, KeyRound } from 'lucide-react';
 import { pipelineLabel, pipelineOptions } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
 
@@ -56,6 +57,8 @@ export default function AdminMenteeDetailPage() {
   const [user, setUser] = useState<MenteeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetUrl, setResetUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -83,6 +86,17 @@ export default function AdminMenteeDetailPage() {
     [load]
   );
 
+  const resetPassword = useCallback(async () => {
+    setResetting(true);
+    try {
+      const res = await fetch(`/api/admin/users/${id}/reset-password`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) setResetUrl(data.resetUrl);
+    } finally {
+      setResetting(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -104,9 +118,27 @@ export default function AdminMenteeDetailPage() {
             <h1 className="text-2xl font-bold text-gray-900">{user.fullName}</h1>
             <p className="text-gray-500">{user.email}</p>
           </div>
-          {rel && <Badge variant="info">{pipelineLabel(rel.pipelineStatus, locale)}</Badge>}
+          <div className="flex items-center gap-3">
+            {rel && <Badge variant="info">{pipelineLabel(rel.pipelineStatus, locale)}</Badge>}
+            <Button variant="outline" size="sm" loading={resetting} onClick={resetPassword}>
+              <KeyRound className="h-4 w-4 mr-1" />
+              {t.candidateDetail.resetPassword}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {resetUrl && (
+        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
+          <p className="text-sm text-green-800 mb-2">{t.candidateDetail.resetPwHint}</p>
+          <input
+            readOnly
+            value={resetUrl}
+            onFocus={(e) => e.target.select()}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-700"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
