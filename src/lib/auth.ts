@@ -46,6 +46,7 @@ export const authOptions: NextAuthOptions = {
           name: user.fullName,
           role: user.role,
           emailVerified: user.emailVerified,
+          companyId: user.companyId,
         };
       },
     }),
@@ -92,6 +93,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = (user as unknown as { role: string }).role;
         token.emailVerified = (user as unknown as { emailVerified: boolean }).emailVerified;
+        token.companyId = (user as unknown as { companyId?: string | null }).companyId ?? null;
         // Set when starting impersonation, absent on a normal/stop sign-in —
         // so this also clears it when returning to the original account.
         const u = user as unknown as { impersonatorId?: string; impersonatorName?: string };
@@ -108,6 +110,7 @@ export const authOptions: NextAuthOptions = {
           token.name = fresh.fullName;
           token.role = fresh.role;
           token.emailVerified = fresh.emailVerified;
+          token.companyId = fresh.companyId;
         }
       }
       return token;
@@ -119,6 +122,7 @@ export const authOptions: NextAuthOptions = {
         session.user.emailVerified = token.emailVerified as boolean;
         session.user.impersonatorId = (token.impersonatorId as string) ?? null;
         session.user.impersonatorName = (token.impersonatorName as string) ?? null;
+        session.user.companyId = (token.companyId as string) ?? null;
         if (token.email) session.user.email = token.email as string;
         if (token.name) session.user.name = token.name as string;
       }
@@ -138,6 +142,7 @@ declare module 'next-auth' {
       emailVerified?: boolean;
       impersonatorId?: string | null;
       impersonatorName?: string | null;
+      companyId?: string | null;
     };
   }
 }

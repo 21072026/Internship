@@ -12,6 +12,7 @@ enum Role {
   ADMIN
   MENTOR
   MENTEE
+  COMPANY
 }
 
 enum MentorshipStatus {
@@ -65,6 +66,8 @@ model User {
   isActive       Boolean   @default(true)
   // Opt-in: expose a limited, PII-free public profile at /p/[id].
   publicProfile  Boolean   @default(false)
+  // For COMPANY-role users: which company they observe (read-only).
+  companyId      String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -74,6 +77,7 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
   cvFile                  CvFile?
+  company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
 }
 
 // A user's CV stored in the database (no external object storage needed, so it
@@ -101,6 +105,7 @@ model Company {
 
   needs       CompanyNeed[]
   mentorships MentorshipRelation[]
+  users       User[]               @relation("CompanyUsers")
 }
 
 model CompanyNeed {

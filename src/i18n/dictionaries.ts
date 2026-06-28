@@ -23,8 +23,16 @@ const en = {
     admin: 'Admin Panel',
     mentor: 'Mentor Portal',
     mentee: 'Mentee Portal',
+    company: 'Company Portal',
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Language' },
+  company: {
+    title: 'Company overview',
+    subtitle: 'Candidates linked to your company (read-only)',
+    candidates: 'Candidates',
+    mentor: 'Mentor',
+    none: 'No candidates linked yet',
+  },
   common: {
     loading: 'Loading...',
     notFound: 'Not found',
@@ -102,6 +110,13 @@ const en = {
   companiesPage: {
     title: 'Companies',
     subtitle: 'Manage partner companies and their internship needs',
+    addLogin: 'Add a company login',
+    addLoginHint: 'Create a read-only login for a company to observe its linked candidates.',
+    selectCompany: 'Select a company…',
+    loginName: 'Contact name',
+    loginEmail: 'Login email',
+    createLogin: 'Create login',
+    loginCreated: 'Login created — we emailed a set-password link.',
   },
   invite: {
     title: 'Send Invitations',
@@ -381,8 +396,16 @@ const tr: Dict = {
     admin: 'Yönetim Paneli',
     mentor: 'Mentor Portalı',
     mentee: 'Mentee Portalı',
+    company: 'Şirket Portalı',
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Dil' },
+  company: {
+    title: 'Şirket genel görünümü',
+    subtitle: 'Şirketinize bağlı adaylar (salt-okunur)',
+    candidates: 'Adaylar',
+    mentor: 'Mentor',
+    none: 'Henüz bağlı aday yok',
+  },
   common: {
     loading: 'Yükleniyor...',
     notFound: 'Bulunamadı',
@@ -460,6 +483,13 @@ const tr: Dict = {
   companiesPage: {
     title: 'Şirketler',
     subtitle: 'Partner şirketleri ve staj ihtiyaçlarını yönet',
+    addLogin: 'Şirket girişi ekle',
+    addLoginHint: 'Bir şirketin kendi adaylarını izlemesi için salt-okunur giriş oluştur.',
+    selectCompany: 'Bir şirket seç…',
+    loginName: 'İletişim adı',
+    loginEmail: 'Giriş e-postası',
+    createLogin: 'Giriş oluştur',
+    loginCreated: 'Giriş oluşturuldu — parola belirleme bağlantısı e-postalandı.',
   },
   invite: {
     title: 'Davet Gönder',

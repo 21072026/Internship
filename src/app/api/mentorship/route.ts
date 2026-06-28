@@ -28,6 +28,9 @@ export async function GET(request: Request) {
       where.mentorId = session.user.id;
     } else if (session.user.role === 'MENTEE') {
       where.menteeId = session.user.id;
+    } else if (session.user.role === 'COMPANY') {
+      // Read-only: only relations linked to this company.
+      where.companyId = session.user.companyId ?? '__none__';
     }
 
     if (status) {

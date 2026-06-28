@@ -28,6 +28,31 @@ export default function CompaniesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [error, setError] = useState('');
+  const [clCompanyId, setClCompanyId] = useState('');
+  const [clEmail, setClEmail] = useState('');
+  const [clName, setClName] = useState('');
+  const [clMsg, setClMsg] = useState('');
+  const [clBusy, setClBusy] = useState(false);
+
+  const createCompanyLogin = async () => {
+    setClBusy(true);
+    setClMsg('');
+    try {
+      const res = await fetch('/api/admin/company-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: clCompanyId, email: clEmail, fullName: clName }),
+      });
+      const data = await res.json();
+      setClMsg(res.ok ? t.companiesPage.loginCreated : data.error || 'Failed');
+      if (res.ok) {
+        setClEmail('');
+        setClName('');
+      }
+    } finally {
+      setClBusy(false);
+    }
+  };
 
   const fetchCompanies = async () => {
     try {
@@ -116,6 +141,53 @@ export default function CompaniesPage() {
           {error}
         </div>
       )}
+
+      {/* Provision a read-only company login */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>{t.companiesPage.addLogin}</CardTitle>
+          <CardDescription>{t.companiesPage.addLoginHint}</CardDescription>
+        </CardHeader>
+        {clMsg && <p className="text-sm text-gray-700 mb-3">{clMsg}</p>}
+        <div className="flex flex-wrap items-end gap-2">
+          <select
+            value={clCompanyId}
+            onChange={(e) => setClCompanyId(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          >
+            <option value="">{t.companiesPage.selectCompany}</option>
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            aria-label={t.companiesPage.loginName}
+            placeholder={t.companiesPage.loginName}
+            value={clName}
+            onChange={(e) => setClName(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          />
+          <input
+            type="email"
+            aria-label={t.companiesPage.loginEmail}
+            placeholder={t.companiesPage.loginEmail}
+            value={clEmail}
+            onChange={(e) => setClEmail(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          />
+          <Button
+            type="button"
+            loading={clBusy}
+            disabled={!clCompanyId || !clEmail || !clName}
+            onClick={createCompanyLogin}
+          >
+            {t.companiesPage.createLogin}
+          </Button>
+        </div>
+      </Card>
 
       {/* Create/Edit Modal */}
       {(showForm || editingCompany) && (

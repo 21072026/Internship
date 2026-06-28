@@ -22,6 +22,10 @@ export default async function PortalLayout({ children }: { children: React.React
     redirect('/mentor');
   }
 
+  if (session.user.role === 'COMPANY') {
+    redirect('/company');
+  }
+
   const { locale, t } = await getServerDictionary();
 
   return (

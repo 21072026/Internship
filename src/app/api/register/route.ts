@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     // With a token: validate the invitation and use its role.
     // Without a token: open self-registration as a MENTOR.
-    let role: 'ADMIN' | 'MENTOR' | 'MENTEE' = 'MENTOR';
+    let role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' = 'MENTOR';
 
     if (token) {
       const invitation = await prisma.invitationToken.findUnique({ where: { token } });
