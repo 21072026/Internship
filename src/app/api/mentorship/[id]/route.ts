@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
+import { notify } from '@/lib/notify';
 import { PIPELINE_STATUSES } from '@/lib/pipeline';
 
 const updateRelationSchema = z.object({
@@ -133,6 +134,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         targetId: id,
         detail: `${relation.pipelineStatus} → ${parsed.data.pipelineStatus}`,
       });
+      await notify(relation.menteeId, 'stage', 'Your pipeline stage was updated.', '/portal');
     }
 
     return NextResponse.json({ relation: updated });

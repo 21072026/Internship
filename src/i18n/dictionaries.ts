@@ -289,6 +289,10 @@ const en = {
     replace: 'Replace',
     remove: 'Remove',
   },
+  notifications: {
+    title: 'Notifications',
+    none: 'No notifications',
+  },
   activity: {
     title: 'Activity log',
     subtitle: 'Auth events and key actions across the app',
@@ -698,6 +702,10 @@ const tr: Dict = {
     upload: 'Fotoğraf yükle',
     replace: 'Değiştir',
     remove: 'Kaldır',
+  },
+  notifications: {
+    title: 'Bildirimler',
+    none: 'Bildirim yok',
   },
   activity: {
     title: 'Aktivite günlüğü',

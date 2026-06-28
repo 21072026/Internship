@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { notify } from '@/lib/notify';
 
 // Public endpoint — the mentee responds to a meeting invite via the token in
 // their email. No auth: the unguessable token is the credential.
@@ -30,5 +31,11 @@ export async function POST(request: Request) {
     where: { id: meeting.id },
     data: { rsvp: response === 'yes' ? 'ACCEPTED' : 'DECLINED' },
   });
+  await notify(
+    meeting.createdById,
+    'rsvp',
+    `A mentee ${response === 'yes' ? 'accepted' : 'declined'} the meeting "${meeting.title}".`,
+    '/mentor/meetings'
+  );
   return NextResponse.json({ ok: true, rsvp: response === 'yes' ? 'ACCEPTED' : 'DECLINED' });
 }

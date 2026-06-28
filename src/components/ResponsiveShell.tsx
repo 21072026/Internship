@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
+import { NotificationBell } from '@/components/NotificationBell';
 
 // App shell: sidebar is a static column on desktop and an off-canvas drawer
 // (with a hamburger top bar) on mobile.
@@ -21,9 +22,12 @@ export function ResponsiveShell({
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white border-b border-gray-200 h-14 px-4">
         <span className="font-bold text-gray-900">InternshipCRM</span>
-        <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-2 -mr-2 text-gray-600 hover:text-gray-900">
-          <Menu className="h-6 w-6" />
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-2 -mr-2 text-gray-600 hover:text-gray-900">
+            <Menu className="h-6 w-6" />
+          </button>
+        </div>
       </div>
 
       {/* Overlay (mobile only) */}
@@ -51,7 +55,11 @@ export function ResponsiveShell({
       </div>
 
       <main className="flex-1 overflow-auto min-w-0">
-        <div className="p-4 lg:p-8">
+        {/* Desktop-only top strip for the notification bell */}
+        <div className="hidden lg:flex justify-end px-8 pt-4">
+          <NotificationBell />
+        </div>
+        <div className="p-4 lg:p-8 lg:pt-2">
           <ImpersonationBanner />
           <EmailVerificationBanner />
           {children}

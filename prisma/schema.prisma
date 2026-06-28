@@ -81,7 +81,23 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   cvFile                  CvFile?
   avatarFile              AvatarFile?
+  notifications           Notification[]
   company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
+}
+
+// In-app notification for a user.
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  text      String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // A user's profile picture, stored in the database (same approach as CvFile).

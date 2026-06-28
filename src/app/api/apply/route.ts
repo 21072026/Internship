@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
+import { notify } from '@/lib/notify';
 
 // GET ?mentorId= — public: validate the link and return the mentor's name so
 // the application page can greet the applicant.
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
   });
 
   await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
+  await notify(mentor.id, 'application', `${fullName} applied to be your mentee.`, '/mentor/mentees');
 
   // Let the applicant set a password so they can sign in to the portal.
   const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
