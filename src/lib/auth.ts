@@ -27,14 +27,20 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
         });
 
-        if (!user) {
-          throw new Error('No account found with this email');
-        }
+        const isPasswordValid = user
+          ? await bcrypt.compare(credentials.password, user.password)
+          : false;
 
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-
-        if (!isPasswordValid) {
-          throw new Error('Invalid password');
+        // Generic error for both unknown email and wrong password so the
+        // endpoint can't be used to discover which emails are registered.
+        if (!user || !isPasswordValid) {
+          await logActivity({
+            action: 'auth.login_failed',
+            level: 'warning',
+            actorEmail: credentials.email,
+            actorId: user?.id ?? null,
+          });
+          throw new Error('Invalid email or password');
         }
 
         if (!user.isActive) {
