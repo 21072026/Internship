@@ -213,6 +213,9 @@ const en = {
     viewingAs: 'You are viewing the app as {name}.',
     return: 'Return to your account',
   },
+  adminBoard: {
+    subtitle: 'All mentees across every mentor — drag a card to change its stage',
+  },
   portal: {
     welcome: 'Welcome',
     dashSubtitle: 'Your internship dashboard',
@@ -488,6 +491,9 @@ const tr: Dict = {
   impersonation: {
     viewingAs: 'Uygulamayı {name} olarak görüntülüyorsun.',
     return: 'Kendi hesabına dön',
+  },
+  adminBoard: {
+    subtitle: 'Tüm mentorların tüm mentee’leri — aşamayı değiştirmek için kartı sürükle',
   },
   portal: {
     welcome: 'Hoş geldin',
