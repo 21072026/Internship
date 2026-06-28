@@ -23,7 +23,7 @@ test('sign-in is recorded in the activity log and visible to admins', async ({ p
 
     // The admin activity viewer shows entries.
     await page.goto('/admin/activity');
-    await expect(page.getByRole('heading', { name: /Activity log/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: /Activity log/i }).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('auth.login').first()).toBeVisible({ timeout: 10_000 });
   } finally {
     await prisma.activityLog.deleteMany({ where: { actorEmail: email } });
