@@ -1,0 +1,84 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
+import { randomBytes } from 'crypto';
+import { sendMeetingInviteEmail } from '@/services/emailService';
+
+const schema = z.object({
+  relationIds: z.array(z.string().min(1)).min(1),
+  title: z.string().min(1),
+  scheduledAt: z.string().min(1),
+  meetLink: z.string().url().optional().or(z.literal('')),
+});
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const where =
+    session.user.role === 'ADMIN' ? {} : { relation: { mentorId: session.user.id } };
+  const meetings = await prisma.meeting.findMany({
+    where,
+    include: { relation: { include: { mentee: { select: { fullName: true } } } } },
+    orderBy: { scheduledAt: 'desc' },
+  });
+  return NextResponse.json({ meetings });
+}
+
+// POST — schedule a meeting for one or many mentees (bulk). Each gets its own
+// Meeting row + RSVP token, and an emailed invite with the Meet link.
+export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const parsed = schema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { relationIds, title, scheduledAt, meetLink } = parsed.data;
+  const when = new Date(scheduledAt);
+
+  const where =
+    session.user.role === 'ADMIN'
+      ? { id: { in: relationIds } }
+      : { id: { in: relationIds }, mentorId: session.user.id };
+  const relations = await prisma.mentorshipRelation.findMany({
+    where,
+    include: { mentee: { select: { email: true, fullName: true } } },
+  });
+
+  let created = 0;
+  for (const rel of relations) {
+    const rsvpToken = randomBytes(24).toString('hex');
+    await prisma.meeting.create({
+      data: {
+        relationId: rel.id,
+        title,
+        scheduledAt: when,
+        meetLink: meetLink || null,
+        rsvpToken,
+        createdById: session.user.id,
+      },
+    });
+    try {
+      await sendMeetingInviteEmail({
+        to: rel.mentee.email,
+        fullName: rel.mentee.fullName,
+        title,
+        scheduledAt: when,
+        meetLink: meetLink || null,
+        rsvpToken,
+      });
+    } catch (e) {
+      console.error('Meeting invite email failed:', e);
+    }
+    created++;
+  }
+
+  return NextResponse.json({ created });
+}

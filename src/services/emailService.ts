@@ -170,6 +170,44 @@ export async function sendVerificationEmail({
   });
 }
 
+export async function sendMeetingInviteEmail({
+  to,
+  fullName,
+  title,
+  scheduledAt,
+  meetLink,
+  rsvpToken,
+}: {
+  to: string;
+  fullName?: string | null;
+  title: string;
+  scheduledAt: Date;
+  meetLink?: string | null;
+  rsvpToken: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
+  const no = `${appUrl}/rsvp/${rsvpToken}?r=no`;
+  const when = scheduledAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' });
+
+  await sendEmail({
+    to,
+    subject: `Meeting invitation: ${title}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">${title}</h2>
+        ${fullName ? `<p>Hi ${fullName},</p>` : ''}
+        <p>You're invited to a meeting.</p>
+        <p><strong>When:</strong> ${when}</p>
+        ${meetLink ? `<p><strong>Google Meet:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
+        <p style="margin-top: 20px;">Can you make it?</p>
+        <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
+        <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
+      </div>
+    `,
+  });
+}
+
 export async function checkMentorInteractionReminders() {
   const fourteenDaysAgo = new Date();
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
