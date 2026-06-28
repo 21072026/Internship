@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
@@ -14,6 +15,9 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, 'register', { limit: 5, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
+
   try {
     const body = await request.json();
     const parsed = registerSchema.safeParse(body);

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
@@ -9,6 +10,9 @@ const schema = z.object({ email: z.string().email() });
 // Always responds 200 with the same body whether or not the email exists, so
 // the endpoint can't be used to enumerate registered accounts.
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, 'forgot', { limit: 5, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
+
   try {
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {

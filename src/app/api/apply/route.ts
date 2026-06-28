@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
@@ -31,6 +32,9 @@ const schema = z.object({
 // POST — public application: creates a mentee linked to the mentor, emails the
 // applicant a "set your password" link, and notifies the mentor.
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, 'apply', { limit: 5, windowMs: 10 * 60 * 1000 });
+  if (limited) return limited;
+
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

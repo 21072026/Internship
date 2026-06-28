@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
@@ -19,6 +20,9 @@ export async function GET(request: Request) {
 const schema = z.object({ token: z.string().min(1), response: z.enum(['yes', 'no']) });
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, 'rsvp', { limit: 20, windowMs: 10 * 60 * 1000 });
+  if (limited) return limited;
+
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

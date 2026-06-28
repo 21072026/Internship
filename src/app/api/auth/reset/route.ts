@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
@@ -19,6 +20,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limited = enforceRateLimit(request, 'reset', { limit: 10, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
+
   try {
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {
