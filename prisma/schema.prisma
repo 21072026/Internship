@@ -166,6 +166,18 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// Lightweight audit trail for sensitive admin actions (e.g. impersonation).
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String // who performed the action (e.g. the admin)
+  action    String // e.g. IMPERSONATE_START / IMPERSONATE_STOP
+  targetId  String? // affected user, when applicable
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+}
+
 // Single-use, time-limited token to confirm a user's email address.
 model EmailVerificationToken {
   id        String   @id @default(cuid())

@@ -206,7 +206,12 @@ const en = {
     inactive: 'Inactive',
     activate: 'Activate',
     deactivate: 'Deactivate',
+    loginAs: 'Login as',
     none: 'No users',
+  },
+  impersonation: {
+    viewingAs: 'You are viewing the app as {name}.',
+    return: 'Return to your account',
   },
   portal: {
     welcome: 'Welcome',
@@ -477,7 +482,12 @@ const tr: Dict = {
     inactive: 'Pasif',
     activate: 'Aktifleştir',
     deactivate: 'Pasifleştir',
+    loginAs: 'Bu kullanıcı gibi gir',
     none: 'Kullanıcı yok',
+  },
+  impersonation: {
+    viewingAs: 'Uygulamayı {name} olarak görüntülüyorsun.',
+    return: 'Kendi hesabına dön',
   },
   portal: {
     welcome: 'Hoş geldin',

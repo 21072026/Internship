@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { signIn, useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { roleHome } from '@/lib/roleHome';
 import { useT } from '@/i18n/client';
 
 interface AdminUser {
@@ -24,10 +27,23 @@ const ROLE_VARIANT: Record<string, 'info' | 'success' | 'warning'> = {
 
 export default function AdminUsersPage() {
   const t = useT();
+  const router = useRouter();
+  const { data: session } = useSession();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'ALL' | 'ADMIN' | 'MENTOR' | 'MENTEE'>('ALL');
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const loginAs = async (u: AdminUser) => {
+    setBusyId(u.id);
+    const res = await signIn('impersonate', { targetUserId: u.id, redirect: false });
+    if (res?.ok) {
+      router.push(roleHome(u.role));
+      router.refresh();
+    } else {
+      setBusyId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     const res = await fetch('/api/users');
@@ -106,6 +122,11 @@ export default function AdminUsersPage() {
                   <Badge variant={u.isActive ? 'success' : 'warning'}>
                     {u.isActive ? t.usersAdmin.active : t.usersAdmin.inactive}
                   </Badge>
+                  {u.id !== session?.user?.id && (
+                    <Button variant="ghost" size="sm" disabled={busyId === u.id} onClick={() => loginAs(u)}>
+                      {t.usersAdmin.loginAs}
+                    </Button>
+                  )}
                   <Button
                     variant={u.isActive ? 'outline' : 'primary'}
                     size="sm"
