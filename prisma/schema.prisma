@@ -61,6 +61,8 @@ model User {
   // Default true so existing rows stay writable after the column is added;
   // new self-registrations are created with false until they verify by email.
   emailVerified  Boolean   @default(true)
+  // Admin can deactivate a user; inactive users cannot sign in.
+  isActive       Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

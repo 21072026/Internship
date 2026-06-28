@@ -54,3 +54,35 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+// PATCH — admin updates a user's account flags (currently: active/inactive).
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    if (typeof body.isActive !== 'boolean') {
+      return NextResponse.json({ error: 'isActive (boolean) is required' }, { status: 400 });
+    }
+
+    // Guard against an admin locking themselves out.
+    if (id === session.user.id && body.isActive === false) {
+      return NextResponse.json({ error: 'You cannot deactivate your own account' }, { status: 400 });
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { isActive: body.isActive },
+      select: { id: true, isActive: true },
+    });
+
+    return NextResponse.json({ user });
+  } catch (error) {
+    console.error('Update user error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

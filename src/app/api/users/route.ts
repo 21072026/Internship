@@ -22,6 +22,8 @@ export async function GET() {
         graduationYear: true,
         skills: true,
         phone: true,
+        isActive: true,
+        emailVerified: true,
         createdAt: true,
         _count: { select: { mentorRelations: true } },
       },
