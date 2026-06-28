@@ -48,6 +48,29 @@ test('a mentee can change password from /account; weak passwords are rejected', 
   }
 });
 
+test('changing email requires the correct current password', async ({ page }) => {
+  const email = uniqueEmail('reauth');
+  const newEmail = uniqueEmail('reauth-new');
+  const pw = 'ReauthPass123';
+  const user = await seedUser(email, pw, 'MENTEE', 'Reauth Mentee');
+
+  try {
+    await signIn(page, email, pw, '/portal');
+    await page.goto('/account');
+    const emailForm = page.locator('form', { has: page.getByRole('button', { name: 'Update email' }) });
+    await emailForm.getByLabel(/Email address/).fill(newEmail);
+    await emailForm.getByLabel(/Current password/).fill('WrongPass999');
+    await page.getByRole('button', { name: 'Update email' }).click();
+
+    await expect(page.getByText(/Current password is incorrect/i)).toBeVisible({ timeout: 10_000 });
+    const after = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(after!.email).toBe(email); // unchanged
+  } finally {
+    await cleanupByEmail(email);
+    await cleanupByEmail(newEmail);
+  }
+});
+
 test('a user can delete their own account', async ({ page }) => {
   const email = uniqueEmail('delmentee');
   const pw = 'DeletePass123';
@@ -57,6 +80,7 @@ test('a user can delete their own account', async ({ page }) => {
     await signIn(page, email, pw, '/portal');
     await page.goto('/account');
     await page.getByRole('button', { name: 'Delete my account' }).click();
+    await page.getByLabel(/Current password/).last().fill(pw); // re-auth required
     const done = page.waitForResponse((r) => r.url().includes('/api/account') && r.request().method() === 'DELETE');
     await page.getByRole('button', { name: 'Yes, delete' }).click();
     await done;

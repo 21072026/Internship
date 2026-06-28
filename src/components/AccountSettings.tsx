@@ -16,9 +16,11 @@ export function AccountSettings() {
   const { update } = useSession();
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
@@ -58,7 +60,8 @@ export function AccountSettings() {
     e.preventDefault();
     setSavingEmail(true);
     try {
-      await call({ email });
+      await call({ email, currentPassword: emailPassword });
+      setEmailPassword('');
       await update();
       router.refresh();
       flash(t.account.updated);
@@ -87,7 +90,11 @@ export function AccountSettings() {
   const deleteAccount = async () => {
     setDeleting(true);
     try {
-      const res = await fetch('/api/account', { method: 'DELETE' });
+      const res = await fetch('/api/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: deletePassword }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       await signOut({ callbackUrl: '/' });
@@ -119,6 +126,7 @@ export function AccountSettings() {
           <CardHeader><CardTitle>{t.account.emailSection}</CardTitle></CardHeader>
           <form onSubmit={submitEmail} className="space-y-4">
             <Input label={t.account.email} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <Input label={t.account.currentPassword} type="password" autoComplete="current-password" hint={t.account.emailPwHint} value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} required />
             <Button type="submit" loading={savingEmail}>{t.account.updateEmail}</Button>
           </form>
         </Card>
@@ -149,10 +157,13 @@ export function AccountSettings() {
         <CardHeader><CardTitle>{t.account.deleteSection}</CardTitle></CardHeader>
         <p className="text-sm text-gray-600 mb-4">{t.account.deleteWarning}</p>
         {confirmDelete ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-red-700">{t.account.deleteConfirm}</span>
-            <Button variant="danger" loading={deleting} onClick={deleteAccount}>{t.account.deleteYes}</Button>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>{t.account.deleteCancel}</Button>
+          <div className="space-y-3 max-w-sm">
+            <p className="text-sm text-red-700">{t.account.deleteConfirm}</p>
+            <Input label={t.account.currentPassword} type="password" autoComplete="current-password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} required />
+            <div className="flex items-center gap-2">
+              <Button variant="danger" loading={deleting} disabled={!deletePassword} onClick={deleteAccount}>{t.account.deleteYes}</Button>
+              <Button variant="outline" onClick={() => { setConfirmDelete(false); setDeletePassword(''); }}>{t.account.deleteCancel}</Button>
+            </div>
           </div>
         ) : (
           <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t.account.deleteButton}</Button>

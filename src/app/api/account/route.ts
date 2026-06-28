@@ -31,8 +31,17 @@ export async function PUT(request: Request) {
     }
 
     const data: { email?: string; password?: string } = {};
+    const changingEmail = !!email && email !== user.email;
 
-    if (email && email !== user.email) {
+    // Changing the email or the password both require re-authentication with
+    // the current password.
+    if (changingEmail || newPassword) {
+      if (!currentPassword || !(await bcrypt.compare(currentPassword, user.password))) {
+        return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 });
+      }
+    }
+
+    if (changingEmail) {
       const taken = await prisma.user.findUnique({ where: { email } });
       if (taken) {
         return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
@@ -41,9 +50,6 @@ export async function PUT(request: Request) {
     }
 
     if (newPassword) {
-      if (!currentPassword || !(await bcrypt.compare(currentPassword, user.password))) {
-        return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 });
-      }
       data.password = await bcrypt.hash(newPassword, 12);
     }
 
@@ -52,7 +58,12 @@ export async function PUT(request: Request) {
     }
 
     await prisma.user.update({ where: { id: user.id }, data });
-    // Note: email/password changes apply on next sign-in (the JWT keeps the old email until then).
+    if (data.email) {
+      await logActivity({ action: 'account.email_change', level: 'warning', actorId: user.id, actorEmail: data.email, detail: `from ${user.email}` });
+    }
+    if (data.password) {
+      await logActivity({ action: 'account.password_change', level: 'warning', actorId: user.id, actorEmail: user.email });
+    }
     return NextResponse.json({ message: 'Account updated', emailChanged: !!data.email });
   } catch (error) {
     console.error('Account update error:', error);
@@ -60,8 +71,8 @@ export async function PUT(request: Request) {
   }
 }
 
-// DELETE — self-service account deletion.
-export async function DELETE() {
+// DELETE — self-service account deletion (requires the current password).
+export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -72,6 +83,14 @@ export async function DELETE() {
     }
 
     const id = session.user.id;
+
+    // Re-authenticate with the current password before destroying the account.
+    const body = await request.json().catch(() => ({}));
+    const currentPassword = typeof body?.currentPassword === 'string' ? body.currentPassword : '';
+    const me = await prisma.user.findUnique({ where: { id } });
+    if (!me || !currentPassword || !(await bcrypt.compare(currentPassword, me.password))) {
+      return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 });
+    }
 
     // The last remaining admin can't delete themselves.
     if (session.user.role === 'ADMIN') {
