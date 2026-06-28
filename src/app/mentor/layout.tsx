@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { GraduationCap, LayoutDashboard, Columns3, Users, BookOpen, Mail, LogOut } from 'lucide-react';
+import { GraduationCap, LayoutDashboard, Columns3, Users, BookOpen, Mail, CalendarClock, LogOut } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
@@ -67,6 +67,13 @@ export default async function MentorLayout({ children }: { children: React.React
           >
             <Mail className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
             {t.nav.email}
+          </Link>
+          <Link
+            href="/mentor/meetings"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+          >
+            <CalendarClock className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+            {t.nav.meetings}
           </Link>
         </nav>
 

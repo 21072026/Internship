@@ -13,7 +13,9 @@ function isAllowlisted(pathname: string) {
     pathname === '/api/register' ||
     // Returning from impersonation must work even if the impersonated user is
     // unverified (the impersonated identity could be a read-only account).
-    pathname === '/api/impersonate/stop'
+    pathname === '/api/impersonate/stop' ||
+    // Public meeting RSVP (the unguessable token is the credential).
+    pathname === '/api/rsvp'
   );
 }
 
