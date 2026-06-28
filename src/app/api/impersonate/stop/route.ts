@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createImpersonationGrant } from '@/lib/impersonation';
+import { logActivity } from '@/lib/activity';
 
 // POST — return from an impersonated session to the original admin. Allowed
 // only when the current session carries an impersonatorId. Returns a single-use
@@ -18,6 +19,7 @@ export async function POST() {
   await prisma.auditLog.create({
     data: { actorId: impersonatorId, action: 'IMPERSONATE_STOP', targetId: session.user.id },
   });
+  await logActivity({ action: 'impersonate.stop', level: 'warning', actorId: impersonatorId, targetType: 'user', targetId: session.user.id });
 
   return NextResponse.json({ grant });
 }

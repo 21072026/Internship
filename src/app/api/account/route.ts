@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { passwordSchema } from '@/lib/password';
+import { logActivity } from '@/lib/activity';
 
 const schema = z.object({
   email: z.string().email().optional(),
@@ -86,6 +87,7 @@ export async function DELETE() {
     await prisma.statusChange.deleteMany({ where: { changedById: id } });
     await prisma.user.delete({ where: { id } });
 
+    await logActivity({ action: 'account.delete', level: 'warning', actorId: id, actorEmail: session.user.email ?? null });
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error('Account delete error:', error);

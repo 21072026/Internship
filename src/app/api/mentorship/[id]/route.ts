@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { logActivity } from '@/lib/activity';
 import { PIPELINE_STATUSES } from '@/lib/pipeline';
 
 const updateRelationSchema = z.object({
@@ -123,6 +124,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           toStatus: parsed.data.pipelineStatus,
           changedById: session.user.id,
         },
+      });
+      await logActivity({
+        action: 'pipeline.stage_change',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        targetType: 'relation',
+        targetId: id,
+        detail: `${relation.pipelineStatus} → ${parsed.data.pipelineStatus}`,
       });
     }
 

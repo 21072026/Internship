@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createImpersonationGrant } from '@/lib/impersonation';
+import { logActivity } from '@/lib/activity';
 
 const schema = z.object({ targetUserId: z.string().min(1) });
 
@@ -32,6 +33,14 @@ export async function POST(request: Request) {
   const grant = await createImpersonationGrant(session.user.id, target.id, 'START');
   await prisma.auditLog.create({
     data: { actorId: session.user.id, action: 'IMPERSONATE_START', targetId: target.id },
+  });
+  await logActivity({
+    action: 'impersonate.start',
+    level: 'warning',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'user',
+    targetId: target.id,
   });
 
   return NextResponse.json({ grant });

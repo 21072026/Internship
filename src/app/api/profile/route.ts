@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { logActivity } from '@/lib/activity';
 
 const updateProfileSchema = z.object({
   fullName: z.string().min(1).optional(),
@@ -110,6 +111,7 @@ export async function PUT(request: Request) {
       },
     });
 
+    await logActivity({ action: 'profile.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
     return NextResponse.json({ user });
   } catch (error) {
     console.error('Update profile error:', error);

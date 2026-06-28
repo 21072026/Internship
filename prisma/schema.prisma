@@ -241,6 +241,31 @@ model ImpersonationGrant {
   expiresAt DateTime
 }
 
+enum LogLevel {
+  DEBUG
+  INFO
+  WARNING
+  ERROR
+}
+
+// Application activity log: auth events and key user actions, at several
+// levels. Powers the admin activity viewer.
+model ActivityLog {
+  id         String   @id @default(cuid())
+  level      LogLevel @default(INFO)
+  action     String
+  actorId    String?
+  actorEmail String?
+  targetType String?
+  targetId   String?
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
 model AuditLog {
   id        String   @id @default(cuid())

@@ -2,6 +2,7 @@ import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { logActivity } from '@/lib/activity';
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -127,6 +128,18 @@ export const authOptions: NextAuthOptions = {
         if (token.name) session.user.name = token.name as string;
       }
       return session;
+    },
+  },
+  events: {
+    async signIn({ user }) {
+      await logActivity({ action: 'auth.login', actorId: user.id, actorEmail: user.email ?? null });
+    },
+    async signOut({ token }) {
+      await logActivity({
+        action: 'auth.logout',
+        actorId: (token?.id as string) ?? null,
+        actorEmail: (token?.email as string) ?? null,
+      });
     },
   },
 };
