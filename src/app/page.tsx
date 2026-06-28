@@ -118,6 +118,7 @@ export default async function HomePage() {
               })}
             </svg>
           </div>
+          <p className="text-sm text-gray-500 mt-6 max-w-xl mx-auto italic">{L.pipelineNote}</p>
         </div>
       </section>
 
