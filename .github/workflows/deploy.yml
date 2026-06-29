@@ -146,7 +146,8 @@ jobs:
             -e SMTP_FROM="\$SMTP_FROM" \
             "\$IMAGE"
 
-          docker image prune -f
+          docker image prune -af
+          docker builder prune -af --filter until=72h
           EOF
 
       # ── Preview deploy (pull_request) ───────────────────────────────────────
@@ -229,7 +230,8 @@ jobs:
             -e SMTP_FROM="\$SMTP_FROM" \
             "\$IMAGE"
 
-          docker image prune -f
+          docker image prune -af
+          docker builder prune -af --filter until=72h
           EOF
 
       - name: Post preview URL comment
