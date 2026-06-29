@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { pipelineOptions, pipelineLabel } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
+import { GoalsPanel } from '@/components/GoalsPanel';
 
 interface InteractionLog {
   id: string;
@@ -360,6 +361,10 @@ export default function MenteeDetailPage() {
 
         <div className="lg:col-span-2">
           <EvaluationPanel relationId={id} />
+        </div>
+
+        <div className="lg:col-span-2">
+          <GoalsPanel relationId={id} />
         </div>
       </div>
     </div>

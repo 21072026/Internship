@@ -1,5 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
+import { GoalsPanel } from '@/components/GoalsPanel';
+import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -251,6 +253,13 @@ export default async function PortalDashboard() {
             </div>
           )}
         </Card>
+
+        {activeRelation && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <GoalsPanel relationId={activeRelation.id} />
+            <EvaluationPanel relationId={activeRelation.id} audience="MENTOR" />
+          </div>
+        )}
       </div>
     </div>
   );
