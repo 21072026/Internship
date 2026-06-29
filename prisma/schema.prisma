@@ -93,6 +93,9 @@ model User {
   // Opt-out switch for transactional email (messages, announcements). In-app
   // notifications are always created regardless.
   emailNotifications Boolean   @default(true)
+  // Per-category email toggles, e.g. {"messages":false}. Nullable so existing
+  // rows aren't touched (avoids MariaDB json_valid CHECK issues); unset = on.
+  notificationPrefs  Json?
   // Optional TOTP two-factor auth. The secret is only meaningful once enabled.
   twoFactorEnabled   Boolean   @default(false)
   twoFactorSecret    String?

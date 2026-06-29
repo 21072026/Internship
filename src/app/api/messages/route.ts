@@ -8,6 +8,7 @@ import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
+import { emailAllowed } from '@/lib/notificationPrefs';
 
 // GET ?relationId= — messages in a thread (participants/admin only).
 export async function GET(request: Request) {
@@ -63,9 +64,9 @@ export async function POST(request: Request) {
     // Reply-To routes email replies back into this thread via /api/inbound-email.
     const rcpt = await prisma.user.findUnique({
       where: { id: recipient },
-      select: { email: true, emailNotifications: true },
+      select: { email: true, emailNotifications: true, notificationPrefs: true },
     });
-    if (rcpt?.email && rcpt.emailNotifications) {
+    if (rcpt?.email && emailAllowed(rcpt, 'messages')) {
       const sender = session.user.name ?? 'Your mentor';
       const safe = parsed.data.body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
       sendEmail({

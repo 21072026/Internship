@@ -30,6 +30,7 @@ export function AccountSettings() {
   const [deleting, setDeleting] = useState(false);
   const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
@@ -48,6 +49,7 @@ export function AccountSettings() {
         if (!user) return;
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
+        setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
         setLanguage(user.preferredLanguage ?? 'en');
         setRole(user.role ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
@@ -105,6 +107,24 @@ export function AccountSettings() {
       flash('Failed', true);
     } finally {
       setSavingExpertise(false);
+    }
+  };
+
+  const togglePref = async (cat: string, next: boolean) => {
+    const updated = { ...notifPrefs, [cat]: next };
+    setNotifPrefs(updated);
+    setSavingPrefs(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationPrefs: updated }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setNotifPrefs(notifPrefs);
+      flash('Failed', true);
+    } finally {
+      setSavingPrefs(false);
     }
   };
 
@@ -280,6 +300,21 @@ export function AccountSettings() {
           {t.account.emailNotifications}
         </label>
         <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
+
+        <div className={`mt-3 space-y-1.5 pl-6 ${emailNotifications ? '' : 'opacity-40 pointer-events-none'}`}>
+          {(['messages', 'announcements', 'deadlines', 'digest'] as const).map((cat) => (
+            <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={notifPrefs[cat] !== false}
+                disabled={savingPrefs || !emailNotifications}
+                onChange={(e) => togglePref(cat, e.target.checked)}
+              />
+              {(t.account.notifCategories as Record<string, string>)[cat]}
+            </label>
+          ))}
+        </div>
+
         <div className="mt-4 pt-4 border-t border-gray-100 max-w-xs">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.language}</label>
           <select

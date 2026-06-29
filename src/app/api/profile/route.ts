@@ -31,6 +31,7 @@ const updateProfileSchema = z.object({
   targetPosition: z.string().max(160).optional(),
   mentorCapacity: z.number().int().min(0).max(100).nullable().optional(),
   emailNotifications: z.boolean().optional(),
+  notificationPrefs: z.record(z.string(), z.boolean()).optional(),
   preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
 });
 
@@ -65,6 +66,7 @@ const PROFILE_SELECT = {
   targetPosition: true,
   mentorCapacity: true,
   emailNotifications: true,
+  notificationPrefs: true,
   preferredLanguage: true,
   createdAt: true,
 } as const;

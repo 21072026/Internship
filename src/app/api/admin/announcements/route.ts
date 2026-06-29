@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
+import { emailAllowed } from '@/lib/notificationPrefs';
 
 const schema = z.object({
   text: z.string().min(1).max(2000),
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
 
   const users = await prisma.user.findMany({
     where: { isActive: true },
-    select: { id: true, email: true, emailNotifications: true },
+    select: { id: true, email: true, emailNotifications: true, notificationPrefs: true },
   });
 
   // Bulk-create the in-app notifications in one statement.
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
     const html = `<p>${safe.replace(/\n/g, '<br>')}</p>${link ? `<p><a href="${link}">${link}</a></p>` : ''}`;
     await Promise.all(
       users
-        .filter((u) => u.email && u.emailNotifications)
+        .filter((u) => u.email && emailAllowed(u, 'announcements'))
         .map((u) =>
           sendEmail({ to: u.email, subject: 'Announcement', html }).then(
             () => { emailed++; },

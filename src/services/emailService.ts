@@ -3,6 +3,7 @@ import cron from 'node-cron';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { getSetting } from '@/lib/settings';
+import { emailAllowed } from '@/lib/notificationPrefs';
 import type { PipelineStatus } from '@prisma/client';
 
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
@@ -302,7 +303,7 @@ export async function checkStageDeadlineReminders() {
 
   for (const rel of overdue) {
     await notify(rel.mentorId, 'deadline', `Stage deadline passed for ${rel.mentee.fullName}.`, `/admin/candidates/${rel.menteeId}`);
-    if (rel.mentor.emailNotifications) {
+    if (emailAllowed(rel.mentor, 'deadlines')) {
       await sendEmail({
         to: rel.mentor.email,
         subject: `Overdue: ${rel.mentee.fullName}'s stage deadline`,
@@ -359,6 +360,8 @@ export async function sendWeeklyMentorDigests() {
       id: true,
       email: true,
       fullName: true,
+      emailNotifications: true,
+      notificationPrefs: true,
       mentorRelations: {
         select: {
           startDate: true,
@@ -372,6 +375,7 @@ export async function sendWeeklyMentorDigests() {
   let sent = 0;
   for (const m of mentors) {
     if (m.mentorRelations.length === 0) continue;
+    if (!emailAllowed(m, 'digest')) continue;
     const stale = m.mentorRelations.filter(
       (r) => !r.interactions[0] || r.interactions[0].date < fourteenDaysAgo
     ).length;
