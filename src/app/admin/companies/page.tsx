@@ -132,7 +132,7 @@ export default function CompaniesPage() {
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4" />
-          Add Company
+          {t.companiesPage.addCompany}
         </Button>
       </div>
 
@@ -194,7 +194,7 @@ export default function CompaniesPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-6">
-              {editingCompany ? 'Edit Company' : 'Add Company'}
+              {editingCompany ? t.companiesPage.editCompany : t.companiesPage.addCompany}
             </h2>
             <CompanyForm
               defaultValues={editingCompany || undefined}
@@ -215,7 +215,7 @@ export default function CompaniesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search companies..."
+            placeholder={t.companiesPage.searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
@@ -229,7 +229,7 @@ export default function CompaniesPage() {
       ) : filteredCompanies.length === 0 ? (
         <Card className="text-center py-12">
           <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No companies found</p>
+          <p className="text-gray-500">{t.companiesPage.none}</p>
           <Button onClick={() => setShowForm(true)} variant="outline" className="mt-4">
             <Plus className="h-4 w-4" />
             Add your first company
@@ -273,14 +273,14 @@ export default function CompaniesPage() {
               )}
 
               <div className="flex items-center gap-2 mb-4">
-                <Badge variant="info">{company._count.mentorships} mentorships</Badge>
-                <Badge variant="default">{company.needs.length} positions</Badge>
+                <Badge variant="info">{company._count.mentorships} {t.companiesPage.mentorships}</Badge>
+                <Badge variant="default">{company.needs.length} {t.companiesPage.positions}</Badge>
               </div>
 
               {company.needs.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                    Open Positions
+                    {t.companiesPage.openPositions}
                   </p>
                   <div className="space-y-1.5">
                     {company.needs.map((need) => (

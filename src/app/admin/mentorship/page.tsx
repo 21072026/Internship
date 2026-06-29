@@ -1,5 +1,5 @@
 'use client';
-import { useT } from "@/i18n/client";
+import { useT, useLocale } from "@/i18n/client";
 import Link from "next/link";
 
 import { useState, useEffect } from 'react';
@@ -32,6 +32,7 @@ interface MentorshipRelation {
 
 export default function MentorshipPage() {
   const t = useT();
+  const locale = useLocale();
   const [relations, setRelations] = useState<MentorshipRelation[]>([]);
   const [mentors, setMentors] = useState<User[]>([]);
   const [mentees, setMentees] = useState<User[]>([]);
@@ -127,7 +128,7 @@ export default function MentorshipPage() {
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4" />
-          Assign Mentorship
+          {t.mentorships.assign}
         </Button>
       </div>
 
@@ -139,7 +140,7 @@ export default function MentorshipPage() {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Assign Mentorship</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-6">{t.mentorships.assign}</h2>
             {formError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{formError}</div>
             )}
@@ -199,8 +200,8 @@ export default function MentorshipPage() {
                     {rel.company && (
                       <span>🏢 {rel.company.name}</span>
                     )}
-                    <span>📅 Started {new Date(rel.startDate).toLocaleDateString()}</span>
-                    <Badge variant="default">{rel._count.interactions} interactions</Badge>
+                    <span>📅 {t.mentorships.started} {new Date(rel.startDate).toLocaleDateString(locale)}</span>
+                    <Badge variant="default">{rel._count.interactions} {t.mentorships.interactions}</Badge>
                   </div>
                 </div>
                 {rel.status === 'ACTIVE' && (
@@ -209,7 +210,7 @@ export default function MentorshipPage() {
                     size="sm"
                     onClick={() => handleComplete(rel.id)}
                   >
-                    Mark Complete
+                    {t.mentorships.markComplete}
                   </Button>
                 )}
               </div>

@@ -47,7 +47,7 @@ async function getMenteeData(menteeId: string) {
 
 export default async function PortalDashboard() {
   const session = await getServerSession(authOptions);
-  const { t } = await getServerDictionary();
+  const { t, locale } = await getServerDictionary();
   const { user, activeRelation } = await getMenteeData(session!.user.id);
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
@@ -74,7 +74,7 @@ export default async function PortalDashboard() {
             href="/onboarding"
             className="bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors flex-shrink-0 ml-4"
           >
-            Complete Profile
+            {t.portal.completeProfileCta}
           </Link>
         </div>
       )}
@@ -166,9 +166,9 @@ export default async function PortalDashboard() {
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <User className="h-8 w-8 text-gray-400" />
               </div>
-              <p className="text-gray-500 font-medium">No mentor assigned yet</p>
+              <p className="text-gray-500 font-medium">{t.portal.noMentor}</p>
               <p className="text-sm text-gray-400 mt-1">
-                An admin will assign you a mentor once your profile is reviewed.
+                {t.portal.noMentorHint}
               </p>
             </div>
           ) : (
@@ -176,14 +176,14 @@ export default async function PortalDashboard() {
               <div className="flex items-center justify-between">
                 <StatusBadge status={activeRelation.status} />
                 <span className="text-xs text-gray-400">
-                  Since {new Date(activeRelation.startDate).toLocaleDateString()}
+                  {t.portal.since} {new Date(activeRelation.startDate).toLocaleDateString(locale)}
                 </span>
               </div>
 
               {/* Mentor */}
               <div className="p-4 bg-blue-50 rounded-xl">
                 <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2">
-                  Your Mentor
+                  {t.portal.yourMentor}
                 </p>
                 <p className="font-semibold text-gray-900">{activeRelation.mentor.fullName}</p>
                 <p className="text-sm text-gray-600">{activeRelation.mentor.email}</p>
@@ -199,7 +199,7 @@ export default async function PortalDashboard() {
               {activeRelation.company && (
                 <div className="p-4 bg-green-50 rounded-xl">
                   <p className="text-xs font-medium text-green-500 uppercase tracking-wide mb-2">
-                    Assigned Company
+                    {t.portal.assignedCompany}
                   </p>
                   <p className="font-semibold text-gray-900">{activeRelation.company.name}</p>
                   {activeRelation.company.industry && (
@@ -219,7 +219,7 @@ export default async function PortalDashboard() {
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
                     <BookOpen className="h-4 w-4" />
-                    Recent Interactions
+                    {t.portal.recentInteractions}
                   </p>
                   <div className="space-y-2">
                     {activeRelation.interactions.map((interaction) => (
@@ -242,7 +242,7 @@ export default async function PortalDashboard() {
                         <div className="min-w-0">
                           <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
                           <p className="text-xs text-gray-400">
-                            {new Date(interaction.date).toLocaleDateString()}
+                            {new Date(interaction.date).toLocaleDateString(locale)}
                           </p>
                         </div>
                       </div>
