@@ -28,8 +28,8 @@ test('admin creates a referral source, assigns a mentee, filters by it, and sees
 
     // Create the source through the admin UI.
     await page.goto('/admin/sources');
-    await page.getByLabel('Name', { exact: true }).fill(sourceName);
-    await page.getByLabel('Contact name').fill('Career Office');
+    await page.locator('#name').fill(sourceName);
+    await page.locator('#contact-name').fill('Career Office');
     await page.getByRole('button', { name: 'Create' }).click();
     await expect(page.getByText(sourceName)).toBeVisible({ timeout: 10_000 });
 
