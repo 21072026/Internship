@@ -7,7 +7,10 @@ test('landing page shows features, pipeline and CTAs in English by default', asy
   await expect(page.getByRole('heading', { name: 'Pipeline tracking' })).toBeVisible();
   // pipeline diagram stage label
   await expect(page.getByText('Internship', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('link', { name: /Get Started/i }).first()).toBeVisible();
+  // "Get Started" sends a new visitor to registration (not sign-in).
+  const getStarted = page.getByRole('link', { name: /Get Started/i }).first();
+  await expect(getStarted).toBeVisible();
+  await expect(getStarted).toHaveAttribute('href', '/auth/register');
 });
 
 test('landing page switches to Turkish via the locale cookie', async ({ page }) => {

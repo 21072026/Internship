@@ -75,11 +75,11 @@ export default async function HomePage() {
           </h1>
           <p className="text-lg sm:text-xl text-gray-600 mb-10 max-w-2xl mx-auto">{L.heroSubtitle}</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/signin" className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-blue-700 transition-colors text-lg">
+            <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-blue-700 transition-colors text-lg">
               {L.getStarted} <ArrowRight className="h-5 w-5" />
             </Link>
-            <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-xl font-semibold hover:border-blue-400 hover:text-blue-600 transition-colors text-lg">
-              {L.registerInvite}
+            <Link href="/auth/signin" className="inline-flex items-center justify-center gap-2 border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-xl font-semibold hover:border-blue-400 hover:text-blue-600 transition-colors text-lg">
+              {L.signIn}
             </Link>
           </div>
         </div>
@@ -169,11 +169,11 @@ export default async function HomePage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">{L.ctaTitle}</h2>
           <p className="text-blue-100 mb-8">{L.ctaSubtitle}</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/signin" className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors">
+            <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors">
               {L.getStarted} <ArrowRight className="h-5 w-5" />
             </Link>
-            <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors">
-              {L.registerInvite}
+            <Link href="/auth/signin" className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors">
+              {L.signIn}
             </Link>
           </div>
         </div>
