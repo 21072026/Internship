@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
 import { passwordSchema } from '@/lib/password';
+import { notify } from '@/lib/notify';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -63,9 +64,13 @@ export async function POST(request: Request) {
     // users are verified immediately. Open (token-less) self-registration must
     // confirm the email — created unverified, then emailed a verification link.
     const emailVerified = !!token;
+    // Open (token-less) self-registration no longer grants immediate access:
+    // the account is created inactive and must be approved by an admin. Invited
+    // users (proven email + chosen role) are active right away.
+    const pending = !token;
 
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, consentAt: new Date() },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !pending, consentAt: new Date() },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true },
     });
 
@@ -78,9 +83,14 @@ export async function POST(request: Request) {
       } catch (e) {
         console.error('Verification email failed:', e);
       }
+      // Let admins know there's a new self-registration awaiting approval.
+      const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+      await Promise.all(
+        admins.map((a) => notify(a.id, 'signup', `New self-registration pending approval: ${user.fullName}.`, '/admin/users'))
+      );
     }
 
-    return NextResponse.json({ user, emailVerified }, { status: 201 });
+    return NextResponse.json({ user, emailVerified, pending }, { status: 201 });
   } catch (error) {
     console.error('Register error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

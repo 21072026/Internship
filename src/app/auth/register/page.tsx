@@ -70,7 +70,8 @@ function RegisterForm() {
         throw new Error(body.error || 'Registration failed');
       }
 
-      router.push('/auth/signin?registered=true');
+      // Token-less self-registration is created pending admin approval.
+      router.push(body.pending ? '/auth/signin?pending=true' : '/auth/signin?registered=true');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
