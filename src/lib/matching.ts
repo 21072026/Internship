@@ -6,18 +6,22 @@ export interface MentorCandidate {
   fullName: string;
   skills: string[];
   activeCount: number;
+  capacity?: number | null;
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
 
 export function scoreMentors(menteeSkills: string[], mentors: MentorCandidate[]) {
-  const want = new Set(menteeSkills.map(norm).filter(Boolean));
+  const want = [...new Set(menteeSkills.map(norm).filter(Boolean))];
   return mentors
     .map((m) => {
-      const overlap = m.skills.map(norm).filter((s) => want.has(s)).length;
-      // Skill overlap dominates; lighter load breaks ties (capacity).
-      const score = overlap * 10 - m.activeCount;
-      return { id: m.id, fullName: m.fullName, overlap, activeCount: m.activeCount, score };
+      const owned = m.skills.map(norm).filter(Boolean);
+      // Substring match so "react" overlaps "React.js" (mirrors candidate search).
+      const overlap = want.filter((w) => owned.some((o) => o === w || o.includes(w) || w.includes(o))).length;
+      const atCapacity = m.capacity != null && m.capacity > 0 && m.activeCount >= m.capacity;
+      // Skill overlap dominates; lighter load breaks ties; full mentors sink.
+      const score = overlap * 10 - m.activeCount - (atCapacity ? 1000 : 0);
+      return { id: m.id, fullName: m.fullName, overlap, activeCount: m.activeCount, capacity: m.capacity ?? null, atCapacity, score };
     })
     .sort((a, b) => b.score - a.score);
 }

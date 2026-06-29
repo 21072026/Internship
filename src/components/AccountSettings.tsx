@@ -36,6 +36,10 @@ export function AccountSettings() {
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaBusy, setTwoFaBusy] = useState(false);
   const [language, setLanguage] = useState('en');
+  const [role, setRole] = useState('');
+  const [skills, setSkills] = useState('');
+  const [capacity, setCapacity] = useState('');
+  const [savingExpertise, setSavingExpertise] = useState(false);
 
   useEffect(() => {
     fetch('/api/profile')
@@ -45,6 +49,9 @@ export function AccountSettings() {
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
         setLanguage(user.preferredLanguage ?? 'en');
+        setRole(user.role ?? '');
+        setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
+        setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null });
       });
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
@@ -81,6 +88,24 @@ export function AccountSettings() {
       // cookie already applied
     }
     window.location.reload();
+  };
+
+  const saveExpertise = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingExpertise(true);
+    try {
+      const skillsArr = skills.split(',').map((x) => x.trim()).filter(Boolean);
+      const res = await fetch('/api/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skills: skillsArr, mentorCapacity: capacity ? Number(capacity) : null }),
+      });
+      if (!res.ok) throw new Error();
+      flash(t.account.updated);
+    } catch {
+      flash('Failed', true);
+    } finally {
+      setSavingExpertise(false);
+    }
   };
 
   const toggleEmailNotifications = async (next: boolean) => {
@@ -204,6 +229,19 @@ export function AccountSettings() {
           </form>
         </Card>
       </div>
+
+      {role === 'MENTOR' && (
+        <Card className="mt-6 max-w-4xl">
+          <CardHeader><CardTitle>{t.account.expertiseSection}</CardTitle></CardHeader>
+          <form onSubmit={saveExpertise} className="space-y-4 max-w-lg">
+            <div>
+              <Input label={t.account.expertise} hint={t.account.expertiseHint} value={skills} onChange={(e) => setSkills(e.target.value)} />
+            </div>
+            <Input label={t.account.capacity} type="number" min={0} hint={t.account.capacityHint} value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+            <Button type="submit" loading={savingExpertise}>{t.profileForm.save}</Button>
+          </form>
+        </Card>
+      )}
 
       <Card className="mt-6 max-w-4xl">
         <CardHeader><CardTitle>{t.account.twoFactorSection}</CardTitle></CardHeader>
