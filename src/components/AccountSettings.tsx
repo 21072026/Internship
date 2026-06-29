@@ -30,6 +30,10 @@ export function AccountSettings() {
   const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [twoFaEnabled, setTwoFaEnabled] = useState(false);
+  const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
+  const [twoFaCode, setTwoFaCode] = useState('');
+  const [twoFaBusy, setTwoFaBusy] = useState(false);
 
   useEffect(() => {
     fetch('/api/profile')
@@ -40,7 +44,27 @@ export function AccountSettings() {
         setEmailNotifications(user.emailNotifications !== false);
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null });
       });
+    fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
   }, []);
+
+  const twoFa = async (action: 'setup' | 'enable' | 'disable') => {
+    setTwoFaBusy(true);
+    try {
+      const res = await fetch('/api/account/2fa', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, code: twoFaCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (action === 'setup') setTwoFaSetup({ secret: data.secret, otpauth: data.otpauth });
+      else if (action === 'enable') { setTwoFaEnabled(true); setTwoFaSetup(null); setTwoFaCode(''); flash(t.account.updated); }
+      else { setTwoFaEnabled(false); setTwoFaSetup(null); setTwoFaCode(''); flash(t.account.updated); }
+    } catch (e2) {
+      flash(e2 instanceof Error ? e2.message : 'Failed', true);
+    } finally {
+      setTwoFaBusy(false);
+    }
+  };
 
   const toggleEmailNotifications = async (next: boolean) => {
     setEmailNotifications(next);
@@ -163,6 +187,31 @@ export function AccountSettings() {
           </form>
         </Card>
       </div>
+
+      <Card className="mt-6 max-w-4xl">
+        <CardHeader><CardTitle>{t.account.twoFactorSection}</CardTitle></CardHeader>
+        {twoFaEnabled ? (
+          <div className="space-y-3 max-w-sm">
+            <p className="text-sm text-green-700">✓ {t.account.twoFactorOn}</p>
+            <Input label={t.account.twoFactorCode} inputMode="numeric" placeholder="123456" value={twoFaCode} onChange={(e) => setTwoFaCode(e.target.value)} />
+            <Button variant="outline" loading={twoFaBusy} disabled={!twoFaCode} onClick={() => twoFa('disable')}>{t.account.twoFactorDisable}</Button>
+          </div>
+        ) : twoFaSetup ? (
+          <div className="space-y-3 max-w-md">
+            <p className="text-sm text-gray-600">{t.account.twoFactorScan}</p>
+            <p className="text-xs text-gray-500">{t.account.twoFactorSecret}:</p>
+            <code className="block bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm break-all">{twoFaSetup.secret}</code>
+            <a href={twoFaSetup.otpauth} className="text-xs text-blue-600 hover:underline break-all">{twoFaSetup.otpauth}</a>
+            <Input label={t.account.twoFactorCode} inputMode="numeric" placeholder="123456" value={twoFaCode} onChange={(e) => setTwoFaCode(e.target.value)} />
+            <Button loading={twoFaBusy} disabled={!twoFaCode} onClick={() => twoFa('enable')}>{t.account.twoFactorConfirm}</Button>
+          </div>
+        ) : (
+          <div className="space-y-2 max-w-sm">
+            <p className="text-sm text-gray-600">{t.account.twoFactorHint}</p>
+            <Button variant="outline" loading={twoFaBusy} onClick={() => twoFa('setup')}>{t.account.twoFactorEnable}</Button>
+          </div>
+        )}
+      </Card>
 
       <Card className="mt-6 max-w-4xl">
         <CardHeader><CardTitle>{t.account.notificationsSection}</CardTitle></CardHeader>

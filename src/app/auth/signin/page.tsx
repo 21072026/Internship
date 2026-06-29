@@ -17,6 +17,7 @@ import { roleHome } from '@/lib/roleHome';
 const signinSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
+  totp: z.string().optional(),
 });
 
 type SignInData = z.infer<typeof signinSchema>;
@@ -28,6 +29,7 @@ export default function SignInPage() {
   const { data: session, status } = useSession();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [show2fa, setShow2fa] = useState(false);
 
   // Already signed in → go straight to the role dashboard.
   useEffect(() => {
@@ -52,10 +54,17 @@ export default function SignInPage() {
       redirect: false,
       email: data.email,
       password: data.password,
+      totp: data.totp || '',
     });
 
     if (result?.error) {
-      setError(result.error || 'Sign in failed');
+      // A 2FA-enabled account needs its code; reveal the field instead of an error.
+      if (result.error === '2FA_REQUIRED') {
+        setShow2fa(true);
+        setError(t.auth.twoFactorPrompt);
+      } else {
+        setError(result.error || 'Sign in failed');
+      }
       setLoading(false);
       return;
     }
@@ -102,6 +111,16 @@ export default function SignInPage() {
               {...register('password')}
               error={errors.password?.message}
             />
+            {show2fa && (
+              <Input
+                label={t.auth.twoFactorCode}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                autoFocus
+                {...register('totp')}
+              />
+            )}
             <Button type="submit" className="w-full" size="lg" loading={loading}>
               {t.auth.signIn}
             </Button>

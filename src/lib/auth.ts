@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
+import { verifyTotp } from '@/lib/totp';
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -18,6 +19,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
+        totp: { label: 'Authenticator code', type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -53,6 +55,15 @@ export const authOptions: NextAuthOptions = {
 
         if (!user.isActive) {
           throw new Error('This account has been deactivated. Please contact an administrator.');
+        }
+
+        // Two-factor: when enabled, a valid TOTP code is required.
+        if (user.twoFactorEnabled && user.twoFactorSecret) {
+          const code = (credentials.totp || '').trim();
+          if (!code) throw new Error('2FA_REQUIRED');
+          if (!verifyTotp(user.twoFactorSecret, code)) {
+            throw new Error('Invalid authenticator code');
+          }
         }
 
         return {
