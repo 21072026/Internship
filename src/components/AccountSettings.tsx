@@ -28,6 +28,8 @@ export function AccountSettings() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null } | null>(null);
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   useEffect(() => {
     fetch('/api/profile')
@@ -35,9 +37,29 @@ export function AccountSettings() {
       .then(({ user }) => {
         if (!user) return;
         setEmail(user.email);
+        setEmailNotifications(user.emailNotifications !== false);
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null });
       });
   }, []);
+
+  const toggleEmailNotifications = async (next: boolean) => {
+    setEmailNotifications(next);
+    setSavingPrefs(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailNotifications: next }),
+      });
+      if (!res.ok) throw new Error();
+      flash(t.account.updated);
+    } catch {
+      setEmailNotifications(!next);
+      flash('Failed', true);
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
 
   const flash = (m: string, isErr = false) => {
     setMsg(isErr ? '' : m);
@@ -141,6 +163,20 @@ export function AccountSettings() {
           </form>
         </Card>
       </div>
+
+      <Card className="mt-6 max-w-4xl">
+        <CardHeader><CardTitle>{t.account.notificationsSection}</CardTitle></CardHeader>
+        <label className="flex items-center gap-3 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={emailNotifications}
+            disabled={savingPrefs}
+            onChange={(e) => toggleEmailNotifications(e.target.checked)}
+          />
+          {t.account.emailNotifications}
+        </label>
+        <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
+      </Card>
 
       <Card className="mt-6 max-w-4xl">
         <CardHeader><CardTitle>{t.account.dataSection}</CardTitle></CardHeader>

@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
+import { replyAddress } from '@/lib/replyToken';
+import { sendEmail } from '@/services/emailService';
+import { logger } from '@/lib/logger';
 
 // GET ?relationId= — messages in a thread (participants/admin only).
 export async function GET(request: Request) {
@@ -19,6 +22,13 @@ export async function GET(request: Request) {
     where: { relationId },
     orderBy: { createdAt: 'asc' },
   });
+
+  // Mark the viewer's incoming unread messages as read.
+  await prisma.message.updateMany({
+    where: { relationId, senderId: { not: session.user.id }, readAt: null },
+    data: { readAt: new Date() },
+  });
+
   return NextResponse.json({
     relationId,
     mentor: rel.mentor,
@@ -48,6 +58,23 @@ export async function POST(request: Request) {
   const recipient = otherParticipant(rel, session.user.id);
   if (recipient && recipient !== session.user.id) {
     await notify(recipient, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, `/messages/${rel.id}`);
+
+    // Mirror the message to the recipient's inbox (unless they opted out). The
+    // Reply-To routes email replies back into this thread via /api/inbound-email.
+    const rcpt = await prisma.user.findUnique({
+      where: { id: recipient },
+      select: { email: true, emailNotifications: true },
+    });
+    if (rcpt?.email && rcpt.emailNotifications) {
+      const sender = session.user.name ?? 'Your mentor';
+      const safe = parsed.data.body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+      sendEmail({
+        to: rcpt.email,
+        subject: `New message from ${sender}`,
+        html: `<p>${sender} sent you a message:</p><blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote><p>Reply to this email or open the conversation in the app.</p>`,
+        replyTo: replyAddress(rel.id),
+      }).catch((e) => logger.error('Failed to mirror message email', { error: String(e) }));
+    }
   }
 
   return NextResponse.json({ message }, { status: 201 });
