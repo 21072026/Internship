@@ -112,8 +112,8 @@ export default function AdminSourcesPage() {
               {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
-          <div className="flex-1 min-w-[140px]"><Input label={t.sources.contactName} value={loginName} onChange={(e) => setLoginName(e.target.value)} /></div>
-          <div className="flex-1 min-w-[160px]"><Input label={t.sources.contactEmail} type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required /></div>
+          <div className="flex-1 min-w-[140px]"><Input id="source-login-name" label={t.sources.contactName} value={loginName} onChange={(e) => setLoginName(e.target.value)} /></div>
+          <div className="flex-1 min-w-[160px]"><Input id="source-login-email" label={t.sources.contactEmail} type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required /></div>
           <Button type="submit" loading={saving}>{t.sources.createLogin}</Button>
         </form>
         {loginMsg && <p className="text-sm text-gray-600 mt-2">{loginMsg}</p>}
