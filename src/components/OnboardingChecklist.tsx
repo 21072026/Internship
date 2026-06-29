@@ -31,6 +31,8 @@ export function OnboardingChecklist() {
   if (allDone) return null;
 
   const labels = t.checklist.steps as Record<string, string>;
+  const doneCount = steps.filter((s) => s.done).length;
+  const pct = Math.round((doneCount / steps.length) * 100);
   const dismiss = () => {
     localStorage.setItem(`onboarding-dismissed-${role}`, '1');
     setDismissed(true);
@@ -42,10 +44,14 @@ export function OnboardingChecklist() {
         <div className="flex items-center gap-2">
           <Rocket className="h-5 w-5 text-blue-600" />
           <h2 className="font-semibold text-gray-900">{t.checklist.title}</h2>
+          <span className="text-xs text-gray-500">{doneCount}/{steps.length}</span>
         </div>
         <button onClick={dismiss} aria-label={t.checklist.dismiss} className="text-gray-400 hover:text-gray-700">
           <X className="h-4 w-4" />
         </button>
+      </div>
+      <div className="mt-3 h-1.5 bg-blue-100 rounded-full overflow-hidden">
+        <div className="h-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
       </div>
       <ul className="mt-3 space-y-1.5">
         {steps.map((s) => (

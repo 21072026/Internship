@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Users } from 'lucide-react';
 import Link from 'next/link';
 import { ApplyLinkBox } from '@/components/ApplyLinkBox';
+import { EmptyState } from '@/components/EmptyState';
 
 interface MentorshipRelation {
   id: string;
@@ -64,9 +65,14 @@ export default function MenteesPage() {
       {loading ? (
         <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
       ) : relations.length === 0 ? (
-        <Card className="text-center py-12">
-          <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">{t.mentor.noMenteesAssigned}</p>
+        <Card>
+          <EmptyState
+            icon={Users}
+            title={t.mentor.noMenteesAssigned}
+            description={t.mentor.noMenteesHint}
+            actionLabel={t.mentor.addMentee}
+            actionHref="/mentor/mentees/new"
+          />
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
