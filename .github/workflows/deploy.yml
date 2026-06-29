@@ -202,10 +202,12 @@ jobs:
           # can reach MySQL running on the host (works on Linux with --add-host).
           CONTAINER_DB=\$(echo "\$DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s|127\.0\.0\.1|host.docker.internal|g')
 
-          # Apply schema changes using host networking so localhost MySQL is reachable.
+          # Apply schema changes. The preview DB user (crm-preview) is only granted
+          # from the docker gateway, not localhost, so push via host.docker.internal
+          # (the same connection the app container uses) rather than --network=host.
           docker run --rm \
-            --network=host \
-            -e DATABASE_URL="\$DATABASE_URL" \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="\$CONTAINER_DB" \
             "\$IMAGE" \
             npx prisma db push --accept-data-loss
 
