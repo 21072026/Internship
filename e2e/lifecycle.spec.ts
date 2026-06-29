@@ -18,6 +18,7 @@ test('mentee lifecycle: invite token -> register -> login -> portal', async ({ p
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', password);
     await page.fill('input[name="confirmPassword"]', password);
+    await page.check('input[name="consent"]');
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 

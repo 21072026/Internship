@@ -21,12 +21,16 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+  globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: externalBase || localURL,
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
+    // Returning-visitor state: consent already given so the banner stays hidden
+    // and never overlaps page actions. legal-consent.spec overrides this.
+    storageState: './e2e/.state/consent.json',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   // Only spin up the app locally; when BASE_URL targets a deployed env, skip it.

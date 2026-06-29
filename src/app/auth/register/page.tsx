@@ -20,6 +20,7 @@ const registerSchema = z
     fullName: z.string().min(1, 'Full name is required'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
+    consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required' }) }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
@@ -137,13 +138,19 @@ function RegisterForm() {
               {...register('confirmPassword')}
               error={errors.confirmPassword?.message}
             />
+            <label className="flex items-start gap-2 text-xs text-gray-600">
+              <input type="checkbox" className="mt-0.5" {...register('consent')} />
+              <span>
+                {t.auth.consentNote}{' '}
+                <Link href="/privacy" className="text-blue-600 hover:underline">{t.auth.privacyLink}</Link>
+                {' '}&{' '}
+                <Link href="/terms" className="text-blue-600 hover:underline">{t.auth.termsLink}</Link>
+              </span>
+            </label>
+            {errors.consent && <p className="text-xs text-red-600">{t.auth.consentRequired}</p>}
             <Button type="submit" className="w-full" size="lg" loading={loading}>
               {t.auth.createAccount}
             </Button>
-            <p className="text-xs text-gray-400 text-center">
-              {t.auth.consentNote}{' '}
-              <Link href="/privacy" className="text-blue-600 hover:underline">{t.auth.privacyLink}</Link>
-            </p>
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-6">

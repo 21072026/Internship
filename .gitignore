@@ -143,3 +143,6 @@ vite.config.ts.timestamp-*
 /test-results/
 /blob-report/
 /playwright/.cache/
+
+# Playwright generated consent state
+e2e/.state/

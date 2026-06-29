@@ -187,7 +187,10 @@ export default async function HomePage() {
             <span className="font-semibold text-gray-700">InternshipCRM</span>
           </div>
           <p>© {new Date().getFullYear()} InternshipCRM. {L.footer}</p>
-          <Link href="/privacy" className="hover:text-gray-700">{t.privacy.title}</Link>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="hover:text-gray-700">{t.privacy.title}</Link>
+            <Link href="/terms" className="hover:text-gray-700">{t.terms.title}</Link>
+          </div>
         </div>
       </footer>
     </div>
