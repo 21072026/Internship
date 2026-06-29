@@ -20,10 +20,12 @@ export async function GET(request: Request) {
     const company = searchParams.get('company');
     const project = searchParams.get('project');
     const cohortId = searchParams.get('cohort');
+    const sourceId = searchParams.get('source');
 
     const where: Record<string, unknown> = {
       role: 'MENTEE',
     };
+    if (sourceId) where.sourceId = sourceId;
 
     const relSome: Record<string, unknown> = {};
     if (pipelineStatus) relSome.pipelineStatus = pipelineStatus;
@@ -69,6 +71,7 @@ export async function GET(request: Request) {
         whatsapp: true,
         city: true,
         createdAt: true,
+        source: { select: { id: true, name: true } },
         menteeRelations: {
           where: { status: 'ACTIVE' },
           include: {

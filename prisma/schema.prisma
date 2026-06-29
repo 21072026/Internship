@@ -71,6 +71,8 @@ model User {
   publicProfile  Boolean   @default(false)
   // For COMPANY-role users: which company they observe (read-only).
   companyId      String?
+  // Mentee's referral source (where they came from).
+  sourceId       String?
   // How many times this user's public profile has been viewed.
   profileViews   Int       @default(0)
   // When the user accepted the privacy/data terms (consent).
@@ -89,6 +91,21 @@ model User {
   ownedProjects           Project[]                @relation("ProjectOwner")
   availabilitySlots       AvailabilitySlot[]
   company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
+  source                  Source?                  @relation(fields: [sourceId], references: [id])
+}
+
+// A referral source — the education/agency a mentee came from. Admin-managed
+// so reporting can group mentees by where they were sourced.
+model Source {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  contactName  String?
+  contactEmail String?
+  createdAt    DateTime @default(now())
+
+  users User[]
+
+  @@index([name])
 }
 
 enum MessageChannel {

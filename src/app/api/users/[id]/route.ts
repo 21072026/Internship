@@ -23,6 +23,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         city: true,
         birthDate: true,
         referralSource: true,
+        sourceId: true,
+        source: { select: { id: true, name: true } },
         university: true,
         department: true,
         graduationYear: true,
@@ -67,19 +69,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const body = await request.json();
-    if (typeof body.isActive !== 'boolean') {
-      return NextResponse.json({ error: 'isActive (boolean) is required' }, { status: 400 });
+    const data: { isActive?: boolean; sourceId?: string | null } = {};
+
+    if (typeof body.isActive === 'boolean') {
+      // Guard against an admin locking themselves out.
+      if (id === session.user.id && body.isActive === false) {
+        return NextResponse.json({ error: 'You cannot deactivate your own account' }, { status: 400 });
+      }
+      data.isActive = body.isActive;
     }
 
-    // Guard against an admin locking themselves out.
-    if (id === session.user.id && body.isActive === false) {
-      return NextResponse.json({ error: 'You cannot deactivate your own account' }, { status: 400 });
+    // Assign / clear the mentee's referral source.
+    if ('sourceId' in body && (typeof body.sourceId === 'string' || body.sourceId === null)) {
+      data.sourceId = body.sourceId || null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
     }
 
     const user = await prisma.user.update({
       where: { id },
-      data: { isActive: body.isActive },
-      select: { id: true, isActive: true },
+      data,
+      select: { id: true, isActive: true, sourceId: true },
     });
 
     return NextResponse.json({ user });
