@@ -31,7 +31,7 @@ test('admin creates a referral source, assigns a mentee, filters by it, and sees
     await page.locator('#name').fill(sourceName);
     await page.locator('#contact-name').fill('Career Office');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
-    await expect(page.getByText(sourceName)).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('table').getByText(sourceName)).toBeVisible({ timeout: 10_000 });
 
     const list = await (await page.request.get('/api/admin/sources')).json();
     const src = list.sources.find((s: { name: string }) => s.name === sourceName);
