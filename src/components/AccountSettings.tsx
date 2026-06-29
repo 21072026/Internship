@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { AvatarManager } from '@/components/AvatarManager';
 import { useT } from '@/i18n/client';
+import { locales, LOCALE_COOKIE } from '@/i18n/config';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -34,6 +35,7 @@ export function AccountSettings() {
   const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaBusy, setTwoFaBusy] = useState(false);
+  const [language, setLanguage] = useState('en');
 
   useEffect(() => {
     fetch('/api/profile')
@@ -42,6 +44,7 @@ export function AccountSettings() {
         if (!user) return;
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
+        setLanguage(user.preferredLanguage ?? 'en');
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null });
       });
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
@@ -64,6 +67,20 @@ export function AccountSettings() {
     } finally {
       setTwoFaBusy(false);
     }
+  };
+
+  const changeLanguage = async (next: string) => {
+    setLanguage(next);
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${60 * 60 * 24 * 365}`;
+    try {
+      await fetch('/api/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferredLanguage: next }),
+      });
+    } catch {
+      // cookie already applied
+    }
+    window.location.reload();
   };
 
   const toggleEmailNotifications = async (next: boolean) => {
@@ -225,6 +242,18 @@ export function AccountSettings() {
           {t.account.emailNotifications}
         </label>
         <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
+        <div className="mt-4 pt-4 border-t border-gray-100 max-w-xs">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.language}</label>
+          <select
+            value={language}
+            onChange={(e) => changeLanguage(e.target.value)}
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          >
+            {locales.map((l) => (
+              <option key={l} value={l}>{(t.account.languages as Record<string, string>)[l] ?? l.toUpperCase()}</option>
+            ))}
+          </select>
+        </div>
       </Card>
 
       <Card className="mt-6 max-w-4xl">

@@ -31,6 +31,7 @@ const updateProfileSchema = z.object({
   targetPosition: z.string().max(160).optional(),
   mentorCapacity: z.number().int().min(0).max(100).nullable().optional(),
   emailNotifications: z.boolean().optional(),
+  preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
 });
 
 // Profile fields surfaced by both GET and PUT responses.
@@ -64,6 +65,7 @@ const PROFILE_SELECT = {
   targetPosition: true,
   mentorCapacity: true,
   emailNotifications: true,
+  preferredLanguage: true,
   createdAt: true,
 } as const;
 

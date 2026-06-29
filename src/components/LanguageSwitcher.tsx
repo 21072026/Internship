@@ -6,7 +6,8 @@ import { locales, type Locale, LOCALE_COOKIE } from '@/i18n/config';
 export function LanguageSwitcher({ current }: { current: Locale }) {
   const set = (locale: Locale) => {
     if (locale === current) return;
-    // 1 year cookie; a full reload re-renders the server layout with the new locale.
+    // Device-level override; a full reload re-renders the server layout. The
+    // per-user saved preference is set deliberately from account settings.
     document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=${60 * 60 * 24 * 365}`;
     window.location.reload();
   };
