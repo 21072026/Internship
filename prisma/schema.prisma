@@ -95,6 +95,8 @@ model User {
   // Optional TOTP two-factor auth. The secret is only meaningful once enabled.
   twoFactorEnabled   Boolean   @default(false)
   twoFactorSecret    String?
+  // Preferred UI language ('en' | 'tr' | 'de'); applied at sign-in.
+  preferredLanguage  String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

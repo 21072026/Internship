@@ -52,6 +52,21 @@ const LABELS: Record<Locale, Record<PipelineStatus, string>> = {
     EMPLOYED_700: '700 · Employed',
     INTERNSHIP_FOUND_ELSEWHERE_800: '800 · Internship elsewhere',
   },
+  de: {
+    APPLICATION_100: '100 · Erstkontakt',
+    APPROVAL_PENDING_220: '220 · Warte auf Freigabe',
+    INTERVIEW_PENDING_250: '250 · Zu interviewen',
+    INTRODUCTION_PENDING_270: '270 · Vorzustellen',
+    INTERNSHIP_STARTING_300: '300 · Praktikum beginnt',
+    INTERNSHIP_IN_PROGRESS_450: '450 · Praktikum läuft',
+    INTERNSHIP_DROPPED_460: '460 · Praktikum abgebrochen',
+    INTERNSHIP_COMPLETED_490: '490 · Praktikum abgeschlossen',
+    JOB_SEEKING_500: '500 · Jobsuche',
+    HIREABLE_600: '600 · Einstellbar',
+    HIRED_660: '660 · Eingestellt',
+    EMPLOYED_700: '700 · Beschäftigt',
+    INTERNSHIP_FOUND_ELSEWHERE_800: '800 · Praktikum anderswo',
+  },
 };
 
 export function pipelineLabel(status: string, locale: Locale = 'en'): string {

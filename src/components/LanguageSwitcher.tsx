@@ -4,10 +4,20 @@ import { Languages } from 'lucide-react';
 import { locales, type Locale, LOCALE_COOKIE } from '@/i18n/config';
 
 export function LanguageSwitcher({ current }: { current: Locale }) {
-  const set = (locale: Locale) => {
+  const set = async (locale: Locale) => {
     if (locale === current) return;
     // 1 year cookie; a full reload re-renders the server layout with the new locale.
     document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=${60 * 60 * 24 * 365}`;
+    // Persist as the per-user preference too (ignored / 401 when signed out).
+    try {
+      await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferredLanguage: locale }),
+      });
+    } catch {
+      // ignore — the cookie already applied the change
+    }
     window.location.reload();
   };
 
