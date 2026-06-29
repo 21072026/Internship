@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Video, Flag } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 interface Ev {
   id: string;
@@ -21,6 +21,7 @@ const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 // purely client-side; all events are fetched once.
 export function CalendarView() {
   const t = useT();
+  const locale = useLocale();
   const [events, setEvents] = useState<Ev[]>([]);
   const [cursor, setCursor] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
 
@@ -46,7 +47,7 @@ export function CalendarView() {
     ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
   ];
   const weekdays = t.calendar.weekdays as string[];
-  const monthName = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(cursor);
+  const monthName = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(cursor);
 
   return (
     <Card>

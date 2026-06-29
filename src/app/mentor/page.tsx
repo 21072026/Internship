@@ -152,15 +152,15 @@ export default async function MentorDashboard() {
                       <Calendar className="h-3 w-3" />
                       {daysSince !== null
                         ? daysSince === 0
-                          ? 'Interacted today'
-                          : `Last interaction: ${daysSince}d ago`
-                        : 'No interactions yet'}
+                          ? t.mentor.interactedToday
+                          : t.mentor.lastInteraction.replace('{d}', String(daysSince))
+                        : t.mentor.noInteractionsYet}
                     </span>
                     <Link
                       href={`/mentor/mentees/${rel.id}`}
                       className="text-blue-600 hover:underline"
                     >
-                      View details →
+                      {t.mentor.viewDetails} →
                     </Link>
                   </div>
                 </div>
