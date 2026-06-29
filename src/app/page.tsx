@@ -45,17 +45,17 @@ export default async function HomePage() {
       {/* Header */}
       <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <GraduationCap className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-bold text-gray-900">InternshipCRM</span>
+          <div className="flex justify-between items-center gap-2 h-16">
+            <div className="flex items-center gap-2 min-w-0">
+              <GraduationCap className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
+              <span className="text-lg sm:text-xl font-bold text-gray-900 truncate">InternshipCRM</span>
             </div>
-            <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <LanguageSwitcher current={locale} />
-              <Link href="/auth/signin" className="text-gray-600 hover:text-gray-900 font-medium transition-colors">
+              <Link href="/auth/signin" className="text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
                 {L.signIn}
               </Link>
-              <Link href="/auth/register" className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+              <Link href="/auth/register" className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors whitespace-nowrap text-sm sm:text-base">
                 {L.register}
               </Link>
             </div>
