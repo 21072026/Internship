@@ -13,6 +13,7 @@ enum Role {
   MENTOR
   MENTEE
   COMPANY
+  SOURCE
 }
 
 enum MentorshipStatus {

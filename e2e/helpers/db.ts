@@ -23,7 +23,7 @@ export async function seedInvite(email: string, role: 'ADMIN' | 'MENTOR' | 'MENT
 export async function seedUser(
   email: string,
   password: string,
-  role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY',
+  role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE',
   fullName: string
 ) {
   const hash = await bcrypt.hash(password, 10);

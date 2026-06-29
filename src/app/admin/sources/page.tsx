@@ -34,6 +34,28 @@ export default function AdminSourcesPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  const [loginSourceId, setLoginSourceId] = useState('');
+  const [loginName, setLoginName] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginMsg, setLoginMsg] = useState<string | null>(null);
+
+  const createLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginSourceId || !loginEmail.trim()) return;
+    setSaving(true); setLoginMsg(null);
+    try {
+      const res = await fetch('/api/admin/source-users', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: loginSourceId, email: loginEmail, fullName: loginName || loginEmail }),
+      });
+      const data = await res.json();
+      setLoginMsg(res.ok ? t.sources.loginCreated : data.error || t.common.error);
+      if (res.ok) { setLoginEmail(''); setLoginName(''); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -77,6 +99,24 @@ export default function AdminSourcesPage() {
           <Button type="submit" loading={saving}>{t.sources.create}</Button>
         </form>
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+      </Card>
+
+      <Card className="mb-6 max-w-2xl">
+        <CardHeader><CardTitle>{t.sources.addLogin}</CardTitle></CardHeader>
+        <p className="text-sm text-gray-500 mb-3">{t.sources.addLoginHint}</p>
+        <form onSubmit={createLogin} className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.sources.name}</label>
+            <select value={loginSourceId} onChange={(e) => setLoginSourceId(e.target.value)} required className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
+              <option value="">—</option>
+              {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[140px]"><Input label={t.sources.contactName} value={loginName} onChange={(e) => setLoginName(e.target.value)} /></div>
+          <div className="flex-1 min-w-[160px]"><Input label={t.sources.contactEmail} type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required /></div>
+          <Button type="submit" loading={saving}>{t.sources.createLogin}</Button>
+        </form>
+        {loginMsg && <p className="text-sm text-gray-600 mt-2">{loginMsg}</p>}
       </Card>
 
       <Card>

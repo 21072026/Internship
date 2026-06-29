@@ -14,19 +14,20 @@ interface AdminUser {
   id: string;
   fullName: string;
   email: string;
-  role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY';
+  role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE';
   isActive: boolean;
   emailVerified: boolean;
 }
 
-const ROLE_VARIANT: Record<string, 'info' | 'success' | 'warning' | 'purple'> = {
+const ROLE_VARIANT: Record<string, 'info' | 'success' | 'warning' | 'purple' | 'default'> = {
   ADMIN: 'warning',
   MENTOR: 'success',
   MENTEE: 'info',
   COMPANY: 'purple',
+  SOURCE: 'default',
 };
 
-type RoleLabel = 'admin' | 'mentor' | 'mentee' | 'company';
+type RoleLabel = 'admin' | 'mentor' | 'mentee' | 'company' | 'source';
 
 export default function AdminUsersPage() {
   const t = useT();
@@ -34,7 +35,7 @@ export default function AdminUsersPage() {
   const { data: session } = useSession();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'ALL' | 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE'>('ALL');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -107,7 +108,7 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        {(['ALL', 'ADMIN', 'MENTOR', 'MENTEE', 'COMPANY'] as const).map((r) => (
+        {(['ALL', 'ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'] as const).map((r) => (
           <button
             key={r}
             onClick={() => { setFilter(r); setPage(1); }}
