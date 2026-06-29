@@ -12,6 +12,7 @@ const include = {
   relations: {
     select: { id: true, pipelineStatus: true, mentee: { select: { id: true, fullName: true } }, mentor: { select: { fullName: true } } },
   },
+  tasks: { orderBy: { order: 'asc' } },
 } as const;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -30,8 +31,11 @@ const schema = z.object({
   technologies: z.array(z.string()).max(50).optional(),
   repoUrl: z.string().url().max(500).optional().or(z.literal('')),
   demoUrl: z.string().url().max(500).optional().or(z.literal('')),
-  status: z.enum(['ACTIVE', 'COMPLETED', 'ARCHIVED']).optional(),
+  status: z.enum(['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED', 'CANCELLED']).optional(),
   isPublic: z.boolean().optional(),
+  goals: z.string().max(5000).nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
   // Owner change (transfer) — admin only.
   ownerType: z.enum(['ADMIN', 'MENTOR', 'COMPANY']).optional(),
   ownerUserId: z.string().nullable().optional(),
@@ -58,6 +62,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (d.demoUrl !== undefined) data.demoUrl = d.demoUrl || null;
   if (d.status !== undefined) data.status = d.status;
   if (d.isPublic !== undefined) data.isPublic = d.isPublic;
+  if (d.goals !== undefined) data.goals = d.goals || null;
+  if (d.startDate !== undefined) data.startDate = d.startDate ? new Date(d.startDate) : null;
+  if (d.endDate !== undefined) data.endDate = d.endDate ? new Date(d.endDate) : null;
 
   // Transfer (admin only): change the owner, preserving the invariant.
   let transferred: string | null = null;

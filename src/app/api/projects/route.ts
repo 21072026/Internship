@@ -10,6 +10,7 @@ import { logActivity } from '@/lib/activity';
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
   ownerCompany: { select: { id: true, name: true } },
+  tasks: { orderBy: { order: 'asc' } },
   _count: { select: { relations: true } },
 } as const;
 
@@ -33,8 +34,11 @@ const schema = z.object({
   technologies: z.array(z.string()).max(50).optional(),
   repoUrl: z.string().url().max(500).optional().or(z.literal('')),
   demoUrl: z.string().url().max(500).optional().or(z.literal('')),
-  status: z.enum(['ACTIVE', 'COMPLETED', 'ARCHIVED']).optional(),
+  status: z.enum(['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED', 'CANCELLED']).optional(),
   isPublic: z.boolean().optional(),
+  goals: z.string().max(5000).optional().nullable(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
   ownerType: z.enum(['ADMIN', 'MENTOR', 'COMPANY']).optional(),
   ownerUserId: z.string().optional().nullable(),
   ownerCompanyId: z.string().optional().nullable(),
@@ -68,6 +72,9 @@ export async function POST(request: Request) {
       demoUrl: d.demoUrl || null,
       status: d.status ?? 'ACTIVE',
       isPublic: d.isPublic ?? false,
+      goals: d.goals || null,
+      startDate: d.startDate ? new Date(d.startDate) : null,
+      endDate: d.endDate ? new Date(d.endDate) : null,
       ...owner,
     },
     include,

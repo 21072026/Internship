@@ -9,6 +9,12 @@ import { Badge } from '@/components/ui/Badge';
 import { Github, ExternalLink, Trash2, Pencil } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
+interface Task {
+  id: string;
+  title: string;
+  done: boolean;
+}
+type ProjectStatus = 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED' | 'CANCELLED';
 interface Project {
   id: string;
   name: string;
@@ -16,16 +22,22 @@ interface Project {
   technologies: string[];
   repoUrl: string | null;
   demoUrl: string | null;
-  status: 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
+  status: ProjectStatus;
   isPublic: boolean;
+  goals: string | null;
+  startDate: string | null;
+  endDate: string | null;
   ownerType: 'ADMIN' | 'MENTOR' | 'COMPANY';
   ownerUser?: { id: string; fullName: string } | null;
   ownerCompany?: { id: string; name: string } | null;
+  tasks?: Task[];
   _count?: { relations: number };
 }
 
-const STATUS_VARIANT = { ACTIVE: 'success', COMPLETED: 'info', ARCHIVED: 'default' } as const;
-const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUrl: '', status: 'ACTIVE', isPublic: false };
+const STATUS_VARIANT: Record<ProjectStatus, 'success' | 'info' | 'default' | 'warning'> = {
+  DRAFT: 'warning', ACTIVE: 'success', COMPLETED: 'info', ARCHIVED: 'default', CANCELLED: 'default',
+};
+const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUrl: '', status: 'ACTIVE', isPublic: false, goals: '', startDate: '', endDate: '' };
 
 export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const t = useT();
@@ -69,6 +81,9 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
         demoUrl: form.demoUrl,
         status: form.status,
         isPublic: form.isPublic,
+        goals: form.goals,
+        startDate: form.startDate || null,
+        endDate: form.endDate || null,
       };
       // Admin sets/changes ownership (create or transfer-on-edit), preserving
       // the "exactly one owner" invariant.
@@ -103,6 +118,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     setForm({
       name: p.name, description: p.description ?? '', technologies: p.technologies.join(', '),
       repoUrl: p.repoUrl ?? '', demoUrl: p.demoUrl ?? '', status: p.status, isPublic: p.isPublic,
+      goals: p.goals ?? '', startDate: p.startDate ? p.startDate.slice(0, 10) : '', endDate: p.endDate ? p.endDate.slice(0, 10) : '',
     });
     setOwnerType(p.ownerType);
     setOwnerUserId(p.ownerUser?.id ?? '');
@@ -112,6 +128,27 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
 
   const remove = async (id: string) => {
     await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+    await load();
+  };
+
+  const [taskDraft, setTaskDraft] = useState<Record<string, string>>({});
+  const addTask = async (projectId: string) => {
+    const title = (taskDraft[projectId] ?? '').trim();
+    if (!title) return;
+    await fetch(`/api/projects/${projectId}/tasks`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+    });
+    setTaskDraft((p) => ({ ...p, [projectId]: '' }));
+    await load();
+  };
+  const toggleTask = async (task: Task) => {
+    await fetch(`/api/project-tasks/${task.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: !task.done }),
+    });
+    await load();
+  };
+  const deleteTask = async (taskId: string) => {
+    await fetch(`/api/project-tasks/${taskId}`, { method: 'DELETE' });
     await load();
   };
 
@@ -142,11 +179,26 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select label={t.projects.status} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
-              options={[{ value: 'ACTIVE', label: t.projects.active }, { value: 'COMPLETED', label: t.projects.completed }, { value: 'ARCHIVED', label: t.projects.archived }]} />
+              options={[
+                { value: 'DRAFT', label: t.projects.draft },
+                { value: 'ACTIVE', label: t.projects.active },
+                { value: 'COMPLETED', label: t.projects.completed },
+                { value: 'ARCHIVED', label: t.projects.archived },
+                { value: 'CANCELLED', label: t.projects.cancelled },
+              ]} />
             <label className="flex items-center gap-2 text-sm text-gray-700 mt-7">
               <input type="checkbox" checked={form.isPublic} onChange={(e) => setForm({ ...form, isPublic: e.target.checked })} />
               {t.projects.isPublic}
             </label>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input label={t.projects.startDate} type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            <Input label={t.projects.endDate} type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.projects.goals}</label>
+            <textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })}
+              rows={2} className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm" />
           </div>
 
           {isAdmin && (
@@ -186,7 +238,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-gray-900">{p.name}</span>
-                      <Badge variant={STATUS_VARIANT[p.status]}>{t.projects[p.status.toLowerCase() as 'active' | 'completed' | 'archived']}</Badge>
+                      <Badge variant={STATUS_VARIANT[p.status]}>{t.projects[p.status.toLowerCase() as 'draft' | 'active' | 'completed' | 'archived' | 'cancelled']}</Badge>
                       {p.isPublic && <Badge variant="purple">{t.projects.public}</Badge>}
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -201,7 +253,53 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                     <div className="flex gap-3 mt-2 text-xs">
                       {p.repoUrl && <a href={p.repoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><Github className="h-3.5 w-3.5" />{t.projects.repo}</a>}
                       {p.demoUrl && <a href={p.demoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><ExternalLink className="h-3.5 w-3.5" />{t.projects.demo}</a>}
+                      {(p.startDate || p.endDate) && (
+                        <span className="text-gray-400">
+                          {p.startDate ? new Date(p.startDate).toLocaleDateString() : '…'} – {p.endDate ? new Date(p.endDate).toLocaleDateString() : '…'}
+                        </span>
+                      )}
                     </div>
+
+                    {/* Tasks + progress */}
+                    {(() => {
+                      const tasks = p.tasks ?? [];
+                      const done = tasks.filter((tk) => tk.done).length;
+                      const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+                      return (
+                        <div className="mt-3 max-w-md">
+                          {tasks.length > 0 && (
+                            <>
+                              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                <span>{done}/{tasks.length} {t.projects.tasksDone}</span>
+                                <span>{pct}%</span>
+                              </div>
+                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                                <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
+                              </div>
+                              <div className="space-y-1">
+                                {tasks.map((tk) => (
+                                  <div key={tk.id} data-testid={`task-${tk.id}`} className="flex items-center gap-2 text-sm">
+                                    <input type="checkbox" checked={tk.done} onChange={() => toggleTask(tk)} />
+                                    <span className={`flex-1 ${tk.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>{tk.title}</span>
+                                    <button onClick={() => deleteTask(tk.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                          <div className="flex gap-2 mt-2">
+                            <input
+                              value={taskDraft[p.id] ?? ''}
+                              onChange={(e) => setTaskDraft((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTask(p.id); } }}
+                              placeholder={t.projects.addTask}
+                              className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1 text-sm"
+                            />
+                            <Button type="button" size="sm" variant="outline" onClick={() => addTask(p.id)}>{t.projects.add}</Button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => edit(p)} aria-label={t.projects.editProject} className="p-2 text-gray-400 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>

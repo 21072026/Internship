@@ -225,9 +225,11 @@ model ApiKey {
 }
 
 enum ProjectStatus {
+  DRAFT
   ACTIVE
   COMPLETED
   ARCHIVED
+  CANCELLED
 }
 
 // A project must be owned by exactly one of: an admin, a mentor, or a company.
@@ -249,6 +251,9 @@ model Project {
   demoUrl        String?
   status         ProjectStatus    @default(ACTIVE)
   isPublic       Boolean          @default(false)
+  goals          String?          @db.Text
+  startDate      DateTime?
+  endDate        DateTime?
   ownerType      ProjectOwnerType
   ownerUserId    String?
   ownerCompanyId String?
@@ -258,9 +263,24 @@ model Project {
   ownerUser    User?                @relation("ProjectOwner", fields: [ownerUserId], references: [id])
   ownerCompany Company?             @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
   relations    MentorshipRelation[]
+  tasks        ProjectTask[]
 
   @@index([ownerUserId])
   @@index([ownerCompanyId])
+}
+
+// A task within a project — supports a task list + progress % (checklist 4).
+model ProjectTask {
+  id        String   @id @default(cuid())
+  projectId String
+  title     String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 // A mentor's recurring weekly availability window.
