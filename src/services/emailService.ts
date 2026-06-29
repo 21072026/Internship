@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import cron from 'node-cron';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { getSetting } from '@/lib/settings';
 import type { PipelineStatus } from '@prisma/client';
 
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
@@ -214,8 +215,9 @@ export async function sendMeetingInviteEmail({
 }
 
 export async function checkMentorInteractionReminders() {
+  const days = parseInt(await getSetting('reminderDays'), 10) || 14;
   const fourteenDaysAgo = new Date();
-  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - days);
 
   const activeRelations = await prisma.mentorshipRelation.findMany({
     where: { status: 'ACTIVE' },

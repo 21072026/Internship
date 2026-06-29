@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { GraduationCap, LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText, BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, Webhook, LogOut } from 'lucide-react';
+import { GraduationCap, LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText, BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, Settings, Webhook, LogOut } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
@@ -150,6 +150,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           >
             <Webhook className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
             {t.nav.integrations}
+          </Link>
+          <Link
+            href="/admin/settings"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+          >
+            <Settings className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+            {t.nav.settings}
           </Link>
           <Link
             href="/admin/invite"

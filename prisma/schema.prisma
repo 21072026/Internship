@@ -255,6 +255,14 @@ model ApiKey {
   createdAt  DateTime  @default(now())
 }
 
+// Key-value system settings, admin-editable (e.g. reminder cadence, support
+// email). Values are stored as strings; callers parse as needed.
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
 enum ProjectStatus {
   DRAFT
   ACTIVE
