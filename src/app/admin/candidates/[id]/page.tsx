@@ -37,6 +37,8 @@ interface MenteeDetail {
   city?: string;
   birthDate?: string;
   referralSource?: string;
+  sourceId?: string | null;
+  source?: { id: string; name: string } | null;
   university?: string;
   department?: string;
   graduationYear?: number;
@@ -67,6 +69,7 @@ export default function AdminMenteeDetailPage() {
   const [suggestions, setSuggestions] = useState<{ id: string; fullName: string; overlap: number; activeCount: number }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
+  const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -176,7 +179,26 @@ export default function AdminMenteeDetailPage() {
       .then((r) => (r.ok ? r.json() : { cohorts: [] }))
       .then((d) => setCohorts(d.cohorts ?? []))
       .catch(() => {});
+    fetch('/api/admin/sources')
+      .then((r) => (r.ok ? r.json() : { sources: [] }))
+      .then((d) => setSources(d.sources ?? []))
+      .catch(() => {});
   }, [id]);
+
+  const changeSource = useCallback(
+    async (sourceId: string) => {
+      setSaving(true);
+      try {
+        await fetch(`/api/users/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: sourceId || null }),
+        });
+        await load();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [id, load]
+  );
 
   const changeRelField = useCallback(
     async (relationId: string, body: Record<string, unknown>) => {
@@ -296,6 +318,13 @@ export default function AdminMenteeDetailPage() {
                   value={rel.cohort?.id ?? ''}
                   disabled={saving}
                   onChange={(e) => changeRelField(rel.id, { cohortId: e.target.value || null })}
+                />
+                <Select
+                  label={t.candidateDetail.source}
+                  options={[{ value: '', label: t.candidateDetail.noSource }, ...sources.map((s) => ({ value: s.id, label: s.name }))]}
+                  value={user.source?.id ?? ''}
+                  disabled={saving}
+                  onChange={(e) => changeSource(e.target.value)}
                 />
               </div>
 

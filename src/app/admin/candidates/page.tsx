@@ -51,6 +51,8 @@ export default function CandidatesPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState('');
 
   const COLS = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
@@ -96,6 +98,7 @@ export default function CandidatesPage() {
       if (statusFilter) params.set('status', statusFilter);
       if (cityFilter) params.set('city', cityFilter);
       if (projectFilter) params.set('project', projectFilter);
+      if (sourceFilter) params.set('source', sourceFilter);
 
       const res = await fetch(`/api/candidates?${params}`);
       const data = await res.json();
@@ -105,7 +108,14 @@ export default function CandidatesPage() {
     } finally {
       setLoading(false);
     }
-  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter]);
+  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter]);
+
+  useEffect(() => {
+    fetch('/api/admin/sources')
+      .then((r) => (r.ok ? r.json() : { sources: [] }))
+      .then((d) => setSources(d.sources ?? []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(fetchCandidates, 300);
@@ -191,8 +201,13 @@ export default function CandidatesPage() {
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
           />
+          <Select
+            options={[{ value: '', label: t.candidates.allSources }, ...sources.map((s) => ({ value: s.id, label: s.name }))]}
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+          />
         </div>
-        {(search || skillFilter || yearFilter || cityFilter || projectFilter) && (
+        {(search || skillFilter || yearFilter || cityFilter || projectFilter || sourceFilter) && (
           <Button
             variant="ghost"
             size="sm"
@@ -203,6 +218,7 @@ export default function CandidatesPage() {
               setYearFilter('');
               setCityFilter('');
               setProjectFilter('');
+              setSourceFilter('');
             }}
           >
             {t.candidates.clearFilters}
