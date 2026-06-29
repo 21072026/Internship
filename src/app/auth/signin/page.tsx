@@ -30,6 +30,7 @@ export default function SignInPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
+  const [notice, setNotice] = useState('');
 
   // Already signed in → go straight to the role dashboard.
   useEffect(() => {
@@ -37,6 +38,13 @@ export default function SignInPage() {
       router.replace(roleHome(session?.user?.role));
     }
   }, [status, session, router]);
+
+  // Surface a post-registration notice (pending approval / verify email).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('pending')) setNotice(t.auth.pendingApproval);
+    else if (params.get('registered')) setNotice(t.auth.registeredNotice);
+  }, [t]);
 
   const {
     register,
@@ -88,6 +96,11 @@ export default function SignInPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+          {notice && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm">
+              {notice}
+            </div>
+          )}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
