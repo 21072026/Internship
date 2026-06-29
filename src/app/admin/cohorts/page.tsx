@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { Pencil, Trash2 } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 interface Cohort {
@@ -46,6 +47,32 @@ export default function AdminCohortsPage() {
     }
   };
 
+  const rename = async (c: Cohort) => {
+    const next = window.prompt(t.cohorts.name, c.name);
+    if (next === null || !next.trim() || next === c.name) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/cohorts/${c.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: next.trim() }),
+      });
+      if (res.ok) await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (c: Cohort) => {
+    if (!window.confirm(t.cohorts.confirmDelete.replace('{name}', c.name))) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/cohorts/${c.id}`, { method: 'DELETE' });
+      if (res.ok) await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const hiredOf = (d: Record<string, number>) => HIRED.reduce((n, s) => n + (d[s] || 0), 0);
 
   return (
@@ -79,7 +106,8 @@ export default function AdminCohortsPage() {
                   <th className="py-2 pr-4">{t.cohorts.term}</th>
                   <th className="py-2 pr-4">{t.cohorts.interns}</th>
                   <th className="py-2 pr-4">{t.cohorts.hired}</th>
-                  <th className="py-2">{t.cohorts.hireRate}</th>
+                  <th className="py-2 pr-4">{t.cohorts.hireRate}</th>
+                  <th className="py-2 text-right"></th>
                 </tr>
               </thead>
               <tbody>
@@ -87,12 +115,16 @@ export default function AdminCohortsPage() {
                   const hired = hiredOf(c.distribution);
                   const rate = c.interns ? Math.round((hired / c.interns) * 100) : 0;
                   return (
-                    <tr key={c.id} className="border-b border-gray-50">
+                    <tr key={c.id} data-testid={`cohort-row-${c.id}`} className="border-b border-gray-50">
                       <td className="py-2 pr-4 font-medium text-gray-900">{c.name}</td>
                       <td className="py-2 pr-4 text-gray-500">{c.term || '—'}</td>
                       <td className="py-2 pr-4">{c.interns}</td>
                       <td className="py-2 pr-4">{hired}</td>
-                      <td className="py-2">{rate}%</td>
+                      <td className="py-2 pr-4">{rate}%</td>
+                      <td className="py-2 text-right whitespace-nowrap">
+                        <button onClick={() => rename(c)} disabled={saving} aria-label={t.common.edit} className="text-gray-400 hover:text-blue-600 mr-3"><Pencil className="h-4 w-4 inline" /></button>
+                        <button onClick={() => remove(c)} disabled={saving} aria-label={t.common.delete} className="text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4 inline" /></button>
+                      </td>
                     </tr>
                   );
                 })}

@@ -53,6 +53,7 @@ const en = {
     cancel: 'Cancel',
     error: 'Something went wrong',
     delete: 'Delete',
+    edit: 'Edit',
     prev: 'Previous',
     next: 'Next',
   },
@@ -497,6 +498,7 @@ const en = {
     hireRate: 'Hire rate',
     create: 'Create',
     none: 'No cohorts yet',
+    confirmDelete: 'Delete cohort "{name}"? Mentees stay; they just lose this cohort tag.',
   },
   sources: {
     title: 'Referral sources',
@@ -876,6 +878,7 @@ const tr: Dict = {
     cancel: 'İptal',
     error: 'Bir şeyler ters gitti',
     delete: 'Sil',
+    edit: 'Düzenle',
     prev: 'Önceki',
     next: 'Sonraki',
   },
@@ -1320,6 +1323,7 @@ const tr: Dict = {
     hireRate: 'İşe alım oranı',
     create: 'Oluştur',
     none: 'Henüz kohort yok',
+    confirmDelete: '"{name}" kohortu silinsin mi? Menteeler kalır; sadece bu kohort etiketini kaybeder.',
   },
   sources: {
     title: 'Başvuru kaynakları',
@@ -1697,6 +1701,7 @@ const de: Dict = {
     cancel: 'Abbrechen',
     error: 'Etwas ist schiefgelaufen',
     delete: 'Löschen',
+    edit: 'Bearbeiten',
     prev: 'Zurück',
     next: 'Weiter',
   },
@@ -2141,6 +2146,7 @@ const de: Dict = {
     hireRate: 'Einstellungsquote',
     create: 'Erstellen',
     none: 'Noch keine Kohorten',
+    confirmDelete: 'Kohorte "{name}" löschen? Mentees bleiben; nur die Kohorten-Zuordnung entfällt.',
   },
   sources: {
     title: 'Empfehlungsquellen',
