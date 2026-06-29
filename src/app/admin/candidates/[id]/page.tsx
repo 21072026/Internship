@@ -23,6 +23,7 @@ interface Relation {
   status: string;
   pipelineStatus: string;
   startDate: string;
+  stageDeadline?: string | null;
   mentor: { fullName: string; email: string };
   company: { name: string; industry?: string } | null;
   project: { id: string; name: string } | null;
@@ -328,6 +329,19 @@ export default function AdminMenteeDetailPage() {
                   disabled={saving}
                   onChange={(e) => changeSource(e.target.value)}
                 />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.candidateDetail.stageDeadline}</label>
+                  <input
+                    type="date"
+                    value={rel.stageDeadline ? rel.stageDeadline.slice(0, 10) : ''}
+                    disabled={saving}
+                    onChange={(e) => changeRelField(rel.id, { stageDeadline: e.target.value || null })}
+                    className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
+                  />
+                  {rel.stageDeadline && new Date(rel.stageDeadline) < new Date() && ![ 'HIRED_660', 'EMPLOYED_700' ].includes(rel.pipelineStatus) && (
+                    <p className="text-xs text-red-600 mt-1">{t.candidateDetail.overdue}</p>
+                  )}
+                </div>
               </div>
 
               {(() => {

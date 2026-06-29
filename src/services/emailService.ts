@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import cron from 'node-cron';
 import { prisma } from '@/lib/prisma';
+import { notify } from '@/lib/notify';
+import type { PipelineStatus } from '@prisma/client';
 
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
 const transporter = nodemailer.createTransport({
@@ -280,6 +282,37 @@ export async function checkMentorInteractionReminders() {
   };
 }
 
+// Notify mentors about mentees whose current stage deadline has passed. Each
+// relation is reminded once per deadline (deadlineReminderSentAt guards it).
+export async function checkStageDeadlineReminders() {
+  const now = new Date();
+  const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'] as const;
+
+  const overdue = await prisma.mentorshipRelation.findMany({
+    where: {
+      status: 'ACTIVE',
+      stageDeadline: { lt: now },
+      deadlineReminderSentAt: null,
+      pipelineStatus: { notIn: TERMINAL as unknown as PipelineStatus[] },
+    },
+    include: { mentor: true, mentee: true },
+  });
+
+  for (const rel of overdue) {
+    await notify(rel.mentorId, 'deadline', `Stage deadline passed for ${rel.mentee.fullName}.`, `/admin/candidates/${rel.menteeId}`);
+    if (rel.mentor.emailNotifications) {
+      await sendEmail({
+        to: rel.mentor.email,
+        subject: `Overdue: ${rel.mentee.fullName}'s stage deadline`,
+        html: `<p>Hi ${rel.mentor.fullName},</p><p>The stage deadline for <strong>${rel.mentee.fullName}</strong> has passed. Please review their progress.</p>`,
+      }).catch(() => {});
+    }
+    await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { deadlineReminderSentAt: now } });
+  }
+
+  return { reminded: overdue.length };
+}
+
 // Email reminders for meetings happening within the next 24h that haven't been
 // reminded yet.
 export async function sendMeetingReminders() {
@@ -377,6 +410,8 @@ export function initCronJobs() {
     try {
       const result = await checkMentorInteractionReminders();
       console.log(`[Cron] Done. Checked: ${result.checked}, Reminded: ${result.reminded}`);
+      const dl = await checkStageDeadlineReminders();
+      console.log(`[Cron] Stage deadline reminders: ${dl.reminded}`);
     } catch (error) {
       console.error('[Cron] Error running reminder check:', error);
     }

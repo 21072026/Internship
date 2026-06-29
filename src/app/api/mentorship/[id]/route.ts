@@ -15,6 +15,7 @@ const updateRelationSchema = z.object({
   companyId: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
   cohortId: z.string().nullable().optional(),
+  stageDeadline: z.string().nullable().optional(),
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -109,9 +110,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       );
     }
 
+    const { stageDeadline, ...rest } = parsed.data;
+    const data: Prisma.MentorshipRelationUncheckedUpdateInput = { ...rest };
+    if (stageDeadline !== undefined) {
+      data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;
+      // A fresh deadline (or cleared) re-arms the overdue reminder.
+      data.deadlineReminderSentAt = null;
+    }
+
     const updated = await prisma.mentorshipRelation.update({
       where: { id },
-      data: parsed.data as Prisma.MentorshipRelationUncheckedUpdateInput,
+      data,
       include: {
         mentor: { select: { id: true, fullName: true, email: true } },
         mentee: { select: { id: true, fullName: true, email: true } },

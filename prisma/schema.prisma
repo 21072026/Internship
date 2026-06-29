@@ -349,15 +349,20 @@ model CompanyNeed {
 }
 
 model MentorshipRelation {
-  id             String           @id @default(cuid())
-  mentorId       String
-  menteeId       String
-  companyId      String?
-  projectId      String?
-  cohortId       String?
-  startDate      DateTime         @default(now())
-  status         MentorshipStatus @default(ACTIVE)
-  pipelineStatus PipelineStatus   @default(APPLICATION_100)
+  id                     String           @id @default(cuid())
+  mentorId               String
+  menteeId               String
+  companyId              String?
+  projectId              String?
+  cohortId               String?
+  startDate              DateTime         @default(now())
+  status                 MentorshipStatus @default(ACTIVE)
+  pipelineStatus         PipelineStatus   @default(APPLICATION_100)
+  // Optional deadline for the current pipeline stage; powers overdue flagging
+  // and deadline reminders.
+  stageDeadline          DateTime?
+  // Set when an overdue-stage reminder was last sent (avoids re-notifying daily).
+  deadlineReminderSentAt DateTime?
 
   mentor        User             @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee        User             @relation("MenteeRelations", fields: [menteeId], references: [id])
