@@ -42,12 +42,13 @@ export default function AdminUsersPage() {
   const PAGE_SIZE = 20;
 
   const loginAs = async (u: AdminUser) => {
+    const reason = window.prompt(t.usersAdmin.impersonateReason) ?? undefined;
     setBusyId(u.id);
     try {
       const res = await fetch('/api/admin/impersonate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetUserId: u.id }),
+        body: JSON.stringify({ targetUserId: u.id, reason }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

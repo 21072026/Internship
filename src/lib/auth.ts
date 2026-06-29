@@ -128,6 +128,25 @@ export const authOptions: NextAuthOptions = {
         const u = user as unknown as { impersonatorId?: string; impersonatorName?: string };
         token.impersonatorId = u.impersonatorId ?? null;
         token.impersonatorName = u.impersonatorName ?? null;
+        // Cap impersonation sessions; after this they auto-revert to the admin.
+        token.impersonationExpiresAt = u.impersonatorId ? Date.now() + 30 * 60 * 1000 : null;
+      }
+
+      // Auto-expire impersonation: once the cap passes, rewrite the token back
+      // to the original admin so elevated access can't linger indefinitely.
+      if (token.impersonatorId && token.impersonationExpiresAt && Date.now() > (token.impersonationExpiresAt as number)) {
+        const admin = await prisma.user.findUnique({ where: { id: token.impersonatorId as string } });
+        if (admin) {
+          token.id = admin.id;
+          token.role = admin.role;
+          token.email = admin.email;
+          token.name = admin.fullName;
+          token.companyId = admin.companyId;
+          token.emailVerified = admin.emailVerified;
+        }
+        token.impersonatorId = null;
+        token.impersonatorName = null;
+        token.impersonationExpiresAt = null;
       }
       // On a client-side session update() (e.g. after changing email/profile),
       // re-read the user so the token — and thus the UI that reads the session,

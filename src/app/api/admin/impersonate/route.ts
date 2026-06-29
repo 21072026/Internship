@@ -5,8 +5,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createImpersonationGrant } from '@/lib/impersonation';
 import { logActivity } from '@/lib/activity';
+import { notify } from '@/lib/notify';
 
-const schema = z.object({ targetUserId: z.string().min(1) });
+const schema = z.object({ targetUserId: z.string().min(1), reason: z.string().max(300).optional() });
 
 // POST — admin starts impersonating a user. Verifies the caller is a real
 // (non-impersonating) admin, audits it, and returns a single-use grant the
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Target user not found' }, { status: 404 });
   }
 
+  const reason = parsed.data.reason?.trim() || null;
   const grant = await createImpersonationGrant(session.user.id, target.id, 'START');
   await prisma.auditLog.create({
     data: { actorId: session.user.id, action: 'IMPERSONATE_START', targetId: target.id },
@@ -41,7 +43,10 @@ export async function POST(request: Request) {
     actorEmail: session.user.email ?? null,
     targetType: 'user',
     targetId: target.id,
+    detail: reason ? `Reason: ${reason}` : undefined,
   });
+  // The impersonated user is told their account was accessed (transparency).
+  await notify(target.id, 'impersonation', `An administrator accessed your account${reason ? ` (${reason})` : ''}.`);
 
   return NextResponse.json({ grant });
 }
