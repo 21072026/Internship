@@ -120,8 +120,8 @@ export default function AdminUsersPage() {
         ) : (
           <div className="divide-y divide-gray-50">
             {shown.map((u) => (
-              <div key={u.id} data-testid={`user-row-${u.id}`} className="flex items-center justify-between gap-3 py-3">
-                <div className="min-w-0">
+              <div key={u.id} data-testid={`user-row-${u.id}`} className="flex flex-col items-start gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <div className="min-w-0 w-full sm:w-auto">
                   {u.role === 'MENTEE' ? (
                     <Link href={`/admin/candidates/${u.id}`} className="text-sm font-medium text-gray-900 hover:text-blue-600 truncate block">
                       {u.fullName}
@@ -131,7 +131,7 @@ export default function AdminUsersPage() {
                   )}
                   <p className="text-xs text-gray-500 truncate">{u.email}</p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={ROLE_VARIANT[u.role]}>{t.usersAdmin[u.role.toLowerCase() as RoleLabel]}</Badge>
                   <Badge variant={u.isActive ? 'success' : 'warning'}>
                     {u.isActive ? t.usersAdmin.active : t.usersAdmin.inactive}
