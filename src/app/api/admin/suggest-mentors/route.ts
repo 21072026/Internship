@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const mentors = await prisma.user.findMany({
     // Exclude mentors already mentoring this mentee.
     where: { role: 'MENTOR', isActive: true, NOT: { mentorRelations: { some: { menteeId } } } },
-    select: { id: true, fullName: true, skills: true, _count: { select: { mentorRelations: true } } },
+    select: { id: true, fullName: true, skills: true, mentorCapacity: true, _count: { select: { mentorRelations: { where: { status: 'ACTIVE' } } } } },
   });
 
   const menteeSkills = Array.isArray(mentee.skills) ? (mentee.skills as string[]) : [];
@@ -30,6 +30,7 @@ export async function GET(request: Request) {
       fullName: m.fullName,
       skills: Array.isArray(m.skills) ? (m.skills as string[]) : [],
       activeCount: m._count.mentorRelations,
+      capacity: m.mentorCapacity,
     }))
   );
 
