@@ -105,6 +105,24 @@ export default function MentorEmailPage() {
             <CardTitle>{t.mentorEmail.compose}</CardTitle>
           </CardHeader>
           <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t.mentorEmail.template}</label>
+              <select
+                id="email-template"
+                defaultValue=""
+                onChange={(e) => {
+                  const tpl = (t.emailTemplates as Record<string, { subject: string; body: string }>)[e.target.value];
+                  if (tpl) { setSubject(tpl.subject); setBody(tpl.body); }
+                  e.target.value = '';
+                }}
+                className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 focus:outline-none"
+              >
+                <option value="">{t.mentorEmail.templatePlaceholder}</option>
+                {['welcome', 'checkin', 'interview', 'followup'].map((k) => (
+                  <option key={k} value={k}>{(t.emailTemplates as Record<string, { label: string }>)[k]?.label ?? k}</option>
+                ))}
+              </select>
+            </div>
             <Input label={t.mentorEmail.subject} value={subject} onChange={(e) => setSubject(e.target.value)} />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t.mentorEmail.message}</label>
