@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { roleHome } from '@/lib/roleHome';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 
 interface AdminUser {
@@ -134,7 +135,7 @@ export default function AdminUsersPage() {
           <CardTitle>{t.usersAdmin.title} ({filtered.length})</CardTitle>
         </CardHeader>
         {loading ? (
-          <p className="text-center py-12 text-gray-400">{t.common.loading}</p>
+          <SkeletonRows rows={6} />
         ) : shown.length === 0 ? (
           <p className="text-center py-12 text-gray-400">{t.usersAdmin.none}</p>
         ) : (

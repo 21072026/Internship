@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useT, useLocale } from "@/i18n/client";
 import { pipelineLabel } from '@/lib/pipeline';
 import { Card } from '@/components/ui/Card';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -247,7 +248,7 @@ export default function CandidatesPage() {
 
       {/* Candidates Grid */}
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+        <Card><SkeletonRows rows={6} /></Card>
       ) : candidates.length === 0 ? (
         <Card>
           <EmptyState
