@@ -9,7 +9,7 @@ const createInteractionSchema = z.object({
   relationId: z.string().min(1),
   date: z.string().min(1),
   notes: z.string().min(1, 'Notes are required'),
-  type: z.enum(['Meeting', 'Feedback', 'Email']),
+  type: z.enum(['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp']),
 });
 
 export async function GET(request: Request) {

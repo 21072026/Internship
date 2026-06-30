@@ -25,6 +25,8 @@ enum InteractionType {
   Meeting
   Feedback
   Email
+  Call
+  WhatsApp
 }
 
 // Mentee'nin staj/işe alım sürecindeki granular aşaması (Excel status kolonunun karşılığı)

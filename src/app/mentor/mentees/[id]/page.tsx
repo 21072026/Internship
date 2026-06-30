@@ -15,6 +15,7 @@ import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
+import { ContactActions } from '@/components/ContactActions';
 import { DocumentsManager } from '@/components/DocumentsManager';
 
 interface InteractionLog {
@@ -207,6 +208,13 @@ export default function MenteeDetailPage() {
                 <p className="text-xs text-gray-500">{t.candidateDetail.whatsapp}</p>
                 <p className="text-sm text-gray-900">{relation.mentee.whatsapp}</p>
               </div>
+            )}
+            {(relation.mentee.whatsapp || relation.mentee.phone) && (
+              <ContactActions
+                relationId={id}
+                phone={relation.mentee.whatsapp || relation.mentee.phone || ''}
+                onLogged={fetchRelation}
+              />
             )}
             {relation.mentee.city && (
               <div>

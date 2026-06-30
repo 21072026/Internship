@@ -574,6 +574,14 @@ const en = {
     overdue: 'Overdue',
     weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   },
+  contact: {
+    call: 'Call',
+    reachedQ: 'Did you reach them?',
+    yes: 'Yes',
+    no: 'No',
+    loggedCall: 'Phone call',
+    loggedWhatsApp: 'WhatsApp contact',
+  },
   apiDocs: {
     title: 'API documentation',
     subtitle: 'Use your API key to read candidate data programmatically',
@@ -1478,6 +1486,14 @@ const tr: Dict = {
     overdue: 'Gecikmiş',
     weekdays: ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'],
   },
+  contact: {
+    call: 'Ara',
+    reachedQ: 'Görüşebildin mi?',
+    yes: 'Evet',
+    no: 'Hayır',
+    loggedCall: 'Telefon görüşmesi',
+    loggedWhatsApp: 'WhatsApp iletişimi',
+  },
   apiDocs: {
     title: 'API dokümantasyonu',
     subtitle: 'API anahtarınla aday verisini programatik olarak oku',
@@ -2379,6 +2395,14 @@ const de: Dict = {
     deadline: 'Frist',
     overdue: 'Überfällig',
     weekdays: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
+  },
+  contact: {
+    call: 'Anrufen',
+    reachedQ: 'Hast du sie erreicht?',
+    yes: 'Ja',
+    no: 'Nein',
+    loggedCall: 'Telefonat',
+    loggedWhatsApp: 'WhatsApp-Kontakt',
   },
   apiDocs: {
     title: 'API-Dokumentation',
