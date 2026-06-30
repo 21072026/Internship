@@ -60,7 +60,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <LogOut className="h-4 w-4" />
             {t.nav.signOut}
           </Link>
-          <div className="mt-3 px-3">
+          <div className="mt-3 px-3 flex flex-col gap-2 items-start">
             <LanguageSwitcher current={locale} />
             <ThemeToggle />
           </div>

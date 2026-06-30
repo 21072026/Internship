@@ -52,6 +52,45 @@ html.dark .border-gray-300 { border-color: #4b5563; }
 html.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: #1f2937; }
 html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #374151; }
 
+/* Translucent white surfaces (e.g. the sticky landing header bg-white/80). */
+html.dark .bg-white\/80 { background-color: rgba(17,24,39,0.85); }
+html.dark .bg-white\/70 { background-color: rgba(17,24,39,0.80); }
+
+/*
+ * Variant utilities (hover:/focus:) can't be reached by the base-name remaps
+ * above — the class is e.g. `hover:bg-blue-50`, not `bg-blue-50`. Re-tint the
+ * ones the app actually uses (nav items, list rows, danger actions).
+ */
+html.dark .hover\:bg-blue-50:hover { background-color: rgba(30,58,138,0.35); }
+html.dark .hover\:bg-gray-50:hover { background-color: #1f2937; }
+html.dark .hover\:bg-gray-100:hover { background-color: #374151; }
+html.dark .hover\:bg-red-50:hover { background-color: rgba(127,29,29,0.35); }
+
+/* Colored heading text used on tinted cards → lighter for contrast on dark. */
+html.dark .text-red-900 { color: #fca5a5; }
+html.dark .text-blue-900 { color: #bfdbfe; }
+html.dark .text-green-900 { color: #bbf7d0; }
+html.dark .text-indigo-900 { color: #c7d2fe; }
+html.dark .text-purple-900 { color: #e9d5ff; }
+html.dark .text-amber-900 { color: #fde68a; }
+
+/*
+ * Native form controls. Inline <input>/<select>/<textarea> scattered through
+ * pages don't all use the themed UI primitives, so default them to dark here.
+ * The UI primitives carry their own dark: classes in the same palette, so the
+ * two never visibly disagree. Checkboxes/radios keep their accent.
+ */
+html.dark input:not([type='checkbox']):not([type='radio']):not([type='range']),
+html.dark select,
+html.dark textarea {
+  background-color: #111827;
+  color: #f3f4f6;
+  border-color: #374151;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: #6b7280; }
+html.dark option { background-color: #111827; color: #f3f4f6; }
+
 @layer components {
   .container-page {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
