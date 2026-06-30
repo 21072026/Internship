@@ -117,6 +117,7 @@ model User {
   company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
   source                  Source?                  @relation(fields: [sourceId], references: [id])
   documents               Document[]               @relation("DocumentOwner")
+  personalNotes           PersonalNote[]
 
   @@index([role])
 }
@@ -423,6 +424,19 @@ model Evaluation {
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
 
   @@index([relationId])
+}
+
+// A mentee's private personal note (only the author can see it).
+model PersonalNote {
+  id        String   @id @default(cuid())
+  userId    String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // A goal set within a mentorship — supports goal setting + tracking (checklist 7).
