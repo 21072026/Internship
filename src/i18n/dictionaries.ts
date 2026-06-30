@@ -649,6 +649,7 @@ const en = {
     send: 'Broadcast',
     sent: 'Sent to {n} users',
   },
+  templatesLib: { preview: 'Preview', close: 'Close', pdf: 'Save as PDF', txt: '.txt', md: '.md' },
   documents: {
     title: 'Documents',
     templates: 'Document templates',
@@ -1565,6 +1566,7 @@ const tr: Dict = {
     send: 'Yayınla',
     sent: '{n} kullanıcıya gönderildi',
   },
+  templatesLib: { preview: 'Önizle', close: 'Kapat', pdf: 'PDF kaydet', txt: '.txt', md: '.md' },
   documents: {
     title: 'Dokümanlar',
     templates: 'Doküman şablonları',
@@ -2479,6 +2481,7 @@ const de: Dict = {
     send: 'Senden',
     sent: 'An {n} Benutzer gesendet',
   },
+  templatesLib: { preview: 'Vorschau', close: 'Schließen', pdf: 'Als PDF speichern', txt: '.txt', md: '.md' },
   documents: {
     title: 'Dokumente',
     templates: 'Dokumentvorlagen',
