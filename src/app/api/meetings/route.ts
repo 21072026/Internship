@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { sendMeetingInviteEmail } from '@/services/emailService';
+import { dispatchWebhook } from '@/lib/webhooks';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -80,5 +81,6 @@ export async function POST(request: Request) {
     created++;
   }
 
+  if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when.toISOString(), count: created });
   return NextResponse.json({ created });
 }

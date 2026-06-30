@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { ALL_CRITERIA, EVALUATION_TYPES } from '@/lib/evaluation';
+import { dispatchWebhook } from '@/lib/webhooks';
 
 // GET ?relationId= — evaluations for a relation (participants/admin).
 export async function GET(request: Request) {
@@ -59,5 +60,6 @@ export async function POST(request: Request) {
       comment: parsed.data.comment || null,
     },
   });
+  await dispatchWebhook('evaluation.added', { relationId: rel.id, type: evaluation.type, authorId: session.user.id });
   return NextResponse.json({ evaluation }, { status: 201 });
 }

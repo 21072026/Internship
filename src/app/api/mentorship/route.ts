@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { dispatchWebhook } from '@/lib/webhooks';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
       },
     });
 
+    await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null });
     return NextResponse.json({ relation }, { status: 201 });
   } catch (error) {
     console.error('Create mentorship error:', error);

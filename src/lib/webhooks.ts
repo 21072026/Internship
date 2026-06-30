@@ -3,7 +3,14 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
 // Known webhook event types.
-export const WEBHOOK_EVENTS = ['application.created', 'pipeline.stage_change'] as const;
+export const WEBHOOK_EVENTS = [
+  'application.created',
+  'pipeline.stage_change',
+  'mentorship.created',
+  'interaction.logged',
+  'evaluation.added',
+  'meeting.scheduled',
+] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 // Fire-and-forget: POST a signed payload to every active webhook subscribed to

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { dispatchWebhook } from '@/lib/webhooks';
 
 const createInteractionSchema = z.object({
   relationId: z.string().min(1),
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
       },
     });
 
+    await dispatchWebhook('interaction.logged', { relationId, type, date: interaction.date.toISOString() });
     return NextResponse.json({ interaction }, { status: 201 });
   } catch (error) {
     console.error('Create interaction error:', error);
