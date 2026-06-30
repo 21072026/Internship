@@ -50,6 +50,7 @@ const en = {
     searchPlaceholder: 'Search by name or university...',
     allStages: 'All stages',
   },
+  offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.' },
   common: {
     loading: 'Loading...',
     notFound: 'Not found',
@@ -921,6 +922,7 @@ const tr: Dict = {
     searchPlaceholder: 'Ad veya üniversiteye göre ara...',
     allStages: 'Tüm aşamalar',
   },
+  offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.' },
   common: {
     loading: 'Yükleniyor...',
     notFound: 'Bulunamadı',
@@ -1790,6 +1792,7 @@ const de: Dict = {
     searchPlaceholder: 'Nach Name oder Universität suchen...',
     allStages: 'Alle Phasen',
   },
+  offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.' },
   common: {
     loading: 'Wird geladen...',
     notFound: 'Nicht gefunden',
