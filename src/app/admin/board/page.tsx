@@ -131,6 +131,18 @@ export default function AdminBoardPage() {
                         {r._count.interactions}
                       </span>
                     </div>
+                    {/* Keyboard-accessible alternative to drag-and-drop. */}
+                    <select
+                      aria-label={t.adminBoard.moveTo}
+                      value={status}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => { e.stopPropagation(); moveTo(r.id, e.target.value); }}
+                      className="mt-2 w-full rounded border border-gray-200 px-1.5 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                      {PIPELINE_STATUSES.map((sv) => (
+                        <option key={sv} value={sv}>{pipelineLabel(sv, locale)}</option>
+                      ))}
+                    </select>
                   </div>
                 ))}
               </div>
