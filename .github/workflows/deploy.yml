@@ -124,6 +124,13 @@ jobs:
             "\$IMAGE" \
             npx prisma db push --accept-data-loss
 
+          # Seed starter document templates (idempotent — only adds missing ones).
+          docker run --rm \
+            --network=host \
+            -e DATABASE_URL="\$DATABASE_URL" \
+            "\$IMAGE" \
+            node prisma/seed-templates.mjs || true
+
           docker stop internship-crm 2>/dev/null || true
           docker rm   internship-crm 2>/dev/null || true
           # Run with host networking so the app reaches the host's MySQL over
@@ -211,6 +218,13 @@ jobs:
             -e DATABASE_URL="\$CONTAINER_DB" \
             "\$IMAGE" \
             npx prisma db push --accept-data-loss
+
+          # Seed starter document templates (idempotent).
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="\$CONTAINER_DB" \
+            "\$IMAGE" \
+            node prisma/seed-templates.mjs || true
 
           docker stop internship-crm-preview 2>/dev/null || true
           docker rm   internship-crm-preview 2>/dev/null || true
