@@ -62,7 +62,8 @@ export default function MentorshipPage() {
         companiesRes.json(),
       ]);
       setRelations(relData.relations || []);
-      setMentors((usersData.users || []).filter((u: User & { role: string }) => u.role === 'MENTOR'));
+      // Admins can mentor too, so include them in the mentor picker.
+      setMentors((usersData.users || []).filter((u: User & { role: string }) => u.role === 'MENTOR' || u.role === 'ADMIN'));
       setMentees((usersData.users || []).filter((u: User & { role: string }) => u.role === 'MENTEE'));
       setCompanies(companiesData.companies || []);
     } catch {
