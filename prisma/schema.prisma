@@ -397,6 +397,7 @@ model MentorshipRelation {
   evaluations     Evaluation[]
   goals           Goal[]
   meetingRequests MeetingRequest[]
+  questions       MentorQuestion[]
 
   @@index([status])
   @@index([pipelineStatus])
@@ -421,6 +422,22 @@ model Evaluation {
   scores     Json           @default("{}") // { criterion: 1..5 }
   comment    String?        @db.Text
   createdAt  DateTime       @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
+}
+
+// A structured question from a mentee to their mentor, with an optional answer.
+// Distinct from chat: each question has an answered/unanswered state.
+model MentorQuestion {
+  id         String    @id @default(cuid())
+  relationId String
+  askedById  String
+  question   String    @db.Text
+  answer     String?   @db.Text
+  answeredAt DateTime?
+  createdAt  DateTime  @default(now())
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
 
