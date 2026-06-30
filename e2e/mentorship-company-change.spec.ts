@@ -32,8 +32,10 @@ test('admin can change the company on an existing mentorship', async ({ page }) 
 
     await page.goto('/admin/mentorship');
     // The list can hold many relations; narrow it to our seeded one by name so
-    // the company picker resolves to a single element.
-    await page.locator('input[type="search"]').fill(menteeName);
+    // the company picker resolves to a single element. Target the mentorship
+    // search box specifically (the admin layout also has a "Filter menu" search
+    // input); the regex matches the en/tr/de placeholders.
+    await page.getByPlaceholder(/mentor, mentee/i).fill(menteeName);
 
     const companySelect = page.getByLabel('Change company');
     await expect(companySelect).toHaveCount(1);
