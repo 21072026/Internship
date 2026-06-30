@@ -574,6 +574,7 @@ const en = {
     overdue: 'Overdue',
     weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   },
+  activityFeed: { title: 'Activity', none: 'No activity yet', neverActive: 'No recorded activity yet.', inactiveDays: 'Inactive for {d} days — consider reaching out.' },
   contact: {
     call: 'Call',
     reachedQ: 'Did you reach them?',
@@ -1486,6 +1487,7 @@ const tr: Dict = {
     overdue: 'Gecikmiş',
     weekdays: ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'],
   },
+  activityFeed: { title: 'Aktivite', none: 'Henüz aktivite yok', neverActive: 'Henüz kayıtlı aktivite yok.', inactiveDays: '{d} gündür pasif — iletişime geçmeyi düşün.' },
   contact: {
     call: 'Ara',
     reachedQ: 'Görüşebildin mi?',
@@ -2396,6 +2398,7 @@ const de: Dict = {
     overdue: 'Überfällig',
     weekdays: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
   },
+  activityFeed: { title: 'Aktivität', none: 'Noch keine Aktivität', neverActive: 'Noch keine Aktivität erfasst.', inactiveDays: 'Seit {d} Tagen inaktiv — kontaktiere sie.' },
   contact: {
     call: 'Anrufen',
     reachedQ: 'Hast du sie erreicht?',

@@ -16,6 +16,7 @@ import { GoalsPanel } from '@/components/GoalsPanel';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { ContactActions } from '@/components/ContactActions';
+import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 
 interface InteractionLog {
@@ -389,6 +390,10 @@ export default function MenteeDetailPage() {
 
         <div className="lg:col-span-2">
           <DocumentsManager targetUserId={relation.mentee.id} />
+        </div>
+
+        <div className="lg:col-span-2">
+          <UserActivityPanel userId={relation.mentee.id} flagInactive />
         </div>
       </div>
     </div>

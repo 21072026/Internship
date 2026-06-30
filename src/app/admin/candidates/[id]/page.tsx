@@ -14,6 +14,7 @@ import { nextAction } from '@/lib/matching';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
+import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { useT, useLocale } from '@/i18n/client';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
@@ -443,6 +444,7 @@ export default function AdminMenteeDetailPage() {
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
         <DocumentsManager targetUserId={id} />
+        <UserActivityPanel userId={id} />
       </div>
     </div>
   );
