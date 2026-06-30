@@ -3,6 +3,7 @@ import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { JourneyTracker } from '@/components/JourneyTracker';
+import { NotesPanel } from '@/components/NotesPanel';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -287,6 +288,10 @@ export default async function PortalDashboard() {
           </div>
         </>
       )}
+
+      <div className="mt-6">
+        <NotesPanel />
+      </div>
     </div>
   );
 }
