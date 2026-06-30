@@ -47,6 +47,8 @@ const en = {
     candidates: 'Candidates',
     mentor: 'Mentor',
     none: 'No candidates linked yet',
+    searchPlaceholder: 'Search by name or university...',
+    allStages: 'All stages',
   },
   common: {
     loading: 'Loading...',
@@ -909,6 +911,8 @@ const tr: Dict = {
     candidates: 'Adaylar',
     mentor: 'Mentor',
     none: 'Henüz bağlı aday yok',
+    searchPlaceholder: 'Ad veya üniversiteye göre ara...',
+    allStages: 'Tüm aşamalar',
   },
   common: {
     loading: 'Yükleniyor...',
@@ -1769,6 +1773,8 @@ const de: Dict = {
     candidates: 'Kandidaten',
     mentor: 'Mentor',
     none: 'Noch keine Kandidaten verknüpft',
+    searchPlaceholder: 'Nach Name oder Universität suchen...',
+    allStages: 'Alle Phasen',
   },
   common: {
     loading: 'Wird geladen...',
