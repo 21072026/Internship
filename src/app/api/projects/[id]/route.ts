@@ -31,6 +31,7 @@ const schema = z.object({
   technologies: z.array(z.string()).max(50).optional(),
   repoUrl: z.string().url().max(500).optional().or(z.literal('')),
   demoUrl: z.string().url().max(500).optional().or(z.literal('')),
+  boardUrl: z.string().url().max(500).optional().or(z.literal('')),
   status: z.enum(['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED', 'CANCELLED']).optional(),
   isPublic: z.boolean().optional(),
   goals: z.string().max(5000).nullable().optional(),
@@ -60,6 +61,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (d.technologies !== undefined) data.technologies = d.technologies;
   if (d.repoUrl !== undefined) data.repoUrl = d.repoUrl || null;
   if (d.demoUrl !== undefined) data.demoUrl = d.demoUrl || null;
+  if (d.boardUrl !== undefined) data.boardUrl = d.boardUrl || null;
   if (d.status !== undefined) data.status = d.status;
   if (d.isPublic !== undefined) data.isPublic = d.isPublic;
   if (d.goals !== undefined) data.goals = d.goals || null;

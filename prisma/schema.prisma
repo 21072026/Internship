@@ -299,6 +299,7 @@ model Project {
   technologies   Json             @default("[]")
   repoUrl        String?
   demoUrl        String?
+  boardUrl       String?
   status         ProjectStatus    @default(ACTIVE)
   isPublic       Boolean          @default(false)
   goals          String?          @db.Text
