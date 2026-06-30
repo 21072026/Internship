@@ -1,0 +1,31 @@
+# Local development database only — NOT used in production or CI.
+#
+# Spins up a throwaway MySQL bound to 127.0.0.1 (loopback only, never exposed
+# off your machine). Lets you run and log into the app locally without touching
+# the shared preview DB. See docs/local-dev.md.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Credentials here are deliberately trivial — this DB holds only local dummy data.
+services:
+  db:
+    image: mysql:8
+    container_name: crm-dev-db
+    environment:
+      MYSQL_DATABASE: internship_crm
+      MYSQL_USER: crm
+      MYSQL_PASSWORD: crm
+      MYSQL_ROOT_PASSWORD: root
+    # Loopback-only bind: reachable from this machine, never from the network.
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - crm_dev_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  crm_dev_db:

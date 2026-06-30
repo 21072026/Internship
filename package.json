@@ -14,7 +14,9 @@
     "test:e2e:headed": "playwright test --headed",
     "import:csv": "node scripts/import-csv.mjs",
     "postinstall": "prisma generate",
-    "seed:templates": "node prisma/seed-templates.mjs"
+    "seed:templates": "node prisma/seed-templates.mjs",
+    "db:dev:up": "docker compose -f docker-compose.dev.yml up -d",
+    "db:dev:down": "docker compose -f docker-compose.dev.yml down"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
