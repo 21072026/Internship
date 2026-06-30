@@ -7,7 +7,7 @@ import { useT } from '@/i18n/client';
 
 // Upload / view / replace / delete a CV. Used by the mentee (self) on the
 // portal profile and by mentor/admin on a mentee's detail page.
-export function CvManager({ targetUserId, initialCvUrl }: { targetUserId?: string; initialCvUrl?: string | null }) {
+export function CvManager({ targetUserId, initialCvUrl, onChange }: { targetUserId?: string; initialCvUrl?: string | null; onChange?: (url: string | null) => void }) {
   const t = useT();
   const [cvUrl, setCvUrl] = useState<string | null>(initialCvUrl ?? null);
   const [busy, setBusy] = useState(false);
@@ -24,9 +24,11 @@ export function CvManager({ targetUserId, initialCvUrl }: { targetUserId?: strin
       const res = await fetch('/api/cv', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed');
-      setCvUrl(targetUserId ? `/api/cv/${targetUserId}` : data.url ?? '/api/cv/me');
+      const base = targetUserId ? `/api/cv/${targetUserId}` : data.url ?? '/api/cv/me';
       // cache-bust the view link
-      setCvUrl((u) => (u ? `${u.split('?')[0]}?t=${Date.now()}` : u));
+      const next = `${base.split('?')[0]}?t=${Date.now()}`;
+      setCvUrl(next);
+      onChange?.(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -42,6 +44,7 @@ export function CvManager({ targetUserId, initialCvUrl }: { targetUserId?: strin
       const base = cvUrl.split('?')[0];
       await fetch(base, { method: 'DELETE' });
       setCvUrl(null);
+      onChange?.(null);
     } finally {
       setBusy(false);
     }

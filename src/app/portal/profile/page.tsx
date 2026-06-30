@@ -57,6 +57,9 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [userId, setUserId] = useState('');
   const [initialCv, setInitialCv] = useState<string | null>(null);
+  // True when the stored CV is an uploaded file (internal /api/cv/... path).
+  // In that case the CvManager owns it and the manual external-URL input hides.
+  const [cvUploaded, setCvUploaded] = useState(false);
   const [publicProfile, setPublicProfile] = useState(false);
   const [profileViews, setProfileViews] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -82,6 +85,7 @@ export default function ProfilePage() {
         if (user) {
           setUserId(user.id);
           setInitialCv(user.cvUrl || null);
+          setCvUploaded(!!user.cvUrl && user.cvUrl.startsWith('/'));
           setPublicProfile(!!user.publicProfile);
           setProfileViews(user.profileViews || 0);
           setAvatarUrl(user.avatarUrl || null);
@@ -98,7 +102,9 @@ export default function ProfilePage() {
             department: user.department || '',
             graduationYear: user.graduationYear || 0,
             skills: user.skills?.join(', ') || '',
-            cvUrl: user.cvUrl || '',
+            // Only seed the manual input with an *external* link; internal
+            // upload paths are managed by the CvManager, not shown here.
+            cvUrl: user.cvUrl && /^https?:\/\//.test(user.cvUrl) ? user.cvUrl : '',
             displayName: user.displayName || '',
             bio: user.bio || '',
             country: user.country || '',
@@ -129,15 +135,18 @@ export default function ProfilePage() {
         skillsArray.filter((s) => skillLevels[s]).map((s) => [s, skillLevels[s]])
       );
 
+      // The manual field only ever carries an external link. When an uploaded
+      // file CV exists, the CvManager owns cvUrl — omit it so we never clobber it.
+      const { cvUrl: externalCvUrl, ...rest } = data;
       const res = await fetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...data,
+          ...rest,
           skills: skillsArray,
           skillLevels: levels,
           graduationYear: data.graduationYear || null,
-          cvUrl: data.cvUrl || null,
+          ...(cvUploaded ? {} : { cvUrl: externalCvUrl || null }),
           mentorCapacity: data.mentorCapacity || null,
           publicProfile,
         }),
@@ -306,18 +315,26 @@ export default function ProfilePage() {
                   </div>
                 );
               })()}
-              <Input
-                label={t.profileForm.cvUrl}
-                type="text"
-                inputMode="url"
-                placeholder="https://drive.google.com/..."
-                hint="Link to your CV"
-                {...register('cvUrl')}
-                error={errors.cvUrl?.message}
-              />
+              {/* Manual link is for an external CV only. Hidden once a file is
+                  uploaded — the CvManager below then owns view/replace/delete. */}
+              {!cvUploaded && (
+                <Input
+                  label={t.profileForm.cvUrl}
+                  type="text"
+                  inputMode="url"
+                  placeholder="https://drive.google.com/..."
+                  hint={t.profileForm.cvUrlHint}
+                  {...register('cvUrl')}
+                  error={errors.cvUrl?.message}
+                />
+              )}
               {userId && (
                 <div className="border-t border-gray-100 pt-4">
-                  <CvManager targetUserId={userId} initialCvUrl={initialCv} />
+                  <CvManager
+                    targetUserId={userId}
+                    initialCvUrl={initialCv}
+                    onChange={(url) => setCvUploaded(!!url && url.startsWith('/'))}
+                  />
                 </div>
               )}
 
