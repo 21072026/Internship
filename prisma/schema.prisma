@@ -385,17 +385,18 @@ model MentorshipRelation {
   // Set when an overdue-stage reminder was last sent (avoids re-notifying daily).
   deadlineReminderSentAt DateTime?
 
-  mentor        User             @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee        User             @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company       Company?         @relation(fields: [companyId], references: [id])
-  project       Project?         @relation(fields: [projectId], references: [id])
-  cohort        Cohort?          @relation(fields: [cohortId], references: [id])
-  interactions  InteractionLog[]
-  statusChanges StatusChange[]
-  meetings      Meeting[]
-  messages      Message[]
-  evaluations   Evaluation[]
-  goals         Goal[]
+  mentor          User             @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee          User             @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company         Company?         @relation(fields: [companyId], references: [id])
+  project         Project?         @relation(fields: [projectId], references: [id])
+  cohort          Cohort?          @relation(fields: [cohortId], references: [id])
+  interactions    InteractionLog[]
+  statusChanges   StatusChange[]
+  meetings        Meeting[]
+  messages        Message[]
+  evaluations     Evaluation[]
+  goals           Goal[]
+  meetingRequests MeetingRequest[]
 
   @@index([status])
   @@index([pipelineStatus])
@@ -420,6 +421,28 @@ model Evaluation {
   scores     Json           @default("{}") // { criterion: 1..5 }
   comment    String?        @db.Text
   createdAt  DateTime       @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
+}
+
+enum MeetingRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// A mentee-initiated meeting request. The mentor accepts (creating a Meeting)
+// or declines. Distinct from Meeting, which is the confirmed event.
+model MeetingRequest {
+  id            String               @id @default(cuid())
+  relationId    String
+  requestedById String
+  topic         String
+  proposedAt    DateTime
+  status        MeetingRequestStatus @default(PENDING)
+  createdAt     DateTime             @default(now())
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
 

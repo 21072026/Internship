@@ -13,6 +13,7 @@ import { pipelineOptions, pipelineLabel } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 
 interface InteractionLog {
@@ -367,6 +368,10 @@ export default function MenteeDetailPage() {
 
         <div className="lg:col-span-2">
           <GoalsPanel relationId={id} />
+        </div>
+
+        <div className="lg:col-span-2">
+          <MeetingRequestsPanel relationId={id} mode="manage" />
         </div>
 
         <div className="lg:col-span-2">

@@ -4,6 +4,7 @@ import { GoalsPanel } from '@/components/GoalsPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { JourneyTracker } from '@/components/JourneyTracker';
 import { NotesPanel } from '@/components/NotesPanel';
+import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -285,6 +286,9 @@ export default async function PortalDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
             <GoalsPanel relationId={activeRelation.id} />
             <EvaluationPanel relationId={activeRelation.id} audience="MENTOR" />
+          </div>
+          <div className="mt-6">
+            <MeetingRequestsPanel relationId={activeRelation.id} mode="request" />
           </div>
         </>
       )}
