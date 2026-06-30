@@ -365,6 +365,8 @@ const en = {
   },
   adminBoard: {
     subtitle: 'All mentees across every mentor — drag a card to change its stage',
+    searchPlaceholder: 'Find a mentee or mentor...',
+    hideEmpty: 'Hide empty stages',
   },
   mentorEmail: {
     title: 'Email mentees',
@@ -1229,6 +1231,8 @@ const tr: Dict = {
   },
   adminBoard: {
     subtitle: 'Tüm mentorların tüm mentee’leri — aşamayı değiştirmek için kartı sürükle',
+    searchPlaceholder: 'Mentee veya mentor bul...',
+    hideEmpty: 'Boş aşamaları gizle',
   },
   mentorEmail: {
     title: 'Mentee’lere e-posta',
@@ -2091,6 +2095,8 @@ const de: Dict = {
   },
   adminBoard: {
     subtitle: 'Alle Mentees aller Mentoren — ziehe eine Karte, um die Phase zu ändern',
+    searchPlaceholder: 'Mentee oder Mentor finden...',
+    hideEmpty: 'Leere Phasen ausblenden',
   },
   mentorEmail: {
     title: 'Mentees per E-Mail erreichen',

@@ -23,6 +23,8 @@ export default function AdminBoardPage() {
   const [relations, setRelations] = useState<Relation[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [hideEmpty, setHideEmpty] = useState(false);
 
   const fetchRelations = useCallback(async () => {
     const res = await fetch('/api/mentorship');
@@ -59,9 +61,28 @@ export default function AdminBoardPage() {
         <p className="text-gray-500 mt-1">{t.adminBoard.subtitle}</p>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t.adminBoard.searchPlaceholder}
+          className="flex-1 min-w-[180px] max-w-sm rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+        />
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
+          {t.adminBoard.hideEmpty}
+        </label>
+      </div>
+
       <div className="flex gap-4 overflow-x-auto pb-4">
         {PIPELINE_STATUSES.map((status) => {
-          const items = relations.filter((r) => r.pipelineStatus === status);
+          const q = search.trim().toLowerCase();
+          const items = relations.filter(
+            (r) => r.pipelineStatus === status &&
+              (!q || r.mentee.fullName.toLowerCase().includes(q) || r.mentor.fullName.toLowerCase().includes(q))
+          );
+          if (hideEmpty && items.length === 0) return null;
           return (
             <div
               key={status}
