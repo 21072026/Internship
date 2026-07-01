@@ -3,15 +3,12 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { BetaBadge } from '@/components/BetaBadge';
-import { GraduationCap, LayoutDashboard, Columns3, Users, BookOpen, Mail, CalendarClock, CalendarRange, CalendarDays, FolderGit2, LogOut } from 'lucide-react';
+import { AccountMenu } from '@/components/AccountMenu';
+import { GraduationCap, LayoutDashboard, Columns3, Users, BookOpen, Mail, CalendarClock, CalendarRange, CalendarDays, FolderGit2 } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { VersionFooter } from '@/components/VersionFooter';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { InstallAppButton } from '@/components/InstallAppButton';
-import { SidebarAvatar } from '@/components/SidebarAvatar';
 import { prisma } from '@/lib/prisma';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
@@ -108,27 +105,16 @@ export default async function MentorLayout({ children }: { children: React.React
           <InstallAppButton />
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
-          <Link href="/account" title={t.account.nav} className="flex items-center gap-3 mb-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-            <SidebarAvatar avatarUrl={me?.avatarUrl} name={session.user.name} fallback="M" className="bg-green-100 text-green-700" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{session.user.name}</p>
-              <p className="text-xs text-gray-500 truncate">{session.user.email}</p>
-            </div>
-          </Link>
-          <Link
-            href="/api/auth/signout"
-            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            {t.nav.signOut}
-          </Link>
-          <div className="mt-3 px-3 flex flex-col gap-2 items-start">
-            <LanguageSwitcher current={locale} />
-            <ThemeToggle />
-            <VersionFooter version={APP_VERSION} />
-          </div>
-        </div>
+        <AccountMenu
+          name={session.user.name}
+          email={session.user.email}
+          avatarUrl={me?.avatarUrl}
+          fallback="M"
+          avatarClassName="bg-green-100 text-green-700"
+          accountHref="/account"
+          locale={locale}
+          version={APP_VERSION}
+        />
         </aside>
       }
     >
