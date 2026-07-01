@@ -6,6 +6,7 @@ import {
   sendMeetingReminders,
   sendWeeklyMentorDigests,
   checkStageDeadlineReminders,
+  checkRetentionReminders,
 } from '@/services/emailService';
 
 export async function GET() {
@@ -16,11 +17,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [interactions, meetings, digests, deadlines] = await Promise.all([
+    const [interactions, meetings, digests, deadlines, retention] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendWeeklyMentorDigests(),
       checkStageDeadlineReminders(),
+      checkRetentionReminders(),
     ]);
 
     return NextResponse.json({
@@ -29,6 +31,7 @@ export async function GET() {
       meetings,
       digests,
       deadlines,
+      retention,
     });
   } catch (error) {
     console.error('Cron error:', error);
