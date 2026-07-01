@@ -51,7 +51,7 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
   };
 
   return (
-    <Card>
+    <Card data-testid="relation-notes-panel">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Lock className="h-4 w-4 text-gray-400" /> {c.title}

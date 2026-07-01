@@ -23,10 +23,13 @@ test('mentor can add a private note on a mentee; the note stays mentor-only', as
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
     await page.goto(`/mentor/mentees/${rel.id}`);
-    await expect(page.getByText(/Private notes/i)).toBeVisible({ timeout: 10_000 });
-    await page.fill('textarea', 'Strong technical fit, a bit shy in meetings — check in 1:1.');
-    await page.getByRole('button', { name: /^Add note$/i }).click();
-    await expect(page.getByText('Strong technical fit, a bit shy in meetings — check in 1:1.')).toBeVisible({ timeout: 10_000 });
+    const panel = page.getByTestId('relation-notes-panel');
+    await expect(panel.getByText(/Private notes/i)).toBeVisible({ timeout: 10_000 });
+    // Scoped to this panel — the page has several other <textarea> fields
+    // (interaction log, evaluation, Q&A) an unscoped fill would hit instead.
+    await panel.locator('textarea').fill('Strong technical fit, a bit shy in meetings — check in 1:1.');
+    await panel.getByRole('button', { name: /^Add note$/i }).click();
+    await expect(panel.getByText('Strong technical fit, a bit shy in meetings — check in 1:1.')).toBeVisible({ timeout: 10_000 });
 
     // IDOR: an unrelated mentor cannot read notes on this relation.
     await page.context().clearCookies();
