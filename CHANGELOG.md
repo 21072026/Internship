@@ -10,6 +10,9 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+### Fixed
+- Onboarding checklist card on the dashboard was nearly unreadable in dark mode (#389).
+
 ## [0.2.0] - 2026-07-01
 
 ### Added
