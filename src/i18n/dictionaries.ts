@@ -650,6 +650,7 @@ const en = {
     sent: 'Sent to {n} users',
   },
   cvSuggest: { button: 'Suggest from CV', hint: 'Reads your uploaded CV locally to suggest contact links and skills. Nothing is sent anywhere.', apply: 'Apply', applyAll: 'Apply all', applied: 'Added', skills: 'Skills', none: 'No suggestions found in the CV.', failed: 'Could not read suggestions.', fields: { phone: 'Phone', linkedinUrl: 'LinkedIn', githubUrl: 'GitHub', portfolioUrl: 'Portfolio / website' } },
+  consent: { section: 'Privacy & consent', intro: 'You control optional data processing. These are off by default and you can change them anytime.', items: { aiCvParsing: { title: 'AI-assisted CV reading', desc: 'Allow sending your CV text to an AI provider to suggest profile fields more accurately. Without this, only on-device parsing is used. Your CV file is never shared; only extracted text is sent when you trigger a suggestion.' } } },
   templatesLib: { preview: 'Preview', close: 'Close', pdf: 'Save as PDF', txt: '.txt', md: '.md' },
   documents: {
     title: 'Documents',
@@ -1568,6 +1569,7 @@ const tr: Dict = {
     sent: '{n} kullanıcıya gönderildi',
   },
   cvSuggest: { button: 'CV’den öner', hint: 'Yüklediğin CV’yi yerel olarak okuyup iletişim bağlantıları ve becerileri önerir. Hiçbir yere gönderilmez.', apply: 'Uygula', applyAll: 'Tümünü uygula', applied: 'Eklendi', skills: 'Beceriler', none: 'CV’de öneri bulunamadı.', failed: 'Öneriler okunamadı.', fields: { phone: 'Telefon', linkedinUrl: 'LinkedIn', githubUrl: 'GitHub', portfolioUrl: 'Portfolyo / web sitesi' } },
+  consent: { section: 'Gizlilik ve onay', intro: 'İsteğe bağlı veri işlemeyi sen kontrol edersin. Bunlar varsayılan olarak kapalıdır ve istediğin zaman değiştirebilirsin.', items: { aiCvParsing: { title: 'AI destekli CV okuma', desc: 'Profil alanlarını daha doğru önermek için CV metninin bir AI sağlayıcısına gönderilmesine izin ver. Bu olmadan yalnızca cihaz üzerinde ayrıştırma kullanılır. CV dosyan asla paylaşılmaz; yalnızca öneri istediğinde çıkarılan metin gönderilir.' } } },
   templatesLib: { preview: 'Önizle', close: 'Kapat', pdf: 'PDF kaydet', txt: '.txt', md: '.md' },
   documents: {
     title: 'Dokümanlar',
@@ -2484,6 +2486,7 @@ const de: Dict = {
     sent: 'An {n} Benutzer gesendet',
   },
   cvSuggest: { button: 'Aus Lebenslauf vorschlagen', hint: 'Liest deinen hochgeladenen Lebenslauf lokal und schlägt Kontaktlinks und Fähigkeiten vor. Es wird nichts gesendet.', apply: 'Übernehmen', applyAll: 'Alle übernehmen', applied: 'Hinzugefügt', skills: 'Fähigkeiten', none: 'Keine Vorschläge im Lebenslauf gefunden.', failed: 'Vorschläge konnten nicht gelesen werden.', fields: { phone: 'Telefon', linkedinUrl: 'LinkedIn', githubUrl: 'GitHub', portfolioUrl: 'Portfolio / Website' } },
+  consent: { section: 'Datenschutz & Einwilligung', intro: 'Du steuerst die optionale Datenverarbeitung. Diese ist standardmäßig aus und jederzeit änderbar.', items: { aiCvParsing: { title: 'KI-gestütztes Lesen des Lebenslaufs', desc: 'Erlaube, den Text deines Lebenslaufs an einen KI-Anbieter zu senden, um Profilfelder genauer vorzuschlagen. Ohne dies wird nur die Verarbeitung auf dem Gerät genutzt. Deine Lebenslauf-Datei wird nie geteilt; nur der extrahierte Text wird gesendet, wenn du einen Vorschlag auslöst.' } } },
   templatesLib: { preview: 'Vorschau', close: 'Schließen', pdf: 'Als PDF speichern', txt: '.txt', md: '.md' },
   documents: {
     title: 'Dokumente',

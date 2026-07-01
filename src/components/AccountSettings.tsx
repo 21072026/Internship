@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { AvatarManager } from '@/components/AvatarManager';
+import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 
@@ -362,6 +363,8 @@ export function AccountSettings() {
           </div>
         </div>
       </Card>
+
+      <ConsentSettings />
 
       <Card className="mt-6 max-w-4xl">
         <CardHeader><CardTitle>{t.account.dataSection}</CardTitle></CardHeader>
