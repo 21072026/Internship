@@ -11,6 +11,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { VersionFooter } from '@/components/VersionFooter';
+import { BetaBadge } from '@/components/BetaBadge';
 import { APP_VERSION } from '@/lib/version';
 
 export default async function HomePage() {
@@ -52,6 +53,7 @@ export default async function HomePage() {
             <div className="flex items-center gap-2 min-w-0">
               <GraduationCap className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
               <span className="text-lg sm:text-xl font-bold text-gray-900 truncate">InternshipCRM</span>
+              <BetaBadge className="flex-shrink-0" />
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <LanguageSwitcher current={locale} />

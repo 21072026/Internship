@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { BetaBadge } from '@/components/BetaBadge';
 import { GraduationCap, LogOut } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { PortalNav } from '@/components/PortalNav';
@@ -44,6 +45,7 @@ export default async function PortalLayout({ children }: { children: React.React
           <div className="flex items-center gap-2">
             <GraduationCap className="h-7 w-7 text-blue-600" />
             <span className="font-bold text-gray-900">InternshipCRM</span>
+            <BetaBadge />
           </div>
           <p className="text-xs text-gray-500 mt-1">{t.panel.mentee}</p>
         </div>
