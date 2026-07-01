@@ -354,7 +354,7 @@ export default function ProfilePage() {
                   {cvUploaded && (
                     <CvSuggestPanel
                       targetUserId={userId}
-                      onApplyField={(field, value) => setValue(field, value, { shouldDirty: true })}
+                      onApplyField={(field, value) => setValue(field as keyof ProfileFormData, value, { shouldDirty: true })}
                       onApplySkills={applySuggestedSkills}
                     />
                   )}

@@ -19,6 +19,7 @@
     "db:dev:down": "docker compose -f docker-compose.dev.yml down"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.109.0",
     "@hookform/resolvers": "^3.9.0",
     "@prisma/client": "^5.16.1",
     "bcryptjs": "^2.4.3",
