@@ -649,6 +649,7 @@ const en = {
     send: 'Broadcast',
     sent: 'Sent to {n} users',
   },
+  cvSuggest: { button: 'Suggest from CV', hint: 'Reads your uploaded CV locally to suggest contact links and skills. Nothing is sent anywhere.', apply: 'Apply', applyAll: 'Apply all', applied: 'Added', skills: 'Skills', none: 'No suggestions found in the CV.', failed: 'Could not read suggestions.', fields: { phone: 'Phone', linkedinUrl: 'LinkedIn', githubUrl: 'GitHub', portfolioUrl: 'Portfolio / website' } },
   templatesLib: { preview: 'Preview', close: 'Close', pdf: 'Save as PDF', txt: '.txt', md: '.md' },
   documents: {
     title: 'Documents',
@@ -1566,6 +1567,7 @@ const tr: Dict = {
     send: 'Yayınla',
     sent: '{n} kullanıcıya gönderildi',
   },
+  cvSuggest: { button: 'CV’den öner', hint: 'Yüklediğin CV’yi yerel olarak okuyup iletişim bağlantıları ve becerileri önerir. Hiçbir yere gönderilmez.', apply: 'Uygula', applyAll: 'Tümünü uygula', applied: 'Eklendi', skills: 'Beceriler', none: 'CV’de öneri bulunamadı.', failed: 'Öneriler okunamadı.', fields: { phone: 'Telefon', linkedinUrl: 'LinkedIn', githubUrl: 'GitHub', portfolioUrl: 'Portfolyo / web sitesi' } },
   templatesLib: { preview: 'Önizle', close: 'Kapat', pdf: 'PDF kaydet', txt: '.txt', md: '.md' },
   documents: {
     title: 'Dokümanlar',
@@ -2481,6 +2483,7 @@ const de: Dict = {
     send: 'Senden',
     sent: 'An {n} Benutzer gesendet',
   },
+  cvSuggest: { button: 'Aus Lebenslauf vorschlagen', hint: 'Liest deinen hochgeladenen Lebenslauf lokal und schlägt Kontaktlinks und Fähigkeiten vor. Es wird nichts gesendet.', apply: 'Übernehmen', applyAll: 'Alle übernehmen', applied: 'Hinzugefügt', skills: 'Fähigkeiten', none: 'Keine Vorschläge im Lebenslauf gefunden.', failed: 'Vorschläge konnten nicht gelesen werden.', fields: { phone: 'Telefon', linkedinUrl: 'LinkedIn', githubUrl: 'GitHub', portfolioUrl: 'Portfolio / Website' } },
   templatesLib: { preview: 'Vorschau', close: 'Schließen', pdf: 'Als PDF speichern', txt: '.txt', md: '.md' },
   documents: {
     title: 'Dokumente',

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { CvManager } from '@/components/CvManager';
+import { CvSuggestPanel } from '@/components/CvSuggestPanel';
 import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
@@ -74,10 +75,24 @@ export default function ProfilePage() {
     handleSubmit,
     reset,
     watch,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
   });
+
+  // Merge CV-suggested skills into the comma-separated skills field (dedup,
+  // case-insensitive), keeping the user's existing entries.
+  const applySuggestedSkills = (incoming: string[]) => {
+    const existing = (getValues('skills') || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const seen = new Set(existing.map((s) => s.toLowerCase()));
+    const merged = [...existing];
+    for (const s of incoming) {
+      if (!seen.has(s.toLowerCase())) { merged.push(s); seen.add(s.toLowerCase()); }
+    }
+    setValue('skills', merged.join(', '), { shouldDirty: true });
+  };
 
   useEffect(() => {
     fetch('/api/profile')
@@ -336,6 +351,13 @@ export default function ProfilePage() {
                     initialCvUrl={initialCv}
                     onChange={(url) => setCvUploaded(!!url && url.startsWith('/'))}
                   />
+                  {cvUploaded && (
+                    <CvSuggestPanel
+                      targetUserId={userId}
+                      onApplyField={(field, value) => setValue(field, value, { shouldDirty: true })}
+                      onApplySkills={applySuggestedSkills}
+                    />
+                  )}
                 </div>
               )}
 
