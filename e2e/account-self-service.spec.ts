@@ -61,7 +61,11 @@ test('changing email requires the correct current password', async ({ page }) =>
     const emailForm = page.locator('form', { has: page.getByRole('button', { name: 'Update email' }) });
     await emailForm.getByLabel(/Email address/).fill(newEmail);
     await emailForm.getByLabel(/Current password/).fill('WrongPass999');
+    // Wait for the actual round-trip rather than racing the UI update against
+    // the assertion timeout — under CI load the request can outlast a tight window.
+    const done = page.waitForResponse((r) => r.url().includes('/api/account') && r.request().method() === 'PUT');
     await page.getByRole('button', { name: 'Update email' }).click();
+    await done;
 
     await expect(page.getByText(/Current password is incorrect/i)).toBeVisible({ timeout: 10_000 });
     const after = await prisma.user.findUnique({ where: { id: user.id } });
