@@ -46,6 +46,8 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tag }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           # No build-time secrets — all real values are injected at `docker run`
 
       # ── SSH key setup (shared by both deploy steps) ──────────────────────────

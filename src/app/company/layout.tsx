@@ -6,6 +6,8 @@ import { GraduationCap, LayoutDashboard, LogOut } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { VersionFooter } from '@/components/VersionFooter';
+import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { SidebarAvatar } from '@/components/SidebarAvatar';
@@ -61,6 +63,7 @@ export default async function CompanyLayout({ children }: { children: React.Reac
             <div className="mt-3 px-3 flex flex-col gap-2 items-start">
               <LanguageSwitcher current={locale} />
               <ThemeToggle />
+            <VersionFooter version={APP_VERSION} />
             </div>
           </div>
         </aside>

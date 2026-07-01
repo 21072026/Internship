@@ -28,8 +28,12 @@ RUN npm run build
 # ---- runner ----
 FROM node:20-slim AS runner
 WORKDIR /app
+# Commit SHA baked in at build time (CI passes --build-arg GIT_SHA), surfaced
+# in the UI footer so a running deployment can be traced back to its commit.
+ARG GIT_SHA=dev
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    GIT_SHA=$GIT_SHA
 
 # OpenSSL is required by the Prisma schema engine (used at runtime for `prisma db push`)
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*

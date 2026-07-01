@@ -10,6 +10,8 @@ import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { VersionFooter } from '@/components/VersionFooter';
+import { APP_VERSION } from '@/lib/version';
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -192,6 +194,7 @@ export default async function HomePage() {
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-gray-700">{t.privacy.title}</Link>
             <Link href="/terms" className="hover:text-gray-700">{t.terms.title}</Link>
+            <VersionFooter version={APP_VERSION} />
           </div>
         </div>
       </footer>

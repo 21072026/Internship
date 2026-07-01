@@ -768,6 +768,7 @@ const en = {
     portfolio: 'Portfolio',
     poweredBy: 'InternshipCRM',
   },
+  releaseNotes: { title: 'What’s new', back: 'Back to home' },
   privacy: {
     title: 'Privacy & data',
     intro: 'We store the information you provide to manage mentorships and internships.',
@@ -1689,6 +1690,7 @@ const tr: Dict = {
     portfolio: 'Portfolyo',
     poweredBy: 'InternshipCRM',
   },
+  releaseNotes: { title: 'Yenilikler', back: 'Ana sayfaya dön' },
   privacy: {
     title: 'Gizlilik & veri',
     intro: 'Mentorluk ve staj sürecini yönetmek için sağladığın bilgileri saklarız.',
@@ -2608,6 +2610,7 @@ const de: Dict = {
     portfolio: 'Portfolio',
     poweredBy: 'InternshipCRM',
   },
+  releaseNotes: { title: 'Neuigkeiten', back: 'Zurück zur Startseite' },
   privacy: {
     title: 'Datenschutz & Daten',
     intro: 'Wir speichern die von dir bereitgestellten Informationen, um Mentorings und Praktika zu verwalten.',
