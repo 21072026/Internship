@@ -34,7 +34,7 @@ export function ImpersonationBanner() {
   };
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-purple-300 bg-purple-100 px-4 py-3 text-sm text-purple-900">
+    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-purple-300 dark:border-purple-700 bg-purple-100 dark:bg-purple-900/40 px-4 py-3 text-sm text-purple-900 dark:text-purple-100">
       <UserCog className="h-4 w-4 shrink-0" />
       <span className="flex-1 min-w-0">
         {t.impersonation.viewingAs.replace('{name}', session.user.name ?? '')}

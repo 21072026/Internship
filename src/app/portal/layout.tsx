@@ -2,8 +2,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { GraduationCap, LayoutDashboard, User, BookOpen, MessageSquare, LogOut } from 'lucide-react';
+import { GraduationCap, LogOut } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
+import { PortalNav } from '@/components/PortalNav';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
@@ -46,34 +47,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <Link
-            href="/portal"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <LayoutDashboard className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.dashboard}
-          </Link>
-          <Link
-            href="/portal/profile"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <User className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.myProfile}
-          </Link>
-          <Link
-            href="/portal/messages"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <MessageSquare className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.messages}
-          </Link>
-          <Link
-            href="/portal/interactions"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <BookOpen className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.interactionLogs}
-          </Link>
+          <PortalNav />
           <InstallAppButton />
         </nav>
 
