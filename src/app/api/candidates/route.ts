@@ -71,6 +71,7 @@ export async function GET(request: Request) {
         whatsapp: true,
         city: true,
         createdAt: true,
+        isActive: true,
         source: { select: { id: true, name: true } },
         menteeRelations: {
           where: { status: 'ACTIVE' },
