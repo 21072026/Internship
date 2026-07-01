@@ -15,6 +15,7 @@ import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
+import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { useT, useLocale } from '@/i18n/client';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
@@ -445,6 +446,7 @@ export default function AdminMenteeDetailPage() {
         {rel && <GoalsPanel relationId={rel.id} />}
         <DocumentsManager targetUserId={id} />
         <UserActivityPanel userId={id} />
+        {user && <CandidateEraseDangerZone userId={id} fullName={user.fullName} onAnonymized={load} />}
       </div>
     </div>
   );

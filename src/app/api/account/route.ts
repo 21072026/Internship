@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { passwordSchema } from '@/lib/password';
 import { logActivity } from '@/lib/activity';
+import { hardDeleteUser } from '@/lib/accountErasure';
 
 const schema = z.object({
   email: z.string().email().optional(),
@@ -100,11 +101,7 @@ export async function DELETE(request: Request) {
       }
     }
 
-    // Remove rows that reference the user without a cascade, then the user
-    // (cvFile + tokens cascade via their onDelete: Cascade relations).
-    await prisma.mentorshipRelation.deleteMany({ where: { OR: [{ mentorId: id }, { menteeId: id }] } });
-    await prisma.statusChange.deleteMany({ where: { changedById: id } });
-    await prisma.user.delete({ where: { id } });
+    await hardDeleteUser(id);
 
     await logActivity({ action: 'account.delete', level: 'warning', actorId: id, actorEmail: session.user.email ?? null });
     return NextResponse.json({ ok: true });

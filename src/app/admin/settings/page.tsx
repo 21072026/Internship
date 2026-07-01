@@ -9,6 +9,7 @@ import { useT } from '@/i18n/client';
 export default function AdminSettingsPage() {
   const t = useT();
   const [reminderDays, setReminderDays] = useState('14');
+  const [retentionMonths, setRetentionMonths] = useState('12');
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -24,6 +25,7 @@ export default function AdminSettingsPage() {
     if (res.ok) {
       const { settings } = await res.json();
       setReminderDays(settings.reminderDays ?? '14');
+      setRetentionMonths(settings.retentionMonths ?? '12');
       setSupportEmail(settings.supportEmail ?? '');
       setWeeklyDigest(settings.weeklyDigest !== 'false');
     }
@@ -36,7 +38,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false' }),
+        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false' }),
       });
       if (res.ok) setFlash(t.settings.saved);
     } finally {
@@ -83,6 +85,7 @@ export default function AdminSettingsPage() {
           <CardHeader><CardTitle>{t.settings.system}</CardTitle></CardHeader>
           <form onSubmit={saveSettings} className="space-y-4">
             <Input label={t.settings.reminderDays} type="number" min={1} max={365} value={reminderDays} onChange={(e) => setReminderDays(e.target.value)} hint={t.settings.reminderDaysHint} />
+            <Input label={t.settings.retentionMonths} type="number" min={1} max={120} value={retentionMonths} onChange={(e) => setRetentionMonths(e.target.value)} hint={t.settings.retentionMonthsHint} />
             <Input label={t.settings.supportEmail} type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={weeklyDigest} onChange={(e) => setWeeklyDigest(e.target.checked)} />
