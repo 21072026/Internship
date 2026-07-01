@@ -3,11 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, FileText, ExternalLink } from 'lucide-react';
+import { ArrowLeft, FileText, ExternalLink, Star, Bookmark, ThumbsDown, Check } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { pipelineLabel } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
+
+type InterestStatus = 'INTERESTED' | 'SHORTLISTED' | 'PASS';
+interface Interest { status: InterestStatus; note?: string | null }
 
 interface Candidate {
   id: string;
@@ -39,6 +43,11 @@ export default function CompanyCandidateDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [interest, setInterest] = useState<Interest | null>(null);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState<InterestStatus | null>(null);
+  const [saved, setSaved] = useState(false);
+
   useEffect(() => {
     fetch(`/api/company/candidates/${id}`)
       .then(async (r) => {
@@ -48,7 +57,34 @@ export default function CompanyCandidateDetailPage() {
       })
       .catch((e) => setError(e instanceof Error ? e.message : t.common.error))
       .finally(() => setLoading(false));
+
+    fetch(`/api/company/interests?menteeId=${id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.interest) { setInterest(d.interest); setNote(d.interest.note ?? ''); }
+      })
+      .catch(() => {});
   }, [id, t.common.error]);
+
+  const setStatus = async (status: InterestStatus) => {
+    setSaving(status);
+    setSaved(false);
+    try {
+      const res = await fetch('/api/company/interests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ menteeId: id, status, note }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        setInterest(body.interest);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      }
+    } finally {
+      setSaving(null);
+    }
+  };
 
   if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
   if (error || !candidate) return <p className="text-center py-12 text-gray-400">{error || t.common.notFound}</p>;
@@ -139,6 +175,54 @@ export default function CompanyCandidateDetailPage() {
             </a>
           ))}
         </div>
+      </Card>
+
+      <Card className="mt-4">
+        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">{t.company.interestTitle}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{t.company.interestHint}</p>
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          <Button
+            type="button"
+            variant={interest?.status === 'INTERESTED' ? 'primary' : 'outline'}
+            size="sm"
+            loading={saving === 'INTERESTED'}
+            onClick={() => setStatus('INTERESTED')}
+          >
+            <Star className="h-4 w-4 mr-1" /> {t.company.interested}
+          </Button>
+          <Button
+            type="button"
+            variant={interest?.status === 'SHORTLISTED' ? 'primary' : 'outline'}
+            size="sm"
+            loading={saving === 'SHORTLISTED'}
+            onClick={() => setStatus('SHORTLISTED')}
+          >
+            <Bookmark className="h-4 w-4 mr-1" /> {t.company.shortlisted}
+          </Button>
+          <Button
+            type="button"
+            variant={interest?.status === 'PASS' ? 'danger' : 'outline'}
+            size="sm"
+            loading={saving === 'PASS'}
+            onClick={() => setStatus('PASS')}
+          >
+            <ThumbsDown className="h-4 w-4 mr-1" /> {t.company.pass}
+          </Button>
+        </div>
+
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={t.company.notePlaceholder}
+          rows={3}
+          className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-2"
+        />
+        {saved && (
+          <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+            <Check className="h-3.5 w-3.5" /> {t.company.interestSaved}
+          </p>
+        )}
       </Card>
     </div>
   );

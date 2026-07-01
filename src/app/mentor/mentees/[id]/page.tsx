@@ -47,6 +47,7 @@ interface RelationDetail {
     cvUrl?: string;
   };
   company: { name: string; industry?: string } | null;
+  companyInterest?: { status: 'INTERESTED' | 'SHORTLISTED' | 'PASS'; note?: string | null } | null;
   interactions: InteractionLog[];
   statusChanges: {
     id: string;
@@ -259,11 +260,21 @@ export default function MenteeDetailPage() {
               </a>
             )}
             {relation.company && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-xs text-blue-500 font-medium mb-1">{t.candidateDetail.company}</p>
-                <p className="text-sm font-medium text-blue-900">{relation.company.name}</p>
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg">
+                <p className="text-xs text-blue-500 dark:text-blue-400 font-medium mb-1">{t.candidateDetail.company}</p>
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">{relation.company.name}</p>
                 {relation.company.industry && (
-                  <p className="text-xs text-blue-700">{relation.company.industry}</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">{relation.company.industry}</p>
+                )}
+                {relation.companyInterest && (
+                  <div className="mt-2 pt-2 border-t border-blue-100 dark:border-blue-900">
+                    <Badge variant={relation.companyInterest.status === 'PASS' ? 'danger' : relation.companyInterest.status === 'SHORTLISTED' ? 'success' : 'info'}>
+                      {t.candidateDetail.companyInterest[relation.companyInterest.status.toLowerCase() as 'interested' | 'shortlisted' | 'pass']}
+                    </Badge>
+                    {relation.companyInterest.note && (
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1.5 italic">“{relation.companyInterest.note}”</p>
+                    )}
+                  </div>
                 )}
               </div>
             )}

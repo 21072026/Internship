@@ -123,6 +123,7 @@ model User {
   documents               Document[]               @relation("DocumentOwner")
   personalNotes           PersonalNote[]
   consents                UserConsent[]
+  companyInterests        CompanyInterest[]        @relation("CompanyInterestMentee")
 
   @@index([role])
 }
@@ -271,6 +272,32 @@ model Company {
   mentorships MentorshipRelation[]
   users       User[]               @relation("CompanyUsers")
   projects    Project[]            @relation("CompanyProjects")
+  interests   CompanyInterest[]
+}
+
+// A company's read/interest signal on a candidate they're linked to via a
+// MentorshipRelation (EPIC: company shortlist). One record per company+mentee
+// pair; re-setting the status updates it in place.
+enum InterestStatus {
+  INTERESTED
+  SHORTLISTED
+  PASS
+}
+
+model CompanyInterest {
+  id        String         @id @default(cuid())
+  companyId String
+  menteeId  String
+  status    InterestStatus
+  note      String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee  User    @relation("CompanyInterestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, menteeId])
+  @@index([menteeId])
 }
 
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
