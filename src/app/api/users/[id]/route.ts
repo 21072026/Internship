@@ -69,7 +69,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const body = await request.json();
-    const data: { isActive?: boolean; sourceId?: string | null } = {};
+    const data: {
+      isActive?: boolean;
+      sourceId?: string | null;
+      skills?: string[];
+      mentorCapacity?: number | null;
+    } = {};
 
     if (typeof body.isActive === 'boolean') {
       // Guard against an admin locking themselves out.
@@ -84,6 +89,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       data.sourceId = body.sourceId || null;
     }
 
+    // Mentor expertise (skills) — admin can populate so skill-match works.
+    if (Array.isArray(body.skills) && body.skills.every((s: unknown) => typeof s === 'string')) {
+      data.skills = [...new Set((body.skills as string[]).map((s) => s.trim()).filter(Boolean))];
+    }
+
+    // Mentor active-mentee capacity (null clears it).
+    if ('mentorCapacity' in body) {
+      const c = body.mentorCapacity;
+      if (c === null || c === '') {
+        data.mentorCapacity = null;
+      } else if (typeof c === 'number' && Number.isInteger(c) && c >= 0 && c <= 999) {
+        data.mentorCapacity = c;
+      } else {
+        return NextResponse.json({ error: 'Invalid mentorCapacity' }, { status: 400 });
+      }
+    }
+
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
     }
@@ -91,7 +113,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const user = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, isActive: true, sourceId: true },
+      select: { id: true, isActive: true, sourceId: true, skills: true, mentorCapacity: true },
     });
 
     return NextResponse.json({ user });

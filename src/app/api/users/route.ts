@@ -21,6 +21,7 @@ export async function GET() {
         department: true,
         graduationYear: true,
         skills: true,
+        mentorCapacity: true,
         phone: true,
         isActive: true,
         emailVerified: true,
