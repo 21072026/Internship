@@ -122,8 +122,30 @@ model User {
   source                  Source?                  @relation(fields: [sourceId], references: [id])
   documents               Document[]               @relation("DocumentOwner")
   personalNotes           PersonalNote[]
+  consents                UserConsent[]
 
   @@index([role])
+}
+
+// Reusable, auditable per-user consent (GDPR). A consent is "active" when
+// grantedAt is set and revokedAt is null. Gates optional processing such as
+// sending CV text to an AI provider (see ConsentType).
+enum ConsentType {
+  AI_CV_PARSING
+}
+
+model UserConsent {
+  id        String      @id @default(cuid())
+  userId    String
+  type      ConsentType
+  grantedAt DateTime?
+  revokedAt DateTime?
+  updatedAt DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
 }
 
 // A referral source — the education/agency a mentee came from. Admin-managed
