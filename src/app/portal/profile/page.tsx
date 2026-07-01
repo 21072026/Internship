@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { CvManager } from '@/components/CvManager';
 import { CvSuggestPanel } from '@/components/CvSuggestPanel';
+import { SkillRating } from '@/components/SkillRating';
 import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
@@ -315,17 +316,14 @@ export default function ProfilePage() {
                     <p className="text-xs font-medium text-gray-600 mb-2">{t.profileForm.skillLevels}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {list.map((s) => (
-                        <label key={s} className="flex items-center justify-between gap-2 text-sm bg-gray-50 rounded-lg px-3 py-1.5">
+                        <div key={s} className="flex items-center justify-between gap-2 text-sm bg-gray-50 rounded-lg px-3 py-1.5">
                           <span className="truncate text-gray-700">{s}</span>
-                          <select
-                            value={skillLevels[s] ?? ''}
-                            onChange={(e) => setSkillLevels((prev) => ({ ...prev, [s]: Number(e.target.value) }))}
-                            className="rounded border border-gray-300 px-2 py-1 text-sm"
-                          >
-                            <option value="">–</option>
-                            {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                          </select>
-                        </label>
+                          <SkillRating
+                            label={s}
+                            value={skillLevels[s] ?? 0}
+                            onChange={(v) => setSkillLevels((prev) => ({ ...prev, [s]: v }))}
+                          />
+                        </div>
                       ))}
                     </div>
                   </div>
