@@ -218,6 +218,14 @@ const en = {
     companyHintLink: 'Companies →',
   },
   mentor: {
+    attention: {
+      title: 'Needs attention',
+      inactive: 'No recent contact',
+      overdue: 'Stage overdue',
+      unansweredQuestion: 'Unanswered question',
+      pendingMeeting: 'Pending meeting request',
+      daysAgo: '{d} days since last interaction',
+    },
     welcomeBack: 'Welcome back',
     dashSubtitle: "Here's an overview of your mentees and interactions",
     activeMentees: 'Active Mentees',
@@ -1150,6 +1158,14 @@ const tr: Dict = {
     companyHintLink: 'Şirketler →',
   },
   mentor: {
+    attention: {
+      title: 'Dikkat gerektiriyor',
+      inactive: 'Yakın zamanda temas yok',
+      overdue: 'Aşama süresi geçti',
+      unansweredQuestion: 'Yanıtsız soru',
+      pendingMeeting: 'Bekleyen toplantı talebi',
+      daysAgo: 'Son etkileşimden bu yana {d} gün',
+    },
     welcomeBack: 'Tekrar hoş geldin',
     dashSubtitle: 'Mentee’lerine ve etkileşimlerine genel bakış',
     activeMentees: 'Aktif Mentee',
@@ -2080,6 +2096,14 @@ const de: Dict = {
     companyHintLink: 'Unternehmen →',
   },
   mentor: {
+    attention: {
+      title: 'Braucht Aufmerksamkeit',
+      inactive: 'Kein aktueller Kontakt',
+      overdue: 'Phase überfällig',
+      unansweredQuestion: 'Unbeantwortete Frage',
+      pendingMeeting: 'Ausstehende Terminanfrage',
+      daysAgo: '{d} Tage seit der letzten Interaktion',
+    },
     welcomeBack: 'Willkommen zurück',
     dashSubtitle: 'Hier ist ein Überblick über deine Mentees und Interaktionen',
     activeMentees: 'Aktive Mentees',
