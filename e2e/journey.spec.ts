@@ -25,6 +25,9 @@ test('mentee portal shows a journey tracker reflecting the pipeline stage', asyn
     // The journey card renders the current stage label.
     await expect(page.getByText(/My journey/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/Internship in progress/i).first()).toBeVisible();
+    // Actionable "what to do now" guidance for the current stage.
+    await expect(page.getByText(/What to do now/i)).toBeVisible();
+    await expect(page.getByText(/Log your progress regularly/i)).toBeVisible();
   } finally {
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
     await cleanupByEmail(menteeEmail);
