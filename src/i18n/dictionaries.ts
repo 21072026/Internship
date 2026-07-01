@@ -49,6 +49,8 @@ const en = {
     none: 'No candidates linked yet',
     searchPlaceholder: 'Search by name or university...',
     allStages: 'All stages',
+    back: 'Back to candidates',
+    viewProfile: 'View profile',
   },
   offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.' },
   common: {
@@ -971,6 +973,8 @@ const tr: Dict = {
     none: 'Henüz bağlı aday yok',
     searchPlaceholder: 'Ad veya üniversiteye göre ara...',
     allStages: 'Tüm aşamalar',
+    back: 'Adaylara dön',
+    viewProfile: 'Profili gör',
   },
   offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.' },
   common: {
@@ -1891,6 +1895,8 @@ const de: Dict = {
     none: 'Noch keine Kandidaten verknüpft',
     searchPlaceholder: 'Nach Name oder Universität suchen...',
     allStages: 'Alle Phasen',
+    back: 'Zurück zu den Kandidaten',
+    viewProfile: 'Profil ansehen',
   },
   offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.' },
   common: {
