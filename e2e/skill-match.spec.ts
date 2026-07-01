@@ -44,7 +44,8 @@ test('admin sets mentor expertise and skill-match returns a real overlap', async
 
     // The mentors list shows the expertise chips.
     await page.goto('/admin/mentors');
-    await page.locator('input[type="search"]').fill('SM Mentor');
+    // Target the mentors search box (the admin layout also has a "Filter menu" one).
+    await page.getByPlaceholder(/name, email or skill/i).fill('SM Mentor');
     await expect(page.getByText('Kotlin', { exact: true })).toBeVisible();
   } finally {
     await cleanupByEmail(mentorEmail);
