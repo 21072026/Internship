@@ -40,11 +40,14 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [impersonateError, setImpersonateError] = useState<{ userId: string; message: string } | null>(null);
   const PAGE_SIZE = 20;
 
   const loginAs = async (u: AdminUser) => {
+    if (busyId) return; // guard against a double-click firing two grants at once
     const reason = window.prompt(t.usersAdmin.impersonateReason) ?? undefined;
     setBusyId(u.id);
+    setImpersonateError(null);
     try {
       const res = await fetch('/api/admin/impersonate', {
         method: 'POST',
@@ -52,15 +55,16 @@ export default function AdminUsersPage() {
         body: JSON.stringify({ targetUserId: u.id, reason }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || t.usersAdmin.impersonateFailed);
       const signed = await signIn('impersonate', { grant: data.grant, redirect: false });
       if (signed?.ok) {
         router.push(roleHome(u.role));
         router.refresh();
         return;
       }
-    } catch {
-      // fall through to reset busy state
+      throw new Error(t.usersAdmin.impersonateFailed);
+    } catch (err) {
+      setImpersonateError({ userId: u.id, message: err instanceof Error ? err.message : t.usersAdmin.impersonateFailed });
     }
     setBusyId(null);
   };
@@ -151,6 +155,9 @@ export default function AdminUsersPage() {
                     <p className="text-sm font-medium text-gray-900 truncate">{u.fullName}</p>
                   )}
                   <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                  {impersonateError?.userId === u.id && (
+                    <p className="text-xs text-red-600 mt-1">{impersonateError.message}</p>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={ROLE_VARIANT[u.role]}>{t.usersAdmin[u.role.toLowerCase() as RoleLabel]}</Badge>
@@ -158,7 +165,7 @@ export default function AdminUsersPage() {
                     {u.isActive ? t.usersAdmin.active : t.usersAdmin.inactive}
                   </Badge>
                   {u.id !== session?.user?.id && (
-                    <Button variant="ghost" size="sm" disabled={busyId === u.id} onClick={() => loginAs(u)}>
+                    <Button variant="ghost" size="sm" loading={busyId === u.id} disabled={!!busyId} onClick={() => loginAs(u)}>
                       {t.usersAdmin.loginAs}
                     </Button>
                   )}

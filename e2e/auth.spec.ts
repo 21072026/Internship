@@ -25,7 +25,9 @@ test('authenticated admin sees a Sign Out control', async ({ page }) => {
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
   await page.goto('/admin');
-  await expect(page.getByRole('link', { name: /sign out/i })).toBeVisible();
+  // Sign Out now lives inside the account menu (open it first).
+  await page.locator('button[aria-haspopup="menu"]').click();
+  await expect(page.getByRole('menuitem', { name: /sign out/i })).toBeVisible();
 });
 
 test('admin sidebar links to the invite page', async ({ page }) => {

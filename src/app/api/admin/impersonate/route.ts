@@ -30,6 +30,11 @@ export async function POST(request: Request) {
   if (!target) {
     return NextResponse.json({ error: 'Target user not found' }, { status: 404 });
   }
+  // Impersonating another admin would grant elevated destructive access while
+  // masked as a different session — never allowed, regardless of reason.
+  if (target.role === 'ADMIN') {
+    return NextResponse.json({ error: 'Cannot impersonate an admin account' }, { status: 400 });
+  }
 
   const reason = parsed.data.reason?.trim() || null;
   const grant = await createImpersonationGrant(session.user.id, target.id, 'START');

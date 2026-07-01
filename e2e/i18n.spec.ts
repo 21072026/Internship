@@ -14,7 +14,9 @@ test('language switcher toggles the admin nav between EN and TR', async ({ page 
   // Default locale is English (exact avoids matching the "Send Invitations" card)
   await expect(page.getByRole('link', { name: 'Send Invitation', exact: true })).toBeVisible();
 
-  // Switch to Turkish — the switcher sets a cookie and reloads
+  // Switch to Turkish — the switcher lives in the account menu; open it, then
+  // clicking TR sets a cookie and reloads.
+  await page.locator('button[aria-haspopup="menu"]').click();
   await page.getByRole('button', { name: 'tr' }).click();
   await page.waitForLoadState('load');
   await expect(page.getByRole('link', { name: 'Davet Gönder', exact: true })).toBeVisible();

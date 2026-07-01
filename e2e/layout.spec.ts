@@ -10,8 +10,9 @@ test('sidebar footer (Sign Out) stays in the viewport on long pages', async ({ p
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
-  // Mentorships is a long list; the sticky sidebar should keep Sign Out on screen.
+  // Mentorships is a long list; the sticky sidebar should keep the account menu
+  // (which holds Sign Out) on screen.
   await page.goto('/admin/mentorship');
   await page.waitForTimeout(1000);
-  await expect(page.getByRole('link', { name: 'Sign Out', exact: true })).toBeInViewport();
+  await expect(page.locator('button[aria-haspopup="menu"]')).toBeInViewport();
 });

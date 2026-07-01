@@ -13,22 +13,27 @@ export function ImpersonationBanner() {
   const router = useRouter();
   const { data: session } = useSession();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!session?.user?.impersonatorName) return null;
 
   const stop = async () => {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch('/api/impersonate/stop', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        await signIn('impersonate', { grant: data.grant, redirect: false });
-        router.push('/admin/users');
-        router.refresh();
-        return;
+        const signed = await signIn('impersonate', { grant: data.grant, redirect: false });
+        if (signed?.ok) {
+          router.push('/admin/users');
+          router.refresh();
+          return;
+        }
       }
+      setError(t.impersonation.stopFailed);
     } catch {
-      /* ignore */
+      setError(t.impersonation.stopFailed);
     }
     setBusy(false);
   };
@@ -39,6 +44,7 @@ export function ImpersonationBanner() {
       <span className="flex-1 min-w-0">
         {t.impersonation.viewingAs.replace('{name}', session.user.name ?? '')}
       </span>
+      {error && <span className="text-red-700 dark:text-red-300">{error}</span>}
       <button onClick={stop} disabled={busy} className="font-semibold underline hover:no-underline disabled:opacity-50">
         {t.impersonation.return}
       </button>

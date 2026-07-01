@@ -20,6 +20,10 @@ export async function PUT(request: Request) {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Don't allow rotating the impersonated user's email/password while impersonating it.
+    if (session.user.impersonatorId) {
+      return NextResponse.json({ error: 'Cannot change account credentials while impersonating' }, { status: 400 });
+    }
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });

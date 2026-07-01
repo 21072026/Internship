@@ -24,7 +24,8 @@ test('German is available in the switcher and a saved preference is applied at s
     await expect(page.getByRole('link', { name: 'Kandidaten', exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('link', { name: 'Unternehmen', exact: true })).toBeVisible();
 
-    // A DE option is offered by the language switcher.
+    // A DE option is offered by the language switcher (inside the account menu).
+    await page.locator('button[aria-haspopup="menu"]').click();
     await expect(page.getByRole('button', { name: 'de', exact: true })).toBeVisible();
   } finally {
     await cleanupByEmail(email);

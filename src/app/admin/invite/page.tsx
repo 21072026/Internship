@@ -181,9 +181,9 @@ export default function InvitePage() {
             </Link>
           </p>
 
-          <div className="mt-6 p-4 bg-blue-50 rounded-xl">
-            <p className="text-sm font-medium text-blue-800 mb-2">{t.invite.howItWorks}</p>
-            <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl">
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">{t.invite.howItWorks}</p>
+            <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
               <li>{t.invite.step1}</li>
               <li>{t.invite.step2}</li>
               <li>{t.invite.step3}</li>
