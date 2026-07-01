@@ -47,66 +47,71 @@ enum PipelineStatus {
 }
 
 model User {
-  id                 String    @id @default(cuid())
-  email              String    @unique
-  password           String
-  role               Role      @default(MENTEE)
-  fullName           String
-  phone              String?
-  university         String?
-  department         String?
-  graduationYear     Int?
-  skills             Json      @default("[]")
+  id                      String    @id @default(cuid())
+  email                   String    @unique
+  password                String
+  role                    Role      @default(MENTEE)
+  fullName                String
+  phone                   String?
+  university              String?
+  department              String?
+  graduationYear          Int?
+  skills                  Json      @default("[]")
   // Mentee self-assessment: { "<skill>": 1..5 }
-  skillLevels        Json      @default("{}")
-  cvUrl              String?
-  avatarUrl          String?
-  whatsapp           String?
-  city               String?
-  birthDate          DateTime?
-  referralSource     String?
+  skillLevels             Json      @default("{}")
+  cvUrl                   String?
+  avatarUrl               String?
+  whatsapp                String?
+  city                    String?
+  birthDate               DateTime?
+  referralSource          String?
   // Extended profile (all optional; safe to add to existing rows).
-  displayName        String?
-  bio                String?   @db.Text
-  country            String?
-  timezone           String?
-  linkedinUrl        String?
-  githubUrl          String?
-  portfolioUrl       String?
+  displayName             String?
+  bio                     String?   @db.Text
+  country                 String?
+  timezone                String?
+  linkedinUrl             String?
+  githubUrl               String?
+  portfolioUrl            String?
   // Mentee: interests / target position. Mentor: max concurrent mentees.
-  interests          String?   @db.Text
-  targetPosition     String?
-  mentorCapacity     Int?
+  interests               String?   @db.Text
+  targetPosition          String?
+  mentorCapacity          Int?
   // Default true so existing rows stay writable after the column is added;
   // new self-registrations are created with false until they verify by email.
-  emailVerified      Boolean   @default(true)
+  emailVerified           Boolean   @default(true)
   // Admin can deactivate a user; inactive users cannot sign in.
-  isActive           Boolean   @default(true)
+  isActive                Boolean   @default(true)
   // Opt-in: expose a limited, PII-free public profile at /p/[id].
-  publicProfile      Boolean   @default(false)
+  publicProfile           Boolean   @default(false)
   // For COMPANY-role users: which company they observe (read-only).
-  companyId          String?
+  companyId               String?
   // Mentee's referral source (where they came from).
-  sourceId           String?
+  sourceId                String?
   // How many times this user's public profile has been viewed.
-  profileViews       Int       @default(0)
-  // When the user accepted the privacy/data terms (consent).
-  consentAt          DateTime?
+  profileViews            Int       @default(0)
+  // When the user accepted the privacy/data terms (consent). Also the anchor
+  // for retention re-consent: data is kept no longer than retentionMonths past
+  // this date without renewal.
+  consentAt               DateTime?
+  // Set when a retention/re-consent reminder was last emailed (avoids resending
+  // on every cron run). Cleared when the user renews consent.
+  retentionReminderSentAt DateTime?
   // Opt-out switch for transactional email (messages, announcements). In-app
   // notifications are always created regardless.
-  emailNotifications Boolean   @default(true)
+  emailNotifications      Boolean   @default(true)
   // Per-category email toggles, e.g. {"messages":false}. Nullable so existing
   // rows aren't touched (avoids MariaDB json_valid CHECK issues); unset = on.
-  notificationPrefs  Json?
+  notificationPrefs       Json?
   // Optional TOTP two-factor auth. The secret is only meaningful once enabled.
-  twoFactorEnabled   Boolean   @default(false)
-  twoFactorSecret    String?
+  twoFactorEnabled        Boolean   @default(false)
+  twoFactorSecret         String?
   // Preferred UI language ('en' | 'tr' | 'de'); applied at sign-in.
-  preferredLanguage  String?
+  preferredLanguage       String?
   // UI theme preference ('light' | 'dark' | 'system'); applied at sign-in.
-  theme              String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  theme                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   mentorRelations         MentorshipRelation[]     @relation("MentorRelations")
   menteeRelations         MentorshipRelation[]     @relation("MenteeRelations")
