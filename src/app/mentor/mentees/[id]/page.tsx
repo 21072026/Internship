@@ -15,6 +15,7 @@ import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
+import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
@@ -405,6 +406,10 @@ export default function MenteeDetailPage() {
 
         <div className="lg:col-span-2">
           <UserActivityPanel userId={relation.mentee.id} flagInactive />
+        </div>
+
+        <div className="lg:col-span-2">
+          <RelationNotesPanel relationId={id} />
         </div>
       </div>
     </div>

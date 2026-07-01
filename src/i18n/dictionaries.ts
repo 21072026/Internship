@@ -41,6 +41,7 @@ const en = {
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Language' },
   a11y: { skipToContent: 'Skip to content' },
+  relationNotes: { title: 'Private notes', hint: 'Only you (and admins) can see these — never the mentee.', placeholder: 'Impressions, prep notes, things to remember…', add: 'Add note', none: 'No notes yet' },
   company: {
     title: 'Company overview',
     subtitle: 'Candidates linked to your company (read-only)',
@@ -981,6 +982,7 @@ const tr: Dict = {
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Dil' },
   a11y: { skipToContent: 'İçeriğe geç' },
+  relationNotes: { title: 'Özel notlar', hint: 'Bunları yalnızca sen (ve adminler) görebilir — mentee asla göremez.', placeholder: 'İzlenimler, hazırlık notları, hatırlanacaklar…', add: 'Not ekle', none: 'Henüz not yok' },
   company: {
     title: 'Şirket genel görünümü',
     subtitle: 'Şirketinize bağlı adaylar (salt-okunur)',
@@ -1919,6 +1921,7 @@ const de: Dict = {
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Sprache' },
   a11y: { skipToContent: 'Zum Inhalt springen' },
+  relationNotes: { title: 'Private Notizen', hint: 'Nur du (und Admins) siehst diese — nie der Mentee.', placeholder: 'Eindrücke, Vorbereitungsnotizen, Dinge zum Merken…', add: 'Notiz hinzufügen', none: 'Noch keine Notizen' },
   company: {
     title: 'Unternehmensübersicht',
     subtitle: 'Mit deinem Unternehmen verknüpfte Kandidaten (nur Lesezugriff)',

@@ -124,6 +124,7 @@ model User {
   personalNotes           PersonalNote[]
   consents                UserConsent[]
   companyInterests        CompanyInterest[]        @relation("CompanyInterestMentee")
+  authoredRelationNotes   RelationNote[]           @relation("RelationNoteAuthor")
 
   @@index([role])
 }
@@ -451,6 +452,7 @@ model MentorshipRelation {
   goals           Goal[]
   meetingRequests MeetingRequest[]
   questions       MentorQuestion[]
+  relationNotes   RelationNote[]
 
   @@index([status])
   @@index([pipelineStatus])
@@ -530,6 +532,23 @@ model PersonalNote {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// A mentor-private note on a mentorship relation (impressions, prep notes,
+// red flags) — visible only to the authoring mentor and admins, never the
+// mentee (EPIC: mentor private notes).
+model RelationNote {
+  id         String   @id @default(cuid())
+  relationId String
+  authorId   String
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  author   User               @relation("RelationNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
 }
 
 // A goal set within a mentorship — supports goal setting + tracking (checklist 7).
