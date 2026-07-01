@@ -5,6 +5,10 @@ export const SETTING_DEFAULTS = {
   reminderDays: '14',
   supportEmail: '',
   weeklyDigest: 'true',
+  // Months of inactivity (unassigned + deactivated) before a candidate is
+  // flagged "stale" for GDPR retention review. Informational only — no
+  // automatic deletion; an admin reviews and erases manually.
+  retentionMonths: '12',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
