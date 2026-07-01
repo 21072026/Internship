@@ -43,7 +43,7 @@ test('mentor dashboard surfaces a needs-attention queue for stale/overdue/unansw
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
     const queue = page.getByTestId('attention-queue');
-    await expect(queue.getByText(/Needs attention/i)).toBeVisible({ timeout: 10_000 });
+    await expect(queue.getByRole('heading', { name: /Needs attention/i })).toBeVisible({ timeout: 10_000 });
     const row = queue.getByRole('link', { name: /Needs Attention Mentee/ });
     await expect(row).toBeVisible();
     await expect(row.getByText(/No recent contact/i)).toBeVisible();
