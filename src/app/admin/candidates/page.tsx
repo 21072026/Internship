@@ -46,6 +46,9 @@ export default function CandidatesPage() {
   const t = useT();
   const locale = useLocale();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 24;
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [skillFilter, setSkillFilter] = useState('');
@@ -70,9 +73,20 @@ export default function CandidatesPage() {
     ];
   };
 
-  const exportCsv = () => {
+  // Exports cover ALL matching candidates (every page), not just the page in
+  // view — fetch the full filtered set with all=1 before building the file.
+  const fetchAllForExport = async (): Promise<Candidate[]> => {
+    const params = buildFilterParams();
+    params.set('all', '1');
+    const res = await fetch(`/api/candidates?${params}`);
+    const data = await res.json();
+    return (data.candidates || []) as Candidate[];
+  };
+
+  const exportCsv = async () => {
+    const rows0 = await fetchAllForExport();
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = candidates.map((c) => toRow(c).map(esc).join(','));
+    const rows = rows0.map((c) => toRow(c).map(esc).join(','));
     const csv = [COLS.join(','), ...rows].join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
@@ -83,8 +97,9 @@ export default function CandidatesPage() {
   };
 
   const exportExcel = async () => {
+    const rows0 = await fetchAllForExport();
     const { exportXlsx } = await import('@/lib/excel');
-    await exportXlsx(`candidates-${new Date().toISOString().slice(0, 10)}`, COLS, candidates.map(toRow), 'Candidates');
+    await exportXlsx(`candidates-${new Date().toISOString().slice(0, 10)}`, COLS, rows0.map(toRow), 'Candidates');
   };
 
   // Read an optional ?status= filter from the URL (e.g. from dashboard pipeline bars)
@@ -92,27 +107,35 @@ export default function CandidatesPage() {
     setStatusFilter(new URLSearchParams(window.location.search).get('status') || '');
   }, []);
 
+  // Build the shared filter query string (without pagination params).
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (skillFilter) params.set('skills', skillFilter);
+    if (yearFilter) params.set('graduationYear', yearFilter);
+    if (search) params.set('search', search);
+    if (statusFilter) params.set('status', statusFilter);
+    if (cityFilter) params.set('city', cityFilter);
+    if (projectFilter) params.set('project', projectFilter);
+    if (sourceFilter) params.set('source', sourceFilter);
+    return params;
+  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter]);
+
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (skillFilter) params.set('skills', skillFilter);
-      if (yearFilter) params.set('graduationYear', yearFilter);
-      if (search) params.set('search', search);
-      if (statusFilter) params.set('status', statusFilter);
-      if (cityFilter) params.set('city', cityFilter);
-      if (projectFilter) params.set('project', projectFilter);
-      if (sourceFilter) params.set('source', sourceFilter);
-
+      const params = buildFilterParams();
+      params.set('page', String(page));
+      params.set('pageSize', String(PAGE_SIZE));
       const res = await fetch(`/api/candidates?${params}`);
       const data = await res.json();
       setCandidates(data.candidates || []);
+      setTotal(typeof data.total === 'number' ? data.total : (data.candidates?.length ?? 0));
     } catch {
       setError('Failed to load candidates');
     } finally {
       setLoading(false);
     }
-  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter]);
+  }, [buildFilterParams, page]);
 
   useEffect(() => {
     fetch('/api/admin/sources')
@@ -125,6 +148,13 @@ export default function CandidatesPage() {
     const timeout = setTimeout(fetchCandidates, 300);
     return () => clearTimeout(timeout);
   }, [fetchCandidates]);
+
+  // Any filter change returns to the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -289,7 +319,7 @@ export default function CandidatesPage() {
             </label>
           )}
           <p className="text-sm text-gray-500">
-            {loading ? t.common.loading : `${candidates.length} ${t.candidates.found}`}
+            {loading ? t.common.loading : `${total} ${t.candidates.found}`}
           </p>
         </div>
         {selected.size > 0 && (
@@ -402,6 +432,18 @@ export default function CandidatesPage() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-8">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            {t.common.prev}
+          </Button>
+          <span className="text-sm text-gray-500">{page} / {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+            {t.common.next}
+          </Button>
         </div>
       )}
     </div>

@@ -21,6 +21,11 @@ export async function GET(request: Request) {
     const project = searchParams.get('project');
     const cohortId = searchParams.get('cohort');
     const sourceId = searchParams.get('source');
+    // Pagination. `all=1` returns everything (used by CSV/Excel export so the
+    // download isn't limited to the current page).
+    const all = searchParams.get('all') === '1';
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '24', 10) || 24));
 
     const where: Record<string, unknown> = {
       role: 'MENTEE',
@@ -56,47 +61,61 @@ export async function GET(request: Request) {
       ];
     }
 
-    const rawCandidates = await prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        university: true,
-        department: true,
-        graduationYear: true,
-        skills: true,
-        cvUrl: true,
-        phone: true,
-        whatsapp: true,
-        city: true,
-        createdAt: true,
-        isActive: true,
-        source: { select: { id: true, name: true } },
-        menteeRelations: {
-          where: { status: 'ACTIVE' },
-          include: {
-            mentor: { select: { id: true, fullName: true } },
-            company: { select: { id: true, name: true } },
-            project: { select: { id: true, name: true } },
-          },
+    const select = {
+      id: true,
+      fullName: true,
+      email: true,
+      university: true,
+      department: true,
+      graduationYear: true,
+      skills: true,
+      cvUrl: true,
+      phone: true,
+      whatsapp: true,
+      city: true,
+      createdAt: true,
+      isActive: true,
+      source: { select: { id: true, name: true } },
+      menteeRelations: {
+        where: { status: 'ACTIVE' as const },
+        include: {
+          mentor: { select: { id: true, fullName: true } },
+          company: { select: { id: true, name: true } },
+          project: { select: { id: true, name: true } },
         },
       },
-      orderBy: { createdAt: 'desc' },
-    });
+    };
+    const normalize = (c: { skills: unknown }) => ({ ...c, skills: (c.skills ?? []) as string[] });
+    const matchesSkills = (c: { skills: string[] }) => {
+      if (skillList.length === 0) return true;
+      const owned = c.skills.map((k) => k.toLowerCase());
+      // Every typed term must be a substring of at least one skill (so "docke"
+      // matches "Docker"), case-insensitive.
+      return skillList.every((term) => owned.some((k) => k.includes(term)));
+    };
 
-    // Normalise skills (stored as JSON array) and apply optional skill filter
-    const candidates = rawCandidates
-      .map((c) => ({ ...c, skills: (c.skills ?? []) as string[] }))
-      .filter((c) => {
-        if (skillList.length === 0) return true;
-        const owned = c.skills.map((k) => k.toLowerCase());
-        // Every typed term must be a substring of at least one of the candidate's
-        // skills (so "docke" matches "Docker"), case-insensitive.
-        return skillList.every((term) => owned.some((k) => k.includes(term)));
+    let candidates;
+    let total: number;
+    if (skillList.length === 0) {
+      // No JSON-skill filter → paginate at the database level.
+      total = await prisma.user.count({ where });
+      const raw = await prisma.user.findMany({
+        where,
+        select,
+        orderBy: { createdAt: 'desc' },
+        ...(all ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
       });
+      candidates = raw.map(normalize);
+    } else {
+      // Skill filter is applied in-memory (MySQL JSON arrays don't support
+      // hasSome), so fetch, filter, then slice the page from the filtered set.
+      const raw = await prisma.user.findMany({ where, select, orderBy: { createdAt: 'desc' } });
+      const filtered = raw.map(normalize).filter(matchesSkills);
+      total = filtered.length;
+      candidates = all ? filtered : filtered.slice((page - 1) * pageSize, page * pageSize);
+    }
 
-    return NextResponse.json({ candidates });
+    return NextResponse.json({ candidates, total, page, pageSize });
   } catch (error) {
     console.error('Get candidates error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
