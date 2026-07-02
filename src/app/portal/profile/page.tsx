@@ -71,6 +71,27 @@ const graduationYearOptions = [
   })),
 ];
 
+const DEFAULT_TIMEZONE = 'Europe/Istanbul';
+const FALLBACK_TIMEZONES = [
+  'Europe/Istanbul', 'Europe/Berlin', 'Europe/London', 'Europe/Paris',
+  'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo', 'UTC',
+];
+function getTimezoneOptions(): { value: string; label: string }[] {
+  let zones: string[];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    zones = (Intl as any).supportedValuesOf('timeZone');
+  } catch {
+    zones = FALLBACK_TIMEZONES;
+  }
+  return zones.map((tz) => ({ value: tz, label: tz }));
+}
+const timezoneOptions = getTimezoneOptions();
+function resolveTimezone(tz: string | null | undefined): string {
+  if (!tz) return DEFAULT_TIMEZONE;
+  return timezoneOptions.some((opt) => opt.value === tz) ? tz : DEFAULT_TIMEZONE;
+}
+
 export default function ProfilePage() {
   const t = useT();
   const [loading, setLoading] = useState(true);
@@ -144,7 +165,7 @@ export default function ProfilePage() {
             displayName: user.displayName || '',
             bio: user.bio || '',
             country: user.country || '',
-            timezone: user.timezone || '',
+            timezone: resolveTimezone(user.timezone),
             linkedinUrl: user.linkedinUrl || '',
             githubUrl: user.githubUrl || '',
             portfolioUrl: user.portfolioUrl || '',
@@ -274,7 +295,7 @@ export default function ProfilePage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label={t.profileForm.country} {...register('country')} error={errors.country?.message} />
-                <Input label={t.profileForm.timezone} placeholder="Europe/Berlin" {...register('timezone')} error={errors.timezone?.message} />
+                <Select label={t.profileForm.timezone} options={timezoneOptions} {...register('timezone')} error={errors.timezone?.message} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="LinkedIn" type="url" placeholder="https://linkedin.com/in/..." {...register('linkedinUrl')} error={errors.linkedinUrl?.message} />

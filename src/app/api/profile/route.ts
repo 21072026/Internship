@@ -43,7 +43,14 @@ const updateProfileSchema = z.object({
   displayName: z.string().max(120).optional(),
   bio: z.string().max(2000).optional(),
   country: z.string().max(80).optional(),
-  timezone: z.string().max(80).optional(),
+  timezone: z.string().max(80).optional().refine(
+    (tz) => {
+      if (!tz) return true;
+      try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; }
+      catch { return false; }
+    },
+    { message: 'Invalid IANA timezone' }
+  ),
   linkedinUrl: z.string().url().or(z.literal('')).optional(),
   githubUrl: z.string().url().or(z.literal('')).optional(),
   portfolioUrl: z.string().url().or(z.literal('')).optional(),
