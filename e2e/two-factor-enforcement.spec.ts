@@ -37,7 +37,7 @@ test('when 2FA is required for admins, an admin without 2FA is held at the setup
     // Navigating into the admin area now redirects to the 2FA setup gate.
     await page.goto('/admin');
     await page.waitForURL((u) => u.pathname.startsWith('/security-setup'), { timeout: 20_000 });
-    await expect(page.getByText(/two-factor authentication/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: /two-factor authentication/i })).toBeVisible({ timeout: 10_000 });
 
     // Relaxing the policy lets the admin back in without setting up 2FA.
     await setPolicy('off');
