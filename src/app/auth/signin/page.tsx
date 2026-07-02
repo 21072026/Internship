@@ -31,6 +31,8 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
   const [notice, setNotice] = useState('');
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Already signed in → go straight to the role dashboard.
   useEffect(() => {
@@ -49,10 +51,28 @@ export default function SignInPage() {
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors },
   } = useForm<SignInData>({
     resolver: zodResolver(signinSchema),
   });
+
+  // Resend the email-verification link for a locked-out (unverified) account.
+  const resendVerification = async () => {
+    setResending(true);
+    try {
+      await fetch('/api/auth/verify-email/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: getValues('email') }),
+      });
+      setError('');
+      setNeedsVerify(false);
+      setNotice(t.auth.verificationResent);
+    } finally {
+      setResending(false);
+    }
+  };
 
   const onSubmit = handleSubmit(async (data) => {
     setLoading(true);
@@ -70,6 +90,10 @@ export default function SignInPage() {
       if (result.error === '2FA_REQUIRED') {
         setShow2fa(true);
         setError(t.auth.twoFactorPrompt);
+      } else if (result.error === 'EMAIL_NOT_VERIFIED') {
+        // Offer to resend the verification link rather than a dead-end error.
+        setNeedsVerify(true);
+        setError(t.auth.emailNotVerified);
       } else {
         setError(result.error || 'Sign in failed');
       }
@@ -104,6 +128,16 @@ export default function SignInPage() {
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
+              {needsVerify && (
+                <button
+                  type="button"
+                  onClick={resendVerification}
+                  disabled={resending}
+                  className="mt-2 block font-medium text-blue-600 hover:underline disabled:opacity-50"
+                >
+                  {t.auth.resendVerification}
+                </button>
+              )}
             </div>
           )}
 
