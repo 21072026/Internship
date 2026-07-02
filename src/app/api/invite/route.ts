@@ -108,6 +108,9 @@ export async function GET() {
         used: true,
         createdAt: true,
         expiresAt: true,
+        openedAt: true,
+        registeredAt: true,
+        verifiedAt: true,
       },
     });
 

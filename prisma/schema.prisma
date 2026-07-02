@@ -25,6 +25,8 @@ enum InteractionType {
   Meeting
   Feedback
   Email
+  Call
+  WhatsApp
 }
 
 // Mentee'nin staj/işe alım sürecindeki granular aşaması (Excel status kolonunun karşılığı)
@@ -45,64 +47,71 @@ enum PipelineStatus {
 }
 
 model User {
-  id                 String    @id @default(cuid())
-  email              String    @unique
-  password           String
-  role               Role      @default(MENTEE)
-  fullName           String
-  phone              String?
-  university         String?
-  department         String?
-  graduationYear     Int?
-  skills             Json      @default("[]")
+  id                      String    @id @default(cuid())
+  email                   String    @unique
+  password                String
+  role                    Role      @default(MENTEE)
+  fullName                String
+  phone                   String?
+  university              String?
+  department              String?
+  graduationYear          Int?
+  skills                  Json      @default("[]")
   // Mentee self-assessment: { "<skill>": 1..5 }
-  skillLevels        Json      @default("{}")
-  cvUrl              String?
-  avatarUrl          String?
-  whatsapp           String?
-  city               String?
-  birthDate          DateTime?
-  referralSource     String?
+  skillLevels             Json      @default("{}")
+  cvUrl                   String?
+  avatarUrl               String?
+  whatsapp                String?
+  city                    String?
+  birthDate               DateTime?
+  referralSource          String?
   // Extended profile (all optional; safe to add to existing rows).
-  displayName        String?
-  bio                String?   @db.Text
-  country            String?
-  timezone           String?
-  linkedinUrl        String?
-  githubUrl          String?
-  portfolioUrl       String?
+  displayName             String?
+  bio                     String?   @db.Text
+  country                 String?
+  timezone                String?
+  linkedinUrl             String?
+  githubUrl               String?
+  portfolioUrl            String?
   // Mentee: interests / target position. Mentor: max concurrent mentees.
-  interests          String?   @db.Text
-  targetPosition     String?
-  mentorCapacity     Int?
+  interests               String?   @db.Text
+  targetPosition          String?
+  mentorCapacity          Int?
   // Default true so existing rows stay writable after the column is added;
   // new self-registrations are created with false until they verify by email.
-  emailVerified      Boolean   @default(true)
+  emailVerified           Boolean   @default(true)
   // Admin can deactivate a user; inactive users cannot sign in.
-  isActive           Boolean   @default(true)
+  isActive                Boolean   @default(true)
   // Opt-in: expose a limited, PII-free public profile at /p/[id].
-  publicProfile      Boolean   @default(false)
+  publicProfile           Boolean   @default(false)
   // For COMPANY-role users: which company they observe (read-only).
-  companyId          String?
+  companyId               String?
   // Mentee's referral source (where they came from).
-  sourceId           String?
+  sourceId                String?
   // How many times this user's public profile has been viewed.
-  profileViews       Int       @default(0)
-  // When the user accepted the privacy/data terms (consent).
-  consentAt          DateTime?
+  profileViews            Int       @default(0)
+  // When the user accepted the privacy/data terms (consent). Also the anchor
+  // for retention re-consent: data is kept no longer than retentionMonths past
+  // this date without renewal.
+  consentAt               DateTime?
+  // Set when a retention/re-consent reminder was last emailed (avoids resending
+  // on every cron run). Cleared when the user renews consent.
+  retentionReminderSentAt DateTime?
   // Opt-out switch for transactional email (messages, announcements). In-app
   // notifications are always created regardless.
-  emailNotifications Boolean   @default(true)
+  emailNotifications      Boolean   @default(true)
   // Per-category email toggles, e.g. {"messages":false}. Nullable so existing
   // rows aren't touched (avoids MariaDB json_valid CHECK issues); unset = on.
-  notificationPrefs  Json?
+  notificationPrefs       Json?
   // Optional TOTP two-factor auth. The secret is only meaningful once enabled.
-  twoFactorEnabled   Boolean   @default(false)
-  twoFactorSecret    String?
+  twoFactorEnabled        Boolean   @default(false)
+  twoFactorSecret         String?
   // Preferred UI language ('en' | 'tr' | 'de'); applied at sign-in.
-  preferredLanguage  String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  preferredLanguage       String?
+  // UI theme preference ('light' | 'dark' | 'system'); applied at sign-in.
+  theme                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   mentorRelations         MentorshipRelation[]     @relation("MentorRelations")
   menteeRelations         MentorshipRelation[]     @relation("MenteeRelations")
@@ -117,8 +126,38 @@ model User {
   company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
   source                  Source?                  @relation(fields: [sourceId], references: [id])
   documents               Document[]               @relation("DocumentOwner")
+  personalNotes           PersonalNote[]
+  consents                UserConsent[]
+  companyInterests        CompanyInterest[]        @relation("CompanyInterestMentee")
+  authoredRelationNotes   RelationNote[]           @relation("RelationNoteAuthor")
 
   @@index([role])
+}
+
+// Reusable, auditable per-user consent (GDPR). A consent is "active" when
+// grantedAt is set and revokedAt is null. Gates optional processing such as
+// sending CV text to an AI provider (see ConsentType).
+enum ConsentType {
+  AI_CV_PARSING
+  // Acceptance of the privacy notice & terms at registration. `version` records
+  // which policy version was accepted (GDPR Art. 7 demonstrability).
+  PRIVACY_POLICY
+}
+
+model UserConsent {
+  id        String      @id @default(cuid())
+  userId    String
+  type      ConsentType
+  // For versioned consents (e.g. PRIVACY_POLICY): the accepted policy version.
+  version   String?
+  grantedAt DateTime?
+  revokedAt DateTime?
+  updatedAt DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
 }
 
 // A referral source — the education/agency a mentee came from. Admin-managed
@@ -244,6 +283,32 @@ model Company {
   mentorships MentorshipRelation[]
   users       User[]               @relation("CompanyUsers")
   projects    Project[]            @relation("CompanyProjects")
+  interests   CompanyInterest[]
+}
+
+// A company's read/interest signal on a candidate they're linked to via a
+// MentorshipRelation (EPIC: company shortlist). One record per company+mentee
+// pair; re-setting the status updates it in place.
+enum InterestStatus {
+  INTERESTED
+  SHORTLISTED
+  PASS
+}
+
+model CompanyInterest {
+  id        String         @id @default(cuid())
+  companyId String
+  menteeId  String
+  status    InterestStatus
+  note      String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee  User    @relation("CompanyInterestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, menteeId])
+  @@index([menteeId])
 }
 
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
@@ -299,6 +364,7 @@ model Project {
   technologies   Json             @default("[]")
   repoUrl        String?
   demoUrl        String?
+  boardUrl       String?
   status         ProjectStatus    @default(ACTIVE)
   isPublic       Boolean          @default(false)
   goals          String?          @db.Text
@@ -383,17 +449,20 @@ model MentorshipRelation {
   // Set when an overdue-stage reminder was last sent (avoids re-notifying daily).
   deadlineReminderSentAt DateTime?
 
-  mentor        User             @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee        User             @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company       Company?         @relation(fields: [companyId], references: [id])
-  project       Project?         @relation(fields: [projectId], references: [id])
-  cohort        Cohort?          @relation(fields: [cohortId], references: [id])
-  interactions  InteractionLog[]
-  statusChanges StatusChange[]
-  meetings      Meeting[]
-  messages      Message[]
-  evaluations   Evaluation[]
-  goals         Goal[]
+  mentor          User             @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee          User             @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company         Company?         @relation(fields: [companyId], references: [id])
+  project         Project?         @relation(fields: [projectId], references: [id])
+  cohort          Cohort?          @relation(fields: [cohortId], references: [id])
+  interactions    InteractionLog[]
+  statusChanges   StatusChange[]
+  meetings        Meeting[]
+  messages        Message[]
+  evaluations     Evaluation[]
+  goals           Goal[]
+  meetingRequests MeetingRequest[]
+  questions       MentorQuestion[]
+  relationNotes   RelationNote[]
 
   @@index([status])
   @@index([pipelineStatus])
@@ -424,15 +493,85 @@ model Evaluation {
   @@index([relationId])
 }
 
+// A structured question from a mentee to their mentor, with an optional answer.
+// Distinct from chat: each question has an answered/unanswered state.
+model MentorQuestion {
+  id         String    @id @default(cuid())
+  relationId String
+  askedById  String
+  question   String    @db.Text
+  answer     String?   @db.Text
+  answeredAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
+}
+
+enum MeetingRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// A mentee-initiated meeting request. The mentor accepts (creating a Meeting)
+// or declines. Distinct from Meeting, which is the confirmed event.
+model MeetingRequest {
+  id            String               @id @default(cuid())
+  relationId    String
+  requestedById String
+  topic         String
+  proposedAt    DateTime
+  status        MeetingRequestStatus @default(PENDING)
+  createdAt     DateTime             @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
+}
+
+// A mentee's private personal note (only the author can see it).
+model PersonalNote {
+  id        String   @id @default(cuid())
+  userId    String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A mentor-private note on a mentorship relation (impressions, prep notes,
+// red flags) — visible only to the authoring mentor and admins, never the
+// mentee (EPIC: mentor private notes).
+model RelationNote {
+  id         String   @id @default(cuid())
+  relationId String
+  authorId   String
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  author   User               @relation("RelationNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([relationId])
+}
+
 // A goal set within a mentorship — supports goal setting + tracking (checklist 7).
 model Goal {
-  id          String     @id @default(cuid())
-  relationId  String
-  title       String
-  description String?    @db.Text
-  status      GoalStatus @default(OPEN)
-  dueDate     DateTime?
-  createdAt   DateTime   @default(now())
+  id            String     @id @default(cuid())
+  relationId    String
+  title         String
+  description   String?    @db.Text
+  status        GoalStatus @default(OPEN)
+  dueDate       DateTime?
+  createdAt     DateTime   @default(now())
+  // Which side created the goal (mentor vs mentee), so it's clear at a glance.
+  createdByRole Role?
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
 
@@ -488,13 +627,20 @@ model StatusChange {
 }
 
 model InvitationToken {
-  id        String   @id @default(cuid())
-  token     String   @unique
-  email     String
-  role      Role
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  id           String    @id @default(cuid())
+  token        String    @unique
+  email        String
+  role         Role
+  used         Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  // Lifecycle timestamps (nullable — each set once, the first time it happens):
+  // openedAt  → the register link was clicked/opened
+  // registeredAt → the account was created from this invitation
+  // verifiedAt → the invitee's email was verified (immediate for invited users)
+  openedAt     DateTime?
+  registeredAt DateTime?
+  verifiedAt   DateTime?
 }
 
 // Single-use, time-limited token for self-service password reset and for the

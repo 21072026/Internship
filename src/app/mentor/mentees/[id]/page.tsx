@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
+import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -13,6 +14,11 @@ import { pipelineOptions, pipelineLabel } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
+import { QuestionsPanel } from '@/components/QuestionsPanel';
+import { RelationNotesPanel } from '@/components/RelationNotesPanel';
+import { ContactActions } from '@/components/ContactActions';
+import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 
 interface InteractionLog {
@@ -43,6 +49,7 @@ interface RelationDetail {
     cvUrl?: string;
   };
   company: { name: string; industry?: string } | null;
+  companyInterest?: { status: 'INTERESTED' | 'SHORTLISTED' | 'PASS'; note?: string | null } | null;
   interactions: InteractionLog[];
   statusChanges: {
     id: string;
@@ -206,6 +213,13 @@ export default function MenteeDetailPage() {
                 <p className="text-sm text-gray-900">{relation.mentee.whatsapp}</p>
               </div>
             )}
+            {(relation.mentee.whatsapp || relation.mentee.phone) && (
+              <ContactActions
+                relationId={id}
+                phone={relation.mentee.whatsapp || relation.mentee.phone || ''}
+                onLogged={fetchRelation}
+              />
+            )}
             {relation.mentee.city && (
               <div>
                 <p className="text-xs text-gray-500">{t.candidateDetail.city}</p>
@@ -248,11 +262,21 @@ export default function MenteeDetailPage() {
               </a>
             )}
             {relation.company && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-xs text-blue-500 font-medium mb-1">{t.candidateDetail.company}</p>
-                <p className="text-sm font-medium text-blue-900">{relation.company.name}</p>
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg">
+                <p className="text-xs text-blue-500 dark:text-blue-400 font-medium mb-1">{t.candidateDetail.company}</p>
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">{relation.company.name}</p>
                 {relation.company.industry && (
-                  <p className="text-xs text-blue-700">{relation.company.industry}</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">{relation.company.industry}</p>
+                )}
+                {relation.companyInterest && (
+                  <div className="mt-2 pt-2 border-t border-blue-100 dark:border-blue-900">
+                    <Badge variant={relation.companyInterest.status === 'PASS' ? 'danger' : relation.companyInterest.status === 'SHORTLISTED' ? 'success' : 'info'}>
+                      {t.candidateDetail.companyInterest[relation.companyInterest.status.toLowerCase() as 'interested' | 'shortlisted' | 'pass']}
+                    </Badge>
+                    {relation.companyInterest.note && (
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1.5 italic">“{relation.companyInterest.note}”</p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -338,12 +362,7 @@ export default function MenteeDetailPage() {
             )}
             {relation.interactions.map((interaction) => (
               <div key={interaction.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-                <Badge
-                  variant={interaction.type === 'Meeting' ? 'info' : interaction.type === 'Feedback' ? 'success' : 'warning'}
-                  className="text-xs flex-shrink-0 mt-0.5"
-                >
-                  {interaction.type}
-                </Badge>
+                <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-1">
@@ -370,7 +389,25 @@ export default function MenteeDetailPage() {
         </div>
 
         <div className="lg:col-span-2">
+          <MeetingRequestsPanel relationId={id} mode="manage" />
+        </div>
+
+        <div className="lg:col-span-2">
+          <QuestionsPanel relationId={id} mode="answer" />
+        </div>
+
+        <div className="lg:col-span-2">
           <DocumentsManager targetUserId={relation.mentee.id} />
+        </div>
+
+        <div className="lg:col-span-2">
+          <RelationNotesPanel relationId={id} />
+        </div>
+
+        {/* Activity feed sits last — it's the least frequently acted-on panel,
+            so private notes and the working panels stay above the fold. */}
+        <div className="lg:col-span-2">
+          <UserActivityPanel userId={relation.mentee.id} flagInactive />
         </div>
       </div>
     </div>

@@ -10,20 +10,43 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { CvManager } from '@/components/CvManager';
+import { CvSuggestPanel } from '@/components/CvSuggestPanel';
+import { SkillRating } from '@/components/SkillRating';
 import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
+import { TemplatesLibrary } from '@/components/TemplatesLibrary';
+
+// Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
+function isValidPhone(v: string): boolean {
+  if (!/^[0-9+\s()-]+$/.test(v)) return false;
+  const digitCount = (v.match(/\d/g) || []).length;
+  return digitCount >= 7 && digitCount <= 15;
+}
+
+// Requires a real calendar date in YYYY-MM-DD format that is today or earlier.
+function isValidPastOrTodayDate(v: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!match) return false;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== m || date.getUTCDate() !== d) return false;
+  return v <= new Date().toISOString().slice(0, 10);
+}
 
 const profileSchema = z.object({
   fullName: z.string().min(1, 'Full name is required'),
-  phone: z.string().optional(),
-  whatsapp: z.string().optional(),
+  phone: z.string().optional().refine((v) => !v || isValidPhone(v), 'Please enter a valid phone number'),
+  whatsapp: z.string().optional().refine((v) => !v || isValidPhone(v), 'Please enter a valid phone number'),
   city: z.string().optional(),
-  birthDate: z.string().optional(),
+  birthDate: z.string().optional().refine((v) => !v || isValidPastOrTodayDate(v), 'Please enter a valid date not in the future'),
   university: z.string().optional(),
   department: z.string().optional(),
   graduationYear: z.coerce.number().int().min(2010).max(new Date().getFullYear() + 5).optional().or(z.literal(0)),
   skills: z.string().optional(),
-  cvUrl: z.string().url('Please enter a valid URL').optional().or(z.literal('')),
+  // Accept a full URL or an internal path (e.g. /api/cv/<id> set on upload).
+  cvUrl: z.string().refine((v) => v === '' || /^https?:\/\//.test(v) || v.startsWith('/'), 'Please enter a valid URL').optional().or(z.literal('')),
   displayName: z.string().optional(),
   bio: z.string().optional(),
   country: z.string().optional(),
@@ -77,6 +100,9 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [userId, setUserId] = useState('');
   const [initialCv, setInitialCv] = useState<string | null>(null);
+  // True when the stored CV is an uploaded file (internal /api/cv/... path).
+  // In that case the CvManager owns it and the manual external-URL input hides.
+  const [cvUploaded, setCvUploaded] = useState(false);
   const [publicProfile, setPublicProfile] = useState(false);
   const [profileViews, setProfileViews] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -90,10 +116,24 @@ export default function ProfilePage() {
     handleSubmit,
     reset,
     watch,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
   });
+
+  // Merge CV-suggested skills into the comma-separated skills field (dedup,
+  // case-insensitive), keeping the user's existing entries.
+  const applySuggestedSkills = (incoming: string[]) => {
+    const existing = (getValues('skills') || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const seen = new Set(existing.map((s) => s.toLowerCase()));
+    const merged = [...existing];
+    for (const s of incoming) {
+      if (!seen.has(s.toLowerCase())) { merged.push(s); seen.add(s.toLowerCase()); }
+    }
+    setValue('skills', merged.join(', '), { shouldDirty: true });
+  };
 
   useEffect(() => {
     fetch('/api/profile')
@@ -102,6 +142,7 @@ export default function ProfilePage() {
         if (user) {
           setUserId(user.id);
           setInitialCv(user.cvUrl || null);
+          setCvUploaded(!!user.cvUrl && user.cvUrl.startsWith('/'));
           setPublicProfile(!!user.publicProfile);
           setProfileViews(user.profileViews || 0);
           setAvatarUrl(user.avatarUrl || null);
@@ -118,7 +159,9 @@ export default function ProfilePage() {
             department: user.department || '',
             graduationYear: user.graduationYear || 0,
             skills: user.skills?.join(', ') || '',
-            cvUrl: user.cvUrl || '',
+            // Only seed the manual input with an *external* link; internal
+            // upload paths are managed by the CvManager, not shown here.
+            cvUrl: user.cvUrl && /^https?:\/\//.test(user.cvUrl) ? user.cvUrl : '',
             displayName: user.displayName || '',
             bio: user.bio || '',
             country: user.country || '',
@@ -149,15 +192,18 @@ export default function ProfilePage() {
         skillsArray.filter((s) => skillLevels[s]).map((s) => [s, skillLevels[s]])
       );
 
+      // The manual field only ever carries an external link. When an uploaded
+      // file CV exists, the CvManager owns cvUrl — omit it so we never clobber it.
+      const { cvUrl: externalCvUrl, ...rest } = data;
       const res = await fetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...data,
+          ...rest,
           skills: skillsArray,
           skillLevels: levels,
           graduationYear: data.graduationYear || null,
-          cvUrl: data.cvUrl || null,
+          ...(cvUploaded ? {} : { cvUrl: externalCvUrl || null }),
           mentorCapacity: data.mentorCapacity || null,
           publicProfile,
         }),
@@ -310,33 +356,46 @@ export default function ProfilePage() {
                     <p className="text-xs font-medium text-gray-600 mb-2">{t.profileForm.skillLevels}</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {list.map((s) => (
-                        <label key={s} className="flex items-center justify-between gap-2 text-sm bg-gray-50 rounded-lg px-3 py-1.5">
+                        <div key={s} className="flex items-center justify-between gap-2 text-sm bg-gray-50 rounded-lg px-3 py-1.5">
                           <span className="truncate text-gray-700">{s}</span>
-                          <select
-                            value={skillLevels[s] ?? ''}
-                            onChange={(e) => setSkillLevels((prev) => ({ ...prev, [s]: Number(e.target.value) }))}
-                            className="rounded border border-gray-300 px-2 py-1 text-sm"
-                          >
-                            <option value="">–</option>
-                            {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                          </select>
-                        </label>
+                          <SkillRating
+                            label={s}
+                            value={skillLevels[s] ?? 0}
+                            onChange={(v) => setSkillLevels((prev) => ({ ...prev, [s]: v }))}
+                          />
+                        </div>
                       ))}
                     </div>
                   </div>
                 );
               })()}
-              <Input
-                label={t.profileForm.cvUrl}
-                type="url"
-                placeholder="https://drive.google.com/..."
-                hint="Link to your CV"
-                {...register('cvUrl')}
-                error={errors.cvUrl?.message}
-              />
+              {/* Manual link is for an external CV only. Hidden once a file is
+                  uploaded — the CvManager below then owns view/replace/delete. */}
+              {!cvUploaded && (
+                <Input
+                  label={t.profileForm.cvUrl}
+                  type="text"
+                  inputMode="url"
+                  placeholder="https://drive.google.com/..."
+                  hint={t.profileForm.cvUrlHint}
+                  {...register('cvUrl')}
+                  error={errors.cvUrl?.message}
+                />
+              )}
               {userId && (
                 <div className="border-t border-gray-100 pt-4">
-                  <CvManager targetUserId={userId} initialCvUrl={initialCv} />
+                  <CvManager
+                    targetUserId={userId}
+                    initialCvUrl={initialCv}
+                    onChange={(url) => setCvUploaded(!!url && url.startsWith('/'))}
+                  />
+                  {cvUploaded && (
+                    <CvSuggestPanel
+                      targetUserId={userId}
+                      onApplyField={(field, value) => setValue(field as keyof ProfileFormData, value, { shouldDirty: true })}
+                      onApplySkills={applySuggestedSkills}
+                    />
+                  )}
                 </div>
               )}
 
@@ -378,7 +437,7 @@ export default function ProfilePage() {
       {userId && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mt-6">
           <DocumentsManager targetUserId={userId} />
-          <DocumentsManager templates canUpload={false} canDelete={false} />
+          <TemplatesLibrary />
         </div>
       )}
     </div>

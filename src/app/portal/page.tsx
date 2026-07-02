@@ -2,12 +2,17 @@ import { getServerSession } from 'next-auth';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
+import { JourneyTracker } from '@/components/JourneyTracker';
+import { NotesPanel } from '@/components/NotesPanel';
+import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
+import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
-import { User, Building2, BookOpen, ExternalLink } from 'lucide-react';
+import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { User, Building2, BookOpen, ExternalLink, MessageCircle, Mail, Github, Linkedin } from 'lucide-react';
 import Link from 'next/link';
 
 async function getMenteeData(menteeId: string) {
@@ -24,6 +29,10 @@ async function getMenteeData(menteeId: string) {
         graduationYear: true,
         skills: true,
         cvUrl: true,
+        githubUrl: true,
+        linkedinUrl: true,
+        portfolioUrl: true,
+        publicProfile: true,
         createdAt: true,
       },
     }),
@@ -90,40 +99,40 @@ export default async function PortalDashboard() {
           </CardHeader>
           <div className="space-y-3">
             <div>
-              <p className="text-xs text-gray-500">Full Name</p>
+              <p className="text-xs text-gray-500">{t.profileForm.fullName}</p>
               <p className="text-sm font-medium text-gray-900">{user?.fullName}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Email</p>
+              <p className="text-xs text-gray-500">{t.account.email}</p>
               <p className="text-sm text-gray-900">{user?.email}</p>
             </div>
             {user?.phone && (
               <div>
-                <p className="text-xs text-gray-500">Phone</p>
+                <p className="text-xs text-gray-500">{t.profileForm.phone}</p>
                 <p className="text-sm text-gray-900">{user.phone}</p>
               </div>
             )}
             {user?.university && (
               <div>
-                <p className="text-xs text-gray-500">University</p>
+                <p className="text-xs text-gray-500">{t.profileForm.university}</p>
                 <p className="text-sm text-gray-900">{user.university}</p>
               </div>
             )}
             {user?.department && (
               <div>
-                <p className="text-xs text-gray-500">Department</p>
+                <p className="text-xs text-gray-500">{t.profileForm.department}</p>
                 <p className="text-sm text-gray-900">{user.department}</p>
               </div>
             )}
             {user?.graduationYear && (
               <div>
-                <p className="text-xs text-gray-500">Graduation Year</p>
+                <p className="text-xs text-gray-500">{t.profileForm.graduationYear}</p>
                 <p className="text-sm text-gray-900">{user.graduationYear}</p>
               </div>
             )}
             {user?.skills && (user.skills as string[]).length > 0 && (
               <div>
-                <p className="text-xs text-gray-500 mb-1.5">Skills</p>
+                <p className="text-xs text-gray-500 mb-1.5">{t.profileForm.skills}</p>
                 <div className="flex flex-wrap gap-1">
                   {(user.skills as string[]).map((skill) => (
                     <Badge key={skill} variant="info" className="text-xs">
@@ -133,22 +142,39 @@ export default async function PortalDashboard() {
                 </div>
               </div>
             )}
-            {user?.cvUrl && (
-              <a
-                href={user.cvUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
-              >
-                <ExternalLink className="h-3 w-3" />
-                View CV
-              </a>
+            {(user?.cvUrl || user?.githubUrl || user?.linkedinUrl || user?.portfolioUrl) && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {user?.cvUrl && (
+                  <a href={user.cvUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                    <ExternalLink className="h-3 w-3" />{t.portal.viewCv}
+                  </a>
+                )}
+                {user?.githubUrl && (
+                  <a href={user.githubUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-700 hover:underline"><Github className="h-3 w-3" />GitHub</a>
+                )}
+                {user?.linkedinUrl && (
+                  <a href={user.linkedinUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-700 hover:underline"><Linkedin className="h-3 w-3" />LinkedIn</a>
+                )}
+                {user?.portfolioUrl && (
+                  <a href={user.portfolioUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-700 hover:underline"><ExternalLink className="h-3 w-3" />{t.profileForm.portfolio}</a>
+                )}
+              </div>
             )}
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
             <Link href="/portal/profile" className="text-sm text-blue-600 hover:underline">
-              Edit profile →
+              {t.portal.editProfile} →
             </Link>
+            {user?.publicProfile && user?.id && (
+              <a
+                href={`/p/${user.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> {t.portal.viewPublicProfile}
+              </a>
+            )}
           </div>
         </Card>
 
@@ -193,6 +219,16 @@ export default async function PortalDashboard() {
                 {activeRelation.mentor.department && (
                   <p className="text-sm text-gray-500 mt-1">{activeRelation.mentor.department}</p>
                 )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link href={`/messages/${activeRelation.id}`} className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
+                    <MessageCircle className="h-4 w-4" />
+                    {t.portal.messageMentor}
+                  </Link>
+                  <a href={`mailto:${activeRelation.mentor.email}`} className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+                    <Mail className="h-4 w-4" />
+                    {t.portal.emailMentor}
+                  </a>
+                </div>
               </div>
 
               {/* Company */}
@@ -227,18 +263,7 @@ export default async function PortalDashboard() {
                         key={interaction.id}
                         className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0"
                       >
-                        <Badge
-                          variant={
-                            interaction.type === 'Meeting'
-                              ? 'info'
-                              : interaction.type === 'Feedback'
-                              ? 'success'
-                              : 'warning'
-                          }
-                          className="text-xs flex-shrink-0"
-                        >
-                          {interaction.type}
-                        </Badge>
+                        <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
                           <p className="text-xs text-gray-400">
@@ -253,13 +278,26 @@ export default async function PortalDashboard() {
             </div>
           )}
         </Card>
+      </div>
 
-        {activeRelation && (
+      {activeRelation && (
+        <>
+          <div className="mt-6">
+            <JourneyTracker status={activeRelation.pipelineStatus} />
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
             <GoalsPanel relationId={activeRelation.id} />
             <EvaluationPanel relationId={activeRelation.id} audience="MENTOR" />
           </div>
-        )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <MeetingRequestsPanel relationId={activeRelation.id} mode="request" />
+            <QuestionsPanel relationId={activeRelation.id} mode="ask" />
+          </div>
+        </>
+      )}
+
+      <div className="mt-6">
+        <NotesPanel />
       </div>
     </div>
   );

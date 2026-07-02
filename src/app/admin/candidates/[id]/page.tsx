@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { ArrowLeft, KeyRound, Trash2, Plus } from 'lucide-react';
@@ -14,7 +15,10 @@ import { nextAction } from '@/lib/matching';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
+import { UserActivityPanel } from '@/components/UserActivityPanel';
+import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { useT, useLocale } from '@/i18n/client';
+import { useToast } from '@/components/ui/Toast';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
@@ -64,6 +68,7 @@ export default function AdminMenteeDetailPage() {
   const id = useParams().id as string;
   const t = useT();
   const locale = useLocale();
+  const toast = useToast();
   const [user, setUser] = useState<MenteeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,34 +92,42 @@ export default function AdminMenteeDetailPage() {
     async (relationId: string, pipelineStatus: string) => {
       setSaving(true);
       try {
-        await fetch(`/api/mentorship/${relationId}`, {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pipelineStatus }),
         });
+        if (!res.ok) throw new Error();
         await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
       } finally {
         setSaving(false);
       }
     },
-    [load]
+    [load, toast, t]
   );
 
   const changeProject = useCallback(
     async (relationId: string, projectId: string) => {
       setSaving(true);
       try {
-        await fetch(`/api/mentorship/${relationId}`, {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ projectId: projectId || null }),
         });
+        if (!res.ok) throw new Error();
         await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
       } finally {
         setSaving(false);
       }
     },
-    [load]
+    [load, toast, t]
   );
 
   const resetPassword = useCallback(async () => {
@@ -192,30 +205,38 @@ export default function AdminMenteeDetailPage() {
     async (sourceId: string) => {
       setSaving(true);
       try {
-        await fetch(`/api/users/${id}`, {
+        const res = await fetch(`/api/users/${id}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: sourceId || null }),
         });
+        if (!res.ok) throw new Error();
         await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
       } finally {
         setSaving(false);
       }
     },
-    [id, load]
+    [id, load, toast, t]
   );
 
   const changeRelField = useCallback(
     async (relationId: string, body: Record<string, unknown>) => {
       setSaving(true);
       try {
-        await fetch(`/api/mentorship/${relationId}`, {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
+        if (!res.ok) throw new Error();
         await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
       } finally {
         setSaving(false);
       }
     },
-    [load]
+    [load, toast, t]
   );
 
   if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
@@ -345,7 +366,7 @@ export default function AdminMenteeDetailPage() {
               </div>
 
               {(() => {
-                const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.interactions[0]?.date });
+                const na = nextAction({ pipelineStatus: rel.pipelineStatus, lastInteractionAt: rel.interactions[0]?.date }, t.nextActions);
                 const color = na.level === 'urgent' ? 'text-red-700 bg-red-50 border-red-200' : na.level === 'warn' ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-green-700 bg-green-50 border-green-200';
                 return (
                   <div className={`inline-flex items-center gap-2 text-sm rounded-lg border px-3 py-1.5 ${color}`}>
@@ -427,7 +448,7 @@ export default function AdminMenteeDetailPage() {
                   <div className="space-y-2">
                     {rel.interactions.map((i) => (
                       <div key={i.id} className="flex items-start gap-2 text-sm">
-                        <Badge variant={i.type === 'Meeting' ? 'info' : i.type === 'Feedback' ? 'success' : 'warning'} className="text-xs flex-shrink-0">{i.type}</Badge>
+                        <InteractionTypeBadge type={i.type} className="text-xs flex-shrink-0" />
                         <div>
                           <p className="text-gray-700">{i.notes}</p>
                           <p className="text-xs text-gray-400">{new Date(i.date).toLocaleDateString()}</p>
@@ -443,6 +464,8 @@ export default function AdminMenteeDetailPage() {
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
         <DocumentsManager targetUserId={id} />
+        <UserActivityPanel userId={id} />
+        {user && <CandidateEraseDangerZone userId={id} fullName={user.fullName} onAnonymized={load} />}
       </div>
     </div>
   );

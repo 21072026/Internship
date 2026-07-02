@@ -28,8 +28,11 @@ export default function MentorMeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [title, setTitle] = useState('');
-  const [scheduledAt, setScheduledAt] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
   const [meetLink, setMeetLink] = useState('');
+  // Combined local date+time → ISO-ish string the API parses with new Date().
+  const scheduledAt = date && time ? `${date}T${time}` : '';
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -58,7 +61,8 @@ export default function MentorMeetingsPage() {
       if (res.ok) {
         setResult(t.meetings.scheduledCount.replace('{n}', String(data.created)));
         setTitle('');
-        setScheduledAt('');
+        setDate('');
+        setTime('');
         setMeetLink('');
         setSelected({});
         await load();
@@ -103,20 +107,39 @@ export default function MentorMeetingsPage() {
                 ))
               )}
             </div>
-            <Input label={t.meetings.meetingTitle} value={title} onChange={(e) => setTitle(e.target.value)} />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.meetings.when}</label>
-              <input
-                type="datetime-local"
-                aria-label={t.meetings.when}
-                value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
-              />
+              <Input label={t.meetings.meetingTitle} value={title} onChange={(e) => setTitle(e.target.value)} list="meeting-topics" />
+              <datalist id="meeting-topics">
+                {(t.meetings.topics as string[]).map((topic) => <option key={topic} value={topic} />)}
+              </datalist>
+            </div>
+            {/* Separate date + time so entering a time doesn't pop a calendar. */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t.meetings.date}</label>
+                <input
+                  type="date"
+                  aria-label={t.meetings.date}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t.meetings.time}</label>
+                <input
+                  type="time"
+                  aria-label={t.meetings.time}
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
+                />
+              </div>
             </div>
             <Input
               label={t.meetings.meetLink}
               placeholder="https://meet.google.com/abc-defg-hij"
+              hint={t.meetings.meetLinkHint}
               value={meetLink}
               onChange={(e) => setMeetLink(e.target.value)}
             />

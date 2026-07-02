@@ -91,7 +91,8 @@ export async function POST(request: Request) {
       prisma.user.findUnique({ where: { id: menteeId } }),
     ]);
 
-    if (!mentor || mentor.role !== 'MENTOR') {
+    // Admins can also mentor, so they're valid mentors too.
+    if (!mentor || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Invalid mentor' }, { status: 400 });
     }
 

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { GraduationCap, Github, ExternalLink } from 'lucide-react';
+import { GraduationCap, Github, ExternalLink, Trello } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 
@@ -13,7 +13,7 @@ export default async function PublicProjectPage({ params }: { params: Promise<{ 
   const p = await prisma.project.findFirst({
     where: { id, isPublic: true },
     select: {
-      name: true, description: true, technologies: true, repoUrl: true, demoUrl: true, status: true,
+      name: true, description: true, technologies: true, repoUrl: true, demoUrl: true, boardUrl: true, status: true,
       ownerType: true, ownerUser: { select: { fullName: true } }, ownerCompany: { select: { name: true } },
       _count: { select: { relations: true } },
     },
@@ -40,6 +40,7 @@ export default async function PublicProjectPage({ params }: { params: Promise<{ 
           <div className="flex gap-4 mt-6 text-sm">
             {p.repoUrl && <a href={p.repoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline"><Github className="h-4 w-4" />{t.projects.repo}</a>}
             {p.demoUrl && <a href={p.demoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline"><ExternalLink className="h-4 w-4" />{t.projects.demo}</a>}
+            {p.boardUrl && <a href={p.boardUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline"><Trello className="h-4 w-4" />{t.projects.board}</a>}
           </div>
           <p className="text-xs text-gray-400 mt-6">{p._count.relations} {t.projects.members}</p>
         </div>

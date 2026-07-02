@@ -12,7 +12,7 @@ export default async function globalSetup() {
       {
         origin,
         localStorage: [
-          { name: 'cookie_consent', value: JSON.stringify({ necessary: true, analytics: false, marketing: false, ts: '2026-01-01T00:00:00.000Z' }) },
+          { name: 'cookie_consent', value: JSON.stringify({ version: 2, necessary: true, analytics: false, marketing: false, ts: '2026-01-01T00:00:00.000Z' }) },
         ],
       },
     ],

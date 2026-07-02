@@ -9,6 +9,10 @@ import { authOptions } from '@/lib/auth';
 import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { VersionFooter } from '@/components/VersionFooter';
+import { BetaBadge } from '@/components/BetaBadge';
+import { APP_VERSION } from '@/lib/version';
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -49,9 +53,11 @@ export default async function HomePage() {
             <div className="flex items-center gap-2 min-w-0">
               <GraduationCap className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
               <span className="text-lg sm:text-xl font-bold text-gray-900 truncate">InternshipCRM</span>
+              <BetaBadge className="flex-shrink-0" />
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <LanguageSwitcher current={locale} />
+            <ThemeToggle />
               <Link href="/auth/signin" className="text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
                 {L.signIn}
               </Link>
@@ -106,7 +112,7 @@ export default async function HomePage() {
                     <rect x={x} y={50} width="180" height="60" rx="14" fill="none" stroke="#6366f1" strokeWidth="1.5" />
                     <circle cx={x + 30} cy={80} r="14" fill="#6366f1" />
                     <text x={x + 30} y={85} textAnchor="middle" fill="#fff" fontSize="13" fontWeight="700">{i + 1}</text>
-                    <text x={x + 58} y={85} fill="#1e293b" fontSize="15" fontWeight="600">{label}</text>
+                    <text x={x + 58} y={85} className="fill-slate-800 dark:fill-slate-100" fontSize="15" fontWeight="600">{label}</text>
                     {i < stages.length - 1 && (
                       <g>
                         <line x1={x + 180} y1={80} x2={x + 218} y2={80} stroke="#94a3b8" strokeWidth="2" />
@@ -169,7 +175,7 @@ export default async function HomePage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">{L.ctaTitle}</h2>
           <p className="text-blue-100 mb-8">{L.ctaSubtitle}</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors">
+            <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-8 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors dark:!bg-white dark:!text-blue-700 dark:hover:!bg-blue-100">
               {L.getStarted} <ArrowRight className="h-5 w-5" />
             </Link>
             <Link href="/auth/signin" className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-8 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors">
@@ -190,6 +196,7 @@ export default async function HomePage() {
           <div className="flex items-center gap-4">
             <Link href="/privacy" className="hover:text-gray-700">{t.privacy.title}</Link>
             <Link href="/terms" className="hover:text-gray-700">{t.terms.title}</Link>
+            <VersionFooter version={APP_VERSION} />
           </div>
         </div>
       </footer>

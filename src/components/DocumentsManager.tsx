@@ -80,7 +80,7 @@ export function DocumentsManager({
 
   return (
     <Card>
-      <CardHeader><CardTitle>{templates ? t.documents.templates : t.documents.title}</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{templates ? t.documents.uploadedTitle : t.documents.title}</CardTitle></CardHeader>
 
       {error && <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">{error}</div>}
 

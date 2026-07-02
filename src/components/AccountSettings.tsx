@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { AvatarManager } from '@/components/AvatarManager';
+import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 
@@ -37,6 +38,7 @@ export function AccountSettings() {
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaBusy, setTwoFaBusy] = useState(false);
   const [language, setLanguage] = useState('en');
+  const [theme, setTheme] = useState('system');
   const [role, setRole] = useState('');
   const [skills, setSkills] = useState('');
   const [capacity, setCapacity] = useState('');
@@ -51,6 +53,7 @@ export function AccountSettings() {
         setEmailNotifications(user.emailNotifications !== false);
         setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
         setLanguage(user.preferredLanguage ?? 'en');
+        setTheme(user.theme ?? 'system');
         setRole(user.role ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
@@ -76,6 +79,24 @@ export function AccountSettings() {
     } finally {
       setTwoFaBusy(false);
     }
+  };
+
+  const changeTheme = async (next: string) => {
+    setTheme(next);
+    const root = document.documentElement;
+    if (next === 'system') {
+      try { localStorage.removeItem('theme'); } catch { /* ignore */ }
+      document.cookie = 'theme=; path=/; max-age=0';
+      const osDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      root.classList.toggle('dark', !!osDark);
+    } else {
+      try { localStorage.setItem('theme', next); } catch { /* ignore */ }
+      document.cookie = `theme=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+      root.classList.toggle('dark', next === 'dark');
+    }
+    try {
+      await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: next }) });
+    } catch { /* ignore */ }
   };
 
   const changeLanguage = async (next: string) => {
@@ -315,19 +336,35 @@ export function AccountSettings() {
           ))}
         </div>
 
-        <div className="mt-4 pt-4 border-t border-gray-100 max-w-xs">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.language}</label>
-          <select
-            value={language}
-            onChange={(e) => changeLanguage(e.target.value)}
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            {locales.map((l) => (
-              <option key={l} value={l}>{(t.account.languages as Record<string, string>)[l] ?? l.toUpperCase()}</option>
-            ))}
-          </select>
+        <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.language}</label>
+            <select
+              value={language}
+              onChange={(e) => changeLanguage(e.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              {locales.map((l) => (
+                <option key={l} value={l}>{(t.account.languages as Record<string, string>)[l] ?? l.toUpperCase()}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.themeLabel}</label>
+            <select
+              value={theme}
+              onChange={(e) => changeTheme(e.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="system">{t.theme.system}</option>
+              <option value="light">{t.theme.light}</option>
+              <option value="dark">{t.theme.dark}</option>
+            </select>
+          </div>
         </div>
       </Card>
+
+      <ConsentSettings />
 
       <Card className="mt-6 max-w-4xl">
         <CardHeader><CardTitle>{t.account.dataSection}</CardTitle></CardHeader>

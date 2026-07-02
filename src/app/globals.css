@@ -13,6 +13,84 @@
   }
 }
 
+/* Dark mode base surfaces (class strategy); primitives add their own dark: */
+html.dark body { background-color: #030712; color: #f3f4f6; }
+
+/*
+ * Dark theme — broad neutral/accent remap.
+ * Components are built from a small set of Tailwind utilities (white/gray
+ * surfaces, gray text, *-50 accent boxes). Rather than annotate every element,
+ * we retint those utilities under html.dark. Flat (non-nested) selectors so no
+ * CSS-nesting plugin is required. Specificity (0,2,0) beats a bare utility
+ * (0,1,0), so these win without !important; primitives carrying explicit dark:
+ * classes resolve to the same dark values.
+ */
+/* Surfaces */
+html.dark .bg-white { background-color: #111827; }      /* gray-900 */
+html.dark .bg-gray-50 { background-color: #1f2937; }    /* gray-800 */
+html.dark .bg-gray-100 { background-color: #374151; }   /* gray-700 */
+html.dark .bg-gray-900 { background-color: #030712; }   /* keep deep */
+/* Soft accent boxes → dark tints (keep light text readable) */
+html.dark .bg-blue-50 { background-color: rgba(30,58,138,0.25); }
+html.dark .bg-green-50 { background-color: rgba(20,83,45,0.25); }
+html.dark .bg-yellow-50 { background-color: rgba(113,63,18,0.25); }
+html.dark .bg-amber-50 { background-color: rgba(120,53,15,0.25); }
+html.dark .bg-red-50 { background-color: rgba(127,29,29,0.25); }
+html.dark .bg-purple-50 { background-color: rgba(88,28,135,0.25); }
+html.dark .bg-indigo-50 { background-color: rgba(49,46,129,0.25); }
+html.dark .bg-gradient-to-br { background-image: none; background-color: #030712; }
+/* Text */
+html.dark .text-gray-900 { color: #f3f4f6; }
+html.dark .text-gray-800 { color: #e5e7eb; }
+html.dark .text-gray-700 { color: #d1d5db; }
+html.dark .text-gray-600 { color: #9ca3af; }
+html.dark .text-gray-500 { color: #9ca3af; }
+/* Borders */
+html.dark .border-gray-100 { border-color: #1f2937; }
+html.dark .border-gray-200 { border-color: #374151; }
+html.dark .border-gray-300 { border-color: #4b5563; }
+html.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: #1f2937; }
+html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #374151; }
+
+/* Translucent white surfaces (e.g. the sticky landing header bg-white/80). */
+html.dark .bg-white\/80 { background-color: rgba(17,24,39,0.85); }
+html.dark .bg-white\/70 { background-color: rgba(17,24,39,0.80); }
+
+/*
+ * Variant utilities (hover:/focus:) can't be reached by the base-name remaps
+ * above — the class is e.g. `hover:bg-blue-50`, not `bg-blue-50`. Re-tint the
+ * ones the app actually uses (nav items, list rows, danger actions).
+ */
+html.dark .hover\:bg-blue-50:hover { background-color: rgba(30,58,138,0.35); }
+html.dark .hover\:bg-gray-50:hover { background-color: #1f2937; }
+html.dark .hover\:bg-gray-100:hover { background-color: #374151; }
+html.dark .hover\:bg-red-50:hover { background-color: rgba(127,29,29,0.35); }
+
+/* Colored heading text used on tinted cards → lighter for contrast on dark. */
+html.dark .text-red-900 { color: #fca5a5; }
+html.dark .text-blue-900 { color: #bfdbfe; }
+html.dark .text-green-900 { color: #bbf7d0; }
+html.dark .text-indigo-900 { color: #c7d2fe; }
+html.dark .text-purple-900 { color: #e9d5ff; }
+html.dark .text-amber-900 { color: #fde68a; }
+
+/*
+ * Native form controls. Inline <input>/<select>/<textarea> scattered through
+ * pages don't all use the themed UI primitives, so default them to dark here.
+ * The UI primitives carry their own dark: classes in the same palette, so the
+ * two never visibly disagree. Checkboxes/radios keep their accent.
+ */
+html.dark input:not([type='checkbox']):not([type='radio']):not([type='range']),
+html.dark select,
+html.dark textarea {
+  background-color: #111827;
+  color: #f3f4f6;
+  border-color: #374151;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: #6b7280; }
+html.dark option { background-color: #111827; color: #f3f4f6; }
+
 @layer components {
   .container-page {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;

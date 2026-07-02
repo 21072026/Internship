@@ -56,12 +56,15 @@ export async function POST(request: Request) {
   let created = 0;
   for (const rel of relations) {
     const rsvpToken = randomBytes(24).toString('hex');
+    // Auto-generate a ready-to-use video link (Jitsi, no account needed) when
+    // the organizer didn't paste one — each meeting gets its own room.
+    const link = meetLink || `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
     await prisma.meeting.create({
       data: {
         relationId: rel.id,
         title,
         scheduledAt: when,
-        meetLink: meetLink || null,
+        meetLink: link,
         rsvpToken,
         createdById: session.user.id,
       },
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
         fullName: rel.mentee.fullName,
         title,
         scheduledAt: when,
-        meetLink: meetLink || null,
+        meetLink: link,
         rsvpToken,
       });
     } catch (e) {

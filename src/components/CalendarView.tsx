@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Video, Flag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { useT, useLocale } from '@/i18n/client';
 
 interface Ev {
   id: string;
-  type: 'meeting' | 'deadline';
+  type: 'meeting' | 'deadline' | 'logged';
   title: string;
   who: string;
   date: string;
@@ -73,10 +73,16 @@ export function CalendarView() {
                 {evs.map((e) => {
                   const cls = e.type === 'deadline'
                     ? (e.overdue ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700')
-                    : 'bg-blue-100 text-blue-700';
+                    : e.type === 'logged'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-blue-100 text-blue-700';
                   const inner = (
                     <span className="flex items-center gap-1 truncate">
-                      {e.type === 'deadline' ? <Flag className="h-3 w-3 flex-shrink-0" /> : <Video className="h-3 w-3 flex-shrink-0" />}
+                      {e.type === 'deadline'
+                        ? <Flag className="h-3 w-3 flex-shrink-0" />
+                        : e.type === 'logged'
+                          ? <CheckCircle2 className="h-3 w-3 flex-shrink-0" />
+                          : <Video className="h-3 w-3 flex-shrink-0" />}
                       <span className="truncate">{e.who}</span>
                     </span>
                   );
@@ -92,8 +98,13 @@ export function CalendarView() {
         })}
       </div>
 
-      <div className="flex gap-4 mt-4 text-xs text-gray-500">
+      {events.length === 0 && (
+        <p className="mt-4 text-center text-sm text-gray-400">{t.calendar.empty}</p>
+      )}
+
+      <div className="flex flex-wrap gap-4 mt-4 text-xs text-gray-500">
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-100 inline-block" />{t.calendar.meeting}</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-100 inline-block" />{t.calendar.logged}</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-100 inline-block" />{t.calendar.deadline}</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 inline-block" />{t.calendar.overdue}</span>
       </div>

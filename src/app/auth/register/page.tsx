@@ -2,7 +2,7 @@
 import { useT, useLocale } from "@/i18n/client";
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,6 +12,7 @@ import { GraduationCap } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Suspense } from 'react';
+import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 
 const registerSchema = z
   .object({
@@ -37,6 +38,18 @@ function RegisterForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Record that the invitation link was opened (once), so admins see the invite
+  // progress from "sent" to "link opened" before the invitee finishes signing up.
+  const inviteToken = searchParams.get('token');
+  useEffect(() => {
+    if (!inviteToken) return;
+    fetch('/api/invite/opened', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    }).catch(() => {});
+  }, [inviteToken]);
+
   const {
     register,
     handleSubmit,
@@ -61,6 +74,8 @@ function RegisterForm() {
           email: data.email,
           password: data.password,
           fullName: data.fullName,
+          consent: data.consent,
+          privacyVersion: PRIVACY_POLICY_VERSION,
         }),
       });
 
@@ -139,6 +154,10 @@ function RegisterForm() {
               {...register('confirmPassword')}
               error={errors.confirmPassword?.message}
             />
+            <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-gray-600">
+              <p className="font-medium text-gray-700 mb-1">{t.auth.dataSharingTitle}</p>
+              <p>{t.auth.dataSharingBody}</p>
+            </div>
             <label className="flex items-start gap-2 text-xs text-gray-600">
               <input type="checkbox" className="mt-0.5" {...register('consent')} />
               <span>

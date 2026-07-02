@@ -5,7 +5,7 @@ import { Check, Circle, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 
 interface Goal {
   id: string;
@@ -13,12 +13,15 @@ interface Goal {
   description: string | null;
   status: 'OPEN' | 'DONE';
   dueDate: string | null;
+  createdAt: string;
+  createdByRole: string | null;
 }
 
 // Goal setting + tracking for a mentorship relation. Read-only viewers (e.g. a
 // company observer) only see progress; participants can add/toggle/remove.
 export function GoalsPanel({ relationId, readOnly = false }: { relationId: string; readOnly?: boolean }) {
   const t = useT();
+  const locale = useLocale();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -92,9 +95,14 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
               >
                 {g.status === 'DONE' ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
               </button>
-              <span className={`flex-1 ${g.status === 'DONE' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                {g.title}
-                {g.dueDate && <span className="text-xs text-gray-400 ml-2">{new Date(g.dueDate).toLocaleDateString()}</span>}
+              <span className="flex-1 min-w-0">
+                <span className={g.status === 'DONE' ? 'line-through text-gray-400' : 'text-gray-800'}>{g.title}</span>
+                <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
+                  {g.createdByRole === 'MENTOR' && <span>{t.goals.byMentor}</span>}
+                  {g.createdByRole === 'MENTEE' && <span>{t.goals.byMentee}</span>}
+                  <span>· {new Date(g.createdAt).toLocaleDateString(locale)}</span>
+                  {g.dueDate && <span>· {t.goals.dueDate}: {new Date(g.dueDate).toLocaleDateString(locale)}</span>}
+                </span>
               </span>
               {!readOnly && (
                 <button onClick={() => remove(g.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600">

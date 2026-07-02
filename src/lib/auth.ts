@@ -9,6 +9,11 @@ import { verifyTotp } from '@/lib/totp';
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
+    // Auth hardening: cap the session lifetime so a stolen/idle token can't live
+    // forever. The token is silently refreshed (at most hourly) while in use, so
+    // active users aren't logged out; an untouched session expires after 12h.
+    maxAge: 12 * 60 * 60,
+    updateAge: 60 * 60,
   },
   pages: {
     signIn: '/auth/signin',
@@ -53,7 +58,18 @@ export const authOptions: NextAuthOptions = {
         // Successful auth — reset the failure counter.
         clearRateLimit(failKey);
 
+        // Verified-but-inactive is NOT the same as never-activated. Only block
+        // inactive accounts: an active-but-unverified user may still sign in
+        // (read-only, nagged to verify — enforced by middleware). Among inactive
+        // accounts, an unverified one is a never-activated self-registration
+        // (its verification link may have expired) — surface EMAIL_NOT_VERIFIED
+        // so the sign-in page can offer to resend, instead of the misleading
+        // "deactivated". A verified-but-inactive account was deactivated by an
+        // admin.
         if (!user.isActive) {
+          if (!user.emailVerified) {
+            throw new Error('EMAIL_NOT_VERIFIED');
+          }
           throw new Error('This account has been deactivated. Please contact an administrator.');
         }
 

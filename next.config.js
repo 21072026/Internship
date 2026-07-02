@@ -26,7 +26,9 @@ const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ['@prisma/client', 'bcryptjs'],
+  // pdf-parse/mammoth pull in Node-only deps (pdfjs) — keep them out of the
+  // webpack server bundle so they load as plain CJS at runtime.
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth'],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

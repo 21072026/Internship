@@ -1,10 +1,12 @@
 // Minimal service worker — enables installability and an offline-friendly
 // shell. Network-first; falls back to cache when offline.
-const CACHE = 'internship-crm-v1';
+const CACHE = 'internship-crm-v2';
+const OFFLINE_URL = '/offline';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(caches.open(CACHE));
+  // Precache the offline fallback so even un-visited pages degrade gracefully.
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll([OFFLINE_URL, '/icon.svg']).catch(() => {})));
 });
 
 self.addEventListener('activate', (event) => {
@@ -26,6 +28,15 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
         return res;
       })
-      .catch(() => caches.match(req))
+      .catch(async () => {
+        const cached = await caches.match(req);
+        if (cached) return cached;
+        // For navigations with nothing cached, show the offline page.
+        if (req.mode === 'navigate') {
+          const offline = await caches.match(OFFLINE_URL);
+          if (offline) return offline;
+        }
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+      })
   );
 });

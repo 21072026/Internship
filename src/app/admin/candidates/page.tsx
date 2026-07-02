@@ -27,6 +27,7 @@ interface Candidate {
   whatsapp?: string;
   city?: string;
   createdAt: string;
+  isActive: boolean;
   menteeRelations: {
     pipelineStatus?: string;
     mentor: { id: string; fullName: string };
@@ -45,6 +46,9 @@ export default function CandidatesPage() {
   const t = useT();
   const locale = useLocale();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 24;
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [skillFilter, setSkillFilter] = useState('');
@@ -55,6 +59,8 @@ export default function CandidatesPage() {
   const [sourceFilter, setSourceFilter] = useState('');
   const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const COLS = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
   const toRow = (c: Candidate) => {
@@ -67,9 +73,20 @@ export default function CandidatesPage() {
     ];
   };
 
-  const exportCsv = () => {
+  // Exports cover ALL matching candidates (every page), not just the page in
+  // view — fetch the full filtered set with all=1 before building the file.
+  const fetchAllForExport = async (): Promise<Candidate[]> => {
+    const params = buildFilterParams();
+    params.set('all', '1');
+    const res = await fetch(`/api/candidates?${params}`);
+    const data = await res.json();
+    return (data.candidates || []) as Candidate[];
+  };
+
+  const exportCsv = async () => {
+    const rows0 = await fetchAllForExport();
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = candidates.map((c) => toRow(c).map(esc).join(','));
+    const rows = rows0.map((c) => toRow(c).map(esc).join(','));
     const csv = [COLS.join(','), ...rows].join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
@@ -80,8 +97,9 @@ export default function CandidatesPage() {
   };
 
   const exportExcel = async () => {
+    const rows0 = await fetchAllForExport();
     const { exportXlsx } = await import('@/lib/excel');
-    await exportXlsx(`candidates-${new Date().toISOString().slice(0, 10)}`, COLS, candidates.map(toRow), 'Candidates');
+    await exportXlsx(`candidates-${new Date().toISOString().slice(0, 10)}`, COLS, rows0.map(toRow), 'Candidates');
   };
 
   // Read an optional ?status= filter from the URL (e.g. from dashboard pipeline bars)
@@ -89,27 +107,35 @@ export default function CandidatesPage() {
     setStatusFilter(new URLSearchParams(window.location.search).get('status') || '');
   }, []);
 
+  // Build the shared filter query string (without pagination params).
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (skillFilter) params.set('skills', skillFilter);
+    if (yearFilter) params.set('graduationYear', yearFilter);
+    if (search) params.set('search', search);
+    if (statusFilter) params.set('status', statusFilter);
+    if (cityFilter) params.set('city', cityFilter);
+    if (projectFilter) params.set('project', projectFilter);
+    if (sourceFilter) params.set('source', sourceFilter);
+    return params;
+  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter]);
+
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (skillFilter) params.set('skills', skillFilter);
-      if (yearFilter) params.set('graduationYear', yearFilter);
-      if (search) params.set('search', search);
-      if (statusFilter) params.set('status', statusFilter);
-      if (cityFilter) params.set('city', cityFilter);
-      if (projectFilter) params.set('project', projectFilter);
-      if (sourceFilter) params.set('source', sourceFilter);
-
+      const params = buildFilterParams();
+      params.set('page', String(page));
+      params.set('pageSize', String(PAGE_SIZE));
       const res = await fetch(`/api/candidates?${params}`);
       const data = await res.json();
       setCandidates(data.candidates || []);
+      setTotal(typeof data.total === 'number' ? data.total : (data.candidates?.length ?? 0));
     } catch {
       setError('Failed to load candidates');
     } finally {
       setLoading(false);
     }
-  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter]);
+  }, [buildFilterParams, page]);
 
   useEffect(() => {
     fetch('/api/admin/sources')
@@ -122,6 +148,48 @@ export default function CandidatesPage() {
     const timeout = setTimeout(fetchCandidates, 300);
     return () => clearTimeout(timeout);
   }, [fetchCandidates]);
+
+  // Any filter change returns to the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allVisibleSelected = candidates.length > 0 && candidates.every((c) => selected.has(c.id));
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      if (allVisibleSelected) return new Set();
+      const next = new Set(prev);
+      candidates.forEach((c) => next.add(c.id));
+      return next;
+    });
+  };
+
+  const runBulkAction = async (action: 'activate' | 'deactivate') => {
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/admin/candidates/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateIds: Array.from(selected), action }),
+      });
+      if (res.ok) {
+        setSelected(new Set());
+        await fetchCandidates();
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   return (
     <div>
@@ -241,10 +309,34 @@ export default function CandidatesPage() {
         </div>
       </div>
 
-      {/* Results count */}
-      <p className="text-sm text-gray-500 mb-4">
-        {loading ? t.common.loading : `${candidates.length} ${t.candidates.found}`}
-      </p>
+      {/* Results count + bulk selection */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-3">
+          {!loading && candidates.length > 0 && (
+            <label className="flex items-center gap-1.5 text-sm text-gray-600">
+              <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} />
+              {t.candidates.selectAll}
+            </label>
+          )}
+          <p className="text-sm text-gray-500">
+            {loading ? t.common.loading : `${total} ${t.candidates.found}`}
+          </p>
+        </div>
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-1.5">
+            <span className="text-sm text-blue-800 dark:text-blue-200">{selected.size} {t.candidates.selected}</span>
+            <Button size="sm" variant="outline" loading={bulkBusy} onClick={() => runBulkAction('deactivate')}>
+              {t.candidates.bulkDeactivate}
+            </Button>
+            <Button size="sm" variant="outline" loading={bulkBusy} onClick={() => runBulkAction('activate')}>
+              {t.candidates.bulkActivate}
+            </Button>
+            <button onClick={() => setSelected(new Set())} className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300">
+              {t.candidates.clearSelection}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Candidates Grid */}
       {loading ? (
@@ -265,22 +357,34 @@ export default function CandidatesPage() {
             const activeRelation = candidate.menteeRelations[0];
 
             return (
-              <Card key={candidate.id}>
+              <Card key={candidate.id} data-testid={`candidate-card-${candidate.id}`} className={!candidate.isActive ? 'opacity-60' : undefined}>
                 <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <Link
-                      href={`/admin/candidates/${candidate.id}`}
-                      className="font-semibold text-gray-900 hover:text-blue-700 hover:underline"
-                    >
-                      {candidate.fullName}
-                    </Link>
-                    <p className="text-sm text-gray-500">{candidate.email}</p>
+                  <div className="flex items-start gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      className="mt-1 flex-shrink-0"
+                      checked={selected.has(candidate.id)}
+                      onChange={() => toggleSelect(candidate.id)}
+                      aria-label={t.candidates.selectOne}
+                    />
+                    <div className="min-w-0">
+                      <Link
+                        href={`/admin/candidates/${candidate.id}`}
+                        className="font-semibold text-gray-900 hover:text-blue-700 hover:underline"
+                      >
+                        {candidate.fullName}
+                      </Link>
+                      <p className="text-sm text-gray-500">{candidate.email}</p>
+                    </div>
                   </div>
-                  {activeRelation ? (
-                    <Badge variant="success" className="flex-shrink-0">{t.candidates.assigned}</Badge>
-                  ) : (
-                    <Badge variant="warning" className="flex-shrink-0">{t.candidates.unassigned}</Badge>
-                  )}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    {!candidate.isActive && <Badge variant="danger">{t.candidates.inactive}</Badge>}
+                    {activeRelation ? (
+                      <Badge variant="success">{t.candidates.assigned}</Badge>
+                    ) : (
+                      <Badge variant="warning">{t.candidates.unassigned}</Badge>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2 mb-4">
@@ -328,6 +432,18 @@ export default function CandidatesPage() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-8">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            {t.common.prev}
+          </Button>
+          <span className="text-sm text-gray-500">{page} / {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+            {t.common.next}
+          </Button>
         </div>
       )}
     </div>

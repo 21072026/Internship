@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import type { Role } from '@prisma/client';
 import { z } from 'zod';
 
 async function relationIfAllowed(userId: string, role: string, relationId: string) {
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
       title: parsed.data.title,
       description: parsed.data.description || null,
       dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null,
+      // Record which side set the goal so it's clear who owns it.
+      createdByRole: session.user.role as Role,
     },
   });
   return NextResponse.json({ goal }, { status: 201 });

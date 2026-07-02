@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { makeConsentRenewToken } from '@/lib/consentRenew';
+import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import type { PipelineStatus } from '@prisma/client';
 
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
@@ -405,6 +407,64 @@ export async function sendWeeklyMentorDigests() {
   return { mentors: mentors.length, sent };
 }
 
+// Retention re-consent (GDPR Art. 5(1)(e) + 7): when a candidate's consent is
+// older than the retention limit, email them a renewal link, notify them and
+// admins in-app, and stamp the send so it isn't repeated. If they don't renew
+// within the grace period they surface in the admin retention review for manual
+// erasure — nothing is deleted automatically.
+export async function checkRetentionReminders() {
+  const months = await getRetentionMonths();
+  const dueCutoff = new Date();
+  dueCutoff.setMonth(dueCutoff.getMonth() - months);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+  const users = await prisma.user.findMany({
+    where: {
+      role: 'MENTEE',
+      consentAt: { not: null, lt: dueCutoff },
+      retentionReminderSentAt: null,
+    },
+    select: { id: true, fullName: true, email: true },
+  });
+
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true },
+  });
+
+  let reminded = 0;
+  for (const u of users) {
+    const renewUrl = `${appUrl}/consent/renew?token=${makeConsentRenewToken(u.id)}`;
+    // Legal/retention notice — always sent (not gated by marketing opt-out).
+    await sendEmail({
+      to: u.email,
+      subject: 'Please confirm you still want us to keep your data',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color:#2563eb;">Do you want to keep your data with us?</h2>
+          <p>Hi ${u.fullName},</p>
+          <p>It has been more than ${months} months since you agreed to us storing your
+          data (profile, CV and interaction history). To keep it, please confirm below.
+          If you don't, an administrator will review your record for deletion.</p>
+          <a href="${renewUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">Keep my data</a>
+          <p style="color:#6b7280;font-size:12px;">You can also download or delete your data anytime from Account settings.</p>
+        </div>`,
+    });
+    await notify(u.id, 'retention', 'Please confirm you still want us to keep your data.', `/consent/renew?token=${makeConsentRenewToken(u.id)}`);
+    await prisma.user.update({ where: { id: u.id }, data: { retentionReminderSentAt: new Date() } });
+    reminded += 1;
+  }
+
+  // Let admins know how many candidates are up for retention review.
+  if (reminded > 0) {
+    await Promise.all(
+      admins.map((a) => notify(a.id, 'retention', `${reminded} candidate(s) asked to re-consent (data retention).`, '/admin/retention'))
+    );
+  }
+
+  return { checked: users.length, reminded, retentionMonths: months, graceDays: RETENTION_GRACE_DAYS };
+}
+
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
 export function initCronJobs() {
@@ -418,6 +478,8 @@ export function initCronJobs() {
       console.log(`[Cron] Done. Checked: ${result.checked}, Reminded: ${result.reminded}`);
       const dl = await checkStageDeadlineReminders();
       console.log(`[Cron] Stage deadline reminders: ${dl.reminded}`);
+      const rr = await checkRetentionReminders();
+      console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
     } catch (error) {
       console.error('[Cron] Error running reminder check:', error);
     }

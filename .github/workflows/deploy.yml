@@ -1,15 +1,23 @@
 name: Deploy to Plesk Server
 
 on:
-  push:
-    branches: [main]
+  # Previews deploy on every PR (tests run alongside — a broken preview is fine).
   pull_request:
+    branches: [main]
+  # Production deploys ONLY after the E2E suite finishes on main. The job below
+  # additionally requires conclusion == success, so a red build never ships.
+  # This is a code-level complement to branch protection (issue #425).
+  workflow_run:
+    workflows: ["E2E Tests"]
+    types: [completed]
     branches: [main]
 
 jobs:
   build-and-deploy:
     name: ${{ github.event_name == 'pull_request' && 'Preview Deploy' || 'Production Deploy' }}
     runs-on: ubuntu-latest
+    # Preview: always (on PR). Production: only when the E2E run it followed passed.
+    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     permissions:
       contents: read
       packages: write       # push images to ghcr.io
@@ -18,6 +26,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # For workflow_run, build the exact commit the E2E suite validated
+          # (github.sha would be the branch tip, which may have moved).
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -46,6 +58,8 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tag }}
+          build-args: |
+            GIT_SHA=${{ github.event.workflow_run.head_sha || github.sha }}
           # No build-time secrets — all real values are injected at `docker run`
 
       # ── SSH key setup (shared by both deploy steps) ──────────────────────────
@@ -67,9 +81,9 @@ jobs:
           ssh-keyscan -H "$SSH_HOST" \
             >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      # ── Production deploy (push to main) ────────────────────────────────────
+      # ── Production deploy (after E2E succeeds on main) ───────────────────────
       - name: Deploy to production via SSH
-        if: github.event_name == 'push'
+        if: github.event_name == 'workflow_run'
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -123,6 +137,13 @@ jobs:
             -e DATABASE_URL="\$DATABASE_URL" \
             "\$IMAGE" \
             npx prisma db push --accept-data-loss
+
+          # Seed starter document templates (idempotent — only adds missing ones).
+          docker run --rm \
+            --network=host \
+            -e DATABASE_URL="\$DATABASE_URL" \
+            "\$IMAGE" \
+            node prisma/seed-templates.mjs || true
 
           docker stop internship-crm 2>/dev/null || true
           docker rm   internship-crm 2>/dev/null || true
@@ -211,6 +232,13 @@ jobs:
             -e DATABASE_URL="\$CONTAINER_DB" \
             "\$IMAGE" \
             npx prisma db push --accept-data-loss
+
+          # Seed starter document templates (idempotent).
+          docker run --rm \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="\$CONTAINER_DB" \
+            "\$IMAGE" \
+            node prisma/seed-templates.mjs || true
 
           docker stop internship-crm-preview 2>/dev/null || true
           docker rm   internship-crm-preview 2>/dev/null || true

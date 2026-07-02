@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
-import { Github, ExternalLink, Trash2, Pencil } from 'lucide-react';
+import { Github, ExternalLink, Trash2, Pencil, Trello } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 interface Task {
@@ -22,6 +22,7 @@ interface Project {
   technologies: string[];
   repoUrl: string | null;
   demoUrl: string | null;
+  boardUrl: string | null;
   status: ProjectStatus;
   isPublic: boolean;
   goals: string | null;
@@ -37,7 +38,7 @@ interface Project {
 const STATUS_VARIANT: Record<ProjectStatus, 'success' | 'info' | 'default' | 'warning'> = {
   DRAFT: 'warning', ACTIVE: 'success', COMPLETED: 'info', ARCHIVED: 'default', CANCELLED: 'default',
 };
-const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUrl: '', status: 'ACTIVE', isPublic: false, goals: '', startDate: '', endDate: '' };
+const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUrl: '', boardUrl: '', status: 'ACTIVE', isPublic: false, goals: '', startDate: '', endDate: '' };
 
 export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const t = useT();
@@ -79,6 +80,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
         technologies: form.technologies.split(',').map((s) => s.trim()).filter(Boolean),
         repoUrl: form.repoUrl,
         demoUrl: form.demoUrl,
+        boardUrl: form.boardUrl,
         status: form.status,
         isPublic: form.isPublic,
         goals: form.goals,
@@ -120,7 +122,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     setEditingId(p.id);
     setForm({
       name: p.name, description: p.description ?? '', technologies: p.technologies.join(', '),
-      repoUrl: p.repoUrl ?? '', demoUrl: p.demoUrl ?? '', status: p.status, isPublic: p.isPublic,
+      repoUrl: p.repoUrl ?? '', demoUrl: p.demoUrl ?? '', boardUrl: p.boardUrl ?? '', status: p.status, isPublic: p.isPublic,
       goals: p.goals ?? '', startDate: p.startDate ? p.startDate.slice(0, 10) : '', endDate: p.endDate ? p.endDate.slice(0, 10) : '',
     });
     setOwnerType(p.ownerType);
@@ -179,6 +181,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label={t.projects.repoUrl} type="url" placeholder="https://github.com/..." value={form.repoUrl} onChange={(e) => setForm({ ...form, repoUrl: e.target.value })} />
             <Input label={t.projects.demoUrl} type="url" placeholder="https://..." value={form.demoUrl} onChange={(e) => setForm({ ...form, demoUrl: e.target.value })} />
+            <Input label={t.projects.boardUrl} type="url" placeholder="https://github.com/users/you/projects/2" hint={t.projects.boardUrlHint} value={form.boardUrl} onChange={(e) => setForm({ ...form, boardUrl: e.target.value })} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select label={t.projects.status} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
@@ -256,6 +259,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                     <div className="flex gap-3 mt-2 text-xs">
                       {p.repoUrl && <a href={p.repoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><Github className="h-3.5 w-3.5" />{t.projects.repo}</a>}
                       {p.demoUrl && <a href={p.demoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><ExternalLink className="h-3.5 w-3.5" />{t.projects.demo}</a>}
+                      {p.boardUrl && <a href={p.boardUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><Trello className="h-3.5 w-3.5" />{t.projects.board}</a>}
                       {(p.startDate || p.endDate) && (
                         <span className="text-gray-400">
                           {p.startDate ? new Date(p.startDate).toLocaleDateString() : '…'} – {p.endDate ? new Date(p.endDate).toLocaleDateString() : '…'}

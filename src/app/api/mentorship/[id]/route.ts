@@ -69,7 +69,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json({ relation });
+    // Surface the linked company's shortlist signal (EPIC: company shortlist)
+    // to the mentor/admin viewing this relation.
+    const companyInterest = relation.companyId
+      ? await prisma.companyInterest.findUnique({
+          where: { companyId_menteeId: { companyId: relation.companyId, menteeId: relation.menteeId } },
+        })
+      : null;
+
+    return NextResponse.json({ relation: { ...relation, companyInterest } });
   } catch (error) {
     console.error('Get mentorship error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

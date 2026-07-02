@@ -9,8 +9,10 @@ import { useT } from '@/i18n/client';
 export default function AdminSettingsPage() {
   const t = useT();
   const [reminderDays, setReminderDays] = useState('14');
+  const [retentionMonths, setRetentionMonths] = useState('12');
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
+  const [require2fa, setRequire2fa] = useState('off');
   const [savingSettings, setSavingSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -24,8 +26,10 @@ export default function AdminSettingsPage() {
     if (res.ok) {
       const { settings } = await res.json();
       setReminderDays(settings.reminderDays ?? '14');
+      setRetentionMonths(settings.retentionMonths ?? '12');
       setSupportEmail(settings.supportEmail ?? '');
       setWeeklyDigest(settings.weeklyDigest !== 'false');
+      setRequire2fa(settings.require2fa ?? 'off');
     }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -36,7 +40,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false' }),
+        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa }),
       });
       if (res.ok) setFlash(t.settings.saved);
     } finally {
@@ -83,11 +87,25 @@ export default function AdminSettingsPage() {
           <CardHeader><CardTitle>{t.settings.system}</CardTitle></CardHeader>
           <form onSubmit={saveSettings} className="space-y-4">
             <Input label={t.settings.reminderDays} type="number" min={1} max={365} value={reminderDays} onChange={(e) => setReminderDays(e.target.value)} hint={t.settings.reminderDaysHint} />
+            <Input label={t.settings.retentionMonths} type="number" min={1} max={120} value={retentionMonths} onChange={(e) => setRetentionMonths(e.target.value)} hint={t.settings.retentionMonthsHint} />
             <Input label={t.settings.supportEmail} type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={weeklyDigest} onChange={(e) => setWeeklyDigest(e.target.checked)} />
               {t.settings.weeklyDigest}
             </label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.require2fa}</label>
+              <select
+                value={require2fa}
+                onChange={(e) => setRequire2fa(e.target.value)}
+                className="block w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3 py-2 text-sm"
+              >
+                <option value="off">{t.settings.require2faOff}</option>
+                <option value="admins">{t.settings.require2faAdmins}</option>
+                <option value="admins_mentors">{t.settings.require2faAdminsMentors}</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">{t.settings.require2faHint}</p>
+            </div>
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">

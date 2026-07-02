@@ -1,10 +1,13 @@
 import { getServerSession } from 'next-auth';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
+import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getAttentionItems } from '@/lib/mentorAttention';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
+import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Users, BookOpen, MessageSquare, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
@@ -55,6 +58,7 @@ export default async function MentorDashboard() {
   const session = await getServerSession(authOptions);
   const { t } = await getServerDictionary();
   const { relations, recentInteractions } = await getMentorData(session!.user.id);
+  const attentionItems = await getAttentionItems(session!.user.id);
 
   const activeRelations = relations.filter((r) => r.status === 'ACTIVE');
 
@@ -67,6 +71,8 @@ export default async function MentorDashboard() {
         </h1>
         <p className="text-gray-500 mt-1">{t.mentor.dashSubtitle}</p>
       </div>
+
+      <MentorAttentionQueue items={attentionItems} t={t} />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
@@ -192,18 +198,7 @@ export default async function MentorDashboard() {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge
-                      variant={
-                        interaction.type === 'Meeting'
-                          ? 'info'
-                          : interaction.type === 'Feedback'
-                          ? 'success'
-                          : 'warning'
-                      }
-                      className="text-xs"
-                    >
-                      {interaction.type}
-                    </Badge>
+                    <InteractionTypeBadge type={interaction.type} className="text-xs" />
                     <span className="text-xs text-gray-500">
                       with {interaction.relation.mentee.fullName}
                     </span>

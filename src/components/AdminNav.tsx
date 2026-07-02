@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText,
   BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, Settings, Webhook, Search,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
@@ -29,6 +30,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
+  { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   { href: '/admin/settings', icon: Settings, key: 'settings' },
   { href: '/admin/invite', icon: Mail, key: 'invite' },
 ];

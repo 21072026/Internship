@@ -1,14 +1,18 @@
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { GraduationCap } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 import { ProfileViewPing } from '@/components/ProfileViewPing';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { PublicContactForm } from '@/components/PublicContactForm';
 
 // Public, PII-free profile. Only fields safe to share are selected — never
 // email, phone, whatsapp, or birth date.
 export default async function PublicProfilePage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
-  const { t } = await getServerDictionary();
+  const { locale, t } = await getServerDictionary();
 
   const user = await prisma.user.findFirst({
     where: { id: userId, publicProfile: true },
@@ -46,6 +50,16 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
       <ProfileViewPing userId={userId} />
       <div className="w-full max-w-lg">
+        {/* Public controls: language, theme, and a link back to the product. */}
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700">
+            <GraduationCap className="h-4 w-4" /> InternshipCRM
+          </Link>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher current={locale} />
+            <ThemeToggle />
+          </div>
+        </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <div className="flex items-center gap-4 mb-6">
             {user.avatarUrl ? (
@@ -114,10 +128,15 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
             </div>
           )}
 
-          <div className="mt-8 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-400">
+          <PublicContactForm userId={userId} />
+
+          <Link
+            href="/"
+            className="mt-8 pt-4 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-400 hover:text-blue-600 transition-colors"
+          >
             <GraduationCap className="h-4 w-4" />
             {t.publicProfile.poweredBy}
-          </div>
+          </Link>
         </div>
       </div>
     </div>

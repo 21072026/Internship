@@ -39,18 +39,18 @@ export function OnboardingChecklist() {
   };
 
   return (
-    <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50/60 p-5">
+    <div className="mb-6 rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Rocket className="h-5 w-5 text-blue-600" />
-          <h2 className="font-semibold text-gray-900">{t.checklist.title}</h2>
-          <span className="text-xs text-gray-500">{doneCount}/{steps.length}</span>
+          <Rocket className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t.checklist.title}</h2>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{doneCount}/{steps.length}</span>
         </div>
-        <button onClick={dismiss} aria-label={t.checklist.dismiss} className="text-gray-400 hover:text-gray-700">
+        <button onClick={dismiss} aria-label={t.checklist.dismiss} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="mt-3 h-1.5 bg-blue-100 rounded-full overflow-hidden">
+      <div className="mt-3 h-1.5 bg-blue-100 dark:bg-blue-900/60 rounded-full overflow-hidden">
         <div className="h-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
       </div>
       <ul className="mt-3 space-y-1.5">
@@ -58,14 +58,14 @@ export function OnboardingChecklist() {
           <li key={s.key}>
             <Link
               href={s.href}
-              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-white ${
-                s.done ? 'text-gray-400' : 'text-gray-800'
+              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-white dark:hover:bg-gray-800 ${
+                s.done ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
               }`}
             >
               {s.done ? (
                 <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
               ) : (
-                <Circle className="h-4 w-4 text-gray-300 flex-shrink-0" />
+                <Circle className="h-4 w-4 text-gray-300 dark:text-gray-600 flex-shrink-0" />
               )}
               <span className={s.done ? 'line-through' : ''}>{labels[s.key] ?? s.key}</span>
             </Link>

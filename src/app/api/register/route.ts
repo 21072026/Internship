@@ -7,12 +7,18 @@ import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
 import { passwordSchema } from '@/lib/password';
 import { notify } from '@/lib/notify';
+import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 
 const registerSchema = z.object({
   token: z.string().optional(),
   email: z.string().email('Invalid email'),
   password: passwordSchema,
   fullName: z.string().min(1, 'Full name is required'),
+  // Consent to the privacy notice/terms. Optional for backward compatibility;
+  // when sent it must be true. `privacyVersion` records which notice version
+  // was shown (GDPR Art. 7 demonstrability).
+  consent: z.boolean().optional(),
+  privacyVersion: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -31,6 +37,11 @@ export async function POST(request: Request) {
     }
 
     const { token, email, password, fullName } = parsed.data;
+
+    // If consent was explicitly provided, it must be affirmative.
+    if (parsed.data.consent === false) {
+      return NextResponse.json({ error: 'Consent to the privacy notice is required' }, { status: 400 });
+    }
 
     // With a token: validate the invitation and use its role.
     // Without a token: open self-registration as a MENTOR.
@@ -74,8 +85,37 @@ export async function POST(request: Request) {
       select: { id: true, email: true, fullName: true, role: true, createdAt: true },
     });
 
+    // Record which privacy-notice version was accepted, so consent is auditable
+    // and re-consent can be requested when the notice changes (GDPR Art. 7).
+    await prisma.userConsent.create({
+      data: {
+        userId: user.id,
+        type: 'PRIVACY_POLICY',
+        version: parsed.data.privacyVersion ?? PRIVACY_POLICY_VERSION,
+        grantedAt: new Date(),
+      },
+    });
+
     if (token) {
-      await prisma.invitationToken.update({ where: { token }, data: { used: true } });
+      // Advance the invitation lifecycle: registered now, and (since invited
+      // users are verified immediately) verified at the same moment. openedAt is
+      // backfilled in case the "opened" ping never landed (e.g. token pasted
+      // manually instead of clicking the emailed link).
+      const now = new Date();
+      await prisma.invitationToken.update({
+        where: { token },
+        data: {
+          used: true,
+          registeredAt: now,
+          verifiedAt: emailVerified ? now : undefined,
+        },
+      });
+      // Backfill openedAt if the "opened" ping never landed (e.g. the token was
+      // pasted manually instead of clicking the emailed link).
+      await prisma.invitationToken.updateMany({
+        where: { token, openedAt: null },
+        data: { openedAt: now },
+      });
     } else {
       const verifyToken = await createEmailVerificationToken(user.id);
       try {

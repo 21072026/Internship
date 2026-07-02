@@ -5,19 +5,39 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 
+// Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
+function isValidPhone(v: string): boolean {
+  if (!/^[0-9+\s()-]+$/.test(v)) return false;
+  const digitCount = (v.match(/\d/g) || []).length;
+  return digitCount >= 7 && digitCount <= 15;
+}
+
+// Requires a real calendar date in YYYY-MM-DD format that is today or earlier.
+function isValidPastOrTodayDate(v: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!match) return false;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== m || date.getUTCDate() !== d) return false;
+  return v <= new Date().toISOString().slice(0, 10);
+}
+
 const updateProfileSchema = z.object({
   fullName: z.string().min(1).optional(),
-  phone: z.string().optional(),
-  whatsapp: z.string().optional(),
+  phone: z.string().optional().refine((v) => !v || isValidPhone(v), 'Invalid phone number'),
+  whatsapp: z.string().optional().refine((v) => !v || isValidPhone(v), 'Invalid phone number'),
   city: z.string().optional(),
-  birthDate: z.string().optional(),
+  birthDate: z.string().optional().refine((v) => !v || isValidPastOrTodayDate(v), 'Birth date must be a valid date and cannot be in the future'),
   referralSource: z.string().optional(),
   university: z.string().optional(),
   department: z.string().optional(),
   graduationYear: z.number().int().nullable().optional(),
   skills: z.array(z.string()).optional(),
   skillLevels: z.record(z.string(), z.number().int().min(1).max(5)).optional(),
-  cvUrl: z.string().url().or(z.literal('')).nullable().optional(),
+  // Full URL or an internal path (/api/cv/<id> set on CV upload).
+  cvUrl: z.string().refine((v) => /^https?:\/\//.test(v) || v.startsWith('/'), 'Invalid URL').or(z.literal('')).nullable().optional(),
   publicProfile: z.boolean().optional(),
   // Extended profile fields (EPIC 32).
   displayName: z.string().max(120).optional(),
@@ -40,6 +60,7 @@ const updateProfileSchema = z.object({
   emailNotifications: z.boolean().optional(),
   notificationPrefs: z.record(z.string(), z.boolean()).optional(),
   preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
+  theme: z.enum(['light', 'dark', 'system']).optional(),
 });
 
 // Profile fields surfaced by both GET and PUT responses.
@@ -75,6 +96,7 @@ const PROFILE_SELECT = {
   emailNotifications: true,
   notificationPrefs: true,
   preferredLanguage: true,
+  theme: true,
   createdAt: true,
 } as const;
 

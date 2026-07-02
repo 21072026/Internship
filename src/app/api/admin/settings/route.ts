@@ -17,6 +17,8 @@ const schema = z.object({
   reminderDays: z.string().regex(/^\d{1,3}$/).optional(),
   supportEmail: z.string().email().or(z.literal('')).optional(),
   weeklyDigest: z.enum(['true', 'false']).optional(),
+  retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),
+  require2fa: z.enum(['off', 'admins', 'admins_mentors']).optional(),
 });
 
 // PUT — upsert one or more settings.
