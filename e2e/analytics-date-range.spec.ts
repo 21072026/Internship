@@ -24,15 +24,15 @@ test('analytics honours the ?from/?to date-range window', async ({ page }) => {
     },
   });
   await prisma.interactionLog.create({
-    data: { relationId: rel.id, date: new Date('2019-03-10T00:00:00Z'), notes: 'dr', type: 'MEETING' },
+    data: { relationId: rel.id, date: new Date('2019-03-10T00:00:00Z'), notes: 'dr', type: 'Meeting' },
   });
-  // A transition out of the initial stage on 2019-03-10 → BASVURU_100 was "left"
-  // that day, so it feeds stageAging for any window covering March 2019.
+  // A transition out of the initial stage on 2019-03-10 → APPLICATION_100 was
+  // "left" that day, so it feeds stageAging for any window covering March 2019.
   await prisma.statusChange.create({
     data: {
       relationId: rel.id,
-      fromStatus: 'BASVURU_100',
-      toStatus: 'ONAY_220',
+      fromStatus: 'APPLICATION_100',
+      toStatus: 'APPROVAL_PENDING_220',
       changedById: mentor.id,
       createdAt: new Date('2019-03-10T00:00:00Z'),
     },
@@ -62,8 +62,8 @@ test('analytics honours the ?from/?to date-range window', async ({ page }) => {
     expect(excluding.range).toEqual({ from: '2020-01-01', to: '2020-03-31' });
     expect(excluding.trends.months).not.toContain('2019-03');
 
-    // Aging honours the window too: the BASVURU_100 duration appears only when
-    // the window covers the day it was left (2019-03-10).
+    // Aging honours the window too: the APPLICATION_100 duration appears only
+    // when the window covers the day it was left (2019-03-10).
     const agingIn = await (
       await page.request.get('/api/admin/analytics/aging?from=2019-01-01&to=2019-06-30')
     ).json();
@@ -71,7 +71,7 @@ test('analytics honours the ?from/?to date-range window', async ({ page }) => {
       await page.request.get('/api/admin/analytics/aging?from=2020-01-01&to=2020-03-31')
     ).json();
     const countFor = (payload: { stageAging: { pipelineStatus: string; count: number }[] }) =>
-      payload.stageAging.find((s) => s.pipelineStatus === 'BASVURU_100')?.count ?? 0;
+      payload.stageAging.find((s) => s.pipelineStatus === 'APPLICATION_100')?.count ?? 0;
     expect(countFor(agingIn)).toBeGreaterThan(countFor(agingOut));
 
     // The UI selector re-queries the API with a date window when changed.
