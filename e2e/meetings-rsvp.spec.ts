@@ -24,7 +24,8 @@ test('mentor schedules a meeting and the mentee can RSVP via the public link', a
     await page.goto('/mentor/meetings');
     await page.getByText('Meeting Mentee').click(); // toggles the recipient checkbox
     await page.getByLabel('Title').fill('Kickoff call');
-    await page.getByLabel('When').fill('2026-07-01T10:00');
+    await page.getByLabel('Date', { exact: true }).fill('2026-07-01');
+    await page.getByLabel('Time', { exact: true }).fill('10:00');
     const scheduled = page.waitForResponse(
       (r) => r.url().includes('/api/meetings') && r.request().method() === 'POST'
     );
