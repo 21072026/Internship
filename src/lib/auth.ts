@@ -53,18 +53,19 @@ export const authOptions: NextAuthOptions = {
         // Successful auth — reset the failure counter.
         clearRateLimit(failKey);
 
-        // Unverified email is the most common lockout for self-registrations
-        // (their verification link may have expired). Surface a distinct error
-        // so the sign-in page can offer to resend the link — do NOT call this
-        // "deactivated", which misleads a never-activated user.
-        if (!user.emailVerified) {
-          throw new Error('EMAIL_NOT_VERIFIED');
-        }
-
+        // Verified-but-inactive is NOT the same as never-activated. Only block
+        // inactive accounts: an active-but-unverified user may still sign in
+        // (read-only, nagged to verify — enforced by middleware). Among inactive
+        // accounts, an unverified one is a never-activated self-registration
+        // (its verification link may have expired) — surface EMAIL_NOT_VERIFIED
+        // so the sign-in page can offer to resend, instead of the misleading
+        // "deactivated". A verified-but-inactive account was deactivated by an
+        // admin.
         if (!user.isActive) {
-          // Covers both self-registrations awaiting admin approval and accounts
-          // an admin has deactivated — either way it's an admin action.
-          throw new Error('Your account is not active yet. If you just verified your email, an administrator needs to approve it; otherwise please contact an administrator.');
+          if (!user.emailVerified) {
+            throw new Error('EMAIL_NOT_VERIFIED');
+          }
+          throw new Error('This account has been deactivated. Please contact an administrator.');
         }
 
         // Two-factor: when enabled, a valid TOTP code is required.
