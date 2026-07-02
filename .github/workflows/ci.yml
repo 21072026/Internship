@@ -27,4 +27,6 @@ jobs:
       - run: npx prisma validate
       - run: npm run lint
       - run: npx tsc --noEmit
+      - name: i18n parity (EN/TR/DE)
+        run: npm run check:i18n
       - run: npm run build

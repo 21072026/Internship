@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "import:csv": "node scripts/import-csv.mjs",
