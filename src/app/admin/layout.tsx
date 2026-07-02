@@ -10,6 +10,7 @@ import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { AdminNav } from '@/components/AdminNav';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { prisma } from '@/lib/prisma';
+import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -23,7 +24,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   const { locale, t } = await getServerDictionary();
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true } });
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
+
+  // Auth hardening: when the org requires 2FA for this role, hold the user at a
+  // setup gate until they enable it. Skipped while impersonating (the admin is
+  // already authenticated; the impersonated identity's 2FA state is irrelevant).
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role))) {
+    redirect('/security-setup');
+  }
 
   return (
     <ResponsiveShell

@@ -9,6 +9,10 @@ export const SETTING_DEFAULTS = {
   // flagged "stale" for GDPR retention review. Informational only — no
   // automatic deletion; an admin reviews and erases manually.
   retentionMonths: '12',
+  // Role-based two-factor enforcement. 'off' = optional for everyone;
+  // 'admins' = required for ADMIN; 'admins_mentors' = required for ADMIN+MENTOR.
+  // Users in scope are held at a 2FA-setup gate until they enable it.
+  require2fa: 'off',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
