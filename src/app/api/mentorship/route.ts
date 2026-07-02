@@ -23,6 +23,13 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    const search = searchParams.get('search');
+    // Pagination is opt-in: only applied when `page` is explicitly passed, so
+    // the many callers that expect the full list (board views, mentee/mentor
+    // dashboards, meeting/email composers) keep working unchanged.
+    const pageParam = searchParams.get('page');
+    const page = Math.max(1, parseInt(pageParam || '1', 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10) || 20));
 
     const where: Record<string, unknown> = {};
 
@@ -38,28 +45,47 @@ export async function GET(request: Request) {
     if (status) {
       where.status = status;
     }
+    if (search) {
+      where.OR = [
+        { mentor: { fullName: { contains: search } } },
+        { mentee: { fullName: { contains: search } } },
+        { company: { name: { contains: search } } },
+      ];
+    }
 
-    const relations = await prisma.mentorshipRelation.findMany({
-      where,
-      include: {
-        mentor: { select: { id: true, fullName: true, email: true, department: true } },
-        mentee: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            university: true,
-            graduationYear: true,
-            skills: true,
-          },
+    const include = {
+      mentor: { select: { id: true, fullName: true, email: true, department: true } },
+      mentee: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          university: true,
+          graduationYear: true,
+          skills: true,
         },
-        company: { select: { id: true, name: true, industry: true } },
-        _count: { select: { interactions: true } },
       },
-      orderBy: { startDate: 'desc' },
-    });
+      company: { select: { id: true, name: true, industry: true } },
+      _count: { select: { interactions: true } },
+    };
 
-    return NextResponse.json({ relations });
+    if (!pageParam) {
+      const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });
+      return NextResponse.json({ relations });
+    }
+
+    const [total, relations] = await Promise.all([
+      prisma.mentorshipRelation.count({ where }),
+      prisma.mentorshipRelation.findMany({
+        where,
+        include,
+        orderBy: { startDate: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return NextResponse.json({ relations, total, page, pageSize });
   } catch (error) {
     console.error('Get mentorships error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -2,11 +2,12 @@
 import { useT, useLocale } from "@/i18n/client";
 import Link from "next/link";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { SavedViews } from '@/components/SavedViews';
 import { BookOpen, Plus } from 'lucide-react';
 
 interface User {
@@ -34,6 +35,7 @@ export default function MentorshipPage() {
   const t = useT();
   const locale = useLocale();
   const [relations, setRelations] = useState<MentorshipRelation[]>([]);
+  const [total, setTotal] = useState(0);
   const [mentors, setMentors] = useState<User[]>([]);
   const [mentees, setMentees] = useState<User[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -48,34 +50,54 @@ export default function MentorshipPage() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
-  const fetchAll = async () => {
+  const fetchRelations = useCallback(async () => {
     setLoading(true);
     try {
-      const [relRes, usersRes, companiesRes] = await Promise.all([
-        fetch('/api/mentorship'),
+      const params = new URLSearchParams();
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (search) params.set('search', search);
+      params.set('page', String(page));
+      params.set('pageSize', String(PAGE_SIZE));
+      const res = await fetch(`/api/mentorship?${params}`);
+      const data = await res.json();
+      setRelations(data.relations || []);
+      setTotal(typeof data.total === 'number' ? data.total : (data.relations?.length ?? 0));
+    } catch {
+      setError(t.mentorships.loadFailed);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, search, page, t.mentorships.loadFailed]);
+
+  const fetchPickers = async () => {
+    try {
+      const [usersRes, companiesRes] = await Promise.all([
         fetch('/api/users'),
         fetch('/api/companies'),
       ]);
-      const [relData, usersData, companiesData] = await Promise.all([
-        relRes.json(),
-        usersRes.json(),
-        companiesRes.json(),
-      ]);
-      setRelations(relData.relations || []);
+      const [usersData, companiesData] = await Promise.all([usersRes.json(), companiesRes.json()]);
       // Admins can mentor too, so include them in the mentor picker.
       setMentors((usersData.users || []).filter((u: User & { role: string }) => u.role === 'MENTOR' || u.role === 'ADMIN'));
       setMentees((usersData.users || []).filter((u: User & { role: string }) => u.role === 'MENTEE'));
       setCompanies(companiesData.companies || []);
     } catch {
       setError(t.mentorships.loadFailed);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAll();
+    fetchPickers();
   }, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(fetchRelations, 300);
+    return () => clearTimeout(timeout);
+  }, [fetchRelations]);
+
+  // Any filter change returns to the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
 
   const handleCreate = async () => {
     if (!formData.mentorId || !formData.menteeId) {
@@ -98,7 +120,7 @@ export default function MentorshipPage() {
         const body = await res.json();
         throw new Error(body.error || 'Failed');
       }
-      await fetchAll();
+      await fetchRelations();
       setShowForm(false);
       setFormData({ mentorId: '', menteeId: '', companyId: '' });
     } catch (err) {
@@ -114,7 +136,7 @@ export default function MentorshipPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'COMPLETED' }),
     });
-    await fetchAll();
+    await fetchRelations();
   };
 
   // Reassign (or clear) the company on an existing mentorship. The backend PUT
@@ -125,7 +147,7 @@ export default function MentorshipPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companyId: companyId || null }),
     });
-    await fetchAll();
+    await fetchRelations();
   };
 
   const mentorOptions = mentors.map((m) => ({ value: m.id, label: m.fullName }));
@@ -197,7 +219,7 @@ export default function MentorshipPage() {
         {(['ALL', 'ACTIVE', 'COMPLETED'] as const).map((sf) => (
           <button
             key={sf}
-            onClick={() => { setStatusFilter(sf); setPage(1); }}
+            onClick={() => setStatusFilter(sf)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               statusFilter === sf ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
@@ -208,9 +230,19 @@ export default function MentorshipPage() {
         <input
           type="search"
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder={t.mentorships.searchPlaceholder}
           className="ml-auto w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+        />
+      </div>
+      <div className="mb-4">
+        <SavedViews
+          storageKey="mentorship-views"
+          current={{ search, statusFilter }}
+          onApply={(f) => {
+            setSearch(f.search || '');
+            setStatusFilter((f.statusFilter as 'ALL' | 'ACTIVE' | 'COMPLETED') || 'ALL');
+          }}
         />
       </div>
 
@@ -223,20 +255,11 @@ export default function MentorshipPage() {
           <p className="text-gray-500">{t.mentorships.none}</p>
         </Card>
       ) : (() => {
-        const q = search.trim().toLowerCase();
-        const filtered = relations.filter(
-          (r) =>
-            (statusFilter === 'ALL' || r.status === statusFilter) &&
-            (!q || r.mentor.fullName.toLowerCase().includes(q) || r.mentee.fullName.toLowerCase().includes(q) || (r.company?.name.toLowerCase().includes(q) ?? false))
-        );
-        const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-        const currentPage = Math.min(page, totalPages);
-        const shown = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-        if (filtered.length === 0) return <Card className="text-center py-12"><p className="text-gray-400">{t.usersAdmin.none}</p></Card>;
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
         return (
         <div className="space-y-4">
-          {shown.map((rel) => (
-            <Card key={rel.id}>
+          {relations.map((rel) => (
+            <Card key={rel.id} data-testid={`mentorship-row-${rel.id}`}>
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
@@ -276,9 +299,9 @@ export default function MentorshipPage() {
           ))}
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 pt-2">
-              <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage((p) => p - 1)}>{t.common.prev}</Button>
-              <span className="text-sm text-gray-500">{currentPage} / {totalPages}</span>
-              <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage((p) => p + 1)}>{t.common.next}</Button>
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t.common.prev}</Button>
+              <span className="text-sm text-gray-500">{page} / {totalPages}</span>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{t.common.next}</Button>
             </div>
           )}
         </div>
