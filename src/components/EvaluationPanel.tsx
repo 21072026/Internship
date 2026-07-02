@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EVAL_CRITERIA, MENTOR_CRITERIA } from '@/lib/evaluation';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { relativeTime } from '@/lib/relativeTime';
 
 interface Evaluation {
   id: string;
@@ -29,6 +30,7 @@ export function EvaluationPanel({
   audience?: 'MENTEE' | 'MENTOR';
 }) {
   const t = useT();
+  const locale = useLocale();
   const [items, setItems] = useState<Evaluation[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [comment, setComment] = useState('');
@@ -148,7 +150,7 @@ export function EvaluationPanel({
                   ))}
                 </div>
                 {ev.comment && <p className="text-sm text-gray-600 mt-1.5 whitespace-pre-wrap">{ev.comment}</p>}
-                <p className="text-xs text-gray-400 mt-1">{new Date(ev.createdAt).toLocaleString()}</p>
+                <p className="text-xs text-gray-400 mt-1">{relativeTime(ev.createdAt, locale)}</p>
               </div>
             );
           })}
