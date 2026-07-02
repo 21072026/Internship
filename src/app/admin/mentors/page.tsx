@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Users, Pencil } from 'lucide-react';
+import Link from 'next/link';
 import { useT } from '@/i18n/client';
 
 interface MentorUser {
@@ -109,7 +110,7 @@ export default function MentorsPage() {
                       <span className="text-green-700 font-semibold text-sm">{m.fullName?.[0] || 'M'}</span>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.fullName}</p>
+                      <Link href={`/admin/mentors/${m.id}`} className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 truncate block">{m.fullName}</Link>
                       <p className="text-xs text-gray-500 truncate">
                         {m.email}
                         {m.department ? ` · ${m.department}` : ''}
