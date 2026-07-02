@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
+import { slugify } from '@/lib/transliterate';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -17,9 +18,6 @@ const schema = z.object({
   department: z.string().optional(),
   referralSource: z.string().optional(),
 });
-
-const slug = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '');
 
 // A mentor (or admin) creates a mentee and assigns it to themselves in one step.
 export async function POST(request: Request) {
@@ -39,7 +37,7 @@ export async function POST(request: Request) {
     const hasRealEmail = !!(email && email.length > 0);
     const finalEmail = hasRealEmail
       ? email!
-      : `mentee.${slug(fullName)}.${crypto.randomBytes(2).toString('hex')}@import.local`;
+      : `mentee.${slugify(fullName)}.${crypto.randomBytes(2).toString('hex')}@import.local`;
 
     const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
     if (existing) {
