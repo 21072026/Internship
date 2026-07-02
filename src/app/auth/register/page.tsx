@@ -2,7 +2,7 @@
 import { useT, useLocale } from "@/i18n/client";
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -37,6 +37,18 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Record that the invitation link was opened (once), so admins see the invite
+  // progress from "sent" to "link opened" before the invitee finishes signing up.
+  const inviteToken = searchParams.get('token');
+  useEffect(() => {
+    if (!inviteToken) return;
+    fetch('/api/invite/opened', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    }).catch(() => {});
+  }, [inviteToken]);
 
   const {
     register,

@@ -632,6 +632,13 @@ model InvitationToken {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
+  // Lifecycle timestamps (nullable — each set once, the first time it happens):
+  // openedAt  → the register link was clicked/opened
+  // registeredAt → the account was created from this invitation
+  // verifiedAt → the invitee's email was verified (immediate for invited users)
+  openedAt     DateTime?
+  registeredAt DateTime?
+  verifiedAt   DateTime?
 }
 
 // Single-use, time-limited token for self-service password reset and for the
