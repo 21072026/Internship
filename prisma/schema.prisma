@@ -210,6 +210,21 @@ model Notification {
   @@index([userId])
 }
 
+// One row per broadcast admin announcement (distinct from the per-recipient
+// Notification rows it fans out to) — lets the admin UI show a history of
+// what was sent, by whom, and to how many people.
+model Announcement {
+  id             String   @id @default(cuid())
+  text           String
+  link           String?
+  sentById       String
+  recipientCount Int
+  emailedCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // A user's profile picture, stored in the database (same approach as CvFile).
 model AvatarFile {
   id          String   @id @default(cuid())

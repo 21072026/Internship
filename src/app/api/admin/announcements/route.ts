@@ -14,6 +14,36 @@ const schema = z.object({
   email: z.boolean().optional(),
 });
 
+// GET — paginated history of past broadcasts (most recent first).
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const pageSize = 20;
+
+  const [total, announcements] = await Promise.all([
+    prisma.announcement.count(),
+    prisma.announcement.findMany({
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  const senderIds = [...new Set(announcements.map((a) => a.sentById))];
+  const senders = await prisma.user.findMany({ where: { id: { in: senderIds } }, select: { id: true, fullName: true } });
+  const senderName = new Map(senders.map((s) => [s.id, s.fullName]));
+
+  return NextResponse.json({
+    announcements: announcements.map((a) => ({ ...a, sentByName: senderName.get(a.sentById) ?? null })),
+    total,
+    page,
+    pageSize,
+  });
+}
+
 // POST — broadcast an announcement to every active user as an in-app
 // notification, optionally also by email (respecting each user's opt-out).
 export async function POST(request: Request) {
@@ -49,6 +79,10 @@ export async function POST(request: Request) {
         )
     );
   }
+
+  await prisma.announcement.create({
+    data: { text, link: link || null, sentById: session.user.id, recipientCount: users.length, emailedCount: emailed },
+  });
 
   await logActivity({ action: 'announcement.broadcast', actorId: session.user.id, actorEmail: session.user.email ?? null });
   return NextResponse.json({ recipients: users.length, emailed }, { status: 201 });
