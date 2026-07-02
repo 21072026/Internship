@@ -9,6 +9,11 @@ import { verifyTotp } from '@/lib/totp';
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
+    // Auth hardening: cap the session lifetime so a stolen/idle token can't live
+    // forever. The token is silently refreshed (at most hourly) while in use, so
+    // active users aren't logged out; an untouched session expires after 12h.
+    maxAge: 12 * 60 * 60,
+    updateAge: 60 * 60,
   },
   pages: {
     signIn: '/auth/signin',

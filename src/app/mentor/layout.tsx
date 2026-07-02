@@ -10,6 +10,7 @@ import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
+import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -23,7 +24,13 @@ export default async function MentorLayout({ children }: { children: React.React
   }
 
   const { locale, t } = await getServerDictionary();
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true } });
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
+
+  // Auth hardening: hold in-scope roles at the 2FA setup gate until enabled.
+  // Skipped while impersonating (the admin behind it is already authenticated).
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role))) {
+    redirect('/security-setup');
+  }
 
   return (
     <ResponsiveShell
