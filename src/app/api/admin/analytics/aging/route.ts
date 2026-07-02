@@ -12,11 +12,27 @@ const DAY = 24 * 60 * 60 * 1000;
 //   stage showing the same current-dwell number.
 // - oldestStuck / overdue: current dwell in the present stage for ACTIVE
 //   relations (how long they've been sitting where they are now).
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Optional date-range window (?from=YYYY-MM-DD&to=YYYY-MM-DD): only stage
+  // transitions that COMPLETED (i.e. the candidate left the stage) within the
+  // window feed stageAging. oldestStuck/overdue describe the present, so they
+  // are never date-filtered. Bad/inverted dates fall back to "all time".
+  const { searchParams } = new URL(request.url);
+  const parseDate = (v: string | null): Date | null => {
+    if (!v) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const fromDate = parseDate(searchParams.get('from'));
+  const toDate = parseDate(searchParams.get('to'));
+  const rangeOk = fromDate && toDate && fromDate.getTime() <= toDate.getTime();
+  const inWindow = (leftAt: number) =>
+    !rangeOk || (leftAt >= fromDate!.getTime() && leftAt <= toDate!.getTime());
 
   const now = Date.now();
   const relations = await prisma.mentorshipRelation.findMany({
@@ -46,10 +62,13 @@ export async function GET() {
     const changes = r.statusChanges;
     if (changes.length > 0) {
       // Initial stage: from relation start until the first recorded transition.
-      pushDuration(changes[0].fromStatus, changes[0].createdAt.getTime() - r.startDate.getTime());
+      // A stage counts only if it was LEFT within the selected window.
+      const firstLeftAt = changes[0].createdAt.getTime();
+      if (inWindow(firstLeftAt)) pushDuration(changes[0].fromStatus, firstLeftAt - r.startDate.getTime());
       // Each subsequent stage: entered at changes[i], left at changes[i+1].
       for (let i = 0; i < changes.length - 1; i++) {
-        pushDuration(changes[i].toStatus, changes[i + 1].createdAt.getTime() - changes[i].createdAt.getTime());
+        const leftAt = changes[i + 1].createdAt.getTime();
+        if (inWindow(leftAt)) pushDuration(changes[i].toStatus, leftAt - changes[i].createdAt.getTime());
       }
     }
   }
