@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Plus, Trash2 } from 'lucide-react';
+import { useT } from '@/i18n/client';
 
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required'),
@@ -36,6 +37,7 @@ interface CompanyFormProps {
 }
 
 export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: CompanyFormProps) {
+  const t = useT();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -73,14 +75,14 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input
-          label="Company Name"
+          label={t.companyForm.name}
           required
           {...register('name')}
           error={errors.name?.message}
         />
         <Input
-          label="Industry"
-          placeholder="e.g. Technology, Finance"
+          label={t.companyForm.industry}
+          placeholder={t.companyForm.industryPlaceholder}
           {...register('industry')}
           error={errors.industry?.message}
         />
@@ -88,47 +90,47 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input
-          label="Contact Email"
+          label={t.companyForm.contactEmail}
           type="email"
           {...register('contactEmail')}
           error={errors.contactEmail?.message}
         />
         <Input
-          label="Company Size"
-          placeholder="e.g. 11-50"
+          label={t.companyForm.size}
+          placeholder={t.companyForm.sizePlaceholder}
           {...register('size')}
           error={errors.size?.message}
         />
         <Input
-          label="Logo URL"
+          label={t.companyForm.logoUrl}
           type="url"
           placeholder="https://..."
           {...register('logoUrl')}
           error={errors.logoUrl?.message}
         />
         <Input
-          label="Internship Quota"
+          label={t.companyForm.quota}
           type="number"
           min={0}
-          placeholder="e.g. 5"
+          placeholder={t.companyForm.quotaPlaceholder}
           {...register('quota')}
           error={errors.quota?.message}
         />
       </div>
 
       <Input
-        label="Address"
-        placeholder="Street, city, country"
+        label={t.companyForm.address}
+        placeholder={t.companyForm.addressPlaceholder}
         {...register('address')}
         error={errors.address?.message}
       />
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.companyForm.description}</label>
         <textarea
           {...register('description')}
           rows={3}
-          placeholder="Brief description of the company..."
+          placeholder={t.companyForm.descriptionPlaceholder}
           className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-colors"
         />
       </div>
@@ -136,7 +138,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
       {/* Company Needs */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="block text-sm font-medium text-gray-700">Internship Needs</label>
+          <label className="block text-sm font-medium text-gray-700">{t.companyForm.needs}</label>
           <Button
             type="button"
             variant="ghost"
@@ -144,7 +146,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
             onClick={() => append({ position: '', count: 1, period: '' })}
           >
             <Plus className="h-4 w-4" />
-            Add Need
+            {t.companyForm.addNeed}
           </Button>
         </div>
         <div className="space-y-3">
@@ -152,7 +154,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
             <div key={field.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
               <div className="flex-1">
                 <Input
-                  placeholder="Position (e.g. Frontend Developer)"
+                  placeholder={t.companyForm.positionPlaceholder}
                   {...register(`needs.${index}.position`)}
                   error={errors.needs?.[index]?.position?.message}
                 />
@@ -160,7 +162,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
               <div className="w-20">
                 <Input
                   type="number"
-                  placeholder="Count"
+                  placeholder={t.companyForm.countPlaceholder}
                   min={1}
                   {...register(`needs.${index}.count`)}
                   error={errors.needs?.[index]?.count?.message}
@@ -168,7 +170,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
               </div>
               <div className="flex-1">
                 <Input
-                  placeholder="Period (e.g. Summer 2025)"
+                  placeholder={t.companyForm.periodPlaceholder}
                   {...register(`needs.${index}.period`)}
                   error={errors.needs?.[index]?.period?.message}
                 />
@@ -184,7 +186,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
           ))}
           {fields.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">
-              No needs added yet. Click &quot;Add Need&quot; to add internship positions.
+              {t.companyForm.noNeeds}
             </p>
           )}
         </div>
@@ -192,10 +194,10 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
+          {t.companyForm.cancel}
         </Button>
         <Button type="submit" loading={loading}>
-          {isEditing ? 'Update Company' : 'Create Company'}
+          {isEditing ? t.companyForm.update : t.companyForm.create}
         </Button>
       </div>
     </form>

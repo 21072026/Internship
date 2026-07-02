@@ -67,7 +67,7 @@ export default function MentorshipPage() {
       setMentees((usersData.users || []).filter((u: User & { role: string }) => u.role === 'MENTEE'));
       setCompanies(companiesData.companies || []);
     } catch {
-      setError('Failed to load data');
+      setError(t.mentorships.loadFailed);
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,7 @@ export default function MentorshipPage() {
 
   const handleCreate = async () => {
     if (!formData.mentorId || !formData.menteeId) {
-      setFormError('Mentor and Mentee are required');
+      setFormError(t.mentorships.mentorMenteeRequired);
       return;
     }
     setSubmitting(true);
@@ -162,23 +162,23 @@ export default function MentorshipPage() {
             )}
             <div className="space-y-4">
               <Select
-                label="Mentor"
+                label={t.mentorships.mentor}
                 required
                 options={mentorOptions}
-                placeholder="Select mentor"
+                placeholder={t.mentorships.selectMentor}
                 value={formData.mentorId}
                 onChange={(e) => setFormData((p) => ({ ...p, mentorId: e.target.value }))}
               />
               <Select
-                label="Mentee"
+                label={t.mentorships.mentee}
                 required
                 options={menteeOptions}
-                placeholder="Select mentee"
+                placeholder={t.mentorships.selectMentee}
                 value={formData.menteeId}
                 onChange={(e) => setFormData((p) => ({ ...p, menteeId: e.target.value }))}
               />
               <Select
-                label="Company (optional)"
+                label={t.mentorships.companyOptional}
                 options={companyOptions}
                 value={formData.companyId}
                 onChange={(e) => setFormData((p) => ({ ...p, companyId: e.target.value }))}
@@ -186,7 +186,7 @@ export default function MentorshipPage() {
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
-              <Button onClick={handleCreate} loading={submitting}>Assign</Button>
+              <Button onClick={handleCreate} loading={submitting}>{t.mentorships.assignSubmit}</Button>
             </div>
           </div>
         </div>

@@ -232,7 +232,7 @@ export default function CompaniesPage() {
           <p className="text-gray-500">{t.companiesPage.none}</p>
           <Button onClick={() => setShowForm(true)} variant="outline" className="mt-4">
             <Plus className="h-4 w-4" />
-            Add your first company
+            {t.companiesPage.addFirstCompany}
           </Button>
         </Card>
       ) : (
