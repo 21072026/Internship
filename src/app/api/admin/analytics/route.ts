@@ -68,8 +68,11 @@ export async function GET() {
     .sort((a, b) => b.active - a.active);
 
   const rsvp = Object.fromEntries(rsvpGroups.map((g) => [g.rsvp, g._count._all]));
-  const rsvpTotal = (rsvp.ACCEPTED || 0) + (rsvp.DECLINED || 0) + (rsvp.PENDING || 0);
-  const rsvpAcceptanceRate = rsvpTotal ? Math.round(((rsvp.ACCEPTED || 0) / rsvpTotal) * 100) : 0;
+  // Acceptance rate is over those who actually responded (accepted + declined).
+  // Pending invites shouldn't drag the rate down, and with no responses at all
+  // the rate is null (rendered as "—") rather than a misleading 0%.
+  const rsvpResponded = (rsvp.ACCEPTED || 0) + (rsvp.DECLINED || 0);
+  const rsvpAcceptanceRate = rsvpResponded ? Math.round(((rsvp.ACCEPTED || 0) / rsvpResponded) * 100) : null;
 
   const totalRelations = byStage.reduce((n, s) => n + s._count._all, 0);
   const hiredCount = (funnel.HIRED_660 || 0) + (funnel.EMPLOYED_700 || 0);
@@ -82,7 +85,7 @@ export async function GET() {
     mentorWorkload,
     projectWorkload,
     engagement: { interactions, meetings },
-    rsvp: { ...rsvp, acceptanceRate: rsvpAcceptanceRate },
+    rsvp: { ...rsvp, responded: rsvpResponded, acceptanceRate: rsvpAcceptanceRate },
     trends,
   });
 }

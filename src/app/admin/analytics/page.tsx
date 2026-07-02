@@ -16,7 +16,7 @@ interface Analytics {
   mentorWorkload: { id: string; fullName: string; active: number; hired: number }[];
   projectWorkload: { name: string; interns: number }[];
   engagement: { interactions: number; meetings: number };
-  rsvp: { ACCEPTED?: number; DECLINED?: number; PENDING?: number; acceptanceRate: number };
+  rsvp: { ACCEPTED?: number; DECLINED?: number; PENDING?: number; responded?: number; acceptanceRate: number | null };
   trends?: { months: string[]; newRelations: number[]; interactions: number[] };
 }
 
@@ -90,7 +90,7 @@ export default function AdminAnalyticsPage() {
         <Stat label={t.analytics.totalRelations} value={data.totalRelations} />
         <Stat label={t.analytics.conversion} value={`${data.conversionToHired}%`} />
         <Stat label={t.analytics.interactions} value={data.engagement.interactions} />
-        <Stat label={t.analytics.rsvpRate} value={`${data.rsvp.acceptanceRate}%`} />
+        <Stat label={t.analytics.rsvpRate} value={data.rsvp.acceptanceRate === null ? '—' : `${data.rsvp.acceptanceRate}%`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

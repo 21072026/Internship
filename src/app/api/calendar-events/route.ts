@@ -17,7 +17,7 @@ export async function GET() {
   const relWhere: Prisma.MentorshipRelationWhereInput =
     role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id };
 
-  const [meetings, relations] = await Promise.all([
+  const [meetings, relations, loggedMeetings] = await Promise.all([
     prisma.meeting.findMany({
       where: { relation: relWhere },
       include: { relation: { include: { mentee: { select: { fullName: true } } } } },
@@ -26,6 +26,14 @@ export async function GET() {
     prisma.mentorshipRelation.findMany({
       where: { ...relWhere, stageDeadline: { not: null } },
       include: { mentee: { select: { fullName: true } } },
+    }),
+    // Logged "Meeting" interactions are past meetings a mentor recorded without
+    // going through the scheduling flow — surface them so the calendar isn't
+    // empty when the team logs meetings as interactions instead.
+    prisma.interactionLog.findMany({
+      where: { type: 'Meeting', relation: relWhere },
+      include: { relation: { include: { mentee: { select: { fullName: true } } } } },
+      orderBy: { date: 'asc' },
     }),
   ]);
 
@@ -37,6 +45,19 @@ export async function GET() {
       who: m.relation.mentee.fullName,
       date: m.scheduledAt.toISOString(),
       link: m.meetLink ?? null,
+    })),
+    ...loggedMeetings.map((i) => ({
+      id: `logged-${i.id}`,
+      type: 'logged' as const,
+      title: i.notes.slice(0, 80) || 'Meeting',
+      who: i.relation.mentee.fullName,
+      date: i.date.toISOString(),
+      link:
+        role === 'ADMIN'
+          ? `/admin/candidates/${i.relation.menteeId}`
+          : role === 'MENTOR'
+            ? `/mentor/mentees/${i.relationId}`
+            : null,
     })),
     ...relations.map((r) => ({
       id: `deadline-${r.id}`,
