@@ -632,6 +632,10 @@ const en = {
     weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   },
   activityFeed: { title: 'Activity', none: 'No activity yet', neverActive: 'No recorded activity yet.', inactiveDays: 'Inactive for {d} days — consider reaching out.' },
+  relationStatus: { ACTIVE: 'Active', COMPLETED: 'Completed' },
+  interactionTypes: { Meeting: 'Meeting', Feedback: 'Feedback', Email: 'Email', Call: 'Call', WhatsApp: 'WhatsApp' },
+  nextActions: { logFirst: 'Log a first interaction', noContact: 'No contact in {d} days — reach out', lastContact: 'Last contact {d} days ago — follow up', pushHiring: 'Push toward hiring', onTrack: 'On track' },
+  notFound: { title: 'Page not found', description: 'This page could not be found.', backHome: 'Back to home' },
   theme: { toggle: 'Toggle theme', light: 'Light', dark: 'Dark', system: 'System' },
   contact: {
     call: 'Call',
@@ -1657,6 +1661,10 @@ const tr: Dict = {
     weekdays: ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'],
   },
   activityFeed: { title: 'Aktivite', none: 'Henüz aktivite yok', neverActive: 'Henüz kayıtlı aktivite yok.', inactiveDays: '{d} gündür pasif — iletişime geçmeyi düşün.' },
+  relationStatus: { ACTIVE: 'Aktif', COMPLETED: 'Tamamlandı' },
+  interactionTypes: { Meeting: 'Toplantı', Feedback: 'Geri bildirim', Email: 'E-posta', Call: 'Arama', WhatsApp: 'WhatsApp' },
+  nextActions: { logFirst: 'İlk etkileşimi kaydet', noContact: '{d} gündür iletişim yok — iletişime geç', lastContact: 'Son iletişim {d} gün önce — takip et', pushHiring: 'İşe alıma yönlendir', onTrack: 'Yolunda' },
+  notFound: { title: 'Sayfa bulunamadı', description: 'Bu sayfa bulunamadı.', backHome: 'Ana sayfaya dön' },
   theme: { toggle: 'Temayı değiştir', light: 'Açık', dark: 'Koyu', system: 'Sistem' },
   contact: {
     call: 'Ara',
@@ -2680,6 +2688,10 @@ const de: Dict = {
     weekdays: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
   },
   activityFeed: { title: 'Aktivität', none: 'Noch keine Aktivität', neverActive: 'Noch keine Aktivität erfasst.', inactiveDays: 'Seit {d} Tagen inaktiv — kontaktiere sie.' },
+  relationStatus: { ACTIVE: 'Aktiv', COMPLETED: 'Abgeschlossen' },
+  interactionTypes: { Meeting: 'Meeting', Feedback: 'Feedback', Email: 'E-Mail', Call: 'Anruf', WhatsApp: 'WhatsApp' },
+  nextActions: { logFirst: 'Erste Interaktion erfassen', noContact: 'Seit {d} Tagen kein Kontakt — melde dich', lastContact: 'Letzter Kontakt vor {d} Tagen — nachfassen', pushHiring: 'Richtung Einstellung drängen', onTrack: 'Auf Kurs' },
+  notFound: { title: 'Seite nicht gefunden', description: 'Diese Seite konnte nicht gefunden werden.', backHome: 'Zurück zur Startseite' },
   theme: { toggle: 'Theme wechseln', light: 'Hell', dark: 'Dunkel', system: 'System' },
   contact: {
     call: 'Anrufen',

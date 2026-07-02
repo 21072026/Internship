@@ -1,6 +1,9 @@
+'use client';
+
 import { HTMLAttributes } from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useT } from '@/i18n/client';
 
 function cn(...inputs: Parameters<typeof clsx>) {
   return twMerge(clsx(inputs));
@@ -47,15 +50,13 @@ export function RoleBadge({ role }: { role: string }) {
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const config = {
-    ACTIVE: { variant: 'success' as const, label: 'Active' },
-    COMPLETED: { variant: 'default' as const, label: 'Completed' },
+  const t = useT();
+  const variantByStatus: Record<string, 'success' | 'default'> = {
+    ACTIVE: 'success',
+    COMPLETED: 'default',
   };
-
-  const { variant, label } = config[status as keyof typeof config] || {
-    variant: 'default' as const,
-    label: status,
-  };
+  const variant = variantByStatus[status] ?? 'default';
+  const label = t.relationStatus[status as keyof typeof t.relationStatus] ?? status;
 
   return <Badge variant={variant}>{label}</Badge>;
 }

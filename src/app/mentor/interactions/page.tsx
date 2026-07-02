@@ -3,7 +3,7 @@ import { useT } from "@/i18n/client";
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { BookOpen } from 'lucide-react';
 
 interface Interaction {
@@ -53,14 +53,7 @@ export default function MentorInteractionsPage() {
           <div className="space-y-3">
             {interactions.map((interaction) => (
               <div key={interaction.id} className="flex items-start gap-4 py-4 border-b border-gray-50 last:border-0">
-                <Badge
-                  variant={
-                    interaction.type === 'Meeting' ? 'info' : interaction.type === 'Feedback' ? 'success' : 'warning'
-                  }
-                  className="text-xs flex-shrink-0 mt-0.5"
-                >
-                  {interaction.type}
-                </Badge>
+                <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-medium text-gray-700">

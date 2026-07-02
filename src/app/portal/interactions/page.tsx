@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { BookOpen } from 'lucide-react';
 
 interface Interaction {
@@ -53,18 +53,7 @@ export default function PortalInteractionsPage() {
           {interactions.map((interaction) => (
             <Card key={interaction.id}>
               <div className="flex items-start gap-4">
-                <Badge
-                  variant={
-                    interaction.type === 'Meeting'
-                      ? 'info'
-                      : interaction.type === 'Feedback'
-                      ? 'success'
-                      : 'warning'
-                  }
-                  className="flex-shrink-0 mt-0.5"
-                >
-                  {interaction.type}
-                </Badge>
+                <InteractionTypeBadge type={interaction.type} className="flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-2">
