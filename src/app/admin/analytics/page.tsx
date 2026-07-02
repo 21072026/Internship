@@ -6,6 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Select } from '@/components/ui/Select';
 import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
 
@@ -18,6 +19,23 @@ interface Analytics {
   engagement: { interactions: number; meetings: number };
   rsvp: { ACCEPTED?: number; DECLINED?: number; PENDING?: number; responded?: number; acceptanceRate: number | null };
   trends?: { months: string[]; newRelations: number[]; interactions: number[] };
+  range?: { from: string; to: string };
+}
+
+type RangePreset = '30' | '90' | '6m' | '12m' | 'all';
+
+// Turn a preset into a from/to query string. "All time" sends no bounds so the
+// API falls back to its default (which then reports the widest sensible window).
+function rangeQuery(preset: RangePreset): string {
+  if (preset === 'all') return '';
+  const to = new Date();
+  const from = new Date(to);
+  if (preset === '30') from.setDate(from.getDate() - 30);
+  else if (preset === '90') from.setDate(from.getDate() - 90);
+  else if (preset === '6m') from.setMonth(from.getMonth() - 6);
+  else if (preset === '12m') from.setMonth(from.getMonth() - 12);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return `?from=${iso(from)}&to=${iso(to)}`;
 }
 
 interface AgingItem {
@@ -50,24 +68,25 @@ export default function AdminAnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [aging, setAging] = useState<Aging | null>(null);
   const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState<RangePreset>('6m');
 
   useEffect(() => {
-    fetch('/api/admin/analytics')
+    const qs = rangeQuery(range);
+    setLoading(true);
+    fetch(`/api/admin/analytics${qs}`)
       .then((r) => r.json())
       .then((d) => setData(d))
       .finally(() => setLoading(false));
-    fetch('/api/admin/analytics/aging')
+    fetch(`/api/admin/analytics/aging${qs}`)
       .then((r) => r.json())
       .then((d) => setAging(d))
       .catch(() => {});
-  }, []);
+  }, [range]);
 
-  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
-  if (!data) return <div className="text-center py-12 text-gray-400">{t.common.notFound}</div>;
-
-  const maxFunnel = Math.max(1, ...PIPELINE_STATUSES.map((s) => data.funnel[s] || 0));
+  const maxFunnel = data ? Math.max(1, ...PIPELINE_STATUSES.map((s) => data.funnel[s] || 0)) : 1;
 
   const exportExcel = async () => {
+    if (!data) return;
     const { exportXlsx } = await import('@/lib/excel');
     const rows = PIPELINE_STATUSES.map((s) => [pipelineLabel(s, locale), data.funnel[s] || 0]);
     await exportXlsx(`analytics-${new Date().toISOString().slice(0, 10)}`, ['Stage', 'Count'], rows, 'Funnel');
@@ -75,17 +94,36 @@ export default function AdminAnalyticsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.analytics.title}</h1>
           <p className="text-gray-500 mt-1">{t.analytics.subtitle}</p>
         </div>
-        <div className="flex gap-2 no-print">
-          <Button variant="outline" size="sm" onClick={exportExcel}>{t.analytics.exportExcel}</Button>
+        <div className="flex items-center gap-2 no-print">
+          <Select
+            aria-label={t.analytics.dateRange}
+            className="w-auto"
+            value={range}
+            onChange={(e) => setRange(e.target.value as RangePreset)}
+            options={[
+              { value: '30', label: t.analytics.last30 },
+              { value: '90', label: t.analytics.last90 },
+              { value: '6m', label: t.analytics.last6m },
+              { value: '12m', label: t.analytics.last12m },
+              { value: 'all', label: t.analytics.allTime },
+            ]}
+          />
+          <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data}>{t.analytics.exportExcel}</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
         </div>
       </div>
 
+      {loading ? (
+        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+      ) : !data ? (
+        <div className="text-center py-12 text-gray-400">{t.common.notFound}</div>
+      ) : (
+        <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Stat label={t.analytics.totalRelations} value={data.totalRelations} />
         <Stat label={t.analytics.conversion} value={`${data.conversionToHired}%`} />
@@ -232,6 +270,8 @@ export default function AdminAnalyticsPage() {
             )}
           </Card>
         </div>
+      )}
+        </>
       )}
     </div>
   );
