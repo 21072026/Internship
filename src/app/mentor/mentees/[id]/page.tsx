@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
+import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -361,12 +362,7 @@ export default function MenteeDetailPage() {
             )}
             {relation.interactions.map((interaction) => (
               <div key={interaction.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-                <Badge
-                  variant={interaction.type === 'Meeting' ? 'info' : interaction.type === 'Feedback' ? 'success' : 'warning'}
-                  className="text-xs flex-shrink-0 mt-0.5"
-                >
-                  {interaction.type}
-                </Badge>
+                <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-1">
