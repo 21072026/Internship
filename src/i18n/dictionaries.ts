@@ -479,6 +479,9 @@ const en = {
     searchPlaceholder: 'Find a mentee or mentor...',
     hideEmpty: 'Hide empty stages',
     moveTo: 'Move to stage',
+    overdue: 'overdue',
+    wipWarning: 'Over the recommended limit',
+    groups: { pre: 'Pre-internship', internship: 'Internship', result: 'Outcome' },
   },
   mentorEmail: {
     title: 'Email mentees',
@@ -1594,6 +1597,9 @@ const tr: Dict = {
     searchPlaceholder: 'Mentee veya mentor bul...',
     hideEmpty: 'Boş aşamaları gizle',
     moveTo: 'Aşamaya taşı',
+    overdue: 'gecikmiş',
+    wipWarning: 'Önerilen limitin üzerinde',
+    groups: { pre: 'Staj öncesi', internship: 'Staj', result: 'Sonuç' },
   },
   mentorEmail: {
     title: 'Mentee’lere e-posta',
@@ -2707,6 +2713,9 @@ const de: Dict = {
     searchPlaceholder: 'Mentee oder Mentor finden...',
     hideEmpty: 'Leere Phasen ausblenden',
     moveTo: 'In Phase verschieben',
+    overdue: 'überfällig',
+    wipWarning: 'Über dem empfohlenen Limit',
+    groups: { pre: 'Vor dem Praktikum', internship: 'Praktikum', result: 'Ergebnis' },
   },
   mentorEmail: {
     title: 'Mentees per E-Mail erreichen',

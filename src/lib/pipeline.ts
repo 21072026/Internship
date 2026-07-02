@@ -77,6 +77,26 @@ export function pipelineOptions(locale: Locale = 'en') {
   return PIPELINE_STATUSES.map((value) => ({ value, label: pipelineLabel(value, locale) }));
 }
 
+// Logical groupings of the 13 stages, so the kanban board can collapse the
+// horizontal sprawl into three phases: before the internship, during it, and
+// the outcome. Every PipelineStatus belongs to exactly one group.
+export type PipelineGroupKey = 'pre' | 'internship' | 'result';
+
+export const PIPELINE_GROUPS: { key: PipelineGroupKey; statuses: PipelineStatus[] }[] = [
+  {
+    key: 'pre',
+    statuses: ['APPLICATION_100', 'APPROVAL_PENDING_220', 'INTERVIEW_PENDING_250', 'INTRODUCTION_PENDING_270'],
+  },
+  {
+    key: 'internship',
+    statuses: ['INTERNSHIP_STARTING_300', 'INTERNSHIP_IN_PROGRESS_450', 'INTERNSHIP_DROPPED_460', 'INTERNSHIP_COMPLETED_490'],
+  },
+  {
+    key: 'result',
+    statuses: ['JOB_SEEKING_500', 'HIREABLE_600', 'HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'],
+  },
+];
+
 // Mentee-facing "what to do now" guidance per stage — turns the journey from a
 // passive status display into actionable direction. Off-path statuses
 // (dropped / found elsewhere) aren't included; the tracker shows a note instead.
