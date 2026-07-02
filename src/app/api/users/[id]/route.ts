@@ -31,6 +31,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         skills: true,
         cvUrl: true,
         createdAt: true,
+        mentorCapacity: true,
+        // For mentor detail: their active mentees, pipeline stage, and the raw
+        // evaluation scores (averaged on the client for a workload/quality view).
+        mentorRelations: {
+          orderBy: { startDate: 'desc' },
+          select: {
+            id: true,
+            status: true,
+            pipelineStatus: true,
+            startDate: true,
+            mentee: { select: { id: true, fullName: true, email: true } },
+            company: { select: { name: true } },
+            evaluations: { select: { scores: true } },
+          },
+        },
         menteeRelations: {
           orderBy: { startDate: 'desc' },
           include: {
