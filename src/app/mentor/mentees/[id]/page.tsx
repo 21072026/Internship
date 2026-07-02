@@ -405,11 +405,13 @@ export default function MenteeDetailPage() {
         </div>
 
         <div className="lg:col-span-2">
-          <UserActivityPanel userId={relation.mentee.id} flagInactive />
+          <RelationNotesPanel relationId={id} />
         </div>
 
+        {/* Activity feed sits last — it's the least frequently acted-on panel,
+            so private notes and the working panels stay above the fold. */}
         <div className="lg:col-span-2">
-          <RelationNotesPanel relationId={id} />
+          <UserActivityPanel userId={relation.mentee.id} flagInactive />
         </div>
       </div>
     </div>
