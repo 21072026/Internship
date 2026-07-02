@@ -16,12 +16,31 @@ import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
 
+// Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
+function isValidPhone(v: string): boolean {
+  if (!/^[0-9+\s()-]+$/.test(v)) return false;
+  const digitCount = (v.match(/\d/g) || []).length;
+  return digitCount >= 7 && digitCount <= 15;
+}
+
+// Requires a real calendar date in YYYY-MM-DD format that is today or earlier.
+function isValidPastOrTodayDate(v: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!match) return false;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() + 1 !== m || date.getUTCDate() !== d) return false;
+  return v <= new Date().toISOString().slice(0, 10);
+}
+
 const profileSchema = z.object({
   fullName: z.string().min(1, 'Full name is required'),
-  phone: z.string().optional(),
-  whatsapp: z.string().optional(),
+  phone: z.string().optional().refine((v) => !v || isValidPhone(v), 'Please enter a valid phone number'),
+  whatsapp: z.string().optional().refine((v) => !v || isValidPhone(v), 'Please enter a valid phone number'),
   city: z.string().optional(),
-  birthDate: z.string().optional(),
+  birthDate: z.string().optional().refine((v) => !v || isValidPastOrTodayDate(v), 'Please enter a valid date not in the future'),
   university: z.string().optional(),
   department: z.string().optional(),
   graduationYear: z.coerce.number().int().min(2010).max(new Date().getFullYear() + 5).optional().or(z.literal(0)),
