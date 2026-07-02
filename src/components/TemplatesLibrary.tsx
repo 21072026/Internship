@@ -66,7 +66,7 @@ export function TemplatesLibrary() {
 
   return (
     <Card>
-      <CardHeader><CardTitle>{t.documents.templates}</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{t.documents.curatedTitle}</CardTitle></CardHeader>
 
       <div className="divide-y divide-gray-50">
         {TEMPLATES.map((tpl) => {
