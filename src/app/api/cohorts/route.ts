@@ -31,6 +31,8 @@ export async function POST(request: Request) {
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
-  const cohort = await prisma.cohort.create({ data: { name: parsed.data.name, term: parsed.data.term || null } });
+  // Trim so a whitespace-only term is stored as null (shows as "—") rather than
+  // a blank string. Term is free-text (e.g. "Fall 2026"), so no format check.
+  const cohort = await prisma.cohort.create({ data: { name: parsed.data.name.trim(), term: parsed.data.term?.trim() || null } });
   return NextResponse.json({ cohort }, { status: 201 });
 }
