@@ -563,13 +563,15 @@ model RelationNote {
 
 // A goal set within a mentorship — supports goal setting + tracking (checklist 7).
 model Goal {
-  id          String     @id @default(cuid())
-  relationId  String
-  title       String
-  description String?    @db.Text
-  status      GoalStatus @default(OPEN)
-  dueDate     DateTime?
-  createdAt   DateTime   @default(now())
+  id            String     @id @default(cuid())
+  relationId    String
+  title         String
+  description   String?    @db.Text
+  status        GoalStatus @default(OPEN)
+  dueDate       DateTime?
+  createdAt     DateTime   @default(now())
+  // Which side created the goal (mentor vs mentee), so it's clear at a glance.
+  createdByRole Role?
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
 
@@ -625,13 +627,13 @@ model StatusChange {
 }
 
 model InvitationToken {
-  id        String   @id @default(cuid())
-  token     String   @unique
-  email     String
-  role      Role
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  id           String    @id @default(cuid())
+  token        String    @unique
+  email        String
+  role         Role
+  used         Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
   // Lifecycle timestamps (nullable — each set once, the first time it happens):
   // openedAt  → the register link was clicked/opened
   // registeredAt → the account was created from this invitation
