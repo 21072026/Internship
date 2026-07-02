@@ -186,7 +186,7 @@ export default function MentorshipPage() {
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
-              <Button onClick={handleCreate} loading={submitting}>{t.mentorships.assign}</Button>
+              <Button onClick={handleCreate} loading={submitting}>{t.mentorships.assignSubmit}</Button>
             </div>
           </div>
         </div>

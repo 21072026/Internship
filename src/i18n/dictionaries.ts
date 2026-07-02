@@ -223,6 +223,7 @@ const en = {
     companyOptional: 'Company (optional)',
     mentorMenteeRequired: 'Mentor and Mentee are required',
     loadFailed: 'Failed to load data',
+    assignSubmit: 'Assign',
   },
   companiesPage: {
     title: 'Companies',
@@ -1332,6 +1333,7 @@ const tr: Dict = {
     companyOptional: 'Şirket (opsiyonel)',
     mentorMenteeRequired: 'Mentor ve Mentee zorunludur',
     loadFailed: 'Veriler yüklenemedi',
+    assignSubmit: 'Ata',
   },
   companiesPage: {
     title: 'Şirketler',
@@ -2439,6 +2441,7 @@ const de: Dict = {
     companyOptional: 'Unternehmen (optional)',
     mentorMenteeRequired: 'Mentor und Mentee sind erforderlich',
     loadFailed: 'Daten konnten nicht geladen werden',
+    assignSubmit: 'Zuweisen',
   },
   companiesPage: {
     title: 'Unternehmen',

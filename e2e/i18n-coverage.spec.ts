@@ -21,9 +21,16 @@ test('previously hardcoded admin strings are translated in Turkish', async ({ pa
 
     await page.goto('/admin/mentorship');
     await expect(page.getByRole('button', { name: 'Mentorluk ata' })).toBeVisible({ timeout: 10_000 });
+    // The "assign mentorship" modal's own form labels were previously hardcoded English.
+    await page.getByRole('button', { name: 'Mentorluk ata' }).click();
+    await expect(page.getByText('Şirket (opsiyonel)')).toBeVisible({ timeout: 10_000 });
 
     await page.goto('/admin/companies');
     await expect(page.getByRole('button', { name: 'Şirket ekle' })).toBeVisible({ timeout: 10_000 });
+    // CompanyForm's field labels were previously hardcoded English.
+    await page.getByRole('button', { name: 'Şirket ekle' }).click();
+    await expect(page.getByText('Şirket Adı')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Staj İhtiyaçları')).toBeVisible({ timeout: 10_000 });
   } finally {
     await cleanupByEmail(email);
   }
