@@ -18,6 +18,7 @@ import { DocumentsManager } from '@/components/DocumentsManager';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { useT, useLocale } from '@/i18n/client';
+import { useToast } from '@/components/ui/Toast';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
@@ -67,6 +68,7 @@ export default function AdminMenteeDetailPage() {
   const id = useParams().id as string;
   const t = useT();
   const locale = useLocale();
+  const toast = useToast();
   const [user, setUser] = useState<MenteeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -90,34 +92,42 @@ export default function AdminMenteeDetailPage() {
     async (relationId: string, pipelineStatus: string) => {
       setSaving(true);
       try {
-        await fetch(`/api/mentorship/${relationId}`, {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pipelineStatus }),
         });
+        if (!res.ok) throw new Error();
         await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
       } finally {
         setSaving(false);
       }
     },
-    [load]
+    [load, toast, t]
   );
 
   const changeProject = useCallback(
     async (relationId: string, projectId: string) => {
       setSaving(true);
       try {
-        await fetch(`/api/mentorship/${relationId}`, {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ projectId: projectId || null }),
         });
+        if (!res.ok) throw new Error();
         await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
       } finally {
         setSaving(false);
       }
     },
-    [load]
+    [load, toast, t]
   );
 
   const resetPassword = useCallback(async () => {
@@ -195,30 +205,38 @@ export default function AdminMenteeDetailPage() {
     async (sourceId: string) => {
       setSaving(true);
       try {
-        await fetch(`/api/users/${id}`, {
+        const res = await fetch(`/api/users/${id}`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: sourceId || null }),
         });
+        if (!res.ok) throw new Error();
         await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
       } finally {
         setSaving(false);
       }
     },
-    [id, load]
+    [id, load, toast, t]
   );
 
   const changeRelField = useCallback(
     async (relationId: string, body: Record<string, unknown>) => {
       setSaving(true);
       try {
-        await fetch(`/api/mentorship/${relationId}`, {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         });
+        if (!res.ok) throw new Error();
         await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
       } finally {
         setSaving(false);
       }
     },
-    [load]
+    [load, toast, t]
   );
 
   if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;

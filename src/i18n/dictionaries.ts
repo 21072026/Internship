@@ -134,6 +134,8 @@ const en = {
   },
   candidateDetail: {
     companyInterest: { interested: 'Company is interested', shortlisted: 'Shortlisted by company', pass: 'Company passed' },
+    saved: 'Changes saved',
+    saveError: 'Could not save — please try again',
     back: 'Back to candidates',
     profile: 'Profile',
     university: 'University',
@@ -1163,6 +1165,8 @@ const tr: Dict = {
   },
   candidateDetail: {
     companyInterest: { interested: 'Şirket ilgileniyor', shortlisted: 'Şirket kısa listeye aldı', pass: 'Şirket geçti' },
+    saved: 'Değişiklikler kaydedildi',
+    saveError: 'Kaydedilemedi — lütfen tekrar deneyin',
     back: 'Adaylara dön',
     profile: 'Profil',
     university: 'Üniversite',
@@ -2190,6 +2194,8 @@ const de: Dict = {
   },
   candidateDetail: {
     companyInterest: { interested: 'Unternehmen interessiert', shortlisted: 'Vom Unternehmen auf die Shortlist gesetzt', pass: 'Unternehmen hat abgesagt' },
+    saved: 'Änderungen gespeichert',
+    saveError: 'Speichern fehlgeschlagen — bitte erneut versuchen',
     back: 'Zurück zu den Kandidaten',
     profile: 'Profil',
     university: 'Universität',
