@@ -582,6 +582,8 @@ const en = {
     completed: 'completed',
     markDone: 'Mark done',
     markOpen: 'Reopen',
+    byMentor: 'Created by mentor',
+    byMentee: 'Created by mentee',
   },
   cohorts: {
     title: 'Cohorts',
@@ -1636,6 +1638,8 @@ const tr: Dict = {
     completed: 'tamamlandı',
     markDone: 'Tamamlandı işaretle',
     markOpen: 'Yeniden aç',
+    byMentor: 'Mentor oluşturdu',
+    byMentee: 'Mentee oluşturdu',
   },
   cohorts: {
     title: 'Kohortlar',
@@ -2688,6 +2692,8 @@ const de: Dict = {
     completed: 'abgeschlossen',
     markDone: 'Als erledigt markieren',
     markOpen: 'Wieder öffnen',
+    byMentor: 'Vom Mentor erstellt',
+    byMentee: 'Vom Mentee erstellt',
   },
   cohorts: {
     title: 'Kohorten',
