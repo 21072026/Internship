@@ -17,10 +17,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This link is invalid or has expired' }, { status: 400 });
     }
 
-    await prisma.$transaction([
-      prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true } }),
+    const [user] = await prisma.$transaction([
+      prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true }, select: { email: true } }),
       prisma.emailVerificationToken.update({ where: { id: record.id }, data: { used: true } }),
     ]);
+
+    // Advance the matching invitation's lifecycle to "verified" (if any invite
+    // for this email hasn't been stamped yet).
+    await prisma.invitationToken.updateMany({
+      where: { email: user.email, verifiedAt: null },
+      data: { verifiedAt: new Date() },
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

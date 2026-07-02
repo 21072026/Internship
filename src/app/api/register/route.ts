@@ -97,7 +97,25 @@ export async function POST(request: Request) {
     });
 
     if (token) {
-      await prisma.invitationToken.update({ where: { token }, data: { used: true } });
+      // Advance the invitation lifecycle: registered now, and (since invited
+      // users are verified immediately) verified at the same moment. openedAt is
+      // backfilled in case the "opened" ping never landed (e.g. token pasted
+      // manually instead of clicking the emailed link).
+      const now = new Date();
+      await prisma.invitationToken.update({
+        where: { token },
+        data: {
+          used: true,
+          registeredAt: now,
+          verifiedAt: emailVerified ? now : undefined,
+        },
+      });
+      // Backfill openedAt if the "opened" ping never landed (e.g. the token was
+      // pasted manually instead of clicking the emailed link).
+      await prisma.invitationToken.updateMany({
+        where: { token, openedAt: null },
+        data: { openedAt: now },
+      });
     } else {
       const verifyToken = await createEmailVerificationToken(user.id);
       try {
