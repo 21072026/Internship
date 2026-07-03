@@ -4,7 +4,10 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
-const schema = z.object({ body: z.string().min(1).max(5000) });
+const schema = z.object({
+  body: z.string().min(1).max(5000),
+  category: z.enum(['MEETING', 'FEEDBACK', 'TASKS', 'PERSONAL']).optional(),
+});
 
 // Only the owner may edit/delete their note.
 async function ownNote(userId: string, id: string) {
@@ -19,7 +22,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!(await ownNote(session.user.id, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
-  const note = await prisma.personalNote.update({ where: { id }, data: { body: parsed.data.body } });
+  const note = await prisma.personalNote.update({
+    where: { id },
+    data: { body: parsed.data.body, ...(parsed.data.category ? { category: parsed.data.category } : {}) },
+  });
   return NextResponse.json({ note });
 }
 

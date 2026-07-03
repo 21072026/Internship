@@ -4,12 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { Trash2, Lock } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
+
+type Category = 'MEETING' | 'FEEDBACK' | 'TASKS' | 'PERSONAL';
+const CATEGORIES: Category[] = ['MEETING', 'FEEDBACK', 'TASKS', 'PERSONAL'];
 
 interface Note {
   id: string;
   body: string;
+  category: Category;
   updatedAt: string;
 }
 
@@ -19,6 +24,8 @@ export function NotesPanel() {
   const toast = useToast();
   const [notes, setNotes] = useState<Note[]>([]);
   const [body, setBody] = useState('');
+  const [category, setCategory] = useState<Category>('PERSONAL');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | Category>('ALL');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -33,9 +40,9 @@ export function NotesPanel() {
     setSaving(true);
     try {
       const res = await fetch('/api/notes', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body, category }),
       });
-      if (res.ok) { setBody(''); await load(); toast(t.portal.notes.added); }
+      if (res.ok) { setBody(''); setCategory('PERSONAL'); await load(); toast(t.portal.notes.added); }
     } finally {
       setSaving(false);
     }
@@ -46,6 +53,8 @@ export function NotesPanel() {
     await load();
     toast(t.portal.notes.deleted);
   };
+
+  const shown = categoryFilter === 'ALL' ? notes : notes.filter((n) => n.category === categoryFilter);
 
   return (
     <Card>
@@ -62,16 +71,59 @@ export function NotesPanel() {
           placeholder={t.portal.notes.placeholder}
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
+        <div data-testid="note-category-picker" className="flex flex-wrap items-center gap-1.5">
+          {CATEGORIES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategory(c)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                category === c ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {t.portal.notes.categories[c]}
+            </button>
+          ))}
+        </div>
         <Button type="submit" size="sm" loading={saving} disabled={!body.trim()}>{t.portal.notes.add}</Button>
       </form>
 
+      {notes.length > 0 && (
+        <div data-testid="note-category-filter" className="flex flex-wrap items-center gap-1.5 mb-3">
+          <button
+            onClick={() => setCategoryFilter('ALL')}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+              categoryFilter === 'ALL' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {t.usersAdmin.all}
+          </button>
+          {CATEGORIES.map((c) => (
+            <button
+              key={c}
+              onClick={() => setCategoryFilter(c)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                categoryFilter === c ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {t.portal.notes.categories[c]}
+            </button>
+          ))}
+        </div>
+      )}
+
       {notes.length === 0 ? (
         <p className="text-sm text-gray-400">{t.portal.notes.none}</p>
+      ) : shown.length === 0 ? (
+        <p className="text-sm text-gray-400">{t.portal.notes.noneInCategory}</p>
       ) : (
         <div className="space-y-2">
-          {notes.map((n) => (
+          {shown.map((n) => (
             <div key={n.id} data-testid={`note-${n.id}`} className="group flex items-start justify-between gap-2 rounded-lg border border-gray-100 p-2.5">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap break-words flex-1">{n.body}</p>
+              <div className="flex-1 min-w-0">
+                <Badge variant="default" className="text-[10px] mb-1">{t.portal.notes.categories[n.category]}</Badge>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{n.body}</p>
+              </div>
               <button onClick={() => remove(n.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600 flex-shrink-0">
                 <Trash2 className="h-4 w-4" />
               </button>

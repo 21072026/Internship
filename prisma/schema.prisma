@@ -552,6 +552,9 @@ model MeetingRequest {
 model PersonalNote {
   id        String   @id @default(cuid())
   userId    String
+  // 'MEETING' | 'FEEDBACK' | 'TASKS' | 'PERSONAL' — validated in the API, not
+  // a DB enum, so new categories don't need a schema change.
+  category  String   @default("PERSONAL")
   body      String   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
