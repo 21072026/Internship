@@ -21,7 +21,9 @@ test('mentee can save the new profile fields (city, whatsapp)', async ({ page })
     await page.getByLabel('City').fill('Monheim');
     await page.getByLabel('WhatsApp').fill('+491631681948');
     await page.getByRole('button', { name: /save/i }).click();
-    await expect(page.getByText(/updated successfully/i)).toBeVisible({ timeout: 10_000 });
+    // Both the inline banner and a toast now show this message — either
+    // proves the save succeeded and was surfaced to the user.
+    await expect(page.getByText(/updated successfully/i).first()).toBeVisible({ timeout: 10_000 });
 
     const user = await prisma.user.findUnique({ where: { email } });
     expect(user?.city).toBe('Monheim');
