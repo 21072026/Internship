@@ -192,9 +192,26 @@ model Message {
   readAt     DateTime?
   createdAt  DateTime       @default(now())
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation    MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  attachments MessageAttachment[]
 
   @@index([relationId])
+}
+
+// A file/image attached to a message (DB bytes, same approach as CvFile/
+// Document — no external object storage needed).
+model MessageAttachment {
+  id          String   @id @default(cuid())
+  messageId   String
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
 }
 
 // In-app notification for a user.

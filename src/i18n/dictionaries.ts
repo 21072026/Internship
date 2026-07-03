@@ -767,6 +767,8 @@ const en = {
     send: 'Send',
     read: 'Read',
     sent: 'Sent',
+    attach: 'Attach a file',
+    sendFailed: 'Could not send. Please try again.',
   },
   announcements: {
     title: 'Announcements',
@@ -1898,6 +1900,8 @@ const tr: Dict = {
     send: 'Gönder',
     read: 'Okundu',
     sent: 'İletildi',
+    attach: 'Dosya ekle',
+    sendFailed: 'Gönderilemedi. Lütfen tekrar deneyin.',
   },
   announcements: {
     title: 'Duyurular',
@@ -3027,6 +3031,8 @@ const de: Dict = {
     send: 'Senden',
     read: 'Gelesen',
     sent: 'Gesendet',
+    attach: 'Datei anhängen',
+    sendFailed: 'Konnte nicht gesendet werden. Bitte versuche es erneut.',
   },
   announcements: {
     title: 'Ankündigungen',
