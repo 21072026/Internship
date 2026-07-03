@@ -85,6 +85,21 @@ html.dark .text-purple-900 { color: #e9d5ff; }
 html.dark .text-amber-900 { color: #fde68a; }
 
 /*
+ * Mid-tone accent text (blue-600/700) sitting on a retinted blue-50 box would
+ * be dark-on-dark — e.g. the active sidebar item (bg-blue-50 + text-blue-700)
+ * and its icon. Compound/descendant selectors lighten only that combination;
+ * blue-600/700 on chips that stay light in dark mode (bg-blue-100) keep their
+ * dark text. Hover variants are safe to lighten globally: every hover surface
+ * is dark in dark mode, and the few light-kept buttons pin their color with
+ * dark:! utilities.
+ */
+html.dark .bg-blue-50.text-blue-700,
+html.dark .bg-blue-50 .text-blue-700,
+html.dark .bg-blue-50 .text-blue-600,
+html.dark .hover\:text-blue-700:hover,
+html.dark .group:hover .group-hover\:text-blue-600 { color: #93c5fd; } /* blue-300 */
+
+/*
  * Native form controls. Inline <input>/<select>/<textarea> scattered through
  * pages don't all use the themed UI primitives, so default them to dark here.
  * The UI primitives carry their own dark: classes in the same palette, so the

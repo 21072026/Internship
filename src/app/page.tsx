@@ -2,6 +2,7 @@ import Link from 'next/link';
 import {
   GraduationCap, Users, Building2, ArrowRight, CheckCircle,
   GitBranch, CalendarClock, BarChart3, ShieldCheck,
+  FileText, Target, Sparkles,
 } from 'lucide-react';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
@@ -26,21 +27,31 @@ export default async function HomePage() {
     { icon: Users, color: 'green', title: L.fMentorT, desc: L.fMentorD },
     { icon: Building2, color: 'purple', title: L.fCompanyT, desc: L.fCompanyD },
     { icon: CalendarClock, color: 'amber', title: L.fCommsT, desc: L.fCommsD },
+    { icon: FileText, color: 'teal', title: L.fDocsT, desc: L.fDocsD },
+    { icon: Target, color: 'orange', title: L.fGrowthT, desc: L.fGrowthD },
     { icon: BarChart3, color: 'sky', title: L.fAnalyticsT, desc: L.fAnalyticsD },
     { icon: ShieldCheck, color: 'rose', title: L.fPrivacyT, desc: L.fPrivacyD },
+    { icon: Sparkles, color: 'indigo', title: L.fPlatformT, desc: L.fPlatformD },
   ];
   const iconBg: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',
     purple: 'bg-purple-100 text-purple-600', amber: 'bg-amber-100 text-amber-600',
+    teal: 'bg-teal-100 text-teal-600', orange: 'bg-orange-100 text-orange-600',
     sky: 'bg-sky-100 text-sky-600', rose: 'bg-rose-100 text-rose-600',
+    indigo: 'bg-indigo-100 text-indigo-600',
   };
+
+  const heroChips = [L.chipStages, L.chipRoles, L.chipLangs, L.chipGdpr];
 
   const roles = [
     { name: L.roleAdmin, desc: L.roleAdminD, c: 'bg-red-50 border-red-100 text-red-900', badge: 'bg-red-100 text-red-700' },
     { name: L.roleMentor, desc: L.roleMentorD, c: 'bg-blue-50 border-blue-100 text-blue-900', badge: 'bg-blue-100 text-blue-700' },
     { name: L.roleMentee, desc: L.roleMenteeD, c: 'bg-green-50 border-green-100 text-green-900', badge: 'bg-green-100 text-green-700' },
     { name: L.roleCompany, desc: L.roleCompanyD, c: 'bg-indigo-50 border-indigo-100 text-indigo-900', badge: 'bg-indigo-100 text-indigo-700' },
+    { name: L.roleSource, desc: L.roleSourceD, c: 'bg-amber-50 border-amber-100 text-amber-900', badge: 'bg-amber-100 text-amber-700' },
   ];
+
+  const more = [L.more1, L.more2, L.more3, L.more4, L.more5, L.more6, L.more7, L.more8];
 
   const stages = [L.stageApply, L.stageInterview, L.stageInternship, L.stageHired];
 
@@ -88,6 +99,14 @@ export default async function HomePage() {
               {L.signIn}
             </Link>
           </div>
+          <div className="mt-10 flex flex-wrap justify-center gap-2 sm:gap-3">
+            {heroChips.map((chip) => (
+              <span key={chip} className="inline-flex items-center gap-1.5 bg-white/70 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium">
+                <CheckCircle className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+                {chip}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -124,7 +143,8 @@ export default async function HomePage() {
               })}
             </svg>
           </div>
-          <p className="text-sm text-gray-500 mt-6 max-w-xl mx-auto italic">{L.pipelineNote}</p>
+          <p className="text-sm text-gray-600 mt-6 max-w-2xl mx-auto">{L.pipelineStagesNote}</p>
+          <p className="text-sm text-gray-500 mt-3 max-w-xl mx-auto italic">{L.pipelineNote}</p>
         </div>
       </section>
 
@@ -153,7 +173,7 @@ export default async function HomePage() {
       <section className="py-16 px-4">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.rolesTitle}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {roles.map((r) => (
               <div key={r.name} className={`flex items-start gap-4 p-6 rounded-xl border ${r.c}`}>
                 <div className={`w-10 h-10 rounded-lg ${r.badge} flex items-center justify-center flex-shrink-0`}>
@@ -166,6 +186,24 @@ export default async function HomePage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* And a lot more */}
+      <section className="py-16 px-4 bg-white">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{L.moreTitle}</h2>
+            <p className="text-gray-600 mt-2">{L.moreSubtitle}</p>
+          </div>
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+            {more.map((item) => (
+              <li key={item} className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <span className="text-gray-700 text-sm sm:text-base leading-relaxed">{item}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
