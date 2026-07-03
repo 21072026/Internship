@@ -8,6 +8,7 @@ import { dispatchWebhook } from '@/lib/webhooks';
 const createInteractionSchema = z.object({
   relationId: z.string().min(1),
   date: z.string().min(1),
+  subject: z.string().max(200).optional(),
   notes: z.string().min(1, 'Notes are required'),
   type: z.enum(['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp']),
 });
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { relationId, date, notes, type } = parsed.data;
+    const { relationId, date, subject, notes, type } = parsed.data;
 
     const relation = await prisma.mentorshipRelation.findUnique({
       where: { id: relationId },
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
       data: {
         relationId,
         date: new Date(date),
+        subject: subject || null,
         notes,
         type,
       },

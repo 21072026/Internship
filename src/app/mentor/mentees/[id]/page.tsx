@@ -25,6 +25,7 @@ import { useToast } from '@/components/ui/Toast';
 interface InteractionLog {
   id: string;
   date: string;
+  subject?: string | null;
   notes: string;
   type: string;
 }
@@ -77,7 +78,7 @@ export default function MenteeDetailPage() {
   const [relation, setRelation] = useState<RelationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ date: '', notes: '', type: 'Meeting' });
+  const [formData, setFormData] = useState({ date: '', subject: '', notes: '', type: 'Meeting' });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [savingStage, setSavingStage] = useState(false);
@@ -113,7 +114,7 @@ export default function MenteeDetailPage() {
       }
       await fetchRelation();
       setShowForm(false);
-      setFormData({ date: '', notes: '', type: 'Meeting' });
+      setFormData({ date: '', subject: '', notes: '', type: 'Meeting' });
       toast(t.mentor.interactionLogged);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed');
@@ -345,6 +346,13 @@ export default function MenteeDetailPage() {
                   onChange={(e) => setFormData((p) => ({ ...p, type: e.target.value }))}
                 />
               </div>
+              <Input
+                label={t.mentor.subject}
+                data-testid="interaction-log-subject"
+                value={formData.subject}
+                onChange={(e) => setFormData((p) => ({ ...p, subject: e.target.value }))}
+                placeholder={t.mentor.subjectPlaceholder}
+              />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.mentor.notes}</label>
                 <textarea
@@ -383,6 +391,9 @@ export default function MenteeDetailPage() {
               <div key={interaction.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
                 <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
+                  {interaction.subject && (
+                    <p className="text-sm font-medium text-gray-900">{interaction.subject}</p>
+                  )}
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     {new Date(interaction.date).toLocaleDateString()}
