@@ -4,6 +4,38 @@
 > hangi katmanlarının ücretli hale getirilebileceğini, piyasa pratikleriyle birlikte
 > değerlendirmek. (Temmuz 2026)
 
+## İşletme modeli bağlamı
+
+Bu çalışmanın çerçevesini belirleyen gerçek durum:
+
+- Uygulamayı **tek kişi** (15+ yıl tecrübeli kurucu) geliştiriyor; tüm haklar onda.
+- Mentee'ler mesleğe yeni başlayanlar ve mentorluk anlaşmasının parçası olarak
+  **projeye emek vererek katkı** sağlıyorlar (kazan-kazan: piyasa tecrübesi ↔ emek).
+- Yani uygulama aynı zamanda mentorluk programının **staj projesi**: ürün, eğitim
+  aracı ve portföy tek gövdede.
+
+Bunun premium modele üç doğrudan etkisi var:
+
+1. **Mentee/mentor ücretsizliği tartışmasızdır** — mentee'ler yalnızca kullanıcı
+   değil, ürünün emekçisi. Onlardan ücret istemek modelin kendisiyle çelişir.
+2. **Geliştirme kapasitesi sınırlıdır** (1 deneyimli + junior'lar). Yol haritası
+   "en az bakım yüküyle en erken gelir"e göre sıralanmalı; multi-tenancy gibi
+   büyük yatırımlar ancak gelir doğrulandıktan sonra anlamlı.
+3. **Hikâyenin kendisi satış argümanı**: "Bu platformdaki adaylar platformu bizzat
+   inşa etti" — şirketlere aday kalitesini kanıtlayan, kopyalanması zor bir sinyal.
+   Mevcut `Project` + `ProjectTask` modülü bu katkıyı zaten görünür kılıyor;
+   premium aday profilinde öne çıkarılabilir.
+
+**Dikkat edilmesi gereken iki nokta:**
+
+- **Fikri haklar**: sözlü anlaşma yeterli değil; her katkı verenle "katkılar işverene
+  aittir" maddesi içeren kısa yazılı bir katkı sözleşmesi (CLA benzeri) imzalanmalı.
+  Ticarileşme anında geriye dönük hak iddiasını en baştan kapatır.
+- **Veri erişimi**: katkı veren mentee'ler kod tabanında çalışırken **gerçek kullanıcı
+  verisine** (paylaşılan preview DB dahil) erişmemeli. Ticarileşme öncesi, geliştirme
+  ortamlarının seed/sahte veriyle çalışması kural haline getirilmeli — hem GDPR gereği
+  hem Enterprise satışında sorulacak ilk soru.
+
 ## 0. Temel ilke: Mentee ve mentor her zaman ücretsiz
 
 Bu varsayım **doğru** ve piyasa pratiğiyle birebir örtüşüyor:
@@ -125,21 +157,31 @@ temel analitik (admin'in işini yapabilmesi için).
 
 ## 5. Yol haritası önerisi
 
+Tek geliştirici + junior katkı kapasitesine göre sıralandı: her faz kendi başına
+değer üretir, bir sonrakine geçiş gelir/ilgi doğrulamasına bağlıdır. Fazların
+alt görevleri aynı zamanda mentee'lere verilecek **staj görevleri** olarak
+bölünebilir — ürün yol haritası ile mentorluk müfredatı bilinçli olarak örtüşür.
+
 1. **Faz 0 — Entitlement altyapısı**: `Plan`/feature-flag katmanı (mevcut `Setting`
    modeli üzerinden başlanabilir), ücretli özellikleri kapıdan geçiren tek bir
-   `hasFeature(org|company, key)` yardımcı fonksiyonu.
+   `hasFeature(org|company, key)` yardımcı fonksiyonu. Küçük, izole, junior-dostu.
 2. **Faz 1 — Company premium** (mevcut tek kiracılı yapıda bile satılabilir):
    yetenek havuzu + erken erişim + eşleştirme bildirimi. En düşük teknik maliyet,
-   en hızlı gelir doğrulaması.
+   en hızlı gelir doğrulaması. Faturalama manuel başlar (Stripe sonra).
 3. **Faz 2 — AI paketi + gelişmiş analitik**: mevcut consent ve analytics API'lerinin
    üstüne inşa.
 4. **Faz 3 — Multi-tenancy + Pro/Enterprise**: en büyük yatırım, en büyük pazar.
+   Ancak Faz 1–2 gelir üretmeye başladıktan ve bakım yükü ölçüldükten sonra —
+   tek kişilik çekirdek ekiple erkenden girilecek bir iş değil.
 
 ## 6. Açık sorular
 
-- Ürünün hukuki/vergisel çerçevesi (dernek/sosyal girişim mi, ticari mi?) success-fee
-  modelini etkiler.
+- Ürünün hukuki/vergisel çerçevesi (şahıs mı, şirket mi; hangi ülke?) success-fee
+  ve abonelik faturalamasını etkiler. Ticarileşmeden önce netleşmeli.
+- Katkı sözleşmeleri: mevcut mentee'lerle yazılı IP devri var mı? Yoksa ilk iş bu.
 - Yetenek havuzu görünürlüğü **mentee'nin açık rızasına** bağlanmalı (mevcut
   `publicProfile` + `UserConsent` deseni genişletilerek) — hem GDPR gereği hem güven.
+- Katkı veren mentee'lerin gerçek kullanıcı verisine erişimi nasıl sınırlanacak?
+  (Seed'li lokal geliştirme zorunluluğu + preview DB'nin anonimleştirilmesi.)
 - Ödeme altyapısı (Stripe vb.) bu dokümanın kapsamı dışında; Faz 1'de manuel
   faturalama ile bile başlanabilir.
