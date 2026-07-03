@@ -110,6 +110,8 @@ model User {
   preferredLanguage       String?
   // UI theme preference ('light' | 'dark' | 'system'); applied at sign-in.
   theme                   String?
+  // UI font-size preference ('sm' | 'md' | 'lg' | 'xl'); applied at sign-in.
+  fontSize                String?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 

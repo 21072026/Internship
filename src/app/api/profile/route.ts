@@ -61,6 +61,7 @@ const updateProfileSchema = z.object({
   notificationPrefs: z.record(z.string(), z.boolean()).optional(),
   preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
+  fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
 });
 
 // Profile fields surfaced by both GET and PUT responses.
@@ -97,6 +98,7 @@ const PROFILE_SELECT = {
   notificationPrefs: true,
   preferredLanguage: true,
   theme: true,
+  fontSize: true,
   createdAt: true,
 } as const;
 

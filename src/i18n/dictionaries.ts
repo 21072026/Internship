@@ -693,6 +693,7 @@ const en = {
   nextActions: { logFirst: 'Log a first interaction', noContact: 'No contact in {d} days — reach out', lastContact: 'Last contact {d} days ago — follow up', pushHiring: 'Push toward hiring', onTrack: 'On track' },
   notFound: { title: 'Page not found', description: 'This page could not be found.', backHome: 'Back to home' },
   theme: { toggle: 'Toggle theme', light: 'Light', dark: 'Dark', system: 'System' },
+  fontSize: { decrease: 'Decrease font size', increase: 'Increase font size', small: 'Small', medium: 'Normal', large: 'Large', extraLarge: 'X-Large' },
   contact: {
     call: 'Call',
     reachedQ: 'Did you reach them?',
@@ -1811,6 +1812,7 @@ const tr: Dict = {
   nextActions: { logFirst: 'İlk etkileşimi kaydet', noContact: '{d} gündür iletişim yok — iletişime geç', lastContact: 'Son iletişim {d} gün önce — takip et', pushHiring: 'İşe alıma yönlendir', onTrack: 'Yolunda' },
   notFound: { title: 'Sayfa bulunamadı', description: 'Bu sayfa bulunamadı.', backHome: 'Ana sayfaya dön' },
   theme: { toggle: 'Temayı değiştir', light: 'Açık', dark: 'Koyu', system: 'Sistem' },
+  fontSize: { decrease: 'Yazı boyutunu küçült', increase: 'Yazı boyutunu büyüt', small: 'Küçük', medium: 'Normal', large: 'Büyük', extraLarge: 'Çok Büyük' },
   contact: {
     call: 'Ara',
     reachedQ: 'Görüşebildin mi?',
@@ -2927,6 +2929,7 @@ const de: Dict = {
   nextActions: { logFirst: 'Erste Interaktion erfassen', noContact: 'Seit {d} Tagen kein Kontakt — melde dich', lastContact: 'Letzter Kontakt vor {d} Tagen — nachfassen', pushHiring: 'Richtung Einstellung drängen', onTrack: 'Auf Kurs' },
   notFound: { title: 'Seite nicht gefunden', description: 'Diese Seite konnte nicht gefunden werden.', backHome: 'Zurück zur Startseite' },
   theme: { toggle: 'Theme wechseln', light: 'Hell', dark: 'Dunkel', system: 'System' },
+  fontSize: { decrease: 'Schrift verkleinern', increase: 'Schrift vergrößern', small: 'Klein', medium: 'Normal', large: 'Groß', extraLarge: 'Sehr groß' },
   contact: {
     call: 'Anrufen',
     reachedQ: 'Hast du sie erreicht?',

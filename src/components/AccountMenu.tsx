@@ -6,6 +6,7 @@ import { LogOut, Settings, ChevronUp } from 'lucide-react';
 import { SidebarAvatar } from '@/components/SidebarAvatar';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { FontSizeControl } from '@/components/FontSizeControl';
 import { VersionFooter } from '@/components/VersionFooter';
 import { useT } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
@@ -81,6 +82,9 @@ export function AccountMenu({
           <div className="flex items-center justify-between gap-2 px-3 py-1.5">
             <LanguageSwitcher current={locale} />
             <ThemeToggle />
+          </div>
+          <div className="flex items-center justify-center px-3 py-1">
+            <FontSizeControl />
           </div>
           <div className="px-3 pt-1">
             <VersionFooter version={version} />

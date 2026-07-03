@@ -13,6 +13,16 @@
   }
 }
 
+/*
+ * Global font-size scale (accessibility preference, independent of theme).
+ * Tailwind's text-* utilities are rem-based, so scaling the root font-size
+ * scales the whole app proportionally — no per-component changes needed.
+ * Default (no class) is 100% (browser default, ~16px).
+ */
+html.font-sm { font-size: 87.5%; }
+html.font-lg { font-size: 112.5%; }
+html.font-xl { font-size: 125%; }
+
 /* Dark mode base surfaces (class strategy); primitives add their own dark: */
 html.dark body { background-color: #030712; color: #f3f4f6; }
 
