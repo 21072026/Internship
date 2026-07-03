@@ -37,6 +37,7 @@ export function AccountSettings() {
   const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaBusy, setTwoFaBusy] = useState(false);
+  const [signOutBusy, setSignOutBusy] = useState(false);
   const [language, setLanguage] = useState('en');
   const [theme, setTheme] = useState('system');
   const [role, setRole] = useState('');
@@ -216,6 +217,19 @@ export function AccountSettings() {
     }
   };
 
+  const signOutAll = async () => {
+    setSignOutBusy(true);
+    try {
+      const res = await fetch('/api/account/sign-out-all', { method: 'POST' });
+      if (!res.ok) throw new Error();
+      // The current cookie is now invalid too — clear it and go to sign-in.
+      await signOut({ callbackUrl: '/auth/signin' });
+    } catch {
+      flash('Failed', true);
+      setSignOutBusy(false);
+    }
+  };
+
   const deleteAccount = async () => {
     setDeleting(true);
     try {
@@ -307,6 +321,12 @@ export function AccountSettings() {
             <Button variant="outline" loading={twoFaBusy} onClick={() => twoFa('setup')}>{t.account.twoFactorEnable}</Button>
           </div>
         )}
+      </Card>
+
+      <Card className="mt-6 max-w-4xl">
+        <CardHeader><CardTitle>{t.account.sessionsSection}</CardTitle></CardHeader>
+        <p className="text-sm text-gray-600 mb-4 max-w-lg">{t.account.sessionsHint}</p>
+        <Button variant="outline" loading={signOutBusy} onClick={signOutAll}>{t.account.signOutAll}</Button>
       </Card>
 
       <Card className="mt-6 max-w-4xl">

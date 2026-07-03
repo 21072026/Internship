@@ -177,9 +177,27 @@ export const authOptions: NextAuthOptions = {
           token.companyId = fresh.companyId;
         }
       }
+
+      // Global sign-out ("all devices"): reject any token issued before the
+      // account's sessionsValidFrom cutoff. token.iat is seconds; a freshly
+      // minted token (just signed in) has iat >= cutoff, so it survives. Runs
+      // per request — one indexed point lookup — so a revocation on one device
+      // logs the others out on their next request, not just at token refresh.
+      if (token.id && typeof token.iat === 'number') {
+        const acct = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { sessionsValidFrom: true },
+        });
+        if (acct?.sessionsValidFrom && token.iat * 1000 < acct.sessionsValidFrom.getTime()) {
+          token.invalidated = true;
+        }
+      }
       return token;
     },
     async session({ session, token }) {
+      // A token revoked by "sign out of all devices" yields no session, so
+      // getServerSession()/useSession() treat the request as unauthenticated.
+      if (token?.invalidated) return null as unknown as typeof session;
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
