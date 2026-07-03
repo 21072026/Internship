@@ -42,7 +42,7 @@ export function NotesPanel() {
       const res = await fetch('/api/notes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body, category }),
       });
-      if (res.ok) { setBody(''); await load(); toast(t.portal.notes.added); }
+      if (res.ok) { setBody(''); setCategory('PERSONAL'); await load(); toast(t.portal.notes.added); }
     } finally {
       setSaving(false);
     }
