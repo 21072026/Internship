@@ -25,8 +25,9 @@ test('sidebar account menu holds sign-out, language and theme behind one trigger
   const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: /sign out|çıkış/i })).toBeVisible();
-  // Language + theme controls moved inside the menu. Exact match — a
-  // substring match on 'DE' also picks up other controls in the menu whose
-  // accessible name happens to contain "de" (e.g. "Decrease font size").
-  await expect(menu.getByRole('button', { name: 'DE', exact: true })).toBeVisible();
+  // Language + theme controls moved inside the menu. Exact match on the
+  // actual (lowercase) locale code — a loose substring match on 'DE' also
+  // picks up other controls whose accessible name happens to contain "de"
+  // (e.g. "Decrease font size").
+  await expect(menu.getByRole('button', { name: 'de', exact: true })).toBeVisible();
 });
