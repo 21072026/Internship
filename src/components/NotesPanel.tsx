@@ -5,6 +5,7 @@ import { Trash2, Lock } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { useToast } from '@/components/ui/Toast';
 
 interface Note {
   id: string;
@@ -15,6 +16,7 @@ interface Note {
 // Private personal notes — visible only to the owner.
 export function NotesPanel() {
   const t = useT();
+  const toast = useToast();
   const [notes, setNotes] = useState<Note[]>([]);
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
@@ -33,7 +35,7 @@ export function NotesPanel() {
       const res = await fetch('/api/notes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
       });
-      if (res.ok) { setBody(''); await load(); }
+      if (res.ok) { setBody(''); await load(); toast(t.portal.notes.added); }
     } finally {
       setSaving(false);
     }
@@ -42,6 +44,7 @@ export function NotesPanel() {
   const remove = async (id: string) => {
     await fetch(`/api/notes/${id}`, { method: 'DELETE' });
     await load();
+    toast(t.portal.notes.deleted);
   };
 
   return (
