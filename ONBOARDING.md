@@ -82,6 +82,23 @@ Generates fake mentors + mentees with cities, universities, skills, pipeline sta
 and interaction history. (It refuses to wipe a DB literally named `internship_crm` without
 `--force`, so it's safe to run locally for *adding* data.)
 
+### Useful npm scripts
+
+| Command | What it does |
+|---------|--------------|
+| `npm run dev` | Starts the local Next.js app at http://localhost:3000 |
+| `npm run build` | Creates the production Next.js build |
+| `npm run start` | Serves a production build locally |
+| `npm run lint` | Runs the Next.js ESLint check |
+| `npm run check:i18n` | Verifies EN/TR/DE dictionaries have matching keys and no empty values |
+| `npm run test:e2e` | Runs the Playwright smoke tests headlessly |
+| `npm run test:e2e:headed` | Runs the same Playwright tests in a visible browser |
+| `npm run import:csv` | Imports or dry-runs the legacy mentoring CSV from `--file` or `--url` |
+| `npm run postinstall` | Generates the Prisma client after dependencies are installed |
+| `npm run seed:templates` | Adds starter document templates if an admin user already exists |
+| `npm run db:dev:up` | Starts the local MySQL Docker Compose database |
+| `npm run db:dev:down` | Stops the local MySQL Docker Compose database |
+
 ---
 
 ## 7. A 5-minute tour of the code

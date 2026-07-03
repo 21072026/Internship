@@ -91,7 +91,14 @@ See [`.env.example`](.env.example) for the full list.
 | `npm run build` | Production build |
 | `npm run start` | Serve production build |
 | `npm run lint` | Lint (`next lint`) |
+| `npm run check:i18n` | Verify EN/TR/DE dictionary key parity and catch empty translations |
 | `npm run test:e2e` | Playwright smoke tests (add `:headed` to watch) |
+| `npm run test:e2e:headed` | Run the same Playwright smoke tests in a visible browser |
+| `npm run import:csv` | Dry-run or apply the legacy mentoring CSV import; pass `--file` or `--url` |
+| `npm run postinstall` | Generate the Prisma client after dependency installs |
+| `npm run seed:templates` | Seed starter document templates when an admin user exists |
+| `npm run db:dev:up` | Start the local MySQL Docker Compose database |
+| `npm run db:dev:down` | Stop the local MySQL Docker Compose database |
 | `npx prisma db push` | Sync schema to DB |
 | `npx prisma db seed` | Seed first admin |
 
