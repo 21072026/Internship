@@ -97,17 +97,25 @@ See [`.env.example`](.env.example) for the full list.
 
 ## Testing
 
-End-to-end smoke tests live in [`e2e/`](e2e/) (Playwright). They cover the home page,
+Several kinds of test guard the app — functional E2E, accessibility, security,
+XSS/injection, and a nightly **stress/load** test. See [`docs/testing.md`](docs/testing.md)
+for the full map and configuration.
+
+End-to-end tests live in [`e2e/`](e2e/) (Playwright). They cover the home page,
 sign-in, admin login, and that the admin pages render without server errors.
 
 ```bash
 npm run test:e2e            # starts the app and runs headless
 npm run test:e2e:headed     # visible browser
 BASE_URL=https://crm-preview.ersah.in npm run test:e2e   # against a deployed env
+
+npm run test:stress         # load test (see docs/testing.md for thresholds/env)
 ```
 
-CI runs these on every PR ([`.github/workflows/e2e.yml`](.github/workflows/e2e.yml)) against
-an isolated MySQL service, so a regression fails the check before merge.
+CI runs the E2E suite on every PR ([`.github/workflows/e2e.yml`](.github/workflows/e2e.yml))
+against an isolated MySQL service, so a regression fails the check before merge. A
+scheduled workflow ([`.github/workflows/stress.yml`](.github/workflows/stress.yml)) runs
+the stress test nightly and **emails the team on failure**.
 
 ## Deployment
 
