@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, User, BookOpen, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, User, BookOpen, MessageSquare, Lock } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 // Mentee portal sidebar navigation with active-route highlighting (mirrors the
@@ -16,6 +16,7 @@ export function PortalNav() {
     { href: '/portal/profile', label: t.nav.myProfile, Icon: User },
     { href: '/portal/messages', label: t.nav.messages, Icon: MessageSquare },
     { href: '/portal/interactions', label: t.nav.interactionLogs, Icon: BookOpen },
+    { href: '/portal/notes', label: t.portal.notes.title, Icon: Lock },
   ];
 
   const isActive = (href: string) =>

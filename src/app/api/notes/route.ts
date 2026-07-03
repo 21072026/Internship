@@ -15,7 +15,10 @@ export async function GET() {
   return NextResponse.json({ notes });
 }
 
-const schema = z.object({ body: z.string().min(1).max(5000) });
+const schema = z.object({
+  body: z.string().min(1).max(5000),
+  category: z.enum(['MEETING', 'FEEDBACK', 'TASKS', 'PERSONAL']).optional(),
+});
 
 // POST — create a private note.
 export async function POST(request: Request) {
@@ -23,6 +26,8 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
-  const note = await prisma.personalNote.create({ data: { userId: session.user.id, body: parsed.data.body } });
+  const note = await prisma.personalNote.create({
+    data: { userId: session.user.id, body: parsed.data.body, category: parsed.data.category ?? 'PERSONAL' },
+  });
   return NextResponse.json({ note }, { status: 201 });
 }
