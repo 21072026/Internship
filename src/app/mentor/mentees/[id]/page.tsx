@@ -20,6 +20,7 @@ import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
+import { useToast } from '@/components/ui/Toast';
 
 interface InteractionLog {
   id: string;
@@ -71,6 +72,7 @@ export default function MenteeDetailPage() {
   const id = params.id as string;
   const t = useT();
   const locale = useLocale();
+  const toast = useToast();
 
   const [relation, setRelation] = useState<RelationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,6 +114,7 @@ export default function MenteeDetailPage() {
       await fetchRelation();
       setShowForm(false);
       setFormData({ date: '', notes: '', type: 'Meeting' });
+      toast(t.mentor.interactionLogged);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed');
     } finally {
@@ -122,6 +125,7 @@ export default function MenteeDetailPage() {
   const handleDeleteInteraction = async (interactionId: string) => {
     await fetch(`/api/interactions/${interactionId}`, { method: 'DELETE' });
     await fetchRelation();
+    toast(t.mentor.interactionDeleted);
   };
 
   const handlePipelineChange = async (pipelineStatus: string) => {
@@ -138,6 +142,7 @@ export default function MenteeDetailPage() {
         throw new Error(body.error || 'Failed to update stage');
       }
       await fetchRelation();
+      toast(t.mentor.stageUpdated);
     } catch (err) {
       setStageError(err instanceof Error ? err.message : 'Failed to update stage');
     } finally {
@@ -321,7 +326,7 @@ export default function MenteeDetailPage() {
           </CardHeader>
 
           {showForm && (
-            <div className="mb-6 p-4 bg-gray-50 rounded-xl space-y-3">
+            <div data-testid="interaction-log-form" className="mb-6 p-4 bg-gray-50 rounded-xl space-y-3">
               {formError && (
                 <p className="text-sm text-red-600">{formError}</p>
               )}
@@ -329,6 +334,7 @@ export default function MenteeDetailPage() {
                 <Input
                   label={t.mentor.date}
                   type="date"
+                  data-testid="interaction-log-date"
                   value={formData.date}
                   onChange={(e) => setFormData((p) => ({ ...p, date: e.target.value }))}
                 />
@@ -343,6 +349,7 @@ export default function MenteeDetailPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.mentor.notes}</label>
                 <textarea
                   rows={3}
+                  data-testid="interaction-log-notes"
                   value={formData.notes}
                   onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
                   placeholder="What was discussed..."
@@ -358,7 +365,19 @@ export default function MenteeDetailPage() {
 
           <div className="space-y-3">
             {relation.interactions.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-8">{t.mentor.noInteractionsYet}</p>
+              <div>
+                <p className="text-sm text-gray-400 text-center pt-4 pb-3">{t.mentor.noInteractionsYet}</p>
+                <div className="opacity-50 pointer-events-none">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t.mentor.exampleLog}</p>
+                  <div className="flex items-start gap-3 py-3 border-b border-dashed border-gray-200">
+                    <InteractionTypeBadge type="Meeting" className="text-xs flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700">{t.mentor.exampleLogNote}</p>
+                      <p className="text-xs text-gray-400 mt-1">{new Date().toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
             {relation.interactions.map((interaction) => (
               <div key={interaction.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">

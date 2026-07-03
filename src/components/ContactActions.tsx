@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { Phone, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { useToast } from '@/components/ui/Toast';
 
 // Quick contact channels for a mentee's number. Opens tel:/wa.me, then asks the
 // mentor whether they reached the mentee — a "yes" logs a Call/WhatsApp
 // interaction so the contact history builds up automatically.
 export function ContactActions({ relationId, phone, onLogged }: { relationId: string; phone: string; onLogged?: () => void }) {
   const t = useT();
+  const toast = useToast();
   const digits = phone.replace(/[^\d+]/g, '');
   const wa = digits.replace(/^\+/, '');
   const [ask, setAsk] = useState<null | 'Call' | 'WhatsApp'>(null);
@@ -37,6 +39,7 @@ export function ContactActions({ relationId, phone, onLogged }: { relationId: st
         }),
       });
       onLogged?.();
+      toast(t.contact.logged);
     } finally {
       setSaving(false);
     }

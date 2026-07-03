@@ -15,6 +15,7 @@ import { SkillRating } from '@/components/SkillRating';
 import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
+import { useToast } from '@/components/ui/Toast';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -94,6 +95,7 @@ function resolveTimezone(tz: string | null | undefined): string {
 
 export default function ProfilePage() {
   const t = useT();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -216,6 +218,7 @@ export default function ProfilePage() {
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
+      toast(t.profileForm.updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
