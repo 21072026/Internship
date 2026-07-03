@@ -1,0 +1,70 @@
+name: Nightly Stress Test
+
+# Runs a load/stress test against the live app on a nightly schedule and emails
+# the team if any latency/error-rate threshold is breached. Can also be run
+# on demand from the Actions tab (with an optional target URL override).
+on:
+  schedule:
+    # 02:30 UTC every night (~03:30/04:30 Europe/Berlin depending on DST).
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Target URL to stress (defaults to the STRESS_TARGET_URL secret / production)'
+        required: false
+        type: string
+
+concurrency:
+  group: stress-test
+  cancel-in-progress: false
+
+jobs:
+  stress:
+    name: Load & latency
+    runs-on: ubuntu-latest
+    env:
+      # Prefer the manual override, then a dedicated secret, then production.
+      BASE_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://crm.ersah.in' }}
+      STRESS_CONCURRENCY: '25'
+      STRESS_DURATION_MS: '30000'
+      STRESS_MAX_ERROR_RATE: '0.02'
+      STRESS_MAX_P95_MS: '2500'
+      STRESS_SUMMARY_FILE: stress-summary.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run stress test
+        id: stress
+        run: node scripts/stress-test.mjs
+
+      - name: Upload stress summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-summary
+          path: stress-summary.json
+          retention-days: 14
+
+      # Email the team only when the stress test failed. Reuses the app's SMTP_*
+      # secrets; ALERT_EMAIL_TO controls the recipient(s).
+      - name: Email alert on failure
+        if: failure()
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          ALERT_SUBJECT: '⚠️ Internship CRM — nightly stress test FAILED'
+          ALERT_BODY: |
+            The nightly stress test breached its thresholds against ${{ env.BASE_URL }}.
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ALERT_SUMMARY_FILE: stress-summary.json
+        run: |
+          npm install nodemailer@^7 --no-save --no-audit --no-fund
+          node scripts/send-alert-email.mjs
