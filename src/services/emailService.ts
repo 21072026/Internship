@@ -44,6 +44,19 @@ export async function sendEmail({
   });
 }
 
+// Connectivity-only check (auth + reachability), no message sent — used by the
+// opt-in `/api/health?smtp=1` probe so SMTP outages (#483) surface as a clear
+// signal instead of only being visible per-user as "email never arrived".
+export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: string }> {
+  if (!process.env.SMTP_USER) return { ok: false, error: 'SMTP not configured' };
+  try {
+    await transporter.verify();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function sendInvitationEmail({
   to,
   token,
