@@ -12,14 +12,23 @@ export function EmailVerificationBanner() {
   const { data: session } = useSession();
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   if (!session || session.user?.emailVerified !== false) return null;
 
   const resend = async () => {
     setSending(true);
+    setError('');
     try {
-      await fetch('/api/auth/verify-email/resend', { method: 'POST' });
-      setSent(true);
+      const res = await fetch('/api/auth/verify-email/resend', { method: 'POST' });
+      if (res.ok) {
+        setSent(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || t.auth.verifyResendFailed);
+      }
+    } catch {
+      setError(t.auth.verifyResendFailed);
     } finally {
       setSending(false);
     }
@@ -29,6 +38,7 @@ export function EmailVerificationBanner() {
     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
       <AlertTriangle className="h-4 w-4 shrink-0" />
       <span className="flex-1 min-w-0">{t.auth.unverifiedBanner}</span>
+      {error && <span className="font-medium text-red-700">{error}</span>}
       {sent ? (
         <span className="font-medium">{t.auth.verifyResent}</span>
       ) : (
