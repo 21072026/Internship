@@ -25,7 +25,9 @@ test('signed-in unverified user can resend from the dashboard banner and gets a 
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
-    await expect(page.getByText(/not verified/i)).toBeVisible({ timeout: 10_000 });
+    // The dashboard banner reads "isn't verified" (distinct wording/key from
+    // the sign-in page's "is not verified" message tested in unverified-login.spec.ts).
+    await expect(page.getByText(/isn.t verified/i)).toBeVisible({ timeout: 10_000 });
 
     const before = await prisma.emailVerificationToken.count({ where: { userId: user.id } });
     const done = page.waitForResponse((r) => r.url().includes('/api/auth/verify-email/resend') && r.request().method() === 'POST');
