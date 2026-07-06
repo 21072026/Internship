@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
-import { Badge } from '@/components/ui/Badge';
+import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Send, Mail, Copy, Check, CheckCircle2, Circle } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
@@ -222,9 +222,7 @@ export default function InvitePage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Badge variant={invite.role === 'ADMIN' ? 'danger' : invite.role === 'MENTOR' ? 'info' : 'success'}>
-                        {invite.role}
-                      </Badge>
+                      <RoleBadge role={invite.role} />
                       <Badge variant={status === 'accepted' ? 'success' : status === 'expired' ? 'warning' : 'default'}>
                         {(t.invite.status as Record<string, string>)[status]}
                       </Badge>

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { roleHome } from '@/lib/roleHome';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -19,14 +19,6 @@ interface AdminUser {
   isActive: boolean;
   emailVerified: boolean;
 }
-
-const ROLE_VARIANT: Record<string, 'info' | 'success' | 'warning' | 'purple' | 'default'> = {
-  ADMIN: 'warning',
-  MENTOR: 'success',
-  MENTEE: 'info',
-  COMPANY: 'purple',
-  SOURCE: 'default',
-};
 
 type RoleLabel = 'admin' | 'mentor' | 'mentee' | 'company' | 'source';
 
@@ -160,7 +152,7 @@ export default function AdminUsersPage() {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={ROLE_VARIANT[u.role]}>{t.usersAdmin[u.role.toLowerCase() as RoleLabel]}</Badge>
+                  <RoleBadge role={u.role} />
                   <Badge variant={u.isActive ? 'success' : 'warning'}>
                     {u.isActive ? t.usersAdmin.active : t.usersAdmin.inactive}
                   </Badge>
