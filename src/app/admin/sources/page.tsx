@@ -27,6 +27,7 @@ export default function AdminSourcesPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/sources');
@@ -84,6 +85,9 @@ export default function AdminSourcesPage() {
     }
   };
 
+  const q = search.trim().toLowerCase();
+  const filtered = sources.filter((s) => !q || s.name.toLowerCase().includes(q));
+
   return (
     <div>
       <div className="mb-6">
@@ -120,11 +124,26 @@ export default function AdminSourcesPage() {
         {loginMsg && <p className="text-sm text-gray-600 mt-2">{loginMsg}</p>}
       </Card>
 
+      {!loading && sources.length > 0 && (
+        <div className="flex items-center mb-4">
+          <input
+            type="search"
+            data-testid="source-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t.sources.searchPlaceholder}
+            className="w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+          />
+        </div>
+      )}
+
       <Card>
-        <CardHeader><CardTitle>{t.sources.title} ({sources.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t.sources.title} ({filtered.length})</CardTitle></CardHeader>
         {loading ? (
           <SkeletonRows rows={5} />
         ) : sources.length === 0 ? (
+          <p className="text-center py-10 text-gray-400">{t.sources.none}</p>
+        ) : filtered.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{t.sources.none}</p>
         ) : (
           <div className="overflow-x-auto">
@@ -140,7 +159,7 @@ export default function AdminSourcesPage() {
                 </tr>
               </thead>
               <tbody>
-                {sources.map((s) => (
+                {filtered.map((s) => (
                   <tr key={s.id} data-testid={`source-row-${s.id}`} className="border-b border-gray-50">
                     <td className="py-2 pr-4 font-medium text-gray-900">{s.name}</td>
                     <td className="py-2 pr-4 text-gray-500">
