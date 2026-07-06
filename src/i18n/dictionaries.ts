@@ -738,6 +738,7 @@ const en = {
   interactionTypes: { Meeting: 'Meeting', Feedback: 'Feedback', Email: 'Email', Call: 'Call', WhatsApp: 'WhatsApp' },
   nextActions: { logFirst: 'Log a first interaction', noContact: 'No contact in {d} days — reach out', lastContact: 'Last contact {d} days ago — follow up', pushHiring: 'Push toward hiring', onTrack: 'On track' },
   notFound: { title: 'Page not found', description: 'This page could not be found.', backHome: 'Back to home' },
+  errorBoundary: { title: 'Something went wrong', description: 'An unexpected error occurred. You can try again or go back to the dashboard.', retry: 'Try again', backHome: 'Back to dashboard' },
   theme: { toggle: 'Toggle theme', light: 'Light', dark: 'Dark', system: 'System' },
   fontSize: { decrease: 'Decrease font size', increase: 'Increase font size', small: 'Small', medium: 'Normal', large: 'Large', extraLarge: 'X-Large' },
   contact: {
@@ -1910,6 +1911,7 @@ const tr: Dict = {
   interactionTypes: { Meeting: 'Toplantı', Feedback: 'Geri bildirim', Email: 'E-posta', Call: 'Arama', WhatsApp: 'WhatsApp' },
   nextActions: { logFirst: 'İlk etkileşimi kaydet', noContact: '{d} gündür iletişim yok — iletişime geç', lastContact: 'Son iletişim {d} gün önce — takip et', pushHiring: 'İşe alıma yönlendir', onTrack: 'Yolunda' },
   notFound: { title: 'Sayfa bulunamadı', description: 'Bu sayfa bulunamadı.', backHome: 'Ana sayfaya dön' },
+  errorBoundary: { title: 'Bir şeyler ters gitti', description: 'Beklenmeyen bir hata oluştu. Tekrar deneyebilir veya panele dönebilirsin.', retry: 'Tekrar dene', backHome: 'Panele dön' },
   theme: { toggle: 'Temayı değiştir', light: 'Açık', dark: 'Koyu', system: 'Sistem' },
   fontSize: { decrease: 'Yazı boyutunu küçült', increase: 'Yazı boyutunu büyüt', small: 'Küçük', medium: 'Normal', large: 'Büyük', extraLarge: 'Çok Büyük' },
   contact: {
@@ -3080,6 +3082,7 @@ const de: Dict = {
   interactionTypes: { Meeting: 'Meeting', Feedback: 'Feedback', Email: 'E-Mail', Call: 'Anruf', WhatsApp: 'WhatsApp' },
   nextActions: { logFirst: 'Erste Interaktion erfassen', noContact: 'Seit {d} Tagen kein Kontakt — melde dich', lastContact: 'Letzter Kontakt vor {d} Tagen — nachfassen', pushHiring: 'Richtung Einstellung drängen', onTrack: 'Auf Kurs' },
   notFound: { title: 'Seite nicht gefunden', description: 'Diese Seite konnte nicht gefunden werden.', backHome: 'Zurück zur Startseite' },
+  errorBoundary: { title: 'Etwas ist schiefgelaufen', description: 'Ein unerwarteter Fehler ist aufgetreten. Du kannst es erneut versuchen oder zum Dashboard zurückkehren.', retry: 'Erneut versuchen', backHome: 'Zurück zum Dashboard' },
   theme: { toggle: 'Theme wechseln', light: 'Hell', dark: 'Dunkel', system: 'System' },
   fontSize: { decrease: 'Schrift verkleinern', increase: 'Schrift vergrößern', small: 'Klein', medium: 'Normal', large: 'Groß', extraLarge: 'Sehr groß' },
   contact: {
