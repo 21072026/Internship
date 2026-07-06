@@ -680,6 +680,7 @@ const en = {
     create: 'Create',
     none: 'No cohorts yet',
     confirmDelete: 'Delete cohort "{name}"? Mentees stay; they just lose this cohort tag.',
+    searchPlaceholder: 'Search cohorts...',
   },
   sources: {
     title: 'Referral sources',
@@ -694,6 +695,7 @@ const en = {
     conversion: 'Conversion',
     create: 'Create',
     none: 'No sources yet',
+    searchPlaceholder: 'Search sources...',
     addLogin: 'Create a source login',
     addLoginHint: 'Give a source a login so they can submit mentees (not read-only).',
     createLogin: 'Create login',
@@ -1845,6 +1847,7 @@ const tr: Dict = {
     create: 'Oluştur',
     none: 'Henüz kohort yok',
     confirmDelete: '"{name}" kohortu silinsin mi? Menteeler kalır; sadece bu kohort etiketini kaybeder.',
+    searchPlaceholder: 'Kohort ara...',
   },
   sources: {
     title: 'Başvuru kaynakları',
@@ -1859,6 +1862,7 @@ const tr: Dict = {
     conversion: 'Dönüşüm',
     create: 'Oluştur',
     none: 'Henüz kaynak yok',
+    searchPlaceholder: 'Kaynak ara...',
     addLogin: 'Kaynak girişi oluştur',
     addLoginHint: 'Bir kaynağa giriş ver ki mentee gönderebilsin (salt-okunur değil).',
     createLogin: 'Giriş oluştur',
@@ -3008,6 +3012,7 @@ const de: Dict = {
     create: 'Erstellen',
     none: 'Noch keine Kohorten',
     confirmDelete: 'Kohorte "{name}" löschen? Mentees bleiben; nur die Kohorten-Zuordnung entfällt.',
+    searchPlaceholder: 'Kohorten suchen...',
   },
   sources: {
     title: 'Empfehlungsquellen',
@@ -3022,6 +3027,7 @@ const de: Dict = {
     conversion: 'Conversion',
     create: 'Erstellen',
     none: 'Noch keine Quellen',
+    searchPlaceholder: 'Quellen suchen...',
     addLogin: 'Quellen-Login erstellen',
     addLoginHint: 'Gib einer Quelle einen Login, damit sie Mentees einreichen kann (nicht nur lesend).',
     createLogin: 'Login erstellen',

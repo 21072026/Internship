@@ -24,6 +24,7 @@ export default function AdminCohortsPage() {
   const [term, setTerm] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     const res = await fetch('/api/cohorts');
@@ -75,6 +76,9 @@ export default function AdminCohortsPage() {
 
   const hiredOf = (d: Record<string, number>) => HIRED.reduce((n, s) => n + (d[s] || 0), 0);
 
+  const q = search.trim().toLowerCase();
+  const filtered = cohorts.filter((c) => !q || c.name.toLowerCase().includes(q));
+
   return (
     <div>
       <div className="mb-6">
@@ -91,11 +95,25 @@ export default function AdminCohortsPage() {
         </form>
       </Card>
 
+      {!loading && cohorts.length > 0 && (
+        <div className="flex items-center mb-4">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t.cohorts.searchPlaceholder}
+            className="w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+          />
+        </div>
+      )}
+
       <Card>
-        <CardHeader><CardTitle>{t.cohorts.comparison} ({cohorts.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t.cohorts.comparison} ({filtered.length})</CardTitle></CardHeader>
         {loading ? (
           <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
         ) : cohorts.length === 0 ? (
+          <p className="text-center py-10 text-gray-400">{t.cohorts.none}</p>
+        ) : filtered.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{t.cohorts.none}</p>
         ) : (
           <div className="overflow-x-auto">
@@ -111,7 +129,7 @@ export default function AdminCohortsPage() {
                 </tr>
               </thead>
               <tbody>
-                {cohorts.map((c) => {
+                {filtered.map((c) => {
                   const hired = hiredOf(c.distribution);
                   const rate = c.interns ? Math.round((hired / c.interns) * 100) : 0;
                   return (
