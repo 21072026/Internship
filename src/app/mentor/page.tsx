@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
 import { getServerDictionary } from "@/i18n/server";
@@ -10,6 +11,7 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Users, BookOpen, MessageSquare, Calendar } from 'lucide-react';
 import Link from 'next/link';
+import { formatDate } from '@/lib/relativeTime';
 
 async function getMentorData(mentorId: string) {
   const relations = await prisma.mentorshipRelation.findMany({
@@ -56,9 +58,13 @@ async function getMentorData(mentorId: string) {
 
 export default async function MentorDashboard() {
   const session = await getServerSession(authOptions);
-  const { t } = await getServerDictionary();
-  const { relations, recentInteractions } = await getMentorData(session!.user.id);
-  const attentionItems = await getAttentionItems(session!.user.id);
+  // The layout gates unauthenticated users, but the session can be revoked
+  // (e.g. "sign out of all devices") between that check and this render, in
+  // which case session is null here — redirect instead of crashing.
+  if (!session?.user?.id) redirect('/auth/signin');
+  const { t, locale } = await getServerDictionary();
+  const { relations, recentInteractions } = await getMentorData(session.user.id);
+  const attentionItems = await getAttentionItems(session.user.id);
 
   const activeRelations = relations.filter((r) => r.status === 'ACTIVE');
 
@@ -66,8 +72,8 @@ export default async function MentorDashboard() {
     <div>
       <OnboardingChecklist />
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {t.mentor.welcomeBack}, {session!.user.name}
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {t.mentor.welcomeBack}, {session.user.name}
         </h1>
         <p className="text-gray-500 mt-1">{t.mentor.dashSubtitle}</p>
       </div>
@@ -205,7 +211,7 @@ export default async function MentorDashboard() {
                   </div>
                   <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    {new Date(interaction.date).toLocaleDateString()}
+                    {formatDate(interaction.date, locale)}
                   </p>
                 </div>
               </div>

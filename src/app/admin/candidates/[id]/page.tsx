@@ -19,6 +19,7 @@ import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
@@ -253,7 +254,7 @@ export default function AdminMenteeDetailPage() {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{user.fullName}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.fullName}</h1>
             <p className="text-gray-500">{user.email}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -290,7 +291,7 @@ export default function AdminMenteeDetailPage() {
             <Field label={t.candidateDetail.phone} value={user.phone} />
             <Field label={t.candidateDetail.whatsapp} value={user.whatsapp} />
             <Field label={t.candidateDetail.city} value={user.city} />
-            <Field label={t.candidateDetail.birthDate} value={user.birthDate ? new Date(user.birthDate).toLocaleDateString() : null} />
+            <Field label={t.candidateDetail.birthDate} value={user.birthDate ? formatDate(user.birthDate, locale) : null} />
             <Field label={t.candidateDetail.referral} value={user.referralSource} />
             {user.skills.length > 0 && (
               <div>
@@ -402,7 +403,7 @@ export default function AdminMenteeDetailPage() {
                           <span className="text-gray-400">{pipelineLabel(sc.fromStatus, locale)}</span>
                           {' → '}
                           <span className="font-medium">{pipelineLabel(sc.toStatus, locale)}</span>
-                          <span className="text-xs text-gray-400"> · {sc.changedBy.fullName} · {new Date(sc.createdAt).toLocaleDateString()}</span>
+                          <span className="text-xs text-gray-400"> · {sc.changedBy.fullName} · {formatDate(sc.createdAt, locale)}</span>
                         </span>
                         <button
                           onClick={() => deleteHistory(sc.id)}
@@ -451,7 +452,7 @@ export default function AdminMenteeDetailPage() {
                         <InteractionTypeBadge type={i.type} className="text-xs flex-shrink-0" />
                         <div>
                           <p className="text-gray-700">{i.notes}</p>
-                          <p className="text-xs text-gray-400">{new Date(i.date).toLocaleDateString()}</p>
+                          <p className="text-xs text-gray-400">{formatDate(i.date, locale)}</p>
                         </div>
                       </div>
                     ))}

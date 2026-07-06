@@ -9,6 +9,7 @@ import { Users } from 'lucide-react';
 import Link from 'next/link';
 import { ApplyLinkBox } from '@/components/ApplyLinkBox';
 import { EmptyState } from '@/components/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 
 interface MentorshipRelation {
   id: string;
@@ -49,7 +50,7 @@ export default function MenteesPage() {
     <div>
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.mentor.myMentees}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.mentor.myMentees}</h1>
           <p className="text-gray-500 mt-1">{t.mentor.menteesSubtitle}</p>
         </div>
         <Link href="/mentor/mentees/new">
@@ -63,7 +64,7 @@ export default function MenteesPage() {
       <ApplyLinkBox />
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+        <Card><SkeletonRows rows={6} /></Card>
       ) : relations.length === 0 ? (
         <Card>
           <EmptyState
@@ -91,7 +92,7 @@ export default function MenteesPage() {
                   <p className="text-sm text-gray-600">🎓 {rel.mentee.university} · {rel.mentee.department}</p>
                 )}
                 {rel.mentee.graduationYear && (
-                  <p className="text-sm text-gray-600">📅 Class of {rel.mentee.graduationYear}</p>
+                  <p className="text-sm text-gray-600">📅 {t.candidates.classOf} {rel.mentee.graduationYear}</p>
                 )}
                 {rel.mentee.phone && (
                   <p className="text-sm text-gray-600">📞 {rel.mentee.phone}</p>
@@ -110,9 +111,9 @@ export default function MenteesPage() {
               )}
 
               <div className="flex items-center justify-between">
-                <Badge variant="default">{rel._count.interactions} interactions</Badge>
+                <Badge variant="default">{rel._count.interactions} {t.mentor.interactions}</Badge>
                 <Link href={`/mentor/mentees/${rel.id}`}>
-                  <Button size="sm" variant="outline">View Details</Button>
+                  <Button size="sm" variant="outline">{t.mentor.viewDetails}</Button>
                 </Link>
               </div>
             </Card>

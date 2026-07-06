@@ -2,10 +2,18 @@
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { Paperclip, X, FileText, Download } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
+interface Attachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+}
 interface Msg {
   id: string;
   senderId: string;
@@ -13,22 +21,27 @@ interface Msg {
   channel: 'IN_APP' | 'EMAIL';
   readAt: string | null;
   createdAt: string;
+  attachments: Attachment[];
 }
 interface Party { id: string; fullName: string }
 
 export default function ThreadPage({ params }: { params: Promise<{ relationId: string }> }) {
   const { relationId } = use(params);
   const t = useT();
+  const locale = useLocale();
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const [messages, setMessages] = useState<Msg[]>([]);
   const [mentor, setMentor] = useState<Party | null>(null);
   const [mentee, setMentee] = useState<Party | null>(null);
   const [body, setBody] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [attachError, setAttachError] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/messages?relationId=${relationId}`);
@@ -45,15 +58,33 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() && !file) return;
     setSending(true);
+    setAttachError('');
     try {
-      const res = await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationId, body }),
-      });
-      if (res.ok) { setBody(''); await load(); }
+      let res: Response;
+      if (file) {
+        const fd = new FormData();
+        fd.append('relationId', relationId);
+        fd.append('body', body);
+        fd.append('file', file);
+        res = await fetch('/api/messages', { method: 'POST', body: fd });
+      } else {
+        res = await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ relationId, body }),
+        });
+      }
+      if (res.ok) {
+        setBody('');
+        setFile(null);
+        if (fileRef.current) fileRef.current.value = '';
+        await load();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setAttachError(data.error || t.messages.sendFailed);
+      }
     } finally {
       setSending(false);
     }
@@ -84,9 +115,28 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                 <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${mine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
                     {!mine && <p className="text-xs font-medium mb-0.5 opacity-70">{nameFor(m.senderId)}</p>}
-                    <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                    {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                    {m.attachments.map((a) =>
+                      a.contentType.startsWith('image/') ? (
+                        <a key={a.id} href={`/api/messages/attachments/${a.id}`} target="_blank" rel="noopener noreferrer" className="block mt-1.5">
+                          <img src={`/api/messages/attachments/${a.id}`} alt={a.filename} className="max-h-48 rounded-lg" />
+                        </a>
+                      ) : (
+                        <a
+                          key={a.id}
+                          href={`/api/messages/attachments/${a.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`flex items-center gap-1.5 mt-1.5 text-xs rounded-lg px-2 py-1.5 ${mine ? 'bg-blue-700 hover:bg-blue-800' : 'bg-white hover:bg-gray-50 border border-gray-200'}`}
+                        >
+                          <FileText className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="truncate">{a.filename}</span>
+                          <Download className="h-3 w-3 flex-shrink-0 ml-auto" />
+                        </a>
+                      )
+                    )}
                     <p className={`text-[10px] mt-1 ${mine ? 'text-blue-100' : 'text-gray-400'}`}>
-                      {m.channel === 'EMAIL' ? '✉ ' : ''}{new Date(m.createdAt).toLocaleString()}
+                      {m.channel === 'EMAIL' ? '✉ ' : ''}{formatDateTime(m.createdAt, locale)}
                       {isMyLast && <span className="ml-1">· {m.readAt ? t.messages.read : t.messages.sent}</span>}
                     </p>
                   </div>
@@ -98,7 +148,28 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
         )}
       </Card>
 
+      {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
+      {file && (
+        <div className="flex items-center gap-2 mb-2 text-xs bg-gray-100 rounded-lg px-2.5 py-1.5 w-fit">
+          <FileText className="h-3.5 w-3.5 text-gray-500" />
+          <span className="text-gray-700">{file.name}</span>
+          <button type="button" onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }} aria-label={t.common.delete} className="text-gray-400 hover:text-red-600">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       <form onSubmit={send} className="flex gap-2">
+        <input
+          ref={fileRef}
+          type="file"
+          data-testid="message-attachment-input"
+          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"
+          className="hidden"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} aria-label={t.messages.attach} title={t.messages.attach}>
+          <Paperclip className="h-4 w-4" />
+        </Button>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -106,7 +177,7 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
           placeholder={t.messages.replyPlaceholder}
           className="flex-1 rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
         />
-        <Button type="submit" loading={sending} disabled={!body.trim()}>{t.messages.send}</Button>
+        <Button type="submit" loading={sending} disabled={!body.trim() && !file}>{t.messages.send}</Button>
       </form>
     </div>
   );

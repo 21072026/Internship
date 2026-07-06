@@ -69,7 +69,7 @@ export default async function AdminDashboard() {
     <div>
       <OnboardingChecklist />
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">{t.dashboard.title}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.dashboard.title}</h1>
         <p className="text-gray-500 mt-1">{t.dashboard.subtitle}</p>
       </div>
 

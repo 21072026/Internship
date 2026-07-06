@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.2.0-beta",
+  "version": "0.3.0-beta",
   "private": true,
   "prisma": {
     "seed": "node prisma/seed.mjs"
@@ -13,6 +13,7 @@
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "test:stress": "node scripts/stress-test.mjs",
     "import:csv": "node scripts/import-csv.mjs",
     "postinstall": "prisma generate",
     "seed:templates": "node prisma/seed-templates.mjs",

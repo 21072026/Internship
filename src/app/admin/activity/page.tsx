@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { SkeletonRows } from '@/components/ui/Skeleton';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
 interface Entry {
   id: string;
@@ -21,6 +23,7 @@ const LEVEL_VARIANT = { DEBUG: 'default', INFO: 'info', WARNING: 'warning', ERRO
 
 export default function AdminActivityPage() {
   const t = useT();
+  const locale = useLocale();
   const [items, setItems] = useState<Entry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -52,7 +55,7 @@ export default function AdminActivityPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t.activity.title}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.activity.title}</h1>
         <p className="text-gray-500 mt-1">{t.activity.subtitle}</p>
       </div>
 
@@ -71,7 +74,7 @@ export default function AdminActivityPage() {
       <Card>
         <CardHeader><CardTitle>{t.activity.title} ({total})</CardTitle></CardHeader>
         {loading ? (
-          <p className="text-center py-12 text-gray-400">{t.common.loading}</p>
+          <SkeletonRows rows={8} />
         ) : items.length === 0 ? (
           <p className="text-center py-12 text-gray-400">{t.activity.none}</p>
         ) : (
@@ -83,7 +86,7 @@ export default function AdminActivityPage() {
                 <span className="text-gray-500 truncate flex-1">
                   {e.actorEmail || '—'}{e.detail ? ` · ${e.detail}` : ''}
                 </span>
-                <span className="text-xs text-gray-400 flex-shrink-0">{new Date(e.createdAt).toLocaleString()}</span>
+                <span className="text-xs text-gray-400 flex-shrink-0">{formatDateTime(e.createdAt, locale)}</span>
               </div>
             ))}
           </div>

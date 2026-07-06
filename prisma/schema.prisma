@@ -106,6 +106,10 @@ model User {
   // Optional TOTP two-factor auth. The secret is only meaningful once enabled.
   twoFactorEnabled        Boolean   @default(false)
   twoFactorSecret         String?
+  // "Sign out of all devices": any JWT issued before this instant is rejected at
+  // the session callback. Null = never revoked. Set to now() to invalidate every
+  // existing session (including the current one) on demand.
+  sessionsValidFrom       DateTime?
   // Preferred UI language ('en' | 'tr' | 'de'); applied at sign-in.
   preferredLanguage       String?
   // UI theme preference ('light' | 'dark' | 'system'); applied at sign-in.
@@ -192,9 +196,26 @@ model Message {
   readAt     DateTime?
   createdAt  DateTime       @default(now())
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation    MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  attachments MessageAttachment[]
 
   @@index([relationId])
+}
+
+// A file/image attached to a message (DB bytes, same approach as CvFile/
+// Document — no external object storage needed).
+model MessageAttachment {
+  id          String   @id @default(cuid())
+  messageId   String
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
 }
 
 // In-app notification for a user.

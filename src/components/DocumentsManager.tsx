@@ -70,8 +70,9 @@ export function DocumentsManager({
     }
   };
 
-  const remove = async (id: string) => {
-    await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+  const remove = async (d: Doc) => {
+    if (!window.confirm(t.documents.confirmDelete.replace('{title}', d.title))) return;
+    await fetch(`/api/documents/${d.id}`, { method: 'DELETE' });
     await load();
   };
 
@@ -98,7 +99,7 @@ export function DocumentsManager({
               {!templates && <Badge variant="info">{typeLabel(d.type)}</Badge>}
               <a href={`/api/documents/${d.id}`} target="_blank" rel="noopener noreferrer" aria-label={t.documents.download} className="text-gray-400 hover:text-blue-600"><Download className="h-4 w-4" /></a>
               {canDelete && (
-                <button onClick={() => remove(d.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                <button onClick={() => remove(d)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
               )}
             </div>
           ))}

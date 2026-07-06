@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Github, ExternalLink, Trash2, Pencil, Trello } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Task {
   id: string;
@@ -42,6 +43,7 @@ const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUr
 
 export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const t = useT();
+  const locale = useLocale();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ...blank });
@@ -131,8 +133,9 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const remove = async (id: string) => {
-    await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+  const remove = async (p: Project) => {
+    if (!window.confirm(t.projects.confirmDelete.replace('{name}', p.name))) return;
+    await fetch(`/api/projects/${p.id}`, { method: 'DELETE' });
     await load();
   };
 
@@ -152,8 +155,9 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     });
     await load();
   };
-  const deleteTask = async (taskId: string) => {
-    await fetch(`/api/project-tasks/${taskId}`, { method: 'DELETE' });
+  const deleteTask = async (task: Task) => {
+    if (!window.confirm(t.projects.confirmDeleteTask.replace('{title}', task.title))) return;
+    await fetch(`/api/project-tasks/${task.id}`, { method: 'DELETE' });
     await load();
   };
 
@@ -262,7 +266,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       {p.boardUrl && <a href={p.boardUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><Trello className="h-3.5 w-3.5" />{t.projects.board}</a>}
                       {(p.startDate || p.endDate) && (
                         <span className="text-gray-400">
-                          {p.startDate ? new Date(p.startDate).toLocaleDateString() : '…'} – {p.endDate ? new Date(p.endDate).toLocaleDateString() : '…'}
+                          {p.startDate ? formatDate(p.startDate, locale) : '…'} – {p.endDate ? formatDate(p.endDate, locale) : '…'}
                         </span>
                       )}
                     </div>
@@ -288,7 +292,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                                   <div key={tk.id} data-testid={`task-${tk.id}`} className="flex items-center gap-2 text-sm">
                                     <input type="checkbox" checked={tk.done} onChange={() => toggleTask(tk)} />
                                     <span className={`flex-1 ${tk.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>{tk.title}</span>
-                                    <button onClick={() => deleteTask(tk.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                                    <button onClick={() => deleteTask(tk)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                                   </div>
                                 ))}
                               </div>
@@ -310,7 +314,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     <button onClick={() => edit(p)} aria-label={t.projects.editProject} className="p-2 text-gray-400 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => remove(p.id)} aria-label={t.projects.deleteProject} className="p-2 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={() => remove(p)} aria-label={t.projects.deleteProject} className="p-2 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
               </div>

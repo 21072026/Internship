@@ -8,7 +8,9 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { SavedViews } from '@/components/SavedViews';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen, Plus } from 'lucide-react';
+import { formatDate } from '@/lib/relativeTime';
 
 interface User {
   id: string;
@@ -161,7 +163,7 @@ export default function MentorshipPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.mentorships.title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.mentorships.title}</h1>
           <p className="text-gray-500 mt-1">{t.mentorships.subtitle}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -248,7 +250,7 @@ export default function MentorshipPage() {
 
       {/* Relations */}
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+        <Card><SkeletonRows rows={6} /></Card>
       ) : relations.length === 0 ? (
         <Card className="text-center py-12">
           <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
@@ -260,34 +262,35 @@ export default function MentorshipPage() {
         <div className="space-y-4">
           {relations.map((rel) => (
             <Card key={rel.id} data-testid={`mentorship-row-${rel.id}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                     <Link href={`/admin/candidates/${rel.mentee.id}`} className="font-semibold text-gray-900 hover:text-blue-700 hover:underline">{rel.mentee.fullName}</Link>
                     <span className="text-gray-400">→</span>
                     <span className="font-semibold text-gray-900">{rel.mentor.fullName}</span>
                     <StatusBadge status={rel.status} />
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
                     {rel.company && (
                       <span>🏢 {rel.company.name}</span>
                     )}
-                    <span>📅 {t.mentorships.started} {new Date(rel.startDate).toLocaleDateString(locale)}</span>
+                    <span>📅 {t.mentorships.started} {formatDate(rel.startDate, locale)}</span>
                     <Badge variant="default">{rel._count.interactions} {t.mentorships.interactions}</Badge>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end sm:shrink-0">
                   <Select
                     aria-label={t.mentorships.changeCompany}
                     options={companyOptions}
                     value={rel.company?.id ?? ''}
                     onChange={(e) => handleChangeCompany(rel.id, e.target.value)}
-                    className="w-44"
+                    className="w-full sm:w-44"
                   />
                   {rel.status === 'ACTIVE' && (
                     <Button
                       variant="outline"
                       size="sm"
+                      className="w-full sm:w-auto"
                       onClick={() => handleComplete(rel.id)}
                     >
                       {t.mentorships.markComplete}

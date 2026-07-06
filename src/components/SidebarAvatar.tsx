@@ -1,3 +1,7 @@
+'use client';
+
+import { useT } from '@/i18n/client';
+
 // Small avatar for sidebars/lists: shows the uploaded image or a colored initial.
 export function SidebarAvatar({
   avatarUrl,
@@ -10,9 +14,10 @@ export function SidebarAvatar({
   fallback?: string;
   className?: string;
 }) {
+  const t = useT();
   if (avatarUrl) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-200" />;
+    return <img src={avatarUrl} alt={name || t.avatar.section} className="w-8 h-8 rounded-full object-cover border border-gray-200" />;
   }
   return (
     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${className}`}>

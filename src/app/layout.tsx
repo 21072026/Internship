@@ -7,12 +7,20 @@ import { getLocale } from '@/i18n/server';
 import { getDictionary } from '@/i18n/dictionaries';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { IS_PREVIEW } from '@/lib/appEnv';
 
 export const metadata: Metadata = {
   title: 'Internship CRM - Mentor-Mentee Management',
   description: 'A comprehensive CRM for managing mentor-mentee relationships and internship programs',
   applicationName: 'Internship CRM',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'InternshipCRM' },
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export const viewport: Viewport = {
@@ -47,6 +55,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={locale}
       className={[theme === 'dark' ? 'dark' : undefined, fontSizeClass].filter(Boolean).join(' ') || undefined}
+      data-env={IS_PREVIEW ? 'preview' : undefined}
       suppressHydrationWarning
     >
       <head>

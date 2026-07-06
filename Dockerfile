@@ -16,9 +16,15 @@ COPY . .
 # Generate Prisma client (no DB connection needed at this stage)
 RUN npx prisma generate
 
+# Deployment flavour ('preview' | 'production'). NEXT_PUBLIC_* is inlined at
+# build time, so it must be present here (not just at runtime). Preview builds
+# pass 'preview' to get the green accent; production defaults to 'production'.
+ARG NEXT_PUBLIC_APP_ENV=production
+
 # Provide dummy env vars so Next.js can analyse routes without a live DB.
 # Real secrets are injected at runtime via `docker run -e`.
 ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV \
     DATABASE_URL="mysql://build:build@127.0.0.1:3306/build" \
     NEXTAUTH_SECRET="build-placeholder" \
     NEXTAUTH_URL="http://localhost:3000"

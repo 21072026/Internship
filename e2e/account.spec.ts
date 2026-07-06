@@ -56,16 +56,24 @@ test('changing email updates the sidebar without a re-login', async ({ page }) =
     await expect(page.getByText(email, { exact: true })).toBeVisible();
 
     const emailForm = page.locator('form', { has: page.getByRole('button', { name: 'Update email' }) });
-    await emailForm.getByLabel(/Email address/).fill(newEmail);
+    const emailInput = emailForm.getByLabel(/Email address/);
+    // Wait for the mount /api/profile fetch to populate the field before
+    // overwriting, else a slow fetch clobbers our value → no-op PUT (flake).
+    await expect(emailInput).toHaveValue(email, { timeout: 10_000 });
+    await emailInput.fill(newEmail);
     await emailForm.getByLabel(/Current password/).fill(pw); // re-auth required
+    // Generous timeout: the PUT does a bcrypt compare + session refresh, which
+    // can outlast a 15s default under parallel CI load (source of flakiness).
     const done = page.waitForResponse(
-      (r) => r.url().includes('/api/account') && r.request().method() === 'PUT'
+      (r) => r.url().includes('/api/account') && r.request().method() === 'PUT',
+      { timeout: 25_000 }
     );
     await page.getByRole('button', { name: 'Update email' }).click();
-    await done;
+    const res = await done;
+    expect(res.ok()).toBeTruthy();
 
     // sidebar reflects the new email immediately (session refreshed, no re-login)
-    await expect(page.getByText(newEmail, { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(newEmail, { exact: true })).toBeVisible({ timeout: 15_000 });
   } finally {
     await cleanupByEmail(email);
     await cleanupByEmail(newEmail);

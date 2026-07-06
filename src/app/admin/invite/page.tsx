@@ -9,9 +9,10 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
-import { Badge } from '@/components/ui/Badge';
+import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Send, Mail, Copy, Check, CheckCircle2, Circle } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDate, formatDateTime } from '@/lib/relativeTime';
 
 const inviteSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -28,6 +29,7 @@ const roleOptions = [
 
 export default function InvitePage() {
   const t = useT();
+  const locale = useLocale();
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -128,7 +130,7 @@ export default function InvitePage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">{t.invite.title}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.invite.title}</h1>
         <p className="text-gray-500 mt-1">{t.invite.subtitle}</p>
       </div>
 
@@ -218,13 +220,11 @@ export default function InvitePage() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{invite.email}</p>
                       <p className="text-xs text-gray-400">
-                        {new Date(invite.createdAt).toLocaleDateString()} · {(t.invite.status as Record<string, string>)[status]}
+                        {formatDate(invite.createdAt, locale)} · {(t.invite.status as Record<string, string>)[status]}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Badge variant={invite.role === 'ADMIN' ? 'danger' : invite.role === 'MENTOR' ? 'info' : 'success'}>
-                        {invite.role}
-                      </Badge>
+                      <RoleBadge role={invite.role} />
                       <Badge variant={status === 'accepted' ? 'success' : status === 'expired' ? 'warning' : 'default'}>
                         {(t.invite.status as Record<string, string>)[status]}
                       </Badge>
@@ -239,7 +239,7 @@ export default function InvitePage() {
                           <Circle className="h-3.5 w-3.5 text-gray-300 flex-shrink-0" />
                         )}
                         <span className={s.at ? 'text-gray-700 font-medium' : 'text-gray-400'}>{s.label}</span>
-                        {s.at && <span className="text-gray-400">· {new Date(s.at).toLocaleString()}</span>}
+                        {s.at && <span className="text-gray-400">· {formatDateTime(s.at, locale)}</span>}
                       </li>
                     ))}
                   </ol>

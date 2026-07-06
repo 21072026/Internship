@@ -105,7 +105,7 @@ export default function CompanyCandidateDetailPage() {
         <div className="flex items-start gap-4 mb-4">
           {candidate.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={candidate.avatarUrl} alt="" className="w-16 h-16 rounded-2xl object-cover border border-gray-200 dark:border-gray-700" />
+            <img src={candidate.avatarUrl} alt={candidate.fullName} className="w-16 h-16 rounded-2xl object-cover border border-gray-200 dark:border-gray-700" />
           ) : (
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/40 rounded-2xl flex items-center justify-center flex-shrink-0">
               <span className="text-blue-700 dark:text-blue-300 font-bold text-2xl">{candidate.fullName?.[0] ?? '?'}</span>

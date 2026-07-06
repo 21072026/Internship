@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Goal {
   id: string;
@@ -57,8 +58,9 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
     await load();
   };
 
-  const remove = async (id: string) => {
-    await fetch(`/api/goals/${id}`, { method: 'DELETE' });
+  const remove = async (g: Goal) => {
+    if (!window.confirm(t.goals.confirmDelete.replace('{title}', g.title))) return;
+    await fetch(`/api/goals/${g.id}`, { method: 'DELETE' });
     await load();
   };
 
@@ -100,12 +102,12 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
                 <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
                   {g.createdByRole === 'MENTOR' && <span>{t.goals.byMentor}</span>}
                   {g.createdByRole === 'MENTEE' && <span>{t.goals.byMentee}</span>}
-                  <span>· {new Date(g.createdAt).toLocaleDateString(locale)}</span>
-                  {g.dueDate && <span>· {t.goals.dueDate}: {new Date(g.dueDate).toLocaleDateString(locale)}</span>}
+                  <span>· {formatDate(g.createdAt, locale)}</span>
+                  {g.dueDate && <span>· {t.goals.dueDate}: {formatDate(g.dueDate, locale)}</span>}
                 </span>
               </span>
               {!readOnly && (
-                <button onClick={() => remove(g.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600">
+                <button onClick={() => remove(g)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600">
                   <Trash2 className="h-4 w-4" />
                 </button>
               )}

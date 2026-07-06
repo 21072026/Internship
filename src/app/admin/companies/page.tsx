@@ -44,7 +44,7 @@ export default function CompaniesPage() {
         body: JSON.stringify({ companyId: clCompanyId, email: clEmail, fullName: clName }),
       });
       const data = await res.json();
-      setClMsg(res.ok ? t.companiesPage.loginCreated : data.error || 'Failed');
+      setClMsg(res.ok ? t.companiesPage.loginCreated : data.error || t.common.error);
       if (res.ok) {
         setClEmail('');
         setClName('');
@@ -60,7 +60,7 @@ export default function CompaniesPage() {
       const data = await res.json();
       setCompanies(data.companies || []);
     } catch {
-      setError('Failed to load companies');
+      setError(t.companiesPage.loadFailed);
     } finally {
       setLoading(false);
     }
@@ -90,7 +90,7 @@ export default function CompaniesPage() {
     });
     if (!res.ok) {
       const body = await res.json();
-      throw new Error(body.error || 'Failed to create company');
+      throw new Error(body.error || t.companiesPage.createFailed);
     }
     await fetchCompanies();
     setShowForm(false);
@@ -111,14 +111,14 @@ export default function CompaniesPage() {
     });
     if (!res.ok) {
       const body = await res.json();
-      throw new Error(body.error || 'Failed to update company');
+      throw new Error(body.error || t.companiesPage.updateFailed);
     }
     await fetchCompanies();
     setEditingCompany(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this company?')) return;
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(t.companiesPage.confirmDelete.replace('{name}', name))) return;
     await fetch(`/api/companies/${id}`, { method: 'DELETE' });
     await fetchCompanies();
   };
@@ -127,7 +127,7 @@ export default function CompaniesPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.companiesPage.title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.companiesPage.title}</h1>
           <p className="text-gray-500 mt-1">{t.companiesPage.subtitle}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
@@ -255,7 +255,7 @@ export default function CompaniesPage() {
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(company.id)}
+                      onClick={() => handleDelete(company.id, company.name)}
                       className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />

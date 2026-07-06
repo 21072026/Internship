@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
@@ -14,6 +15,7 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { User, Building2, BookOpen, ExternalLink, MessageCircle, Mail, Github, Linkedin } from 'lucide-react';
 import Link from 'next/link';
+import { formatDate } from '@/lib/relativeTime';
 
 async function getMenteeData(menteeId: string) {
   const [user, activeRelation] = await Promise.all([
@@ -56,8 +58,12 @@ async function getMenteeData(menteeId: string) {
 
 export default async function PortalDashboard() {
   const session = await getServerSession(authOptions);
+  // The layout gates unauthenticated users, but the session can be revoked
+  // between the layout check and this render (e.g. "sign out of all devices"),
+  // in which case session is null here — redirect instead of crashing.
+  if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const { user, activeRelation } = await getMenteeData(session!.user.id);
+  const { user, activeRelation } = await getMenteeData(session.user.id);
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
 
@@ -65,8 +71,8 @@ export default async function PortalDashboard() {
     <div>
       <OnboardingChecklist />
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {t.portal.welcome}, {session!.user.name}!
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {t.portal.welcome}, {session.user.name}!
         </h1>
         <p className="text-gray-500 mt-1">{t.portal.dashSubtitle}</p>
       </div>
@@ -202,7 +208,7 @@ export default async function PortalDashboard() {
               <div className="flex items-center justify-between">
                 <StatusBadge status={activeRelation.status} />
                 <span className="text-xs text-gray-400">
-                  {t.portal.since} {new Date(activeRelation.startDate).toLocaleDateString(locale)}
+                  {t.portal.since} {formatDate(activeRelation.startDate, locale)}
                 </span>
               </div>
 
@@ -267,7 +273,7 @@ export default async function PortalDashboard() {
                         <div className="min-w-0">
                           <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
                           <p className="text-xs text-gray-400">
-                            {new Date(interaction.date).toLocaleDateString(locale)}
+                            {formatDate(interaction.date, locale)}
                           </p>
                         </div>
                       </div>

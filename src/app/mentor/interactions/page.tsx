@@ -1,10 +1,12 @@
 'use client';
-import { useT } from "@/i18n/client";
+import { useT, useLocale } from "@/i18n/client";
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen } from 'lucide-react';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Interaction {
   id: string;
@@ -22,6 +24,7 @@ const TYPES = ['ALL', 'Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] as con
 
 export default function MentorInteractionsPage() {
   const t = useT();
+  const locale = useLocale();
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -51,7 +54,7 @@ export default function MentorInteractionsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">{t.nav.interactionLogs}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.nav.interactionLogs}</h1>
         <p className="text-gray-500 mt-1">{t.mentor.interactionLogsSubtitle}</p>
       </div>
 
@@ -79,7 +82,7 @@ export default function MentorInteractionsPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+        <Card><SkeletonRows rows={6} /></Card>
       ) : interactions.length === 0 ? (
         <Card className="text-center py-12">
           <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
@@ -93,7 +96,7 @@ export default function MentorInteractionsPage() {
                 <p className="text-sm font-medium text-gray-700 mb-1">{t.mentor.exampleLogWith}</p>
                 <p className="text-sm text-gray-600">{t.mentor.exampleLogNote}</p>
               </div>
-              <span className="text-xs text-gray-400 flex-shrink-0">{new Date().toLocaleDateString()}</span>
+              <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(new Date(), locale)}</span>
             </div>
           </div>
         </Card>
@@ -110,7 +113,7 @@ export default function MentorInteractionsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-medium text-gray-700">
-                      with {interaction.relation.mentee.fullName}
+                      {t.mentor.withMentee.replace('{name}', interaction.relation.mentee.fullName)}
                     </span>
                   </div>
                   {interaction.subject && (
@@ -119,7 +122,7 @@ export default function MentorInteractionsPage() {
                   <p className="text-sm text-gray-600">{interaction.notes}</p>
                 </div>
                 <span className="text-xs text-gray-400 flex-shrink-0">
-                  {new Date(interaction.date).toLocaleDateString()}
+                  {formatDate(interaction.date, locale)}
                 </span>
               </div>
             ))}

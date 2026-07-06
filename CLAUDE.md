@@ -123,8 +123,26 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
   CI handles DB sync on deploy.
 - **Never commit secrets.** Real values live only in server-side env / GitHub secrets.
 - **Branch + PR per change.** Branch names: `feat/<issue>-slug`, `fix/<issue>-slug`,
-  `docs/...`. Reference issues with `Closes #N`. Merging to `main` deploys to production —
-  leave merges to a human unless told otherwise.
+  `docs/...`. Reference issues with `Closes #N`. Merging to `main` deploys to production.
+- **Ship it yourself (standing instruction from the maintainer, 2026-07):** for every change,
+  open a PR, self-review the diff, and **merge it once CI is green** (enable auto-merge if
+  your session may end before checks finish). Don't leave green PRs waiting for a human.
+  Track multi-step work with a visible task list as you go.
+- **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
+  (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
+  assert exact landing strings (e.g. "Connect Talent with", "Everything you need",
+  "Pipeline tracking", TR "Fırsatla buluştur" in `e2e/landing-i18n.spec.ts`) — keep them or
+  update the specs in the same PR. Keep the marketing claims in sync with shipped features
+  (check `CHANGELOG.md` / `src/lib/releaseNotes.ts` when features land).
+- **Dark mode** is class-based (`html.dark`) with flat utility overrides in
+  `src/app/globals.css`: `bg-*-50` boxes are retinted dark while `bg-*-100` chips stay
+  light. Mid-tone text (`text-*-600/700`) sitting on a tinted `*-50` box goes dark-on-dark —
+  add a compound override like the existing blue rules (`html.dark .bg-blue-50.text-blue-700
+  { … }`); elements that must stay light in dark mode pin colors with `dark:!` utilities.
+  Verify with the `dark-mode`/`landing-cta-dark` e2e specs or a computed-style check.
+- **Claude Code web containers:** run `npm install` first (deps aren't preinstalled). If
+  Playwright's pinned browser build is missing under `/opt/pw-browsers`, symlink the
+  installed build into the expected version directory instead of `playwright install`.
 - **Work is tracked on a GitHub Project board** (Epics #5–#11, stories #12+). Move the issue
   to the matching column as you work.
 - Co-author trailer on commits: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.

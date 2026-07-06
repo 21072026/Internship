@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { MessageSquare } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
@@ -27,13 +28,13 @@ export default function PortalMessagesPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t.messages.title}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.messages.title}</h1>
         <p className="text-gray-500 mt-1">{t.messages.listSubtitle}</p>
       </div>
       <Card>
         <CardHeader><CardTitle>{t.messages.threads}</CardTitle></CardHeader>
         {loading ? (
-          <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
+          <SkeletonRows rows={3} />
         ) : relations.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{t.messages.noThreads}</p>
         ) : (
