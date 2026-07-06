@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { SavedViews } from '@/components/SavedViews';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen, Plus } from 'lucide-react';
+import { formatDate } from '@/lib/relativeTime';
 
 interface User {
   id: string;
@@ -273,7 +274,7 @@ export default function MentorshipPage() {
                     {rel.company && (
                       <span>🏢 {rel.company.name}</span>
                     )}
-                    <span>📅 {t.mentorships.started} {new Date(rel.startDate).toLocaleDateString(locale)}</span>
+                    <span>📅 {t.mentorships.started} {formatDate(rel.startDate, locale)}</span>
                     <Badge variant="default">{rel._count.interactions} {t.mentorships.interactions}</Badge>
                   </div>
                 </div>

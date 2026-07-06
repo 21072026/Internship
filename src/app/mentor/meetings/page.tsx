@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
 interface Relation {
   id: string;
@@ -24,6 +25,7 @@ const RSVP_VARIANT = { PENDING: 'warning', ACCEPTED: 'success', DECLINED: 'dange
 
 export default function MentorMeetingsPage() {
   const t = useT();
+  const locale = useLocale();
   const [relations, setRelations] = useState<Relation[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -162,7 +164,7 @@ export default function MentorMeetingsPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{m.title}</p>
                     <p className="text-xs text-gray-500 truncate">
-                      {m.relation.mentee.fullName} · {new Date(m.scheduledAt).toLocaleString()}
+                      {m.relation.mentee.fullName} · {formatDateTime(m.scheduledAt, locale)}
                     </p>
                   </div>
                   <Badge variant={RSVP_VARIANT[m.rsvp]}>{t.meetings[m.rsvp.toLowerCase() as 'pending' | 'accepted' | 'declined']}</Badge>

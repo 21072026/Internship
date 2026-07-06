@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { getRetentionReview, getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getServerDictionary } from '@/i18n/server';
+import { formatDate } from '@/lib/relativeTime';
 
 // Admin retention review (GDPR Art. 5(1)(e)): candidates whose consent has
 // passed the retention limit. "overdue" ones (past the grace period without
 // renewal) should be reviewed for erasure — deletion stays a manual admin
 // action (via the candidate's danger zone), never automatic.
 export default async function AdminRetentionPage() {
-  const { t } = await getServerDictionary();
+  const { t, locale } = await getServerDictionary();
   const r = t.retentionAdmin;
   const [items, months] = await Promise.all([getRetentionReview(), getRetentionMonths()]);
 
@@ -42,7 +43,7 @@ export default async function AdminRetentionPage() {
                     <div className="text-xs text-gray-400">{it.email}</div>
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                    {it.consentAt ? new Date(it.consentAt).toLocaleDateString() : '—'}
+                    {it.consentAt ? formatDate(it.consentAt, locale) : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{it.monthsSinceConsent ?? '—'}</td>
                   <td className="px-4 py-3">

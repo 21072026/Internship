@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Goal {
   id: string;
@@ -101,8 +102,8 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
                 <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
                   {g.createdByRole === 'MENTOR' && <span>{t.goals.byMentor}</span>}
                   {g.createdByRole === 'MENTEE' && <span>{t.goals.byMentee}</span>}
-                  <span>· {new Date(g.createdAt).toLocaleDateString(locale)}</span>
-                  {g.dueDate && <span>· {t.goals.dueDate}: {new Date(g.dueDate).toLocaleDateString(locale)}</span>}
+                  <span>· {formatDate(g.createdAt, locale)}</span>
+                  {g.dueDate && <span>· {t.goals.dueDate}: {formatDate(g.dueDate, locale)}</span>}
                 </span>
               </span>
               {!readOnly && (

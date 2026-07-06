@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
 interface AnnouncementRecord {
   id: string;
@@ -119,7 +120,7 @@ export default function AdminAnnouncementsPage() {
                     </a>
                   )}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-xs text-gray-500">
-                    <span>{new Date(a.createdAt).toLocaleString(locale)}</span>
+                    <span>{formatDateTime(a.createdAt, locale)}</span>
                     {a.sentByName && <span>{t.announcements.sentBy.replace('{name}', a.sentByName)}</span>}
                     <span>{t.announcements.recipients.replace('{n}', String(a.recipientCount))}</span>
                     {a.emailedCount > 0 && <span>{t.announcements.emailedCount.replace('{n}', String(a.emailedCount))}</span>}

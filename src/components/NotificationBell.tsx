@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { Bell } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
 interface Note {
   id: string;
@@ -16,6 +17,7 @@ interface Note {
 
 export function NotificationBell() {
   const t = useT();
+  const locale = useLocale();
   const { status } = useSession();
   const [items, setItems] = useState<Note[]>([]);
   const [unread, setUnread] = useState(0);
@@ -81,7 +83,7 @@ export function NotificationBell() {
               const inner = (
                 <div className={`px-4 py-3 border-b border-gray-50 text-sm ${n.read ? 'text-gray-500' : 'text-gray-900 bg-blue-50/40'}`}>
                   <p>{n.text}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{new Date(n.createdAt).toLocaleString()}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(n.createdAt, locale)}</p>
                 </div>
               );
               return n.link ? (

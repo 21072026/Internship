@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
 interface Entry {
   id: string;
@@ -22,6 +23,7 @@ const LEVEL_VARIANT = { DEBUG: 'default', INFO: 'info', WARNING: 'warning', ERRO
 
 export default function AdminActivityPage() {
   const t = useT();
+  const locale = useLocale();
   const [items, setItems] = useState<Entry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -84,7 +86,7 @@ export default function AdminActivityPage() {
                 <span className="text-gray-500 truncate flex-1">
                   {e.actorEmail || '—'}{e.detail ? ` · ${e.detail}` : ''}
                 </span>
-                <span className="text-xs text-gray-400 flex-shrink-0">{new Date(e.createdAt).toLocaleString()}</span>
+                <span className="text-xs text-gray-400 flex-shrink-0">{formatDateTime(e.createdAt, locale)}</span>
               </div>
             ))}
           </div>

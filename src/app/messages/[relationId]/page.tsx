@@ -5,7 +5,8 @@ import { useSession } from 'next-auth/react';
 import { Paperclip, X, FileText, Download } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
 interface Attachment {
   id: string;
@@ -27,6 +28,7 @@ interface Party { id: string; fullName: string }
 export default function ThreadPage({ params }: { params: Promise<{ relationId: string }> }) {
   const { relationId } = use(params);
   const t = useT();
+  const locale = useLocale();
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -134,7 +136,7 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                       )
                     )}
                     <p className={`text-[10px] mt-1 ${mine ? 'text-blue-100' : 'text-gray-400'}`}>
-                      {m.channel === 'EMAIL' ? '✉ ' : ''}{new Date(m.createdAt).toLocaleString()}
+                      {m.channel === 'EMAIL' ? '✉ ' : ''}{formatDateTime(m.createdAt, locale)}
                       {isMyLast && <span className="ml-1">· {m.readAt ? t.messages.read : t.messages.sent}</span>}
                     </p>
                   </div>
