@@ -76,6 +76,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tag }}
           build-args: |
             GIT_SHA=${{ github.event.workflow_run.head_sha || github.sha }}
+            NEXT_PUBLIC_APP_ENV=${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
           # No build-time secrets — all real values are injected at `docker run`
 
       # ── SSH key setup (shared by both deploy steps) ──────────────────────────
