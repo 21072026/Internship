@@ -8,6 +8,7 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { SavedViews } from '@/components/SavedViews';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen, Plus } from 'lucide-react';
 
 interface User {
@@ -248,7 +249,7 @@ export default function MentorshipPage() {
 
       {/* Relations */}
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+        <Card><SkeletonRows rows={6} /></Card>
       ) : relations.length === 0 ? (
         <Card className="text-center py-12">
           <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />

@@ -9,6 +9,7 @@ import { Users } from 'lucide-react';
 import Link from 'next/link';
 import { ApplyLinkBox } from '@/components/ApplyLinkBox';
 import { EmptyState } from '@/components/EmptyState';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 
 interface MentorshipRelation {
   id: string;
@@ -63,7 +64,7 @@ export default function MenteesPage() {
       <ApplyLinkBox />
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+        <Card><SkeletonRows rows={6} /></Card>
       ) : relations.length === 0 ? (
         <Card>
           <EmptyState

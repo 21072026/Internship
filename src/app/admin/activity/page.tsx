@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 
 interface Entry {
@@ -71,7 +72,7 @@ export default function AdminActivityPage() {
       <Card>
         <CardHeader><CardTitle>{t.activity.title} ({total})</CardTitle></CardHeader>
         {loading ? (
-          <p className="text-center py-12 text-gray-400">{t.common.loading}</p>
+          <SkeletonRows rows={8} />
         ) : items.length === 0 ? (
           <p className="text-center py-12 text-gray-400">{t.activity.none}</p>
         ) : (

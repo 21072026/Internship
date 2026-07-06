@@ -5,6 +5,7 @@ import { Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 
 interface Source {
@@ -122,7 +123,7 @@ export default function AdminSourcesPage() {
       <Card>
         <CardHeader><CardTitle>{t.sources.title} ({sources.length})</CardTitle></CardHeader>
         {loading ? (
-          <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
+          <SkeletonRows rows={5} />
         ) : sources.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{t.sources.none}</p>
         ) : (

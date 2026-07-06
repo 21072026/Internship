@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Pencil, Trash2 } from 'lucide-react';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 
 interface Cohort {
@@ -94,7 +95,7 @@ export default function AdminCohortsPage() {
       <Card>
         <CardHeader><CardTitle>{t.cohorts.comparison} ({cohorts.length})</CardTitle></CardHeader>
         {loading ? (
-          <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
+          <SkeletonRows rows={5} />
         ) : cohorts.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{t.cohorts.none}</p>
         ) : (
