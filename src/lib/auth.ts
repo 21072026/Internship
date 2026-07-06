@@ -150,6 +150,11 @@ export const authOptions: NextAuthOptions = {
         // second-granular JWT `iat`, so a fresh login is never mistaken for a
         // pre-revocation token even within the same second.
         token.authTime = Date.now();
+        // Stamp the last real sign-in (not impersonation) for activity reports.
+        // Fire-and-forget so it never slows the login round-trip.
+        if (!u.impersonatorId) {
+          prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
+        }
       }
 
       // Auto-expire impersonation: once the cap passes, rewrite the token back

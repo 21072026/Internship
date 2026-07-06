@@ -9,6 +9,7 @@ import { useT } from '@/i18n/client';
 // optional processing activity. Currently: AI-assisted CV parsing.
 const CONSENTS = [
   { type: 'AI_CV_PARSING', key: 'aiCvParsing' as const },
+  { type: 'ACTIVITY_TRACKING', key: 'activityTracking' as const },
 ];
 
 export function ConsentSettings() {
