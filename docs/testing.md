@@ -65,14 +65,15 @@ Actions tab (with an optional target-URL override). It targets the URL in the
 
 If any threshold is breached, the job fails and the **"Email alert on failure"** step
 sends a notification via [`scripts/send-alert-email.mjs`](../scripts/send-alert-email.mjs),
-reusing the app's existing `SMTP_*` secrets. The recipient is the `ALERT_EMAIL_TO`
-secret. When SMTP is not configured the script logs and skips (exit 0) so it never masks
-the underlying failure.
+reusing the app's existing `SMTP_*` secrets. The recipient defaults to the maintainer
+and can be overridden with an `ALERT_EMAIL_TO` secret. When SMTP is not configured the
+script logs a GitHub Actions warning and skips (exit 0) so it never masks the underlying
+failure.
 
 ### Required GitHub secrets for the alert
 
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — already used by deploy.
-- `ALERT_EMAIL_TO` — comma-separated recipient(s) for failure alerts. **(new)**
+- `ALERT_EMAIL_TO` — optional; comma-separated recipient(s) for failure alerts. Defaults to the maintainer if unset. **(new)**
 - `STRESS_TARGET_URL` — optional; the env to stress. Defaults to `https://crm.ersah.in`. **(new)**
 
 The same alert script can be reused by any other CI job that wants to email on failure

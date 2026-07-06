@@ -62,6 +62,7 @@ const updateProfileSchema = z.object({
   preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
   fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
+  accentColor: z.enum(['blue', 'green', 'purple', 'rose', 'teal', 'amber']).optional(),
 });
 
 // Profile fields surfaced by both GET and PUT responses.
@@ -99,6 +100,7 @@ const PROFILE_SELECT = {
   preferredLanguage: true,
   theme: true,
   fontSize: true,
+  accentColor: true,
   createdAt: true,
 } as const;
 
