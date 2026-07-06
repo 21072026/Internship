@@ -96,7 +96,8 @@ test('XSS payload in a profile display name is escaped in the admin users list',
     await page.goto('/admin/users');
     // Filter to the victim by its plain-text marker so it renders regardless of
     // how many other users exist / pagination — otherwise the assertion is vacuous.
-    await page.locator('input[type="search"]').fill('hello-xss');
+    // Target the users search specifically (the sidebar has its own search box).
+    await page.getByPlaceholder(/name or email/i).fill('hello-xss');
 
     // The payload-bearing name must actually appear as text before we can claim
     // it wasn't executed.
