@@ -100,35 +100,134 @@ html.dark .hover\:text-blue-700:hover,
 html.dark .group:hover .group-hover\:text-blue-600 { color: #93c5fd; } /* blue-300 */
 
 /*
- * Preview environment accent — the preview deployment is themed GREEN so it is
- * never mistaken for production (which stays blue). Retints the primary blue
- * utilities to green with the same flat-selector approach as dark mode, so no
- * component markup changes are needed. `data-env="preview"` is set on <html>
- * when NEXT_PUBLIC_APP_ENV=preview (see src/lib/appEnv.ts).
+ * Accent color system.
+ * The product's primary color is blue by default. We expose that primary as a
+ * palette of CSS custom properties (--accent-50 … --accent-900) and remap the
+ * blue-* utilities the app actually uses onto those vars with a single flat
+ * selector layer (specificity 0,2,0, so it beats a bare 0,1,0 utility). The
+ * whole product can then be recolored by setting ONE attribute — data-accent —
+ * on <html>, with no component markup changes.
+ *
+ * data-accent is set when (see src/app/layout.tsx + AccountSettings):
+ *   • the signed-in user picked an accent (cookie / User.accentColor), OR
+ *   • the preview deployment defaults to "green" (so it's never mistaken for
+ *     production; NEXT_PUBLIC_APP_ENV=preview → IS_PREVIEW, see appEnv.ts).
+ * Production with no user preference sets NO attribute and renders the raw blue
+ * palette — the unchanged, lowest-risk path.
  */
-html[data-env="preview"] .bg-blue-600 { background-color: #16a34a; }   /* green-600 */
-html[data-env="preview"] .bg-blue-500 { background-color: #22c55e; }   /* green-500 */
-html[data-env="preview"] .hover\:bg-blue-700:hover { background-color: #15803d; } /* green-700 */
-html[data-env="preview"] .focus\:bg-blue-600:focus { background-color: #16a34a; }
-html[data-env="preview"] .text-blue-600 { color: #16a34a; }
-html[data-env="preview"] .text-blue-700 { color: #15803d; }
-html[data-env="preview"] .hover\:text-blue-700:hover { color: #15803d; }
-html[data-env="preview"] .border-blue-400 { border-color: #4ade80; }   /* green-400 */
-html[data-env="preview"] .bg-blue-50 { background-color: #f0fdf4; }     /* green-50 */
-/* Dark + preview: lighter greens so text/boxes stay legible on dark surfaces. */
-html.dark[data-env="preview"] .text-blue-600,
-html.dark[data-env="preview"] .text-blue-700 { color: #4ade80; }        /* green-400 */
-html.dark[data-env="preview"] .bg-blue-50 { background-color: rgba(20,83,45,0.25); }
-html.dark[data-env="preview"] .bg-blue-50.text-blue-700,
-html.dark[data-env="preview"] .bg-blue-50 .text-blue-700,
-html.dark[data-env="preview"] .bg-blue-50 .text-blue-600 { color: #86efac; } /* green-300 */
-/* Keyboard focus ring in preview → green. */
-html[data-env="preview"] a:focus-visible,
-html[data-env="preview"] button:focus-visible,
-html[data-env="preview"] [role='button']:focus-visible,
-html[data-env="preview"] input:focus-visible,
-html[data-env="preview"] select:focus-visible,
-html[data-env="preview"] textarea:focus-visible { outline-color: #16a34a; }
+
+/* Per-accent palettes. "blue" mirrors Tailwind's blue exactly, so
+   data-accent="blue" is a visual no-op; the others recolor. --accent-tint and
+   --accent-tint-hover are the dark-mode translucent forms of the softest box
+   (bg-blue-50), i.e. shade 900 at 25% / 35% opacity. */
+html[data-accent="blue"] {
+  --accent-50:#eff6ff; --accent-100:#dbeafe; --accent-200:#bfdbfe; --accent-300:#93c5fd;
+  --accent-400:#60a5fa; --accent-500:#3b82f6; --accent-600:#2563eb; --accent-700:#1d4ed8;
+  --accent-800:#1e40af; --accent-900:#1e3a8a;
+  --accent-tint:rgba(30,58,138,0.25); --accent-tint-hover:rgba(30,58,138,0.35);
+}
+html[data-accent="green"] {
+  --accent-50:#f0fdf4; --accent-100:#dcfce7; --accent-200:#bbf7d0; --accent-300:#86efac;
+  --accent-400:#4ade80; --accent-500:#22c55e; --accent-600:#16a34a; --accent-700:#15803d;
+  --accent-800:#166534; --accent-900:#14532d;
+  --accent-tint:rgba(20,83,45,0.25); --accent-tint-hover:rgba(20,83,45,0.35);
+}
+html[data-accent="purple"] {
+  --accent-50:#faf5ff; --accent-100:#f3e8ff; --accent-200:#e9d5ff; --accent-300:#d8b4fe;
+  --accent-400:#c084fc; --accent-500:#a855f7; --accent-600:#9333ea; --accent-700:#7e22ce;
+  --accent-800:#6b21a8; --accent-900:#581c87;
+  --accent-tint:rgba(88,28,135,0.25); --accent-tint-hover:rgba(88,28,135,0.35);
+}
+html[data-accent="rose"] {
+  --accent-50:#fff1f2; --accent-100:#ffe4e6; --accent-200:#fecdd3; --accent-300:#fda4af;
+  --accent-400:#fb7185; --accent-500:#f43f5e; --accent-600:#e11d48; --accent-700:#be123c;
+  --accent-800:#9f1239; --accent-900:#881337;
+  --accent-tint:rgba(136,19,55,0.25); --accent-tint-hover:rgba(136,19,55,0.35);
+}
+html[data-accent="teal"] {
+  --accent-50:#f0fdfa; --accent-100:#ccfbf1; --accent-200:#99f6e4; --accent-300:#5eead4;
+  --accent-400:#2dd4bf; --accent-500:#14b8a6; --accent-600:#0d9488; --accent-700:#0f766e;
+  --accent-800:#115e59; --accent-900:#134e4a;
+  --accent-tint:rgba(19,78,74,0.25); --accent-tint-hover:rgba(19,78,74,0.35);
+}
+html[data-accent="amber"] {
+  --accent-50:#fffbeb; --accent-100:#fef3c7; --accent-200:#fde68a; --accent-300:#fcd34d;
+  --accent-400:#fbbf24; --accent-500:#f59e0b; --accent-600:#d97706; --accent-700:#b45309;
+  --accent-800:#92400e; --accent-900:#78350f;
+  --accent-tint:rgba(120,53,15,0.25); --accent-tint-hover:rgba(120,53,15,0.35);
+}
+
+/* --- Utility remap (written once; references the palette vars above). --- */
+/* Backgrounds */
+html[data-accent] .bg-blue-50 { background-color: var(--accent-50); }
+html[data-accent] .bg-blue-100 { background-color: var(--accent-100); }
+html[data-accent] .bg-blue-400 { background-color: var(--accent-400); }
+html[data-accent] .bg-blue-500 { background-color: var(--accent-500); }
+html[data-accent] .bg-blue-600 { background-color: var(--accent-600); }
+html[data-accent] .bg-blue-700 { background-color: var(--accent-700); }
+html[data-accent] .bg-blue-900 { background-color: var(--accent-900); }
+html[data-accent] .hover\:bg-blue-50:hover { background-color: var(--accent-50); }
+html[data-accent] .hover\:bg-blue-700:hover { background-color: var(--accent-700); }
+html[data-accent] .hover\:bg-blue-800:hover { background-color: var(--accent-800); }
+html[data-accent] .focus\:bg-blue-600:focus { background-color: var(--accent-600); }
+/* Gradient start stop (from-blue-*). Only --tw-gradient-from is overridden so an
+   explicit to-* on the same element (a 2-color gradient) is left intact. */
+html[data-accent] .from-blue-50 { --tw-gradient-from: var(--accent-50) var(--tw-gradient-from-position); }
+html[data-accent] .from-blue-600 { --tw-gradient-from: var(--accent-600) var(--tw-gradient-from-position); }
+/* Text */
+html[data-accent] .text-blue-100 { color: var(--accent-100); }
+html[data-accent] .text-blue-200 { color: var(--accent-200); }
+html[data-accent] .text-blue-300 { color: var(--accent-300); }
+html[data-accent] .text-blue-400 { color: var(--accent-400); }
+html[data-accent] .text-blue-500 { color: var(--accent-500); }
+html[data-accent] .text-blue-600 { color: var(--accent-600); }
+html[data-accent] .text-blue-700 { color: var(--accent-700); }
+html[data-accent] .text-blue-800 { color: var(--accent-800); }
+html[data-accent] .text-blue-900 { color: var(--accent-900); }
+html[data-accent] .hover\:text-blue-300:hover { color: var(--accent-300); }
+html[data-accent] .hover\:text-blue-400:hover { color: var(--accent-400); }
+html[data-accent] .hover\:text-blue-600:hover { color: var(--accent-600); }
+html[data-accent] .hover\:text-blue-700:hover { color: var(--accent-700); }
+html[data-accent] .hover\:text-blue-800:hover { color: var(--accent-800); }
+html[data-accent] .group:hover .group-hover\:text-blue-600 { color: var(--accent-600); }
+/* Borders */
+html[data-accent] .border-blue-100 { border-color: var(--accent-100); }
+html[data-accent] .border-blue-200 { border-color: var(--accent-200); }
+html[data-accent] .border-blue-300 { border-color: var(--accent-300); }
+html[data-accent] .border-blue-400 { border-color: var(--accent-400); }
+html[data-accent] .border-blue-800 { border-color: var(--accent-800); }
+html[data-accent] .border-blue-900 { border-color: var(--accent-900); }
+html[data-accent] .hover\:border-blue-200:hover { border-color: var(--accent-200); }
+html[data-accent] .hover\:border-blue-300:hover { border-color: var(--accent-300); }
+html[data-accent] .hover\:border-blue-400:hover { border-color: var(--accent-400); }
+html[data-accent] .focus\:border-blue-400:focus { border-color: var(--accent-400); }
+/* Focus rings (Tailwind ring utilities set --tw-ring-color) */
+html[data-accent] .ring-blue-100 { --tw-ring-color: var(--accent-100); }
+html[data-accent] .focus\:ring-blue-100:focus { --tw-ring-color: var(--accent-100); }
+html[data-accent] .focus\:ring-blue-500:focus { --tw-ring-color: var(--accent-500); }
+html[data-accent] .focus-visible\:ring-blue-500:focus-visible { --tw-ring-color: var(--accent-500); }
+/* Keyboard focus outline (the a11y ring below defaults to blue) */
+html[data-accent] a:focus-visible,
+html[data-accent] button:focus-visible,
+html[data-accent] [role='button']:focus-visible,
+html[data-accent] input:focus-visible,
+html[data-accent] select:focus-visible,
+html[data-accent] textarea:focus-visible { outline-color: var(--accent-600); }
+
+/* --- Dark-mode legibility. Mirrors the blue dark rules near the top of this
+   file, but with accent shades and higher specificity (html.dark[data-accent])
+   so an accent theme stays legible on dark surfaces instead of reverting to
+   blue. text-blue-600/700 are deliberately NOT globally lightened here (they
+   also sit on light bg-blue-100 chips that stay light in dark mode); only the
+   soft-box and hover combinations are. --- */
+html.dark[data-accent] .bg-blue-50 { background-color: var(--accent-tint); }
+html.dark[data-accent] .hover\:bg-blue-50:hover { background-color: var(--accent-tint-hover); }
+html.dark[data-accent] .text-blue-900 { color: var(--accent-200); }
+html.dark[data-accent] .bg-blue-50.text-blue-700,
+html.dark[data-accent] .bg-blue-50 .text-blue-700,
+html.dark[data-accent] .bg-blue-50 .text-blue-600,
+html.dark[data-accent] .hover\:text-blue-700:hover,
+html.dark[data-accent] .group:hover .group-hover\:text-blue-600 { color: var(--accent-300); }
 
 /*
  * Native form controls. Inline <input>/<select>/<textarea> scattered through

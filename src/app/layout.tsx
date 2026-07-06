@@ -7,7 +7,7 @@ import { getLocale } from '@/i18n/server';
 import { getDictionary } from '@/i18n/dictionaries';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { IS_PREVIEW } from '@/lib/appEnv';
+import { resolveAccent } from '@/lib/accent';
 
 export const metadata: Metadata = {
   title: 'Internship CRM - Mentor-Mentee Management',
@@ -37,15 +37,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const cookieStore = await cookies();
   let theme = cookieStore.get('theme')?.value;
   let fontSize = cookieStore.get('fontSize')?.value;
+  let accent = cookieStore.get('accent')?.value;
   // No device cookie yet? Fall back to the signed-in user's saved preferences
   // so they follow them across devices (the no-flash script still handles OS default).
-  if (!theme || !fontSize) {
+  if (!theme || !fontSize || !accent) {
     try {
       const session = await getServerSession(authOptions);
       if (session?.user?.id) {
-        const u = await prisma.user.findUnique({ where: { id: session.user.id }, select: { theme: true, fontSize: true } });
+        const u = await prisma.user.findUnique({ where: { id: session.user.id }, select: { theme: true, fontSize: true, accentColor: true } });
         if (!theme && u?.theme) theme = u.theme;
         if (!fontSize && u?.fontSize) fontSize = u.fontSize;
+        if (!accent && u?.accentColor) accent = u.accentColor;
       }
     } catch { /* ignore */ }
   }
@@ -55,7 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={locale}
       className={[theme === 'dark' ? 'dark' : undefined, fontSizeClass].filter(Boolean).join(' ') || undefined}
-      data-env={IS_PREVIEW ? 'preview' : undefined}
+      data-accent={resolveAccent(accent)}
       suppressHydrationWarning
     >
       <head>

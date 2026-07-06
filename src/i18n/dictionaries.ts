@@ -1170,6 +1170,9 @@ const en = {
     language: 'Language',
     themeLabel: 'Theme',
     languages: { en: 'English', tr: 'Türkçe', de: 'Deutsch' },
+    accentLabel: 'Accent color',
+    accentHint: 'Personalize the app’s primary color.',
+    accentColors: { blue: 'Blue', green: 'Green', purple: 'Purple', rose: 'Rose', teal: 'Teal', amber: 'Amber' },
   },
 };
 
@@ -2343,6 +2346,9 @@ const tr: Dict = {
     language: 'Dil',
     themeLabel: 'Tema',
     languages: { en: 'English', tr: 'Türkçe', de: 'Deutsch' },
+    accentLabel: 'Vurgu rengi',
+    accentHint: 'Uygulamanın ana rengini kişiselleştirin.',
+    accentColors: { blue: 'Mavi', green: 'Yeşil', purple: 'Mor', rose: 'Gül', teal: 'Turkuaz', amber: 'Kehribar' },
   },
 };
 
@@ -3514,6 +3520,9 @@ const de: Dict = {
     language: 'Sprache',
     themeLabel: 'Theme',
     languages: { en: 'English', tr: 'Türkçe', de: 'Deutsch' },
+    accentLabel: 'Akzentfarbe',
+    accentHint: 'Passe die Primärfarbe der App an.',
+    accentColors: { blue: 'Blau', green: 'Grün', purple: 'Lila', rose: 'Rosé', teal: 'Türkis', amber: 'Bernstein' },
   },
 };
 

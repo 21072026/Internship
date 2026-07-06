@@ -10,6 +10,7 @@ import { AvatarManager } from '@/components/AvatarManager';
 import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
+import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -40,6 +41,7 @@ export function AccountSettings() {
   const [signOutBusy, setSignOutBusy] = useState(false);
   const [language, setLanguage] = useState('en');
   const [theme, setTheme] = useState('system');
+  const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
   const [role, setRole] = useState('');
   const [skills, setSkills] = useState('');
   const [capacity, setCapacity] = useState('');
@@ -55,6 +57,7 @@ export function AccountSettings() {
         setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
         setLanguage(user.preferredLanguage ?? 'en');
         setTheme(user.theme ?? 'system');
+        setAccent(resolveAccent(user.accentColor));
         setRole(user.role ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
@@ -98,6 +101,23 @@ export function AccountSettings() {
     try {
       await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: next }) });
     } catch { /* ignore */ }
+  };
+
+  const changeAccent = async (next: string) => {
+    setAccent(next);
+    // Apply instantly (no reload) by flipping the attribute the CSS keys off,
+    // and persist to a cookie so SSR paints the same accent on the next load.
+    document.documentElement.setAttribute('data-accent', next);
+    document.cookie = `accent=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+    try {
+      await fetch('/api/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accentColor: next }),
+      });
+      flash(t.account.updated);
+    } catch {
+      // cookie + attribute already applied locally
+    }
   };
 
   const changeLanguage = async (next: string) => {
@@ -380,6 +400,31 @@ export function AccountSettings() {
               <option value="light">{t.theme.light}</option>
               <option value="dark">{t.theme.dark}</option>
             </select>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-100 max-w-md">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.accentLabel}</label>
+          <p className="text-xs text-gray-400 mb-2">{t.account.accentHint}</p>
+          <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={t.account.accentLabel}>
+            {ACCENT_COLORS.map((c) => {
+              const selected = accent === c;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={(t.account.accentColors as Record<string, string>)[c] ?? c}
+                  title={(t.account.accentColors as Record<string, string>)[c] ?? c}
+                  onClick={() => changeAccent(c)}
+                  className={`h-8 w-8 rounded-full ring-offset-2 ring-offset-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 ${selected ? 'ring-2 ring-gray-500' : 'ring-1 ring-gray-200 hover:ring-gray-300'}`}
+                  style={{ backgroundColor: ACCENT_SWATCH[c] }}
+                >
+                  {selected && <span className="flex items-center justify-center text-white text-sm leading-none">✓</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
       </Card>
