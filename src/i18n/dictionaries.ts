@@ -243,6 +243,10 @@ const en = {
     positions: 'positions',
     openPositions: 'Open positions',
     loginCreated: 'Login created — we emailed a set-password link.',
+    loadFailed: 'Failed to load companies',
+    createFailed: 'Failed to create company',
+    updateFailed: 'Failed to update company',
+    confirmDelete: 'Are you sure you want to delete "{name}"?',
   },
   companyForm: {
     name: 'Company Name',
@@ -1403,6 +1407,10 @@ const tr: Dict = {
     positions: 'pozisyon',
     openPositions: 'Açık pozisyonlar',
     loginCreated: 'Giriş oluşturuldu — parola belirleme bağlantısı e-postalandı.',
+    loadFailed: 'Şirketler yüklenemedi',
+    createFailed: 'Şirket oluşturulamadı',
+    updateFailed: 'Şirket güncellenemedi',
+    confirmDelete: '"{name}" şirketini silmek istediğine emin misin?',
   },
   companyForm: {
     name: 'Şirket Adı',
@@ -2561,6 +2569,10 @@ const de: Dict = {
     positions: 'Positionen',
     openPositions: 'Offene Positionen',
     loginCreated: 'Zugang erstellt — wir haben einen Link zum Setzen des Passworts per E-Mail gesendet.',
+    loadFailed: 'Unternehmen konnten nicht geladen werden',
+    createFailed: 'Unternehmen konnte nicht erstellt werden',
+    updateFailed: 'Unternehmen konnte nicht aktualisiert werden',
+    confirmDelete: 'Möchtest du "{name}" wirklich löschen?',
   },
   companyForm: {
     name: 'Firmenname',
