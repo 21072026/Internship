@@ -110,7 +110,7 @@ export default function MentorInteractionsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-medium text-gray-700">
-                      with {interaction.relation.mentee.fullName}
+                      {t.mentor.withMentee.replace('{name}', interaction.relation.mentee.fullName)}
                     </span>
                   </div>
                   {interaction.subject && (

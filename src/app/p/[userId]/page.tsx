@@ -64,7 +64,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           <div className="flex items-center gap-4 mb-6">
             {user.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatarUrl} alt="" className="w-16 h-16 rounded-2xl object-cover border border-gray-200" />
+              <img src={user.avatarUrl} alt={user.fullName} className="w-16 h-16 rounded-2xl object-cover border border-gray-200" />
             ) : (
               <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center">
                 <span className="text-blue-700 font-bold text-2xl">{user.fullName?.[0] ?? '?'}</span>

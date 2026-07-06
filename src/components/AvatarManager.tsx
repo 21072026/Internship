@@ -65,7 +65,7 @@ export function AvatarManager({
     <div className="flex items-center gap-4">
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border border-gray-200" />
+        <img src={avatarUrl} alt={name || t.avatar.section} className="w-16 h-16 rounded-full object-cover border border-gray-200" />
       ) : (
         <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
           <span className="text-blue-700 font-bold text-2xl">{name?.[0] ?? '?'}</span>
