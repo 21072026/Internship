@@ -5,6 +5,7 @@ import { Menu, X } from 'lucide-react';
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { NotificationBell } from '@/components/NotificationBell';
+import { MessagesButton } from '@/components/MessagesButton';
 import { BetaBadge } from '@/components/BetaBadge';
 
 // App shell: sidebar is a static column on desktop and an off-canvas drawer
@@ -27,6 +28,7 @@ export function ResponsiveShell({
         <span className="font-bold text-gray-900 dark:text-gray-100">InternshipCRM</span>
         <BetaBadge className="ml-2" />
         <div className="flex items-center gap-1">
+          <MessagesButton />
           <NotificationBell />
           <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-2 -mr-2 text-gray-600 hover:text-gray-900">
             <Menu className="h-6 w-6" />
@@ -62,6 +64,7 @@ export function ResponsiveShell({
         {/* Desktop-only top strip for search + notifications */}
         <div className="hidden lg:flex items-center justify-end gap-3 px-8 pt-4 no-print">
           {headerExtra}
+          <MessagesButton />
           <NotificationBell />
         </div>
         <div className="p-4 lg:p-8 lg:pt-2">
