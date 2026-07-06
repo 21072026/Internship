@@ -124,6 +124,7 @@ export default function MenteeDetailPage() {
   };
 
   const handleDeleteInteraction = async (interactionId: string) => {
+    if (!window.confirm(t.common.confirmDelete)) return;
     await fetch(`/api/interactions/${interactionId}`, { method: 'DELETE' });
     await fetchRelation();
     toast(t.mentor.interactionDeleted);

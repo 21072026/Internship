@@ -85,6 +85,7 @@ const en = {
     save: 'Save',
     prev: 'Previous',
     next: 'Next',
+    confirmDelete: 'Are you sure you want to delete this?',
   },
   dashboard: {
     title: 'Admin Dashboard',
@@ -638,6 +639,8 @@ const en = {
     showcaseSubtitle: 'Community and company internship projects.',
     noPublic: 'No public projects yet.',
     by: 'by',
+    confirmDelete: 'Delete project "{name}"? This cannot be undone.',
+    confirmDeleteTask: 'Delete task "{title}"?',
   },
   evaluation: {
     title: 'Evaluation',
@@ -666,6 +669,7 @@ const en = {
     markOpen: 'Reopen',
     byMentor: 'Created by mentor',
     byMentee: 'Created by mentee',
+    confirmDelete: 'Delete goal "{title}"?',
   },
   cohorts: {
     title: 'Cohorts',
@@ -829,6 +833,7 @@ const en = {
     download: 'Download',
     titlePlaceholder: 'Title (optional)',
     types: { CV: 'CV', CONTRACT: 'Contract', CERTIFICATE: 'Certificate', OTHER: 'Other' },
+    confirmDelete: 'Delete document "{title}"?',
   },
   securitySetup: {
     title: 'Set up two-factor authentication',
@@ -1250,6 +1255,7 @@ const tr: Dict = {
     save: 'Kaydet',
     prev: 'Önceki',
     next: 'Sonraki',
+    confirmDelete: 'Bunu silmek istediğinize emin misiniz?',
   },
   dashboard: {
     title: 'Yönetim Paneli',
@@ -1803,6 +1809,8 @@ const tr: Dict = {
     showcaseSubtitle: 'Topluluk ve şirket staj projeleri.',
     noPublic: 'Henüz herkese açık proje yok.',
     by: '·',
+    confirmDelete: '"{name}" projesini silmek istiyor musun? Bu işlem geri alınamaz.',
+    confirmDeleteTask: '"{title}" görevini silmek istiyor musun?',
   },
   evaluation: {
     title: 'Değerlendirme',
@@ -1831,6 +1839,7 @@ const tr: Dict = {
     markOpen: 'Yeniden aç',
     byMentor: 'Mentor oluşturdu',
     byMentee: 'Mentee oluşturdu',
+    confirmDelete: '"{title}" hedefini silmek istiyor musun?',
   },
   cohorts: {
     title: 'Kohortlar',
@@ -1994,6 +2003,7 @@ const tr: Dict = {
     download: 'İndir',
     titlePlaceholder: 'Başlık (opsiyonel)',
     types: { CV: 'CV', CONTRACT: 'Sözleşme', CERTIFICATE: 'Sertifika', OTHER: 'Diğer' },
+    confirmDelete: '"{title}" belgesini silmek istiyor musun?',
   },
   securitySetup: {
     title: 'İki adımlı doğrulamayı kur',
@@ -2413,6 +2423,7 @@ const de: Dict = {
     save: 'Speichern',
     prev: 'Zurück',
     next: 'Weiter',
+    confirmDelete: 'Möchtest du das wirklich löschen?',
   },
   dashboard: {
     title: 'Admin-Dashboard',
@@ -2966,6 +2977,8 @@ const de: Dict = {
     showcaseSubtitle: 'Gemeinschafts- und Unternehmens-Praktikumsprojekte.',
     noPublic: 'Noch keine öffentlichen Projekte.',
     by: 'von',
+    confirmDelete: 'Projekt "{name}" löschen? Dies kann nicht rückgängig gemacht werden.',
+    confirmDeleteTask: 'Aufgabe "{title}" löschen?',
   },
   evaluation: {
     title: 'Bewertung',
@@ -2994,6 +3007,7 @@ const de: Dict = {
     markOpen: 'Wieder öffnen',
     byMentor: 'Vom Mentor erstellt',
     byMentee: 'Vom Mentee erstellt',
+    confirmDelete: 'Ziel "{title}" löschen?',
   },
   cohorts: {
     title: 'Kohorten',
@@ -3157,6 +3171,7 @@ const de: Dict = {
     download: 'Herunterladen',
     titlePlaceholder: 'Titel (optional)',
     types: { CV: 'Lebenslauf', CONTRACT: 'Vertrag', CERTIFICATE: 'Zertifikat', OTHER: 'Sonstiges' },
+    confirmDelete: 'Dokument "{title}" löschen?',
   },
   securitySetup: {
     title: 'Zwei-Faktor-Authentifizierung einrichten',
