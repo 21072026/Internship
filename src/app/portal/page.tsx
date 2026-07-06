@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
@@ -57,8 +58,12 @@ async function getMenteeData(menteeId: string) {
 
 export default async function PortalDashboard() {
   const session = await getServerSession(authOptions);
+  // The layout gates unauthenticated users, but the session can be revoked
+  // between the layout check and this render (e.g. "sign out of all devices"),
+  // in which case session is null here — redirect instead of crashing.
+  if (!session) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const { user, activeRelation } = await getMenteeData(session!.user.id);
+  const { user, activeRelation } = await getMenteeData(session.user.id);
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
 
@@ -67,7 +72,7 @@ export default async function PortalDashboard() {
       <OnboardingChecklist />
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {t.portal.welcome}, {session!.user.name}!
+          {t.portal.welcome}, {session.user.name}!
         </h1>
         <p className="text-gray-500 mt-1">{t.portal.dashSubtitle}</p>
       </div>
