@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
 
 interface AnnouncementRecord {
@@ -104,7 +105,7 @@ export default function AdminAnnouncementsPage() {
         <Card>
           <CardHeader><CardTitle>{t.announcements.history}</CardTitle></CardHeader>
           {historyLoading ? (
-            <p className="text-sm text-gray-400">{t.common.loading}</p>
+            <SkeletonRows rows={4} />
           ) : history.length === 0 ? (
             <p className="text-sm text-gray-400">{t.announcements.noHistory}</p>
           ) : (

@@ -4,6 +4,7 @@ import { useT } from "@/i18n/client";
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen } from 'lucide-react';
 
 interface Interaction {
@@ -79,7 +80,7 @@ export default function MentorInteractionsPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
+        <Card><SkeletonRows rows={6} /></Card>
       ) : interactions.length === 0 ? (
         <Card className="text-center py-12">
           <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />

@@ -6,6 +6,7 @@ import { ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { pipelineLabel, pipelineOptions } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
 
@@ -67,7 +68,7 @@ export default function CompanyOverviewPage() {
           <CardTitle>{t.company.candidates} ({shown.length})</CardTitle>
         </CardHeader>
         {loading ? (
-          <p className="text-center py-12 text-gray-400">{t.common.loading}</p>
+          <SkeletonRows rows={6} />
         ) : shown.length === 0 ? (
           <p className="text-center py-12 text-gray-400">{t.company.none}</p>
         ) : (

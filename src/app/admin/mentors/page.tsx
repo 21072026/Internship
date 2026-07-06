@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Users, Pencil } from 'lucide-react';
 import Link from 'next/link';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 
 interface MentorUser {
@@ -95,7 +96,7 @@ export default function MentorsPage() {
         </CardHeader>
 
         {loading ? (
-          <p className="text-center py-12 text-gray-400">{t.common.loading}</p>
+          <SkeletonRows rows={6} />
         ) : shown.length === 0 ? (
           <p className="text-center py-12 text-gray-400">{t.mentors.none}</p>
         ) : (
