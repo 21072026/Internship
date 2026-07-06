@@ -262,15 +262,15 @@ export default function MentorshipPage() {
         <div className="space-y-4">
           {relations.map((rel) => (
             <Card key={rel.id} data-testid={`mentorship-row-${rel.id}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                     <Link href={`/admin/candidates/${rel.mentee.id}`} className="font-semibold text-gray-900 hover:text-blue-700 hover:underline">{rel.mentee.fullName}</Link>
                     <span className="text-gray-400">→</span>
                     <span className="font-semibold text-gray-900">{rel.mentor.fullName}</span>
                     <StatusBadge status={rel.status} />
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
                     {rel.company && (
                       <span>🏢 {rel.company.name}</span>
                     )}
@@ -278,18 +278,19 @@ export default function MentorshipPage() {
                     <Badge variant="default">{rel._count.interactions} {t.mentorships.interactions}</Badge>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end sm:shrink-0">
                   <Select
                     aria-label={t.mentorships.changeCompany}
                     options={companyOptions}
                     value={rel.company?.id ?? ''}
                     onChange={(e) => handleChangeCompany(rel.id, e.target.value)}
-                    className="w-44"
+                    className="w-full sm:w-44"
                   />
                   {rel.status === 'ACTIVE' && (
                     <Button
                       variant="outline"
                       size="sm"
+                      className="w-full sm:w-auto"
                       onClick={() => handleComplete(rel.id)}
                     >
                       {t.mentorships.markComplete}
