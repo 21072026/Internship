@@ -17,13 +17,13 @@ test('admin/users shows translated role badges for every role', async ({ page })
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
     await page.goto('/admin/users');
-    await expect(page.getByTestId(`user-row-${company.id}`).getByText('Company')).toBeVisible();
-    await expect(page.getByTestId(`user-row-${source.id}`).getByText('Source')).toBeVisible();
+    await expect(page.getByTestId(`user-row-${company.id}`).getByText('Company', { exact: true })).toBeVisible();
+    await expect(page.getByTestId(`user-row-${source.id}`).getByText('Source', { exact: true })).toBeVisible();
 
     // Turkish label for the same COMPANY role, no other page-specific translation work needed.
     await page.evaluate(() => { document.cookie = 'locale=tr;path=/'; });
     await page.reload();
-    await expect(page.getByTestId(`user-row-${company.id}`).getByText('Şirket')).toBeVisible();
+    await expect(page.getByTestId(`user-row-${company.id}`).getByText('Şirket', { exact: true })).toBeVisible();
   } finally {
     await cleanupByEmail(company.email);
     await cleanupByEmail(source.email);
