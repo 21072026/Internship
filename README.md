@@ -140,8 +140,31 @@ src/services/   # email + cron
 prisma/         # schema.prisma + seed
 ```
 
+## License
+
+Licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later) —
+see [LICENSE](LICENSE). You are free to use, study, modify, and self-host this software. If
+you run a modified version as a network service, the AGPL requires you to make your modified
+source available to its users.
+
+## Commercial licensing & hosting
+
+The AGPL keeps the project open while ensuring improvements flow back to the community. Two
+paths exist for organizations:
+
+- **Hosted service** — use the maintained deployment at https://crm.ersah.in (support,
+  updates, backups included) instead of running it yourself.
+- **Commercial license** — if AGPL's source-sharing obligations don't fit your product (e.g.
+  embedding in a closed-source offering), a separate commercial license is available.
+
+For hosting, a commercial license, custom deployment, or support, contact
+**ersahin@bcsit-gmbh.de**.
+
 ## Contributing
 
 Work is planned on a GitHub Project board as Epics (#5–#11) and Stories (#12+). Branch per
 issue (`feat/<issue>-slug`), open a PR, reference `Closes #N`. For AI-agent guidance see
 [CLAUDE.md](CLAUDE.md).
+
+By contributing you agree that your contributions are licensed under AGPL-3.0-or-later, and
+that the maintainer may also offer them under a commercial license (dual licensing).

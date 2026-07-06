@@ -2,6 +2,7 @@
   "name": "internship-crm",
   "version": "0.3.0-beta",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "prisma": {
     "seed": "node prisma/seed.mjs"
   },
