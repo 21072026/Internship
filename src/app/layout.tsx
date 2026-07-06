@@ -13,6 +13,13 @@ export const metadata: Metadata = {
   description: 'A comprehensive CRM for managing mentor-mentee relationships and internship programs',
   applicationName: 'Internship CRM',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'InternshipCRM' },
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export const viewport: Viewport = {
