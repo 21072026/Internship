@@ -100,6 +100,37 @@ html.dark .hover\:text-blue-700:hover,
 html.dark .group:hover .group-hover\:text-blue-600 { color: #93c5fd; } /* blue-300 */
 
 /*
+ * Preview environment accent — the preview deployment is themed GREEN so it is
+ * never mistaken for production (which stays blue). Retints the primary blue
+ * utilities to green with the same flat-selector approach as dark mode, so no
+ * component markup changes are needed. `data-env="preview"` is set on <html>
+ * when NEXT_PUBLIC_APP_ENV=preview (see src/lib/appEnv.ts).
+ */
+html[data-env="preview"] .bg-blue-600 { background-color: #16a34a; }   /* green-600 */
+html[data-env="preview"] .bg-blue-500 { background-color: #22c55e; }   /* green-500 */
+html[data-env="preview"] .hover\:bg-blue-700:hover { background-color: #15803d; } /* green-700 */
+html[data-env="preview"] .focus\:bg-blue-600:focus { background-color: #16a34a; }
+html[data-env="preview"] .text-blue-600 { color: #16a34a; }
+html[data-env="preview"] .text-blue-700 { color: #15803d; }
+html[data-env="preview"] .hover\:text-blue-700:hover { color: #15803d; }
+html[data-env="preview"] .border-blue-400 { border-color: #4ade80; }   /* green-400 */
+html[data-env="preview"] .bg-blue-50 { background-color: #f0fdf4; }     /* green-50 */
+/* Dark + preview: lighter greens so text/boxes stay legible on dark surfaces. */
+html.dark[data-env="preview"] .text-blue-600,
+html.dark[data-env="preview"] .text-blue-700 { color: #4ade80; }        /* green-400 */
+html.dark[data-env="preview"] .bg-blue-50 { background-color: rgba(20,83,45,0.25); }
+html.dark[data-env="preview"] .bg-blue-50.text-blue-700,
+html.dark[data-env="preview"] .bg-blue-50 .text-blue-700,
+html.dark[data-env="preview"] .bg-blue-50 .text-blue-600 { color: #86efac; } /* green-300 */
+/* Keyboard focus ring in preview → green. */
+html[data-env="preview"] a:focus-visible,
+html[data-env="preview"] button:focus-visible,
+html[data-env="preview"] [role='button']:focus-visible,
+html[data-env="preview"] input:focus-visible,
+html[data-env="preview"] select:focus-visible,
+html[data-env="preview"] textarea:focus-visible { outline-color: #16a34a; }
+
+/*
  * Native form controls. Inline <input>/<select>/<textarea> scattered through
  * pages don't all use the themed UI primitives, so default them to dark here.
  * The UI primitives carry their own dark: classes in the same palette, so the
