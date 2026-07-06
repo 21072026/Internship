@@ -50,7 +50,8 @@ jobs:
           retention-days: 14
 
       # Email the team only when the stress test failed. Reuses the app's SMTP_*
-      # secrets; ALERT_EMAIL_TO controls the recipient(s).
+      # secrets. Recipient defaults to the maintainer; set an ALERT_EMAIL_TO
+      # secret to override (e.g. a shared alias / multiple comma-separated addrs).
       - name: Email alert on failure
         if: failure()
         env:
@@ -59,7 +60,7 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
           ALERT_SUBJECT: '⚠️ Internship CRM — nightly stress test FAILED'
           ALERT_BODY: |
             The nightly stress test breached its thresholds against ${{ env.BASE_URL }}.
