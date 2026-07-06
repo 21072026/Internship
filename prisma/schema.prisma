@@ -120,6 +120,10 @@ model User {
   // drives the app's primary color via data-accent. Null = environment default
   // (green in preview, blue in production).
   accentColor             String?
+  // Last successful sign-in; powers "X days since login" in activity reports.
+  lastLoginAt             DateTime?
+  // Last time the user was seen active (page-view heartbeat, consent-gated).
+  lastSeenAt              DateTime?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
@@ -140,8 +144,28 @@ model User {
   consents                UserConsent[]
   companyInterests        CompanyInterest[]        @relation("CompanyInterestMentee")
   authoredRelationNotes   RelationNote[]           @relation("RelationNoteAuthor")
+  pageViews               PageView[]
 
   @@index([role])
+}
+
+// Consent-gated activity trail: one row per page visit, with the dwell time on
+// the previous page. Powers the "pages visited / time on site" section of the
+// mentee activity report. Only written when the user has granted
+// ACTIVITY_TRACKING consent (see src/lib/consent.ts + /api/track/pageview).
+model PageView {
+  id          String   @id @default(cuid())
+  userId      String
+  // App-relative path only (query string stripped), capped in the API.
+  path        String
+  // Seconds spent on this page before navigating away (0 for the entry hit,
+  // filled by the next beacon / an unload beacon).
+  durationSec Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 // Reusable, auditable per-user consent (GDPR). A consent is "active" when
@@ -152,6 +176,9 @@ enum ConsentType {
   // Acceptance of the privacy notice & terms at registration. `version` records
   // which policy version was accepted (GDPR Art. 7 demonstrability).
   PRIVACY_POLICY
+  // Opt-in to detailed activity tracking (pages visited + time on site) that
+  // feeds the mentee activity report shared with the mentor/admin.
+  ACTIVITY_TRACKING
 }
 
 model UserConsent {
