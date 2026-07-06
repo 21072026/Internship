@@ -18,11 +18,11 @@ export function EmptyState({
 }) {
   return (
     <div className="text-center py-14 px-4">
-      <div className="mx-auto w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-        <Icon className="h-6 w-6 text-gray-400" />
+      <div className="mx-auto w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+        <Icon className="h-6 w-6 text-gray-400 dark:text-gray-400" />
       </div>
-      <p className="text-gray-900 font-medium">{title}</p>
-      {description && <p className="text-gray-500 text-sm mt-1 max-w-sm mx-auto">{description}</p>}
+      <p className="text-gray-900 dark:text-gray-100 font-medium">{title}</p>
+      {description && <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 max-w-sm mx-auto">{description}</p>}
       {actionLabel && actionHref && (
         <Link
           href={actionHref}
