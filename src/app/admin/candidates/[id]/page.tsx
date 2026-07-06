@@ -253,7 +253,7 @@ export default function AdminMenteeDetailPage() {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{user.fullName}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.fullName}</h1>
             <p className="text-gray-500">{user.email}</p>
           </div>
           <div className="flex items-center gap-3">

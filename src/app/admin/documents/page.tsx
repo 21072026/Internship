@@ -9,7 +9,7 @@ export default function AdminDocumentsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t.documents.templates}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.documents.templates}</h1>
         <p className="text-gray-500 mt-1">{t.documents.templatesSubtitle}</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">

@@ -23,7 +23,7 @@ export default function ApiDocsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t.apiDocs.title}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.apiDocs.title}</h1>
         <p className="text-gray-500 mt-1">{t.apiDocs.subtitle}</p>
       </div>
 
