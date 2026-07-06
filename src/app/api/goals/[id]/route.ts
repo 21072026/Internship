@@ -35,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const updated = await prisma.goal.update({
     where: { id },
     data: {
-      ...(status !== undefined ? { status } : {}),
+      ...(status !== undefined ? { status, completedAt: status === 'DONE' ? new Date() : null } : {}),
       ...(title !== undefined ? { title } : {}),
       ...(description !== undefined ? { description } : {}),
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
