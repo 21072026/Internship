@@ -91,7 +91,7 @@ export default function MenteesPage() {
                   <p className="text-sm text-gray-600">🎓 {rel.mentee.university} · {rel.mentee.department}</p>
                 )}
                 {rel.mentee.graduationYear && (
-                  <p className="text-sm text-gray-600">📅 Class of {rel.mentee.graduationYear}</p>
+                  <p className="text-sm text-gray-600">📅 {t.candidates.classOf} {rel.mentee.graduationYear}</p>
                 )}
                 {rel.mentee.phone && (
                   <p className="text-sm text-gray-600">📞 {rel.mentee.phone}</p>
@@ -110,9 +110,9 @@ export default function MenteesPage() {
               )}
 
               <div className="flex items-center justify-between">
-                <Badge variant="default">{rel._count.interactions} interactions</Badge>
+                <Badge variant="default">{rel._count.interactions} {t.mentor.interactions}</Badge>
                 <Link href={`/mentor/mentees/${rel.id}`}>
-                  <Button size="sm" variant="outline">View Details</Button>
+                  <Button size="sm" variant="outline">{t.mentor.viewDetails}</Button>
                 </Link>
               </div>
             </Card>
