@@ -26,8 +26,12 @@ test('admin dashboard shows the pipeline distribution', async ({ page }) => {
     await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
     await page.goto('/admin');
-    await expect(page.getByText('Mentees per stage')).toBeVisible();
-    await expect(page.getByText('450 · Internship in progress')).toBeVisible();
+    // The route-level loading.tsx (#499) makes /admin stream: content briefly
+    // exists in a hidden segment before React swaps it into place, so an
+    // unscoped getByText can hit a hidden duplicate mid-stream (strict-mode
+    // violation). Match visible nodes only.
+    await expect(page.getByText('Mentees per stage').filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByText('450 · Internship in progress').filter({ visible: true }).first()).toBeVisible();
   } finally {
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(menteeEmail);
