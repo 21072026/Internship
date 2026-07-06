@@ -10,7 +10,34 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-03
+
+Backlog epics A–L plus user-reported feedback, shipped as individual PRs.
+
+### Added
+- **Meetings, RSVP & calendar** (EPIC D) — meetings surface on the admin/mentor
+  calendar, RSVP flows feed analytics, auto Meet link + reminders (#417/#432).
+- **Mentor management & capacity** (EPIC A/B) — skill-overlap matching, mentor
+  expertise + capacity, at-capacity flags, mentor detail page (#414/#415).
+- **Analytics accuracy** (EPIC G) — time-in-stage computed from real
+  `StatusChange` history + a date-range selector (#420).
+- **Kanban grouping** (EPIC I) — 13 stages grouped into collapsible phases
+  (pre/internship/outcome), WIP warnings, overdue badges (#422).
+- **Auth hardening** (EPIC J) — role-based 2FA enforcement gate, 12h session
+  timeout, and "sign out of all devices" session revocation (#423).
+- **Category cookie consent** (EPIC K) (#424) and full EN/TR/DE localization
+  (EPIC E) (#418).
+- **CI/CD gates** (EPIC L) — production deploy gated on E2E success
+  (`workflow_run`) + i18n EN/TR/DE parity check (#425).
+- **List UX** (EPIC H) — candidates + mentorships pagination and search (#421).
+- Invitation lifecycle with timestamped history (#433/#434); change toasts on
+  candidate detail (#436); editable notes; a dedicated My Notes page; interaction
+  log subject/filter; message attachments; adjustable font size (Betül feedback).
+
 ### Fixed
+- P0: never-activated users were shown a "deactivated" dead-end at sign-in with
+  no way to resend verification (#447).
+- Generated mentee placeholder emails are ASCII-transliterated (EPIC F) (#419).
 - Onboarding checklist card on the dashboard was nearly unreadable in dark mode (#389).
 
 ## [0.2.0] - 2026-07-01

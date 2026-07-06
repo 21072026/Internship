@@ -13,6 +13,39 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.3.0-beta',
+    date: '2026-07-03',
+    highlights: {
+      en: [
+        'Meetings & calendar — schedule a meeting, mentees RSVP with one click, and everything shows on the calendar with reminder emails.',
+        'Smarter mentor matching — suggestions now rank by real skill overlap, and mentors can set their expertise and how many mentees they can take on.',
+        'Analytics you can trust — "time in stage" is now computed from real pipeline history, plus a date-range filter (last 30/90 days, 6/12 months).',
+        'Cleaner pipeline board — the 13 stages are grouped into collapsible phases (pre-internship / internship / outcome), with overdue flags and a workload hint.',
+        'Account security — your organization can require two-factor authentication, sessions time out automatically, and you can now "sign out of all devices".',
+        'Privacy — cookie consent is now by category (necessary / analytics / …), and the whole app is fully translated in English, Turkish and German.',
+        'Everyday polish — invitation status with timestamps, confirmation toasts on changes, editable notes, a dedicated My Notes page, message attachments, and an adjustable font size.',
+      ],
+      tr: [
+        'Toplantılar & takvim — toplantı planla, mentee’ler tek tıkla katılım (RSVP) versin; her şey hatırlatma e-postalarıyla takvimde görünsün.',
+        'Daha akıllı mentor eşleştirme — öneriler artık gerçek yetenek örtüşmesine göre sıralanıyor; mentörler uzmanlıklarını ve kaç mentee alabileceklerini belirleyebiliyor.',
+        'Güvenilir analitik — "aşamada geçen süre" artık gerçek süreç geçmişinden hesaplanıyor; ayrıca tarih aralığı filtresi (son 30/90 gün, 6/12 ay).',
+        'Daha derli toplu pano — 13 aşama katlanabilir fazlara gruplandı (staj öncesi / staj / sonuç); gecikme işaretleri ve iş yükü uyarısıyla.',
+        'Hesap güvenliği — kuruluşunuz iki adımlı doğrulamayı zorunlu kılabilir, oturumlar otomatik zaman aşımına uğrar ve artık "tüm cihazlardan çıkış" yapabilirsiniz.',
+        'Gizlilik — çerez rızası artık kategori bazlı (gerekli / analitik / …) ve tüm uygulama İngilizce, Türkçe ve Almanca olarak eksiksiz çevrildi.',
+        'Günlük iyileştirmeler — zaman damgalı davet durumu, değişikliklerde onay bildirimleri, düzenlenebilir notlar, ayrı bir Notlarım sayfası, mesaj ekleri ve ayarlanabilir yazı boyutu.',
+      ],
+      de: [
+        'Meetings & Kalender — plane ein Meeting, Mentees sagen mit einem Klick zu (RSVP), und alles erscheint im Kalender samt Erinnerungs-E-Mails.',
+        'Intelligenteres Mentoren-Matching — Vorschläge werden nach echter Fähigkeiten-Überschneidung sortiert, und Mentoren können ihre Expertise und Kapazität festlegen.',
+        'Verlässliche Analysen — die „Zeit in Phase" wird jetzt aus dem echten Pipeline-Verlauf berechnet, plus ein Zeitraumfilter (letzte 30/90 Tage, 6/12 Monate).',
+        'Übersichtlicheres Board — die 13 Phasen sind in einklappbare Abschnitte gruppiert (vor dem Praktikum / Praktikum / Ergebnis), mit Überfällig-Markierungen und Auslastungshinweis.',
+        'Kontosicherheit — deine Organisation kann Zwei-Faktor-Authentifizierung verlangen, Sitzungen laufen automatisch ab, und du kannst dich jetzt „von allen Geräten abmelden".',
+        'Datenschutz — die Cookie-Einwilligung erfolgt jetzt kategorienweise (notwendig / Analyse / …), und die gesamte App ist vollständig auf Englisch, Türkisch und Deutsch übersetzt.',
+        'Feinschliff im Alltag — Einladungsstatus mit Zeitstempeln, Bestätigungs-Toasts bei Änderungen, bearbeitbare Notizen, eine eigene „Meine Notizen"-Seite, Nachrichtenanhänge und eine anpassbare Schriftgröße.',
+      ],
+    },
+  },
+  {
     version: '0.2.0-beta',
     date: '2026-07-01',
     highlights: {
