@@ -49,6 +49,7 @@ export function NotesPanel() {
   };
 
   const remove = async (id: string) => {
+    if (!window.confirm(t.common.confirmDelete)) return;
     await fetch(`/api/notes/${id}`, { method: 'DELETE' });
     await load();
     toast(t.portal.notes.deleted);

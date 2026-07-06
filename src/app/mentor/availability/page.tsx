@@ -44,6 +44,7 @@ export default function AvailabilityPage() {
   };
 
   const remove = async (id: string) => {
+    if (!window.confirm(t.common.confirmDelete)) return;
     await fetch(`/api/availability?id=${id}`, { method: 'DELETE' });
     await load();
   };

@@ -50,6 +50,7 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
   };
 
   const remove = async (id: string) => {
+    if (!window.confirm(t.common.confirmDelete)) return;
     await fetch(`/api/relation-notes/${id}`, { method: 'DELETE' });
     await load();
   };

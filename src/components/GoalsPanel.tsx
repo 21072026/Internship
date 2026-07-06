@@ -57,8 +57,9 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
     await load();
   };
 
-  const remove = async (id: string) => {
-    await fetch(`/api/goals/${id}`, { method: 'DELETE' });
+  const remove = async (g: Goal) => {
+    if (!window.confirm(t.goals.confirmDelete.replace('{title}', g.title))) return;
+    await fetch(`/api/goals/${g.id}`, { method: 'DELETE' });
     await load();
   };
 
@@ -105,7 +106,7 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
                 </span>
               </span>
               {!readOnly && (
-                <button onClick={() => remove(g.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600">
+                <button onClick={() => remove(g)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600">
                   <Trash2 className="h-4 w-4" />
                 </button>
               )}
