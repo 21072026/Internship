@@ -59,15 +59,22 @@ test('changing email requires the correct current password', async ({ page }) =>
     await signIn(page, email, pw, '/portal');
     await page.goto('/account');
     const emailForm = page.locator('form', { has: page.getByRole('button', { name: 'Update email' }) });
-    await emailForm.getByLabel(/Email address/).fill(newEmail);
+    const emailInput = emailForm.getByLabel(/Email address/);
+    // The form fetches /api/profile on mount and sets the field to the current
+    // email; wait for that to land before overwriting, or a slow fetch clobbers
+    // our value and the PUT becomes a no-op 200 (this was the chronic flake).
+    await expect(emailInput).toHaveValue(email, { timeout: 10_000 });
+    await emailInput.fill(newEmail);
     await emailForm.getByLabel(/Current password/).fill('WrongPass999');
-    // Wait for the actual round-trip rather than racing the UI update against
-    // the assertion timeout — under CI load the request can outlast a tight window.
-    const done = page.waitForResponse((r) => r.url().includes('/api/account') && r.request().method() === 'PUT');
+    // Assert on the API response (deterministic) rather than the toast, which
+    // auto-dismisses after 4s and races the assertion. Wrong password → 400.
+    const done = page.waitForResponse(
+      (r) => r.url().includes('/api/account') && r.request().method() === 'PUT',
+      { timeout: 20_000 }
+    );
     await page.getByRole('button', { name: 'Update email' }).click();
-    await done;
-
-    await expect(page.getByText(/Current password is incorrect/i)).toBeVisible({ timeout: 10_000 });
+    const res = await done;
+    expect(res.status()).toBe(400);
     const after = await prisma.user.findUnique({ where: { id: user.id } });
     expect(after!.email).toBe(email); // unchanged
   } finally {

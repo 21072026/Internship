@@ -146,6 +146,10 @@ export const authOptions: NextAuthOptions = {
         token.impersonatorName = u.impersonatorName ?? null;
         // Cap impersonation sessions; after this they auto-revert to the admin.
         token.impersonationExpiresAt = u.impersonatorId ? Date.now() + 30 * 60 * 1000 : null;
+        // Millisecond mint time for "sign out of all devices" — finer than the
+        // second-granular JWT `iat`, so a fresh login is never mistaken for a
+        // pre-revocation token even within the same second.
+        token.authTime = Date.now();
       }
 
       // Auto-expire impersonation: once the cap passes, rewrite the token back
@@ -178,17 +182,19 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // Global sign-out ("all devices"): reject any token issued before the
-      // account's sessionsValidFrom cutoff. token.iat is seconds; a freshly
-      // minted token (just signed in) has iat >= cutoff, so it survives. Runs
-      // per request — one indexed point lookup — so a revocation on one device
-      // logs the others out on their next request, not just at token refresh.
-      if (token.id && typeof token.iat === 'number') {
+      // Global sign-out ("all devices"): reject any token minted before the
+      // account's sessionsValidFrom cutoff. Runs per request — one indexed point
+      // lookup — so a revocation on one device logs the others out on their next
+      // request, not just at token refresh. Uses the millisecond `authTime` we
+      // stamp at sign-in (above) rather than the second-granular JWT `iat`, so a
+      // fresh login is never mistaken for a pre-revocation token. Tokens minted
+      // before this field existed (no authTime) are left alone.
+      if (token.id && typeof token.authTime === 'number') {
         const acct = await prisma.user.findUnique({
           where: { id: token.id as string },
           select: { sessionsValidFrom: true },
         });
-        if (acct?.sessionsValidFrom && token.iat * 1000 < acct.sessionsValidFrom.getTime()) {
+        if (acct?.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
           token.invalidated = true;
         }
       }

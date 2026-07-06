@@ -61,7 +61,7 @@ export default async function PortalDashboard() {
   // The layout gates unauthenticated users, but the session can be revoked
   // between the layout check and this render (e.g. "sign out of all devices"),
   // in which case session is null here — redirect instead of crashing.
-  if (!session) redirect('/auth/signin');
+  if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
   const { user, activeRelation } = await getMenteeData(session.user.id);
 
