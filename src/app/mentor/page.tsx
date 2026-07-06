@@ -10,6 +10,7 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Users, BookOpen, MessageSquare, Calendar } from 'lucide-react';
 import Link from 'next/link';
+import { formatDate } from '@/lib/relativeTime';
 
 async function getMentorData(mentorId: string) {
   const relations = await prisma.mentorshipRelation.findMany({
@@ -56,7 +57,7 @@ async function getMentorData(mentorId: string) {
 
 export default async function MentorDashboard() {
   const session = await getServerSession(authOptions);
-  const { t } = await getServerDictionary();
+  const { t, locale } = await getServerDictionary();
   const { relations, recentInteractions } = await getMentorData(session!.user.id);
   const attentionItems = await getAttentionItems(session!.user.id);
 
@@ -205,7 +206,7 @@ export default async function MentorDashboard() {
                   </div>
                   <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    {new Date(interaction.date).toLocaleDateString()}
+                    {formatDate(interaction.date, locale)}
                   </p>
                 </div>
               </div>

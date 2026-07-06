@@ -14,6 +14,7 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { User, Building2, BookOpen, ExternalLink, MessageCircle, Mail, Github, Linkedin } from 'lucide-react';
 import Link from 'next/link';
+import { formatDate } from '@/lib/relativeTime';
 
 async function getMenteeData(menteeId: string) {
   const [user, activeRelation] = await Promise.all([
@@ -202,7 +203,7 @@ export default async function PortalDashboard() {
               <div className="flex items-center justify-between">
                 <StatusBadge status={activeRelation.status} />
                 <span className="text-xs text-gray-400">
-                  {t.portal.since} {new Date(activeRelation.startDate).toLocaleDateString(locale)}
+                  {t.portal.since} {formatDate(activeRelation.startDate, locale)}
                 </span>
               </div>
 
@@ -267,7 +268,7 @@ export default async function PortalDashboard() {
                         <div className="min-w-0">
                           <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
                           <p className="text-xs text-gray-400">
-                            {new Date(interaction.date).toLocaleDateString(locale)}
+                            {formatDate(interaction.date, locale)}
                           </p>
                         </div>
                       </div>

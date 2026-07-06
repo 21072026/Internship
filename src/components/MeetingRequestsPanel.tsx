@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
 interface MReq {
   id: string;
@@ -82,7 +83,7 @@ export function MeetingRequestsPanel({ relationId, mode }: { relationId: string;
             <div key={r.id} data-testid={`mreq-${r.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 p-2.5">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{r.topic}</p>
-                <p className="text-xs text-gray-400">{new Date(r.proposedAt).toLocaleString(locale)}</p>
+                <p className="text-xs text-gray-400">{formatDateTime(r.proposedAt, locale)}</p>
               </div>
               {mode === 'manage' ? (
                 <div className="flex gap-2 flex-shrink-0">

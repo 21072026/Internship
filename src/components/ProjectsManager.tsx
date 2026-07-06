@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Github, ExternalLink, Trash2, Pencil, Trello } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Task {
   id: string;
@@ -42,6 +43,7 @@ const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUr
 
 export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const t = useT();
+  const locale = useLocale();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ...blank });
@@ -264,7 +266,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       {p.boardUrl && <a href={p.boardUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><Trello className="h-3.5 w-3.5" />{t.projects.board}</a>}
                       {(p.startDate || p.endDate) && (
                         <span className="text-gray-400">
-                          {p.startDate ? new Date(p.startDate).toLocaleDateString() : '…'} – {p.endDate ? new Date(p.endDate).toLocaleDateString() : '…'}
+                          {p.startDate ? formatDate(p.startDate, locale) : '…'} – {p.endDate ? formatDate(p.endDate, locale) : '…'}
                         </span>
                       )}
                     </div>

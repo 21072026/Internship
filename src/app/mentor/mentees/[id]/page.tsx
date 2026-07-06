@@ -21,6 +21,7 @@ import { ContactActions } from '@/components/ContactActions';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { useToast } from '@/components/ui/Toast';
+import { formatDate, formatDateTime } from '@/lib/relativeTime';
 
 interface InteractionLog {
   id: string;
@@ -237,7 +238,7 @@ export default function MenteeDetailPage() {
               <div>
                 <p className="text-xs text-gray-500">{t.candidateDetail.birthDate}</p>
                 <p className="text-sm text-gray-900">
-                  {new Date(relation.mentee.birthDate).toLocaleDateString()}
+                  {formatDate(relation.mentee.birthDate, locale)}
                 </p>
               </div>
             )}
@@ -307,7 +308,7 @@ export default function MenteeDetailPage() {
                     <span className="font-medium text-gray-900">{pipelineLabel(sc.toStatus, locale)}</span>
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {sc.changedBy.fullName} · {new Date(sc.createdAt).toLocaleString()}
+                    {sc.changedBy.fullName} · {formatDateTime(sc.createdAt, locale)}
                   </p>
                 </li>
               ))}
@@ -382,7 +383,7 @@ export default function MenteeDetailPage() {
                     <InteractionTypeBadge type="Meeting" className="text-xs flex-shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-700">{t.mentor.exampleLogNote}</p>
-                      <p className="text-xs text-gray-400 mt-1">{new Date().toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-400 mt-1">{formatDate(new Date(), locale)}</p>
                     </div>
                   </div>
                 </div>
@@ -397,7 +398,7 @@ export default function MenteeDetailPage() {
                   )}
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    {new Date(interaction.date).toLocaleDateString()}
+                    {formatDate(interaction.date, locale)}
                   </p>
                 </div>
                 <button

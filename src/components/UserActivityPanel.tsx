@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useT, useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Item {
   id: string;
@@ -57,7 +58,7 @@ export function UserActivityPanel({ userId, flagInactive = false }: { userId: st
               <Badge variant={i.level === 'WARNING' ? 'warning' : i.level === 'ERROR' ? 'danger' : 'info'} className="text-[10px]">{i.level}</Badge>
               <span className="font-mono text-xs text-gray-700">{i.action}</span>
               {i.detail && <span className="text-xs text-gray-400 truncate">· {i.detail}</span>}
-              <span className="ml-auto text-[11px] text-gray-400 flex-shrink-0">{new Date(i.createdAt).toLocaleDateString(locale)}</span>
+              <span className="ml-auto text-[11px] text-gray-400 flex-shrink-0">{formatDate(i.createdAt, locale)}</span>
             </div>
           ))}
         </div>

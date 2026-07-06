@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { BookOpen } from 'lucide-react';
+import { useLocale } from '@/i18n/client';
 
 interface Interaction {
   id: string;
@@ -17,6 +18,7 @@ interface Interaction {
 }
 
 export default function PortalInteractionsPage() {
+  const locale = useLocale();
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -57,7 +59,7 @@ export default function PortalInteractionsPage() {
                 <div className="flex-1">
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-2">
-                    {new Date(interaction.date).toLocaleDateString('en-US', {
+                    {new Date(interaction.date).toLocaleDateString(locale, {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',

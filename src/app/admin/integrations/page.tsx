@@ -6,13 +6,15 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Trash2 } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
 interface Key { id: string; name: string; lastUsedAt: string | null; createdAt: string }
 
 export default function IntegrationsPage() {
   const t = useT();
+  const locale = useLocale();
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [keys, setKeys] = useState<Key[]>([]);
@@ -109,7 +111,7 @@ export default function IntegrationsPage() {
                 <div key={k.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                   <div>
                     <p className="text-gray-900">{k.name}</p>
-                    <p className="text-xs text-gray-400">{k.lastUsedAt ? `${t.integrations.lastUsed}: ${new Date(k.lastUsedAt).toLocaleDateString()}` : t.integrations.neverUsed}</p>
+                    <p className="text-xs text-gray-400">{k.lastUsedAt ? `${t.integrations.lastUsed}: ${formatDate(k.lastUsedAt, locale)}` : t.integrations.neverUsed}</p>
                   </div>
                   <button onClick={() => delKey(k.id)} aria-label="revoke" className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                 </div>
