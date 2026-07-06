@@ -94,7 +94,7 @@ export default function NewMenteePage() {
         {t.mentor.backToMentees}
       </Link>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t.mentor.newMentee}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.mentor.newMentee}</h1>
       </div>
 
       <Card className="max-w-2xl">

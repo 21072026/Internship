@@ -163,7 +163,7 @@ export default function MenteeDetailPage() {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{relation.mentee.fullName}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{relation.mentee.fullName}</h1>
             <p className="text-gray-500">{relation.mentee.email}</p>
           </div>
           <div className="flex flex-col items-end gap-2 min-w-[240px]">
