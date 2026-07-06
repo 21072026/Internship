@@ -21,12 +21,13 @@ test('admin filters cohorts by name via the search box', async ({ page }) => {
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
     await page.goto('/admin/cohorts');
-    await expect(page.getByText('Autumn Interns 2026')).toBeVisible();
-    await expect(page.getByText('Winter Batch')).toBeVisible();
+    const table = page.locator('table');
+    await expect(table.getByText('Autumn Interns 2026')).toBeVisible();
+    await expect(table.getByText('Winter Batch')).toBeVisible();
 
-    await page.fill('input[type="search"]', 'autumn');
-    await expect(page.getByText('Autumn Interns 2026')).toBeVisible();
-    await expect(page.getByText('Winter Batch')).toHaveCount(0);
+    await page.fill('[data-testid="cohort-search"]', 'autumn');
+    await expect(table.getByText('Autumn Interns 2026')).toBeVisible();
+    await expect(table.getByText('Winter Batch')).toHaveCount(0);
   } finally {
     await prisma.cohort.deleteMany({ where: { id: { in: [cohortA.id, cohortB.id] } } });
     await cleanupByEmail(adminEmail);
@@ -47,12 +48,13 @@ test('admin filters referral sources by name via the search box', async ({ page 
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
     await page.goto('/admin/sources');
-    await expect(page.getByText('LinkedIn Campaign')).toBeVisible();
-    await expect(page.getByText('University Career Fair')).toBeVisible();
+    const table = page.locator('table');
+    await expect(table.getByText('LinkedIn Campaign')).toBeVisible();
+    await expect(table.getByText('University Career Fair')).toBeVisible();
 
-    await page.fill('input[type="search"]', 'linkedin');
-    await expect(page.getByText('LinkedIn Campaign')).toBeVisible();
-    await expect(page.getByText('University Career Fair')).toHaveCount(0);
+    await page.fill('[data-testid="source-search"]', 'linkedin');
+    await expect(table.getByText('LinkedIn Campaign')).toBeVisible();
+    await expect(table.getByText('University Career Fair')).toHaveCount(0);
   } finally {
     await prisma.source.deleteMany({ where: { id: { in: [sourceA.id, sourceB.id] } } });
     await cleanupByEmail(adminEmail);

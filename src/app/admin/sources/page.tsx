@@ -127,6 +127,7 @@ export default function AdminSourcesPage() {
         <div className="flex items-center mb-4">
           <input
             type="search"
+            data-testid="source-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.sources.searchPlaceholder}
