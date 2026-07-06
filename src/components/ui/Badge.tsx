@@ -37,16 +37,19 @@ export function Badge({ className, variant = 'default', children, ...props }: Ba
   );
 }
 
+const ROLE_VARIANT: Record<string, BadgeProps['variant']> = {
+  ADMIN: 'warning',
+  MENTOR: 'success',
+  MENTEE: 'info',
+  COMPANY: 'purple',
+  SOURCE: 'default',
+};
+
 export function RoleBadge({ role }: { role: string }) {
-  const config = {
-    ADMIN: { variant: 'danger' as const, label: 'Admin' },
-    MENTOR: { variant: 'info' as const, label: 'Mentor' },
-    MENTEE: { variant: 'success' as const, label: 'Mentee' },
-  };
+  const t = useT();
+  const label = (t.usersAdmin as Record<string, string>)[role.toLowerCase()] ?? role;
 
-  const { variant, label } = config[role as keyof typeof config] || { variant: 'default' as const, label: role };
-
-  return <Badge variant={variant}>{label}</Badge>;
+  return <Badge variant={ROLE_VARIANT[role] ?? 'default'}>{label}</Badge>;
 }
 
 export function StatusBadge({ status }: { status: string }) {
