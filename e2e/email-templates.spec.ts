@@ -22,7 +22,7 @@ test('selecting an email template fills the subject and body', async ({ page }) 
     // Subject input now carries the template subject.
     const subject = page.getByLabel('Subject');
     await expect(subject).toHaveValue(/Welcome to the program/i);
-    await expect(page.getByLabel('Message')).toHaveValue(/\{name\}/);
+    await expect(page.getByLabel('Message', { exact: true })).toHaveValue(/\{name\}/);
   } finally {
     await cleanupByEmail(email);
   }

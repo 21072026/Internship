@@ -796,6 +796,8 @@ const en = {
   messages: {
     title: 'Messages',
     listSubtitle: 'Your conversations with your mentor',
+    inboxSubtitle: 'Your conversations',
+    you: 'You',
     threads: 'Conversations',
     noThreads: 'No conversations yet',
     empty: 'No messages yet. Say hello!',
@@ -1972,6 +1974,8 @@ const tr: Dict = {
   messages: {
     title: 'Mesajlar',
     listSubtitle: 'Mentorunla yazışmaların',
+    inboxSubtitle: 'Yazışmaların',
+    you: 'Sen',
     threads: 'Görüşmeler',
     noThreads: 'Henüz görüşme yok',
     empty: 'Henüz mesaj yok. Merhaba de!',
@@ -3146,6 +3150,8 @@ const de: Dict = {
   messages: {
     title: 'Nachrichten',
     listSubtitle: 'Deine Unterhaltungen mit deinem Mentor',
+    inboxSubtitle: 'Deine Unterhaltungen',
+    you: 'Du',
     threads: 'Unterhaltungen',
     noThreads: 'Noch keine Unterhaltungen',
     empty: 'Noch keine Nachrichten. Sag Hallo!',

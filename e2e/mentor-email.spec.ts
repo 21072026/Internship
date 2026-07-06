@@ -24,7 +24,7 @@ test('mentor emails a mentee and it is logged as an interaction', async ({ page 
     await page.goto('/mentor/email');
     await page.getByText('Select all').click();
     await page.getByLabel('Subject').fill('Weekly check-in');
-    await page.getByLabel('Message').fill('Hi, let us sync this week.');
+    await page.getByLabel('Message', { exact: true }).fill('Hi, let us sync this week.');
     const sent = page.waitForResponse(
       (r) => r.url().includes('/api/mentor/email') && r.request().method() === 'POST'
     );
