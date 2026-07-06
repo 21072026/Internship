@@ -24,22 +24,38 @@
  * Usage:
  *   BASE_URL=https://crm-preview.ersah.in node scripts/stress-test.mjs
  */
+import { writeFileSync } from 'node:fs';
+
+// Read a numeric env var, honouring an explicit 0 (a plain `Number(x) || d`
+// would silently drop 0 back to the default — wrong for e.g. a zero-tolerance
+// error threshold or a disabled warmup).
+function numEnv(name, def) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return def;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : def;
+}
 
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const PATHS = (process.env.STRESS_PATHS || '/,/auth/signin,/api/health')
   .split(',')
   .map((p) => p.trim())
   .filter(Boolean);
-const CONCURRENCY = Number(process.env.STRESS_CONCURRENCY) || 20;
-const DURATION_MS = Number(process.env.STRESS_DURATION_MS) || 20_000;
-const TIMEOUT_MS = Number(process.env.STRESS_TIMEOUT_MS) || 10_000;
-const WARMUP_MS = Number(process.env.STRESS_WARMUP_MS) || 1_000;
-const MAX_ERROR_RATE = Number(process.env.STRESS_MAX_ERROR_RATE) || 0.02;
-const MAX_P95_MS = Number(process.env.STRESS_MAX_P95_MS) || 2_000;
-const MIN_RPS = Number(process.env.STRESS_MIN_RPS) || 0;
+const CONCURRENCY = numEnv('STRESS_CONCURRENCY', 20);
+const DURATION_MS = numEnv('STRESS_DURATION_MS', 20_000);
+const TIMEOUT_MS = numEnv('STRESS_TIMEOUT_MS', 10_000);
+const WARMUP_MS = numEnv('STRESS_WARMUP_MS', 1_000);
+const MAX_ERROR_RATE = numEnv('STRESS_MAX_ERROR_RATE', 0.02);
+const MAX_P95_MS = numEnv('STRESS_MAX_P95_MS', 2_000);
+const MIN_RPS = numEnv('STRESS_MIN_RPS', 0);
 
-/** @type {{ ok: boolean; status: number; ms: number; path: string; error?: string }[]} */
-const samples = [];
+// Aggregate incrementally so memory stays flat (~a few counters) regardless of
+// how many requests a long soak fires, instead of retaining one object each.
+const okLatencies = []; // latency samples for successful responses only
+let totalCount = 0;
+let failCount = 0;
+/** @type {Record<string, { total: number; failures: number }>} */
+const byPath = {};
 let warmupUntil = 0;
 
 function percentile(sortedMs, p) {
@@ -48,11 +64,29 @@ function percentile(sortedMs, p) {
   return sortedMs[Math.max(0, idx)];
 }
 
+function record(path, ok, ms) {
+  totalCount++;
+  const agg = (byPath[path] ??= { total: 0, failures: 0 });
+  agg.total++;
+  if (ok) {
+    // Only successful responses feed the latency percentiles — otherwise a
+    // timeout (recorded at ~TIMEOUT_MS) or a fast connection-refused would
+    // distort the p95 latency gate.
+    okLatencies.push(ms);
+  } else {
+    failCount++;
+    agg.failures++;
+  }
+}
+
 async function hit(path) {
   const url = BASE_URL + path;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   const start = performance.now();
+  // Warmup is keyed off request *start* so a slow cold-start request that
+  // begins during warmup is excluded even if it completes after the window.
+  const counted = start >= warmupUntil;
   try {
     const res = await fetch(url, {
       signal: controller.signal,
@@ -61,25 +95,20 @@ async function hit(path) {
     });
     // Drain the body so the connection can be reused and timing reflects a full response.
     await res.arrayBuffer().catch(() => {});
-    const ms = performance.now() - start;
     // 2xx and 3xx are healthy for these public routes (signin may redirect).
     const ok = res.status >= 200 && res.status < 400;
-    if (performance.now() >= warmupUntil) {
-      samples.push({ ok, status: res.status, ms, path });
-    }
-  } catch (err) {
-    const ms = performance.now() - start;
-    if (performance.now() >= warmupUntil) {
-      samples.push({ ok: false, status: 0, ms, path, error: err?.name || String(err) });
-    }
+    if (counted) record(path, ok, performance.now() - start);
+  } catch {
+    if (counted) record(path, false, performance.now() - start);
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function worker(deadline, counter) {
+let pathIndex = 0;
+async function worker(deadline) {
   while (performance.now() < deadline) {
-    const path = PATHS[counter.i++ % PATHS.length];
+    const path = PATHS[pathIndex++ % PATHS.length];
     await hit(path);
   }
 }
@@ -95,20 +124,18 @@ async function main() {
       (MIN_RPS ? ` rps>=${MIN_RPS}` : '')
   );
 
+  const startedAt = new Date().toISOString();
   const testStart = performance.now();
   warmupUntil = testStart + WARMUP_MS;
   const deadline = testStart + DURATION_MS;
-  const counter = { i: 0 };
 
-  await Promise.all(
-    Array.from({ length: CONCURRENCY }, () => worker(deadline, counter))
-  );
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker(deadline)));
 
-  const measuredMs = DURATION_MS - WARMUP_MS;
-  const total = samples.length;
-  const failures = samples.filter((s) => !s.ok);
-  const errorRate = total === 0 ? 1 : failures.length / total;
-  const latencies = samples.map((s) => s.ms).sort((a, b) => a - b);
+  // Guard against warmup >= duration, which would divide by zero / go negative.
+  const measuredMs = Math.max(1, DURATION_MS - WARMUP_MS);
+  const total = totalCount;
+  const errorRate = total === 0 ? 1 : failCount / total;
+  const latencies = okLatencies.sort((a, b) => a - b);
   const rps = total / (measuredMs / 1000);
 
   const p50 = percentile(latencies, 50);
@@ -117,20 +144,12 @@ async function main() {
   const avg = latencies.reduce((a, b) => a + b, 0) / (latencies.length || 1);
   const max = latencies[latencies.length - 1] || 0;
 
-  // Per-path status-code breakdown for quick diagnosis.
-  const byPath = {};
-  for (const s of samples) {
-    byPath[s.path] ??= { total: 0, failures: 0 };
-    byPath[s.path].total++;
-    if (!s.ok) byPath[s.path].failures++;
-  }
-
   console.log(`\n── Results (${(measuredMs / 1000).toFixed(1)}s measured window) ──`);
   console.log(`  requests:   ${total}`);
   console.log(`  throughput: ${rps.toFixed(1)} req/s`);
-  console.log(`  errors:     ${failures.length} (${(errorRate * 100).toFixed(2)}%)`);
+  console.log(`  errors:     ${failCount} (${(errorRate * 100).toFixed(2)}%)`);
   console.log(
-    `  latency ms: avg=${avg.toFixed(0)} p50=${p50.toFixed(0)} p95=${p95.toFixed(0)} p99=${p99.toFixed(0)} max=${max.toFixed(0)}`
+    `  latency ms (successful responses): avg=${avg.toFixed(0)} p50=${p50.toFixed(0)} p95=${p95.toFixed(0)} p99=${p99.toFixed(0)} max=${max.toFixed(0)}`
   );
   for (const [path, agg] of Object.entries(byPath)) {
     console.log(`    ${path}: ${agg.total} reqs, ${agg.failures} errors`);
@@ -153,9 +172,9 @@ async function main() {
   // Emit a machine-readable summary for the CI/cron job and email alert.
   const summary = {
     baseUrl: BASE_URL,
-    startedAt: new Date().toISOString(),
+    startedAt,
     total,
-    errors: failures.length,
+    errors: failCount,
     errorRate: Number(errorRate.toFixed(4)),
     rps: Number(rps.toFixed(1)),
     latencyMs: { avg: Math.round(avg), p50: Math.round(p50), p95: Math.round(p95), p99: Math.round(p99), max: Math.round(max) },
@@ -165,7 +184,6 @@ async function main() {
   };
 
   if (process.env.STRESS_SUMMARY_FILE) {
-    const { writeFileSync } = await import('node:fs');
     writeFileSync(process.env.STRESS_SUMMARY_FILE, JSON.stringify(summary, null, 2));
     console.log(`\n  summary written to ${process.env.STRESS_SUMMARY_FILE}`);
   }

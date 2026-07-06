@@ -66,5 +66,7 @@ jobs:
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ALERT_SUMMARY_FILE: stress-summary.json
         run: |
-          npm install nodemailer@^7 --no-save --no-audit --no-fund
+          # Install from the lockfile so nodemailer matches the version the app
+          # pins (single source of truth); skip postinstall (prisma generate).
+          npm ci --ignore-scripts --no-audit --no-fund
           node scripts/send-alert-email.mjs

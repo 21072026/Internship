@@ -19,15 +19,21 @@
 import nodemailer from 'nodemailer';
 import { readFileSync } from 'node:fs';
 
-const to = process.env.ALERT_EMAIL_TO;
-if (!to) {
-  console.error('ALERT_EMAIL_TO is not set — cannot send alert. Skipping.');
+// Surface a skip as a GitHub Actions warning annotation (visible on the run)
+// rather than a silent green step, so a missing secret can't quietly disable
+// alerting. Still exits 0 so it never masks the original test failure.
+function skip(reason) {
+  console.log(`::warning title=Alert email not sent::${reason}`);
   process.exit(0);
 }
 
+const to = process.env.ALERT_EMAIL_TO;
+if (!to) {
+  skip('ALERT_EMAIL_TO secret is not set — no failure alert was delivered.');
+}
+
 if (!process.env.SMTP_HOST || !process.env.SMTP_USER) {
-  console.log(`[alert email skipped — no SMTP config] would notify: ${to}`);
-  process.exit(0);
+  skip(`SMTP is not configured (SMTP_HOST/SMTP_USER) — no failure alert delivered to ${to}.`);
 }
 
 const subject = process.env.ALERT_SUBJECT || '⚠️ Internship CRM — automated test failure';
