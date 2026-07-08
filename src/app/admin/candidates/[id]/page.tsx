@@ -75,7 +75,6 @@ export default function AdminMenteeDetailPage() {
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetUrl, setResetUrl] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<{ id: string; fullName: string; overlap: number; activeCount: number; capacity: number | null; atCapacity: boolean }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
   const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
@@ -184,10 +183,6 @@ export default function AdminMenteeDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    fetch(`/api/admin/suggest-mentors?menteeId=${id}`)
-      .then((r) => (r.ok ? r.json() : { suggestions: [] }))
-      .then((d) => setSuggestions(d.suggestions ?? []))
-      .catch(() => {});
     fetch('/api/projects')
       .then((r) => (r.ok ? r.json() : { projects: [] }))
       .then((d) => setProjects(d.projects ?? []))
@@ -375,21 +370,6 @@ export default function AdminMenteeDetailPage() {
                   </div>
                 );
               })()}
-
-              {suggestions.length > 0 && (
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-2">{t.candidateDetail.suggestedMentors}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestions.map((s) => (
-                      <span key={s.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-sm ${s.atCapacity ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
-                        {s.fullName}
-                        <span className="text-xs text-gray-400">· {s.overlap} {t.candidateDetail.matchSkills} · {s.activeCount}{s.capacity ? `/${s.capacity}` : ''}</span>
-                        {s.atCapacity && <span className="text-xs text-amber-700 font-medium">· {t.candidateDetail.full}</span>}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">{t.candidateDetail.stageHistory} ({rel.statusChanges.length})</p>

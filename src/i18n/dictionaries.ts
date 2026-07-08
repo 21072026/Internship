@@ -191,9 +191,6 @@ const en = {
     addEntry: 'Add entry',
     deleteEntry: 'Delete entry',
     nextAction: 'Next action',
-    suggestedMentors: 'Suggested mentors',
-    matchSkills: 'matching skills',
-    full: 'full',
   },
   mentors: {
     title: 'Mentors',
@@ -1395,9 +1392,6 @@ const tr: Dict = {
     addEntry: 'Kayıt ekle',
     deleteEntry: 'Kaydı sil',
     nextAction: 'Sonraki aksiyon',
-    suggestedMentors: 'Önerilen mentorlar',
-    matchSkills: 'eşleşen yetenek',
-    full: 'dolu',
   },
   mentors: {
     title: 'Mentorlar',
@@ -2597,9 +2591,6 @@ const de: Dict = {
     addEntry: 'Eintrag hinzufügen',
     deleteEntry: 'Eintrag löschen',
     nextAction: 'Nächster Schritt',
-    suggestedMentors: 'Vorgeschlagene Mentoren',
-    matchSkills: 'passende Skills',
-    full: 'voll',
   },
   mentors: {
     title: 'Mentoren',
