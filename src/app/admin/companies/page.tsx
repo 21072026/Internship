@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 
 
 import { CompanyForm } from '@/components/forms/CompanyForm';
-import { Building2, Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { CompanyEntitlements } from '@/components/admin/CompanyEntitlements';
+import { Building2, Plus, Pencil, Trash2, Search, Sparkles } from 'lucide-react';
 
 interface Company {
   id: string;
@@ -27,6 +28,7 @@ export default function CompaniesPage() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [entitlingCompany, setEntitlingCompany] = useState<Company | null>(null);
   const [error, setError] = useState('');
   const [clCompanyId, setClCompanyId] = useState('');
   const [clEmail, setClEmail] = useState('');
@@ -209,6 +211,15 @@ export default function CompaniesPage() {
         </div>
       )}
 
+      {/* Premium entitlements modal */}
+      {entitlingCompany && (
+        <CompanyEntitlements
+          companyId={entitlingCompany.id}
+          companyName={entitlingCompany.name}
+          onClose={() => setEntitlingCompany(null)}
+        />
+      )}
+
       {/* Search */}
       <div className="mb-6">
         <div className="relative max-w-sm">
@@ -248,6 +259,14 @@ export default function CompaniesPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEntitlingCompany(company)}
+                      title={t.entitlements.title}
+                      aria-label={t.entitlements.title}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                    </button>
                     <button
                       onClick={() => setEditingCompany(company)}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"

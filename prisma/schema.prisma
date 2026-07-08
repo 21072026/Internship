@@ -348,11 +348,29 @@ model Company {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  needs       CompanyNeed[]
-  mentorships MentorshipRelation[]
-  users       User[]               @relation("CompanyUsers")
-  projects    Project[]            @relation("CompanyProjects")
-  interests   CompanyInterest[]
+  needs        CompanyNeed[]
+  mentorships  MentorshipRelation[]
+  users        User[]               @relation("CompanyUsers")
+  projects     Project[]            @relation("CompanyProjects")
+  interests    CompanyInterest[]
+  entitlements CompanyEntitlement[]
+}
+
+// Premium entitlement (freemium — Faz 0). One row per enabled feature per
+// company; the row's PRESENCE means the feature is on (see src/lib/entitlements.ts).
+// Mentor/mentee functionality is always free and never gated by this table.
+model CompanyEntitlement {
+  id        String   @id @default(cuid())
+  companyId String
+  // A key from PREMIUM_FEATURES (src/lib/entitlements.ts), stored as text so
+  // adding features needs no migration.
+  feature   String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, feature])
+  @@index([companyId])
 }
 
 // A company's read/interest signal on a candidate they're linked to via a
