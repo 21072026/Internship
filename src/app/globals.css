@@ -100,6 +100,28 @@ html.dark .hover\:text-blue-700:hover,
 html.dark .group:hover .group-hover\:text-blue-600 { color: #93c5fd; } /* blue-300 */
 
 /*
+ * Same dark-on-dark fix for the other accent colors (#503): mid-tone
+ * text-*-600/700 on a retinted bg-*-50 box → the color's -300 shade. Only the
+ * combinations that actually occur in the app are covered (green, red, amber,
+ * indigo, yellow); *-600/700 on chips that stay light (bg-*-100) is untouched.
+ */
+html.dark .bg-green-50.text-green-700,
+html.dark .bg-green-50 .text-green-700,
+html.dark .bg-green-50 .text-green-600 { color: #86efac; } /* green-300 */
+html.dark .bg-red-50.text-red-700,
+html.dark .bg-red-50 .text-red-700,
+html.dark .bg-red-50 .text-red-600 { color: #fca5a5; } /* red-300 */
+html.dark .bg-amber-50.text-amber-700,
+html.dark .bg-amber-50 .text-amber-700,
+html.dark .bg-amber-50 .text-amber-600 { color: #fcd34d; } /* amber-300 */
+html.dark .bg-indigo-50.text-indigo-700,
+html.dark .bg-indigo-50 .text-indigo-700,
+html.dark .bg-indigo-50 .text-indigo-600 { color: #a5b4fc; } /* indigo-300 */
+html.dark .bg-yellow-50.text-yellow-700,
+html.dark .bg-yellow-50 .text-yellow-700,
+html.dark .bg-yellow-50 .text-yellow-600 { color: #fde047; } /* yellow-300 */
+
+/*
  * Accent color system.
  * The product's primary color is blue by default. We expose that primary as a
  * palette of CSS custom properties (--accent-50 … --accent-900) and remap the
