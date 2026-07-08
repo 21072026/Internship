@@ -4,12 +4,13 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
-import { GraduationCap, LayoutDashboard } from 'lucide-react';
+import { GraduationCap, LayoutDashboard, Sparkles } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
+import { hasFeature } from '@/lib/entitlements';
 
 export default async function CompanyLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -19,6 +20,9 @@ export default async function CompanyLayout({ children }: { children: React.Reac
 
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true } });
+  // Show the premium talent-pool link only when the company is entitled (admins
+  // always see it for support).
+  const showTalentPool = session.user.role === 'ADMIN' || (await hasFeature(session.user.companyId, 'TALENT_POOL_SEARCH'));
 
   return (
     <ResponsiveShell
@@ -41,6 +45,15 @@ export default async function CompanyLayout({ children }: { children: React.Reac
               <LayoutDashboard className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
               {t.nav.dashboard}
             </Link>
+            {showTalentPool && (
+              <Link
+                href="/company/talent-pool"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+              >
+                <Sparkles className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+                {t.talentPool.navLink}
+              </Link>
+            )}
             <InstallAppButton />
         </nav>
 
