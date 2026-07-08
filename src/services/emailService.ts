@@ -20,6 +20,33 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Best-effort HTML → plain text for the multipart alternative. A message with
+// only an HTML part scores worse with spam filters (e.g. Gmail); shipping a
+// text/plain alternative alongside improves inbox placement.
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, '$2 ($1)')
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+// A From header with a display name ("Internship CRM <noreply@…>") looks less
+// like bulk/spam than a bare address. Honor an address that already includes a
+// name; otherwise wrap the configured address.
+function fromHeader(): string {
+  const addr = process.env.SMTP_FROM || process.env.SMTP_USER || '';
+  if (addr.includes('<') || !addr) return addr;
+  const name = process.env.MAIL_FROM_NAME || 'Internship CRM';
+  return `${name} <${addr}>`;
+}
+
 export async function sendEmail({
   to,
   subject,
@@ -37,10 +64,11 @@ export async function sendEmail({
   }
 
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    from: fromHeader(),
     to,
     subject,
     html,
+    text: htmlToText(html),
     ...(replyTo ? { replyTo } : {}),
   });
 }
