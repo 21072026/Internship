@@ -31,9 +31,9 @@ jobs:
       STRESS_MAX_P95_MS: '2500'
       STRESS_SUMMARY_FILE: stress-summary.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
 
@@ -43,7 +43,7 @@ jobs:
 
       - name: Upload stress summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stress-summary
           path: stress-summary.json

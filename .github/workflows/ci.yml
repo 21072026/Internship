@@ -18,8 +18,8 @@ jobs:
       # Prisma client instantiates lazily; build never connects, but a valid-format URL is required.
       DATABASE_URL: 'mysql://user:pass@127.0.0.1:3306/db'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
