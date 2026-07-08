@@ -3616,3 +3616,16 @@ export type Dictionary = Dict;
 export function getDictionary(locale: Locale): Dict {
   return dictionaries[locale] ?? en;
 }
+
+// Namespaces that are only ever read in server components (via
+// getServerDictionary), never through useT() on the client — e.g. the landing
+// marketing copy. They are stripped from the dictionary serialized into every
+// page's client payload to keep it lean (#502).
+export const SERVER_ONLY_NAMESPACES = ['landing'] as const;
+export type ClientDictionary = Omit<Dictionary, (typeof SERVER_ONLY_NAMESPACES)[number]>;
+
+export function getClientDictionary(locale: Locale): ClientDictionary {
+  const clientDict: Partial<Dictionary> = { ...getDictionary(locale) };
+  for (const ns of SERVER_ONLY_NAMESPACES) delete clientDict[ns];
+  return clientDict as ClientDictionary;
+}

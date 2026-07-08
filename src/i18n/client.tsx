@@ -2,9 +2,9 @@
 
 import { createContext, useContext } from 'react';
 import type { Locale } from './config';
-import type { Dictionary } from './dictionaries';
+import type { ClientDictionary } from './dictionaries';
 
-const LocaleContext = createContext<{ locale: Locale; t: Dictionary } | null>(null);
+const LocaleContext = createContext<{ locale: Locale; t: ClientDictionary } | null>(null);
 
 export function LocaleProvider({
   locale,
@@ -12,7 +12,7 @@ export function LocaleProvider({
   children,
 }: {
   locale: Locale;
-  dict: Dictionary;
+  dict: ClientDictionary;
   children: React.ReactNode;
 }) {
   return <LocaleContext.Provider value={{ locale, t: dict }}>{children}</LocaleContext.Provider>;
@@ -24,8 +24,9 @@ function useLocaleContext() {
   return ctx;
 }
 
-// Client-side translation hook — returns the active dictionary.
-export function useT(): Dictionary {
+// Client-side translation hook — returns the active dictionary (client subset;
+// server-only namespaces like `landing` are not shipped to the browser).
+export function useT(): ClientDictionary {
   return useLocaleContext().t;
 }
 
