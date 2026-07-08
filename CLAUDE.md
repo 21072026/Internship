@@ -128,6 +128,11 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
   open a PR, self-review the diff, and **merge it once CI is green** (enable auto-merge if
   your session may end before checks finish). Don't leave green PRs waiting for a human.
   Track multi-step work with a visible task list as you go.
+- **End-of-session retrospective (standing instruction, 2026-07):** before wrapping up a
+  session, append a short dated entry to [`docs/agent-experience.md`](docs/agent-experience.md)
+  with the concrete, reusable lessons you learned (environment quirks, tooling limits, process
+  gotchas). Read it at the start of a session too — it captures fast-changing tactical tips that
+  complement these durable rules.
 - **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
   (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
   assert exact landing strings (e.g. "Connect Talent with", "Everything you need",
