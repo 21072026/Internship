@@ -21,6 +21,32 @@ export default function AdminSettingsPage() {
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importRows, setImportRows] = useState<{ row: number; email: string; status: string; reason?: string }[]>([]);
 
+  const [smtpInfo, setSmtpInfo] = useState<{ smtp?: { ok: boolean; error?: string }; from?: string | null; host?: string | null } | null>(null);
+  const [testTo, setTestTo] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; sentAt?: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/admin/email-test').then((r) => (r.ok ? r.json() : null)).then((d) => d && setSmtpInfo(d)).catch(() => {});
+  }, []);
+
+  const sendTest = async () => {
+    if (!testTo.trim()) return;
+    setTesting(true); setTestResult(null);
+    try {
+      const res = await fetch('/api/admin/email-test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testTo.trim() }),
+      });
+      const d = await res.json();
+      setTestResult(res.ok ? d : { ok: false, error: d.error ?? t.common.error });
+    } catch {
+      setTestResult({ ok: false, error: t.common.error });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/settings');
     if (res.ok) {
@@ -147,6 +173,45 @@ export default function AdminSettingsPage() {
           </div>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader><CardTitle>{t.settings.emailHealth}</CardTitle></CardHeader>
+        <div className="space-y-3 max-w-2xl">
+          <p className="text-xs text-gray-500 dark:text-gray-400">{t.settings.emailHealthHint}</p>
+
+          {smtpInfo && (
+            <div className="text-sm">
+              {smtpInfo.smtp?.ok ? (
+                <span className="text-green-600 dark:text-green-400">● {t.settings.smtpConnected}</span>
+              ) : (
+                <span className="text-red-600 dark:text-red-400">● {t.settings.smtpFailed}{smtpInfo.smtp?.error ? `: ${smtpInfo.smtp.error}` : ''}</span>
+              )}
+              {smtpInfo.from && <span className="text-gray-400"> · {t.settings.sendingFrom} {smtpInfo.from}</span>}
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="email"
+              value={testTo}
+              onChange={(e) => setTestTo(e.target.value)}
+              placeholder="check-auth@verifier.port25.com"
+              className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3 py-2 text-sm"
+            />
+            <Button type="button" loading={testing} disabled={!testTo.trim()} onClick={sendTest}>{t.settings.sendTest}</Button>
+          </div>
+
+          {testResult && (
+            testResult.ok ? (
+              <p className="text-sm text-green-600 dark:text-green-400">✓ {t.settings.testSent}</p>
+            ) : (
+              <p className="text-sm text-red-600 dark:text-red-400">{t.settings.testFailed.replace('{e}', testResult.error ?? '')}</p>
+            )
+          )}
+
+          <p className="text-xs text-gray-400">{t.settings.emailTesters}</p>
+        </div>
+      </Card>
     </div>
   );
 }
