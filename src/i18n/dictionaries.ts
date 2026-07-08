@@ -87,6 +87,8 @@ const en = {
     pass: 'Pass',
     notePlaceholder: 'Optional note for the mentor...',
     interestSaved: 'Saved — the mentor has been notified.',
+    noteSaving: 'Saving…',
+    noteSaved: 'Note saved.',
   },
   offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.' },
   common: {
@@ -1280,6 +1282,8 @@ const tr: Dict = {
     pass: 'Geç',
     notePlaceholder: 'Mentör için isteğe bağlı not...',
     interestSaved: 'Kaydedildi — mentöre bildirim gönderildi.',
+    noteSaving: 'Kaydediliyor…',
+    noteSaved: 'Not kaydedildi.',
   },
   offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.' },
   common: {
@@ -2471,6 +2475,8 @@ const de: Dict = {
     pass: 'Absagen',
     notePlaceholder: 'Optionale Notiz für den Mentor...',
     interestSaved: 'Gespeichert — der Mentor wurde benachrichtigt.',
+    noteSaving: 'Wird gespeichert…',
+    noteSaved: 'Notiz gespeichert.',
   },
   offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.' },
   common: {

@@ -50,6 +50,14 @@ export async function POST(request: Request) {
 
   const company = await prisma.company.findUnique({ where: { id: session.user.companyId }, select: { name: true } });
 
+  // Was there already an interest, and is this a genuine status change? Note-only
+  // updates (e.g. the debounced note auto-save) must NOT re-notify the mentor.
+  const existing = await prisma.companyInterest.findUnique({
+    where: { companyId_menteeId: { companyId: session.user.companyId, menteeId } },
+    select: { status: true },
+  });
+  const statusChanged = !existing || existing.status !== status;
+
   const interest = await prisma.companyInterest.upsert({
     where: { companyId_menteeId: { companyId: session.user.companyId, menteeId } },
     create: { companyId: session.user.companyId, menteeId, status, note },
@@ -61,13 +69,15 @@ export async function POST(request: Request) {
     SHORTLISTED: 'shortlisted',
     PASS: 'passed on',
   };
-  await prisma.notification.create({
-    data: {
-      userId: relation.mentorId,
-      type: 'company_interest',
-      text: `${company?.name ?? 'A company'} ${STATUS_TEXT[status]} ${relation.mentee.fullName}.`,
-    },
-  });
+  if (statusChanged) {
+    await prisma.notification.create({
+      data: {
+        userId: relation.mentorId,
+        type: 'company_interest',
+        text: `${company?.name ?? 'A company'} ${STATUS_TEXT[status]} ${relation.mentee.fullName}.`,
+      },
+    });
+  }
 
   await logActivity({
     action: 'company.interest.set',
