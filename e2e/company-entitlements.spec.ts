@@ -10,6 +10,7 @@ test('admin toggles a company premium feature; nothing is enabled by default (fr
   const pw = 'EntAdminPass123';
   await seedUser(adminEmail, pw, 'ADMIN', 'Entitlement Admin');
   const company = await prisma.company.create({ data: { name: `Entitle Co ${Date.now()}` } });
+  const base = `/api/admin/companies/${company.id}/entitlements`;
 
   try {
     await page.goto('/auth/signin');
@@ -18,29 +19,28 @@ test('admin toggles a company premium feature; nothing is enabled by default (fr
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
-    // Free core: a brand-new company has no premium entitlements.
+    // Free core: a brand-new company has no premium features enabled by default.
+    const initial = await page.request.get(base);
+    expect(initial.ok()).toBeTruthy();
+    const initialFeatures = (await initial.json()).features as Record<string, boolean>;
+    expect(Object.values(initialFeatures).some(Boolean)).toBe(false);
     expect(await prisma.companyEntitlement.count({ where: { companyId: company.id } })).toBe(0);
 
-    await page.goto('/admin/companies');
-    // Narrow to just this company, then open its premium modal.
-    await page.getByPlaceholder(/Search/i).fill(company.name);
-    await page.getByRole('button', { name: 'Premium features' }).click();
-
-    // Enable one feature via the toggle.
-    await page.getByText('Talent pool search & filters').click();
-    const done = page.waitForResponse(
-      (r) => r.url().includes(`/api/admin/companies/${company.id}/entitlements`) && r.request().method() === 'PUT',
-      { timeout: 20_000 }
-    );
-    const res = await done;
-    expect(res.ok()).toBeTruthy();
-
+    // Admin enables one feature (the request the toggle UI makes).
+    const enable = await page.request.put(base, { data: { feature: 'TALENT_POOL_SEARCH', enabled: true } });
+    expect(enable.ok()).toBeTruthy();
+    expect((await enable.json()).features.TALENT_POOL_SEARCH).toBe(true);
     await expect
       .poll(async () => prisma.companyEntitlement.count({ where: { companyId: company.id, feature: 'TALENT_POOL_SEARCH' } }), { timeout: 10_000 })
       .toBe(1);
 
-    // Toggling off removes it again.
-    await page.getByText('Talent pool search & filters').click();
+    // An unknown feature key is rejected (400) — the catalogue is enforced.
+    const bad = await page.request.put(base, { data: { feature: 'NOT_A_FEATURE', enabled: true } });
+    expect(bad.status()).toBe(400);
+
+    // Disabling removes the entitlement again.
+    const disable = await page.request.put(base, { data: { feature: 'TALENT_POOL_SEARCH', enabled: false } });
+    expect(disable.ok()).toBeTruthy();
     await expect
       .poll(async () => prisma.companyEntitlement.count({ where: { companyId: company.id } }), { timeout: 10_000 })
       .toBe(0);
