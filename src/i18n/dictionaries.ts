@@ -118,6 +118,13 @@ const en = {
     lockedTitle: 'Talent pool is a premium feature',
     lockedBody: 'Ask your administrator to enable talent-pool search for your company.',
   },
+  assignMentor: {
+    label: 'Assign a mentor',
+    assignToMe: 'Assign to me',
+    chooseMentor: 'Choose a mentor…',
+    assign: 'Assign',
+    alreadyAssigned: 'This candidate already has an active mentor.',
+  },
   offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.' },
   common: {
     loading: 'Loading...',
@@ -1347,6 +1354,13 @@ const tr: Dict = {
     lockedTitle: 'Yetenek havuzu premium bir özelliktir',
     lockedBody: 'Şirketiniz için yetenek havuzu aramasını etkinleştirmesi için yöneticinizle görüşün.',
   },
+  assignMentor: {
+    label: 'Mentör ata',
+    assignToMe: 'Bana ata',
+    chooseMentor: 'Mentör seç…',
+    assign: 'Ata',
+    alreadyAssigned: 'Bu adayın zaten aktif bir mentörü var.',
+  },
   offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.' },
   common: {
     loading: 'Yükleniyor...',
@@ -2573,6 +2587,13 @@ const de: Dict = {
     viewProfile: 'Profil ansehen',
     lockedTitle: 'Der Talentpool ist eine Premium-Funktion',
     lockedBody: 'Bitte deinen Administrator, die Talentpool-Suche für dein Unternehmen zu aktivieren.',
+  },
+  assignMentor: {
+    label: 'Mentor zuweisen',
+    assignToMe: 'Mir zuweisen',
+    chooseMentor: 'Mentor wählen…',
+    assign: 'Zuweisen',
+    alreadyAssigned: 'Dieser Kandidat hat bereits einen aktiven Mentor.',
   },
   offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.' },
   common: {
