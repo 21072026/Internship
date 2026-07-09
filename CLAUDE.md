@@ -128,6 +128,11 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
   open a PR, self-review the diff, and **merge it once CI is green** (enable auto-merge if
   your session may end before checks finish). Don't leave green PRs waiting for a human.
   Track multi-step work with a visible task list as you go.
+- **End-of-session retrospective (standing instruction, 2026-07):** before wrapping up a
+  session, append a short dated entry to [`docs/agent-experience.md`](docs/agent-experience.md)
+  with the concrete, reusable lessons you learned (environment quirks, tooling limits, process
+  gotchas). Read it at the start of a session too — it captures fast-changing tactical tips that
+  complement these durable rules.
 - **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
   (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
   assert exact landing strings (e.g. "Connect Talent with", "Everything you need",
@@ -152,3 +157,31 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
   rendered at `/release-notes`, linked from the sidebar version footer). The app version is
   read from `package.json` at build time (`src/lib/version.ts`); the git SHA is baked into the
   Docker image via a build arg — no other wiring is needed.
+- **E2E locator pitfalls** (hit repeatedly): `AdminNav` renders its own sidebar
+  `input[type="search"]` filter box present on every admin page — an unscoped
+  `input[type="search"]` selector in a new test will hit that instead of a page-level search
+  box; add a `data-testid` to any new search input and target that. `getByText('X')` does
+  substring matching, so a seeded name like "RB Company" also matches `getByText('Company')`
+  — use `{ exact: true }` or scope to a container (`page.locator('table').getByText(...)`).
+- **Known pre-existing CI flakes**: `e2e/account-self-service.spec.ts:52` and
+  `e2e/sign-out-all.spec.ts:24` fail intermittently in the Playwright smoke job (usually
+  preceded by a `[WebServer] TypeError: Cannot read properties of null (reading 'user')`
+  warning) — unrelated to most changes. `gh run rerun <run-id> --failed` and it typically
+  passes; other specs have occasionally failed-then-passed-on-retry too, so one flaky run
+  isn't itself a regression signal — check the actual failure log before concluding a change
+  broke something.
+- **zsh gotcha**: `for f in $(cmd)` does **not** split on newlines in zsh (unlike bash), so
+  iterating multi-line command output silently processes it as one word. Use
+  `cmd | while IFS= read -r f; do ...; done` instead.
+- **`gh` CLI + GitHub API rate limits**: `gh pr merge` / `gh pr create` / `gh pr checks` all
+  use the GraphQL API, which has its own (separate, sometimes-exhausted) quota from REST —
+  check both with `gh api rate_limit`. If GraphQL is exhausted but REST still has headroom,
+  fall back to REST directly: `gh api --method PUT repos/<owner>/<repo>/pulls/<n>/merge -f
+  merge_method=squash`, `gh api --method POST repos/<owner>/<repo>/pulls -f title=... -f
+  head=... -f base=... -f body=...`, and `gh api repos/<owner>/<repo>/commits/<sha>/check-runs`
+  for polling CI status.
+- Local `main` can end up diverged from `origin/main` (e.g. an upstream force-push/history
+  rewrite, or a stray local commit) — `git pull --ff-only` failing with "Diverging branches"
+  is a signal to inspect first (`git log --oneline main..origin/main` and
+  `origin/main..main`), not to force through. If the actual file contents match between the
+  two tips, `git reset --hard origin/main` is safe.

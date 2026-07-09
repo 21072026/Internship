@@ -6,7 +6,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { CookieConsent } from '@/components/CookieConsent';
 import { ActivityTracker } from '@/components/ActivityTracker';
 import type { Locale } from '@/i18n/config';
-import type { Dictionary } from '@/i18n/dictionaries';
+import type { ClientDictionary } from '@/i18n/dictionaries';
 
 export function Providers({
   children,
@@ -15,7 +15,7 @@ export function Providers({
 }: {
   children: React.ReactNode;
   locale: Locale;
-  dict: Dictionary;
+  dict: ClientDictionary;
 }) {
   return (
     <SessionProvider>

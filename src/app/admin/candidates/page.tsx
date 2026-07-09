@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import { SavedViews } from '@/components/SavedViews';
+import { AssignMentorInline } from '@/components/admin/AssignMentorInline';
 import { EmptyState } from '@/components/EmptyState';
 import Link from "next/link";
 import { useT, useLocale } from "@/i18n/client";
@@ -45,6 +47,8 @@ const gradYears = Array.from({ length: MAX_GRAD_YEAR - MIN_GRAD_YEAR + 1 }, (_, 
 export default function CandidatesPage() {
   const t = useT();
   const locale = useLocale();
+  const { data: session } = useSession();
+  const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -141,6 +145,17 @@ export default function CandidatesPage() {
     fetch('/api/admin/sources')
       .then((r) => (r.ok ? r.json() : { sources: [] }))
       .then((d) => setSources(d.sources ?? []))
+      .catch(() => {});
+    // Mentors available to assign a candidate to (admins can mentor too).
+    fetch('/api/users')
+      .then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((d) =>
+        setMentors(
+          ((d.users ?? []) as { id: string; fullName: string; role: string }[])
+            .filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN')
+            .map((u) => ({ id: u.id, fullName: u.fullName }))
+        )
+      )
       .catch(() => {});
   }, []);
 
@@ -428,6 +443,15 @@ export default function CandidatesPage() {
                     <ExternalLink className="h-3 w-3" />
                     {t.candidates.viewCv}
                   </a>
+                )}
+
+                {!activeRelation && candidate.isActive && (
+                  <AssignMentorInline
+                    menteeId={candidate.id}
+                    mentors={mentors}
+                    meId={session?.user?.id}
+                    onAssigned={fetchCandidates}
+                  />
                 )}
               </Card>
             );

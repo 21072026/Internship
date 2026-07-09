@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
-import { GraduationCap, LayoutDashboard, Columns3, Users, BookOpen, Mail, CalendarClock, CalendarRange, CalendarDays, FolderGit2 } from 'lucide-react';
+import { GraduationCap, LayoutDashboard, Columns3, Users, BookOpen, Mail, CalendarClock, CalendarRange, CalendarDays, FolderGit2, Activity } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
@@ -108,6 +108,13 @@ export default async function MentorLayout({ children }: { children: React.React
           >
             <CalendarDays className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
             {t.nav.calendar}
+          </Link>
+          <Link
+            href="/mentor/mentee-activity"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
+          >
+            <Activity className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+            {t.nav.menteeActivity}
           </Link>
           <InstallAppButton />
         </nav>

@@ -54,8 +54,17 @@ export function ResponsiveShell({
         >
           <X className="h-5 w-5" />
         </button>
-        {/* Close the drawer when a nav link is tapped */}
-        <div className="h-full" onClick={() => setOpen(false)}>
+        {/* Close the drawer only when a navigation link is tapped — NOT on any
+            click. A blanket handler also caught the account-menu toggle button,
+            closing the whole drawer before its popover (with sign-out) could
+            show, so mobile users couldn't reach sign-out. Buttons (account
+            toggle, theme/language/font-size) now keep the drawer open. */}
+        <div
+          className="h-full"
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('a')) setOpen(false);
+          }}
+        >
           {sidebar}
         </div>
       </div>

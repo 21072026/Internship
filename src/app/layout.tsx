@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import './globals.css';
 import { Providers } from './providers';
 import { getLocale } from '@/i18n/server';
-import { getDictionary } from '@/i18n/dictionaries';
+import { getClientDictionary } from '@/i18n/dictionaries';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveAccent } from '@/lib/accent';
@@ -33,7 +33,7 @@ const NO_FLASH = `(function(){try{var m=document.cookie.match(/(?:^|; )theme=([^
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale();
-  const dict = getDictionary(locale);
+  const dict = getClientDictionary(locale);
   const cookieStore = await cookies();
   let theme = cookieStore.get('theme')?.value;
   let fontSize = cookieStore.get('fontSize')?.value;

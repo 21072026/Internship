@@ -6,6 +6,7 @@ import { getSetting } from '@/lib/settings';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
+import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import type { PipelineStatus } from '@prisma/client';
 
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
@@ -18,6 +19,33 @@ const transporter = nodemailer.createTransport({
     pass: process.env.SMTP_PASS,
   },
 });
+
+// Best-effort HTML → plain text for the multipart alternative. A message with
+// only an HTML part scores worse with spam filters (e.g. Gmail); shipping a
+// text/plain alternative alongside improves inbox placement.
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, '$2 ($1)')
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+// A From header with a display name ("Internship CRM <noreply@…>") looks less
+// like bulk/spam than a bare address. Honor an address that already includes a
+// name; otherwise wrap the configured address.
+function fromHeader(): string {
+  const addr = process.env.SMTP_FROM || process.env.SMTP_USER || '';
+  if (addr.includes('<') || !addr) return addr;
+  const name = process.env.MAIL_FROM_NAME || 'Internship CRM';
+  return `${name} <${addr}>`;
+}
 
 export async function sendEmail({
   to,
@@ -36,10 +64,11 @@ export async function sendEmail({
   }
 
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    from: fromHeader(),
     to,
     subject,
     html,
+    text: htmlToText(html),
     ...(replyTo ? { replyTo } : {}),
   });
 }
@@ -420,6 +449,106 @@ export async function sendWeeklyMentorDigests() {
   return { mentors: mentors.length, sent };
 }
 
+// Renders the per-mentee rows of the daily activity digest email. Page-view /
+// time-on-site columns are only meaningful for mentees who opted into activity
+// tracking; they simply read 0 for those who didn't.
+function activityDigestTable(items: MenteeActivity[]): string {
+  const rows = items
+    .map((m) => {
+      const login =
+        m.daysSinceLogin === null
+          ? 'never'
+          : m.daysSinceLogin <= 0
+            ? 'today'
+            : `${m.daysSinceLogin}d ago`;
+      const flag = m.daysSinceLogin !== null && m.daysSinceLogin >= 7 ? ' ⚠️' : '';
+      return `<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.menteeName}${flag}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${login}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${formatDuration(m.timeOnSiteSec)} · ${m.pageViews}p</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.goalsCompleted}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.interactions}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.meetings}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.pipelineChanges}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.messagesSent}/${m.messagesReceived}</td>
+      </tr>`;
+    })
+    .join('');
+  return `<table style="border-collapse:collapse;width:100%;font-size:13px;">
+    <thead><tr style="text-align:left;color:#6b7280;">
+      <th style="padding:6px 8px;">Mentee</th><th style="padding:6px 8px;">Login</th>
+      <th style="padding:6px 8px;">On site</th><th style="padding:6px 8px;">Goals</th>
+      <th style="padding:6px 8px;">Interac.</th><th style="padding:6px 8px;">Meet.</th>
+      <th style="padding:6px 8px;">Stage</th><th style="padding:6px 8px;">Msg s/r</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// Daily mentee-activity digest. Each mentor gets a summary of THEIR mentees'
+// activity in the last 24h; each admin gets a system-wide summary. Respects the
+// 'digest' email preference. Recipients with no mentees / no data are skipped.
+export async function sendDailyActivityDigests() {
+  const now = new Date();
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  let sent = 0;
+
+  const mentors = await prisma.user.findMany({
+    where: { role: 'MENTOR', isActive: true },
+    select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+  });
+  for (const m of mentors) {
+    if (!emailAllowed(m, 'digest')) continue;
+    const items = await getMentorMenteeActivity(m.id, since);
+    if (items.length === 0) continue;
+    try {
+      await sendEmail({
+        to: m.email,
+        subject: 'Daily mentee activity',
+        html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+          <h2 style="color:#2563eb;">Daily mentee activity</h2>
+          <p>Hi ${m.fullName}, here's what your mentees did in the last 24 hours:</p>
+          ${activityDigestTable(items)}
+          <p style="margin-top:16px;"><a href="${appUrl}/mentor/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Open full report</a></p>
+          <p style="color:#9ca3af;font-size:12px;">Time-on-site and page views are shown only for mentees who enabled activity tracking.</p>
+        </div>`,
+      });
+      sent++;
+    } catch (e) {
+      console.error('Mentor activity digest failed:', e);
+    }
+  }
+
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN', isActive: true },
+    select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+  });
+  const adminItems = await getSystemMenteeActivity(since);
+  if (adminItems.length > 0) {
+    for (const a of admins) {
+      if (!emailAllowed(a, 'digest')) continue;
+      try {
+        await sendEmail({
+          to: a.email,
+          subject: 'Daily mentee activity (all mentees)',
+          html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+            <h2 style="color:#2563eb;">Daily mentee activity</h2>
+            <p>Hi ${a.fullName}, system-wide mentee activity in the last 24 hours:</p>
+            ${activityDigestTable(adminItems)}
+            <p style="margin-top:16px;"><a href="${appUrl}/admin/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Open full report</a></p>
+          </div>`,
+        });
+        sent++;
+      } catch (e) {
+        console.error('Admin activity digest failed:', e);
+      }
+    }
+  }
+
+  return { mentors: mentors.length, admins: admins.length, sent };
+}
+
 // Retention re-consent (GDPR Art. 5(1)(e) + 7): when a candidate's consent is
 // older than the retention limit, email them a renewal link, notify them and
 // admins in-app, and stamp the send so it isn't repeated. If they don't renew
@@ -521,6 +650,17 @@ export function initCronJobs() {
     }
   });
   scheduledTasks.set('weekly-digest', digestTask);
+
+  // Daily mentee-activity digest — every day at 7:30.
+  const activityTask = cron.schedule('30 7 * * *', async () => {
+    try {
+      const r = await sendDailyActivityDigests();
+      console.log(`[Cron] Daily activity digests sent: ${r.sent}`);
+    } catch (e) {
+      console.error('[Cron] Activity digest error:', e);
+    }
+  });
+  scheduledTasks.set('activity-digest', activityTask);
 
   console.log('[Cron] Scheduled jobs initialized');
 }

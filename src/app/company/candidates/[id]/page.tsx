@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, FileText, ExternalLink, Star, Bookmark, ThumbsDown, Check } from 'lucide-react';
@@ -47,6 +47,11 @@ export default function CompanyCandidateDetailPage() {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState<InterestStatus | null>(null);
   const [saved, setSaved] = useState(false);
+  // Debounced note auto-save state (distinct from the status-change "saved").
+  const [noteState, setNoteState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  // The last note value we persisted, so the auto-save effect only fires on a
+  // genuine change (and never on the initial load).
+  const savedNote = useRef('');
 
   useEffect(() => {
     fetch(`/api/company/candidates/${id}`)
@@ -61,23 +66,31 @@ export default function CompanyCandidateDetailPage() {
     fetch(`/api/company/interests?menteeId=${id}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.interest) { setInterest(d.interest); setNote(d.interest.note ?? ''); }
+        if (d.interest) { setInterest(d.interest); setNote(d.interest.note ?? ''); savedNote.current = d.interest.note ?? ''; }
       })
       .catch(() => {});
   }, [id, t.common.error]);
+
+  // POST the interest (create/update). The server only re-notifies the mentor
+  // when the status actually changes, so note-only saves stay silent.
+  const persist = useCallback(async (status: InterestStatus, noteVal: string): Promise<Interest | null> => {
+    const res = await fetch('/api/company/interests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ menteeId: id, status, note: noteVal }),
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    savedNote.current = noteVal;
+    setInterest(body.interest);
+    return body.interest;
+  }, [id]);
 
   const setStatus = async (status: InterestStatus) => {
     setSaving(status);
     setSaved(false);
     try {
-      const res = await fetch('/api/company/interests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ menteeId: id, status, note }),
-      });
-      if (res.ok) {
-        const body = await res.json();
-        setInterest(body.interest);
+      if (await persist(status, note)) {
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
       }
@@ -85,6 +98,22 @@ export default function CompanyCandidateDetailPage() {
       setSaving(null);
     }
   };
+
+  // Auto-save the note after the user pauses typing. Requires an existing
+  // status to attach to (the API needs one); before any status is picked, the
+  // note is saved with the first status click instead. This fixes the case
+  // where a status was chosen first and the note typed afterwards.
+  useEffect(() => {
+    if (!interest) return;
+    if (note === savedNote.current) return;
+    setNoteState('saving');
+    const timer = setTimeout(async () => {
+      const ok = await persist(interest.status, note);
+      setNoteState(ok ? 'saved' : 'idle');
+      if (ok) setTimeout(() => setNoteState('idle'), 2000);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [note, interest, persist]);
 
   if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
   if (error || !candidate) return <p className="text-center py-12 text-gray-400">{error || t.common.notFound}</p>;
@@ -218,11 +247,17 @@ export default function CompanyCandidateDetailPage() {
           rows={3}
           className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-2"
         />
-        {saved && (
+        {saved ? (
           <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
             <Check className="h-3.5 w-3.5" /> {t.company.interestSaved}
           </p>
-        )}
+        ) : noteState === 'saving' ? (
+          <p className="text-xs text-gray-400 flex items-center gap-1">{t.company.noteSaving}</p>
+        ) : noteState === 'saved' ? (
+          <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+            <Check className="h-3.5 w-3.5" /> {t.company.noteSaved}
+          </p>
+        ) : null}
       </Card>
     </div>
   );

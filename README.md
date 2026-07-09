@@ -87,19 +87,21 @@ See [`.env.example`](.env.example) for the full list.
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Dev server |
+| `npm run dev` | Dev server (http://localhost:3000) |
 | `npm run build` | Production build |
 | `npm run start` | Serve production build |
 | `npm run lint` | Lint (`next lint`) |
-| `npm run check:i18n` | Verify EN/TR/DE dictionaries have matching keys and no empty values |
+
+| `npm run check:i18n` | Verify EN/TR/DE dictionary key parity (`scripts/check-i18n.ts`); CI gate |
 | `npm run test:e2e` | Playwright smoke tests |
-| `npm run test:e2e:headed` | Same, with a visible browser |
-| `npm run test:stress` | Load/stress test against public GET routes (see [`docs/testing.md`](docs/testing.md)) |
-| `npm run import:csv` | Import the legacy spreadsheet CSV into the CRM (dry-run by default, `--apply` to write) |
+| `npm run test:e2e:headed` | Run the Playwright smoke tests with a visible browser |
+| `npm run test:stress` | Load/stress test against the app (`scripts/stress-test.mjs`; see `docs/testing.md`) |
+| `npm run import:csv` | Bulk-import candidates from a CSV file (`scripts/import-csv.mjs`; dry-run by default, `--apply` to write) |
+| `npm run seed:templates` | Seed the built-in document templates (`prisma/seed-templates.mjs`) |
+| `npm run db:dev:up` | Start the local dev MySQL via Docker Compose (`docker-compose.dev.yml`) |
+| `npm run db:dev:down` | Stop and remove the local dev MySQL container |
 | `npm run postinstall` | Regenerate the Prisma client (runs automatically after `npm install`) |
-| `npm run seed:templates` | Seed starter document templates (idempotent) |
-| `npm run db:dev:up` | Start a local, loopback-only MySQL container for development |
-| `npm run db:dev:down` | Stop the local dev MySQL container |
+
 | `npx prisma db push` | Sync schema to DB |
 | `npx prisma db seed` | Seed first admin |
 

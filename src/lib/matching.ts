@@ -1,30 +1,4 @@
-// Lightweight, deterministic heuristics for mentor suggestions and the
-// "next action" hint. No ML — just skill overlap + capacity + recency.
-
-export interface MentorCandidate {
-  id: string;
-  fullName: string;
-  skills: string[];
-  activeCount: number;
-  capacity?: number | null;
-}
-
-const norm = (s: string) => s.trim().toLowerCase();
-
-export function scoreMentors(menteeSkills: string[], mentors: MentorCandidate[]) {
-  const want = [...new Set(menteeSkills.map(norm).filter(Boolean))];
-  return mentors
-    .map((m) => {
-      const owned = m.skills.map(norm).filter(Boolean);
-      // Substring match so "react" overlaps "React.js" (mirrors candidate search).
-      const overlap = want.filter((w) => owned.some((o) => o === w || o.includes(w) || w.includes(o))).length;
-      const atCapacity = m.capacity != null && m.capacity > 0 && m.activeCount >= m.capacity;
-      // Skill overlap dominates; lighter load breaks ties; full mentors sink.
-      const score = overlap * 10 - m.activeCount - (atCapacity ? 1000 : 0);
-      return { id: m.id, fullName: m.fullName, overlap, activeCount: m.activeCount, capacity: m.capacity ?? null, atCapacity, score };
-    })
-    .sort((a, b) => b.score - a.score);
-}
+// Deterministic heuristic for the "next action" hint on a mentorship relation.
 
 export interface NextActionInput {
   pipelineStatus: string;
