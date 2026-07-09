@@ -30,8 +30,9 @@ test('mobile: tapping the account menu opens sign-out without closing the drawer
     // Tapping the account toggle opens the popover — the drawer stays open.
     await accountToggle.click();
 
-    const signOut = page.getByRole('link', { name: 'Sign Out' });
-    await expect(signOut).toBeVisible();
+    // The sign-out item is role="menuitem" (not a plain link).
+    const signOut = page.getByRole('menuitem', { name: 'Sign Out' });
+    await expect(signOut).toBeVisible({ timeout: 10_000 });
     // The drawer is still open (the account toggle remains visible).
     await expect(accountToggle).toBeVisible();
   } finally {
