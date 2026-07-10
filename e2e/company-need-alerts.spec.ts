@@ -42,9 +42,14 @@ test('need-match alerts fire once for premium companies only, on consenting cand
     data: { email: freeUserEmail, password: hash, role: 'COMPANY', fullName: 'Free Co User', skills: [], companyId: freeCo.id },
   });
 
-  // A consenting (publicProfile) mentee whose target position matches the need.
+  // A consenting mentee (publicProfile + TALENT_POOL_VISIBILITY, #527) whose
+  // target position matches the need.
   const mentee = await prisma.user.create({
-    data: { email: menteeEmail, password: hash, role: 'MENTEE', fullName: 'Matching Mentee', skills: [], targetPosition: position, publicProfile: true },
+    data: {
+      email: menteeEmail, password: hash, role: 'MENTEE', fullName: 'Matching Mentee', skills: [],
+      targetPosition: position, publicProfile: true,
+      consents: { create: { type: 'TALENT_POOL_VISIBILITY', grantedAt: new Date() } },
+    },
   });
 
   try {

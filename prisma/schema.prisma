@@ -180,6 +180,10 @@ enum ConsentType {
   // Opt-in to detailed activity tracking (pages visited + time on site) that
   // feeds the mentee activity report shared with the mentor/admin.
   ACTIVITY_TRACKING
+  // Explicit opt-in to being visible to companies (talent-pool search,
+  // need-match alerts, early access). GDPR basis for company-facing exposure —
+  // required IN ADDITION to publicProfile (#527). Default off.
+  TALENT_POOL_VISIBILITY
 }
 
 model UserConsent {

@@ -45,13 +45,16 @@ test('early-access window hides newly-hireable candidates from non-premium subsc
   await prisma.user.create({ data: { email: premiumEmail, password: hash, role: 'COMPANY', fullName: 'EA Premium User', skills: [], companyId: premiumCo.id } });
   const mentor = await prisma.user.create({ data: { email: mentorEmail, password: hash, role: 'MENTOR', fullName: 'EA Mentor', skills: [] } });
 
+  // Both mentees are fully visible to companies: publicProfile + active
+  // TALENT_POOL_VISIBILITY consent (#527).
+  const consent = { create: { type: 'TALENT_POOL_VISIBILITY' as const, grantedAt: new Date() } };
   // recentMentee: became hireable just now → inside the window.
   const recentMentee = await prisma.user.create({
-    data: { email: recentEmail, password: hash, role: 'MENTEE', fullName: `EA Recent ${stamp}`, skills: [], publicProfile: true, targetPosition: position },
+    data: { email: recentEmail, password: hash, role: 'MENTEE', fullName: `EA Recent ${stamp}`, skills: [], publicProfile: true, targetPosition: position, consents: consent },
   });
   // oldMentee: became hireable 30 days ago → window has passed.
   const oldMentee = await prisma.user.create({
-    data: { email: oldEmail, password: hash, role: 'MENTEE', fullName: `EA Old ${stamp}`, skills: [], publicProfile: true, targetPosition: position },
+    data: { email: oldEmail, password: hash, role: 'MENTEE', fullName: `EA Old ${stamp}`, skills: [], publicProfile: true, targetPosition: position, consents: consent },
   });
 
   const recentRel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: recentMentee.id, pipelineStatus: 'HIREABLE_600' } });
