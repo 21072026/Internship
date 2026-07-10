@@ -607,6 +607,97 @@ export async function checkRetentionReminders() {
   return { checked: users.length, reminded, retentionMonths: months, graceDays: RETENTION_GRACE_DAYS };
 }
 
+// Does a consenting candidate match any of a company's open positions? A match
+// is a loose, case-insensitive overlap between a need's position and the
+// candidate's target position or one of their skills — deliberately generous
+// (the alert is a "worth a look" nudge, not a hard filter).
+function candidateMatchesNeeds(
+  positions: string[],
+  cand: { targetPosition?: string | null; skills: unknown }
+): boolean {
+  const target = (cand.targetPosition || '').toLowerCase().trim();
+  const skills = (Array.isArray(cand.skills) ? cand.skills : []).map((s) => String(s).toLowerCase().trim()).filter(Boolean);
+  return positions.some((pos) => {
+    if (!pos) return false;
+    if (target && (target.includes(pos) || pos.includes(target))) return true;
+    return skills.some((sk) => sk && (pos.includes(sk) || sk.includes(pos)));
+  });
+}
+
+// Premium CompanyNeed match alerts (Faz 1, #530). For every company holding the
+// COMPANY_NEED_MATCH_ALERTS entitlement, scan the consenting talent pool (the
+// same publicProfile-only visibility as talent-pool search) for candidates
+// matching an open position, and notify the company's users once per candidate.
+// Repeat notifications are prevented by the CompanyNeedAlert dedupe row (the
+// unique [companyId, menteeId] insert is the marker — createMany/skipDuplicates
+// makes "insert-or-skip" atomic, so a candidate only ever alerts a company once).
+export async function checkCompanyNeedMatches() {
+  const companies = await prisma.company.findMany({
+    where: {
+      entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
+      needs: { some: {} },
+    },
+    select: {
+      id: true,
+      name: true,
+      needs: { select: { position: true } },
+      users: {
+        where: { role: 'COMPANY', isActive: true },
+        select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+      },
+    },
+  });
+  if (companies.length === 0) return { companies: 0, alerts: 0 };
+
+  // The consenting talent pool — only mentees who opted into a public profile.
+  const pool = await prisma.user.findMany({
+    where: { role: 'MENTEE', isActive: true, publicProfile: true },
+    select: { id: true, fullName: true, targetPosition: true, skills: true },
+  });
+  if (pool.length === 0) return { companies: companies.length, alerts: 0 };
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  let alerts = 0;
+
+  for (const company of companies) {
+    const positions = company.needs.map((n) => n.position.toLowerCase().trim()).filter(Boolean);
+    if (positions.length === 0) continue;
+
+    for (const cand of pool) {
+      if (!candidateMatchesNeeds(positions, cand)) continue;
+
+      // Atomic dedupe: the insert succeeds only the first time; count 0 means
+      // this company was already alerted about this candidate — skip silently.
+      const created = await prisma.companyNeedAlert.createMany({
+        data: [{ companyId: company.id, menteeId: cand.id }],
+        skipDuplicates: true,
+      });
+      if (created.count === 0) continue;
+
+      alerts += 1;
+      const link = `/p/${cand.id}`;
+      const text = `New candidate matches your open position: ${cand.fullName}`;
+      for (const u of company.users) {
+        await notify(u.id, 'need_match', text, link);
+        if (emailAllowed(u, 'digest')) {
+          await sendEmail({
+            to: u.email,
+            subject: 'A candidate matches your open position',
+            html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color:#2563eb;">New matching candidate</h2>
+              <p>Hi ${u.fullName},</p>
+              <p><strong>${cand.fullName}</strong> matches one of ${company.name}'s open positions${cand.targetPosition ? ` (${cand.targetPosition})` : ''}.</p>
+              <p><a href="${appUrl}${link}">View profile</a></p>
+            </div>`,
+          }).catch(() => {});
+        }
+      }
+    }
+  }
+
+  return { companies: companies.length, alerts };
+}
+
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
 export function initCronJobs() {
@@ -622,6 +713,8 @@ export function initCronJobs() {
       console.log(`[Cron] Stage deadline reminders: ${dl.reminded}`);
       const rr = await checkRetentionReminders();
       console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
+      const nm = await checkCompanyNeedMatches();
+      console.log(`[Cron] Company need-match alerts: ${nm.alerts}`);
     } catch (error) {
       console.error('[Cron] Error running reminder check:', error);
     }
