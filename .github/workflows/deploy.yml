@@ -193,9 +193,11 @@ jobs:
 
       # ── Preview deploy (pull_request) ───────────────────────────────────────
       # Skipped for fork PRs — no pushed image to pull, and the SSH/DB secrets
-      # aren't available to fork-triggered runs.
+      # aren't available to fork-triggered runs. Topic branches (…topicN…) get
+      # their own isolated env via topic-preview.yml, so skip the shared preview
+      # for them too (no double deploy).
       - name: Deploy preview via SSH
-        if: github.event_name == 'pull_request' && steps.fork.outputs.is_fork != 'true'
+        if: github.event_name == 'pull_request' && steps.fork.outputs.is_fork != 'true' && !contains(github.head_ref, 'topic')
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -285,7 +287,7 @@ jobs:
           EOF
 
       - name: Post preview URL comment
-        if: github.event_name == 'pull_request' && steps.fork.outputs.is_fork != 'true'
+        if: github.event_name == 'pull_request' && steps.fork.outputs.is_fork != 'true' && !contains(github.head_ref, 'topic')
         uses: actions/github-script@v7
         with:
           script: |
