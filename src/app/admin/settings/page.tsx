@@ -14,6 +14,7 @@ export default function AdminSettingsPage() {
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [require2fa, setRequire2fa] = useState('off');
   const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
+  const [premiumAnalytics, setPremiumAnalytics] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -58,6 +59,7 @@ export default function AdminSettingsPage() {
       setWeeklyDigest(settings.weeklyDigest !== 'false');
       setRequire2fa(settings.require2fa ?? 'off');
       setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
+      setPremiumAnalytics(settings.premiumAnalytics === 'true');
     }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -68,7 +70,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, earlyAccessWindowDays }),
+        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false' }),
       });
       if (res.ok) setFlash(t.settings.saved);
     } finally {
@@ -135,6 +137,13 @@ export default function AdminSettingsPage() {
               <p className="text-xs text-gray-500 mt-1">{t.settings.require2faHint}</p>
             </div>
             <Input label={t.settings.earlyAccessWindow} type="number" min={0} max={365} value={earlyAccessWindowDays} onChange={(e) => setEarlyAccessWindowDays(e.target.value)} hint={t.settings.earlyAccessWindowHint} />
+            <div>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={premiumAnalytics} onChange={(e) => setPremiumAnalytics(e.target.checked)} />
+                {t.settings.premiumAnalytics}
+              </label>
+              <p className="text-xs text-gray-500 mt-1">{t.settings.premiumAnalyticsHint}</p>
+            </div>
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">
