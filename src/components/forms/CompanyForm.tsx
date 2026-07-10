@@ -9,15 +9,22 @@ import { Button } from '@/components/ui/Button';
 import { Plus, Trash2 } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
+// Optional free-text field. Prisma returns `null` for empty nullable columns,
+// so when editing an existing company those nulls reach the form. Plain
+// `.optional()` only accepts `undefined` and rejected `null` with
+// "Expected string, received null" (#569). Accept `undefined`/`null` and
+// normalize to '' so validation passes AND the API always receives a string.
+const optionalText = z.string().nullish().transform((v) => v ?? '');
+
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required'),
-  description: z.string().optional(),
-  contactEmail: z.string().email('Invalid email').optional().or(z.literal('')),
-  industry: z.string().optional(),
-  logoUrl: z.string().url('Enter a valid URL').optional().or(z.literal('')),
-  size: z.string().optional(),
-  address: z.string().optional(),
-  quota: z.coerce.number().int().min(0).optional().or(z.literal(0)),
+  description: optionalText,
+  contactEmail: z.string().email('Invalid email').or(z.literal('')).nullish().transform((v) => v ?? ''),
+  industry: optionalText,
+  logoUrl: z.string().url('Enter a valid URL').or(z.literal('')).nullish().transform((v) => v ?? ''),
+  size: optionalText,
+  address: optionalText,
+  quota: z.coerce.number().int().min(0).nullish(),
   needs: z.array(
     z.object({
       position: z.string().min(1, 'Position is required'),

@@ -269,6 +269,7 @@ export default function CompaniesPage() {
                     </button>
                     <button
                       onClick={() => setEditingCompany(company)}
+                      data-testid={`edit-company-${company.id}`}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
                     >
                       <Pencil className="h-4 w-4" />
