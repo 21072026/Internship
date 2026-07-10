@@ -13,6 +13,11 @@ export const SETTING_DEFAULTS = {
   // 'admins' = required for ADMIN; 'admins_mentors' = required for ADMIN+MENTOR.
   // Users in scope are held at a 2FA-setup gate until they enable it.
   require2fa: 'off',
+  // Premium early-access window (#531): number of days a newly-hireable
+  // (HIREABLE_600) candidate is visible in talent-pool search ONLY to companies
+  // holding the EARLY_ACCESS entitlement, before opening to all subscribers.
+  // '0' disables the window (everyone sees new candidates immediately).
+  earlyAccessWindowDays: '7',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

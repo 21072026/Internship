@@ -13,6 +13,7 @@ export default function AdminSettingsPage() {
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [require2fa, setRequire2fa] = useState('off');
+  const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
   const [savingSettings, setSavingSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -56,6 +57,7 @@ export default function AdminSettingsPage() {
       setSupportEmail(settings.supportEmail ?? '');
       setWeeklyDigest(settings.weeklyDigest !== 'false');
       setRequire2fa(settings.require2fa ?? 'off');
+      setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
     }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -66,7 +68,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa }),
+        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, earlyAccessWindowDays }),
       });
       if (res.ok) setFlash(t.settings.saved);
     } finally {
@@ -132,6 +134,7 @@ export default function AdminSettingsPage() {
               </select>
               <p className="text-xs text-gray-500 mt-1">{t.settings.require2faHint}</p>
             </div>
+            <Input label={t.settings.earlyAccessWindow} type="number" min={0} max={365} value={earlyAccessWindowDays} onChange={(e) => setEarlyAccessWindowDays(e.target.value)} hint={t.settings.earlyAccessWindowHint} />
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">
