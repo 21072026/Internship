@@ -10,6 +10,49 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-10
+
+Company Premium (freemium Faz 0 + Faz 1) plus messaging, activity reporting,
+email deliverability and a round of UX fixes — shipped as individual PRs. The
+mentor and mentee experience stays fully free.
+
+### Added
+- **Premium entitlement infrastructure** (Faz 0) — per-company feature flags
+  (`CompanyEntitlement`), a client-safe feature catalogue, `hasFeature` gating,
+  and an admin toggle UI. Row-presence = feature on; nothing on by default so
+  the free core is preserved (#557).
+- **Talent-pool search** (Faz 1) — companies with the entitlement can search a
+  privacy-safe pool of mentees who opted into a public profile (#560).
+- **Verified candidate card** (Faz 1) — gated section on the company candidate
+  view surfacing mentor evaluations + project contributions (#529).
+- **CompanyNeed match alerts** (Faz 1) — a daily scan notifies premium companies
+  when a consenting candidate matches an open position, deduped per candidate
+  (#530).
+- **Early-access window** (Faz 1) — newly-hireable candidates are visible only to
+  early-access companies for a configurable window before opening to all
+  subscribers (#531).
+- **Messaging inbox icon** — a header entry point (admin/mentor) plus a unified
+  `/messages` inbox (#512).
+- **Daily mentee activity report** — page-view/dwell tracking foundation plus a
+  daily digest and in-app view (#513/#514).
+- **Admin email-test tool** — send a probe to any address and see SMTP status,
+  for diagnosing deliverability (#553).
+- **Mentor engagement signals** — a "no open goal" attention-queue badge and a
+  stale-mentee in-app notification, deduped per staleness episode (#571/#572/#573).
+- **Archive view for users** — deactivated accounts drop out of the default
+  Users list and live under an "Archived" tab (#570).
+- **User-selectable accent color** + a fuller preview-green theme (#511).
+- **Inline mentor assignment** from the admin Candidates screen (#564).
+
+### Fixed
+- **P0 mobile account menu** — the responsive drawer no longer closes on the
+  account toggle, so mobile users can reach Sign out (#563).
+- **Company edit validation** — optional fields left empty (NULL in the DB) no
+  longer fail with "Expected string, received null" (#569).
+- **Email deliverability** — plain-text alternative part + a named From header
+  to improve inbox placement (#562).
+- **Company interest note** now auto-saves after typing stops (#532).
+
 ## [0.3.0] - 2026-07-03
 
 Backlog epics A–L plus user-reported feedback, shipped as individual PRs.
