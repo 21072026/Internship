@@ -143,6 +143,7 @@ model User {
   personalNotes           PersonalNote[]
   consents                UserConsent[]
   companyInterests        CompanyInterest[]        @relation("CompanyInterestMentee")
+  companyNeedAlerts       CompanyNeedAlert[]       @relation("CompanyNeedAlertMentee")
   authoredRelationNotes   RelationNote[]           @relation("RelationNoteAuthor")
   pageViews               PageView[]
 
@@ -354,6 +355,7 @@ model Company {
   projects     Project[]            @relation("CompanyProjects")
   interests    CompanyInterest[]
   entitlements CompanyEntitlement[]
+  needAlerts   CompanyNeedAlert[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -370,6 +372,22 @@ model CompanyEntitlement {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, feature])
+  @@index([companyId])
+}
+
+// Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
+// company+mentee: once a matching candidate has triggered an alert for a
+// company, we never re-notify for the same candidate (the "*SentAt" pattern).
+model CompanyNeedAlert {
+  id        String   @id @default(cuid())
+  companyId String
+  menteeId  String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee  User    @relation("CompanyNeedAlertMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, menteeId])
   @@index([companyId])
 }
 
