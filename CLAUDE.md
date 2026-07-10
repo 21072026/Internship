@@ -122,6 +122,9 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 - **Do not run `db push` against the shared preview/prod DB** without explicit confirmation;
   CI handles DB sync on deploy.
 - **Never commit secrets.** Real values live only in server-side env / GitHub secrets.
+- **Develop on synthetic data only** ([docs/DATA_ACCESS_POLICY.md](docs/DATA_ACCESS_POLICY.md)):
+  local DB + `npx prisma db seed` + `npm run seed:demo` (rich fake data set). Contributors
+  never browse real/preview PII; the demo seeder refuses non-local `DATABASE_URL`s.
 - **Branch + PR per change.** Branch names: `feat/<issue>-slug`, `fix/<issue>-slug`,
   `docs/...`. Reference issues with `Closes #N`. Merging to `main` deploys to production.
 - **Ship it yourself (standing instruction from the maintainer, 2026-07):** for every change,

@@ -18,6 +18,7 @@
     "import:csv": "node scripts/import-csv.mjs",
     "postinstall": "prisma generate",
     "seed:templates": "node prisma/seed-templates.mjs",
+    "seed:demo": "node prisma/seed-demo.mjs",
     "db:dev:up": "docker compose -f docker-compose.dev.yml up -d",
     "db:dev:down": "docker compose -f docker-compose.dev.yml down"
   },
