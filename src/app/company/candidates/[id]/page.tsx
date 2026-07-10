@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, FileText, ExternalLink, Star, Bookmark, ThumbsDown, Check } from 'lucide-react';
+import { ArrowLeft, FileText, ExternalLink, Star, Bookmark, ThumbsDown, Check, ShieldCheck, FolderGit2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -33,6 +33,30 @@ interface Candidate {
   mentorName: string;
 }
 
+interface VerifiedEvaluation {
+  id: string;
+  type: 'INTERIM' | 'FINAL';
+  scores: Record<string, number> | null;
+  comment?: string | null;
+  createdAt: string;
+  authorName: string;
+}
+interface VerifiedProject {
+  id: string;
+  name: string;
+  description?: string | null;
+  technologies: string[];
+  repoUrl?: string | null;
+  demoUrl?: string | null;
+  status: string;
+  tasksTotal: number;
+  tasksDone: number;
+}
+interface Verified {
+  evaluations: VerifiedEvaluation[];
+  projects: VerifiedProject[];
+}
+
 // Read-only candidate detail for a COMPANY user (EPIC: company candidate
 // detail). Authorized server-side by a mentorship relation to this company.
 export default function CompanyCandidateDetailPage() {
@@ -40,6 +64,7 @@ export default function CompanyCandidateDetailPage() {
   const locale = useLocale();
   const { id } = useParams<{ id: string }>();
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [verified, setVerified] = useState<Verified | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -59,6 +84,7 @@ export default function CompanyCandidateDetailPage() {
         const body = await r.json();
         if (!r.ok) throw new Error(body.error || t.common.error);
         setCandidate(body.candidate);
+        setVerified(body.verified ?? null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : t.common.error))
       .finally(() => setLoading(false));
@@ -205,6 +231,89 @@ export default function CompanyCandidateDetailPage() {
           ))}
         </div>
       </Card>
+
+      {verified && (
+        <Card className="mt-4" data-testid="verified-card">
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.company.verifiedTitle}</p>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{t.company.verifiedHint}</p>
+
+          {verified.evaluations.length === 0 && verified.projects.length === 0 && (
+            <p className="text-sm text-gray-400">{t.company.verifiedNone}</p>
+          )}
+
+          {verified.evaluations.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{t.company.verifiedEvaluations}</p>
+              <ul className="space-y-2">
+                {verified.evaluations.map((e) => {
+                  const scores = e.scores ? Object.entries(e.scores) : [];
+                  const avg = scores.length ? scores.reduce((s, [, v]) => s + Number(v), 0) / scores.length : null;
+                  return (
+                    <li key={e.id} className="rounded-lg border border-gray-100 dark:border-gray-800 p-3 bg-green-50 dark:bg-green-900/10">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <Badge variant={e.type === 'FINAL' ? 'success' : 'info'} className="text-xs">
+                          {e.type === 'FINAL' ? t.company.verifiedFinal : t.company.verifiedInterim}
+                        </Badge>
+                        {avg !== null && (
+                          <span className="inline-flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400">
+                            <Star className="h-3.5 w-3.5 fill-current" /> {avg.toFixed(1)}/5
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-400">{t.company.verifiedBy.replace('{name}', e.authorName)}</span>
+                      </div>
+                      {e.comment && <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{e.comment}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {verified.projects.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{t.company.verifiedProjects}</p>
+              <ul className="space-y-2">
+                {verified.projects.map((p) => (
+                  <li key={p.id} className="rounded-lg border border-gray-100 dark:border-gray-800 p-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <FolderGit2 className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{p.name}</span>
+                      {p.tasksTotal > 0 && (
+                        <span className="text-xs text-gray-400">
+                          {t.company.verifiedTasks.replace('{done}', String(p.tasksDone)).replace('{total}', String(p.tasksTotal))}
+                        </span>
+                      )}
+                    </div>
+                    {p.description && <p className="text-sm text-gray-600 dark:text-gray-300 mb-1.5 whitespace-pre-line">{p.description}</p>}
+                    {p.technologies.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-1.5">
+                        {p.technologies.map((tech) => (
+                          <Badge key={tech} variant="info" className="text-xs">{tech}</Badge>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      {p.repoUrl && (
+                        <a href={p.repoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                          <ExternalLink className="h-3.5 w-3.5" /> {p.repoUrl.includes('github') ? 'GitHub' : 'Repo'}
+                        </a>
+                      )}
+                      {p.demoUrl && (
+                        <a href={p.demoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                          <ExternalLink className="h-3.5 w-3.5" /> Demo
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card className="mt-4">
         <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">{t.company.interestTitle}</p>
