@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasFeature } from '@/lib/entitlements';
+import { getSetting } from '@/lib/settings';
 
 // GET — premium talent-pool search for companies (Faz 1, #528). Gated by the
 // TALENT_POOL_SEARCH entitlement. Privacy-safe: only surfaces mentees who have
@@ -45,9 +46,31 @@ export async function GET(request: Request) {
   });
 
   // skills is a JSON array — filter in JS when a skill query is given.
-  const candidates = skill
+  let candidates = skill
     ? rows.filter((r) => Array.isArray(r.skills) && (r.skills as string[]).some((s) => String(s).toLowerCase().includes(skill)))
     : rows;
+
+  // Early-access window (#531): a candidate who became hireable (HIREABLE_600)
+  // within the last N days is visible ONLY to premium companies holding the
+  // EARLY_ACCESS entitlement (admins always see everyone). Non-entitled
+  // subscribers see them once the window closes. The window length is an admin
+  // setting; '0' disables it. Candidates who never became hireable, or whose
+  // window has closed, are unaffected.
+  const windowDays = parseInt(await getSetting('earlyAccessWindowDays'), 10) || 0;
+  const hasEarlyAccess = session.user.role === 'ADMIN' || (await hasFeature(session.user.companyId, 'EARLY_ACCESS'));
+  if (windowDays > 0 && !hasEarlyAccess && candidates.length > 0) {
+    const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const recent = await prisma.statusChange.findMany({
+      where: {
+        toStatus: 'HIREABLE_600',
+        createdAt: { gte: cutoff },
+        relation: { menteeId: { in: candidates.map((c) => c.id) } },
+      },
+      select: { relation: { select: { menteeId: true } } },
+    });
+    const embargoed = new Set(recent.map((s) => s.relation.menteeId));
+    candidates = candidates.filter((c) => !embargoed.has(c.id));
+  }
 
   return NextResponse.json({ candidates });
 }
