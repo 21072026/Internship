@@ -29,6 +29,9 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'ALL' | 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE'>('ALL');
+  // Archived = deactivated (isActive=false). Default view hides them so the list
+  // stays uncluttered; the "Archived" tab reveals them for reactivation (#570).
+  const [statusView, setStatusView] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -89,8 +92,10 @@ export default function AdminUsersPage() {
   };
 
   const q = search.trim().toLowerCase();
+  const archivedCount = users.filter((u) => !u.isActive).length;
   const filtered = users.filter(
     (u) =>
+      (statusView === 'ACTIVE' ? u.isActive : !u.isActive) &&
       (filter === 'ALL' || u.role === filter) &&
       (!q || u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
   );
@@ -103,6 +108,21 @@ export default function AdminUsersPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.usersAdmin.title}</h1>
         <p className="text-gray-500 mt-1">{t.usersAdmin.subtitle}</p>
+      </div>
+
+      <div className="inline-flex items-center gap-1 mb-4 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
+        {(['ACTIVE', 'ARCHIVED'] as const).map((s) => (
+          <button
+            key={s}
+            data-testid={`status-view-${s.toLowerCase()}`}
+            onClick={() => { setStatusView(s); setPage(1); }}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              statusView === s ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            {s === 'ACTIVE' ? t.usersAdmin.viewActive : `${t.usersAdmin.viewArchived}${archivedCount ? ` (${archivedCount})` : ''}`}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
