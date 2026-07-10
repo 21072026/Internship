@@ -29,11 +29,14 @@ test('mentor dashboard surfaces a needs-attention queue for stale/overdue/unansw
     data: { relationId: rel.id, requestedById: mentee.id, topic: 'Check-in', proposedAt: new Date(Date.now() + 86_400_000) },
   });
 
-  // A fine relation with a recent interaction and nothing pending — should NOT appear.
+  // A fine relation with a recent interaction, an open goal, and nothing
+  // pending — should NOT appear. (An open goal is required so it doesn't trip
+  // the no_open_goal signal.)
   const okRel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: okMentee.id, status: 'ACTIVE' } });
   await prisma.interactionLog.create({
     data: { relationId: okRel.id, type: 'Meeting', notes: 'Recent sync', date: new Date() },
   });
+  await prisma.goal.create({ data: { relationId: okRel.id, title: 'Finish portfolio site' } });
 
   try {
     await page.goto('/auth/signin');
@@ -50,6 +53,8 @@ test('mentor dashboard surfaces a needs-attention queue for stale/overdue/unansw
     await expect(row.getByText(/Stage overdue/i)).toBeVisible();
     await expect(row.getByText(/Unanswered question/i)).toBeVisible();
     await expect(row.getByText(/Pending meeting request/i)).toBeVisible();
+    // This mentee has no goals yet → the no_open_goal signal shows too (#572).
+    await expect(row.getByText(/No open goal/i)).toBeVisible();
 
     // The healthy relation is not in the attention queue (it may still
     // legitimately appear elsewhere on the dashboard, e.g. "My mentees").

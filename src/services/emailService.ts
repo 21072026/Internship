@@ -280,8 +280,32 @@ export async function checkMentorInteractionReminders() {
 
   for (const relation of activeRelations) {
     const lastInteraction = relation.interactions[0];
-    if (!lastInteraction || lastInteraction.date < fourteenDaysAgo) {
+    const stale = !lastInteraction || lastInteraction.date < fourteenDaysAgo;
+    if (stale) {
       remindersToSend.push(relation);
+      // In-app notification once per staleness episode (#573): only when we
+      // haven't already flagged this stretch of inactivity. In-app bell items
+      // are always created (consistent with deadline/retention notifications);
+      // email opt-out is handled separately below.
+      if (!relation.stalenessReminderSentAt) {
+        await notify(
+          relation.mentorId,
+          'stale_mentee',
+          `No recent contact with ${relation.mentee.fullName}.`,
+          `/mentor/mentees/${relation.id}`
+        );
+        await prisma.mentorshipRelation.update({
+          where: { id: relation.id },
+          data: { stalenessReminderSentAt: new Date() },
+        });
+      }
+    } else if (relation.stalenessReminderSentAt) {
+      // Mentee is active again — clear the flag so a future staleness episode
+      // re-notifies the mentor.
+      await prisma.mentorshipRelation.update({
+        where: { id: relation.id },
+        data: { stalenessReminderSentAt: null },
+      });
     }
   }
 
