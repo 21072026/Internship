@@ -1137,6 +1137,9 @@ const en = {
     assignedCompany: 'Assigned company',
     recentInteractions: 'Recent interactions',
     completeProfileCta: 'Complete profile',
+    visibilityNudge: 'Want partner companies to discover you?',
+    visibilityNudgeHint: 'Turn on company visibility to appear in partner companies’ talent search. Only your public profile is shown — never your email or phone. You decide, and you can change it anytime.',
+    visibilityNudgeCta: 'Choose in settings',
   },
   profileForm: {
     title: 'My Profile',
@@ -2387,6 +2390,9 @@ const tr: Dict = {
     assignedCompany: 'Atanan şirket',
     recentInteractions: 'Son etkileşimler',
     completeProfileCta: 'Profili tamamla',
+    visibilityNudge: 'Partner şirketler seni keşfetsin ister misin?',
+    visibilityNudgeHint: 'Şirketlere görünürlüğü açarsan partner şirketlerin yetenek aramasında görünürsün. Yalnızca herkese açık profilin gösterilir — e-postan veya telefonun asla. Karar senin; istediğin an değiştirebilirsin.',
+    visibilityNudgeCta: 'Ayarlardan seç',
   },
   profileForm: {
     title: 'Profilim',
@@ -3635,6 +3641,9 @@ const de: Dict = {
     assignedCompany: 'Zugewiesenes Unternehmen',
     recentInteractions: 'Letzte Interaktionen',
     completeProfileCta: 'Profil vervollständigen',
+    visibilityNudge: 'Möchtest du von Partnerunternehmen entdeckt werden?',
+    visibilityNudgeHint: 'Aktiviere die Sichtbarkeit für Unternehmen, um in der Talentsuche der Partnerunternehmen zu erscheinen. Nur dein öffentliches Profil wird gezeigt — nie deine E-Mail oder Telefonnummer. Du entscheidest und kannst es jederzeit ändern.',
+    visibilityNudgeCta: 'In den Einstellungen wählen',
   },
   profileForm: {
     title: 'Mein Profil',

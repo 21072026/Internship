@@ -18,7 +18,7 @@ import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 
 async function getMenteeData(menteeId: string) {
-  const [user, activeRelation] = await Promise.all([
+  const [user, activeRelation, visibilityConsent] = await Promise.all([
     prisma.user.findUnique({
       where: { id: menteeId },
       select: {
@@ -51,9 +51,15 @@ async function getMenteeData(menteeId: string) {
         },
       },
     }),
+    // Has the mentee ever decided on company visibility (#527)? A row means
+    // decided (granted OR revoked) — the nudge below only targets the undecided.
+    prisma.userConsent.findUnique({
+      where: { userId_type: { userId: menteeId, type: 'TALENT_POOL_VISIBILITY' } },
+      select: { id: true },
+    }),
   ]);
 
-  return { user, activeRelation };
+  return { user, activeRelation, visibilityDecided: !!visibilityConsent };
 }
 
 export default async function PortalDashboard() {
@@ -63,7 +69,7 @@ export default async function PortalDashboard() {
   // in which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const { user, activeRelation } = await getMenteeData(session.user.id);
+  const { user, activeRelation, visibilityDecided } = await getMenteeData(session.user.id);
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
 
@@ -90,6 +96,24 @@ export default async function PortalDashboard() {
             className="bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors flex-shrink-0 ml-4"
           >
             {t.portal.completeProfileCta}
+          </Link>
+        </div>
+      )}
+
+      {/* Company-visibility nudge (#527): shown only while the mentee has never
+          decided on the TALENT_POOL_VISIBILITY consent. Granting OR declining
+          in Account settings makes it disappear — no nagging after a decision. */}
+      {!visibilityDecided && (
+        <div data-testid="visibility-nudge" className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between dark:bg-blue-900/20 dark:border-blue-800">
+          <div>
+            <p className="font-medium text-blue-800 dark:text-blue-200">{t.portal.visibilityNudge}</p>
+            <p className="text-sm text-blue-600 dark:text-blue-300 mt-0.5">{t.portal.visibilityNudgeHint}</p>
+          </div>
+          <Link
+            href="/account"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex-shrink-0 ml-4"
+          >
+            {t.portal.visibilityNudgeCta}
           </Link>
         </div>
       )}
