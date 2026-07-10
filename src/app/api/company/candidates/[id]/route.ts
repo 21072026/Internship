@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { hasFeature } from '@/lib/entitlements';
 
 // GET — read-only candidate detail for a COMPANY user (EPIC: company
 // candidate detail). Authorized only when a mentorship relation links this
@@ -47,7 +48,71 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   if (!candidate) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  // Premium "verified candidate card" (Faz 1, #529): mentor-authored
+  // evaluations + the candidate's project contributions, surfaced only when the
+  // company holds the VERIFIED_CANDIDATE_CARD entitlement. Absent otherwise, so
+  // the free experience is unchanged. Scoped to relations that link this
+  // candidate to *this* company — never another company's private evaluations.
+  let verified = null;
+  if (await hasFeature(session.user.companyId, 'VERIFIED_CANDIDATE_CARD')) {
+    const relations = await prisma.mentorshipRelation.findMany({
+      where: { companyId: session.user.companyId, menteeId: id },
+      select: {
+        evaluations: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            type: true,
+            scores: true,
+            comment: true,
+            createdAt: true,
+            relation: { select: { mentor: { select: { fullName: true } } } },
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            technologies: true,
+            repoUrl: true,
+            demoUrl: true,
+            status: true,
+            tasks: { select: { done: true } },
+          },
+        },
+      },
+    });
+
+    const evaluations = relations.flatMap((r) =>
+      r.evaluations.map((e) => ({
+        id: e.id,
+        type: e.type,
+        scores: e.scores,
+        comment: e.comment,
+        createdAt: e.createdAt,
+        authorName: e.relation.mentor.fullName,
+      }))
+    );
+
+    // De-duplicate projects (multiple relations can point at the same project).
+    const projectMap = new Map<string, unknown>();
+    for (const r of relations) {
+      if (r.project && !projectMap.has(r.project.id)) {
+        const { tasks, ...rest } = r.project;
+        projectMap.set(r.project.id, {
+          ...rest,
+          tasksTotal: tasks.length,
+          tasksDone: tasks.filter((tk) => tk.done).length,
+        });
+      }
+    }
+
+    verified = { evaluations, projects: Array.from(projectMap.values()) };
+  }
+
   return NextResponse.json({
     candidate: { ...candidate, pipelineStatus: relation.pipelineStatus, mentorName: relation.mentor.fullName },
+    verified,
   });
 }
