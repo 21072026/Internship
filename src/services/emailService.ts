@@ -673,9 +673,16 @@ export async function checkCompanyNeedMatches() {
   });
   if (companies.length === 0) return { companies: 0, alerts: 0 };
 
-  // The consenting talent pool — only mentees who opted into a public profile.
+  // The consenting talent pool — publicProfile opt-in AND an active
+  // TALENT_POOL_VISIBILITY consent (#527), same visibility rule as talent-pool
+  // search.
   const pool = await prisma.user.findMany({
-    where: { role: 'MENTEE', isActive: true, publicProfile: true },
+    where: {
+      role: 'MENTEE',
+      isActive: true,
+      publicProfile: true,
+      consents: { some: { type: 'TALENT_POOL_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
+    },
     select: { id: true, fullName: true, targetPosition: true, skills: true },
   });
   if (pool.length === 0) return { companies: companies.length, alerts: 0 };

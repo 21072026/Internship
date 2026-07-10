@@ -24,7 +24,15 @@ export async function GET(request: Request) {
   const q = (searchParams.get('q') || '').trim().slice(0, 100);
   const skill = (searchParams.get('skill') || '').trim().slice(0, 60).toLowerCase();
 
-  const where: Record<string, unknown> = { role: 'MENTEE', isActive: true, publicProfile: true };
+  // Visibility = publicProfile opt-in AND an active TALENT_POOL_VISIBILITY
+  // consent (#527, GDPR basis for company-facing exposure). Revoking the
+  // consent removes the mentee from company search immediately.
+  const where: Record<string, unknown> = {
+    role: 'MENTEE',
+    isActive: true,
+    publicProfile: true,
+    consents: { some: { type: 'TALENT_POOL_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
+  };
   if (q) {
     where.OR = [
       { fullName: { contains: q } },
