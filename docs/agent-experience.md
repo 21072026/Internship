@@ -67,3 +67,37 @@ Newest entries on top.
 - The e2e suite is genuinely flaky (see `CLAUDE.md` for the known specs). Re-running only the
   failed jobs (`actions_run_trigger rerun_failed_jobs`) usually goes green; read the actual
   failure log before assuming your change broke something.
+
+## 2026-07-10 — Premium Faz 1 tamamlama + küçük backlog süpürmesi
+
+**Pipelining beats polling (maintainer feedback, now standing):** don't idle-wait on CI.
+Open the PR, immediately start the next item on a fresh branch off `origin/main`, and merge
+green PRs opportunistically whenever you happen to check. `git stash` + `checkout -B <new>
+origin/main` + `stash pop` cleanly moves work-in-progress to its own branch when you started
+it on the wrong one.
+
+**Parallel PRs need disjoint files.** The batch (#575/#576/#577) worked because each PR
+touched different files; `dictionaries.ts` is the common collision point — add i18n keys in
+separate blocks and rebase quickly if two PRs touch it.
+
+**Cross-PR dependencies:** a seed/script referencing a new enum value must merge *after* the
+schema PR that adds it (noted in the PR body, e.g. #581 after #579). Squash-merges make the
+order matter — GitHub won't warn you.
+
+**Entitlement-gating pattern is settled:** `hasFeature(companyId, KEY)` in the route +
+`feature_locked` 403 + e2e that flips the flag via direct `prisma.companyEntitlement` writes.
+The free-core regression spec (`e2e/free-core-regression.spec.ts`, #526) is the shield —
+extend it if you add core routes.
+
+**Consent-gated visibility:** company-facing mentee exposure now requires BOTH
+`publicProfile` AND an active `TALENT_POOL_VISIBILITY` consent (`grantedAt` set, `revokedAt`
+null). Any new company-facing query must include the same `consents.some` clause — copy it
+from `talent-pool/route.ts`.
+
+**Faz 2/3 premium işleri bilinçli beklemede:** story #521 "task'lar Faz 1 geliri
+doğrulandıktan sonra bölünecek" diyor; analytics gating'in alıcısı (admin vs şirket) da
+belirsiz. Bunlara başlamadan maintainer'dan ürün kararı iste.
+
+**Verify-before-build:** `npm run build` in the sandbox needs
+`PRISMA_QUERY_ENGINE_LIBRARY` exported; a chained `format && validate && generate` without
+`DATABASE_URL` fails at validate — pass a dummy `DATABASE_URL` for validate only.
