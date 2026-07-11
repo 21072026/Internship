@@ -907,6 +907,21 @@ const en = {
     approve: 'Approve',
     reject: 'Reject',
   },
+  featureCatalog: {
+    title: 'Everything InternshipCRM can do',
+    subtitle: 'The full feature catalogue — from first contact to hired, for every role.',
+    allFeatures: 'All features',
+    backHome: 'Back to home',
+    categories: { tracking: 'Pipeline & intake', collaboration: 'Mentoring & collaboration', companies: 'For companies', insights: 'Insights & AI', trust: 'Privacy & security', platform: 'Platform' },
+    items: {
+      messaging: { t: 'Built-in messaging', d: 'A unified inbox with per-mentorship threads, attachments and email mirroring — reachable from anywhere in the app.' },
+      activityReport: { t: 'Daily activity reports', d: 'Consent-based mentee activity digests for mentors and admins: logins, time on site, pages visited and completed to-dos.' },
+      talentPool: { t: 'Talent pool & alerts (Premium)', d: 'Companies search a consent-based talent pool, see verified candidate cards, and get alerts when a candidate matches an open position.' },
+      aiPackage: { t: 'AI assistants (Premium)', d: 'CV feedback and interview prep for mentees, interaction-log summaries for mentors, AI-assisted matching — all consent- and quota-gated.' },
+      security: { t: 'Two-factor auth & session control', d: 'Role-based 2FA enforcement, session timeouts and "sign out of all devices".' },
+      selfServe: { t: 'Self-serve mentee intake', d: 'Mentees sign up on their own, complete onboarding and request mentorship; admins approve from a queue.' },
+    },
+  },
   aiSummary: {
     button: 'AI summary',
     hint: 'Summarize this interaction log with AI (uses one AI credit).',
@@ -2229,6 +2244,21 @@ const tr: Dict = {
     approve: 'Onayla',
     reject: 'Reddet',
   },
+  featureCatalog: {
+    title: 'InternshipCRM neler yapabilir',
+    subtitle: 'Tüm özellik kataloğu — ilk temastan işe alıma, her rol için.',
+    allFeatures: 'Tüm özellikler',
+    backHome: 'Ana sayfaya dön',
+    categories: { tracking: 'Süreç & başvuru', collaboration: 'Mentorluk & iş birliği', companies: 'Şirketler için', insights: 'İçgörü & AI', trust: 'Gizlilik & güvenlik', platform: 'Platform' },
+    items: {
+      messaging: { t: 'Yerleşik mesajlaşma', d: 'Mentorluk başına thread’ler, ekler ve e-posta yansıtmalı tek gelen kutusu — uygulamanın her yerinden erişilebilir.' },
+      activityReport: { t: 'Günlük aktivite raporları', d: 'Mentör ve adminler için rıza temelli mentee aktivite özetleri: girişler, sitede geçen süre, gezilen sayfalar ve tamamlanan görevler.' },
+      talentPool: { t: 'Yetenek havuzu & bildirimler (Premium)', d: 'Şirketler rıza temelli yetenek havuzunda arama yapar, doğrulanmış aday kartlarını görür ve açık pozisyona uyan aday çıkınca bildirim alır.' },
+      aiPackage: { t: 'AI asistanları (Premium)', d: 'Mentee’lere CV geri bildirimi ve mülakat hazırlığı, mentörlere etkileşim özeti, AI destekli eşleştirme — hepsi rıza ve kota kapılı.' },
+      security: { t: 'İki adımlı doğrulama & oturum kontrolü', d: 'Rol bazlı 2FA zorlama, oturum zaman aşımı ve "tüm cihazlardan çıkış".' },
+      selfServe: { t: 'Self-servis mentee başvurusu', d: 'Mentee’ler kendileri kaydolur, onboarding’i tamamlar ve mentörlük talep eder; adminler kuyruğundan onaylar.' },
+    },
+  },
   aiSummary: {
     button: 'AI özeti',
     hint: 'Bu etkileşim kaydını AI ile özetle (bir AI kredisi kullanır).',
@@ -3549,6 +3579,21 @@ const de: Dict = {
     approve: 'Genehmigen',
     reject: 'Ablehnen',
   },
+  featureCatalog: {
+    title: 'Alles, was InternshipCRM kann',
+    subtitle: 'Der vollständige Funktionskatalog — vom Erstkontakt bis zur Einstellung, für jede Rolle.',
+    allFeatures: 'Alle Funktionen',
+    backHome: 'Zurück zur Startseite',
+    categories: { tracking: 'Pipeline & Aufnahme', collaboration: 'Mentoring & Zusammenarbeit', companies: 'Für Unternehmen', insights: 'Einblicke & KI', trust: 'Datenschutz & Sicherheit', platform: 'Plattform' },
+    items: {
+      messaging: { t: 'Integrierte Nachrichten', d: 'Ein zentraler Posteingang mit Threads pro Mentoring, Anhängen und E-Mail-Spiegelung — überall in der App erreichbar.' },
+      activityReport: { t: 'Tägliche Aktivitätsberichte', d: 'Einwilligungsbasierte Mentee-Aktivitätsübersichten für Mentoren und Admins: Logins, Verweildauer, besuchte Seiten und erledigte To-dos.' },
+      talentPool: { t: 'Talent-Pool & Benachrichtigungen (Premium)', d: 'Unternehmen durchsuchen einen einwilligungsbasierten Talent-Pool, sehen verifizierte Kandidatenkarten und werden bei passenden Kandidaten benachrichtigt.' },
+      aiPackage: { t: 'KI-Assistenten (Premium)', d: 'Lebenslauf-Feedback und Interviewvorbereitung für Mentees, Interaktionszusammenfassungen für Mentoren, KI-gestütztes Matching — alles einwilligungs- und kontingentgesteuert.' },
+      security: { t: 'Zwei-Faktor-Auth & Sitzungskontrolle', d: 'Rollenbasierte 2FA-Durchsetzung, Sitzungs-Timeouts und „Auf allen Geräten abmelden".' },
+      selfServe: { t: 'Self-Service-Mentee-Aufnahme', d: 'Mentees registrieren sich selbst, durchlaufen das Onboarding und fragen Mentoring an; Admins genehmigen aus einer Warteschlange.' },
+    },
+  },
   aiSummary: {
     button: 'KI-Zusammenfassung',
     hint: 'Dieses Interaktionsprotokoll mit KI zusammenfassen (verbraucht ein KI-Guthaben).',
@@ -3975,7 +4020,7 @@ export function getDictionary(locale: Locale): Dict {
 // getServerDictionary), never through useT() on the client — e.g. the landing
 // marketing copy. They are stripped from the dictionary serialized into every
 // page's client payload to keep it lean (#502).
-export const SERVER_ONLY_NAMESPACES = ['landing'] as const;
+export const SERVER_ONLY_NAMESPACES = ['landing', 'featureCatalog'] as const;
 export type ClientDictionary = Omit<Dictionary, (typeof SERVER_ONLY_NAMESPACES)[number]>;
 
 export function getClientDictionary(locale: Locale): ClientDictionary {
