@@ -146,6 +146,9 @@ model User {
   companyNeedAlerts       CompanyNeedAlert[]       @relation("CompanyNeedAlertMentee")
   mentorshipRequests      MentorshipRequest[]      @relation("MentorshipRequests")
   decidedRequests         MentorshipRequest[]      @relation("DecidedMentorshipRequests")
+  supportTickets          SupportTicket[]          @relation("SupportRequester")
+  assignedSupportTickets  SupportTicket[]          @relation("SupportAssignee")
+  supportMessages         SupportMessage[]         @relation("SupportMessageSender")
   authoredRelationNotes   RelationNote[]           @relation("RelationNoteAuthor")
   pageViews               PageView[]
 
@@ -382,6 +385,47 @@ model CompanyEntitlement {
 
   @@unique([companyId, feature])
   @@index([companyId])
+}
+
+// Support tickets (#586/#592): a relation-independent channel between any user
+// and the admins. Deliberately separate from Message (which is bound to a
+// MentorshipRelation) — clean boundary, no relation baggage.
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+model SupportTicket {
+  id              String        @id @default(cuid())
+  requesterId     String
+  status          SupportStatus @default(OPEN)
+  subject         String?
+  assignedAdminId String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  closedAt        DateTime?
+
+  requester     User             @relation("SupportRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  assignedAdmin User?            @relation("SupportAssignee", fields: [assignedAdminId], references: [id])
+  messages      SupportMessage[]
+
+  @@index([requesterId])
+  @@index([status])
+}
+
+model SupportMessage {
+  id        String    @id @default(cuid())
+  ticketId  String
+  senderId  String
+  body      String    @db.Text
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
 }
 
 // A mentee's self-serve request for mentorship (#590). One PENDING request at
