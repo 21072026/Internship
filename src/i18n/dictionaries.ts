@@ -1031,6 +1031,10 @@ const en = {
     sourceName: 'Source',
     sourceInPipeline: 'In pipeline',
     sourceUnsourced: '{n} mentee(s) have no source and are not shown above.',
+    fullReportTitle: 'Full analytics report',
+    fullReport: 'Full report',
+    fullReportExcel: 'Full report (Excel)',
+    fullReportMonth: 'Month',
   },
   apply: {
     title: 'Apply for mentorship',
@@ -2302,6 +2306,10 @@ const tr: Dict = {
     sourceName: 'Kaynak',
     sourceInPipeline: 'Süreçte',
     sourceUnsourced: '{n} mentee’nin kaynağı yok ve yukarıda gösterilmiyor.',
+    fullReportTitle: 'Tam analitik raporu',
+    fullReport: 'Tam rapor',
+    fullReportExcel: 'Tam rapor (Excel)',
+    fullReportMonth: 'Ay',
   },
   apply: {
     title: 'Mentorluk başvurusu',
@@ -3571,6 +3579,10 @@ const de: Dict = {
     sourceName: 'Quelle',
     sourceInPipeline: 'In der Pipeline',
     sourceUnsourced: '{n} Mentee(s) ohne Quelle werden oben nicht angezeigt.',
+    fullReportTitle: 'Vollständiger Analytik-Bericht',
+    fullReport: 'Vollständiger Bericht',
+    fullReportExcel: 'Vollständiger Bericht (Excel)',
+    fullReportMonth: 'Monat',
   },
   apply: {
     title: 'Für ein Mentoring bewerben',
