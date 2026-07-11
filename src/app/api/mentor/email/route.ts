@@ -39,25 +39,32 @@ export async function POST(request: Request) {
     include: { mentee: { select: { email: true, fullName: true } } },
   });
 
-  const html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${esc(body)
-    .split('\n')
-    .map((l) => `<p>${l || '&nbsp;'}</p>`)
-    .join('')}</div>`;
+  // Template placeholders (e.g. "{name}") are filled per recipient with the
+  // mentee's own name — otherwise the literal "{name}" is emailed out. A replacer
+  // function avoids `$`-sequences in a name being interpreted by String.replace.
+  const fill = (s: string, name: string) => s.replace(/\{name\}/g, () => name);
 
   let sent = 0;
   for (const rel of relations) {
+    const name = rel.mentee.fullName;
+    const personalSubject = fill(subject, name);
+    const personalBody = fill(body, name);
+    const html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">${esc(personalBody)
+      .split('\n')
+      .map((l) => `<p>${l || '&nbsp;'}</p>`)
+      .join('')}</div>`;
     try {
       // Reply-To routes mentee replies back into this thread (inbound email).
-      await sendEmail({ to: rel.mentee.email, subject, html, replyTo: replyAddress(rel.id) });
+      await sendEmail({ to: rel.mentee.email, subject: personalSubject, html, replyTo: replyAddress(rel.id) });
     } catch (e) {
       console.error('Mentor email failed for', rel.mentee.email, e);
     }
     await prisma.interactionLog.create({
-      data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${subject} — ${body}` },
+      data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${personalSubject} — ${personalBody}` },
     });
     // Mirror the email into the conversation thread + notify the mentee in-app.
     await prisma.message.create({
-      data: { relationId: rel.id, senderId: session.user.id, channel: 'EMAIL', body: `${subject}\n\n${body}` },
+      data: { relationId: rel.id, senderId: session.user.id, channel: 'EMAIL', body: `${personalSubject}\n\n${personalBody}` },
     });
     await notify(rel.menteeId, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, `/messages/${rel.id}`);
     sent++;
