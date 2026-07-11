@@ -17,6 +17,10 @@ const include = {
     select: { mentee: { select: { id: true, fullName: true } } },
     take: 12,
   },
+  members: {
+    orderBy: { addedAt: 'asc' },
+    select: { role: true, user: { select: { id: true, fullName: true, role: true } } },
+  },
   _count: { select: { relations: true } },
 } as const;
 
@@ -31,9 +35,12 @@ export async function GET() {
   else if (session.user.role === 'MENTEE') where = { isPublic: true };
 
   const projects = await prisma.project.findMany({ where, include, orderBy: { updatedAt: 'desc' } });
-  // Mentees only browse the public showcase set — keep it PII-free (count only).
+  // Mentees only browse the public showcase set — keep it PII-free
+  // (member/relation names stripped, count only).
   if (session.user.role === 'MENTEE') {
-    return NextResponse.json({ projects: projects.map(({ relations: _relations, ...rest }) => rest) });
+    return NextResponse.json({
+      projects: projects.map(({ relations: _relations, members: _members, ...rest }) => rest),
+    });
   }
   return NextResponse.json({ projects });
 }
@@ -78,6 +85,9 @@ export async function POST(request: Request) {
 
   const project = await prisma.project.create({
     data: {
+      // Person owners also get an OWNER member row (#617) so the members
+      // table is authoritative from day one.
+      ...(owner.ownerUserId ? { members: { create: { userId: owner.ownerUserId, role: 'OWNER' } } } : {}),
       name: d.name,
       description: d.description || null,
       technologies: d.technologies ?? [],

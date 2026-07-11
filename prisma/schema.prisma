@@ -136,6 +136,7 @@ model User {
   avatarFile              AvatarFile?
   notifications           Notification[]
   ownedProjects           Project[]                @relation("ProjectOwner")
+  projectMemberships      ProjectMember[]          @relation("ProjectMemberships")
   availabilitySlots       AvailabilitySlot[]
   company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
   source                  Source?                  @relation(fields: [sourceId], references: [id])
@@ -580,9 +581,34 @@ model Project {
   ownerCompany Company?             @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
   relations    MentorshipRelation[]
   tasks        ProjectTask[]
+  members      ProjectMember[]
 
   @@index([ownerUserId])
   @@index([ownerCompanyId])
+}
+
+// Person-level project membership (#617): a project can have several OWNERs
+// (admins/mentors) and several MENTORs. Company ownership stays on
+// ownerCompanyId; legacy ownerType/ownerUserId are kept in sync with the
+// OWNER rows for backward compatibility until every consumer reads members.
+enum ProjectMemberRole {
+  OWNER
+  MENTOR
+}
+
+model ProjectMember {
+  id        String            @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectMemberRole @default(MENTOR)
+  addedAt   DateTime          @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation("ProjectMemberships", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId, role])
 }
 
 // A task within a project — supports a task list + progress % (checklist 4).
