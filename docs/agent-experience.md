@@ -101,3 +101,31 @@ belirsiz. Bunlara başlamadan maintainer'dan ürün kararı iste.
 **Verify-before-build:** `npm run build` in the sandbox needs
 `PRISMA_QUERY_ENGINE_LIBRARY` exported; a chained `format && validate && generate` without
 `DATABASE_URL` fails at validate — pass a dummy `DATABASE_URL` for validate only.
+
+## 2026-07-11 — Premium Faz 2 tamamlama (analitik + AI paketi)
+
+**Faz 2 gating kararları (uygulandı, gerekçeli):** admin-facing premium analitik
+tek-tenant'ta `premiumAnalytics` Setting flag'i ile kapatıldı (hasFeature şirket-bazlı
+olduğu için admin'e uymuyor; Faz 3 multi-tenancy'de per-tenant entitlement'a taşınır).
+AI tarafında merkezi kapı `runAiGated` (src/lib/aiGate.ts): consent → kota → sağlayıcı →
+çağrı → ölçüm; kota `aiMonthlyQuota` Setting + `AiUsage` satırları (yalnızca BAŞARILI
+çağrı kredi tüketir). Yeni AI özelliği eklerken sağlayıcıyı doğrudan çağırma — kapıdan geç.
+
+**Mentee'ye asla paywall:** mentee-facing AI özellikleri (CV feedback, interview prep)
+kota bitince nötr "şu an kullanılamıyor" der; kota/fiyat mekaniği yalnızca admin'e görünür.
+
+**Kişisel veri sağlayıcıya gitmiyor:** eşleştirme/interview-prep yalnızca skills/pozisyon
+string'leri gönderir; mentörler anonim etiketlerle (A-E) sıralanıp lokalde geri eşlenir.
+Yeni AI özelliklerinde bu deseni koru; kişi-verisi işleyen özellik için özel ConsentType aç
+(örn. AI_INTERACTION_SUMMARY).
+
+**dictionaries.ts çakışma pratiği:** aynı bölgeye dokunan paralel PR'larda squash sonrası
+rebase kaçınılmaz. Çözüm kalıbı: HEAD bloğunu tut + "  }," kapat + gelen dalın yalnızca
+yeni bloğunu ekle (python regex ile 3 locale'de tek seferde). `check:i18n` anında doğrular.
+
+**Stale Prisma client tuzağı (yine):** rebase sonrası `tsc` yeni enum değerini tanımazsa
+önce `npx prisma generate` — kod hatası sanma.
+
+**CI kırmızısı triage:** "228 passed" + exit 1 → altyapı flake'i (Chromium SIGSEGV, teardown);
+`rerun_failed_jobs` yeterli. Log'da gerçek spec hatası olup olmadığına mutlaka bak; benim
+diff'ime dokunmayan spec'te strict-mode ihlali de tipik flake işareti.
