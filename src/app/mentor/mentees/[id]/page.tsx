@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { InteractionSummary } from '@/components/InteractionSummary';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -327,6 +328,8 @@ export default function MenteeDetailPage() {
               </Button>
             </div>
           </CardHeader>
+
+          {relation.interactions.length > 0 && <InteractionSummary relationId={relation.id} />}
 
           {showForm && (
             <div data-testid="interaction-log-form" className="mb-6 p-4 bg-gray-50 rounded-xl space-y-3">

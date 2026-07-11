@@ -13,6 +13,7 @@ const CONSENTS = [
   { type: 'AI_CV_PARSING', key: 'aiCvParsing' as const },
   { type: 'ACTIVITY_TRACKING', key: 'activityTracking' as const },
   { type: 'TALENT_POOL_VISIBILITY', key: 'talentPoolVisibility' as const, menteeOnly: true },
+  { type: 'AI_INTERACTION_SUMMARY', key: 'aiInteractionSummary' as const, menteeOnly: true },
 ];
 
 export function ConsentSettings() {

@@ -184,6 +184,9 @@ enum ConsentType {
   // need-match alerts, early access). GDPR basis for company-facing exposure —
   // required IN ADDITION to publicProfile (#527). Default off.
   TALENT_POOL_VISIBILITY
+  // Opt-in to sending the mentee's interaction-log text to the AI provider for
+  // the mentor-facing auto-summary (Faz 2, #534). Default off.
+  AI_INTERACTION_SUMMARY
 }
 
 model UserConsent {
