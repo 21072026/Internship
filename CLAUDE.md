@@ -38,6 +38,8 @@ npm run test:e2e:headed  # same, with a visible browser
 server; set `BASE_URL=https://crm-preview.ersah.in` to run against a deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
+The **full suite** also runs on a schedule, 4× a day (`.github/workflows/e2e-full.yml`,
+4-way sharded); a red scheduled run emails the team (`ALERT_EMAIL_TO`, stress.yml pattern).
 
 ## Architecture
 
