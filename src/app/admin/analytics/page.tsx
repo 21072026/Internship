@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
+import { CohortComparison } from '@/components/admin/CohortComparison';
 import { useT, useLocale } from '@/i18n/client';
 
 interface Analytics {
@@ -271,6 +272,7 @@ export default function AdminAnalyticsPage() {
           </Card>
         </div>
       )}
+      <CohortComparison />
         </>
       )}
     </div>

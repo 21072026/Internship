@@ -18,6 +18,11 @@ export const SETTING_DEFAULTS = {
   // holding the EARLY_ACCESS entitlement, before opening to all subscribers.
   // '0' disables the window (everyone sees new candidates immediately).
   earlyAccessWindowDays: '7',
+  // Premium analytics tier (Faz 2, #521/#538): unlocks cohort comparison (and
+  // future export/scheduled reports) on the admin analytics page. Off by
+  // default — basic analytics stay free. Single-tenant placeholder for real
+  // billing; becomes a per-tenant entitlement with Faz 3 multi-tenancy.
+  premiumAnalytics: 'false',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
