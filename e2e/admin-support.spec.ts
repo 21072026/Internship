@@ -48,15 +48,22 @@ test('admin queue: reply takes assignment and IN_PROGRESS, close notifies the re
     await expect(adminPage.getByTestId('admin-reply-input')).toBeVisible();
     await adminPage.getByTestId('admin-reply-input').fill('Thanks — we are checking the dates now.');
     await adminPage.getByTestId('admin-reply-send').click();
-    await expect(adminPage.getByText('checking the dates now', { exact: false })).toBeVisible({ timeout: 10_000 });
+    await expect(row.getByText('checking the dates now', { exact: false })).toBeVisible({ timeout: 10_000 });
 
     // Reply side-effects: IN_PROGRESS, assigned to the replying admin,
-    // requester message marked read, requester notified.
-    const afterReply = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
-    expect(afterReply!.status).toBe('IN_PROGRESS');
-    expect(afterReply!.assignedAdminId).toBe(admin.id);
-    expect(await prisma.supportMessage.count({ where: { ticketId, senderId: user.id, readAt: null } })).toBe(0);
-    expect(await prisma.notification.count({ where: { userId: user.id, type: 'support' } })).toBeGreaterThanOrEqual(1);
+    // requester message marked read, requester notified. Poll the DB rather
+    // than asserting instantly — the reply bubble can render before the
+    // request's follow-up writes are committed.
+    await expect
+      .poll(async () => (await prisma.supportTicket.findUnique({ where: { id: ticketId } }))?.status, { timeout: 10_000 })
+      .toBe('IN_PROGRESS');
+    expect((await prisma.supportTicket.findUnique({ where: { id: ticketId } }))!.assignedAdminId).toBe(admin.id);
+    await expect
+      .poll(() => prisma.supportMessage.count({ where: { ticketId, senderId: user.id, readAt: null } }), { timeout: 10_000 })
+      .toBe(0);
+    await expect
+      .poll(() => prisma.notification.count({ where: { userId: user.id, type: 'support' } }), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1);
 
     // The user sees the admin reply in their pinned chat.
     const userView = await (await userPage.request.get('/api/support')).json();
