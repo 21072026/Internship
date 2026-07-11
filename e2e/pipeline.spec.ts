@@ -5,7 +5,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('mentor can change a mentee pipeline stage and it persists', async ({ page }) => {
+test('mentor can change a mentee pipeline stage and it persists', { tag: '@smoke' }, async ({ page }) => {
   const mentorEmail = uniqueEmail('mentor');
   const menteeEmail = uniqueEmail('mentee');
   const password = 'StagePass123!';

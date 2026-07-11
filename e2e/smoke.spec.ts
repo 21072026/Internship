@@ -27,7 +27,7 @@ async function login(page: Page) {
   await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 }
 
-test('home page loads with favicon and no console errors', async ({ page }) => {
+test('home page loads with favicon and no console errors', { tag: '@smoke' }, async ({ page }) => {
   const diag: string[] = [];
   attachDiagnostics(page, diag);
   const res = await page.goto('/');
@@ -38,19 +38,19 @@ test('home page loads with favicon and no console errors', async ({ page }) => {
   expect(diag, `unexpected diagnostics: ${diag.join(' | ')}`).toEqual([]);
 });
 
-test('signin page renders the credentials form', async ({ page }) => {
+test('signin page renders the credentials form', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/auth/signin');
   await expect(page.locator('input[type="email"], input[name="email"]')).toBeVisible();
   await expect(page.locator('input[type="password"]')).toBeVisible();
   await expect(page.locator('button[type="submit"]')).toBeVisible();
 });
 
-test('admin can log in and lands off the signin page', async ({ page }) => {
+test('admin can log in and lands off the signin page', { tag: '@smoke' }, async ({ page }) => {
   await login(page);
   expect(page.url()).not.toContain('/auth/signin');
 });
 
-test('admin pages load without server errors', async ({ page }) => {
+test('admin pages load without server errors', { tag: '@smoke' }, async ({ page }) => {
   await login(page);
   const paths = ['/admin', '/admin/candidates', '/admin/mentorship', '/admin/companies', '/admin/invite'];
   for (const path of paths) {
