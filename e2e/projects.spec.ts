@@ -16,6 +16,10 @@ test('a mentor can create and see a project they own', async ({ page }) => {
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
     await page.goto('/mentor/projects');
+    // Card-first screen (#615): no form on load; it opens via "Add project".
+    await expect(page.getByTestId('add-project')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel(/^Name/)).toHaveCount(0);
+    await page.getByTestId('add-project').click();
     await page.getByLabel(/^Name/).fill('Community Bot');
     await page.getByLabel(/Technologies/).fill('Python, Docker');
     const done = page.waitForResponse((r) => r.url().endsWith('/api/projects') && r.request().method() === 'POST');
