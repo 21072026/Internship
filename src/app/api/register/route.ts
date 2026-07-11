@@ -44,8 +44,10 @@ export async function POST(request: Request) {
     }
 
     // With a token: validate the invitation and use its role.
-    // Without a token: open self-registration as a MENTOR.
-    let role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE' = 'MENTOR';
+    // Without a token: open self-registration creates a MENTEE (#589) — mentees
+    // are the self-serve intake; mentors/companies/sources arrive by invitation.
+    // Same safety net as before: unverified email + inactive until admin approval.
+    let role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE' = 'MENTEE';
 
     if (token) {
       const invitation = await prisma.invitationToken.findUnique({ where: { token } });
