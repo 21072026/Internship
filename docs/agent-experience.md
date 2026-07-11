@@ -157,3 +157,25 @@ yeni spec'lerinde DB yan-etki assert'lerini `expect.poll` ile yaz (bubble render
 **E2E'de destek sistemi deseni:** iki browser context (user + admin) tek spec'te tam döngüyü
 (ticket aç → kuyrukta gör → yanıtla → durum geçişi → bildirim) doğrulayabiliyor; API çağrılarını
 `page.request` ile atıp UI'ı yalnızca kritik noktalarda assert etmek hem hızlı hem az kırılgan.
+
+## 2026-07-11 (2. tur) — CI hızlandırma + Projeler yenileme (0.7.0-beta)
+
+**Smoke gate kanıtlandı:** PR gate @smoke setine indirildikten sonra Playwright
+job'ı ~10 dk'dan ~3,5 dk'ya düştü (ilk kanıt: #630'un kendi CI'ı). Yeni kritik
+akış spec'i yazarken `{ tag: '@smoke' }` eklemeyi unutma; tam suite güvenlik ağı
+`e2e-full.yml` (4×/gün, 4 shard, kırmızıda tek mail).
+
+**Stacked PR ritmi oturdu:** base merge → `git rebase --onto origin/main <eski-base>
+<branch>` → force-push-with-lease → PR. Aynı include bloğuna dokunan paralel
+branch'lerde (örn. /api/projects include) conflict beklenen durum; iki tarafı da
+tutup birleştir.
+
+**Owner-perms deseni (#619):** sunucu tarafında alan-bazlı yetki için "owner
+değilse gönderilen korumalı alanları 403 + alan listesiyle reddet" yaklaşımı,
+UI'da da aynı alanları disabled yapıp payload'dan çıkarmakla eşleşiyor — UI'a
+güvenmeden net hata mesajı veriyor.
+
+**Actions runner'ı sunucu eli olarak kullan:** bu konteynerde SSH anahtarı yok ama
+runner'da var — tek seferlik sunucu işleri (wildcard cert, izin doğrulama) için
+`workflow_dispatch` + deploy.yml'in SSH deseni yeterli (infra-setup.yml). Adımları
+ayrı ayrı atlanabilir ve idempotent yap; root gerektiren işleri deneme, TODO yaz.

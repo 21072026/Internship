@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.0-beta',
+    date: '2026-07-11',
+    highlights: {
+      en: [
+        'Projects, rebuilt — the screen now opens with rich project cards (who is on it, tech, links, progress); the form appears only when you add or edit. Every project has a detail page.',
+        'Share project ownership — projects can now have several owners and several mentors. Owners add or remove people from the card and can hand a project over in one step.',
+        'Clear roles — the project name, status, visibility and dates can only be changed by an owner; everyone on the project can work on the description, links, goals and tasks.',
+      ],
+      tr: [
+        'Projeler yenilendi — ekran artık zengin proje kartlarıyla açılıyor (kimler var, teknolojiler, linkler, ilerleme); form yalnızca ekleme/düzenlemede geliyor. Her projenin bir detay sayfası var.',
+        'Proje sahipliğini paylaş — projelerde artık birden çok owner ve birden çok mentör olabiliyor. Owner’lar kart üzerinden kişi ekleyip çıkarabiliyor ve projeyi tek adımda devredebiliyor.',
+        'Net roller — proje adı, durumu, görünürlüğü ve tarihlerini yalnızca owner değiştirebilir; projedeki herkes açıklama, linkler, hedefler ve görevler üzerinde çalışabilir.',
+      ],
+      de: [
+        'Projekte, neu gebaut — der Bildschirm öffnet jetzt mit reichhaltigen Projektkarten (wer dabei ist, Technologien, Links, Fortschritt); das Formular erscheint nur beim Anlegen/Bearbeiten. Jedes Projekt hat eine Detailseite.',
+        'Geteilte Projektverantwortung — Projekte können jetzt mehrere Owner und mehrere Mentoren haben. Owner fügen Personen direkt auf der Karte hinzu und übergeben ein Projekt in einem Schritt.',
+        'Klare Rollen — Name, Status, Sichtbarkeit und Termine ändert nur ein Owner; an Beschreibung, Links, Zielen und Aufgaben arbeiten alle Projektmitglieder.',
+      ],
+    },
+  },
+  {
     version: '0.6.0-beta',
     date: '2026-07-11',
     highlights: {
