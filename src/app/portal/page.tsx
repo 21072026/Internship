@@ -7,6 +7,7 @@ import { JourneyTracker } from '@/components/JourneyTracker';
 import { NotesPanel } from '@/components/NotesPanel';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
+import { InterviewPrep } from '@/components/InterviewPrep';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -35,6 +36,7 @@ async function getMenteeData(menteeId: string) {
         linkedinUrl: true,
         portfolioUrl: true,
         publicProfile: true,
+        targetPosition: true,
         createdAt: true,
       },
     }),
@@ -329,6 +331,8 @@ export default async function PortalDashboard() {
       <div className="mt-6">
         <NotesPanel />
       </div>
+
+      <InterviewPrep defaultPosition={user?.targetPosition} />
     </div>
   );
 }
