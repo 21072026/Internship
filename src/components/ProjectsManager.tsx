@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
-import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye } from 'lucide-react';
+import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2 } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 
@@ -34,6 +34,7 @@ interface Project {
   ownerCompany?: { id: string; name: string } | null;
   tasks?: Task[];
   relations?: { mentee: { id: string; fullName: string } }[];
+  members?: { role: 'OWNER' | 'MENTOR'; user: { id: string; fullName: string; role: string } }[];
   _count?: { relations: number };
 }
 
@@ -69,8 +70,11 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
+    // Mentors get a minimal directory too — needed for the member picker (#618).
+    fetch('/api/users').then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((d) => setMentors((d.users ?? []).filter((u: { role: string }) => u.role === 'MENTOR' || u.role === 'ADMIN')))
+      .catch(() => {});
     if (!isAdmin) return;
-    fetch('/api/users').then((r) => r.json()).then((d) => setMentors((d.users ?? []).filter((u: { role: string }) => u.role === 'MENTOR')));
     fetch('/api/companies').then((r) => r.json()).then((d) => setCompanies(d.companies ?? []));
   }, [isAdmin]);
 
@@ -168,6 +172,40 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
 
   const ownerLabel = (p: Project) =>
     p.ownerType === 'COMPANY' ? p.ownerCompany?.name : p.ownerUser?.fullName;
+
+  // Owner management + transfer (#618) on top of /api/projects/[id]/members.
+  const [manageId, setManageId] = useState<string | null>(null);
+  const [addUserId, setAddUserId] = useState('');
+  const [addRole, setAddRole] = useState<'OWNER' | 'MENTOR'>('MENTOR');
+  const [memberErr, setMemberErr] = useState('');
+  const canManageMembers = (p: Project) =>
+    isAdmin || (p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER');
+
+  const memberCall = async (projectId: string, method: 'POST' | 'DELETE', body: Record<string, unknown>) => {
+    setMemberErr('');
+    const res = await fetch(`/api/projects/${projectId}/members`, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setMemberErr(d.code === 'last_owner' ? t.projects.lastOwnerError : d.error || t.common.error);
+      return false;
+    }
+    await load();
+    return true;
+  };
+
+  const addMember = (projectId: string) => {
+    if (!addUserId) return;
+    memberCall(projectId, 'POST', { userId: addUserId, role: addRole }).then((ok) => { if (ok) setAddUserId(''); });
+  };
+  // Transfer = make the target an OWNER, then step down yourself.
+  const transferTo = async (projectId: string) => {
+    if (!addUserId) return;
+    if (await memberCall(projectId, 'POST', { userId: addUserId, role: 'OWNER' })) {
+      await memberCall(projectId, 'DELETE', { userId: meId });
+    }
+  };
 
   return (
     <div>
@@ -341,10 +379,53 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                     })()}
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
+                    {canManageMembers(p) && (
+                      <button onClick={() => { setManageId(manageId === p.id ? null : p.id); setAddUserId(''); setMemberErr(''); }} aria-label={t.projects.manageOwners} data-testid="manage-owners" className="p-2 text-gray-400 hover:text-blue-600"><Users2 className="h-4 w-4" /></button>
+                    )}
                     <button onClick={() => edit(p)} aria-label={t.projects.editProject} className="p-2 text-gray-400 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => remove(p)} aria-label={t.projects.deleteProject} className="p-2 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
+
+                {manageId === p.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800" data-testid="owners-panel">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">{t.projects.manageOwners}</p>
+                    {memberErr && <p className="text-xs text-red-600 mb-2">{memberErr}</p>}
+                    <div className="space-y-1 mb-3">
+                      {(p.members ?? []).map((m) => (
+                        <div key={m.user.id} className="flex items-center gap-2 text-sm">
+                          <Badge variant={m.role === 'OWNER' ? 'info' : 'default'} className="text-xs">
+                            {m.role === 'OWNER' ? t.projects.roleOwner : t.projects.roleMentorMember}
+                          </Badge>
+                          <span className="flex-1 text-gray-800 dark:text-gray-200">{m.user.fullName}</span>
+                          <button onClick={() => memberCall(p.id, 'DELETE', { userId: m.user.id })} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 flex-wrap items-center">
+                      <select value={addUserId} onChange={(e) => setAddUserId(e.target.value)} data-testid="member-picker"
+                        className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-sm">
+                        <option value="">—</option>
+                        {mentors.filter((m) => !(p.members ?? []).some((x) => x.user.id === m.id)).map((m) => (
+                          <option key={m.id} value={m.id}>{m.fullName}</option>
+                        ))}
+                      </select>
+                      <select value={addRole} onChange={(e) => setAddRole(e.target.value as 'OWNER' | 'MENTOR')}
+                        className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-sm">
+                        <option value="MENTOR">{t.projects.roleMentorMember}</option>
+                        <option value="OWNER">{t.projects.roleOwner}</option>
+                      </select>
+                      <Button type="button" size="sm" variant="outline" disabled={!addUserId} onClick={() => addMember(p.id)} data-testid="member-add">
+                        {t.projects.add}
+                      </Button>
+                      {(p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER') && (
+                        <Button type="button" size="sm" variant="secondary" disabled={!addUserId} onClick={() => transferTo(p.id)} data-testid="member-transfer">
+                          {t.projects.transfer}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </Card>
             ))}
           </div>
