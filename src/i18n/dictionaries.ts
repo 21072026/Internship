@@ -708,6 +708,9 @@ const en = {
     by: 'by',
     confirmDelete: 'Delete project "{name}"? This cannot be undone.',
     confirmDeleteTask: 'Delete task "{title}"?',
+    viewDetail: 'Detail',
+    noMembers: 'No members yet',
+    goalsLabel: 'Goals',
   },
   evaluation: {
     title: 'Evaluation',
@@ -2073,6 +2076,9 @@ const tr: Dict = {
     by: '·',
     confirmDelete: '"{name}" projesini silmek istiyor musun? Bu işlem geri alınamaz.',
     confirmDeleteTask: '"{title}" görevini silmek istiyor musun?',
+    viewDetail: 'Detay',
+    noMembers: 'Henüz üye yok',
+    goalsLabel: 'Hedefler',
   },
   evaluation: {
     title: 'Değerlendirme',
@@ -3436,6 +3442,9 @@ const de: Dict = {
     by: 'von',
     confirmDelete: 'Projekt "{name}" löschen? Dies kann nicht rückgängig gemacht werden.',
     confirmDeleteTask: 'Aufgabe "{title}" löschen?',
+    viewDetail: 'Detail',
+    noMembers: 'Noch keine Mitglieder',
+    goalsLabel: 'Ziele',
   },
   evaluation: {
     title: 'Bewertung',
