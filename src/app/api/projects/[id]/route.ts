@@ -13,6 +13,10 @@ const include = {
     select: { id: true, pipelineStatus: true, mentee: { select: { id: true, fullName: true } }, mentor: { select: { fullName: true } } },
   },
   tasks: { orderBy: { order: 'asc' } },
+  members: {
+    orderBy: { addedAt: 'asc' },
+    select: { role: true, user: { select: { id: true, fullName: true, role: true } } },
+  },
 } as const;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -82,6 +86,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 
   const updated = await prisma.project.update({ where: { id }, data, include });
+  // Keep the members table in step with a legacy transfer (#617): the new
+  // person owner becomes (or stays) an OWNER member. Previous owners keep
+  // their rows — multi-owner is allowed; removal goes through /members.
+  if (transferred && typeof data.ownerUserId === 'string') {
+    await prisma.projectMember.upsert({
+      where: { projectId_userId: { projectId: id, userId: data.ownerUserId } },
+      update: { role: 'OWNER' },
+      create: { projectId: id, userId: data.ownerUserId, role: 'OWNER' },
+    });
+  }
   if (transferred) {
     await logActivity({ action: 'project.transfer', level: 'warning', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'project', targetId: id, detail: transferred });
   }

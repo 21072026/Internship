@@ -165,6 +165,13 @@ jobs:
             "\$IMAGE" \
             node prisma/seed-templates.mjs || true
 
+          # Backfill ProjectMember OWNER rows (#617, idempotent).
+          docker run --rm \
+            --network=host \
+            -e DATABASE_URL="\$DATABASE_URL" \
+            "\$IMAGE" \
+            node prisma/backfill-project-members.mjs || true
+
           docker stop internship-crm 2>/dev/null || true
           docker rm   internship-crm 2>/dev/null || true
           # Run with host networking so the app reaches the host's MySQL over
@@ -263,6 +270,13 @@ jobs:
             -e DATABASE_URL="\$CONTAINER_DB" \
             "\$IMAGE" \
             node prisma/seed-templates.mjs || true
+
+          # Backfill ProjectMember OWNER rows (#617, idempotent).
+          docker run --rm \
+            --network=host \
+            -e DATABASE_URL="\$DATABASE_URL" \
+            "\$IMAGE" \
+            node prisma/backfill-project-members.mjs || true
 
           docker stop internship-crm-preview 2>/dev/null || true
           docker rm   internship-crm-preview 2>/dev/null || true
