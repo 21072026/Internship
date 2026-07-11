@@ -729,6 +729,55 @@ export async function checkCompanyNeedMatches() {
   return { companies: companies.length, alerts };
 }
 
+// Weekly scheduled analytics report email (Faz 2, #541). Premium: only runs
+// when the premiumAnalytics setting is on. Sends every active admin a compact
+// pipeline summary — total relations, hired conversion, stage counts and the
+// last 7 days' activity — honoring the per-user digest email opt-out.
+export async function sendWeeklyAnalyticsReport() {
+  if ((await getSetting('premiumAnalytics')) !== 'true') return { locked: true, sent: 0 };
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [byStage, newRelations, interactions, admins] = await Promise.all([
+    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], _count: { _all: true } }),
+    prisma.mentorshipRelation.count({ where: { startDate: { gte: weekAgo } } }),
+    prisma.interactionLog.count({ where: { date: { gte: weekAgo } } }),
+    prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+    }),
+  ]);
+
+  const total = byStage.reduce((n, s) => n + s._count._all, 0);
+  const hired = byStage
+    .filter((s) => s.pipelineStatus === 'HIRED_660' || s.pipelineStatus === 'EMPLOYED_700')
+    .reduce((n, s) => n + s._count._all, 0);
+  const conversion = total ? Math.round((hired / total) * 100) : 0;
+  const stageRows = byStage
+    .sort((a, b) => b._count._all - a._count._all)
+    .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${s.pipelineStatus}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
+    .join('');
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+  let sent = 0;
+  for (const a of admins) {
+    if (!emailAllowed(a, 'digest')) continue;
+    await sendEmail({
+      to: a.email,
+      subject: 'Weekly analytics report — Internship CRM',
+      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color:#2563eb;">Weekly analytics report</h2>
+        <p>Hi ${a.fullName},</p>
+        <p><strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
+        last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.</p>
+        <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
+        <p><a href="${appUrl}/admin/analytics">Open the analytics dashboard</a></p>
+      </div>`,
+    }).catch(() => {});
+    sent++;
+  }
+  return { locked: false, sent };
+}
+
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
 export function initCronJobs() {
@@ -774,6 +823,18 @@ export function initCronJobs() {
     }
   });
   scheduledTasks.set('weekly-digest', digestTask);
+
+  // Weekly premium analytics report — Mondays 8:15 (no-op while the
+  // premiumAnalytics setting is off).
+  const analyticsTask = cron.schedule('15 8 * * 1', async () => {
+    try {
+      const r = await sendWeeklyAnalyticsReport();
+      if (!r.locked) console.log(`[Cron] Weekly analytics reports sent: ${r.sent}`);
+    } catch (e) {
+      console.error('[Cron] Analytics report error:', e);
+    }
+  });
+  scheduledTasks.set('analytics-report', analyticsTask);
 
   // Daily mentee-activity digest — every day at 7:30.
   const activityTask = cron.schedule('30 7 * * *', async () => {
