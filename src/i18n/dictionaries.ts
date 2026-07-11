@@ -894,6 +894,16 @@ const en = {
     consentRequired: 'The mentee has not allowed AI summaries. They can enable it under Account → Privacy & consent.',
     quotaExceeded: 'The monthly AI quota is exhausted. An admin can raise it in Settings.',
   },
+  cvFeedback: {
+    title: 'AI CV feedback',
+    hint: 'Get constructive suggestions to improve your CV — strengths, improvements and missing sections.',
+    button: 'Get feedback',
+    consentCta: 'Allow AI CV processing in settings →',
+    empty: 'Your CV appears to be empty or unreadable.',
+    consentRequired: 'AI CV processing is not enabled. You can allow it under Account → Privacy & consent.',
+    unavailable: 'CV feedback is temporarily unavailable. Please try again later.',
+
+  },
   templatesLib: { preview: 'Preview', close: 'Close', pdf: 'Save as PDF', txt: '.txt', md: '.md' },
   documents: {
     title: 'Documents',
@@ -2176,6 +2186,16 @@ const tr: Dict = {
     consentRequired: 'Mentee AI özetlerine izin vermemiş. Hesap → Gizlilik ve onay bölümünden açabilir.',
     quotaExceeded: 'Aylık AI kotası doldu. Admin, Ayarlar’dan artırabilir.',
   },
+  cvFeedback: {
+    title: 'AI CV geri bildirimi',
+    hint: 'CV’ni geliştirmek için yapıcı öneriler al — güçlü yanlar, iyileştirmeler ve eksik bölümler.',
+    button: 'Geri bildirim al',
+    consentCta: 'Ayarlardan AI CV işlemeye izin ver →',
+    empty: 'CV’n boş veya okunamıyor görünüyor.',
+    consentRequired: 'AI CV işleme açık değil. Hesap → Gizlilik ve onay bölümünden izin verebilirsin.',
+    unavailable: 'CV geri bildirimi şu an kullanılamıyor. Lütfen daha sonra tekrar dene.',
+
+  },
   templatesLib: { preview: 'Önizle', close: 'Kapat', pdf: 'PDF kaydet', txt: '.txt', md: '.md' },
   documents: {
     title: 'Dokümanlar',
@@ -3455,6 +3475,16 @@ const de: Dict = {
     empty: 'Noch keine Interaktionen zum Zusammenfassen.',
     consentRequired: 'Der Mentee hat KI-Zusammenfassungen nicht erlaubt. Aktivierbar unter Konto → Datenschutz & Einwilligung.',
     quotaExceeded: 'Das monatliche KI-Kontingent ist aufgebraucht. Ein Admin kann es in den Einstellungen erhöhen.',
+  },
+  cvFeedback: {
+    title: 'KI-Feedback zum Lebenslauf',
+    hint: 'Erhalte konstruktive Vorschläge zur Verbesserung deines Lebenslaufs — Stärken, Verbesserungen und fehlende Abschnitte.',
+    button: 'Feedback erhalten',
+    consentCta: 'KI-Verarbeitung des Lebenslaufs in den Einstellungen erlauben →',
+    empty: 'Dein Lebenslauf scheint leer oder unlesbar zu sein.',
+    consentRequired: 'Die KI-Verarbeitung des Lebenslaufs ist nicht aktiviert. Erlaube sie unter Konto → Datenschutz & Einwilligung.',
+    unavailable: 'Das Lebenslauf-Feedback ist vorübergehend nicht verfügbar. Bitte versuche es später erneut.',
+
   },
   templatesLib: { preview: 'Vorschau', close: 'Schließen', pdf: 'Als PDF speichern', txt: '.txt', md: '.md' },
   documents: {

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { CvManager } from '@/components/CvManager';
+import { CvFeedback } from '@/components/CvFeedback';
 import { CvSuggestPanel } from '@/components/CvSuggestPanel';
 import { SkillRating } from '@/components/SkillRating';
 import { AvatarManager } from '@/components/AvatarManager';
@@ -399,6 +400,7 @@ export default function ProfilePage() {
                       onApplySkills={applySuggestedSkills}
                     />
                   )}
+                  {cvUploaded && <CvFeedback />}
                 </div>
               )}
 
