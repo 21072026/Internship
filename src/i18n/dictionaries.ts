@@ -904,6 +904,16 @@ const en = {
     unavailable: 'CV feedback is temporarily unavailable. Please try again later.',
 
   },
+  interviewPrep: {
+    title: 'Interview preparation (AI)',
+    hint: 'Get realistic example questions and preparation tips for your target position. Your skills from your profile are taken into account.',
+    positionPlaceholder: 'Target position (from your profile if empty)',
+    focusPlaceholder: 'Optional focus, e.g. "system design"',
+    button: 'Prepare me',
+    noPosition: 'Set a target position first (in your profile) or type one above.',
+    unavailable: 'Interview prep is temporarily unavailable. Please try again later.',
+
+  },
   templatesLib: { preview: 'Preview', close: 'Close', pdf: 'Save as PDF', txt: '.txt', md: '.md' },
   documents: {
     title: 'Documents',
@@ -2196,6 +2206,16 @@ const tr: Dict = {
     unavailable: 'CV geri bildirimi şu an kullanılamıyor. Lütfen daha sonra tekrar dene.',
 
   },
+  interviewPrep: {
+    title: 'Mülakat hazırlığı (AI)',
+    hint: 'Hedef pozisyonun için gerçekçi örnek sorular ve hazırlık ipuçları al. Profilindeki yetenekler dikkate alınır.',
+    positionPlaceholder: 'Hedef pozisyon (boşsa profilinden alınır)',
+    focusPlaceholder: 'İsteğe bağlı odak, ör. "system design"',
+    button: 'Beni hazırla',
+    noPosition: 'Önce (profilinde) bir hedef pozisyon belirle ya da yukarıya yaz.',
+    unavailable: 'Mülakat hazırlığı şu an kullanılamıyor. Lütfen daha sonra tekrar dene.',
+
+  },
   templatesLib: { preview: 'Önizle', close: 'Kapat', pdf: 'PDF kaydet', txt: '.txt', md: '.md' },
   documents: {
     title: 'Dokümanlar',
@@ -3484,6 +3504,16 @@ const de: Dict = {
     empty: 'Dein Lebenslauf scheint leer oder unlesbar zu sein.',
     consentRequired: 'Die KI-Verarbeitung des Lebenslaufs ist nicht aktiviert. Erlaube sie unter Konto → Datenschutz & Einwilligung.',
     unavailable: 'Das Lebenslauf-Feedback ist vorübergehend nicht verfügbar. Bitte versuche es später erneut.',
+
+  },
+  interviewPrep: {
+    title: 'Interviewvorbereitung (KI)',
+    hint: 'Erhalte realistische Beispielfragen und Vorbereitungstipps für deine Zielposition. Deine Fähigkeiten aus dem Profil werden berücksichtigt.',
+    positionPlaceholder: 'Zielposition (leer = aus deinem Profil)',
+    focusPlaceholder: 'Optionaler Fokus, z. B. „System Design“',
+    button: 'Bereite mich vor',
+    noPosition: 'Lege zuerst (im Profil) eine Zielposition fest oder gib oben eine ein.',
+    unavailable: 'Die Interviewvorbereitung ist vorübergehend nicht verfügbar. Bitte versuche es später erneut.',
 
   },
   templatesLib: { preview: 'Vorschau', close: 'Schließen', pdf: 'Als PDF speichern', txt: '.txt', md: '.md' },
