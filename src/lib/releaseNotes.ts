@@ -13,6 +13,36 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.5.0-beta',
+    date: '2026-07-11',
+    highlights: {
+      en: [
+        'You decide who sees you — companies can only find you in talent search after your explicit consent, and a friendly banner helps you choose. Withdrawing hides you immediately.',
+        'AI helpers for mentees (free for you): constructive CV feedback and an interview-prep assistant with realistic questions and tips for your target position.',
+        'AI helpers for mentors: one-click summary of your interaction log with a mentee — progress, themes, risks and next steps (with the mentee’s permission).',
+        'Smarter mentor matching — suggestions now come with a short AI rationale; without AI they gracefully fall back to skill overlap.',
+        'Premium analytics for admins: cohort comparison, conversion per referral source, a full printable/Excel report and a weekly report email.',
+        'Fair AI usage — a monthly AI quota managed in Settings; mentees never see pricing or quotas.',
+      ],
+      tr: [
+        'Seni kimin göreceğine sen karar verirsin — şirketler seni ancak açık iznin sonrasında yetenek aramasında bulabilir; dostça bir banner seçim yapmana yardım eder. İzni geri çekince anında gizlenirsin.',
+        'Mentee’lere AI yardımcıları (senin için ücretsiz): yapıcı CV geri bildirimi ve hedef pozisyonuna uygun gerçekçi sorular + ipuçlarıyla mülakat hazırlık asistanı.',
+        'Mentörlere AI yardımcıları: bir mentee ile etkileşim kaydının tek tıkla özeti — ilerleme, temalar, riskler ve sonraki adımlar (mentee’nin izniyle).',
+        'Daha akıllı mentör eşleştirme — öneriler artık kısa bir AI gerekçesiyle geliyor; AI yoksa yetenek örtüşmesine zarifçe düşüyor.',
+        'Adminlere premium analitik: cohort karşılaştırması, kaynak bazlı dönüşüm, yazdırılabilir/Excel tam rapor ve haftalık rapor e-postası.',
+        'Adil AI kullanımı — Ayarlar’dan yönetilen aylık AI kotası; mentee’ler asla fiyat veya kota görmez.',
+      ],
+      de: [
+        'Du entscheidest, wer dich sieht — Unternehmen finden dich in der Talentsuche erst nach deiner ausdrücklichen Einwilligung; ein freundlicher Hinweis hilft dir bei der Wahl. Ein Widerruf verbirgt dich sofort.',
+        'KI-Helfer für Mentees (für dich kostenlos): konstruktives Lebenslauf-Feedback und ein Interview-Vorbereitungsassistent mit realistischen Fragen und Tipps für deine Zielposition.',
+        'KI-Helfer für Mentoren: Ein-Klick-Zusammenfassung des Interaktionsprotokolls mit einem Mentee — Fortschritt, Themen, Risiken und nächste Schritte (mit Einwilligung des Mentees).',
+        'Intelligenteres Mentoren-Matching — Vorschläge kommen jetzt mit einer kurzen KI-Begründung; ohne KI greift die Fähigkeiten-Überschneidung.',
+        'Premium-Analytik für Admins: Cohort-Vergleich, Konversion pro Quelle, ein druckbarer/Excel-Gesamtbericht und eine wöchentliche Berichts-E-Mail.',
+        'Faire KI-Nutzung — ein monatliches KI-Kontingent in den Einstellungen; Mentees sehen nie Preise oder Kontingente.',
+      ],
+    },
+  },
+  {
     version: '0.4.0-beta',
     date: '2026-07-10',
     highlights: {
