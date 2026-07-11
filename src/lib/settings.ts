@@ -23,6 +23,10 @@ export const SETTING_DEFAULTS = {
   // default — basic analytics stay free. Single-tenant placeholder for real
   // billing; becomes a per-tenant entitlement with Faz 3 multi-tenancy.
   premiumAnalytics: 'false',
+  // Monthly cap on AI provider calls across the org (Faz 2, #537). Every AI
+  // feature consumes from this pool via runAiGated; '0' disables AI calls
+  // entirely. Metered in AiUsage; resets each calendar month.
+  aiMonthlyQuota: '200',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

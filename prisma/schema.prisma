@@ -395,6 +395,21 @@ model CompanyNeedAlert {
   @@index([companyId])
 }
 
+// One row per successful AI provider call (Faz 2, #537) — the metering behind
+// the monthly AI quota (Setting.aiMonthlyQuota). scope identifies the feature
+// (e.g. "cv_extract"); userId/companyId record who consumed it (companyId
+// prepares per-company quotas for multi-tenancy).
+model AiUsage {
+  id        String   @id @default(cuid())
+  scope     String
+  userId    String?
+  companyId String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([scope])
+}
+
 // A company's read/interest signal on a candidate they're linked to via a
 // MentorshipRelation (EPIC: company shortlist). One record per company+mentee
 // pair; re-setting the status updates it in place.
