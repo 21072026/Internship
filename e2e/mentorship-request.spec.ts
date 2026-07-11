@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'fs';
+import path from 'path';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 
 test.afterAll(async () => {
@@ -14,6 +16,12 @@ test('mentee request → admin approve creates the relation; duplicate pending i
   const mentorEmail = uniqueEmail('req-mentor');
   const pw = 'RequestPass123';
   const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Request Mentee');
+  // Complete the onboarding gate (#591): profile basics + an uploaded CV.
+  await prisma.user.update({ where: { id: mentee.id }, data: { university: 'Test University', skills: ['React'] } });
+  const pdf = readFileSync(path.join(__dirname, 'fixtures', 'sample-cv.pdf'));
+  await prisma.cvFile.create({
+    data: { userId: mentee.id, filename: 'cv.pdf', contentType: 'application/pdf', size: pdf.length, data: pdf },
+  });
   await seedUser(adminEmail, pw, 'ADMIN', 'Request Admin');
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Request Mentor');
 

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { getMenteeRequestGate } from '@/lib/requestGate';
 
 // Mentee-side mentorship requests (#590): a mentee asks for a mentor; an admin
 // approves (creating the MentorshipRelation) or rejects via the admin queue.
@@ -19,13 +20,16 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const requests = await prisma.mentorshipRequest.findMany({
-    where: { menteeId: session.user.id },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-    select: { id: true, status: true, message: true, targetPosition: true, createdAt: true, decidedAt: true },
-  });
-  return NextResponse.json({ requests });
+  const [requests, gate] = await Promise.all([
+    prisma.mentorshipRequest.findMany({
+      where: { menteeId: session.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { id: true, status: true, message: true, targetPosition: true, createdAt: true, decidedAt: true },
+    }),
+    getMenteeRequestGate(session.user.id),
+  ]);
+  return NextResponse.json({ requests, gate });
 }
 
 // POST — create a request. Guards: one PENDING at a time, no request while a
@@ -37,6 +41,16 @@ export async function POST(request: Request) {
 
   const parsed = createSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+
+  // Onboarding gate (#591) — server-side, never trust the UI: profile + CV
+  // must be complete before a request is accepted.
+  const gate = await getMenteeRequestGate(session.user.id);
+  if (!gate.complete) {
+    return NextResponse.json(
+      { error: 'Complete your onboarding first', code: 'onboarding_incomplete', missing: gate.missing },
+      { status: 400 }
+    );
+  }
 
   const [activeRelation, pending, latest] = await Promise.all([
     prisma.mentorshipRelation.findFirst({ where: { menteeId: session.user.id, status: 'ACTIVE' }, select: { id: true } }),
