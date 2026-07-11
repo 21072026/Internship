@@ -154,6 +154,9 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 - **Work is tracked on a GitHub Project board** (Epics #5–#11, stories #12+). Move the issue
   to the matching column as you work.
 - Co-author trailer on commits: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- **Feature catalogue**: when a user-visible feature ships, add/update its entry in
+  `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
+  page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.
 - **Versioning**: on a notable batch of merged features (not every PR), bump `package.json`
   `version` (semver), add an entry to `CHANGELOG.md` (developer-facing, Keep a Changelog
   format), and add a matching entry to `src/lib/releaseNotes.ts` (user-facing, EN/TR/DE,
