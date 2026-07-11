@@ -716,6 +716,7 @@ const en = {
     roleMentorMember: 'Mentor',
     transfer: 'Transfer to selected',
     lastOwnerError: 'A project must keep at least one owner.',
+    ownerOnlyHint: 'Only a project owner can change the name, status, visibility and dates.',
   },
   evaluation: {
     title: 'Evaluation',
@@ -2089,6 +2090,7 @@ const tr: Dict = {
     roleMentorMember: 'Mentör',
     transfer: 'Seçilene devret',
     lastOwnerError: 'Projede en az bir owner kalmalı.',
+    ownerOnlyHint: 'Ad, durum, görünürlük ve tarihleri yalnızca proje owner’ı değiştirebilir.',
   },
   evaluation: {
     title: 'Değerlendirme',
@@ -3460,6 +3462,7 @@ const de: Dict = {
     roleMentorMember: 'Mentor',
     transfer: 'An Auswahl übertragen',
     lastOwnerError: 'Ein Projekt braucht mindestens einen Owner.',
+    ownerOnlyHint: 'Name, Status, Sichtbarkeit und Termine kann nur ein Projekt-Owner ändern.',
   },
   evaluation: {
     title: 'Bewertung',

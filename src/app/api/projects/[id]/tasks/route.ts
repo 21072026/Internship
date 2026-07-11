@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { canManageProject } from '@/lib/projectAccess';
+import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 
 const schema = z.object({ title: z.string().min(1).max(300) });
 
@@ -15,7 +15,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (!canManageProject(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Tasks are collaborative (#619): owners AND mentor members may edit.
+  if (!canManageProject(session.user, project) && !(await isProjectMember(session.user, id))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
