@@ -1,0 +1,171 @@
+name: Infra Setup (one-time, manual)
+
+# One-time foundations for topic-based preview environments (#583), run from
+# the Actions tab. Each step can be skipped independently, so a partial setup
+# can be completed or safely re-run — every step is idempotent.
+#
+#   1. dns   — wildcard A record `*.ersah.in` → server IP (Cloudflare API)
+#   2. cert  — wildcard TLS cert via acme.sh + DNS-01, on the server over SSH
+#   3. perms — verify $NGINX_CONF_DIR is writable + nginx reload works
+#
+# Required secrets: SSH_PRIVATE_KEY / SSH_HOST / SSH_USER / SSH_PORT (already
+# used by deploy.yml) and CF_API_TOKEN — a SCOPED Cloudflare token
+# (Zone→DNS→Edit + Zone→Zone→Read, zone ersah.in only). See infra/README.md.
+on:
+  workflow_dispatch:
+    inputs:
+      run_dns:
+        description: 'Step 1: create wildcard *.ersah.in A record (Cloudflare)'
+        type: boolean
+        default: true
+      run_cert:
+        description: 'Step 2: issue wildcard TLS cert on the server (acme.sh)'
+        type: boolean
+        default: true
+      run_perms:
+        description: 'Step 3: verify nginx conf dir + reload permissions'
+        type: boolean
+        default: true
+
+concurrency:
+  group: infra-setup
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    name: Wildcard DNS · TLS · nginx perms
+    runs-on: ubuntu-latest
+    env:
+      BASE_DOMAIN: ersah.in
+      NGINX_CONF_DIR: /etc/nginx/conf.d
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H -p "${SSH_PORT:-22}" "$SSH_HOST" \
+            >> ~/.ssh/known_hosts 2>/dev/null || \
+          ssh-keyscan -H "$SSH_HOST" \
+            >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      # ── Step 1: wildcard DNS ────────────────────────────────────────────────
+      # Idempotent: looks for an existing `*` A record first. The record points
+      # at the server's public IP (resolved from SSH_HOST) with the Cloudflare
+      # proxy on, matching the existing crm/crm-preview records.
+      - name: Wildcard DNS record (Cloudflare)
+        if: inputs.run_dns
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CF_API_TOKEN" ]; then
+            echo "::error::CF_API_TOKEN secret is not set — add the scoped Cloudflare token first (see infra/README.md §2)."
+            exit 1
+          fi
+          # SSH_HOST may be a hostname or an IP; resolve to the raw server IP.
+          if [[ "$SSH_HOST" =~ ^[0-9.]+$ ]]; then
+            SERVER_IP="$SSH_HOST"
+          else
+            SERVER_IP=$(getent ahostsv4 "$SSH_HOST" | awk '{print $1; exit}')
+          fi
+          [ -n "$SERVER_IP" ] || { echo "::error::could not resolve server IP from SSH_HOST"; exit 1; }
+          echo "Server IP resolved (not echoing)."
+
+          api() { curl -sS -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" "$@"; }
+          ZONE_ID=$(api "https://api.cloudflare.com/client/v4/zones?name=${BASE_DOMAIN}" | python3 -c "import sys,json;r=json.load(sys.stdin);print(r['result'][0]['id'] if r['result'] else '')")
+          [ -n "$ZONE_ID" ] || { echo "::error::zone ${BASE_DOMAIN} not found with this token"; exit 1; }
+
+          EXISTING=$(api "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?type=A&name=%2A.${BASE_DOMAIN}" | python3 -c "import sys,json;r=json.load(sys.stdin);print(len(r['result']))")
+          if [ "$EXISTING" != "0" ]; then
+            echo "Wildcard A record already exists — nothing to do."
+          else
+            api -X POST "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+              --data "{\"type\":\"A\",\"name\":\"*\",\"content\":\"${SERVER_IP}\",\"proxied\":true,\"ttl\":1}" \
+              | python3 -c "import sys,json;r=json.load(sys.stdin);assert r['success'],r;print('Created *.${BASE_DOMAIN} (proxied).')"
+          fi
+
+      # ── Step 2: wildcard TLS cert (on the server) ───────────────────────────
+      # Ships infra/acme-issue-wildcard.sh to the server and runs it with the
+      # CF token passed via base64 (never logged). acme.sh installs a cron for
+      # auto-renewal, so this really is one-time.
+      - name: Wildcard TLS cert via acme.sh (DNS-01)
+        if: inputs.run_cert
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CF_API_TOKEN" ]; then
+            echo "::error::CF_API_TOKEN secret is not set — add the scoped Cloudflare token first (see infra/README.md §2)."
+            exit 1
+          fi
+          scp -i ~/.ssh/deploy_key -P "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            infra/acme-issue-wildcard.sh "${SSH_USER}@${SSH_HOST}:/tmp/acme-issue-wildcard.sh"
+          B64_CF=$(printf '%s' "$CF_API_TOKEN" | base64 -w0)
+          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            "${SSH_USER}@${SSH_HOST}" "bash -s" << EOF
+          set -euo pipefail
+          export CF_Token=\$(printf '%s' '$B64_CF' | base64 -d)
+          export DOMAIN='${BASE_DOMAIN}'
+          chmod +x /tmp/acme-issue-wildcard.sh
+          /tmp/acme-issue-wildcard.sh
+          rm -f /tmp/acme-issue-wildcard.sh
+          EOF
+
+      # ── Step 3: nginx conf dir + reload permissions ─────────────────────────
+      # Verifies (and where possible prepares) what topic-deploy.sh needs:
+      # writable $NGINX_CONF_DIR, an active conf.d include, and a working
+      # reload. Prints clear TODOs instead of guessing at privileged changes.
+      - name: Verify nginx conf dir + reload
+        if: inputs.run_perms
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            "${SSH_USER}@${SSH_HOST}" "NGINX_CONF_DIR='${NGINX_CONF_DIR}' bash -s" << 'EOF'
+          set -u
+          ok=1
+          echo "== user: $(id -un) (uid $(id -u))"
+
+          if [ -d "$NGINX_CONF_DIR" ] && touch "$NGINX_CONF_DIR/.infra-setup-probe" 2>/dev/null; then
+            rm -f "$NGINX_CONF_DIR/.infra-setup-probe"
+            echo "OK: $NGINX_CONF_DIR is writable."
+          else
+            echo "TODO: $NGINX_CONF_DIR is NOT writable by $(id -un)."
+            echo "      As root: chown or ACL, e.g. setfacl -m u:$(id -un):rwx $NGINX_CONF_DIR"
+            ok=0
+          fi
+
+          if grep -rqs "conf\.d/\*\.conf" /etc/nginx/nginx.conf; then
+            echo "OK: nginx.conf includes conf.d/*.conf."
+          else
+            echo "WARN: could not confirm 'include /etc/nginx/conf.d/*.conf;' in /etc/nginx/nginx.conf — check manually (or set NGINX_CONF_DIR)."
+          fi
+
+          if nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1; then
+            echo "OK: nginx -t && systemctl reload nginx works directly."
+          elif sudo -n nginx -t >/dev/null 2>&1 && sudo -n systemctl reload nginx >/dev/null 2>&1; then
+            echo "OK: reload works via passwordless sudo."
+          else
+            echo "TODO: $(id -un) cannot reload nginx (directly or via sudo -n)."
+            echo "      As root, add a sudoers rule, e.g.:"
+            echo "      echo '$(id -un) ALL=(root) NOPASSWD: /usr/sbin/nginx -t, /usr/bin/systemctl reload nginx' > /etc/sudoers.d/topic-preview"
+            ok=0
+          fi
+
+          [ "$ok" = "1" ] || { echo "::warning::one or more TODOs above need a root shell on the server."; exit 78; }
+          EOF
