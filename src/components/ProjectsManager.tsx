@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
-import { Github, ExternalLink, Trash2, Pencil, Trello } from 'lucide-react';
+import { Github, ExternalLink, Trash2, Pencil, Trello, Plus } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 
@@ -48,6 +48,9 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ...blank });
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Card-first screen (#615): the create/edit form lives in a panel that only
+  // opens via "Add project" or a card's edit action.
+  const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
@@ -70,7 +73,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     fetch('/api/companies').then((r) => r.json()).then((d) => setCompanies(d.companies ?? []));
   }, [isAdmin]);
 
-  const reset = () => { setForm({ ...blank }); setEditingId(null); setOwnerType('ADMIN'); setOwnerUserId(''); setOwnerCompanyId(''); };
+  const reset = () => { setForm({ ...blank }); setEditingId(null); setOwnerType('ADMIN'); setOwnerUserId(''); setOwnerCompanyId(''); setShowForm(false); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +124,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => { fetch('/api/profile').then((r) => r.json()).then(({ user }) => user && setMeId(user.id)); }, []);
 
   const edit = (p: Project) => {
+    setShowForm(true);
     setEditingId(p.id);
     setForm({
       name: p.name, description: p.description ?? '', technologies: p.technologies.join(', '),
@@ -166,11 +170,19 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t.projects.title}</h1>
-        <p className="text-gray-500 mt-1">{t.projects.subtitle}</p>
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t.projects.title}</h1>
+          <p className="text-gray-500 mt-1">{t.projects.subtitle}</p>
+        </div>
+        {!showForm && (
+          <Button type="button" onClick={() => { reset(); setShowForm(true); }} data-testid="add-project">
+            <Plus className="h-4 w-4 mr-1" /> {t.projects.newProject}
+          </Button>
+        )}
       </div>
 
+      {showForm && (
       <Card className="mb-6 max-w-3xl">
         <CardHeader><CardTitle>{editingId ? t.projects.editProject : t.projects.newProject}</CardTitle></CardHeader>
         {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
@@ -229,21 +241,21 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
 
           <div className="flex gap-2">
             <Button type="submit" loading={saving}>{editingId ? t.projects.save : t.projects.create}</Button>
-            {editingId && <Button type="button" variant="outline" onClick={reset}>{t.common.cancel}</Button>}
+            <Button type="button" variant="outline" onClick={reset}>{t.common.cancel}</Button>
           </div>
         </form>
       </Card>
+      )}
 
-      <Card>
-        <CardHeader><CardTitle>{t.projects.allProjects} ({projects.length})</CardTitle></CardHeader>
-        {loading ? (
-          <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
-        ) : projects.length === 0 ? (
-          <p className="text-center py-10 text-gray-400">{t.projects.none}</p>
-        ) : (
-          <div className="divide-y divide-gray-50">
+      <h2 className="text-sm font-medium text-gray-500 mb-3">{t.projects.allProjects} ({projects.length})</h2>
+      {loading ? (
+        <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
+      ) : projects.length === 0 ? (
+        <Card><p className="text-center py-10 text-gray-400">{t.projects.none}</p></Card>
+      ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {projects.map((p) => (
-              <div key={p.id} className="py-3">
+              <Card key={p.id} data-testid="project-card">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -317,11 +329,10 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                     <button onClick={() => remove(p)} aria-label={t.projects.deleteProject} className="p-2 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}
-      </Card>
     </div>
   );
 }
