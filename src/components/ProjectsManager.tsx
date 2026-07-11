@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
-import { Github, ExternalLink, Trash2, Pencil, Trello, Plus } from 'lucide-react';
+import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 
@@ -33,6 +33,7 @@ interface Project {
   ownerUser?: { id: string; fullName: string } | null;
   ownerCompany?: { id: string; name: string } | null;
   tasks?: Task[];
+  relations?: { mentee: { id: string; fullName: string } }[];
   _count?: { relations: number };
 }
 
@@ -266,6 +267,20 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                     <p className="text-xs text-gray-500 mt-0.5">
                       {t.projects.owner}: {ownerLabel(p)} · {p._count?.relations ?? 0} {t.projects.members}
                     </p>
+                    {(p.relations?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5" data-testid="project-members">
+                        {p.relations!.slice(0, 6).map((r) => (
+                          <span key={r.mentee.id} className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
+                            {r.mentee.fullName}
+                          </span>
+                        ))}
+                        {(p._count?.relations ?? 0) > 6 && (
+                          <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs">
+                            +{(p._count?.relations ?? 0) - 6}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {p.description && <p className="text-sm text-gray-600 mt-1 line-clamp-2">{p.description}</p>}
                     <div className="flex flex-wrap gap-1 mt-2">
                       {p.technologies.map((tech) => (
@@ -276,6 +291,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       {p.repoUrl && <a href={p.repoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><Github className="h-3.5 w-3.5" />{t.projects.repo}</a>}
                       {p.demoUrl && <a href={p.demoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><ExternalLink className="h-3.5 w-3.5" />{t.projects.demo}</a>}
                       {p.boardUrl && <a href={p.boardUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><Trello className="h-3.5 w-3.5" />{t.projects.board}</a>}
+                      <a href={`/projects/${p.id}`} className="inline-flex items-center gap-1 text-blue-600 hover:underline" data-testid="project-detail-link"><Eye className="h-3.5 w-3.5" />{t.projects.viewDetail}</a>
                       {(p.startDate || p.endDate) && (
                         <span className="text-gray-400">
                           {p.startDate ? formatDate(p.startDate, locale) : '…'} – {p.endDate ? formatDate(p.endDate, locale) : '…'}

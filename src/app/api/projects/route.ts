@@ -11,6 +11,12 @@ const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
   ownerCompany: { select: { id: true, name: true } },
   tasks: { orderBy: { order: 'asc' } },
+  // Member (mentee) names for the card's "who's on it" row (#616).
+  relations: {
+    where: { status: 'ACTIVE' },
+    select: { mentee: { select: { id: true, fullName: true } } },
+    take: 12,
+  },
   _count: { select: { relations: true } },
 } as const;
 
@@ -25,6 +31,10 @@ export async function GET() {
   else if (session.user.role === 'MENTEE') where = { isPublic: true };
 
   const projects = await prisma.project.findMany({ where, include, orderBy: { updatedAt: 'desc' } });
+  // Mentees only browse the public showcase set — keep it PII-free (count only).
+  if (session.user.role === 'MENTEE') {
+    return NextResponse.json({ projects: projects.map(({ relations: _relations, ...rest }) => rest) });
+  }
   return NextResponse.json({ projects });
 }
 
