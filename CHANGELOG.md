@@ -10,6 +10,39 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-11
+
+Premium Faz 1 completion (GDPR consent) and the full Faz 2 tier — premium
+analytics and the AI package — plus small admin/mentor improvements. Mentor
+and mentee experience stays free; mentees never see a paywall.
+
+### Added
+- **Talent-pool visibility consent** (Faz 1, #527) — company-facing exposure now
+  requires an explicit, revocable mentee consent in addition to publicProfile;
+  talent-pool search and need-match alerts enforce it. A portal banner nudges
+  undecided mentees (decision — grant or decline — dismisses it permanently).
+- **Premium analytics tier** (Faz 2, gated by the new premiumAnalytics setting;
+  basic analytics stay free):
+  - Cohort comparison — conversion, time-to-hire, engagement side by side (#538)
+  - Source conversion report — hire rate per referral source (#539)
+  - Full report export — multi-sheet Excel + print/PDF report page (#540)
+  - Weekly scheduled analytics email to admins (#541)
+- **AI package** (Faz 2, all through the central AI gate):
+  - Central AI gate — consent → monthly quota (aiMonthlyQuota setting, AiUsage
+    metering; only successful calls consume credit) → provider (#537)
+  - AI summary of interaction logs for mentors, gated by a new mentee consent (#534)
+  - AI CV improvement feedback for mentees — free for the mentee (#535)
+  - AI interview-prep assistant on the mentee portal — free for the mentee (#536)
+  - AI-deepened mentor matching with rationale + graceful rule-based fallback;
+    no personal identifiers ever reach the provider (#533)
+- **Free-core regression shield** (#526) — e2e proving every core mentor/mentee
+  flow works with zero entitlements.
+- **Synthetic demo seed + contributor data-access policy** (#550) — `npm run
+  seed:demo`, local-only guard, docs/DATA_ACCESS_POLICY.md.
+
+### Fixed
+- Company edit no longer fails on empty optional fields (#569).
+
 ## [0.4.0] - 2026-07-10
 
 Company Premium (freemium Faz 0 + Faz 1) plus messaging, activity reporting,
