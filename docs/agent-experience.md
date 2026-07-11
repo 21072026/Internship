@@ -129,3 +129,31 @@ yeni bloğunu ekle (python regex ile 3 locale'de tek seferde). `check:i18n` anı
 **CI kırmızısı triage:** "228 passed" + exit 1 → altyapı flake'i (Chromium SIGSEGV, teardown);
 `rerun_failed_jobs` yeterli. Log'da gerçek spec hatası olup olmadığına mutlaka bak; benim
 diff'ime dokunmayan spec'te strict-mode ihlali de tipik flake işareti.
+
+## 2026-07-11 — Ürün turu: self-serve intake, destek sistemi, katalog, topic preview (0.6.0-beta)
+
+**Pipelining artık standart:** PR açar açmaz sıradaki işi kodla; CI sonuçlarını toplu
+"sweep"le kontrol edip yeşilleri merge et. Bekleme molası yok — kullanıcının açık talebi.
+
+**PR "dirty" ise CI hiç tetiklenmez:** #609'da check-run listesi bomboştu; sebep workflow
+değil, PR'ın merge conflict'i (mergeable_state: dirty — GitHub merge commit'i üretemeyince
+pull_request workflow'ları koşmaz). Boş check listesi gördüğünde önce `pull_request_read get`
+ile mergeable_state'e bak; rebase + çöz + push sonrası CI kendiliğinden gelir.
+
+**Ortamdaki GITHUB_TOKEN doğrudan API'ye kapalı:** curl ile api.github.com "GitHub access
+is not enabled for this session" döner — CI izleme/merge yalnızca mcp__github__* araçlarıyla.
+Kendi kendine check-in için `send_later` (claude-code-remote) çalışıyor; Monitor + curl çalışmıyor.
+
+**Aynı dashboard'a ikinci link eklerken mevcut spec'leri tara:** #591'in kapı kutusundaki
+"Upload your CV" linki, onboarding-checklist spec'inin kapsamsız `getByText`'ini strict-mode
+ihlaline düşürdü. Yeni UI metni eklemeden önce `grep -rn "<metin>" e2e/` — çakışan spec'i
+aynı PR'da kapsamlandır (`data-testid` + scoped locator).
+
+**DOM-duplikasyon flake'i tekrar etti:** bazı koşularda sayfa içeriği DOM'da iki kez görünüyor
+(iki `#name`, iki arama kutusu; export-filter/skill-match/sources/api-docs değişen kurbanlar).
+Diff'inle ilgisiz strict-mode "resolved to 2 elements" bunun işareti — rerun yeterli. Kendi
+yeni spec'lerinde DB yan-etki assert'lerini `expect.poll` ile yaz (bubble render ≠ commit bitti).
+
+**E2E'de destek sistemi deseni:** iki browser context (user + admin) tek spec'te tam döngüyü
+(ticket aç → kuyrukta gör → yanıtla → durum geçişi → bildirim) doğrulayabiliyor; API çağrılarını
+`page.request` ile atıp UI'ı yalnızca kritik noktalarda assert etmek hem hızlı hem az kırılgan.
