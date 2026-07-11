@@ -10,6 +10,37 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-11
+
+A faster CI feedback loop and a rebuilt Projects experience with true
+multi-owner/multi-mentor collaboration.
+
+### Added
+- **Projects redesign** (#614): card-first screen — the create/edit form only
+  opens via "Add project" or a card's edit action (#615); detailed cards with
+  member chips + a Detail link, and an internal `/projects/[id]` view for
+  admins/owners (status, dates, goals, members, task progress) while the
+  public showcase stays PII-free (#616).
+- **Multiple owners & mentors per project** (#617) — new `ProjectMember`
+  model with an idempotent backfill on deploy/seed; `/api/projects/[id]/members`
+  with a last-owner guard; legacy single-owner pointer kept in sync.
+- **Owner management & transfer UI** (#618) — per-card panel to add/remove
+  members, change roles and transfer ownership in one flow; mentors get a
+  minimal PII-free directory for the picker.
+- **Owner-only field permissions** (#619) — name/status/visibility/dates and
+  deletion are owner-only (server-enforced 403 + disabled inputs); description,
+  technologies, links, goals and tasks are collaborative for all members, and
+  mentors now see projects they are members of.
+- **One-time infra-setup workflow** (#583 follow-up) — wildcard DNS, wildcard
+  TLS (acme.sh over SSH) and nginx-permission verification as a manual,
+  idempotent Actions run.
+
+### Changed
+- **PR quality gate now runs the `@smoke` subset** (17 tagged critical-path
+  tests, ~3.5 min instead of ~10) (#621–#623); the **full suite runs 4× a day**
+  via `e2e-full.yml` (4-way sharded) and emails the team on failure (#624).
+
+
 ## [0.6.0] - 2026-07-11
 
 Self-serve mentee intake, a built-in support channel, a public feature
