@@ -34,8 +34,9 @@ npm run test:e2e:smoke   # critical-path subset only (tests tagged @smoke)
 npm run test:e2e:headed  # full suite, with a visible browser
 ```
 
-**E2E tests** (Playwright) live in `e2e/` and run as a CI quality gate on every PR
-(`.github/workflows/e2e.yml`, isolated MySQL service). The **smoke set** is the tests
+**E2E tests** (Playwright) live in `e2e/`. The PR quality gate
+(`.github/workflows/e2e.yml`, isolated MySQL service) runs **only the `@smoke` subset**;
+the full suite is the scheduled safety net (see below). The **smoke set** is the tests
 tagged `@smoke` (`test('…', { tag: '@smoke' }, …)`) — boot, auth, landing i18n, invite,
 pipeline, free-core regression. When you add a spec for a *critical* flow, tag it
 `@smoke`; keep the set small (~15-20 tests) so the PR gate stays fast. Locally `test:e2e`
