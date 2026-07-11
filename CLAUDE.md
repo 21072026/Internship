@@ -29,13 +29,18 @@ npx prisma generate  # regenerate client (also runs on postinstall)
 npx prisma db push   # sync schema to DB (this project uses db push, NOT migrations)
 npx prisma db seed   # create first ADMIN (see seed env vars below)
 
-npm run test:e2e         # Playwright smoke tests (starts the app itself)
-npm run test:e2e:headed  # same, with a visible browser
+npm run test:e2e         # full Playwright suite (starts the app itself)
+npm run test:e2e:smoke   # critical-path subset only (tests tagged @smoke)
+npm run test:e2e:headed  # full suite, with a visible browser
 ```
 
 **E2E tests** (Playwright) live in `e2e/` and run as a CI quality gate on every PR
-(`.github/workflows/e2e.yml`, isolated MySQL service). Locally `test:e2e` boots the dev
-server; set `BASE_URL=https://crm-preview.ersah.in` to run against a deployed env instead.
+(`.github/workflows/e2e.yml`, isolated MySQL service). The **smoke set** is the tests
+tagged `@smoke` (`test('…', { tag: '@smoke' }, …)`) — boot, auth, landing i18n, invite,
+pipeline, free-core regression. When you add a spec for a *critical* flow, tag it
+`@smoke`; keep the set small (~15-20 tests) so the PR gate stays fast. Locally `test:e2e`
+boots the dev server; set `BASE_URL=https://crm-preview.ersah.in` to run against a
+deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
 

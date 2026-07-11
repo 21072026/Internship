@@ -17,7 +17,7 @@ async function signIn(page: import('@playwright/test').Page, email: string, pw: 
 // with ZERO premium entitlements anywhere (none are created here; nothing is on
 // by default), every core mentor/mentee flow must keep working. If a future
 // change accidentally gates a core route behind hasFeature(), this fails.
-test('core mentor/mentee flows work with no premium entitlement anywhere', async ({ browser }) => {
+test('core mentor/mentee flows work with no premium entitlement anywhere', { tag: '@smoke' }, async ({ browser }) => {
   const mentorEmail = uniqueEmail('freecore-mentor');
   const menteeEmail = uniqueEmail('freecore-mentee');
   const pw = 'FreeCorePass123';
