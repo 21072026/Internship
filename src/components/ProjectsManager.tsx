@@ -78,25 +78,31 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     fetch('/api/companies').then((r) => r.json()).then((d) => setCompanies(d.companies ?? []));
   }, [isAdmin]);
 
-  const reset = () => { setForm({ ...blank }); setEditingId(null); setOwnerType('ADMIN'); setOwnerUserId(''); setOwnerCompanyId(''); setShowForm(false); };
+  const reset = () => { setForm({ ...blank }); setEditingId(null); setEditingOwner(true); setOwnerType('ADMIN'); setOwnerUserId(''); setOwnerCompanyId(''); setShowForm(false); };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true); setError('');
     try {
       const payload: Record<string, unknown> = {
-        name: form.name,
         description: form.description,
         technologies: form.technologies.split(',').map((s) => s.trim()).filter(Boolean),
         repoUrl: form.repoUrl,
         demoUrl: form.demoUrl,
         boardUrl: form.boardUrl,
-        status: form.status,
-        isPublic: form.isPublic,
         goals: form.goals,
-        startDate: form.startDate || null,
-        endDate: form.endDate || null,
       };
+      // Owner-protected fields (#619) — the server rejects them from
+      // non-owners, so a limited editor simply doesn't send them.
+      if (editingOwner || !editingId) {
+        Object.assign(payload, {
+          name: form.name,
+          status: form.status,
+          isPublic: form.isPublic,
+          startDate: form.startDate || null,
+          endDate: form.endDate || null,
+        });
+      }
       // Admin sets/changes ownership (create or transfer-on-edit), preserving
       // the "exactly one owner" invariant.
       if (isAdmin) {
@@ -131,6 +137,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const edit = (p: Project) => {
     setShowForm(true);
     setEditingId(p.id);
+    setEditingOwner(isOwnerOf(p));
     setForm({
       name: p.name, description: p.description ?? '', technologies: p.technologies.join(', '),
       repoUrl: p.repoUrl ?? '', demoUrl: p.demoUrl ?? '', boardUrl: p.boardUrl ?? '', status: p.status, isPublic: p.isPublic,
@@ -180,6 +187,10 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const [memberErr, setMemberErr] = useState('');
   const canManageMembers = (p: Project) =>
     isAdmin || (p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER');
+  // Owner-only fields (#619): non-owner mentor members get a limited form.
+  const isOwnerOf = (p: Project) =>
+    isAdmin || p.ownerUser?.id === meId || (p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER');
+  const [editingOwner, setEditingOwner] = useState(true);
 
   const memberCall = async (projectId: string, method: 'POST' | 'DELETE', body: Record<string, unknown>) => {
     setMemberErr('');
@@ -226,7 +237,8 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
         <CardHeader><CardTitle>{editingId ? t.projects.editProject : t.projects.newProject}</CardTitle></CardHeader>
         {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
         <form onSubmit={submit} className="space-y-3">
-          <Input label={t.projects.name} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Input label={t.projects.name} required disabled={!editingOwner && !!editingId} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          {!editingOwner && !!editingId && <p className="text-xs text-gray-400 -mt-2">{t.projects.ownerOnlyHint}</p>}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.projects.description}</label>
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -239,7 +251,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
             <Input label={t.projects.boardUrl} type="url" placeholder="https://github.com/users/you/projects/2" hint={t.projects.boardUrlHint} value={form.boardUrl} onChange={(e) => setForm({ ...form, boardUrl: e.target.value })} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Select label={t.projects.status} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
+            <Select label={t.projects.status} disabled={!editingOwner && !!editingId} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
               options={[
                 { value: 'DRAFT', label: t.projects.draft },
                 { value: 'ACTIVE', label: t.projects.active },
@@ -248,13 +260,13 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                 { value: 'CANCELLED', label: t.projects.cancelled },
               ]} />
             <label className="flex items-center gap-2 text-sm text-gray-700 mt-7">
-              <input type="checkbox" checked={form.isPublic} onChange={(e) => setForm({ ...form, isPublic: e.target.checked })} />
+              <input type="checkbox" disabled={!editingOwner && !!editingId} checked={form.isPublic} onChange={(e) => setForm({ ...form, isPublic: e.target.checked })} />
               {t.projects.isPublic}
             </label>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input label={t.projects.startDate} type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
-            <Input label={t.projects.endDate} type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            <Input label={t.projects.startDate} type="date" disabled={!editingOwner && !!editingId} value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            <Input label={t.projects.endDate} type="date" disabled={!editingOwner && !!editingId} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.projects.goals}</label>
@@ -383,7 +395,9 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       <button onClick={() => { setManageId(manageId === p.id ? null : p.id); setAddUserId(''); setMemberErr(''); }} aria-label={t.projects.manageOwners} data-testid="manage-owners" className="p-2 text-gray-400 hover:text-blue-600"><Users2 className="h-4 w-4" /></button>
                     )}
                     <button onClick={() => edit(p)} aria-label={t.projects.editProject} className="p-2 text-gray-400 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => remove(p)} aria-label={t.projects.deleteProject} className="p-2 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    {isOwnerOf(p) && (
+                      <button onClick={() => remove(p)} aria-label={t.projects.deleteProject} className="p-2 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    )}
                   </div>
                 </div>
 

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { canViewProject, canManageProject, resolveOwner } from '@/lib/projectAccess';
+import { canViewProject, resolveOwner, isProjectOwner, isProjectMember } from '@/lib/projectAccess';
 import { logActivity } from '@/lib/activity';
 
 const include = {
@@ -53,11 +53,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (!canManageProject(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Owner-only fields (#619): owners (admin / OWNER member / legacy owner)
+  // edit everything; other MENTOR members only the collaborative fields.
+  const owner = await isProjectOwner(session.user, id);
+  const member = owner || (session.user.role === 'MENTOR' && (await isProjectMember(session.user, id)));
+  if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
+
+  if (!owner) {
+    const protectedSent = (['name', 'status', 'isPublic', 'startDate', 'endDate', 'ownerType', 'ownerUserId', 'ownerCompanyId'] as const)
+      .filter((k) => d[k] !== undefined);
+    if (protectedSent.length > 0) {
+      return NextResponse.json(
+        { error: 'Only a project owner may change these fields', fields: protectedSent, code: 'owner_only' },
+        { status: 403 }
+      );
+    }
+  }
 
   const data: Record<string, unknown> = {};
   if (d.name !== undefined) data.name = d.name;
@@ -108,7 +123,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (!canManageProject(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Deletion is owner-only (#619).
+  if (!(await isProjectOwner(session.user, id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   // Detach mentees, then delete.
   await prisma.mentorshipRelation.updateMany({ where: { projectId: id }, data: { projectId: null } });

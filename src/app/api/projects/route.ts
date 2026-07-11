@@ -30,7 +30,10 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let where: Prisma.ProjectWhereInput = {};
-  if (session.user.role === 'MENTOR') where = { ownerUserId: session.user.id };
+  // Mentors see projects they own OR are members of (#617/#619).
+  if (session.user.role === 'MENTOR') {
+    where = { OR: [{ ownerUserId: session.user.id }, { members: { some: { userId: session.user.id } } }] };
+  }
   else if (session.user.role === 'COMPANY') where = { ownerCompanyId: session.user.companyId ?? '__none__' };
   else if (session.user.role === 'MENTEE') where = { isPublic: true };
 
