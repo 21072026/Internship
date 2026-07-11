@@ -8,6 +8,7 @@ import { NotesPanel } from '@/components/NotesPanel';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
+import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -119,6 +120,8 @@ export default async function PortalDashboard() {
           </Link>
         </div>
       )}
+
+      {!activeRelation && <MentorshipRequestPanel />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Summary */}

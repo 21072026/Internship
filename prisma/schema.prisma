@@ -144,6 +144,8 @@ model User {
   consents                UserConsent[]
   companyInterests        CompanyInterest[]        @relation("CompanyInterestMentee")
   companyNeedAlerts       CompanyNeedAlert[]       @relation("CompanyNeedAlertMentee")
+  mentorshipRequests      MentorshipRequest[]      @relation("MentorshipRequests")
+  decidedRequests         MentorshipRequest[]      @relation("DecidedMentorshipRequests")
   authoredRelationNotes   RelationNote[]           @relation("RelationNoteAuthor")
   pageViews               PageView[]
 
@@ -380,6 +382,33 @@ model CompanyEntitlement {
 
   @@unique([companyId, feature])
   @@index([companyId])
+}
+
+// A mentee's self-serve request for mentorship (#590). One PENDING request at
+// a time; an admin approves (choosing a mentor -> MentorshipRelation) or
+// rejects. Powers the self-registration intake (#585).
+enum MentorshipRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model MentorshipRequest {
+  id             String                  @id @default(cuid())
+  menteeId       String
+  status         MentorshipRequestStatus @default(PENDING)
+  message        String?                 @db.Text
+  targetPosition String?
+  decidedById    String?
+  decidedAt      DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  mentee    User  @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  decidedBy User? @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
+
+  @@index([status])
+  @@index([menteeId])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
