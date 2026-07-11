@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, LifeBuoy } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
@@ -16,6 +16,10 @@ export default async function MessagesInboxPage() {
   if (!session) redirect('/auth/signin');
   const { locale, t } = await getServerDictionary();
   const me = session.user.id;
+
+  const supportUnread = await prisma.supportMessage.count({
+    where: { ticket: { requesterId: me }, senderId: { not: me }, readAt: null },
+  });
 
   const relations = await prisma.mentorshipRelation.findMany({
     where: { OR: [{ mentorId: me }, { menteeId: me }] },
@@ -54,6 +58,25 @@ export default async function MessagesInboxPage() {
       </div>
       <Card>
         <CardHeader><CardTitle>{t.messages.threads}</CardTitle></CardHeader>
+        {/* Pinned support conversation (#593) — every role's line to the admins. */}
+        <Link
+          href="/messages/support"
+          data-testid="support-entry"
+          className="flex items-center gap-3 py-3 hover:bg-gray-50 rounded-lg px-2 border-b border-gray-100 dark:border-gray-800"
+        >
+          <div className="w-9 h-9 shrink-0 rounded-full bg-amber-100 flex items-center justify-center">
+            <LifeBuoy className="h-4 w-4 text-amber-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <span className={`text-sm ${supportUnread > 0 ? 'font-bold' : 'font-medium'} text-gray-900 dark:text-gray-100`}>{t.support.title}</span>
+            <p className="text-xs text-gray-400 mt-0.5">{t.support.pinnedHint}</p>
+          </div>
+          {supportUnread > 0 && (
+            <span className="ml-1 shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center">
+              {supportUnread > 9 ? '9+' : supportUnread}
+            </span>
+          )}
+        </Link>
         {threads.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{t.messages.noThreads}</p>
         ) : (
