@@ -13,6 +13,30 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.6.0-beta',
+    date: '2026-07-11',
+    highlights: {
+      en: [
+        'Join on your own — you can now sign up directly as a mentee; an admin approves your account and you land in your portal.',
+        'Request a mentor — once your profile basics and CV are in place, ask for a mentor right from your dashboard; admins match you and you are notified the moment it is decided.',
+        'Built-in support — every user has a pinned "Support" conversation in Messages. Write to us anytime; you can follow the status of your request (open, in progress, closed) and get notified on replies.',
+        'New Features page — everything InternshipCRM can do, categorized and in three languages, linked from the landing page.',
+      ],
+      tr: [
+        'Kendi başına katıl — artık doğrudan mentee olarak kaydolabilirsin; hesabını bir admin onaylar ve portalına ulaşırsın.',
+        'Mentör talep et — temel profil bilgilerin ve CV’in hazır olduğunda panelinden mentör isteyebilirsin; adminler eşleştirir ve karar verilir verilmez haberdar olursun.',
+        'Yerleşik destek — her kullanıcının Mesajlar’da sabit bir "Destek" sohbeti var. Bize istediğin an yaz; talebinin durumunu (açık, işlemde, kapalı) takip edebilir ve yanıtlarda bildirim alırsın.',
+        'Yeni Özellikler sayfası — InternshipCRM’in yapabildiği her şey, kategorili ve üç dilde, açılış sayfasından erişilebilir.',
+      ],
+      de: [
+        'Selbst beitreten — du kannst dich jetzt direkt als Mentee registrieren; ein Admin bestätigt dein Konto und du landest in deinem Portal.',
+        'Mentor anfragen — sobald Profilbasics und Lebenslauf vorliegen, fragst du direkt vom Dashboard einen Mentor an; Admins vermitteln und du wirst sofort über die Entscheidung informiert.',
+        'Eingebauter Support — jede*r hat in den Nachrichten eine angeheftete "Support"-Unterhaltung. Schreib uns jederzeit; du verfolgst den Status deiner Anfrage (offen, in Bearbeitung, geschlossen) und wirst bei Antworten benachrichtigt.',
+        'Neue Funktionsseite — alles, was InternshipCRM kann, kategorisiert und in drei Sprachen, verlinkt von der Startseite.',
+      ],
+    },
+  },
+  {
     version: '0.5.0-beta',
     date: '2026-07-11',
     highlights: {

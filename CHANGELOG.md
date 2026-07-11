@@ -10,6 +10,36 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-11
+
+Self-serve mentee intake, a built-in support channel, a public feature
+catalogue, and isolated per-topic preview environments for the growing
+contributor team.
+
+### Added
+- **Mentee self-registration** (#589) — the token-less signup now creates a
+  MENTEE (inactive until admin approval) instead of a MENTOR; new mentees land
+  on the portal after activation.
+- **Mentorship requests** (#590, #591) — mentees without an active mentorship
+  request one from the portal (one pending request at a time, rate-limited);
+  admins approve from a queue on /admin/mentorship, picking the mentor —
+  approval creates the relation and notifies both sides. Requests are gated on
+  onboarding: profile basics (university + skills) and an uploaded CV are
+  required, enforced server-side and explained in the UI.
+- **Support tickets** (#592–#594) — every user gets a pinned "Support"
+  conversation in Messages: the first message opens a ticket, replies join the
+  open ticket, closed tickets start fresh ones. Admins work a queue at
+  /admin/support with status filters (open / in progress / closed), inline
+  reply, assignment and status transitions; both sides get notifications.
+- **Feature catalogue** (#587, #588) — public /features page (EN/TR/DE,
+  categorized) backed by a single-source feature list that also feeds the
+  landing cards; "All features" links from the landing header, grid and footer.
+- **Topic-based ephemeral previews** (#583) — branches carrying a `topicN`
+  token deploy to their own `crm-<topic>.ersah.in` container and are torn down
+  when the PR closes; topic-less branches keep the shared preview. Includes a
+  wildcard-TLS/nginx runbook under `infra/`.
+
+
 ## [0.5.0] - 2026-07-11
 
 Premium Faz 1 completion (GDPR consent) and the full Faz 2 tier — premium
