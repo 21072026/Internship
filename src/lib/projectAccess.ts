@@ -30,6 +30,30 @@ export function canManageProject(user: SessionUser, p: ProjectOwner) {
   return false;
 }
 
+// Owner check against the members table (#619): admins and OWNER members.
+// The legacy ownerUserId is honoured too (backfill safety net).
+export async function isProjectOwner(user: SessionUser, projectId: string) {
+  if (user.role === 'ADMIN') return true;
+  const [member, legacy] = await Promise.all([
+    prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: user.id } },
+      select: { role: true },
+    }),
+    prisma.project.findUnique({ where: { id: projectId }, select: { ownerUserId: true } }),
+  ]);
+  return member?.role === 'OWNER' || legacy?.ownerUserId === user.id;
+}
+
+// A MENTOR member (any role) may edit the collaborative fields; owners edit
+// everything. Used by the PUT route to split the field set.
+export async function isProjectMember(user: SessionUser, projectId: string) {
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId: user.id } },
+    select: { role: true },
+  });
+  return !!member;
+}
+
 // Validate + normalise an owner triplet so exactly one target is set and it
 // matches ownerType, and the referenced entity exists. Returns null if invalid.
 export async function resolveOwner(input: {

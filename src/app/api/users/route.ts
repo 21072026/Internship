@@ -7,8 +7,19 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Mentors get a minimal, PII-free directory of active mentors/admins —
+    // just enough for the project owner/member picker (#618).
+    if (session.user.role === 'MENTOR') {
+      const users = await prisma.user.findMany({
+        where: { role: { in: ['MENTOR', 'ADMIN'] }, isActive: true },
+        select: { id: true, fullName: true, role: true },
+        orderBy: { fullName: 'asc' },
+      });
+      return NextResponse.json({ users });
     }
 
     const users = await prisma.user.findMany({

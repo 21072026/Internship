@@ -136,6 +136,7 @@ model User {
   avatarFile              AvatarFile?
   notifications           Notification[]
   ownedProjects           Project[]                @relation("ProjectOwner")
+  projectMemberships      ProjectMember[]          @relation("ProjectMemberships")
   availabilitySlots       AvailabilitySlot[]
   company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
   source                  Source?                  @relation(fields: [sourceId], references: [id])
@@ -143,6 +144,12 @@ model User {
   personalNotes           PersonalNote[]
   consents                UserConsent[]
   companyInterests        CompanyInterest[]        @relation("CompanyInterestMentee")
+  companyNeedAlerts       CompanyNeedAlert[]       @relation("CompanyNeedAlertMentee")
+  mentorshipRequests      MentorshipRequest[]      @relation("MentorshipRequests")
+  decidedRequests         MentorshipRequest[]      @relation("DecidedMentorshipRequests")
+  supportTickets          SupportTicket[]          @relation("SupportRequester")
+  assignedSupportTickets  SupportTicket[]          @relation("SupportAssignee")
+  supportMessages         SupportMessage[]         @relation("SupportMessageSender")
   authoredRelationNotes   RelationNote[]           @relation("RelationNoteAuthor")
   pageViews               PageView[]
 
@@ -179,6 +186,13 @@ enum ConsentType {
   // Opt-in to detailed activity tracking (pages visited + time on site) that
   // feeds the mentee activity report shared with the mentor/admin.
   ACTIVITY_TRACKING
+  // Explicit opt-in to being visible to companies (talent-pool search,
+  // need-match alerts, early access). GDPR basis for company-facing exposure —
+  // required IN ADDITION to publicProfile (#527). Default off.
+  TALENT_POOL_VISIBILITY
+  // Opt-in to sending the mentee's interaction-log text to the AI provider for
+  // the mentor-facing auto-summary (Faz 2, #534). Default off.
+  AI_INTERACTION_SUMMARY
 }
 
 model UserConsent {
@@ -354,6 +368,7 @@ model Company {
   projects     Project[]            @relation("CompanyProjects")
   interests    CompanyInterest[]
   entitlements CompanyEntitlement[]
+  needAlerts   CompanyNeedAlert[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -371,6 +386,105 @@ model CompanyEntitlement {
 
   @@unique([companyId, feature])
   @@index([companyId])
+}
+
+// Support tickets (#586/#592): a relation-independent channel between any user
+// and the admins. Deliberately separate from Message (which is bound to a
+// MentorshipRelation) — clean boundary, no relation baggage.
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+model SupportTicket {
+  id              String        @id @default(cuid())
+  requesterId     String
+  status          SupportStatus @default(OPEN)
+  subject         String?
+  assignedAdminId String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  closedAt        DateTime?
+
+  requester     User             @relation("SupportRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  assignedAdmin User?            @relation("SupportAssignee", fields: [assignedAdminId], references: [id])
+  messages      SupportMessage[]
+
+  @@index([requesterId])
+  @@index([status])
+}
+
+model SupportMessage {
+  id        String    @id @default(cuid())
+  ticketId  String
+  senderId  String
+  body      String    @db.Text
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+// A mentee's self-serve request for mentorship (#590). One PENDING request at
+// a time; an admin approves (choosing a mentor -> MentorshipRelation) or
+// rejects. Powers the self-registration intake (#585).
+enum MentorshipRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model MentorshipRequest {
+  id             String                  @id @default(cuid())
+  menteeId       String
+  status         MentorshipRequestStatus @default(PENDING)
+  message        String?                 @db.Text
+  targetPosition String?
+  decidedById    String?
+  decidedAt      DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  mentee    User  @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  decidedBy User? @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
+
+  @@index([status])
+  @@index([menteeId])
+}
+
+// Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
+// company+mentee: once a matching candidate has triggered an alert for a
+// company, we never re-notify for the same candidate (the "*SentAt" pattern).
+model CompanyNeedAlert {
+  id        String   @id @default(cuid())
+  companyId String
+  menteeId  String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee  User    @relation("CompanyNeedAlertMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, menteeId])
+  @@index([companyId])
+}
+
+// One row per successful AI provider call (Faz 2, #537) — the metering behind
+// the monthly AI quota (Setting.aiMonthlyQuota). scope identifies the feature
+// (e.g. "cv_extract"); userId/companyId record who consumed it (companyId
+// prepares per-company quotas for multi-tenancy).
+model AiUsage {
+  id        String   @id @default(cuid())
+  scope     String
+  userId    String?
+  companyId String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([scope])
 }
 
 // A company's read/interest signal on a candidate they're linked to via a
@@ -467,9 +581,34 @@ model Project {
   ownerCompany Company?             @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
   relations    MentorshipRelation[]
   tasks        ProjectTask[]
+  members      ProjectMember[]
 
   @@index([ownerUserId])
   @@index([ownerCompanyId])
+}
+
+// Person-level project membership (#617): a project can have several OWNERs
+// (admins/mentors) and several MENTORs. Company ownership stays on
+// ownerCompanyId; legacy ownerType/ownerUserId are kept in sync with the
+// OWNER rows for backward compatibility until every consumer reads members.
+enum ProjectMemberRole {
+  OWNER
+  MENTOR
+}
+
+model ProjectMember {
+  id        String            @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectMemberRole @default(MENTOR)
+  addedAt   DateTime          @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation("ProjectMemberships", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId, role])
 }
 
 // A task within a project — supports a task list + progress % (checklist 4).
@@ -521,20 +660,24 @@ model CompanyNeed {
 }
 
 model MentorshipRelation {
-  id                     String           @id @default(cuid())
-  mentorId               String
-  menteeId               String
-  companyId              String?
-  projectId              String?
-  cohortId               String?
-  startDate              DateTime         @default(now())
-  status                 MentorshipStatus @default(ACTIVE)
-  pipelineStatus         PipelineStatus   @default(APPLICATION_100)
+  id                      String           @id @default(cuid())
+  mentorId                String
+  menteeId                String
+  companyId               String?
+  projectId               String?
+  cohortId                String?
+  startDate               DateTime         @default(now())
+  status                  MentorshipStatus @default(ACTIVE)
+  pipelineStatus          PipelineStatus   @default(APPLICATION_100)
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
-  stageDeadline          DateTime?
+  stageDeadline           DateTime?
   // Set when an overdue-stage reminder was last sent (avoids re-notifying daily).
-  deadlineReminderSentAt DateTime?
+  deadlineReminderSentAt  DateTime?
+  // Set when a stale-mentee in-app notification was last sent; cleared once the
+  // mentee has a recent interaction again, so each staleness episode notifies the
+  // mentor only once (#573).
+  stalenessReminderSentAt DateTime?
 
   mentor          User             @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee          User             @relation("MenteeRelations", fields: [menteeId], references: [id])

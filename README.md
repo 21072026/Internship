@@ -97,6 +97,7 @@ See [`.env.example`](.env.example) for the full list.
 | `npm run test:e2e:headed` | Run the Playwright smoke tests with a visible browser |
 | `npm run test:stress` | Load/stress test against the app (`scripts/stress-test.mjs`; see `docs/testing.md`) |
 | `npm run import:csv` | Bulk-import candidates from a CSV file (`scripts/import-csv.mjs`; dry-run by default, `--apply` to write) |
+| `npm run import:csv` | Import legacy mentoring CSV data from a file or URL (`scripts/import-csv.mjs`); dry-run by default, use `--owner=<email> --apply` to write |
 | `npm run seed:templates` | Seed the built-in document templates (`prisma/seed-templates.mjs`) |
 | `npm run db:dev:up` | Start the local dev MySQL via Docker Compose (`docker-compose.dev.yml`) |
 | `npm run db:dev:down` | Stop and remove the local dev MySQL container |

@@ -1,0 +1,121 @@
+name: E2E Full Suite (scheduled)
+
+# The PR gate (e2e.yml) runs only the @smoke subset; this workflow is the
+# safety net behind it (#621/#624): the FULL Playwright suite, 4× a day,
+# sharded for speed, with an email alert to the team when a run goes red.
+# Can also be run on demand from the Actions tab.
+#
+# Note: GitHub scheduled workflows can lag a few minutes and are disabled
+# automatically after 60 days without repository activity.
+on:
+  schedule:
+    # 4× a day at 03/09/15/21 UTC (~05/11/17/23 Europe/Berlin in summer).
+    - cron: '0 3,9,15,21 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-full
+  cancel-in-progress: false
+
+jobs:
+  e2e-full:
+    name: Playwright full (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: internship_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/internship_test"
+      NEXTAUTH_SECRET: "ci-test-secret-not-for-production"
+      NEXTAUTH_URL: "http://localhost:3000"
+      # Seeded admin used by the smoke tests
+      SEED_ADMIN_EMAIL: "admin@example.com"
+      SEED_ADMIN_PASSWORD: "ChangeMe123!"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "ChangeMe123!"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply DB schema
+        run: npx prisma db push
+
+      - name: Seed admin user
+        run: npx prisma db seed
+
+      - name: Build app
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run full E2E suite (shard ${{ matrix.shard }}/4)
+        run: npx playwright test --shard=${{ matrix.shard }}/4
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-full-shard-${{ matrix.shard }}
+          path: playwright-report/
+          retention-days: 7
+
+  # Single alert for the whole run (not one per shard). Reuses the app's
+  # SMTP_* secrets via scripts/send-alert-email.mjs, same as stress.yml.
+  notify:
+    name: Email alert on failure
+    runs-on: ubuntu-latest
+    needs: [e2e-full]
+    if: failure()
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Send alert email
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          ALERT_SUBJECT: '⚠️ Internship CRM — scheduled full e2e FAILED'
+          ALERT_BODY: |
+            The scheduled full Playwright suite failed (at least one shard red).
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Per-shard reports are attached to the run as artifacts
+            (playwright-report-full-shard-N).
+        run: |
+          # Install from the lockfile so nodemailer matches the version the app
+          # pins (single source of truth); skip postinstall (prisma generate).
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/send-alert-email.mjs

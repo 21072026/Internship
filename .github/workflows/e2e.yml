@@ -65,8 +65,10 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
+      # PR gate runs the @smoke subset only (#623); the FULL suite runs 4x a
+      # day via e2e-full.yml (sharded, email on failure) and on demand.
       - name: Run E2E smoke tests
-        run: npm run test:e2e
+        run: npm run test:e2e:smoke
 
       - name: Upload Playwright report
         if: always()

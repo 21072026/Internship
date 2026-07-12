@@ -10,6 +10,143 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-11
+
+A faster CI feedback loop and a rebuilt Projects experience with true
+multi-owner/multi-mentor collaboration.
+
+### Added
+- **Projects redesign** (#614): card-first screen — the create/edit form only
+  opens via "Add project" or a card's edit action (#615); detailed cards with
+  member chips + a Detail link, and an internal `/projects/[id]` view for
+  admins/owners (status, dates, goals, members, task progress) while the
+  public showcase stays PII-free (#616).
+- **Multiple owners & mentors per project** (#617) — new `ProjectMember`
+  model with an idempotent backfill on deploy/seed; `/api/projects/[id]/members`
+  with a last-owner guard; legacy single-owner pointer kept in sync.
+- **Owner management & transfer UI** (#618) — per-card panel to add/remove
+  members, change roles and transfer ownership in one flow; mentors get a
+  minimal PII-free directory for the picker.
+- **Owner-only field permissions** (#619) — name/status/visibility/dates and
+  deletion are owner-only (server-enforced 403 + disabled inputs); description,
+  technologies, links, goals and tasks are collaborative for all members, and
+  mentors now see projects they are members of.
+- **One-time infra-setup workflow** (#583 follow-up) — wildcard DNS, wildcard
+  TLS (acme.sh over SSH) and nginx-permission verification as a manual,
+  idempotent Actions run.
+
+### Changed
+- **PR quality gate now runs the `@smoke` subset** (17 tagged critical-path
+  tests, ~3.5 min instead of ~10) (#621–#623); the **full suite runs 4× a day**
+  via `e2e-full.yml` (4-way sharded) and emails the team on failure (#624).
+
+
+## [0.6.0] - 2026-07-11
+
+Self-serve mentee intake, a built-in support channel, a public feature
+catalogue, and isolated per-topic preview environments for the growing
+contributor team.
+
+### Added
+- **Mentee self-registration** (#589) — the token-less signup now creates a
+  MENTEE (inactive until admin approval) instead of a MENTOR; new mentees land
+  on the portal after activation.
+- **Mentorship requests** (#590, #591) — mentees without an active mentorship
+  request one from the portal (one pending request at a time, rate-limited);
+  admins approve from a queue on /admin/mentorship, picking the mentor —
+  approval creates the relation and notifies both sides. Requests are gated on
+  onboarding: profile basics (university + skills) and an uploaded CV are
+  required, enforced server-side and explained in the UI.
+- **Support tickets** (#592–#594) — every user gets a pinned "Support"
+  conversation in Messages: the first message opens a ticket, replies join the
+  open ticket, closed tickets start fresh ones. Admins work a queue at
+  /admin/support with status filters (open / in progress / closed), inline
+  reply, assignment and status transitions; both sides get notifications.
+- **Feature catalogue** (#587, #588) — public /features page (EN/TR/DE,
+  categorized) backed by a single-source feature list that also feeds the
+  landing cards; "All features" links from the landing header, grid and footer.
+- **Topic-based ephemeral previews** (#583) — branches carrying a `topicN`
+  token deploy to their own `crm-<topic>.ersah.in` container and are torn down
+  when the PR closes; topic-less branches keep the shared preview. Includes a
+  wildcard-TLS/nginx runbook under `infra/`.
+
+
+## [0.5.0] - 2026-07-11
+
+Premium Faz 1 completion (GDPR consent) and the full Faz 2 tier — premium
+analytics and the AI package — plus small admin/mentor improvements. Mentor
+and mentee experience stays free; mentees never see a paywall.
+
+### Added
+- **Talent-pool visibility consent** (Faz 1, #527) — company-facing exposure now
+  requires an explicit, revocable mentee consent in addition to publicProfile;
+  talent-pool search and need-match alerts enforce it. A portal banner nudges
+  undecided mentees (decision — grant or decline — dismisses it permanently).
+- **Premium analytics tier** (Faz 2, gated by the new premiumAnalytics setting;
+  basic analytics stay free):
+  - Cohort comparison — conversion, time-to-hire, engagement side by side (#538)
+  - Source conversion report — hire rate per referral source (#539)
+  - Full report export — multi-sheet Excel + print/PDF report page (#540)
+  - Weekly scheduled analytics email to admins (#541)
+- **AI package** (Faz 2, all through the central AI gate):
+  - Central AI gate — consent → monthly quota (aiMonthlyQuota setting, AiUsage
+    metering; only successful calls consume credit) → provider (#537)
+  - AI summary of interaction logs for mentors, gated by a new mentee consent (#534)
+  - AI CV improvement feedback for mentees — free for the mentee (#535)
+  - AI interview-prep assistant on the mentee portal — free for the mentee (#536)
+  - AI-deepened mentor matching with rationale + graceful rule-based fallback;
+    no personal identifiers ever reach the provider (#533)
+- **Free-core regression shield** (#526) — e2e proving every core mentor/mentee
+  flow works with zero entitlements.
+- **Synthetic demo seed + contributor data-access policy** (#550) — `npm run
+  seed:demo`, local-only guard, docs/DATA_ACCESS_POLICY.md.
+
+### Fixed
+- Company edit no longer fails on empty optional fields (#569).
+
+## [0.4.0] - 2026-07-10
+
+Company Premium (freemium Faz 0 + Faz 1) plus messaging, activity reporting,
+email deliverability and a round of UX fixes — shipped as individual PRs. The
+mentor and mentee experience stays fully free.
+
+### Added
+- **Premium entitlement infrastructure** (Faz 0) — per-company feature flags
+  (`CompanyEntitlement`), a client-safe feature catalogue, `hasFeature` gating,
+  and an admin toggle UI. Row-presence = feature on; nothing on by default so
+  the free core is preserved (#557).
+- **Talent-pool search** (Faz 1) — companies with the entitlement can search a
+  privacy-safe pool of mentees who opted into a public profile (#560).
+- **Verified candidate card** (Faz 1) — gated section on the company candidate
+  view surfacing mentor evaluations + project contributions (#529).
+- **CompanyNeed match alerts** (Faz 1) — a daily scan notifies premium companies
+  when a consenting candidate matches an open position, deduped per candidate
+  (#530).
+- **Early-access window** (Faz 1) — newly-hireable candidates are visible only to
+  early-access companies for a configurable window before opening to all
+  subscribers (#531).
+- **Messaging inbox icon** — a header entry point (admin/mentor) plus a unified
+  `/messages` inbox (#512).
+- **Daily mentee activity report** — page-view/dwell tracking foundation plus a
+  daily digest and in-app view (#513/#514).
+- **Admin email-test tool** — send a probe to any address and see SMTP status,
+  for diagnosing deliverability (#553).
+- **Mentor engagement signals** — a "no open goal" attention-queue badge and a
+  stale-mentee in-app notification, deduped per staleness episode (#571/#572/#573).
+- **Archive view for users** — deactivated accounts drop out of the default
+  Users list and live under an "Archived" tab (#570).
+- **User-selectable accent color** + a fuller preview-green theme (#511).
+- **Inline mentor assignment** from the admin Candidates screen (#564).
+
+### Fixed
+- **P0 mobile account menu** — the responsive drawer no longer closes on the
+  account toggle, so mobile users can reach Sign out (#563).
+- **Company edit validation** — optional fields left empty (NULL in the DB) no
+  longer fail with "Expected string, received null" (#569).
+- **Email deliverability** — plain-text alternative part + a named From header
+  to improve inbox placement (#562).
+- **Company interest note** now auto-saves after typing stops (#532).
+
 ## [0.3.0] - 2026-07-03
 
 Backlog epics A–L plus user-reported feedback, shipped as individual PRs.

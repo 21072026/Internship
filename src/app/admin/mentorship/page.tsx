@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { MentorshipRequestQueue } from '@/components/admin/MentorshipRequestQueue';
 import { Select } from '@/components/ui/Select';
 import { SavedViews } from '@/components/SavedViews';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -175,6 +176,8 @@ export default function MentorshipPage() {
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
       )}
+
+      <MentorshipRequestQueue mentors={mentors} onApproved={() => fetchRelations()} />
 
       {/* Create Modal */}
       {showForm && (

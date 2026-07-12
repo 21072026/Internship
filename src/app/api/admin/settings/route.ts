@@ -19,6 +19,9 @@ const schema = z.object({
   weeklyDigest: z.enum(['true', 'false']).optional(),
   retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),
   require2fa: z.enum(['off', 'admins', 'admins_mentors']).optional(),
+  earlyAccessWindowDays: z.string().regex(/^\d{1,3}$/).optional(),
+  premiumAnalytics: z.enum(['true', 'false']).optional(),
+  aiMonthlyQuota: z.string().regex(/^\d{1,6}$/).optional(),
 });
 
 // PUT — upsert one or more settings.

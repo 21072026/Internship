@@ -17,9 +17,11 @@ test('a fresh mentee sees the first-run checklist on the dashboard', async ({ pa
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
     await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible({ timeout: 10_000 });
-    // Steps unique to the checklist (the portal also has a generic "Complete your profile" prompt).
-    await expect(page.getByText('Upload your CV')).toBeVisible();
-    await expect(page.getByText('Make your profile public')).toBeVisible();
+    // Scope to the checklist card — the mentorship-request gate box (#591) also
+    // renders an "Upload your CV" link on the same dashboard.
+    const checklist = page.getByTestId('onboarding-checklist');
+    await expect(checklist.getByText('Upload your CV')).toBeVisible();
+    await expect(checklist.getByText('Make your profile public')).toBeVisible();
   } finally {
     await cleanupByEmail(email);
   }

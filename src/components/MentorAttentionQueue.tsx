@@ -10,6 +10,7 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   overdue: 'danger',
   unanswered_question: 'info',
   pending_meeting: 'purple',
+  no_open_goal: 'info',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
@@ -22,6 +23,7 @@ export function MentorAttentionQueue({ items, t }: { items: AttentionItem[]; t: 
     overdue: labels.overdue,
     unanswered_question: labels.unansweredQuestion,
     pending_meeting: labels.pendingMeeting,
+    no_open_goal: labels.noOpenGoal,
   };
 
   return (

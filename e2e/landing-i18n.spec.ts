@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('landing page shows features, pipeline and CTAs in English by default', async ({ page }) => {
+test('landing page shows features, pipeline and CTAs in English by default', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Connect Talent with/i })).toBeVisible();
   await expect(page.getByText('Everything you need')).toBeVisible();
@@ -13,7 +13,7 @@ test('landing page shows features, pipeline and CTAs in English by default', asy
   await expect(getStarted).toHaveAttribute('href', '/auth/register');
 });
 
-test('landing page switches to Turkish via the locale cookie', async ({ page }) => {
+test('landing page switches to Turkish via the locale cookie', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => { document.cookie = 'locale=tr;path=/'; });
   await page.reload();
@@ -21,7 +21,7 @@ test('landing page switches to Turkish via the locale cookie', async ({ page }) 
   await expect(page.getByText('İhtiyacın olan her şey')).toBeVisible();
 });
 
-test('public sign-in page is internationalized', async ({ page }) => {
+test('public sign-in page is internationalized', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/auth/signin');
   await expect(page.getByRole('link', { name: /Forgot password/i })).toBeVisible();
   await expect(page.getByRole('link', { name: /Register here/i })).toBeVisible();

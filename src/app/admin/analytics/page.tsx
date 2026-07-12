@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
+import { CohortComparison } from '@/components/admin/CohortComparison';
+import { SourceConversion } from '@/components/admin/SourceConversion';
 import { useT, useLocale } from '@/i18n/client';
 
 interface Analytics {
@@ -69,6 +71,9 @@ export default function AdminAnalyticsPage() {
   const [aging, setAging] = useState<Aging | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangePreset>('6m');
+  // Premium tier state (#540): drives the full-report export buttons. Detected
+  // via the (server-gated) cohorts endpoint — 403 means the tier is off.
+  const [premium, setPremium] = useState(false);
 
   useEffect(() => {
     const qs = rangeQuery(range);
@@ -83,6 +88,10 @@ export default function AdminAnalyticsPage() {
       .catch(() => {});
   }, [range]);
 
+  useEffect(() => {
+    fetch('/api/admin/analytics/cohorts').then((r) => setPremium(r.ok)).catch(() => {});
+  }, []);
+
   const maxFunnel = data ? Math.max(1, ...PIPELINE_STATUSES.map((s) => data.funnel[s] || 0)) : 1;
 
   const exportExcel = async () => {
@@ -90,6 +99,32 @@ export default function AdminAnalyticsPage() {
     const { exportXlsx } = await import('@/lib/excel');
     const rows = PIPELINE_STATUSES.map((s) => [pipelineLabel(s, locale), data.funnel[s] || 0]);
     await exportXlsx(`analytics-${new Date().toISOString().slice(0, 10)}`, ['Stage', 'Count'], rows, 'Funnel');
+  };
+
+  // Premium full-report Excel (#540): one workbook covering funnel, trends,
+  // mentor workload plus the premium cohort/source reports.
+  const exportFullExcel = async () => {
+    if (!data) return;
+    const [cohortsRes, sourcesRes] = await Promise.all([
+      fetch('/api/admin/analytics/cohorts'),
+      fetch('/api/admin/analytics/sources'),
+    ]);
+    if (!cohortsRes.ok || !sourcesRes.ok) return; // tier switched off mid-session
+    const cohorts = (await cohortsRes.json()).cohorts as { name: string; term?: string | null; total: number; inProgress: number; hired: number; conversionToHired: number; avgDaysToHired: number | null; interactionsPerRelation: number }[];
+    const sources = (await sourcesRes.json()).sources as { name: string; mentees: number; inPipeline: number; hired: number; conversionToHired: number }[];
+    const { exportXlsxSheets } = await import('@/lib/excel');
+    const a = t.analytics;
+    await exportXlsxSheets(`analytics-full-${new Date().toISOString().slice(0, 10)}`, [
+      { name: 'Funnel', columns: ['Stage', 'Count'], rows: PIPELINE_STATUSES.map((s) => [pipelineLabel(s, locale), data.funnel[s] || 0]) },
+      ...(data.trends ? [{
+        name: 'Trends',
+        columns: [a.fullReportMonth, a.trendNewRelations, a.trendInteractions],
+        rows: data.trends.months.map((m, i) => [m, data.trends!.newRelations[i], data.trends!.interactions[i]]),
+      }] : []),
+      { name: 'Mentors', columns: ['Mentor', a.active, a.hired], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) },
+      { name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, a.cohortHired, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) },
+      { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, a.cohortHired, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
+    ]);
   };
 
   return (
@@ -115,6 +150,14 @@ export default function AdminAnalyticsPage() {
           />
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data}>{t.analytics.exportExcel}</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
+          {premium && (
+            <>
+              <Button variant="outline" size="sm" onClick={exportFullExcel} disabled={!data} data-testid="full-report-excel">{t.analytics.fullReportExcel}</Button>
+              <Link href="/admin/analytics/report" className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors" data-testid="full-report-link">
+                {t.analytics.fullReport}
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -271,6 +314,8 @@ export default function AdminAnalyticsPage() {
           </Card>
         </div>
       )}
+      <CohortComparison />
+      <SourceConversion />
         </>
       )}
     </div>

@@ -11,6 +11,16 @@ const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
   ownerCompany: { select: { id: true, name: true } },
   tasks: { orderBy: { order: 'asc' } },
+  // Member (mentee) names for the card's "who's on it" row (#616).
+  relations: {
+    where: { status: 'ACTIVE' },
+    select: { mentee: { select: { id: true, fullName: true } } },
+    take: 12,
+  },
+  members: {
+    orderBy: { addedAt: 'asc' },
+    select: { role: true, user: { select: { id: true, fullName: true, role: true } } },
+  },
   _count: { select: { relations: true } },
 } as const;
 
@@ -20,11 +30,21 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let where: Prisma.ProjectWhereInput = {};
-  if (session.user.role === 'MENTOR') where = { ownerUserId: session.user.id };
+  // Mentors see projects they own OR are members of (#617/#619).
+  if (session.user.role === 'MENTOR') {
+    where = { OR: [{ ownerUserId: session.user.id }, { members: { some: { userId: session.user.id } } }] };
+  }
   else if (session.user.role === 'COMPANY') where = { ownerCompanyId: session.user.companyId ?? '__none__' };
   else if (session.user.role === 'MENTEE') where = { isPublic: true };
 
   const projects = await prisma.project.findMany({ where, include, orderBy: { updatedAt: 'desc' } });
+  // Mentees only browse the public showcase set — keep it PII-free
+  // (member/relation names stripped, count only).
+  if (session.user.role === 'MENTEE') {
+    return NextResponse.json({
+      projects: projects.map(({ relations: _relations, members: _members, ...rest }) => rest),
+    });
+  }
   return NextResponse.json({ projects });
 }
 
@@ -68,6 +88,9 @@ export async function POST(request: Request) {
 
   const project = await prisma.project.create({
     data: {
+      // Person owners also get an OWNER member row (#617) so the members
+      // table is authoritative from day one.
+      ...(owner.ownerUserId ? { members: { create: { userId: owner.ownerUserId, role: 'OWNER' } } } : {}),
       name: d.name,
       description: d.description || null,
       technologies: d.technologies ?? [],

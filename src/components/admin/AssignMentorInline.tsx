@@ -1,12 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 
 interface MentorOption {
   id: string;
   fullName: string;
+}
+
+interface Suggestion {
+  mentorId: string;
+  fullName: string;
+  sharedSkills: string[];
+  reason: string | null;
 }
 
 // Inline "assign a mentor" control shown on an unassigned candidate card, so an
@@ -28,6 +36,37 @@ export function AssignMentorInline({
   const [choice, setChoice] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const [aiUsed, setAiUsed] = useState(false);
+
+  // Mentor suggestion (#533): rule-based ranking, AI-deepened with a rationale
+  // when the AI gate allows — otherwise the top rule-based match, no rationale.
+  const suggest = async () => {
+    setSuggesting(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/admin/mentor-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ menteeId }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const top = (d.suggestions ?? [])[0] ?? null;
+        setSuggestion(top);
+        setAiUsed(!!d.aiUsed);
+        if (top) setChoice(top.mentorId);
+        else setErr(a.noSuggestion);
+      } else {
+        setErr(t.common.error);
+      }
+    } catch {
+      setErr(t.common.error);
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
   const assign = async (mentorId: string) => {
     if (!mentorId) return;
@@ -79,7 +118,21 @@ export function AssignMentorInline({
         <Button size="sm" variant="outline" loading={busy} disabled={!choice} onClick={() => assign(choice)}>
           {a.assign}
         </Button>
+        <Button size="sm" variant="ghost" loading={suggesting} onClick={suggest} title={a.suggestHint} data-testid="suggest-mentor">
+          <Sparkles className="h-4 w-4" />
+        </Button>
       </div>
+      {suggestion && (
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5" data-testid="mentor-suggestion">
+          <span className="font-medium">{a.suggested}: {suggestion.fullName}</span>
+          {suggestion.reason
+            ? ` — ${suggestion.reason}`
+            : suggestion.sharedSkills.length > 0
+              ? ` — ${a.sharedSkills}: ${suggestion.sharedSkills.join(', ')}`
+              : ''}
+          {!aiUsed && <span className="text-gray-400"> ({a.ruleBased})</span>}
+        </p>
+      )}
       {err && <p className="text-xs text-red-600 mt-1.5">{err}</p>}
     </div>
   );

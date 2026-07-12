@@ -29,15 +29,23 @@ npx prisma generate  # regenerate client (also runs on postinstall)
 npx prisma db push   # sync schema to DB (this project uses db push, NOT migrations)
 npx prisma db seed   # create first ADMIN (see seed env vars below)
 
-npm run test:e2e         # Playwright smoke tests (starts the app itself)
-npm run test:e2e:headed  # same, with a visible browser
+npm run test:e2e         # full Playwright suite (starts the app itself)
+npm run test:e2e:smoke   # critical-path subset only (tests tagged @smoke)
+npm run test:e2e:headed  # full suite, with a visible browser
 ```
 
-**E2E tests** (Playwright) live in `e2e/` and run as a CI quality gate on every PR
-(`.github/workflows/e2e.yml`, isolated MySQL service). Locally `test:e2e` boots the dev
-server; set `BASE_URL=https://crm-preview.ersah.in` to run against a deployed env instead.
+**E2E tests** (Playwright) live in `e2e/`. The PR quality gate
+(`.github/workflows/e2e.yml`, isolated MySQL service) runs **only the `@smoke` subset**;
+the full suite is the scheduled safety net (see below). The **smoke set** is the tests
+tagged `@smoke` (`test('…', { tag: '@smoke' }, …)`) — boot, auth, landing i18n, invite,
+pipeline, free-core regression. When you add a spec for a *critical* flow, tag it
+`@smoke`; keep the set small (~15-20 tests) so the PR gate stays fast. Locally `test:e2e`
+boots the dev server; set `BASE_URL=https://crm-preview.ersah.in` to run against a
+deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
+The **full suite** also runs on a schedule, 4× a day (`.github/workflows/e2e-full.yml`,
+4-way sharded); a red scheduled run emails the team (`ALERT_EMAIL_TO`, stress.yml pattern).
 
 ## Architecture
 
@@ -122,6 +130,9 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 - **Do not run `db push` against the shared preview/prod DB** without explicit confirmation;
   CI handles DB sync on deploy.
 - **Never commit secrets.** Real values live only in server-side env / GitHub secrets.
+- **Develop on synthetic data only** ([docs/DATA_ACCESS_POLICY.md](docs/DATA_ACCESS_POLICY.md)):
+  local DB + `npx prisma db seed` + `npm run seed:demo` (rich fake data set). Contributors
+  never browse real/preview PII; the demo seeder refuses non-local `DATABASE_URL`s.
 - **Branch + PR per change.** Branch names: `feat/<issue>-slug`, `fix/<issue>-slug`,
   `docs/...`. Reference issues with `Closes #N`. Merging to `main` deploys to production.
 - **Ship it yourself (standing instruction from the maintainer, 2026-07):** for every change,
@@ -151,6 +162,9 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 - **Work is tracked on a GitHub Project board** (Epics #5–#11, stories #12+). Move the issue
   to the matching column as you work.
 - Co-author trailer on commits: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- **Feature catalogue**: when a user-visible feature ships, add/update its entry in
+  `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
+  page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.
 - **Versioning**: on a notable batch of merged features (not every PR), bump `package.json`
   `version` (semver), add an entry to `CHANGELOG.md` (developer-facing, Keep a Changelog
   format), and add a matching entry to `src/lib/releaseNotes.ts` (user-facing, EN/TR/DE,

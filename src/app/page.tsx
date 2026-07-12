@@ -1,9 +1,6 @@
 import Link from 'next/link';
-import {
-  GraduationCap, Users, Building2, ArrowRight, CheckCircle,
-  GitBranch, CalendarClock, BarChart3, ShieldCheck,
-  FileText, Target, Sparkles,
-} from 'lucide-react';
+import { GraduationCap, ArrowRight, CheckCircle } from 'lucide-react';
+import { getFeatures } from '@/lib/features';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
@@ -22,17 +19,9 @@ export default async function HomePage() {
   const { locale, t } = await getServerDictionary();
   const L = t.landing;
 
-  const features = [
-    { icon: GitBranch, color: 'blue', title: L.fPipelineT, desc: L.fPipelineD },
-    { icon: Users, color: 'green', title: L.fMentorT, desc: L.fMentorD },
-    { icon: Building2, color: 'purple', title: L.fCompanyT, desc: L.fCompanyD },
-    { icon: CalendarClock, color: 'amber', title: L.fCommsT, desc: L.fCommsD },
-    { icon: FileText, color: 'teal', title: L.fDocsT, desc: L.fDocsD },
-    { icon: Target, color: 'orange', title: L.fGrowthT, desc: L.fGrowthD },
-    { icon: BarChart3, color: 'sky', title: L.fAnalyticsT, desc: L.fAnalyticsD },
-    { icon: ShieldCheck, color: 'rose', title: L.fPrivacyT, desc: L.fPrivacyD },
-    { icon: Sparkles, color: 'indigo', title: L.fPlatformT, desc: L.fPlatformD },
-  ];
+  // Fed from the single-source catalogue (#584/#588): the landing shows the
+  // featured subset; /features shows everything.
+  const features = getFeatures(t).filter((f) => f.featured);
   const iconBg: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',
     purple: 'bg-purple-100 text-purple-600', amber: 'bg-amber-100 text-amber-600',
@@ -67,6 +56,9 @@ export default async function HomePage() {
               <BetaBadge className="flex-shrink-0" />
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              <Link href="/features" className="hidden sm:inline text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
+                {t.featureCatalog.allFeatures}
+              </Link>
               <LanguageSwitcher current={locale} />
             <ThemeToggle />
               <Link href="/auth/signin" className="text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
@@ -106,6 +98,11 @@ export default async function HomePage() {
                 {chip}
               </span>
             ))}
+          </div>
+          <div className="text-center mt-8">
+            <Link href="/features" className="inline-flex items-center gap-1.5 text-blue-600 hover:underline font-medium" data-testid="all-features-link">
+              {t.featureCatalog.allFeatures} <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </section>
@@ -232,6 +229,7 @@ export default async function HomePage() {
           </div>
           <p>© {new Date().getFullYear()} InternshipCRM. {L.footer}</p>
           <div className="flex items-center gap-4">
+            <Link href="/features" className="hover:text-gray-700">{t.featureCatalog.allFeatures}</Link>
             <Link href="/privacy" className="hover:text-gray-700">{t.privacy.title}</Link>
             <Link href="/terms" className="hover:text-gray-700">{t.terms.title}</Link>
             <VersionFooter version={APP_VERSION} />

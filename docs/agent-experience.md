@@ -67,3 +67,115 @@ Newest entries on top.
 - The e2e suite is genuinely flaky (see `CLAUDE.md` for the known specs). Re-running only the
   failed jobs (`actions_run_trigger rerun_failed_jobs`) usually goes green; read the actual
   failure log before assuming your change broke something.
+
+## 2026-07-10 — Premium Faz 1 tamamlama + küçük backlog süpürmesi
+
+**Pipelining beats polling (maintainer feedback, now standing):** don't idle-wait on CI.
+Open the PR, immediately start the next item on a fresh branch off `origin/main`, and merge
+green PRs opportunistically whenever you happen to check. `git stash` + `checkout -B <new>
+origin/main` + `stash pop` cleanly moves work-in-progress to its own branch when you started
+it on the wrong one.
+
+**Parallel PRs need disjoint files.** The batch (#575/#576/#577) worked because each PR
+touched different files; `dictionaries.ts` is the common collision point — add i18n keys in
+separate blocks and rebase quickly if two PRs touch it.
+
+**Cross-PR dependencies:** a seed/script referencing a new enum value must merge *after* the
+schema PR that adds it (noted in the PR body, e.g. #581 after #579). Squash-merges make the
+order matter — GitHub won't warn you.
+
+**Entitlement-gating pattern is settled:** `hasFeature(companyId, KEY)` in the route +
+`feature_locked` 403 + e2e that flips the flag via direct `prisma.companyEntitlement` writes.
+The free-core regression spec (`e2e/free-core-regression.spec.ts`, #526) is the shield —
+extend it if you add core routes.
+
+**Consent-gated visibility:** company-facing mentee exposure now requires BOTH
+`publicProfile` AND an active `TALENT_POOL_VISIBILITY` consent (`grantedAt` set, `revokedAt`
+null). Any new company-facing query must include the same `consents.some` clause — copy it
+from `talent-pool/route.ts`.
+
+**Faz 2/3 premium işleri bilinçli beklemede:** story #521 "task'lar Faz 1 geliri
+doğrulandıktan sonra bölünecek" diyor; analytics gating'in alıcısı (admin vs şirket) da
+belirsiz. Bunlara başlamadan maintainer'dan ürün kararı iste.
+
+**Verify-before-build:** `npm run build` in the sandbox needs
+`PRISMA_QUERY_ENGINE_LIBRARY` exported; a chained `format && validate && generate` without
+`DATABASE_URL` fails at validate — pass a dummy `DATABASE_URL` for validate only.
+
+## 2026-07-11 — Premium Faz 2 tamamlama (analitik + AI paketi)
+
+**Faz 2 gating kararları (uygulandı, gerekçeli):** admin-facing premium analitik
+tek-tenant'ta `premiumAnalytics` Setting flag'i ile kapatıldı (hasFeature şirket-bazlı
+olduğu için admin'e uymuyor; Faz 3 multi-tenancy'de per-tenant entitlement'a taşınır).
+AI tarafında merkezi kapı `runAiGated` (src/lib/aiGate.ts): consent → kota → sağlayıcı →
+çağrı → ölçüm; kota `aiMonthlyQuota` Setting + `AiUsage` satırları (yalnızca BAŞARILI
+çağrı kredi tüketir). Yeni AI özelliği eklerken sağlayıcıyı doğrudan çağırma — kapıdan geç.
+
+**Mentee'ye asla paywall:** mentee-facing AI özellikleri (CV feedback, interview prep)
+kota bitince nötr "şu an kullanılamıyor" der; kota/fiyat mekaniği yalnızca admin'e görünür.
+
+**Kişisel veri sağlayıcıya gitmiyor:** eşleştirme/interview-prep yalnızca skills/pozisyon
+string'leri gönderir; mentörler anonim etiketlerle (A-E) sıralanıp lokalde geri eşlenir.
+Yeni AI özelliklerinde bu deseni koru; kişi-verisi işleyen özellik için özel ConsentType aç
+(örn. AI_INTERACTION_SUMMARY).
+
+**dictionaries.ts çakışma pratiği:** aynı bölgeye dokunan paralel PR'larda squash sonrası
+rebase kaçınılmaz. Çözüm kalıbı: HEAD bloğunu tut + "  }," kapat + gelen dalın yalnızca
+yeni bloğunu ekle (python regex ile 3 locale'de tek seferde). `check:i18n` anında doğrular.
+
+**Stale Prisma client tuzağı (yine):** rebase sonrası `tsc` yeni enum değerini tanımazsa
+önce `npx prisma generate` — kod hatası sanma.
+
+**CI kırmızısı triage:** "228 passed" + exit 1 → altyapı flake'i (Chromium SIGSEGV, teardown);
+`rerun_failed_jobs` yeterli. Log'da gerçek spec hatası olup olmadığına mutlaka bak; benim
+diff'ime dokunmayan spec'te strict-mode ihlali de tipik flake işareti.
+
+## 2026-07-11 — Ürün turu: self-serve intake, destek sistemi, katalog, topic preview (0.6.0-beta)
+
+**Pipelining artık standart:** PR açar açmaz sıradaki işi kodla; CI sonuçlarını toplu
+"sweep"le kontrol edip yeşilleri merge et. Bekleme molası yok — kullanıcının açık talebi.
+
+**PR "dirty" ise CI hiç tetiklenmez:** #609'da check-run listesi bomboştu; sebep workflow
+değil, PR'ın merge conflict'i (mergeable_state: dirty — GitHub merge commit'i üretemeyince
+pull_request workflow'ları koşmaz). Boş check listesi gördüğünde önce `pull_request_read get`
+ile mergeable_state'e bak; rebase + çöz + push sonrası CI kendiliğinden gelir.
+
+**Ortamdaki GITHUB_TOKEN doğrudan API'ye kapalı:** curl ile api.github.com "GitHub access
+is not enabled for this session" döner — CI izleme/merge yalnızca mcp__github__* araçlarıyla.
+Kendi kendine check-in için `send_later` (claude-code-remote) çalışıyor; Monitor + curl çalışmıyor.
+
+**Aynı dashboard'a ikinci link eklerken mevcut spec'leri tara:** #591'in kapı kutusundaki
+"Upload your CV" linki, onboarding-checklist spec'inin kapsamsız `getByText`'ini strict-mode
+ihlaline düşürdü. Yeni UI metni eklemeden önce `grep -rn "<metin>" e2e/` — çakışan spec'i
+aynı PR'da kapsamlandır (`data-testid` + scoped locator).
+
+**DOM-duplikasyon flake'i tekrar etti:** bazı koşularda sayfa içeriği DOM'da iki kez görünüyor
+(iki `#name`, iki arama kutusu; export-filter/skill-match/sources/api-docs değişen kurbanlar).
+Diff'inle ilgisiz strict-mode "resolved to 2 elements" bunun işareti — rerun yeterli. Kendi
+yeni spec'lerinde DB yan-etki assert'lerini `expect.poll` ile yaz (bubble render ≠ commit bitti).
+
+**E2E'de destek sistemi deseni:** iki browser context (user + admin) tek spec'te tam döngüyü
+(ticket aç → kuyrukta gör → yanıtla → durum geçişi → bildirim) doğrulayabiliyor; API çağrılarını
+`page.request` ile atıp UI'ı yalnızca kritik noktalarda assert etmek hem hızlı hem az kırılgan.
+
+## 2026-07-11 (2. tur) — CI hızlandırma + Projeler yenileme (0.7.0-beta)
+
+**Smoke gate kanıtlandı:** PR gate @smoke setine indirildikten sonra Playwright
+job'ı ~10 dk'dan ~3,5 dk'ya düştü (ilk kanıt: #630'un kendi CI'ı). Yeni kritik
+akış spec'i yazarken `{ tag: '@smoke' }` eklemeyi unutma; tam suite güvenlik ağı
+`e2e-full.yml` (4×/gün, 4 shard, kırmızıda tek mail).
+
+**Stacked PR ritmi oturdu:** base merge → `git rebase --onto origin/main <eski-base>
+<branch>` → force-push-with-lease → PR. Aynı include bloğuna dokunan paralel
+branch'lerde (örn. /api/projects include) conflict beklenen durum; iki tarafı da
+tutup birleştir.
+
+**Owner-perms deseni (#619):** sunucu tarafında alan-bazlı yetki için "owner
+değilse gönderilen korumalı alanları 403 + alan listesiyle reddet" yaklaşımı,
+UI'da da aynı alanları disabled yapıp payload'dan çıkarmakla eşleşiyor — UI'a
+güvenmeden net hata mesajı veriyor.
+
+**Actions runner'ı sunucu eli olarak kullan:** bu konteynerde SSH anahtarı yok ama
+runner'da var — tek seferlik sunucu işleri (wildcard cert, izin doğrulama) için
+`workflow_dispatch` + deploy.yml'in SSH deseni yeterli (infra-setup.yml). Adımları
+ayrı ayrı atlanabilir ve idempotent yap; root gerektiren işleri deneme, TODO yaz.

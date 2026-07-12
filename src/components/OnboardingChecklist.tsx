@@ -39,7 +39,7 @@ export function OnboardingChecklist() {
   };
 
   return (
-    <div className="mb-6 rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 p-5">
+    <div className="mb-6 rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 p-5" data-testid="onboarding-checklist">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <Rocket className="h-5 w-5 text-blue-600 dark:text-blue-400" />

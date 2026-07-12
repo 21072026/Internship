@@ -5,7 +5,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('mentor can add a mentee and it is assigned to them', async ({ page }) => {
+test('mentor can add a mentee and it is assigned to them', { tag: '@smoke' }, async ({ page }) => {
   const mentorEmail = uniqueEmail('mentor');
   const password = 'MentorPass123!';
   const mentor = await seedUser(mentorEmail, password, 'MENTOR', 'AddMentee Mentor');

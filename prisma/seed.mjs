@@ -22,6 +22,19 @@ async function main() {
     console.log(`Created ADMIN user: ${email}`);
   }
 
+  // Backfill ProjectMember OWNER rows (#617, idempotent) so no person-owned
+  // project is ever without an OWNER member.
+  const owned = await prisma.project.findMany({
+    where: { ownerUserId: { not: null } },
+    select: { id: true, ownerUserId: true },
+  });
+  if (owned.length > 0) {
+    await prisma.projectMember.createMany({
+      data: owned.map((p) => ({ projectId: p.id, userId: p.ownerUserId, role: 'OWNER' })),
+      skipDuplicates: true,
+    });
+  }
+
   // Idempotent company seed (Company.name is not unique, so check first).
   for (const name of SEED_COMPANIES) {
     const found = await prisma.company.findFirst({ where: { name } });

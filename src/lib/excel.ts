@@ -6,10 +6,20 @@ export async function exportXlsx(
   rows: (string | number | null | undefined)[][],
   sheetName = 'Sheet1'
 ) {
+  await exportXlsxSheets(filename, [{ name: sheetName, columns, rows }]);
+}
+
+// Multi-sheet variant (premium full report, #540): one workbook, one sheet per
+// section. Sheet names are capped at Excel's 31-char limit.
+export async function exportXlsxSheets(
+  filename: string,
+  sheets: { name: string; columns: string[]; rows: (string | number | null | undefined)[][] }[]
+) {
   const XLSX = await import('xlsx');
-  const data = [columns, ...rows.map((r) => r.map((c) => (c == null ? '' : c)))];
-  const ws = XLSX.utils.aoa_to_sheet(data);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  for (const s of sheets) {
+    const data = [s.columns, ...s.rows.map((r) => r.map((c) => (c == null ? '' : c)))];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), s.name.slice(0, 31));
+  }
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
 }

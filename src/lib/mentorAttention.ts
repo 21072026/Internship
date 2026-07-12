@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal';
 
 export interface AttentionItem {
   relationId: string;
@@ -29,6 +29,7 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionItem
       interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
       questions: { where: { answer: null }, select: { id: true } },
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
+      goals: { where: { status: 'OPEN' }, select: { id: true } },
     },
   });
 
@@ -42,6 +43,7 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionItem
     if (r.stageDeadline && r.stageDeadline.getTime() < now) reasons.push('overdue');
     if (r.questions.length > 0) reasons.push('unanswered_question');
     if (r.meetingRequests.length > 0) reasons.push('pending_meeting');
+    if (r.goals.length === 0) reasons.push('no_open_goal');
 
     if (reasons.length > 0) {
       items.push({

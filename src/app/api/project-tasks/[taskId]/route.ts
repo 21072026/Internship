@@ -3,12 +3,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { canManageProject } from '@/lib/projectAccess';
+import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 
 async function taskIfManageable(userId: string, role: string, companyId: string | null | undefined, taskId: string) {
   const task = await prisma.projectTask.findUnique({ where: { id: taskId }, include: { project: true } });
   if (!task) return null;
-  return canManageProject({ id: userId, role, companyId }, task.project) ? task : null;
+  // Tasks are collaborative (#619): owners AND mentor members may edit.
+  if (canManageProject({ id: userId, role, companyId }, task.project)) return task;
+  return (await isProjectMember({ id: userId, role, companyId }, task.projectId)) ? task : null;
 }
 
 const schema = z.object({

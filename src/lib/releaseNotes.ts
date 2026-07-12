@@ -13,6 +13,114 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.0-beta',
+    date: '2026-07-11',
+    highlights: {
+      en: [
+        'Projects, rebuilt — the screen now opens with rich project cards (who is on it, tech, links, progress); the form appears only when you add or edit. Every project has a detail page.',
+        'Share project ownership — projects can now have several owners and several mentors. Owners add or remove people from the card and can hand a project over in one step.',
+        'Clear roles — the project name, status, visibility and dates can only be changed by an owner; everyone on the project can work on the description, links, goals and tasks.',
+      ],
+      tr: [
+        'Projeler yenilendi — ekran artık zengin proje kartlarıyla açılıyor (kimler var, teknolojiler, linkler, ilerleme); form yalnızca ekleme/düzenlemede geliyor. Her projenin bir detay sayfası var.',
+        'Proje sahipliğini paylaş — projelerde artık birden çok owner ve birden çok mentör olabiliyor. Owner’lar kart üzerinden kişi ekleyip çıkarabiliyor ve projeyi tek adımda devredebiliyor.',
+        'Net roller — proje adı, durumu, görünürlüğü ve tarihlerini yalnızca owner değiştirebilir; projedeki herkes açıklama, linkler, hedefler ve görevler üzerinde çalışabilir.',
+      ],
+      de: [
+        'Projekte, neu gebaut — der Bildschirm öffnet jetzt mit reichhaltigen Projektkarten (wer dabei ist, Technologien, Links, Fortschritt); das Formular erscheint nur beim Anlegen/Bearbeiten. Jedes Projekt hat eine Detailseite.',
+        'Geteilte Projektverantwortung — Projekte können jetzt mehrere Owner und mehrere Mentoren haben. Owner fügen Personen direkt auf der Karte hinzu und übergeben ein Projekt in einem Schritt.',
+        'Klare Rollen — Name, Status, Sichtbarkeit und Termine ändert nur ein Owner; an Beschreibung, Links, Zielen und Aufgaben arbeiten alle Projektmitglieder.',
+      ],
+    },
+  },
+  {
+    version: '0.6.0-beta',
+    date: '2026-07-11',
+    highlights: {
+      en: [
+        'Join on your own — you can now sign up directly as a mentee; an admin approves your account and you land in your portal.',
+        'Request a mentor — once your profile basics and CV are in place, ask for a mentor right from your dashboard; admins match you and you are notified the moment it is decided.',
+        'Built-in support — every user has a pinned "Support" conversation in Messages. Write to us anytime; you can follow the status of your request (open, in progress, closed) and get notified on replies.',
+        'New Features page — everything InternshipCRM can do, categorized and in three languages, linked from the landing page.',
+      ],
+      tr: [
+        'Kendi başına katıl — artık doğrudan mentee olarak kaydolabilirsin; hesabını bir admin onaylar ve portalına ulaşırsın.',
+        'Mentör talep et — temel profil bilgilerin ve CV’in hazır olduğunda panelinden mentör isteyebilirsin; adminler eşleştirir ve karar verilir verilmez haberdar olursun.',
+        'Yerleşik destek — her kullanıcının Mesajlar’da sabit bir "Destek" sohbeti var. Bize istediğin an yaz; talebinin durumunu (açık, işlemde, kapalı) takip edebilir ve yanıtlarda bildirim alırsın.',
+        'Yeni Özellikler sayfası — InternshipCRM’in yapabildiği her şey, kategorili ve üç dilde, açılış sayfasından erişilebilir.',
+      ],
+      de: [
+        'Selbst beitreten — du kannst dich jetzt direkt als Mentee registrieren; ein Admin bestätigt dein Konto und du landest in deinem Portal.',
+        'Mentor anfragen — sobald Profilbasics und Lebenslauf vorliegen, fragst du direkt vom Dashboard einen Mentor an; Admins vermitteln und du wirst sofort über die Entscheidung informiert.',
+        'Eingebauter Support — jede*r hat in den Nachrichten eine angeheftete "Support"-Unterhaltung. Schreib uns jederzeit; du verfolgst den Status deiner Anfrage (offen, in Bearbeitung, geschlossen) und wirst bei Antworten benachrichtigt.',
+        'Neue Funktionsseite — alles, was InternshipCRM kann, kategorisiert und in drei Sprachen, verlinkt von der Startseite.',
+      ],
+    },
+  },
+  {
+    version: '0.5.0-beta',
+    date: '2026-07-11',
+    highlights: {
+      en: [
+        'You decide who sees you — companies can only find you in talent search after your explicit consent, and a friendly banner helps you choose. Withdrawing hides you immediately.',
+        'AI helpers for mentees (free for you): constructive CV feedback and an interview-prep assistant with realistic questions and tips for your target position.',
+        'AI helpers for mentors: one-click summary of your interaction log with a mentee — progress, themes, risks and next steps (with the mentee’s permission).',
+        'Smarter mentor matching — suggestions now come with a short AI rationale; without AI they gracefully fall back to skill overlap.',
+        'Premium analytics for admins: cohort comparison, conversion per referral source, a full printable/Excel report and a weekly report email.',
+        'Fair AI usage — a monthly AI quota managed in Settings; mentees never see pricing or quotas.',
+      ],
+      tr: [
+        'Seni kimin göreceğine sen karar verirsin — şirketler seni ancak açık iznin sonrasında yetenek aramasında bulabilir; dostça bir banner seçim yapmana yardım eder. İzni geri çekince anında gizlenirsin.',
+        'Mentee’lere AI yardımcıları (senin için ücretsiz): yapıcı CV geri bildirimi ve hedef pozisyonuna uygun gerçekçi sorular + ipuçlarıyla mülakat hazırlık asistanı.',
+        'Mentörlere AI yardımcıları: bir mentee ile etkileşim kaydının tek tıkla özeti — ilerleme, temalar, riskler ve sonraki adımlar (mentee’nin izniyle).',
+        'Daha akıllı mentör eşleştirme — öneriler artık kısa bir AI gerekçesiyle geliyor; AI yoksa yetenek örtüşmesine zarifçe düşüyor.',
+        'Adminlere premium analitik: cohort karşılaştırması, kaynak bazlı dönüşüm, yazdırılabilir/Excel tam rapor ve haftalık rapor e-postası.',
+        'Adil AI kullanımı — Ayarlar’dan yönetilen aylık AI kotası; mentee’ler asla fiyat veya kota görmez.',
+      ],
+      de: [
+        'Du entscheidest, wer dich sieht — Unternehmen finden dich in der Talentsuche erst nach deiner ausdrücklichen Einwilligung; ein freundlicher Hinweis hilft dir bei der Wahl. Ein Widerruf verbirgt dich sofort.',
+        'KI-Helfer für Mentees (für dich kostenlos): konstruktives Lebenslauf-Feedback und ein Interview-Vorbereitungsassistent mit realistischen Fragen und Tipps für deine Zielposition.',
+        'KI-Helfer für Mentoren: Ein-Klick-Zusammenfassung des Interaktionsprotokolls mit einem Mentee — Fortschritt, Themen, Risiken und nächste Schritte (mit Einwilligung des Mentees).',
+        'Intelligenteres Mentoren-Matching — Vorschläge kommen jetzt mit einer kurzen KI-Begründung; ohne KI greift die Fähigkeiten-Überschneidung.',
+        'Premium-Analytik für Admins: Cohort-Vergleich, Konversion pro Quelle, ein druckbarer/Excel-Gesamtbericht und eine wöchentliche Berichts-E-Mail.',
+        'Faire KI-Nutzung — ein monatliches KI-Kontingent in den Einstellungen; Mentees sehen nie Preise oder Kontingente.',
+      ],
+    },
+  },
+  {
+    version: '0.4.0-beta',
+    date: '2026-07-10',
+    highlights: {
+      en: [
+        'Company Premium — companies can now search a privacy-safe talent pool of mentees who opted in, see a "verified" candidate card with mentor evaluations and project work, get alerts when a candidate matches an open position, and preview newly-hireable candidates first. Mentor and mentee features stay free.',
+        'Messaging is easier to reach — a new inbox icon in the header and a single Messages page for all your conversations.',
+        'Daily activity report — mentors and admins can get a daily summary of mentee activity (logins, time on site, pages visited, completed to-dos).',
+        'Mentor attention queue — mentees with no open goal are now flagged, and you get an in-app heads-up when a mentee goes quiet.',
+        'Tidier admin — deactivated users move to an "Archived" tab instead of cluttering the list; assign a mentor to a candidate right from the Candidates screen.',
+        'Personalization — pick your own accent color for the app.',
+        'Fixes — mobile users can now reach Sign out from the menu; editing a company with empty optional fields no longer errors; emails land in the inbox more reliably.',
+      ],
+      tr: [
+        'Şirket Premium — şirketler artık rıza vermiş mentee’lerden oluşan gizlilik-güvenli bir yetenek havuzunda arama yapabilir, mentör değerlendirmeleri ve proje çalışmasıyla "doğrulanmış" aday kartını görebilir, açık pozisyona uyan aday çıkınca bildirim alabilir ve yeni işe alınabilir adayları önce görebilir. Mentör ve mentee özellikleri ücretsiz kalır.',
+        'Mesajlaşmaya erişim kolaylaştı — başlıkta yeni bir gelen kutusu ikonu ve tüm sohbetleriniz için tek bir Mesajlar sayfası.',
+        'Günlük aktivite raporu — mentör ve adminler mentee aktivitesinin (giriş, sitede geçen süre, gezilen sayfalar, tamamlanan görevler) günlük özetini alabilir.',
+        'Mentor dikkat kuyruğu — açık hedefi olmayan mentee’ler artık işaretleniyor ve bir mentee sessizleştiğinde uygulama içi uyarı alıyorsunuz.',
+        'Daha derli admin — pasifleştirilen kullanıcılar listeyi doldurmak yerine "Arşiv" sekmesine taşınıyor; adayı doğrudan Adaylar ekranından bir mentöre atayabilirsiniz.',
+        'Kişiselleştirme — uygulama için kendi vurgu renginizi seçin.',
+        'Düzeltmeler — mobil kullanıcılar artık menüden Çıkış’a ulaşabiliyor; opsiyonel alanları boş bir şirketi düzenlemek artık hata vermiyor; e-postalar gelen kutusuna daha güvenilir ulaşıyor.',
+      ],
+      de: [
+        'Unternehmens-Premium — Unternehmen können jetzt in einem datenschutzfreundlichen Talent-Pool von Mentees suchen, die zugestimmt haben, eine „verifizierte" Kandidatenkarte mit Mentor-Bewertungen und Projektarbeit sehen, Benachrichtigungen bei passenden Kandidaten erhalten und neu vermittelbare Kandidaten zuerst sehen. Mentor- und Mentee-Funktionen bleiben kostenlos.',
+        'Nachrichten sind leichter erreichbar — ein neues Posteingang-Symbol in der Kopfzeile und eine einzige Nachrichten-Seite für alle Unterhaltungen.',
+        'Täglicher Aktivitätsbericht — Mentoren und Admins erhalten eine tägliche Zusammenfassung der Mentee-Aktivität (Logins, Verweildauer, besuchte Seiten, erledigte To-dos).',
+        'Mentor-Aufmerksamkeitsliste — Mentees ohne offenes Ziel werden jetzt markiert, und du bekommst einen In-App-Hinweis, wenn ein Mentee still wird.',
+        'Aufgeräumtere Verwaltung — deaktivierte Nutzer wandern in einen „Archiviert"-Tab, statt die Liste zu überladen; weise einem Kandidaten direkt aus der Kandidaten-Ansicht einen Mentor zu.',
+        'Personalisierung — wähle deine eigene Akzentfarbe für die App.',
+        'Korrekturen — Mobile Nutzer erreichen jetzt „Abmelden" im Menü; das Bearbeiten eines Unternehmens mit leeren optionalen Feldern schlägt nicht mehr fehl; E-Mails landen zuverlässiger im Posteingang.',
+      ],
+    },
+  },
+  {
     version: '0.3.0-beta',
     date: '2026-07-03',
     highlights: {

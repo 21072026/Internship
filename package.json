@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.3.0-beta",
+  "version": "0.7.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "prisma": {
@@ -13,11 +13,13 @@
     "lint": "next lint",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:headed": "playwright test --headed",
     "test:stress": "node scripts/stress-test.mjs",
     "import:csv": "node scripts/import-csv.mjs",
     "postinstall": "prisma generate",
     "seed:templates": "node prisma/seed-templates.mjs",
+    "seed:demo": "node prisma/seed-demo.mjs",
     "db:dev:up": "docker compose -f docker-compose.dev.yml up -d",
     "db:dev:down": "docker compose -f docker-compose.dev.yml down"
   },

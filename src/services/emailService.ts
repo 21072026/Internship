@@ -280,8 +280,32 @@ export async function checkMentorInteractionReminders() {
 
   for (const relation of activeRelations) {
     const lastInteraction = relation.interactions[0];
-    if (!lastInteraction || lastInteraction.date < fourteenDaysAgo) {
+    const stale = !lastInteraction || lastInteraction.date < fourteenDaysAgo;
+    if (stale) {
       remindersToSend.push(relation);
+      // In-app notification once per staleness episode (#573): only when we
+      // haven't already flagged this stretch of inactivity. In-app bell items
+      // are always created (consistent with deadline/retention notifications);
+      // email opt-out is handled separately below.
+      if (!relation.stalenessReminderSentAt) {
+        await notify(
+          relation.mentorId,
+          'stale_mentee',
+          `No recent contact with ${relation.mentee.fullName}.`,
+          `/mentor/mentees/${relation.id}`
+        );
+        await prisma.mentorshipRelation.update({
+          where: { id: relation.id },
+          data: { stalenessReminderSentAt: new Date() },
+        });
+      }
+    } else if (relation.stalenessReminderSentAt) {
+      // Mentee is active again — clear the flag so a future staleness episode
+      // re-notifies the mentor.
+      await prisma.mentorshipRelation.update({
+        where: { id: relation.id },
+        data: { stalenessReminderSentAt: null },
+      });
     }
   }
 
@@ -607,6 +631,153 @@ export async function checkRetentionReminders() {
   return { checked: users.length, reminded, retentionMonths: months, graceDays: RETENTION_GRACE_DAYS };
 }
 
+// Does a consenting candidate match any of a company's open positions? A match
+// is a loose, case-insensitive overlap between a need's position and the
+// candidate's target position or one of their skills — deliberately generous
+// (the alert is a "worth a look" nudge, not a hard filter).
+function candidateMatchesNeeds(
+  positions: string[],
+  cand: { targetPosition?: string | null; skills: unknown }
+): boolean {
+  const target = (cand.targetPosition || '').toLowerCase().trim();
+  const skills = (Array.isArray(cand.skills) ? cand.skills : []).map((s) => String(s).toLowerCase().trim()).filter(Boolean);
+  return positions.some((pos) => {
+    if (!pos) return false;
+    if (target && (target.includes(pos) || pos.includes(target))) return true;
+    return skills.some((sk) => sk && (pos.includes(sk) || sk.includes(pos)));
+  });
+}
+
+// Premium CompanyNeed match alerts (Faz 1, #530). For every company holding the
+// COMPANY_NEED_MATCH_ALERTS entitlement, scan the consenting talent pool (the
+// same publicProfile-only visibility as talent-pool search) for candidates
+// matching an open position, and notify the company's users once per candidate.
+// Repeat notifications are prevented by the CompanyNeedAlert dedupe row (the
+// unique [companyId, menteeId] insert is the marker — createMany/skipDuplicates
+// makes "insert-or-skip" atomic, so a candidate only ever alerts a company once).
+export async function checkCompanyNeedMatches() {
+  const companies = await prisma.company.findMany({
+    where: {
+      entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
+      needs: { some: {} },
+    },
+    select: {
+      id: true,
+      name: true,
+      needs: { select: { position: true } },
+      users: {
+        where: { role: 'COMPANY', isActive: true },
+        select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+      },
+    },
+  });
+  if (companies.length === 0) return { companies: 0, alerts: 0 };
+
+  // The consenting talent pool — publicProfile opt-in AND an active
+  // TALENT_POOL_VISIBILITY consent (#527), same visibility rule as talent-pool
+  // search.
+  const pool = await prisma.user.findMany({
+    where: {
+      role: 'MENTEE',
+      isActive: true,
+      publicProfile: true,
+      consents: { some: { type: 'TALENT_POOL_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
+    },
+    select: { id: true, fullName: true, targetPosition: true, skills: true },
+  });
+  if (pool.length === 0) return { companies: companies.length, alerts: 0 };
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  let alerts = 0;
+
+  for (const company of companies) {
+    const positions = company.needs.map((n) => n.position.toLowerCase().trim()).filter(Boolean);
+    if (positions.length === 0) continue;
+
+    for (const cand of pool) {
+      if (!candidateMatchesNeeds(positions, cand)) continue;
+
+      // Atomic dedupe: the insert succeeds only the first time; count 0 means
+      // this company was already alerted about this candidate — skip silently.
+      const created = await prisma.companyNeedAlert.createMany({
+        data: [{ companyId: company.id, menteeId: cand.id }],
+        skipDuplicates: true,
+      });
+      if (created.count === 0) continue;
+
+      alerts += 1;
+      const link = `/p/${cand.id}`;
+      const text = `New candidate matches your open position: ${cand.fullName}`;
+      for (const u of company.users) {
+        await notify(u.id, 'need_match', text, link);
+        if (emailAllowed(u, 'digest')) {
+          await sendEmail({
+            to: u.email,
+            subject: 'A candidate matches your open position',
+            html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color:#2563eb;">New matching candidate</h2>
+              <p>Hi ${u.fullName},</p>
+              <p><strong>${cand.fullName}</strong> matches one of ${company.name}'s open positions${cand.targetPosition ? ` (${cand.targetPosition})` : ''}.</p>
+              <p><a href="${appUrl}${link}">View profile</a></p>
+            </div>`,
+          }).catch(() => {});
+        }
+      }
+    }
+  }
+
+  return { companies: companies.length, alerts };
+}
+
+// Weekly scheduled analytics report email (Faz 2, #541). Premium: only runs
+// when the premiumAnalytics setting is on. Sends every active admin a compact
+// pipeline summary — total relations, hired conversion, stage counts and the
+// last 7 days' activity — honoring the per-user digest email opt-out.
+export async function sendWeeklyAnalyticsReport() {
+  if ((await getSetting('premiumAnalytics')) !== 'true') return { locked: true, sent: 0 };
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [byStage, newRelations, interactions, admins] = await Promise.all([
+    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], _count: { _all: true } }),
+    prisma.mentorshipRelation.count({ where: { startDate: { gte: weekAgo } } }),
+    prisma.interactionLog.count({ where: { date: { gte: weekAgo } } }),
+    prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+    }),
+  ]);
+
+  const total = byStage.reduce((n, s) => n + s._count._all, 0);
+  const hired = byStage
+    .filter((s) => s.pipelineStatus === 'HIRED_660' || s.pipelineStatus === 'EMPLOYED_700')
+    .reduce((n, s) => n + s._count._all, 0);
+  const conversion = total ? Math.round((hired / total) * 100) : 0;
+  const stageRows = byStage
+    .sort((a, b) => b._count._all - a._count._all)
+    .map((s) => `<tr><td style="padding:4px 12px 4px 0;">${s.pipelineStatus}</td><td style="padding:4px 0;"><strong>${s._count._all}</strong></td></tr>`) // eslint-disable-line
+    .join('');
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+  let sent = 0;
+  for (const a of admins) {
+    if (!emailAllowed(a, 'digest')) continue;
+    await sendEmail({
+      to: a.email,
+      subject: 'Weekly analytics report — Internship CRM',
+      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color:#2563eb;">Weekly analytics report</h2>
+        <p>Hi ${a.fullName},</p>
+        <p><strong>${total}</strong> mentorship relations · <strong>${conversion}%</strong> hired conversion ·
+        last 7 days: <strong>${newRelations}</strong> new relations, <strong>${interactions}</strong> interactions.</p>
+        <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
+        <p><a href="${appUrl}/admin/analytics">Open the analytics dashboard</a></p>
+      </div>`,
+    }).catch(() => {});
+    sent++;
+  }
+  return { locked: false, sent };
+}
+
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
 export function initCronJobs() {
@@ -622,6 +793,8 @@ export function initCronJobs() {
       console.log(`[Cron] Stage deadline reminders: ${dl.reminded}`);
       const rr = await checkRetentionReminders();
       console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
+      const nm = await checkCompanyNeedMatches();
+      console.log(`[Cron] Company need-match alerts: ${nm.alerts}`);
     } catch (error) {
       console.error('[Cron] Error running reminder check:', error);
     }
@@ -650,6 +823,18 @@ export function initCronJobs() {
     }
   });
   scheduledTasks.set('weekly-digest', digestTask);
+
+  // Weekly premium analytics report — Mondays 8:15 (no-op while the
+  // premiumAnalytics setting is off).
+  const analyticsTask = cron.schedule('15 8 * * 1', async () => {
+    try {
+      const r = await sendWeeklyAnalyticsReport();
+      if (!r.locked) console.log(`[Cron] Weekly analytics reports sent: ${r.sent}`);
+    } catch (e) {
+      console.error('[Cron] Analytics report error:', e);
+    }
+  });
+  scheduledTasks.set('analytics-report', analyticsTask);
 
   // Daily mentee-activity digest — every day at 7:30.
   const activityTask = cron.schedule('30 7 * * *', async () => {

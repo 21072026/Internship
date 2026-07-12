@@ -6,7 +6,7 @@ import { getConsents, setConsent } from '@/lib/consent';
 import { logActivity } from '@/lib/activity';
 import type { ConsentType } from '@prisma/client';
 
-const CONSENT_TYPES = ['AI_CV_PARSING', 'ACTIVITY_TRACKING'] as const;
+const CONSENT_TYPES = ['AI_CV_PARSING', 'ACTIVITY_TRACKING', 'TALENT_POOL_VISIBILITY', 'AI_INTERACTION_SUMMARY'] as const;
 
 const bodySchema = z.object({
   type: z.enum(CONSENT_TYPES),

@@ -8,7 +8,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('admin invite surfaces a shareable registration link', async ({ page }) => {
+test('admin invite surfaces a shareable registration link', { tag: '@smoke' }, async ({ page }) => {
   const email = uniqueEmail('invitee');
   try {
     // Sign in as admin and open the invite page
