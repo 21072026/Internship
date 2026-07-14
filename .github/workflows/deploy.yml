@@ -2,8 +2,14 @@ name: Deploy to Plesk Server
 
 on:
   # Previews deploy on every PR (tests run alongside — a broken preview is fine).
+  # Docs-only PRs skip the preview build/deploy — no runtime change to preview
+  # (#636 cost control).
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/**'
   # Production deploys ONLY after the E2E suite finishes on main. The job below
   # additionally requires conclusion == success, so a red build never ships.
   # This is a code-level complement to branch protection (issue #425).
@@ -11,6 +17,13 @@ on:
     workflows: ["E2E Tests"]
     types: [completed]
     branches: [main]
+
+# Cancel a superseded PREVIEW build when a new push lands on the same PR
+# (rapid agent pushes) — the big single win on minutes. Production deploys
+# (workflow_run) get a per-run group so they never cancel one another.
+concurrency:
+  group: deploy-${{ github.event_name }}-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-deploy:
