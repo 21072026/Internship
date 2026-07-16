@@ -58,8 +58,21 @@ cd "$REPO_DIR"
 
 # ── 0. Preconditions ────────────────────────────────────────────────────────
 command -v docker >/dev/null || { echo "ERROR: docker not found on PATH" >&2; exit 1; }
+# If the env file is missing but the production container is already running,
+# derive the env from it (#636) — the values never leave the server and no
+# secret ever has to be typed by hand. Only the first deploy on a fresh box
+# needs the file created manually.
+if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
+  log "env file missing — capturing it from the running $CONTAINER container"
+  mkdir -p "$(dirname "$ENV_FILE")"
+  : > "$ENV_FILE"; chmod 600 "$ENV_FILE"
+  for k in DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+    v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
+    [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> "$ENV_FILE"
+  done
+fi
 if [ ! -f "$ENV_FILE" ]; then
-  echo "ERROR: env file not found: $ENV_FILE" >&2
+  echo "ERROR: env file not found: $ENV_FILE (and no running $CONTAINER to derive it from)" >&2
   echo "Create it (chmod 600) with the production secrets — see the header of this script." >&2
   exit 1
 fi
