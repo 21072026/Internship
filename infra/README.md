@@ -122,3 +122,63 @@ the live box. First validation: open a PR from a `…_topicN` branch and confirm
 container comes up, `crm-topicN.ersah.in` serves over TLS, and closing the PR tears
 it down (`docker ps` + `$NGINX_CONF_DIR` clean). Adjust `NGINX_CONF_DIR` /
 `NGINX_RELOAD_CMD` / `CERT_DIR` if paths differ.
+
+---
+
+## CI-independent operations (when the Actions quota is exhausted, #636)
+
+Everything CI does is just scripts, and the server is reachable over SSH — so
+production deploys and the topic-preview foundations can run **without any
+GitHub Actions minutes**.
+
+### One-time: production secrets on the server
+Create an env file (same values as the GitHub secrets), readable only by root:
+
+```bash
+sudo mkdir -p /etc/internship-crm
+sudo tee /etc/internship-crm/prod.env >/dev/null <<'ENV'
+DATABASE_URL=mysql://...
+NEXTAUTH_SECRET=...
+NEXTAUTH_URL=https://crm.ersah.in
+SMTP_HOST=...
+SMTP_PORT=587
+SMTP_USER=...
+SMTP_PASS=...
+SMTP_FROM=...
+ENV
+sudo chmod 600 /etc/internship-crm/prod.env
+```
+
+### Deploy `main` to production (builds from source — no ghcr pull needed)
+```bash
+# from your laptop, in one line:
+ssh <user>@<server> 'cd /path/to/Internship && sudo ENV_FILE=/etc/internship-crm/prod.env ./infra/deploy-prod.sh'
+```
+`deploy-prod.sh` mirrors the `Production Deploy` job exactly: sync `main`, build
+the image (stamping `GIT_SHA`), `prisma db push --accept-data-loss`, seed +
+backfill, swap the `internship-crm` container (host net, :3200), health-check.
+
+### Push-to-deploy without a webhook (optional)
+Add a cron entry on the server — every 5 min it deploys only if `main` moved:
+```cron
+*/5 * * * * cd /path/to/Internship && ENV_FILE=/etc/internship-crm/prod.env ./infra/autodeploy.sh >> /var/log/internship-autodeploy.log 2>&1
+```
+No inbound port, no listener — just `git fetch` + the deploy script, lock-guarded.
+
+### Topic-preview foundations without Actions
+```bash
+# DNS (from anywhere): wildcard *.ersah.in A record
+export CF_Token="<scoped Cloudflare token>"
+SERVER_IP=<server ip> ./infra/setup-dns-cloudflare.sh
+# TLS (on the server): wildcard cert + auto-renew
+export CF_Token="<scoped Cloudflare token>"
+./infra/acme-issue-wildcard.sh
+```
+
+### Permanent fix: self-hosted runner
+The always-on Plesk server can register as a **self-hosted GitHub Actions
+runner** (Settings → Actions → Runners → New self-hosted runner). Self-hosted
+minutes do **not** count against the 2000-min quota, so the existing workflows
+(deploy, e2e, infra-setup) all run again for free — flip `runs-on: ubuntu-latest`
+to `runs-on: self-hosted` on the workflows you want off the hosted quota. This
+is the structural cure; the scripts above are the immediate, dependency-free path.
