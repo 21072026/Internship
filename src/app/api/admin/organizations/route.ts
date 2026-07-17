@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor } from '@/lib/branding';
+import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -47,6 +48,15 @@ export async function GET() {
           brandLogoUrl: o.brandLogoUrl,
           brandColor: o.brandColor,
           supportEmail: o.supportEmail,
+        },
+        sso: {
+          ssoEnabled: o.ssoEnabled,
+          ssoProvider: o.ssoProvider,
+          ssoIssuer: o.ssoIssuer,
+          ssoEntryPoint: o.ssoEntryPoint,
+          // Never expose the raw certificate to the list view; just whether one is set.
+          ssoCertificateSet: !!o.ssoCertificate,
+          active: isSsoActive(o),
         },
         createdAt: o.createdAt,
         counts: {
@@ -107,6 +117,12 @@ const patchSchema = z.object({
   brandLogoUrl: z.string().max(2000).optional(),
   brandColor: z.string().optional(),
   supportEmail: z.string().max(200).optional(),
+  // SSO config (#545).
+  ssoEnabled: z.boolean().optional(),
+  ssoProvider: z.string().max(20).optional(),
+  ssoIssuer: z.string().max(500).optional(),
+  ssoEntryPoint: z.string().max(2000).optional(),
+  ssoCertificate: z.string().max(20000).optional(),
 });
 
 function orNull(v: string | undefined): string | null | undefined {
@@ -115,21 +131,24 @@ function orNull(v: string | undefined): string | null | undefined {
   return t.length ? t : null; // blank → clear
 }
 
-// PATCH — change an organization's plan and/or branding (admin).
+// PATCH — change an organization's plan, branding and/or SSO config (admin).
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const parsed = patchSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-  const { id, plan, brandName, brandLogoUrl, brandColor, supportEmail } = parsed.data;
+  const {
+    id, plan, brandName, brandLogoUrl, brandColor, supportEmail,
+    ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate,
+  } = parsed.data;
 
   // Validate an explicitly-set (non-blank) brand color as a hex value.
   if (brandColor && brandColor.trim() && !isHexColor(brandColor)) {
     return NextResponse.json({ error: 'Brand color must be a hex value like #2563eb' }, { status: 400 });
   }
 
-  const existing = await prisma.organization.findUnique({ where: { id }, select: { id: true } });
+  const existing = await prisma.organization.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
 
   const data: Record<string, unknown> = {};
@@ -138,6 +157,30 @@ export async function PATCH(request: Request) {
   const bl = orNull(brandLogoUrl); if (bl !== undefined) data.brandLogoUrl = bl;
   const bc = orNull(brandColor); if (bc !== undefined) data.brandColor = bc;
   const se = orNull(supportEmail); if (se !== undefined) data.supportEmail = se;
+
+  // SSO fields: only touch what's provided, then validate the effective config
+  // (existing merged with the incoming changes) — so enabling requires a
+  // complete config even if some fields were set in an earlier request.
+  const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
+    ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined;
+  if (touchesSso) {
+    if (ssoEnabled !== undefined) data.ssoEnabled = ssoEnabled;
+    const sp = orNull(ssoProvider); if (sp !== undefined) data.ssoProvider = sp;
+    const si = orNull(ssoIssuer); if (si !== undefined) data.ssoIssuer = si;
+    const sep = orNull(ssoEntryPoint); if (sep !== undefined) data.ssoEntryPoint = sep;
+    const sc = orNull(ssoCertificate); if (sc !== undefined) data.ssoCertificate = sc;
+
+    const effective = {
+      ssoEnabled: (data.ssoEnabled as boolean | undefined) ?? existing.ssoEnabled,
+      ssoProvider: (data.ssoProvider as string | null | undefined) ?? existing.ssoProvider,
+      ssoIssuer: (data.ssoIssuer as string | null | undefined) ?? existing.ssoIssuer,
+      ssoEntryPoint: (data.ssoEntryPoint as string | null | undefined) ?? existing.ssoEntryPoint,
+      ssoCertificate: (data.ssoCertificate as string | null | undefined) ?? existing.ssoCertificate,
+    };
+    const err = validateSsoConfig(effective);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
+  }
+
   if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
 
   const organization = await prisma.organization.update({ where: { id }, data });
