@@ -51,6 +51,29 @@ test('admin creates an organization and it appears in the list', async ({ page }
       (await prisma.organization.findUnique({ where: { id: org!.id } }))?.plan,
       { timeout: 10_000 },
     ).toBe('PRO');
+
+    // White-label branding (#546): set fields via the API and confirm persistence.
+    const brand = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, brandName: 'Acme Talent', brandColor: '#2563eb', supportEmail: 'help@acme.test' },
+    });
+    expect(brand.ok()).toBeTruthy();
+    const branded = await prisma.organization.findUnique({ where: { id: org!.id } });
+    expect(branded?.brandName).toBe('Acme Talent');
+    expect(branded?.brandColor).toBe('#2563eb');
+
+    // A bad hex color is rejected.
+    const badColor = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, brandColor: 'notacolor' },
+    });
+    expect(badColor.status()).toBe(400);
+
+    // A blank field clears the override.
+    const clear = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, brandName: '' },
+    });
+    expect(clear.ok()).toBeTruthy();
+    const cleared = await prisma.organization.findUnique({ where: { id: org!.id } });
+    expect(cleared?.brandName).toBeNull();
   } finally {
     await cleanupByEmail(adminEmail);
   }

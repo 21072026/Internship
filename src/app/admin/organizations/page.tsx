@@ -14,6 +14,12 @@ interface Organization {
   slug: string;
   plan: OrgPlan;
   limits: OrgPlanLimits;
+  branding: {
+    brandName: string | null;
+    brandLogoUrl: string | null;
+    brandColor: string | null;
+    supportEmail: string | null;
+  };
   createdAt: string;
   counts: {
     users: number;
@@ -87,6 +93,41 @@ export default function AdminOrganizationsPage() {
     }
   };
 
+  // Branding editor (#546).
+  const [brandOrgId, setBrandOrgId] = useState('');
+  const [brandName, setBrandName] = useState('');
+  const [brandLogoUrl, setBrandLogoUrl] = useState('');
+  const [brandColor, setBrandColor] = useState('');
+  const [brandSupport, setBrandSupport] = useState('');
+  const [brandMsg, setBrandMsg] = useState<string | null>(null);
+
+  const selectBrandOrg = (id: string) => {
+    setBrandOrgId(id);
+    setBrandMsg(null);
+    const o = orgs.find((x) => x.id === id);
+    setBrandName(o?.branding.brandName ?? '');
+    setBrandLogoUrl(o?.branding.brandLogoUrl ?? '');
+    setBrandColor(o?.branding.brandColor ?? '');
+    setBrandSupport(o?.branding.supportEmail ?? '');
+  };
+
+  const saveBranding = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brandOrgId) return;
+    setSaving(true); setBrandMsg(null);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: brandOrgId, brandName, brandLogoUrl, brandColor, supportEmail: brandSupport }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setBrandMsg(res.ok ? t.organizations.brandingSaved : data.error || t.common.error);
+      if (res.ok) await load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const q = search.trim().toLowerCase();
   const filtered = orgs.filter((o) => !q || o.name.toLowerCase().includes(q) || o.slug.toLowerCase().includes(q));
 
@@ -115,6 +156,38 @@ export default function AdminOrganizationsPage() {
         <p className="text-xs text-gray-500 mt-2">{t.organizations.slugHint}</p>
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
       </Card>
+
+      {orgs.length > 0 && (
+        <Card className="mb-6 max-w-2xl">
+          <CardHeader><CardTitle>{t.organizations.branding}</CardTitle></CardHeader>
+          <p className="text-sm text-gray-500 mb-3">{t.organizations.brandingHint}</p>
+          <form onSubmit={saveBranding} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.title}</label>
+              <select
+                value={brandOrgId}
+                data-testid="brand-org-select"
+                onChange={(e) => selectBrandOrg(e.target.value)}
+                required
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+              >
+                <option value="">—</option>
+                {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </div>
+            {brandOrgId && (
+              <div className="flex flex-wrap gap-3">
+                <div className="flex-1 min-w-[160px]"><Input label={t.organizations.brandName} value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Internship CRM" /></div>
+                <div className="flex-1 min-w-[160px]"><Input label={t.organizations.brandColor} value={brandColor} onChange={(e) => setBrandColor(e.target.value)} placeholder="#2563eb" /></div>
+                <div className="flex-1 min-w-[220px]"><Input label={t.organizations.brandLogoUrl} value={brandLogoUrl} onChange={(e) => setBrandLogoUrl(e.target.value)} placeholder="https://…/logo.svg" /></div>
+                <div className="flex-1 min-w-[200px]"><Input label={t.organizations.brandSupportEmail} type="email" value={brandSupport} onChange={(e) => setBrandSupport(e.target.value)} placeholder="help@acme.com" /></div>
+              </div>
+            )}
+            {brandOrgId && <Button type="submit" loading={saving} data-testid="brand-save">{t.common.save}</Button>}
+          </form>
+          {brandMsg && <p className="text-sm text-gray-600 mt-2">{brandMsg}</p>}
+        </Card>
+      )}
 
       {!loading && orgs.length > 0 && (
         <div className="flex items-center mb-4">
