@@ -10,6 +10,51 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-17
+
+Multi-tenancy foundations (an operator can now run several programs on one
+instance), a cross-program benchmark, a Google Calendar integration surface,
+and a production sign-in fix.
+
+### Added
+- **Multi-tenancy — organizations** (#543/#544): `Organization` model +
+  nullable `orgId` on the tenant-scoped models with an idempotent backfill to a
+  default org; super-admin **Organizations** screen (create tenants, per-tenant
+  row counts). Additive and reversible — single-tenant behaviour unchanged.
+- **Per-tenant plan tiers** (#547): `OrgPlan` (FREE/PRO/ENTERPRISE) with an
+  in-code limits catalogue (`src/lib/orgPlans.ts`); the admin screen shows
+  usage-vs-limit and a per-tenant plan selector. Limits are advisory this phase;
+  the legacy default org is grandfathered to ENTERPRISE.
+- **Per-tenant white-label branding** (#546): name/logo/accent/support overrides
+  on `Organization` + resolver (`src/lib/branding.ts`) + admin editor.
+  Documented in `docs/white-label.md` (applied once tenant resolution lands).
+- **Per-tenant enterprise SSO config** (#545): SAML/OIDC config + validation +
+  gating (`src/lib/sso.ts`); admin editor; the certificate is never returned to
+  the client. Login wiring documented in `docs/sso-saml.md`.
+- **Tenant-isolation enforcement building blocks** (#543): `src/lib/orgScope.ts`
+  (`orgScoped`/`requireOrg`/`assertSameOrg`) behind `MT_ENFORCE_ISOLATION`
+  (default off) + `orgId` carried in the session; `docs/tenant-isolation.md`
+  describes the guarded roll-out.
+- **Cross-program benchmark** (#542): anonymized, aggregated funnel conversion
+  vs. platform average with a k-anonymity floor; gated by `premiumAnalytics`.
+- **Google Calendar integration surface** (#417): config detection + admin
+  status card + `docs/google-calendar.md` runbook (OAuth wiring deferred until
+  operator credentials exist). In-app calendar/.ics/reminders unchanged.
+
+### Fixed
+- **Safari sign-in loop**: after `signIn`, the immediate session read could miss
+  the just-set cookie in Safari, redirecting to the wrong place or bouncing back
+  to sign-in. Now polls for the session then does a full-page navigation.
+- **Forgot-password never arriving**: email lookups are now normalized
+  (trim + lowercase) at register/sign-in/forgot, so a casing/whitespace
+  difference can't silently miss the account (SMTP itself was healthy).
+
+### Changed
+- **CI cost control**: hosted workflows (ci, e2e, deploy preview/prod, e2e-full,
+  stress, topic-preview) paused to `workflow_dispatch`-only while the GitHub
+  Actions quota is exhausted; production deploys via the self-hosted
+  `deploy-prod.yml`. Re-enable by restoring the commented triggers.
+
 ## [0.7.0] - 2026-07-11
 
 A faster CI feedback loop and a rebuilt Projects experience with true

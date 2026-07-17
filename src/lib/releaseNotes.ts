@@ -13,6 +13,33 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.8.0-beta',
+    date: '2026-07-17',
+    highlights: {
+      en: [
+        'Run several programs on one platform — a new Organizations area lets an administrator create and manage separate programs, each with its own plan, and see how much data each holds.',
+        'Your own look — each program can set its name, logo, accent color and support email (white-label), and configure enterprise single sign-on (SAML/OIDC).',
+        'Know where you stand — a new benchmark compares your hiring-funnel conversion against the anonymized platform average; no other program’s data is ever shown.',
+        'Google Calendar — the groundwork is in: administrators can see the integration status and follow the setup guide to connect it.',
+        'Sign-in fixes — resolved a Safari sign-in loop, and “forgot password” now reliably finds your account regardless of capitalization or spaces in your email.',
+      ],
+      tr: [
+        'Tek platformda birden çok program — yeni Organizasyonlar alanı, yöneticinin her biri kendi planına sahip ayrı programlar oluşturup yönetmesini ve her birinin ne kadar veri tuttuğunu görmesini sağlar.',
+        'Kendi görünümün — her program kendi adını, logosunu, vurgu rengini ve destek e-postasını belirleyebilir (white-label) ve kurumsal tek oturum açmayı (SAML/OIDC) yapılandırabilir.',
+        'Nerede olduğunu bil — yeni kıyaslama, işe alım huni dönüşümünü anonimleştirilmiş platform ortalamasıyla karşılaştırır; başka hiçbir programın verisi gösterilmez.',
+        'Google Takvim — altyapı hazır: yöneticiler entegrasyon durumunu görebilir ve kurulum kılavuzunu izleyerek bağlayabilir.',
+        'Giriş düzeltmeleri — Safari’deki giriş döngüsü giderildi ve “şifremi unuttum” artık e-postandaki büyük/küçük harf veya boşluk farkına bakmaksızın hesabını güvenilir biçimde buluyor.',
+      ],
+      de: [
+        'Mehrere Programme auf einer Plattform — im neuen Bereich Organisationen kann eine Administratorin separate Programme mit je eigenem Tarif anlegen und verwalten und sehen, wie viele Daten jedes enthält.',
+        'Ihr eigenes Erscheinungsbild — jedes Programm kann Name, Logo, Akzentfarbe und Support-E-Mail festlegen (White-Label) und Enterprise-Single-Sign-on (SAML/OIDC) konfigurieren.',
+        'Standortbestimmung — ein neuer Benchmark vergleicht Ihre Einstellungs-Funnel-Conversion mit dem anonymisierten Plattformdurchschnitt; Daten anderer Programme werden nie angezeigt.',
+        'Google Kalender — die Grundlage steht: Administratoren sehen den Integrationsstatus und können ihn per Anleitung verbinden.',
+        'Anmelde-Fixes — eine Safari-Anmeldeschleife wurde behoben, und „Passwort vergessen“ findet Ihr Konto jetzt zuverlässig, unabhängig von Groß-/Kleinschreibung oder Leerzeichen in der E-Mail.',
+      ],
+    },
+  },
+  {
     version: '0.7.0-beta',
     date: '2026-07-11',
     highlights: {
