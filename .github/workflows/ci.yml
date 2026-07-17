@@ -1,10 +1,14 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  # PAUSED (GitHub Actions quota exhausted) — auto-triggers disabled so failing
+  # hosted runs stop emailing the team. Re-enable by restoring the push/
+  # pull_request blocks below. Manual runs still work via "Run workflow".
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}

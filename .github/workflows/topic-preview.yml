@@ -13,9 +13,13 @@ name: Topic Preview
 # preview DB (no per-topic DB, so no DB admin secret needed).
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches: [main]
+  # PAUSED (GitHub Actions quota exhausted) — auto-triggers disabled so failing
+  # hosted runs stop emailing the team. Re-enable the pull_request block below
+  # once the quota is restored. Manual runs still work via "Run workflow".
+  workflow_dispatch:
+  # pull_request:
+  #   types: [opened, synchronize, reopened, closed]
+  #   branches: [main]
 
 # One in-flight run per PR; a new push cancels the previous deploy.
 concurrency:

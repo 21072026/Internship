@@ -1,22 +1,21 @@
 name: Deploy to Plesk Server
 
 on:
-  # Previews deploy on every PR (tests run alongside — a broken preview is fine).
-  # Docs-only PRs skip the preview build/deploy — no runtime change to preview
-  # (#636 cost control).
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '.github/**'
-  # Production deploys ONLY after the E2E suite finishes on main. The job below
-  # additionally requires conclusion == success, so a red build never ships.
-  # This is a code-level complement to branch protection (issue #425).
-  workflow_run:
-    workflows: ["E2E Tests"]
-    types: [completed]
-    branches: [main]
+  # PAUSED (GitHub Actions quota exhausted) — this hosted preview/prod deploy is
+  # disabled so failing runs stop emailing the team. Production now deploys via
+  # deploy-prod.yml (self-hosted runner, no hosted-quota cost). Re-enable the
+  # pull_request / workflow_run blocks below once the quota is restored.
+  workflow_dispatch:
+  # pull_request:
+  #   branches: [main]
+  #   paths-ignore:
+  #     - 'docs/**'
+  #     - '**/*.md'
+  #     - '.github/**'
+  # workflow_run:
+  #   workflows: ["E2E Tests"]
+  #   types: [completed]
+  #   branches: [main]
 
 # Cancel a superseded PREVIEW build when a new push lands on the same PR
 # (rapid agent pushes) — the big single win on minutes. Production deploys

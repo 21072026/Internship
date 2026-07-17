@@ -4,17 +4,18 @@ name: Nightly Stress Test
 # the team if any latency/error-rate threshold is breached. Can also be run
 # on demand from the Actions tab (with an optional target URL override).
 on:
-  schedule:
-    # 02:30 UTC every Monday (~03:30/04:30 Europe/Berlin depending on DST).
-    # Weekly, not nightly (#636): during pre-launch a nightly load test burns
-    # Actions minutes for little signal; run it weekly + on demand / pre-release.
-    - cron: '30 2 * * 1'
+  # PAUSED (GitHub Actions quota exhausted) — the weekly schedule is disabled so
+  # failing runs stop emailing the team. Re-enable the schedule below once the
+  # quota is restored. Manual runs still work via "Run workflow".
   workflow_dispatch:
     inputs:
       base_url:
         description: 'Target URL to stress (defaults to the STRESS_TARGET_URL secret / production)'
         required: false
         type: string
+  # schedule:
+  #   # 02:30 UTC every Monday (~03:30/04:30 Europe/Berlin depending on DST).
+  #   - cron: '30 2 * * 1'
 
 concurrency:
   group: stress-test
