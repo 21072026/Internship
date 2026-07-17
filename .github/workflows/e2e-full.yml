@@ -13,10 +13,14 @@ name: E2E Full Suite (scheduled)
 # Note: GitHub scheduled workflows can lag a few minutes and are disabled
 # automatically after 60 days without repository activity.
 on:
-  schedule:
-    # Once a day at 03:00 UTC (~05:00 Europe/Berlin in summer).
-    - cron: '0 3 * * *'
+  # PAUSED (GitHub Actions quota exhausted) — the daily schedule is disabled so
+  # failing runs stop emailing the team (this workflow also emails on red via the
+  # notify job). Re-enable the schedule below once the quota is restored. Manual
+  # runs still work via "Run workflow".
   workflow_dispatch:
+  # schedule:
+  #   # Once a day at 03:00 UTC (~05:00 Europe/Berlin in summer).
+  #   - cron: '0 3 * * *'
 
 concurrency:
   group: e2e-full
