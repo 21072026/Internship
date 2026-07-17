@@ -10,10 +10,13 @@ const DEFAULT_SLUG = process.env.DEFAULT_ORG_SLUG || 'default';
 const DEFAULT_NAME = process.env.DEFAULT_ORG_NAME || 'Default Organization';
 
 async function main() {
+  // The legacy single-tenant org is grandfathered to ENTERPRISE (unlimited)
+  // so per-tenant plan limits (#547) never constrain existing production data.
+  // New tenants created via the admin screen start on FREE (schema default).
   const org = await prisma.organization.upsert({
     where: { slug: DEFAULT_SLUG },
-    update: {},
-    create: { slug: DEFAULT_SLUG, name: DEFAULT_NAME },
+    update: { plan: 'ENTERPRISE' },
+    create: { slug: DEFAULT_SLUG, name: DEFAULT_NAME, plan: 'ENTERPRISE' },
     select: { id: true },
   });
 

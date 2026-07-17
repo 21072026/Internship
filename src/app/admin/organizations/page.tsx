@@ -6,11 +6,14 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
+import type { OrgPlan, OrgPlanLimits } from '@/lib/orgPlans';
 
 interface Organization {
   id: string;
   name: string;
   slug: string;
+  plan: OrgPlan;
+  limits: OrgPlanLimits;
   createdAt: string;
   counts: {
     users: number;
@@ -22,9 +25,20 @@ interface Organization {
   };
 }
 
+// Render "used / limit" and flag over-limit in red (advisory only).
+function Usage({ used, limit }: { used: number; limit: number | null }) {
+  const over = limit != null && used > limit;
+  return (
+    <span className={over ? 'text-red-600 font-medium' : ''}>
+      {used}{limit != null ? ` / ${limit}` : ' / ∞'}
+    </span>
+  );
+}
+
 export default function AdminOrganizationsPage() {
   const t = useT();
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [plans, setPlans] = useState<OrgPlan[]>([]);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [saving, setSaving] = useState(false);
@@ -34,7 +48,11 @@ export default function AdminOrganizationsPage() {
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/organizations');
-    if (res.ok) setOrgs((await res.json()).organizations ?? []);
+    if (res.ok) {
+      const data = await res.json();
+      setOrgs(data.organizations ?? []);
+      setPlans(data.plans ?? []);
+    }
     setLoading(false);
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -51,6 +69,19 @@ export default function AdminOrganizationsPage() {
       });
       if (res.ok) { setName(''); setSlug(''); await load(); }
       else setError((await res.json().catch(() => ({}))).error ?? t.common.error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changePlan = async (id: string, plan: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, plan }),
+      });
+      if (res.ok) await load();
     } finally {
       setSaving(false);
     }
@@ -113,10 +144,11 @@ export default function AdminOrganizationsPage() {
                 <tr className="text-left text-gray-500 border-b border-gray-100">
                   <th className="py-2 pr-4">{t.organizations.name}</th>
                   <th className="py-2 pr-4">{t.organizations.slug}</th>
+                  <th className="py-2 pr-4">{t.organizations.plan}</th>
                   <th className="py-2 pr-4">{t.organizations.users}</th>
-                  <th className="py-2 pr-4">{t.organizations.companies}</th>
-                  <th className="py-2 pr-4">{t.organizations.projects}</th>
                   <th className="py-2 pr-4">{t.organizations.relations}</th>
+                  <th className="py-2 pr-4">{t.organizations.projects}</th>
+                  <th className="py-2 pr-4">{t.organizations.companies}</th>
                   <th className="py-2 pr-4">{t.organizations.cohorts}</th>
                   <th className="py-2 pr-4">{t.organizations.sources}</th>
                 </tr>
@@ -126,10 +158,22 @@ export default function AdminOrganizationsPage() {
                   <tr key={o.id} data-testid={`org-row-${o.id}`} className="border-b border-gray-50">
                     <td className="py-2 pr-4 font-medium text-gray-900 dark:text-gray-100">{o.name}</td>
                     <td className="py-2 pr-4 text-gray-500"><code className="text-xs">{o.slug}</code></td>
-                    <td className="py-2 pr-4">{o.counts.users}</td>
+                    <td className="py-2 pr-4">
+                      <select
+                        aria-label={t.organizations.plan}
+                        data-testid={`org-plan-${o.id}`}
+                        value={o.plan}
+                        disabled={saving}
+                        onChange={(e) => changePlan(o.id, e.target.value)}
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                      >
+                        {plans.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </td>
+                    <td className="py-2 pr-4"><Usage used={o.counts.users} limit={o.limits.maxUsers} /></td>
+                    <td className="py-2 pr-4"><Usage used={o.counts.relations} limit={o.limits.maxActiveRelations} /></td>
+                    <td className="py-2 pr-4"><Usage used={o.counts.projects} limit={o.limits.maxProjects} /></td>
                     <td className="py-2 pr-4">{o.counts.companies}</td>
-                    <td className="py-2 pr-4">{o.counts.projects}</td>
-                    <td className="py-2 pr-4">{o.counts.relations}</td>
                     <td className="py-2 pr-4">{o.counts.cohorts}</td>
                     <td className="py-2 pr-4">{o.counts.sources}</td>
                   </tr>

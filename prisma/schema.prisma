@@ -21,6 +21,14 @@ enum MentorshipStatus {
   COMPLETED
 }
 
+// Per-tenant plan tier (#547). Concrete limits per plan live in
+// src/lib/orgPlans.ts (client-safe), not the DB.
+enum OrgPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
 enum InteractionType {
   Meeting
   Feedback
@@ -54,6 +62,12 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  // Per-tenant plan tier (#547). Limits per plan live in src/lib/orgPlans.ts
+  // (client-safe catalogue), not the DB. New tenants start on FREE; the
+  // backfilled legacy "default" org is grandfathered to ENTERPRISE (unlimited)
+  // so single-tenant production is never constrained. Limits are advisory in
+  // this phase (surfaced as usage-vs-limit), not hard-enforced.
+  plan      OrgPlan  @default(FREE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
