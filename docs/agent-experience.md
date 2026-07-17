@@ -179,3 +179,49 @@ güvenmeden net hata mesajı veriyor.
 runner'da var — tek seferlik sunucu işleri (wildcard cert, izin doğrulama) için
 `workflow_dispatch` + deploy.yml'in SSH deseni yeterli (infra-setup.yml). Adımları
 ayrı ayrı atlanabilir ve idempotent yap; root gerektiren işleri deneme, TODO yaz.
+
+## 2026-07-17 — CI-independent deploy + Faz 3 multi-tenancy + prod auth fix (0.8.0-beta)
+
+**Bu sandbox'tan SSH YOK — self-hosted runner sunucu elin:** `ssh` binary yok ve
+:22 kapalı (yalnızca HTTPS-proxy). Deploy'u GitHub Actions hosted kotasından
+bağımsızlaştırmak için sunucuya **self-hosted runner** + `deploy-prod.yml`
+(`workflow_dispatch`, `runs-on: self-hosted`) kur; deploy'u GitHub MCP ile
+tetikle (`actions_run_trigger run_workflow`). Sırlar sunucudaki env dosyasından
+(`/etc/internship-crm/prod.env`), repoya asla girmez. Kök: root için runner'da
+`RUNNER_ALLOW_RUNASROOT=1`.
+
+**Deploy doğrulaması kotasız:** `curl https://crm.ersah.in/api/health` `sha` ve
+`version` döndürüyor — merge sonrası bir `until [ "$sha" = "<yeni>" ]` döngüsüyle
+prod'un gerçekten yeni SHA'ya geçtiğini uçtan uca doğrula (deploy run "success"
+demek yetmez, health kanıttır). Build ~2-3 dk; foreground `sleep` bloklu, until +
+`sleep 5` kullan.
+
+**Hosted kota tükenince pipeline gürültüsünü kes:** her hosted workflow anında
+patlayıp mail atıyor. `on:` bloklarını `workflow_dispatch`-only yap (orijinali
+yorumda bırak). Önemli: `pull_request` workflow tanımları **PR head'inden**
+okunur — tetikleyiciyi kaldıran PR o workflow'ları kendi üstünde ÇALIŞTIRMAZ, yani
+değişiklik yeni hata maili üretmeden iner.
+
+**Prod şema değişikliklerini seri + doğrulamalı sür:** `deploy-prod` concurrency
+grubu (`cancel-in-progress: false`) deploy'ları sıraya sokuyor, yarış yok. Yine de
+her additive şema PR'ından (nullable kolon/enum) sonra bir sonrakini yığmadan önce
+health/SHA ile doğrula. `prisma validate` için dummy `DATABASE_URL` + engine
+env'i (`PRISMA_QUERY_ENGINE_LIBRARY=.../libquery_engine-debian-openssl-3.0.x.so.node`).
+
+**Riskli dilimi test edemeden AÇMA — güvenli/kapalı/dokümante bırak:** canlı
+tek-kiracılı prod'da global tenant-izolasyonunu (her sorguyu orgId ile filtreleme)
+veya test edilemeyen SAML/Google OAuth token akışını açmak yerine; yapı taşlarını
+(orgScope helpers, config + gating) + bir env bayrağı (`MT_ENFORCE_ISOLATION`,
+default off) + runbook ile ver. Local DB/CI yokken (sandbox'ta docker daemon da
+yok) untested auth/izolasyon kodunu prod'a sürmek sorumsuzluk; dürüst kapsam:
+tsc+build+check:i18n yeşil, kalan wiring dokümante.
+
+**i18n toplu ekleme tuzağı:** Python `str.replace(x, en_block, 1)` ile üç locale'e
+blok eklerken, EN bloğunun İÇİNDE tekrar eden bir anahtar (örn. `plan: 'Plan',`)
+varsa bir sonraki `replace` yanlış (yeni eklenen) satırı yakalar. Her locale için
+o dile ÖZGÜ bir çapa anahtarı kullan (ör. TR `plan: 'Plan',` yerine benzersiz bir
+komşu satır) ve `assert count==1` ile doğrula; sonra `npm run check:i18n`.
+
+**Squash sadece ilk commit'i alma tuzağı (hatırlatma):** PR açtıktan SONRA
+push'lanan commit'ler squash'a girmeyebiliyor — branch'i PR'dan önce tam hazırla,
+ya da tek commit tut.
