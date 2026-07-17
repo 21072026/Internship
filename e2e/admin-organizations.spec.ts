@@ -40,9 +40,17 @@ test('admin creates an organization and it appears in the list', async ({ page }
     // New org row shows up with its slug.
     await expect(page.locator('table').getByText(orgName, { exact: true })).toBeVisible({ timeout: 10_000 });
 
-    // Persisted in the DB.
+    // Persisted in the DB, defaults to the FREE plan.
     const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
     expect(org?.name).toBe(orgName);
+    expect(org?.plan).toBe('FREE');
+
+    // Change the plan to PRO via the row selector; it persists.
+    await page.getByTestId(`org-plan-${org!.id}`).selectOption('PRO');
+    await expect.poll(async () =>
+      (await prisma.organization.findUnique({ where: { id: org!.id } }))?.plan,
+      { timeout: 10_000 },
+    ).toBe('PRO');
   } finally {
     await cleanupByEmail(adminEmail);
   }
