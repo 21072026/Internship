@@ -31,10 +31,13 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email and password are required');
         }
 
-        const failKey = `login-fail:${credentials.email.toLowerCase()}`;
+        // Normalize (trim + lowercase) to match how emails are stored at
+        // registration, so sign-in never misses on a casing/whitespace diff.
+        const email = credentials.email.trim().toLowerCase();
+        const failKey = `login-fail:${email}`;
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email },
         });
 
         const isPasswordValid = user

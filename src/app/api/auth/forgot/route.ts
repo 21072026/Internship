@@ -19,7 +19,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+    // Normalize (trim + lowercase) so a casing/whitespace difference from what
+    // was stored at registration can't silently miss the account — which would
+    // otherwise show "email sent" while no reset mail is ever dispatched.
+    const email = parsed.data.email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email } });
     if (user) {
       const token = await createPasswordResetToken(user.id, 'RESET');
       try {

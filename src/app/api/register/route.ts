@@ -36,7 +36,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const { token, email, password, fullName } = parsed.data;
+    const { token, password, fullName } = parsed.data;
+    // Normalize email (trim + lowercase) so the account is looked up
+    // consistently everywhere afterwards (sign-in, forgot-password) — a
+    // casing/whitespace difference otherwise creates a "can't find my account"
+    // dead-end and silent forgot-password no-ops.
+    const email = parsed.data.email.trim().toLowerCase();
 
     // If consent was explicitly provided, it must be affirmative.
     if (parsed.data.consent === false) {
