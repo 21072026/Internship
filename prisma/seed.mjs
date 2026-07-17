@@ -35,6 +35,17 @@ async function main() {
     });
   }
 
+  // Backfill default Organization + orgId (#543, idempotent).
+  const defaultOrg = await prisma.organization.upsert({
+    where: { slug: 'default' },
+    update: {},
+    create: { slug: 'default', name: 'Default Organization' },
+    select: { id: true },
+  });
+  for (const m of ['user', 'source', 'cohort', 'company', 'project', 'mentorshipRelation']) {
+    await prisma[m].updateMany({ where: { orgId: null }, data: { orgId: defaultOrg.id } });
+  }
+
   // Idempotent company seed (Company.name is not unique, so check first).
   for (const name of SEED_COMPANIES) {
     const found = await prisma.company.findFirst({ where: { name } });
