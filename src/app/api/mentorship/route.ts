@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
+import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -137,10 +138,19 @@ export async function POST(request: Request) {
       );
     }
 
+    // Plan gate (#547): block a new active relation once the tenant is at its
+    // plan limit. No-op for the unlimited default org; existing mentees are
+    // never affected.
+    const gate = await checkActiveRelationLimit(mentee.orgId);
+    if (!gate.allowed) {
+      return NextResponse.json(planLimitError(gate), { status: 403 });
+    }
+
     const relation = await prisma.mentorshipRelation.create({
       data: {
         mentorId,
         menteeId,
+        orgId: mentee.orgId,
         companyId: companyId || null,
         projectId: projectId || null,
         startDate: startDate ? new Date(startDate) : new Date(),
