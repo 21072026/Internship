@@ -74,6 +74,41 @@ test('admin creates an organization and it appears in the list', async ({ page }
     expect(clear.ok()).toBeTruthy();
     const cleared = await prisma.organization.findUnique({ where: { id: org!.id } });
     expect(cleared?.brandName).toBeNull();
+
+    // Enterprise SSO (#545): cannot enable without a complete config.
+    const badEnable = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, ssoEnabled: true, ssoProvider: 'saml' },
+    });
+    expect(badEnable.status()).toBe(400);
+
+    // A non-https entry point is rejected.
+    const badUrl = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, ssoProvider: 'saml', ssoEntryPoint: 'http://idp.test/sso' },
+    });
+    expect(badUrl.status()).toBe(400);
+
+    // A complete SAML config enables and reports active.
+    const goodSso = await page.request.patch('/api/admin/organizations', {
+      data: {
+        id: org!.id,
+        ssoEnabled: true,
+        ssoProvider: 'saml',
+        ssoIssuer: 'https://idp.test/metadata',
+        ssoEntryPoint: 'https://idp.test/sso',
+        ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----',
+      },
+    });
+    expect(goodSso.ok()).toBeTruthy();
+    const ssoOrg = await prisma.organization.findUnique({ where: { id: org!.id } });
+    expect(ssoOrg?.ssoEnabled).toBe(true);
+    expect(ssoOrg?.ssoProvider).toBe('saml');
+
+    // The GET list never leaks the raw certificate.
+    const listed = await (await page.request.get('/api/admin/organizations')).json();
+    const row = listed.organizations.find((o: { id: string }) => o.id === org!.id);
+    expect(row.sso.ssoCertificateSet).toBe(true);
+    expect(row.sso.active).toBe(true);
+    expect(row.sso).not.toHaveProperty('ssoCertificate');
   } finally {
     await cleanupByEmail(adminEmail);
   }

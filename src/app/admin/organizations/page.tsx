@@ -20,6 +20,14 @@ interface Organization {
     brandColor: string | null;
     supportEmail: string | null;
   };
+  sso: {
+    ssoEnabled: boolean;
+    ssoProvider: string | null;
+    ssoIssuer: string | null;
+    ssoEntryPoint: string | null;
+    ssoCertificateSet: boolean;
+    active: boolean;
+  };
   createdAt: string;
   counts: {
     users: number;
@@ -128,6 +136,48 @@ export default function AdminOrganizationsPage() {
     }
   };
 
+  // SSO config editor (#545).
+  const [ssoOrgId, setSsoOrgId] = useState('');
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoProvider, setSsoProvider] = useState('');
+  const [ssoIssuer, setSsoIssuer] = useState('');
+  const [ssoEntryPoint, setSsoEntryPoint] = useState('');
+  const [ssoCertificate, setSsoCertificate] = useState('');
+  const [ssoMsg, setSsoMsg] = useState<string | null>(null);
+
+  const selectSsoOrg = (id: string) => {
+    setSsoOrgId(id);
+    setSsoMsg(null);
+    const o = orgs.find((x) => x.id === id);
+    setSsoEnabled(o?.sso.ssoEnabled ?? false);
+    setSsoProvider(o?.sso.ssoProvider ?? '');
+    setSsoIssuer(o?.sso.ssoIssuer ?? '');
+    setSsoEntryPoint(o?.sso.ssoEntryPoint ?? '');
+    setSsoCertificate(''); // never prefilled; leave blank to keep the stored cert
+  };
+
+  const saveSso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ssoOrgId) return;
+    setSaving(true); setSsoMsg(null);
+    try {
+      const body: Record<string, unknown> = {
+        id: ssoOrgId, ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint,
+      };
+      // Only send the cert when the admin actually typed one (blank = keep).
+      if (ssoCertificate.trim()) body.ssoCertificate = ssoCertificate;
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      setSsoMsg(res.ok ? t.organizations.ssoSaved : data.error || t.common.error);
+      if (res.ok) { setSsoCertificate(''); await load(); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const q = search.trim().toLowerCase();
   const filtered = orgs.filter((o) => !q || o.name.toLowerCase().includes(q) || o.slug.toLowerCase().includes(q));
 
@@ -186,6 +236,61 @@ export default function AdminOrganizationsPage() {
             {brandOrgId && <Button type="submit" loading={saving} data-testid="brand-save">{t.common.save}</Button>}
           </form>
           {brandMsg && <p className="text-sm text-gray-600 mt-2">{brandMsg}</p>}
+        </Card>
+      )}
+
+      {orgs.length > 0 && (
+        <Card className="mb-6 max-w-2xl">
+          <CardHeader><CardTitle>{t.organizations.sso}</CardTitle></CardHeader>
+          <p className="text-sm text-gray-500 mb-3">{t.organizations.ssoHint}</p>
+          <form onSubmit={saveSso} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.title}</label>
+              <select
+                value={ssoOrgId}
+                data-testid="sso-org-select"
+                onChange={(e) => selectSsoOrg(e.target.value)}
+                required
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+              >
+                <option value="">—</option>
+                {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}{o.sso.active ? ' • SSO' : ''}</option>)}
+              </select>
+            </div>
+            {ssoOrgId && (
+              <>
+                <div className="flex flex-wrap gap-3">
+                  <div className="min-w-[140px]">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoProvider}</label>
+                    <select value={ssoProvider} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
+                      <option value="">—</option>
+                      <option value="saml">SAML</option>
+                      <option value="oidc">OIDC</option>
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
+                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoCertificate}</label>
+                  <textarea
+                    value={ssoCertificate}
+                    onChange={(e) => setSsoCertificate(e.target.value)}
+                    rows={3}
+                    placeholder="-----BEGIN CERTIFICATE-----"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{t.organizations.ssoCertHint}</p>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" data-testid="sso-enabled" checked={ssoEnabled} onChange={(e) => setSsoEnabled(e.target.checked)} />
+                  {t.organizations.ssoEnable}
+                </label>
+                <Button type="submit" loading={saving} data-testid="sso-save">{t.common.save}</Button>
+              </>
+            )}
+          </form>
+          {ssoMsg && <p className="text-sm text-gray-600 mt-2">{ssoMsg}</p>}
         </Card>
       )}
 

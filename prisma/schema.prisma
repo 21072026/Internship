@@ -59,26 +59,36 @@ enum PipelineStatus {
 // enforces isolation yet, so behaviour is unchanged. Enforcement (query
 // filtering, per-org uniqueness) lands in a later, guarded slice.
 model Organization {
-  id           String   @id @default(cuid())
-  name         String
-  slug         String   @unique
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
   // Per-tenant plan tier (#547). Limits per plan live in src/lib/orgPlans.ts
   // (client-safe catalogue), not the DB. New tenants start on FREE; the
   // backfilled legacy "default" org is grandfathered to ENTERPRISE (unlimited)
   // so single-tenant production is never constrained. Limits are advisory in
   // this phase (surfaced as usage-vs-limit), not hard-enforced.
-  plan         OrgPlan  @default(FREE)
+  plan           OrgPlan  @default(FREE)
   // White-label branding (#546). All optional — when null the app falls back to
   // its own defaults (see src/lib/branding.ts). These are stored per tenant and
   // resolved once per-tenant chrome application lands (needs tenant resolution,
   // the #543 enforcement slice); until then they are managed but not applied to
   // the live single-tenant UI.
-  brandName    String?
-  brandLogoUrl String?  @db.Text
-  brandColor   String?
-  supportEmail String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  brandName      String?
+  brandLogoUrl   String?  @db.Text
+  brandColor     String?
+  supportEmail   String?
+  // Enterprise SSO config (#545). All optional; nothing is active until
+  // ssoEnabled is true AND a valid config is present (see src/lib/sso.ts).
+  // Actual assertion handling requires the tenant's IdP metadata and a SAML
+  // library — see docs/sso-saml.md; this stores/validates the config and gates
+  // the (documented, not-yet-wired) auth code path.
+  ssoEnabled     Boolean  @default(false)
+  ssoProvider    String? // 'saml' | 'oidc'
+  ssoIssuer      String? // IdP entity ID / issuer
+  ssoEntryPoint  String?  @db.Text // IdP SSO sign-in URL
+  ssoCertificate String?  @db.Text // IdP x509 signing certificate (PEM)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   users     User[]
   sources   Source[]
