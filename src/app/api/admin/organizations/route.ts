@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPlans';
+import { isHexColor } from '@/lib/branding';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -41,6 +42,12 @@ export async function GET() {
         slug: o.slug,
         plan,
         limits: planLimits(plan),
+        branding: {
+          brandName: o.brandName,
+          brandLogoUrl: o.brandLogoUrl,
+          brandColor: o.brandColor,
+          supportEmail: o.supportEmail,
+        },
         createdAt: o.createdAt,
         counts: {
           users: o._count.users,
@@ -91,24 +98,48 @@ export async function POST(request: Request) {
   return NextResponse.json({ organization }, { status: 201 });
 }
 
+// Empty string clears an optional branding field (stored as null).
+const optionalText = z.string().max(200).optional();
 const patchSchema = z.object({
   id: z.string().min(1),
-  plan: z.string().refine(isOrgPlan, 'Invalid plan'),
+  plan: z.string().refine(isOrgPlan, 'Invalid plan').optional(),
+  brandName: optionalText,
+  brandLogoUrl: z.string().max(2000).optional(),
+  brandColor: z.string().optional(),
+  supportEmail: z.string().max(200).optional(),
 });
 
-// PATCH — change an organization's plan (admin).
+function orNull(v: string | undefined): string | null | undefined {
+  if (v === undefined) return undefined; // field not provided → leave unchanged
+  const t = v.trim();
+  return t.length ? t : null; // blank → clear
+}
+
+// PATCH — change an organization's plan and/or branding (admin).
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const parsed = patchSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-  const existing = await prisma.organization.findUnique({ where: { id: parsed.data.id }, select: { id: true } });
+  const { id, plan, brandName, brandLogoUrl, brandColor, supportEmail } = parsed.data;
+
+  // Validate an explicitly-set (non-blank) brand color as a hex value.
+  if (brandColor && brandColor.trim() && !isHexColor(brandColor)) {
+    return NextResponse.json({ error: 'Brand color must be a hex value like #2563eb' }, { status: 400 });
+  }
+
+  const existing = await prisma.organization.findUnique({ where: { id }, select: { id: true } });
   if (!existing) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
 
-  const organization = await prisma.organization.update({
-    where: { id: parsed.data.id },
-    data: { plan: parsed.data.plan },
-  });
+  const data: Record<string, unknown> = {};
+  if (plan !== undefined) data.plan = plan;
+  const bn = orNull(brandName); if (bn !== undefined) data.brandName = bn;
+  const bl = orNull(brandLogoUrl); if (bl !== undefined) data.brandLogoUrl = bl;
+  const bc = orNull(brandColor); if (bc !== undefined) data.brandColor = bc;
+  const se = orNull(supportEmail); if (se !== undefined) data.supportEmail = se;
+  if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+
+  const organization = await prisma.organization.update({ where: { id }, data });
   return NextResponse.json({ organization });
 }
