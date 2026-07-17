@@ -101,9 +101,22 @@ export default function SignInPage() {
       return;
     }
 
-    const res = await fetch('/api/auth/session');
-    const fresh = await res.json();
-    router.push(roleHome(fresh?.user?.role));
+    // Safari (and other strict-cookie browsers) can lag applying the Set-Cookie
+    // that signIn() just issued, so an immediate /api/auth/session read returned
+    // no user → we redirected to the default (/portal) or bounced back to
+    // sign-in, i.e. an apparent "login does nothing / page repeats" loop. Poll
+    // briefly for the session to settle, then do a FULL-PAGE navigation so the
+    // freshly-committed cookie is guaranteed to accompany the next request
+    // (client-side router.push could run before the cookie is readable).
+    let role: string | undefined;
+    for (let i = 0; i < 6; i++) {
+      const res = await fetch('/api/auth/session', { cache: 'no-store' });
+      const fresh = await res.json().catch(() => null);
+      role = fresh?.user?.role;
+      if (role) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    window.location.assign(roleHome(role));
   });
 
   return (
