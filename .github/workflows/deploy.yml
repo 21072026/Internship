@@ -183,7 +183,12 @@ jobs:
             --network=host \
             -e DATABASE_URL="\$DATABASE_URL" \
             "\$IMAGE" \
-            node prisma/backfill-project-members.mjs || true
+            node prisma/backfill-project-members.mjs || true           # Backfill default Organization + orgId (#543, idempotent).
+          docker run --rm \
+            --network=host \
+            -e DATABASE_URL="\$DATABASE_URL" \
+            "\$IMAGE" \
+            node prisma/backfill-organization.mjs || true
 
           docker stop internship-crm 2>/dev/null || true
           docker rm   internship-crm 2>/dev/null || true
@@ -289,7 +294,12 @@ jobs:
             --network=host \
             -e DATABASE_URL="\$DATABASE_URL" \
             "\$IMAGE" \
-            node prisma/backfill-project-members.mjs || true
+            node prisma/backfill-project-members.mjs || true           # Backfill default Organization + orgId (#543, idempotent).
+          docker run --rm \
+            --network=host \
+            -e DATABASE_URL="\$DATABASE_URL" \
+            "\$IMAGE" \
+            node prisma/backfill-organization.mjs || true
 
           docker stop internship-crm-preview 2>/dev/null || true
           docker rm   internship-crm-preview 2>/dev/null || true

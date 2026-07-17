@@ -46,19 +46,40 @@ enum PipelineStatus {
   INTERNSHIP_FOUND_ELSEWHERE_800 // 800 tr: başka yerde staj buldu
 }
 
+// Tenant/organization for multi-tenancy (#543). Phase 1: additive & nullable —
+// every tenant-scoped row is backfilled to a single default org and nothing
+// enforces isolation yet, so behaviour is unchanged. Enforcement (query
+// filtering, per-org uniqueness) lands in a later, guarded slice.
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  sources   Source[]
+  cohorts   Cohort[]
+  companies Company[]
+  projects  Project[]
+  relations MentorshipRelation[]
+}
+
 model User {
-  id                      String    @id @default(cuid())
-  email                   String    @unique
+  orgId                   String?
+  org                     Organization? @relation(fields: [orgId], references: [id])
+  id                      String        @id @default(cuid())
+  email                   String        @unique
   password                String
-  role                    Role      @default(MENTEE)
+  role                    Role          @default(MENTEE)
   fullName                String
   phone                   String?
   university              String?
   department              String?
   graduationYear          Int?
-  skills                  Json      @default("[]")
+  skills                  Json          @default("[]")
   // Mentee self-assessment: { "<skill>": 1..5 }
-  skillLevels             Json      @default("{}")
+  skillLevels             Json          @default("{}")
   cvUrl                   String?
   avatarUrl               String?
   whatsapp                String?
@@ -67,29 +88,29 @@ model User {
   referralSource          String?
   // Extended profile (all optional; safe to add to existing rows).
   displayName             String?
-  bio                     String?   @db.Text
+  bio                     String?       @db.Text
   country                 String?
   timezone                String?
   linkedinUrl             String?
   githubUrl               String?
   portfolioUrl            String?
   // Mentee: interests / target position. Mentor: max concurrent mentees.
-  interests               String?   @db.Text
+  interests               String?       @db.Text
   targetPosition          String?
   mentorCapacity          Int?
   // Default true so existing rows stay writable after the column is added;
   // new self-registrations are created with false until they verify by email.
-  emailVerified           Boolean   @default(true)
+  emailVerified           Boolean       @default(true)
   // Admin can deactivate a user; inactive users cannot sign in.
-  isActive                Boolean   @default(true)
+  isActive                Boolean       @default(true)
   // Opt-in: expose a limited, PII-free public profile at /p/[id].
-  publicProfile           Boolean   @default(false)
+  publicProfile           Boolean       @default(false)
   // For COMPANY-role users: which company they observe (read-only).
   companyId               String?
   // Mentee's referral source (where they came from).
   sourceId                String?
   // How many times this user's public profile has been viewed.
-  profileViews            Int       @default(0)
+  profileViews            Int           @default(0)
   // When the user accepted the privacy/data terms (consent). Also the anchor
   // for retention re-consent: data is kept no longer than retentionMonths past
   // this date without renewal.
@@ -99,12 +120,12 @@ model User {
   retentionReminderSentAt DateTime?
   // Opt-out switch for transactional email (messages, announcements). In-app
   // notifications are always created regardless.
-  emailNotifications      Boolean   @default(true)
+  emailNotifications      Boolean       @default(true)
   // Per-category email toggles, e.g. {"messages":false}. Nullable so existing
   // rows aren't touched (avoids MariaDB json_valid CHECK issues); unset = on.
   notificationPrefs       Json?
   // Optional TOTP two-factor auth. The secret is only meaningful once enabled.
-  twoFactorEnabled        Boolean   @default(false)
+  twoFactorEnabled        Boolean       @default(false)
   twoFactorSecret         String?
   // "Sign out of all devices": any JWT issued before this instant is rejected at
   // the session callback. Null = never revoked. Set to now() to invalidate every
@@ -124,8 +145,8 @@ model User {
   lastLoginAt             DateTime?
   // Last time the user was seen active (page-view heartbeat, consent-gated).
   lastSeenAt              DateTime?
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
 
   mentorRelations         MentorshipRelation[]     @relation("MentorRelations")
   menteeRelations         MentorshipRelation[]     @relation("MenteeRelations")
@@ -214,11 +235,13 @@ model UserConsent {
 // A referral source — the education/agency a mentee came from. Admin-managed
 // so reporting can group mentees by where they were sourced.
 model Source {
-  id           String   @id @default(cuid())
-  name         String   @unique
+  orgId        String?
+  org          Organization? @relation(fields: [orgId], references: [id])
+  id           String        @id @default(cuid())
+  name         String        @unique
   contactName  String?
   contactEmail String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime      @default(now())
 
   users User[]
 
@@ -350,7 +373,9 @@ model Document {
 }
 
 model Company {
-  id           String   @id @default(cuid())
+  orgId        String?
+  org          Organization? @relation(fields: [orgId], references: [id])
+  id           String        @id @default(cuid())
   name         String
   description  String?
   contactEmail String?
@@ -359,8 +384,8 @@ model Company {
   size         String?
   address      String?
   quota        Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   needs        CompanyNeed[]
   mentorships  MentorshipRelation[]
@@ -559,6 +584,8 @@ enum ProjectOwnerType {
 // community project owned by an admin/mentor. Mentees are assigned via
 // MentorshipRelation.projectId. Ownership is transferable (audited).
 model Project {
+  orgId          String?
+  org            Organization?    @relation(fields: [orgId], references: [id])
   id             String           @id @default(cuid())
   name           String
   description    String?          @db.Text
@@ -641,10 +668,12 @@ model AvailabilitySlot {
 
 // A cohort groups mentees/internships by intake period for comparison.
 model Cohort {
-  id        String   @id @default(cuid())
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id])
+  id        String        @id @default(cuid())
   name      String
   term      String?
-  createdAt DateTime @default(now())
+  createdAt DateTime      @default(now())
 
   relations MentorshipRelation[]
 }
@@ -660,6 +689,8 @@ model CompanyNeed {
 }
 
 model MentorshipRelation {
+  orgId                   String?
+  org                     Organization?    @relation(fields: [orgId], references: [id])
   id                      String           @id @default(cuid())
   mentorId                String
   menteeId                String

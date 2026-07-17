@@ -110,6 +110,7 @@ run_tool npx prisma db push --accept-data-loss
 log "seed-templates + project-member backfill (idempotent)"
 run_tool node prisma/seed-templates.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
+run_tool node prisma/backfill-organization.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 log "Restarting $CONTAINER on :$PORT"
