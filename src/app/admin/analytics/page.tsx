@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
 import { CohortComparison } from '@/components/admin/CohortComparison';
+import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { useT, useLocale } from '@/i18n/client';
 
@@ -315,6 +316,8 @@ export default function AdminAnalyticsPage() {
         </div>
       )}
       <CohortComparison />
+
+      <ProgramBenchmark />
       <SourceConversion />
         </>
       )}
