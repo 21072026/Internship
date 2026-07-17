@@ -89,6 +89,7 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           emailVerified: user.emailVerified,
           companyId: user.companyId,
+          orgId: user.orgId,
         };
       },
     }),
@@ -126,6 +127,7 @@ export const authOptions: NextAuthOptions = {
           // Carry the impersonated user's company so the company portal (and any
           // companyId-scoped data) loads correctly while impersonating.
           companyId: user.companyId,
+          orgId: user.orgId,
           impersonatorId: isStart ? grant.adminId : undefined,
           impersonatorName: isStart ? admin?.fullName ?? 'Admin' : undefined,
         };
@@ -139,6 +141,8 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as unknown as { role: string }).role;
         token.emailVerified = (user as unknown as { emailVerified: boolean }).emailVerified;
         token.companyId = (user as unknown as { companyId?: string | null }).companyId ?? null;
+        // Tenant the user belongs to (multi-tenancy, #543). Null until assigned.
+        token.orgId = (user as unknown as { orgId?: string | null }).orgId ?? null;
         // Set when starting impersonation, absent on a normal/stop sign-in —
         // so this also clears it when returning to the original account.
         const u = user as unknown as { impersonatorId?: string; impersonatorName?: string };
@@ -167,6 +171,7 @@ export const authOptions: NextAuthOptions = {
           token.email = admin.email;
           token.name = admin.fullName;
           token.companyId = admin.companyId;
+          token.orgId = admin.orgId;
           token.emailVerified = admin.emailVerified;
         }
         token.impersonatorId = null;
@@ -184,6 +189,7 @@ export const authOptions: NextAuthOptions = {
           token.role = fresh.role;
           token.emailVerified = fresh.emailVerified;
           token.companyId = fresh.companyId;
+          token.orgId = fresh.orgId;
         }
       }
 
@@ -216,6 +222,7 @@ export const authOptions: NextAuthOptions = {
         session.user.impersonatorId = (token.impersonatorId as string) ?? null;
         session.user.impersonatorName = (token.impersonatorName as string) ?? null;
         session.user.companyId = (token.companyId as string) ?? null;
+        session.user.orgId = (token.orgId as string) ?? null;
         if (token.email) session.user.email = token.email as string;
         if (token.name) session.user.name = token.name as string;
       }
@@ -248,6 +255,7 @@ declare module 'next-auth' {
       impersonatorId?: string | null;
       impersonatorName?: string | null;
       companyId?: string | null;
+      orgId?: string | null;
     };
   }
 }
