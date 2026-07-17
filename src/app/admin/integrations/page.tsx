@@ -11,6 +11,7 @@ import { formatDate } from '@/lib/relativeTime';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
 interface Key { id: string; name: string; lastUsedAt: string | null; createdAt: string }
+interface GoogleStatus { configured: boolean; connected: boolean }
 
 export default function IntegrationsPage() {
   const t = useT();
@@ -24,10 +25,17 @@ export default function IntegrationsPage() {
   const [keyName, setKeyName] = useState('');
   const [newKey, setNewKey] = useState('');
 
+  const [google, setGoogle] = useState<GoogleStatus | null>(null);
+
   const load = useCallback(async () => {
-    const [w, k] = await Promise.all([fetch('/api/admin/webhooks'), fetch('/api/admin/api-keys')]);
+    const [w, k, g] = await Promise.all([
+      fetch('/api/admin/webhooks'),
+      fetch('/api/admin/api-keys'),
+      fetch('/api/admin/integrations/google/status'),
+    ]);
     if (w.ok) { const d = await w.json(); setHooks(d.webhooks ?? []); setEventTypes(d.eventTypes ?? []); }
     if (k.ok) setKeys((await k.json()).keys ?? []);
+    if (g.ok) setGoogle(await g.json());
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -120,6 +128,31 @@ export default function IntegrationsPage() {
           )}
           <p className="text-xs text-gray-400 mt-3">{t.integrations.apiHint} <code>GET /api/v1/candidates</code></p>
           <Link href="/admin/api-docs" className="inline-block text-sm text-blue-600 hover:underline mt-2">{t.integrations.apiDocsLink} →</Link>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>{t.integrations.googleCalendar}</CardTitle></CardHeader>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{t.integrations.googleCalendarDesc}</p>
+          {google && (
+            <div className="flex items-center gap-2 mb-3">
+              <span
+                data-testid="google-status"
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                  google.configured
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                }`}
+              >
+                {google.configured ? t.integrations.googleConfigured : t.integrations.googleNotConfigured}
+              </span>
+            </div>
+          )}
+          {google && !google.configured && (
+            <p className="text-xs text-gray-400">{t.integrations.googleSetupHint}</p>
+          )}
+          {google && google.configured && !google.connected && (
+            <p className="text-xs text-gray-400">{t.integrations.googleReadyHint}</p>
+          )}
         </Card>
       </div>
     </div>
