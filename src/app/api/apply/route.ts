@@ -6,6 +6,7 @@ import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
 import { dispatchWebhook } from '@/lib/webhooks';
+import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 
 // GET ?mentorId= — public: validate the link and return the mentor's name so
 // the application page can greet the applicant.
@@ -52,12 +53,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
   }
 
+  // Plan gate (#547): a public application creates a new active relation in the
+  // mentor's tenant. Gate before creating the account. No-op for the unlimited
+  // default org.
+  const gate = await checkActiveRelationLimit(mentor.orgId);
+  if (!gate.allowed) {
+    return NextResponse.json(planLimitError(gate), { status: 403 });
+  }
+
   const mentee = await prisma.user.create({
     data: {
       email,
       password: '!apply-no-login',
       role: 'MENTEE',
       fullName,
+      orgId: mentor.orgId,
       emailVerified: false,
       phone: phone || null,
       city: city || null,
@@ -67,7 +77,7 @@ export async function POST(request: Request) {
     },
   });
 
-  await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
+  await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, orgId: mentor.orgId } });
   await notify(mentor.id, 'application', `${fullName} applied to be your mentee.`, '/mentor/mentees');
   await dispatchWebhook('application.created', { mentorId: mentor.id, menteeName: fullName, email });
 

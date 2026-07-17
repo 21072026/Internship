@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { slugify } from '@/lib/transliterate';
+import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
+import { resolveOrgId } from '@/lib/orgScope';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -44,12 +46,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
     }
 
+    // Plan gate (#547): a new mentee here means a new active relation. Gate on
+    // the creating user's tenant before creating anything. No-op for the
+    // unlimited default org.
+    const orgId = resolveOrgId(session);
+    const gate = await checkActiveRelationLimit(orgId);
+    if (!gate.allowed) {
+      return NextResponse.json(planLimitError(gate), { status: 403 });
+    }
+
     const mentee = await prisma.user.create({
       data: {
         email: finalEmail,
         password: '!created-no-login',
         role: 'MENTEE',
         fullName,
+        orgId,
         skills: [],
         phone: rest.phone || null,
         whatsapp: rest.whatsapp || null,
@@ -61,7 +73,7 @@ export async function POST(request: Request) {
     });
 
     await prisma.mentorshipRelation.create({
-      data: { mentorId: session.user.id, menteeId: mentee.id },
+      data: { mentorId: session.user.id, menteeId: mentee.id, orgId },
     });
 
     // If the mentee has a real email, send a "set your password" link so they

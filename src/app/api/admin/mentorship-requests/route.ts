@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
 
 // Admin queue for mentee mentorship requests (#590): list PENDING requests,
 // approve (pick a mentor → MentorshipRelation) or reject. The mentee is
@@ -72,8 +73,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Mentee already has an active mentorship', code: 'already_mentored' }, { status: 409 });
     }
 
+    // Plan gate (#547): approving a request creates a new active relation.
+    const gate = await checkActiveRelationLimitForMentee(req.menteeId);
+    if (!gate.allowed) {
+      return NextResponse.json(planLimitError(gate), { status: 403 });
+    }
+
     const [relation] = await prisma.$transaction([
-      prisma.mentorshipRelation.create({ data: { mentorId, menteeId: req.menteeId } }),
+      prisma.mentorshipRelation.create({ data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId } }),
       prisma.mentorshipRequest.update({
         where: { id: req.id },
         data: { status: 'APPROVED', decidedById: session.user.id, decidedAt: new Date() },
