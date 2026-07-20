@@ -1,6 +1,6 @@
 # Infra — Wildcard TLS & topic-based preview environments
 
-Runbook for the automation behind [#583](https://github.com/mersahin/Internship/issues/583)
+Runbook for the automation behind [#583](https://github.com/21072026/Internship/issues/583)
 (per-topic ephemeral preview environments at `crm-<topic>.ersah.in`).
 
 The whole design rests on **three one-time foundations**, after which spinning a

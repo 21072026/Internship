@@ -8,7 +8,7 @@ arguments: [issue]
 
 # Intern issue pipeline
 
-Process GitHub issue **#$issue** in this repo (`mersahin/Internship`) completely autonomously,
+Process GitHub issue **#$issue** in this repo (`21072026/Internship`) completely autonomously,
 ending with a squash-merge to `main`. This mirrors the exact workflow used to clear issues
 #463–#477 from the intern backlog (#478) in a prior session.
 
@@ -155,7 +155,7 @@ gh pr view <PR> --json state,mergedAt -q '.state, .mergedAt'   # confirm MERGED
 ## 9. Update the GitHub Project board
 
 ```
-ITEM_ID=$(gh project item-add 2 --owner mersahin --url https://github.com/mersahin/Internship/issues/$issue --format json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+ITEM_ID=$(gh project item-add 2 --owner mersahin --url https://github.com/21072026/Internship/issues/$issue --format json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 gh project item-edit --id "$ITEM_ID" --field-id PVTSSF_lAHOADrM1M4BbnzxzhWXFDs --project-id PVT_kwHOADrM1M4Bbnzx --single-select-option-id 98236657
 ```
 
