@@ -10,6 +10,19 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-20
+
+### Added
+- **Mentee project members with functional roles (#51)** — projects can now
+  include **mentee** members, each tagged with a functional (job) role:
+  Developer, Tester, or Marketing. Managed from the project owners/members panel
+  (`/admin/projects`, `/mentor/projects`) via a dedicated mentee picker.
+  - Schema: `ProjectMember.functionalRole` (nullable enum
+    `ProjectFunctionalRole`), plus `MENTEE` added to `ProjectMemberRole`
+    (additive, safe `db push`).
+  - `POST /api/projects/[id]/members` accepts `role: 'MENTEE'` + `functionalRole`;
+    mentees can never be owners, and the last-owner protection is unchanged.
+
 ## [0.13.0] - 2026-07-20
 
 ### Added

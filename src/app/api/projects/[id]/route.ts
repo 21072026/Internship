@@ -15,7 +15,7 @@ const include = {
   tasks: { orderBy: { order: 'asc' } },
   members: {
     orderBy: { addedAt: 'asc' },
-    select: { role: true, addedAt: true, user: { select: { id: true, fullName: true, role: true } } },
+    select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, role: true } } },
   },
 } as const;
 
