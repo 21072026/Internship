@@ -17,6 +17,7 @@ interface MentorUser {
   department?: string;
   skills?: string[];
   mentorCapacity?: number | null;
+  isActive: boolean;
   _count: { mentorRelations: number };
 }
 
@@ -29,6 +30,10 @@ export default function MentorsPage() {
   const [skillsText, setSkillsText] = useState('');
   const [capacityText, setCapacityText] = useState('');
   const [saving, setSaving] = useState(false);
+  // Archived = deactivated (isActive=false). Default view hides them, mirroring
+  // the Users admin page (#570).
+  const [statusView, setStatusView] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -46,6 +51,25 @@ export default function MentorsPage() {
     setEditing(m);
     setSkillsText((m.skills ?? []).join(', '));
     setCapacityText(m.mentorCapacity != null ? String(m.mentorCapacity) : '');
+  };
+
+  // Archive (deactivate) or restore a mentor. Reuses the same endpoint + guard
+  // as the Users admin page; an archived mentor cannot sign in and drops out of
+  // the default view. Existing mentorship data is untouched.
+  const toggleActive = async (m: MentorUser) => {
+    setBusyId(m.id);
+    try {
+      const res = await fetch(`/api/users/${m.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !m.isActive }),
+      });
+      if (res.ok) {
+        setMentors((prev) => prev.map((x) => (x.id === m.id ? { ...x, isActive: !x.isActive } : x)));
+      }
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const save = async () => {
@@ -67,12 +91,14 @@ export default function MentorsPage() {
   };
 
   const q = search.trim().toLowerCase();
+  const archivedCount = mentors.filter((m) => !m.isActive).length;
   const shown = mentors.filter(
     (m) =>
-      !q ||
-      m.fullName.toLowerCase().includes(q) ||
-      m.email.toLowerCase().includes(q) ||
-      (m.skills ?? []).some((s) => s.toLowerCase().includes(q))
+      (statusView === 'ACTIVE' ? m.isActive : !m.isActive) &&
+      (!q ||
+        m.fullName.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        (m.skills ?? []).some((s) => s.toLowerCase().includes(q)))
   );
 
   return (
@@ -89,6 +115,22 @@ export default function MentorsPage() {
         placeholder={t.mentors.searchPlaceholder}
         className="mb-4 w-full sm:w-80 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
       />
+
+      <div className="flex gap-2 mb-4">
+        {(['ACTIVE', 'ARCHIVED'] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusView(s)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              statusView === s
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}
+          >
+            {s === 'ACTIVE' ? t.usersAdmin.viewActive : `${t.usersAdmin.viewArchived}${archivedCount ? ` (${archivedCount})` : ''}`}
+          </button>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>
@@ -135,10 +177,20 @@ export default function MentorsPage() {
                       <Users className="h-3 w-3" />
                       {m._count.mentorRelations}{cap != null ? `/${cap}` : ''} {t.mentors.mentee}
                     </Badge>
-                    <Button variant="outline" size="sm" onClick={() => openEdit(m)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      {t.mentors.editExpertise}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(m)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        {t.mentors.editExpertise}
+                      </Button>
+                      <Button
+                        variant={m.isActive ? 'outline' : 'primary'}
+                        size="sm"
+                        loading={busyId === m.id}
+                        onClick={() => toggleActive(m)}
+                      >
+                        {m.isActive ? t.usersAdmin.deactivate : t.usersAdmin.activate}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
