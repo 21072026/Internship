@@ -12,6 +12,7 @@ import { useT } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
 import { durationSince } from '@/lib/relativeTime';
+import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -35,6 +36,10 @@ export function AccountSettings() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
   const [savingPrefs, setSavingPrefs] = useState(false);
+  // Browser (foreground) notifications — per-device, not stored server-side (#675).
+  const [browserNotif, setBrowserNotif] = useState(false);
+  const [browserNotifSupported, setBrowserNotifSupported] = useState(false);
+  const [browserNotifDenied, setBrowserNotifDenied] = useState(false);
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
@@ -66,6 +71,34 @@ export function AccountSettings() {
       });
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const supported = canUseBrowserNotifications();
+    setBrowserNotifSupported(supported);
+    if (supported) {
+      setBrowserNotifDenied(Notification.permission === 'denied');
+      setBrowserNotif(browserNotificationsPrefOn() && Notification.permission === 'granted');
+    }
+  }, []);
+
+  const toggleBrowserNotif = async (next: boolean) => {
+    if (!next) {
+      setBrowserNotif(false);
+      setBrowserNotificationsPref(false);
+      return;
+    }
+    let perm = Notification.permission;
+    if (perm === 'default') perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      setBrowserNotif(true);
+      setBrowserNotificationsPref(true);
+      setBrowserNotifDenied(false);
+    } else {
+      setBrowserNotif(false);
+      setBrowserNotificationsPref(false);
+      setBrowserNotifDenied(perm === 'denied');
+    }
+  };
 
   const twoFa = async (action: 'setup' | 'enable' | 'disable') => {
     setTwoFaBusy(true);
@@ -388,6 +421,24 @@ export function AccountSettings() {
             </label>
           ))}
         </div>
+
+        {browserNotifSupported && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <label className="flex items-center gap-3 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={browserNotif}
+                disabled={browserNotifDenied}
+                onChange={(e) => toggleBrowserNotif(e.target.checked)}
+                data-testid="browser-notif-toggle"
+              />
+              {t.account.browserNotifications}
+            </label>
+            <p className="text-xs text-gray-400 mt-1">
+              {browserNotifDenied ? t.account.browserNotificationsDenied : t.account.browserNotificationsHint}
+            </p>
+          </div>
+        )}
 
         <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
           <div>

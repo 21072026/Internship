@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Bell } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { showBrowserNotification } from '@/lib/browserNotifications';
 
 interface Note {
   id: string;
@@ -23,18 +24,33 @@ export function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  // Ids we've already accounted for, so a browser notification fires once per
+  // new item. null until the first poll establishes a baseline — that first
+  // batch of existing unread items must NOT trigger a burst of popups.
+  const seenIds = useRef<Set<string> | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/notifications');
       if (!res.ok) return;
       const d = await res.json();
-      setItems(d.items ?? []);
+      const next: Note[] = d.items ?? [];
+      if (seenIds.current === null) {
+        seenIds.current = new Set(next.map((n) => n.id));
+      } else {
+        for (const n of next) {
+          if (!seenIds.current.has(n.id)) {
+            seenIds.current.add(n.id);
+            if (!n.read) showBrowserNotification(t.notifications.title, n.text, n.link);
+          }
+        }
+      }
+      setItems(next);
       setUnread(d.unread ?? 0);
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [t.notifications.title]);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
