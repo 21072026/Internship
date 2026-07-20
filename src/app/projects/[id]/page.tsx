@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { GraduationCap, Github, ExternalLink, Trello, CheckCircle2, Circle } from 'lucide-react';
+import { GraduationCap, Github, ExternalLink, Trello, CheckCircle2, Circle, ArrowLeft } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
@@ -53,8 +53,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-12 px-4">
       <div className="max-w-2xl mx-auto">
-        <Link href="/projects" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6">
-          <GraduationCap className="h-4 w-4 text-blue-600" /> {t.projects.showcaseTitle}
+        {/* Back link: internal viewers return to their own project list (where
+            they came from); public visitors get the showcase header link. */}
+        <Link
+          href={role === 'ADMIN' ? '/admin/projects' : role === 'MENTOR' ? '/mentor/projects' : '/projects'}
+          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6"
+        >
+          {canInternal
+            ? <><ArrowLeft className="h-4 w-4" /> {t.projects.allProjects}</>
+            : <><GraduationCap className="h-4 w-4 text-blue-600" /> {t.projects.showcaseTitle}</>}
         </Link>
         <div className="bg-white rounded-2xl border border-gray-200 p-8">
           <div className="flex items-center gap-2 flex-wrap">

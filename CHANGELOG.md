@@ -10,6 +10,14 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-07-20
+
+### Fixed
+- **Project detail back link** — the top link on `/projects/[id]` now returns
+  internal viewers to their own project list (`/admin/projects` or
+  `/mentor/projects`) with a clear back arrow, instead of always sending them to
+  the public showcase. Public visitors keep the showcase link.
+
 ## [0.9.0] - 2026-07-20
 
 Admin↔mentor parity and quality-of-life additions on top of the multi-tenancy
