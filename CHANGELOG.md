@@ -10,7 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.9.1] - 2026-07-20
+## [0.10.0] - 2026-07-20
+
+### Added
+- **"Select all" in the meeting scheduler** — one checkbox to select every
+  mentee in the list at once (`MeetingsManager`).
+
+### Changed
+- **Meeting time is now optional** (#417): `Meeting.scheduledAt` is nullable.
+  A meeting **with** a time behaves as before (RSVP expected + reminder email);
+  a meeting **without** a time is just a shared link — no RSVP ask, no reminder.
+  The scheduler no longer requires a time, and the invite email / list UI omit
+  the "when" + RSVP parts when there is no time.
 
 ### Fixed
 - **Project detail back link** — the top link on `/projects/[id]` now returns

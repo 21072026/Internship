@@ -232,14 +232,16 @@ export async function sendMeetingInviteEmail({
   to: string;
   fullName?: string | null;
   title: string;
-  scheduledAt: Date;
+  scheduledAt: Date | null;
   meetLink?: string | null;
   rsvpToken: string;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
   const no = `${appUrl}/rsvp/${rsvpToken}?r=no`;
-  const when = scheduledAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' });
+  // A meeting with no set time is just a shared link — skip the "when" line and
+  // the RSVP ask entirely.
+  const when = scheduledAt ? scheduledAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }) : null;
 
   await sendEmail({
     to,
@@ -249,11 +251,13 @@ export async function sendMeetingInviteEmail({
         <h2 style="color: #2563eb;">${title}</h2>
         ${fullName ? `<p>Hi ${fullName},</p>` : ''}
         <p>You're invited to a meeting.</p>
-        <p><strong>When:</strong> ${when}</p>
+        ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
         ${meetLink ? `<p><strong>Google Meet:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
+        ${when ? `
         <p style="margin-top: 20px;">Can you make it?</p>
         <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
+        ` : ''}
       </div>
     `,
   });
@@ -402,7 +406,7 @@ export async function sendMeetingReminders() {
         subject: `Reminder: ${m.title}`,
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color:#2563eb;">Upcoming meeting</h2>
-          <p>Hi ${m.relation.mentee.fullName}, this is a reminder for <strong>${m.title}</strong> at ${m.scheduledAt.toLocaleString('en-GB')}.</p>
+          <p>Hi ${m.relation.mentee.fullName}, this is a reminder for <strong>${m.title}</strong> at ${m.scheduledAt!.toLocaleString('en-GB')}.</p>
           ${m.meetLink ? `<p><a href="${m.meetLink}">${m.meetLink}</a></p>` : ''}
         </div>`,
       });

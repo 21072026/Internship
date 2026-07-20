@@ -903,7 +903,9 @@ model Meeting {
   id             String     @id @default(cuid())
   relationId     String
   title          String
-  scheduledAt    DateTime
+  // Optional: a meeting with a set time expects an RSVP and gets reminders; a
+  // meeting with no time (null) is just a shared link — no RSVP, no reminder.
+  scheduledAt    DateTime?
   meetLink       String?
   rsvp           RsvpStatus @default(PENDING)
   rsvpToken      String     @unique

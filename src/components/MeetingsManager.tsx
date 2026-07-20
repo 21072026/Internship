@@ -16,7 +16,7 @@ interface Relation {
 interface Meeting {
   id: string;
   title: string;
-  scheduledAt: string;
+  scheduledAt: string | null;
   meetLink?: string | null;
   rsvp: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   relation: { mentee: { fullName: string } };
@@ -39,8 +39,10 @@ export function MeetingsManager() {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [meetLink, setMeetLink] = useState('');
-  // Combined local date+time → ISO-ish string the API parses with new Date().
-  const scheduledAt = date && time ? `${date}T${time}` : '';
+  // Time is optional. With a date the meeting has a time (defaulting to
+  // midnight if no clock time) and expects an RSVP; with no date it's a
+  // no-time meeting (just a link, no RSVP).
+  const scheduledAt = date ? `${date}T${time || '00:00'}` : '';
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -116,7 +118,16 @@ export function MeetingsManager() {
               {relations.length === 0 ? (
                 <p className="text-sm text-gray-400">{t.mentor.noMenteesAssigned}</p>
               ) : (
-                relations.map((r) => (
+                <>
+                <label className="flex items-center gap-2 text-sm py-1 mb-1 border-b border-gray-100 dark:border-gray-800 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={relations.every((r) => selected[r.id])}
+                    onChange={(e) => setSelected(e.target.checked ? Object.fromEntries(relations.map((r) => [r.id, true])) : {})}
+                  />
+                  <span>{t.meetings.selectAll}</span>
+                </label>
+                {relations.map((r) => (
                   <label key={r.id} className="flex items-center gap-2 text-sm py-1">
                     <input
                       type="checkbox"
@@ -125,7 +136,8 @@ export function MeetingsManager() {
                     />
                     <span className="truncate">{r.mentee.fullName}</span>
                   </label>
-                ))
+                ))}
+                </>
               )}
             </div>
             <div>
@@ -164,7 +176,7 @@ export function MeetingsManager() {
               value={meetLink}
               onChange={(e) => setMeetLink(e.target.value)}
             />
-            <Button onClick={schedule} loading={busy} disabled={chosen.length === 0 || !title || !scheduledAt}>
+            <Button onClick={schedule} loading={busy} disabled={chosen.length === 0 || !title}>
               {t.meetings.sendInvite}
             </Button>
           </div>
@@ -183,7 +195,7 @@ export function MeetingsManager() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.title}</p>
                     <p className="text-xs text-gray-500 truncate">
-                      {m.relation.mentee.fullName} · {formatDateTime(m.scheduledAt, locale)}
+                      {m.relation.mentee.fullName}{m.scheduledAt ? ` · ${formatDateTime(m.scheduledAt, locale)}` : ` · ${t.meetings.noTime}`}
                     </p>
                     {m.meetLink && (
                       <a
@@ -208,7 +220,7 @@ export function MeetingsManager() {
                         {copiedId === m.id ? t.meetings.linkCopied : t.meetings.copyLink}
                       </Button>
                     )}
-                    <Badge variant={RSVP_VARIANT[m.rsvp]}>{t.meetings[m.rsvp.toLowerCase() as 'pending' | 'accepted' | 'declined']}</Badge>
+                    {m.scheduledAt && <Badge variant={RSVP_VARIANT[m.rsvp]}>{t.meetings[m.rsvp.toLowerCase() as 'pending' | 'accepted' | 'declined']}</Badge>}
                   </div>
                 </div>
               ))}

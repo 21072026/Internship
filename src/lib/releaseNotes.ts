@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.10.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'Schedule a meeting without a fixed time — if you set a time, attendees are asked to RSVP and get a reminder; if you don’t, it’s simply a shared meeting link with no RSVP.',
+        '“Select all” when scheduling — pick every mentee in the list with one click.',
+      ],
+      tr: [
+        'Sabit zaman olmadan toplantı planla — bir zaman belirlersen katılımcılardan RSVP istenir ve hatırlatma gider; belirlemezsen sadece paylaşılan bir toplantı linki olur, RSVP’siz.',
+        'Planlarken “tümünü seç” — listedeki her mentee’yi tek tıkla seç.',
+      ],
+      de: [
+        'Meeting ohne feste Zeit planen — mit Zeit werden Teilnehmer um RSVP gebeten und erhalten eine Erinnerung; ohne Zeit ist es einfach ein geteilter Meeting-Link ohne RSVP.',
+        '„Alle auswählen“ beim Planen — jeden Mentee der Liste mit einem Klick wählen.',
+      ],
+    },
+  },
+  {
     version: '0.9.1-beta',
     date: '2026-07-20',
     highlights: {
