@@ -10,6 +10,17 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-20
+
+### Added
+- **Browser notifications for new messages (foreground, #675 Kademe 1)** — when
+  the user opts in (Account → Notifications) and grants the browser permission,
+  a desktop notification fires for each new unread in-app notification while the
+  app is open in a tab. Per-device preference in `localStorage` (no schema
+  change); dedupes by notification id and never bursts on the first poll. New
+  `src/lib/browserNotifications.ts` helper, wired into `NotificationBell`.
+  Background web-push (Kademe 2) remains a separate follow-up.
+
 ## [0.12.0] - 2026-07-20
 
 ### Added

@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.13.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'Browser notifications — turn them on in Account → Notifications and get a desktop popup for new messages while the app is open.',
+      ],
+      tr: [
+        'Tarayıcı bildirimleri — Hesap → Bildirimler’den aç, uygulama açıkken yeni mesajlarda masaüstü bildirimi al.',
+      ],
+      de: [
+        'Browser-Benachrichtigungen — aktiviere sie unter Konto → Benachrichtigungen und erhalte bei neuen Nachrichten ein Desktop-Popup, solange die App geöffnet ist.',
+      ],
+    },
+  },
+  {
     version: '0.12.0-beta',
     date: '2026-07-20',
     highlights: {
