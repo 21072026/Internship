@@ -10,6 +10,16 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-20
+
+### Added
+- **Membership duration indicator** — the account page now shows how long you've
+  been a member ("Member for 3 months", from `User.createdAt`), and the project
+  owners/members panel shows how long each person has been on that project (from
+  `ProjectMember.addedAt`). New `durationSince` helper in `src/lib/relativeTime.ts`
+  and a localized `membership` i18n block (EN/TR/DE). `/api/projects` now includes
+  `addedAt` on member rows.
+
 ## [0.11.0] - 2026-07-20
 
 ### Added
