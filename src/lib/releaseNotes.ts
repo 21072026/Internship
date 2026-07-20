@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.1-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: ['Meeting invite emails now correctly say “Meeting link” instead of “Google Meet” (the links are Jitsi).'],
+      tr: ['Toplantı davet e-postaları artık “Google Meet” yerine doğru şekilde “Toplantı bağlantısı” diyor (bağlantılar Jitsi).'],
+      de: ['Meeting-Einladungs-E-Mails sagen jetzt korrekt „Meeting-Link“ statt „Google Meet“ (die Links sind Jitsi).'],
+    },
+  },
+  {
     version: '0.14.0-beta',
     date: '2026-07-20',
     highlights: {

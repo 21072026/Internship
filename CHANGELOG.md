@@ -10,6 +10,15 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-07-20
+
+### Fixed
+- **Meeting links were mislabeled "Google Meet"** — the app auto-generates
+  **Jitsi** meeting links, but the invite email and the scheduler label called
+  them "Google Meet". Relabeled to a provider-neutral "Meeting link"
+  (email template + `meetLink` in EN/TR/DE), and corrected the feature-catalog
+  comms description ("video meeting invites" instead of "Google Meet invites").
+
 ## [0.14.0] - 2026-07-20
 
 ### Added
