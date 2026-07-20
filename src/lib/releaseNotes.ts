@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.1-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: ['A clearer “back” link on a project’s page — it now takes you back to your project list instead of the public showcase.'],
+      tr: ['Proje sayfasında daha net bir “geri” linki — artık sizi herkese açık vitrin yerine kendi proje listenize götürüyor.'],
+      de: ['Ein klarerer „Zurück“-Link auf der Projektseite — er führt Sie jetzt zu Ihrer Projektliste zurück statt zur öffentlichen Vitrine.'],
+    },
+  },
+  {
     version: '0.9.0-beta',
     date: '2026-07-20',
     highlights: {
