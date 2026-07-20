@@ -10,7 +10,8 @@ import { dispatchWebhook } from '@/lib/webhooks';
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
   title: z.string().min(1),
-  scheduledAt: z.string().min(1),
+  // Optional: omit/empty → a no-time meeting (just a link, no RSVP/reminder).
+  scheduledAt: z.string().optional().or(z.literal('')),
   meetLink: z.string().url().optional().or(z.literal('')),
 });
 
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
   const { relationIds, title, scheduledAt, meetLink } = parsed.data;
-  const when = new Date(scheduledAt);
+  const when = scheduledAt ? new Date(scheduledAt) : null;
 
   const where =
     session.user.role === 'ADMIN'
@@ -84,6 +85,6 @@ export async function POST(request: Request) {
     created++;
   }
 
-  if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when.toISOString(), count: created });
+  if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created });
   return NextResponse.json({ created });
 }

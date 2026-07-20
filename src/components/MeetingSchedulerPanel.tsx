@@ -12,7 +12,7 @@ interface Meeting {
   id: string;
   relationId: string;
   title: string;
-  scheduledAt: string;
+  scheduledAt: string | null;
   meetLink?: string | null;
 }
 
@@ -30,7 +30,9 @@ export function MeetingSchedulerPanel({ relationId }: { relationId: string }) {
   const [meetLink, setMeetLink] = useState('');
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const scheduledAt = date && time ? `${date}T${time}` : '';
+  // Time optional: a date gives the meeting a time (+ RSVP); no date → no-time
+  // meeting (just a link).
+  const scheduledAt = date ? `${date}T${time || '00:00'}` : '';
 
   const load = useCallback(async () => {
     const r = await fetch('/api/meetings');
@@ -103,7 +105,7 @@ export function MeetingSchedulerPanel({ relationId }: { relationId: string }) {
           <Input label={t.meetings.meetLink} placeholder="https://meet.google.com/abc-defg-hij" hint={t.meetings.meetLinkHint} value={meetLink} onChange={(e) => setMeetLink(e.target.value)} />
         </div>
         <div className="sm:col-span-2">
-          <Button onClick={schedule} loading={busy} disabled={!title || !scheduledAt}>
+          <Button onClick={schedule} loading={busy} disabled={!title}>
             {t.meetings.sendInvite}
           </Button>
         </div>
@@ -115,7 +117,7 @@ export function MeetingSchedulerPanel({ relationId }: { relationId: string }) {
             <div key={m.id} className="flex items-center justify-between gap-3 py-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.title}</p>
-                <p className="text-xs text-gray-500">{formatDateTime(m.scheduledAt, locale)}</p>
+                <p className="text-xs text-gray-500">{m.scheduledAt ? formatDateTime(m.scheduledAt, locale) : t.meetings.noTime}</p>
                 {m.meetLink && (
                   <a href={m.meetLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate block max-w-[18rem]">
                     {m.meetLink}

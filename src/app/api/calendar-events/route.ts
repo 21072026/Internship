@@ -38,12 +38,13 @@ export async function GET() {
   ]);
 
   const events = [
-    ...meetings.map((m) => ({
+    // No-time meetings (nullable scheduledAt) don't belong on a calendar.
+    ...meetings.filter((m) => m.scheduledAt).map((m) => ({
       id: `meeting-${m.id}`,
       type: 'meeting' as const,
       title: m.title,
       who: m.relation.mentee.fullName,
-      date: m.scheduledAt.toISOString(),
+      date: m.scheduledAt!.toISOString(),
       link: m.meetLink ?? null,
     })),
     ...loggedMeetings.map((i) => ({
