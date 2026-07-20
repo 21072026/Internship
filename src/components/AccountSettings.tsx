@@ -11,6 +11,7 @@ import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
+import { durationSince } from '@/lib/relativeTime';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -30,7 +31,7 @@ export function AccountSettings() {
   const [savingPw, setSavingPw] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null } | null>(null);
+  const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null; createdAt: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -61,7 +62,7 @@ export function AccountSettings() {
         setRole(user.role ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
-        setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null });
+        setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt ?? null });
       });
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
   }, []);
@@ -267,11 +268,23 @@ export function AccountSettings() {
     }
   };
 
+  // "Member for 3 months" — the magnitude comes from durationSince, the noun
+  // and surrounding phrase from the localized membership block.
+  const membershipLabel = (() => {
+    if (!me?.createdAt) return null;
+    const { count, unit } = durationSince(me.createdAt);
+    const noun = count === 1 ? t.membership[unit] : t.membership[`${unit}s` as 'days' | 'months' | 'years'];
+    return t.membership.inSystemFor.replace('{d}', `${count} ${noun}`);
+  })();
+
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">{t.account.title}</h1>
         <p className="text-gray-500 mt-1">{t.account.subtitle}</p>
+        {membershipLabel && (
+          <p className="text-xs text-gray-400 mt-1" data-testid="membership-duration">{membershipLabel}</p>
+        )}
       </div>
 
       {msg && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">✓ {msg}</div>}

@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.12.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'See how long you’ve been a member — your account page now shows “Member for 3 months”.',
+        'Project members now show how long each person has been on the project.',
+      ],
+      tr: [
+        'Ne zamandır üye olduğunu gör — hesap sayfanda artık “Üyelik süresi: 3 ay” yazıyor.',
+        'Proje üyelerinde her kişinin projede ne kadar süredir olduğu görünüyor.',
+      ],
+      de: [
+        'Sieh, wie lange du schon Mitglied bist — deine Kontoseite zeigt jetzt „Mitglied seit 3 Monaten“.',
+        'Bei Projektmitgliedern wird jetzt angezeigt, wie lange jede Person schon im Projekt ist.',
+      ],
+    },
+  },
+  {
     version: '0.11.0-beta',
     date: '2026-07-20',
     highlights: {

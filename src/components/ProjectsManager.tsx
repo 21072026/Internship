@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2 } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { formatDate, durationSince } from '@/lib/relativeTime';
 
 interface Task {
   id: string;
@@ -34,7 +34,7 @@ interface Project {
   ownerCompany?: { id: string; name: string } | null;
   tasks?: Task[];
   relations?: { mentee: { id: string; fullName: string } }[];
-  members?: { role: 'OWNER' | 'MENTOR'; user: { id: string; fullName: string; role: string } }[];
+  members?: { role: 'OWNER' | 'MENTOR'; addedAt?: string; user: { id: string; fullName: string; role: string } }[];
   _count?: { relations: number };
 }
 
@@ -411,7 +411,14 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                           <Badge variant={m.role === 'OWNER' ? 'info' : 'default'} className="text-xs">
                             {m.role === 'OWNER' ? t.projects.roleOwner : t.projects.roleMentorMember}
                           </Badge>
-                          <span className="flex-1 text-gray-800 dark:text-gray-200">{m.user.fullName}</span>
+                          <span className="flex-1 text-gray-800 dark:text-gray-200">
+                            {m.user.fullName}
+                            {m.addedAt && (() => {
+                              const { count, unit } = durationSince(m.addedAt);
+                              const noun = count === 1 ? t.membership[unit] : t.membership[`${unit}s` as 'days' | 'months' | 'years'];
+                              return <span className="ml-1.5 text-xs text-gray-400">· {t.membership.inProjectFor.replace('{d}', `${count} ${noun}`)}</span>;
+                            })()}
+                          </span>
                           <button onClick={() => memberCall(p.id, 'DELETE', { userId: m.user.id })} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
                       ))}

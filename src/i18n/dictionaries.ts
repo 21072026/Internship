@@ -666,6 +666,13 @@ const en = {
     install: 'Install app',
     iosHint: 'Tap the Share button, then “Add to Home Screen”.',
   },
+  membership: {
+    inSystemFor: 'Member for {d}',
+    inProjectFor: 'On this project for {d}',
+    day: 'day', days: 'days',
+    month: 'month', months: 'months',
+    year: 'year', years: 'years',
+  },
   projects: {
     title: 'Projects',
     subtitle: 'Internship projects — company-backed or community',
@@ -2097,6 +2104,13 @@ const tr: Dict = {
     install: 'Uygulamayı kur',
     iosHint: 'Paylaş düğmesine, sonra “Ana Ekrana Ekle”ye dokun.',
   },
+  membership: {
+    inSystemFor: 'Üyelik süresi: {d}',
+    inProjectFor: 'Projede: {d}',
+    day: 'gün', days: 'gün',
+    month: 'ay', months: 'ay',
+    year: 'yıl', years: 'yıl',
+  },
   projects: {
     title: 'Projeler',
     subtitle: 'Staj projeleri — şirket destekli veya topluluk',
@@ -3525,6 +3539,13 @@ const de: Dict = {
   pwa: {
     install: 'App installieren',
     iosHint: 'Tippe auf die Teilen-Schaltfläche und dann auf „Zum Home-Bildschirm“.',
+  },
+  membership: {
+    inSystemFor: 'Mitglied seit {d}',
+    inProjectFor: 'Im Projekt seit {d}',
+    day: 'Tag', days: 'Tagen',
+    month: 'Monat', months: 'Monaten',
+    year: 'Jahr', years: 'Jahren',
   },
   projects: {
     title: 'Projekte',
