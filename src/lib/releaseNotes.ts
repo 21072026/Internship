@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.11.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'Paste images into messages — copy an image and paste it right into the reply box; it shows as a thumbnail you can preview and remove, and it’s sent with your message.',
+        'Attach several files at once to a single message.',
+        'Message attachments (including pasted images) now also arrive in the email notification.',
+      ],
+      tr: [
+        'Mesajlara resim yapıştır — bir resmi kopyalayıp doğrudan yanıt kutusuna yapıştır; önizleyip kaldırabileceğin bir küçük resim olarak görünür ve mesajınla birlikte gönderilir.',
+        'Tek mesaja aynı anda birden çok dosya ekle.',
+        'Mesaj ekleri (yapıştırılan resimler dâhil) artık e-posta bildiriminde de geliyor.',
+      ],
+      de: [
+        'Bilder in Nachrichten einfügen — ein Bild kopieren und direkt ins Antwortfeld einfügen; es erscheint als Miniaturansicht zum Vorschauen und Entfernen und wird mit der Nachricht gesendet.',
+        'Mehrere Dateien gleichzeitig an eine Nachricht anhängen.',
+        'Nachrichtenanhänge (auch eingefügte Bilder) kommen jetzt auch in der E-Mail-Benachrichtigung an.',
+      ],
+    },
+  },
+  {
     version: '0.10.0-beta',
     date: '2026-07-20',
     highlights: {
