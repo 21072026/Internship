@@ -9,7 +9,7 @@ name: Deploy prod (self-hosted, manual)
 # PREREQUISITES (one-time, on the Plesk server):
 #   1. Register a self-hosted runner for this repo (Settings → Actions →
 #      Runners → New self-hosted runner) and install it as a service:
-#        ./config.sh --url https://github.com/mersahin/Internship --token <TOKEN> --labels self-hosted
+#        ./config.sh --url https://github.com/21072026/Internship --token <TOKEN> --labels self-hosted
 #        sudo ./svc.sh install && sudo ./svc.sh start
 #   2. Create /etc/internship-crm/prod.env (chmod 600) with the production
 #      secrets — see infra/README.md. The runner's user must be able to read it

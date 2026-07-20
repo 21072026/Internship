@@ -19,7 +19,7 @@ works*. Plan for ~30 minutes. If you only read one other file afterwards, read
 ## 2. Clone
 
 ```bash
-git clone https://github.com/mersahin/Internship.git
+git clone https://github.com/21072026/Internship.git
 cd Internship
 npm install        # postinstall runs `prisma generate` for you
 ```

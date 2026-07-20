@@ -301,6 +301,6 @@ interaction logging, Kanban board, calendar & reminders, analytics, document
 uploads with versioning, two-factor authentication, invitation-based
 registration, and English/Turkish/German localization.
 
-[Unreleased]: https://github.com/mersahin/Internship/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/mersahin/Internship/releases/tag/v0.2.0
-[0.1.0]: https://github.com/mersahin/Internship/releases/tag/v0.1.0
+[Unreleased]: https://github.com/21072026/Internship/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/21072026/Internship/releases/tag/v0.2.0
+[0.1.0]: https://github.com/21072026/Internship/releases/tag/v0.1.0
