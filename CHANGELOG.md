@@ -10,6 +10,27 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-20
+
+Admin↔mentor parity and quality-of-life additions on top of the multi-tenancy
+foundations.
+
+### Added
+- **Admin meetings** (#661): a `/admin/meetings` page (shared `MeetingsManager`
+  with the mentor screen) so admins can schedule/see meetings, plus a **one-click
+  "Copy link"** on every meeting (mentors benefit too). AdminNav entry added.
+- **Schedule a meeting from the candidate screen** (#661): a meeting scheduler +
+  copyable-link panel on `/admin/candidates/[id]`, scoped to the candidate's
+  mentorship relation.
+- **Archive/restore mentors** from the Mentors list — Active/Archived view + a
+  per-row deactivate/activate action, reusing the Users archive mechanism (#570).
+
+### Changed
+- **Plan limits are now enforced** (#547): the FREE/PRO active-mentorship limit
+  is a real gate at the four relation-create paths (existing mentees are never
+  affected; the grandfathered default org is ENTERPRISE/unlimited so single-
+  tenant prod is unchanged).
+
 ## [0.8.0] - 2026-07-17
 
 Multi-tenancy foundations (an operator can now run several programs on one
