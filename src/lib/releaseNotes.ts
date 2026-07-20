@@ -13,6 +13,30 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'Meetings for admins — admins can now schedule and see meetings from a dedicated page, and every meeting has a one-click “Copy link” button (mentors get this too).',
+        'Schedule a meeting straight from a candidate’s page — no need to leave the profile you’re looking at.',
+        'Archive mentors — hide inactive mentors from the Mentors list (and bring them back) without losing any of their history.',
+        'Plan limits now apply — programs on a limited plan are gently stopped from adding new mentorships past their limit; existing mentees are never affected.',
+      ],
+      tr: [
+        'Adminler için toplantılar — adminler artık ayrı bir sayfadan toplantı planlayıp görebiliyor ve her toplantıda tek tıkla “Bağlantıyı kopyala” butonu var (mentörler de faydalanıyor).',
+        'Adayın sayfasından doğrudan toplantı planla — baktığın profilden ayrılmana gerek yok.',
+        'Mentör arşivle — pasif mentörleri geçmişlerini kaybetmeden Mentörler listesinden gizle (ve geri getir).',
+        'Plan limitleri artık geçerli — sınırlı plandaki programlar limit üstü yeni mentorluk eklemede nazikçe durduruluyor; mevcut mentee’ler asla etkilenmiyor.',
+      ],
+      de: [
+        'Meetings für Admins — Admins können Meetings jetzt über eine eigene Seite planen und einsehen, und jedes Meeting hat einen „Link kopieren“-Button mit einem Klick (auch für Mentoren).',
+        'Meeting direkt von der Kandidatenseite planen — ohne das Profil zu verlassen.',
+        'Mentoren archivieren — inaktive Mentoren aus der Mentorenliste ausblenden (und zurückholen), ohne ihre Historie zu verlieren.',
+        'Plan-Limits greifen jetzt — Programme mit begrenztem Tarif werden am Anlegen neuer Mentorships über dem Limit sanft gehindert; bestehende Mentees sind nie betroffen.',
+      ],
+    },
+  },
+  {
     version: '0.8.0-beta',
     date: '2026-07-17',
     highlights: {

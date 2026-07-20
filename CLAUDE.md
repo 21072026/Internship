@@ -165,12 +165,15 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.
-- **Versioning**: on a notable batch of merged features (not every PR), bump `package.json`
-  `version` (semver), add an entry to `CHANGELOG.md` (developer-facing, Keep a Changelog
-  format), and add a matching entry to `src/lib/releaseNotes.ts` (user-facing, EN/TR/DE,
-  rendered at `/release-notes`, linked from the sidebar version footer). The app version is
-  read from `package.json` at build time (`src/lib/version.ts`); the git SHA is baked into the
-  Docker image via a build arg — no other wiring is needed.
+- **Versioning (maintainer instruction, 2026-07-20): bump the version + changelog on EVERY
+  shipped change**, not just notable batches — the maintainer tracks "what changed / what's
+  live" from the version. For each user-visible PR: bump `package.json` `version` (semver —
+  patch for fixes/small tweaks, minor for features), add a `CHANGELOG.md` entry (developer-
+  facing, Keep a Changelog format), and add a matching `src/lib/releaseNotes.ts` entry (user-
+  facing, EN/TR/DE, rendered at `/release-notes`, linked from the sidebar version footer). The
+  app version is read from `package.json` at build time (`src/lib/version.ts`); the git SHA is
+  baked into the Docker image via a build arg — no other wiring is needed. (Trivial non-user-
+  facing changes — pure docs, CI config — don't need a bump.)
 - **E2E locator pitfalls** (hit repeatedly): `AdminNav` renders its own sidebar
   `input[type="search"]` filter box present on every admin page — an unscoped
   `input[type="search"]` selector in a new test will hit that instead of a page-level search
