@@ -52,11 +52,13 @@ export async function sendEmail({
   subject,
   html,
   replyTo,
+  attachments,
 }: {
   to: string;
   subject: string;
   html: string;
   replyTo?: string;
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }) {
   if (!process.env.SMTP_USER) {
     console.log(`[Email skipped - no SMTP config] To: ${to}, Subject: ${subject}`);
@@ -70,6 +72,7 @@ export async function sendEmail({
     html,
     text: htmlToText(html),
     ...(replyTo ? { replyTo } : {}),
+    ...(attachments?.length ? { attachments } : {}),
   });
 }
 

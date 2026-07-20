@@ -10,7 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.10.0] - 2026-07-20
+## [0.11.0] - 2026-07-20
+
+### Added
+- **Paste images into a message** — paste from the clipboard straight into the
+  reply box; pasted images (and picked files) appear as instant thumbnails you
+  can click to preview and remove before sending.
+- **Multiple attachments per message** (closes #655) — the compose box and
+  `POST /api/messages` now accept several files at once (`form.getAll('file')`,
+  capped at 10); each becomes a `MessageAttachment`.
+- **Attachments are included in the notification email** — pasted images and
+  files are mirrored into the recipient's email as attachments (`sendEmail` now
+  supports `attachments`).
 
 ### Added
 - **"Select all" in the meeting scheduler** — one checkbox to select every
