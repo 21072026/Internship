@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'Add mentees to a project with a functional role — Developer, Tester, or Marketing — so a project shows who does what.',
+      ],
+      tr: [
+        'Projeye mentee’leri işlevsel rolüyle ekle — Geliştirici, Test uzmanı veya Pazarlama — böylece projede kimin ne yaptığı görünür.',
+      ],
+      de: [
+        'Füge Mentees mit einer funktionalen Rolle zu einem Projekt hinzu — Entwickler, Tester oder Marketing — damit ersichtlich ist, wer was macht.',
+      ],
+    },
+  },
+  {
     version: '0.13.0-beta',
     date: '2026-07-20',
     highlights: {

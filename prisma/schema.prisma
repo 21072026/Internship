@@ -654,14 +654,25 @@ model Project {
 enum ProjectMemberRole {
   OWNER
   MENTOR
+  MENTEE
+}
+
+// Functional (job) role of a project member — orthogonal to the structural
+// role above (owner/mentor/mentee). Optional; used mainly for mentee members
+// so a project can show who does what (#51).
+enum ProjectFunctionalRole {
+  DEVELOPER
+  TESTER
+  MARKETING
 }
 
 model ProjectMember {
-  id        String            @id @default(cuid())
-  projectId String
-  userId    String
-  role      ProjectMemberRole @default(MENTOR)
-  addedAt   DateTime          @default(now())
+  id             String                 @id @default(cuid())
+  projectId      String
+  userId         String
+  role           ProjectMemberRole      @default(MENTOR)
+  functionalRole ProjectFunctionalRole?
+  addedAt        DateTime               @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User    @relation("ProjectMemberships", fields: [userId], references: [id], onDelete: Cascade)
