@@ -27,7 +27,16 @@ etikete göre grupla/sırala); akış **Status** kolonları. **Custom alan yok.*
 > tür ve önceliği taşıyor; bunları custom alanla kopyalamak = kalıcı bakım yükü
 > (her issue'da alan doldurma, PAT secret, workflow). Yerlisi neyi ifade ediyorsa
 > onu tekrar üretme. Sub-issue linkleme + etiketleme agent'ın App'iyle çalışır;
-> Projects alan yazımı yazılamaz (gerekmiyor da).
+> *proje-scope'lu* custom alan/board yerleşimi yazılamaz.
+
+**AMA resmî org "Priority" alanı YAZILABİLİR (önemli düzeltme):** Board'daki resmî
+Priority, proje custom alanı değil bir **org-seviyesi issue alanı** (Urgent/High/
+Medium/Low; `Effort`, `Start date`, `Target date` de öyle). `mcp__github__list_issue_fields`
+(owner+repo ile; owner-only 403) görür, ve agent bunu **`mcp__github__issue_write`**
+(`method:update`, `issue_fields:[{field_name:"Priority",field_option_name:"High"}]`)
+ile **set edebilir**. Bu yüzden custom "Prio" gereksizdi — resmî alanı P-etiketinden
+doldur: **P0→Urgent, P1→High, P2→Medium, P3→Low**. (Bu oturumda 33 açık issue'ya
+tek tek uygulandı, `list_issues` field_filter=Priority ile doğrulandı.)
 
 **Transfer yazma yolunu AÇTI (önceki oturum 403 alıyordu):** yeni repoya scoped
 oturumda `git push` + `mcp__github__*` sorunsuz çalıştı. Transfer sonrası ilk iş:

@@ -87,11 +87,12 @@ not a coder. Author issues; do not implement unless explicitly told to.
     findings from step 2 (especially "already partly exists"), the dependency
     order, and a recommended next item. Do not paste full issue bodies back.
 
-11. **Link it into the hierarchy — that's all the board needs.** After creating an
-    issue, link it as a sub-issue of its parent Story/Epic with
-    `mcp__github__sub_issue_write`. Do **not** add custom board fields — the
-    board stays **GitHub-standard** (see below). Sub-issue linking + labels both
-    work with the agent's App; that's everything the board needs.
+11. **Link it in + set the official Priority.** After creating an issue: (a) link
+    it as a sub-issue of its parent Story/Epic with `mcp__github__sub_issue_write`;
+    (b) set the board's native **Priority** field via `mcp__github__issue_write`
+    (`issue_fields`, mapped from the P-label — see the board section). Do **not**
+    add *custom* board fields — the board stays **GitHub-standard**. Sub-issue
+    linking, labels, and the org Priority field all work with the agent's App.
 
 ## GitHub Project board — conventions (org `21072026`, project `1`)
 
@@ -109,14 +110,23 @@ they encoded is already carried natively. Reverted. Don't reintroduce them.)
   theme, create a small umbrella **Story** and nest them. Never a mega-parent —
   "No Parent" always holds the top-level epics/stories, and that's correct
   (a tree always has roots).
-- **Priority = the `P1`/`P2`/`P3` label.** Don't create a priority field — the
-  label already carries it and the board can group/sort/filter by label.
+- **Priority** — set the `P0`–`P3` **label** (for filtering/at-a-glance) AND the
+  board's **official org "Priority" field** (options **Urgent/High/Medium/Low**).
+  The Priority field is an **org-level issue field** (`list_issue_fields` shows it),
+  so — unlike a project custom field — the agent's App **CAN write it** via
+  `mcp__github__issue_write` (method `update`, `issue_fields:
+  [{field_name:"Priority", field_option_name:"High"}]`). Set it on every issue,
+  mapping the label: **P0→Urgent, P1→High, P2→Medium, P3→Low**. This is a native
+  GitHub field (not the custom `Prio` we removed), so it's fine — it drives the
+  board's Priority view/sort. (`Effort`, `Start date`, `Target date` org fields
+  also exist and are settable the same way if ever needed.)
 - **Status** = the built-in workflow column (Backlog → Ready → In progress →
-  In review → Done). Move a P1 bug to Ready so it surfaces.
-- **Env note:** the agent's App can't write GitHub Projects fields and this sandbox
-  has no `gh` — but with the standard approach nothing needs writing: labels +
-  sub-issues go through the normal issue API, and grouping is a one-time board
-  setting the maintainer makes in the UI.
+  In review → Done). Move a P0/P1 bug to Ready so it surfaces.
+- **What the agent CAN vs CAN'T write:** CAN — labels, sub-issue links, and the
+  **org-level issue fields** (Priority/Effort/dates) via `issue_write`. CANNOT —
+  project-scoped custom fields / board item placement (needs `gh` + Projects
+  scope). So set Priority via `issue_write`; leave board grouping to the one-time
+  UI setting. (`list_issue_fields` needs BOTH owner+repo; owner-only 403s.)
 
 ## Repo facts to reuse (verify, don't assume they're still true)
 
