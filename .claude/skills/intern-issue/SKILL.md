@@ -154,13 +154,21 @@ gh pr view <PR> --json state,mergedAt -q '.state, .mergedAt'   # confirm MERGED
 
 ## 9. Update the GitHub Project board
 
+> ⚠️ **Disabled after the repo transfer (mersahin → 21072026).** GitHub Projects
+> do **not** transfer with a repository, so the old board (`--owner mersahin`,
+> project/field/option IDs below) no longer applies. **Skip this step** until a
+> new Project board is created in the `21072026` org; then update the owner,
+> project number, and the field/option node-IDs here and re-enable it. The IDs
+> below are the *old* board's, kept only as a template for what to replace.
+
 ```
+# OLD board (mersahin) — replace owner/IDs with the new 21072026 org board first:
 ITEM_ID=$(gh project item-add 2 --owner mersahin --url https://github.com/21072026/Internship/issues/$issue --format json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
 gh project item-edit --id "$ITEM_ID" --field-id PVTSSF_lAHOADrM1M4BbnzxzhWXFDs --project-id PVT_kwHOADrM1M4Bbnzx --single-select-option-id 98236657
 ```
 
-(Project 2, "Status" field `PVTSSF_lAHOADrM1M4BbnzxzhWXFDs`, "Done" option `98236657`. Other
-option ids on this field if ever needed: Backlog `f75ad846`, Ready `61e4505c`, In progress
+(OLD board: Project 2, "Status" field `PVTSSF_lAHOADrM1M4BbnzxzhWXFDs`, "Done" option
+`98236657`. Other option ids on this field: Backlog `f75ad846`, Ready `61e4505c`, In progress
 `47fc9ee4`, In review `df73e18b`.)
 
 ## 10. Sync and report
