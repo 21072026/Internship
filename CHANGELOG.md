@@ -10,6 +10,22 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-07-21
+
+### Added
+- **Emoji reactions on messages (closes #665)** — react to a message with 👍 ❤️
+  😂 😮 🎉 (WhatsApp/Slack style). Reaction chips show the emoji + count and
+  highlight the ones you added; tapping a chip or picking from the emoji button
+  toggles your reaction.
+  - Schema: new `MessageReaction` model (`@@unique([messageId, userId, emoji])`),
+    `Message.reactions` (additive `db push`).
+  - API: `POST /api/messages/[id]/reactions` toggles the caller's reaction
+    (thread participants/admin only; emoji restricted to the fixed set);
+    `GET /api/messages` returns a per-message reaction summary (emoji → count +
+    whether you reacted).
+  - Advances the WhatsApp-like messaging story (#663) under the Communication
+    epic (#717).
+
 ## [0.18.0] - 2026-07-21
 
 ### Changed

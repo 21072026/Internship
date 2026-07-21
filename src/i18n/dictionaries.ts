@@ -953,6 +953,7 @@ const en = {
     editFailed: 'Could not edit the message. Please try again.',
     deleteFailed: 'Could not delete the message. Please try again.',
     messageActions: 'Message actions',
+    react: 'React',
   },
   logInteraction: {
     add: 'Log interaction',
@@ -2418,6 +2419,7 @@ const tr: Dict = {
     editFailed: 'Mesaj düzenlenemedi. Lütfen tekrar deneyin.',
     deleteFailed: 'Mesaj silinemedi. Lütfen tekrar deneyin.',
     messageActions: 'Mesaj işlemleri',
+    react: 'Tepki ver',
   },
   logInteraction: {
     add: 'Etkileşim ekle',
@@ -3881,6 +3883,7 @@ const de: Dict = {
     editFailed: 'Nachricht konnte nicht bearbeitet werden. Bitte versuche es erneut.',
     deleteFailed: 'Nachricht konnte nicht gelöscht werden. Bitte versuche es erneut.',
     messageActions: 'Nachrichtenaktionen',
+    react: 'Reagieren',
   },
   logInteraction: {
     add: 'Interaktion erfassen',

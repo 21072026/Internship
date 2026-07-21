@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Paperclip, X, FileText, Download, MoreVertical, Check, CheckCheck } from 'lucide-react';
+import { Paperclip, X, FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
@@ -24,7 +24,11 @@ interface Msg {
   editedAt: string | null;
   deleted: boolean;
   attachments: Attachment[];
+  reactions: { emoji: string; count: number; mine: boolean }[];
 }
+
+// Fixed reaction set (mirrors the server's REACTION_EMOJIS).
+const REACTIONS = ['👍', '❤️', '😂', '😮', '🎉'] as const;
 interface Party { id: string; fullName: string }
 
 export default function ThreadPage({ params }: { params: Promise<{ relationId: string }> }) {
@@ -46,6 +50,7 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
   const [forbidden, setForbidden] = useState(false);
   // Per-message edit/delete state.
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [reactId, setReactId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [rowBusy, setRowBusy] = useState(false);
@@ -124,6 +129,18 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
     } finally {
       setSending(false);
     }
+  };
+
+  const react = async (id: string, emoji: string) => {
+    setReactId(null);
+    try {
+      const res = await fetch(`/api/messages/${id}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+      if (res.ok) await load();
+    } catch { /* non-critical; ignore */ }
   };
 
   const startEdit = (m: Msg) => { setMenuId(null); setEditId(m.id); setEditBody(m.body); };
@@ -233,16 +250,55 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                         </span>
                       )}
                       {!m.deleted && editId !== m.id && (
-                        <button
-                          type="button"
-                          onClick={() => setMenuId(menuId === m.id ? null : m.id)}
-                          aria-label={t.messages.messageActions}
-                          className={`ml-auto rounded p-0.5 ${mine ? 'hover:bg-blue-700' : 'hover:bg-gray-200'}`}
-                        >
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </button>
+                        <span className="ml-auto flex items-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => { setReactId(reactId === m.id ? null : m.id); setMenuId(null); }}
+                            aria-label={t.messages.react}
+                            className={`rounded p-0.5 ${mine ? 'hover:bg-blue-700' : 'hover:bg-gray-200'}`}
+                          >
+                            <SmilePlus className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setMenuId(menuId === m.id ? null : m.id); setReactId(null); }}
+                            aria-label={t.messages.messageActions}
+                            className={`rounded p-0.5 ${mine ? 'hover:bg-blue-700' : 'hover:bg-gray-200'}`}
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
                       )}
                     </p>
+
+                    {/* Emoji picker */}
+                    {reactId === m.id && !m.deleted && (
+                      <div className="mt-1.5 flex gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit">
+                        {REACTIONS.map((emoji) => (
+                          <button key={emoji} type="button" onClick={() => react(m.id, emoji)} className="text-base leading-none hover:scale-125 transition-transform" aria-label={emoji}>
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Reaction chips */}
+                    {!m.deleted && m.reactions.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {m.reactions.map((r) => (
+                          <button
+                            key={r.emoji}
+                            type="button"
+                            onClick={() => react(m.id, r.emoji)}
+                            aria-pressed={r.mine}
+                            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border ${r.mine ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-white/90 border-black/5 text-gray-700'}`}
+                          >
+                            <span>{r.emoji}</span>
+                            <span>{r.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {menuId === m.id && !m.deleted && editId !== m.id && (
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {mine && (

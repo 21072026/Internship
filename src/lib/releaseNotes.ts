@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.19.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['React to messages with emoji (👍 ❤️ 😂 😮 🎉) — tap the reaction button on any message and see reaction counts, just like WhatsApp or Slack.'],
+      tr: ['Mesajlara emoji ile tepki ver (👍 ❤️ 😂 😮 🎉) — herhangi bir mesajdaki tepki butonuna dokun, tepki sayılarını gör; tıpkı WhatsApp veya Slack gibi.'],
+      de: ['Reagiere auf Nachrichten mit Emojis (👍 ❤️ 😂 😮 🎉) — tippe bei einer Nachricht auf die Reaktionsschaltfläche und sieh die Reaktionszahlen, wie bei WhatsApp oder Slack.'],
+    },
+  },
+  {
     version: '0.18.0-beta',
     date: '2026-07-21',
     highlights: {

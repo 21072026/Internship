@@ -26,8 +26,20 @@ export async function GET(request: Request) {
     // Exclude messages this viewer deleted "for me".
     where: { relationId, hiddenFor: { none: { userId: session.user.id } } },
     orderBy: { createdAt: 'asc' },
-    include: { attachments: { select: ATTACHMENT_SELECT } },
+    include: { attachments: { select: ATTACHMENT_SELECT }, reactions: { select: { emoji: true, userId: true } } },
   });
+
+  // Summarize reactions per message: emoji → { count, mine }.
+  const summarizeReactions = (reactions: { emoji: string; userId: string }[]) => {
+    const map = new Map<string, { emoji: string; count: number; mine: boolean }>();
+    for (const r of reactions) {
+      const cur = map.get(r.emoji) ?? { emoji: r.emoji, count: 0, mine: false };
+      cur.count += 1;
+      if (r.userId === session.user.id) cur.mine = true;
+      map.set(r.emoji, cur);
+    }
+    return Array.from(map.values());
+  };
 
   // Mask "deleted for everyone" messages server-side so the original body/
   // attachments never leak; the client renders a placeholder instead.
@@ -43,6 +55,7 @@ export async function GET(request: Request) {
           editedAt: null,
           deleted: true,
           attachments: [],
+          reactions: [],
         }
       : {
           id: m.id,
@@ -54,6 +67,7 @@ export async function GET(request: Request) {
           editedAt: m.editedAt,
           deleted: false,
           attachments: m.attachments,
+          reactions: summarizeReactions(m.reactions),
         },
   );
 
