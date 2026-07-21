@@ -54,8 +54,35 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
   const [editId, setEditId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [rowBusy, setRowBusy] = useState(false);
+  // Per-user (per-device) composer preference: when on, Enter sends and
+  // Shift+Enter inserts a newline; when off (default), Enter is a newline and
+  // Shift+Enter sends. Persisted in localStorage so it sticks for this user.
+  const [enterToSend, setEnterToSend] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Load the saved Enter-to-send preference once on mount.
+  useEffect(() => {
+    setEnterToSend(localStorage.getItem('messages-enter-to-send') === '1');
+  }, []);
+  const toggleEnterToSend = () => {
+    setEnterToSend((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('messages-enter-to-send', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  // Enter/Shift+Enter behaviour depends on the preference above.
+  const onComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    const shouldSend = enterToSend ? !e.shiftKey : e.shiftKey;
+    if (shouldSend) {
+      e.preventDefault();
+      if (!sending) void send();
+    }
+    // otherwise let the textarea insert a newline (default behaviour)
+  };
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/messages?relationId=${relationId}`);
@@ -96,8 +123,8 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
     if (imgs.length) { e.preventDefault(); addFiles(imgs); }
   };
 
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const send = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!body.trim() && attachments.length === 0) return;
     setSending(true);
     setAttachError('');
@@ -369,12 +396,28 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onPaste={onPaste}
+          onKeyDown={onComposerKeyDown}
           rows={2}
           placeholder={t.messages.replyPlaceholder}
           className="flex-1 rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
         />
         <Button type="submit" loading={sending} disabled={!body.trim() && attachments.length === 0}>{t.messages.send}</Button>
       </form>
+      <div className="mt-1.5 flex justify-end">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enterToSend}
+          onClick={toggleEnterToSend}
+          title={enterToSend ? t.messages.enterToSendOnHint : t.messages.enterToSendOffHint}
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+        >
+          <span className={`relative inline-block h-4 w-7 rounded-full transition-colors ${enterToSend ? 'bg-blue-600' : 'bg-gray-300'}`}>
+            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enterToSend ? 'translate-x-[15px]' : 'translate-x-0.5'}`} />
+          </span>
+          {t.messages.enterToSend}
+        </button>
+      </div>
     </div>
   );
 }

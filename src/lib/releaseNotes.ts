@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.21.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['New “Enter to send” toggle in the message box — turn it on to send with Enter (Shift+Enter for a new line), or leave it off to send with Shift+Enter. Your choice is remembered.'],
+      tr: ['Mesaj kutusunda yeni “Enter ile gönder” anahtarı — açarsan Enter ile gönderirsin (Shift+Enter alt satır), kapalı bırakırsan Shift+Enter ile gönderirsin. Tercihin hatırlanır.'],
+      de: ['Neuer Schalter „Mit Enter senden“ im Nachrichtenfeld — aktiviert sendest du mit Enter (Umschalt+Enter für neue Zeile), deaktiviert sendest du mit Umschalt+Enter. Deine Wahl wird gemerkt.'],
+    },
+  },
+  {
     version: '0.20.0-beta',
     date: '2026-07-21',
     highlights: {

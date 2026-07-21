@@ -954,6 +954,9 @@ const en = {
     deleteFailed: 'Could not delete the message. Please try again.',
     messageActions: 'Message actions',
     react: 'React',
+    enterToSend: 'Enter to send',
+    enterToSendOnHint: 'Enter sends · Shift+Enter adds a new line',
+    enterToSendOffHint: 'Enter adds a new line · Shift+Enter sends',
   },
   logInteraction: {
     add: 'Log interaction',
@@ -2420,6 +2423,9 @@ const tr: Dict = {
     deleteFailed: 'Mesaj silinemedi. Lütfen tekrar deneyin.',
     messageActions: 'Mesaj işlemleri',
     react: 'Tepki ver',
+    enterToSend: 'Enter ile gönder',
+    enterToSendOnHint: 'Enter gönderir · Shift+Enter alt satıra geçer',
+    enterToSendOffHint: 'Enter alt satıra geçer · Shift+Enter gönderir',
   },
   logInteraction: {
     add: 'Etkileşim ekle',
@@ -3884,6 +3890,9 @@ const de: Dict = {
     deleteFailed: 'Nachricht konnte nicht gelöscht werden. Bitte versuche es erneut.',
     messageActions: 'Nachrichtenaktionen',
     react: 'Reagieren',
+    enterToSend: 'Mit Enter senden',
+    enterToSendOnHint: 'Enter sendet · Umschalt+Enter fügt eine neue Zeile ein',
+    enterToSendOffHint: 'Enter fügt eine neue Zeile ein · Umschalt+Enter sendet',
   },
   logInteraction: {
     add: 'Interaktion erfassen',

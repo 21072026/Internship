@@ -10,6 +10,15 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-21
+
+### Added
+- **"Enter to send" toggle in the message composer** — a small per-user switch
+  under the reply box lets you choose how Enter behaves. When on, **Enter sends**
+  and **Shift+Enter** inserts a new line; when off (the default), **Enter** inserts
+  a new line and **Shift+Enter** sends. The choice is remembered per device
+  (`localStorage`). Handles IME composition (won't send mid-composition).
+
 ## [0.20.0] - 2026-07-21
 
 ### Added
