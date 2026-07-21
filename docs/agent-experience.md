@@ -10,6 +10,61 @@ Newest entries on top.
 
 ---
 
+## 2026-07-21 — Transfer sonrası: yazma yolu, CI kotası reset, backlog süpürmesi (0.12.0→0.14.1)
+
+**Repo `mersahin/Internship` → `21072026/Internship`'e taşındı.** Bu oturumun büyük
+teması transfer artıklarını temizlemek + kotanın reset'inden faydalanmak oldu.
+
+**Transfer yazma yolunu AÇTI (önceki oturum 403 alıyordu):** yeni repoya scoped
+oturumda `git push` + `mcp__github__*` sorunsuz çalıştı. Transfer sonrası ilk iş:
+repo-path referanslarını güncelle (ONBOARDING clone URL, CHANGELOG footer link'leri,
+infra/README issue link'i, backlog+intern-issue skill'lerindeki repo adı, deploy-prod.yml
+runner-setup yorumu). **GitHub Project board repo ile TAŞINMIYOR** —
+`e2e/project-board-url.spec.ts` ve intern-issue skill'indeki `gh project --owner mersahin`
++ proje/field ID'leri hâlâ eski board'a bakıyor; yeni board URL'i olmadan bunları
+güncelleyemedim (maintainer'a soruldu, beklemede).
+
+**Transfer GitHub Actions kotasını SIFIRLADI (temiz ~2000h/ay).** Kota tükendiği için
+`workflow_dispatch`-only'e duraklatılmış hosted workflow'ları dikkatli geri açtım:
+- **Aç:** `ci.yml` (~2 dk) + `e2e.yml` (@smoke, ~3.5 dk) → `push`+`pull_request`. PR
+  başına ~6 dk, ayda binlerce PR bile <100h.
+- **Dispatch-only KALSIN:** `e2e-full` (4×/gün × 4 shard ≈ aylık kotanın çoğunu yiyen
+  asıl tüketici), `stress`, `topic-preview`. Bütçeyi bunlar belirliyor, PR gate'i değil.
+- **`deploy.yml` PAUSED kalsın:** prod artık self-hosted `deploy-prod` ile iniyor; hosted
+  deploy hem kota yer hem çift-deploy riski. Doğrulama: re-enable PR'ının KENDİSİNDE
+  iki check de yeşil koştu (gate uçtan uca kanıtlandı).
+
+**`infra/deploy-prod.sh` tamamen parametrik → preview deploy bedava geldi.** Script
+`CONTAINER`/`PORT`/`IMAGE`/`ENV_FILE` env override'larını kabul ediyor; preview =
+aynı script'i `internship-crm-preview` / `:3201` / `preview.env` ile çağırmak. Yeni
+`deploy-preview.yml` (self-hosted, dispatch-only) bunu yapıyor. Env dosyası yoksa script
+çalışan preview container'ından türetiyor (satır ~65), yani ek kurulum gerekmedi. Preview
+hosted deploy duraklayınca 0.7.0'da kalmıştı; bu workflow ile prod+preview birlikte
+güncellenebilir.
+
+**Claude Code / Copilot oturum-task sayfaları DIŞARIDAN OKUNMUYOR:**
+`github.com/OWNER/REPO/tasks/<uuid>` linkleri WebFetch'te 404/auth veriyor. Copilot
+uygulama-denetimi task'ı aslında **taslak bir PR'a** dönüşmüştü (#676) — bulguları o PR
+gövdesinden okudum, kodda `file:line` ile doğruladım, 7 backlog issue açtım (#678–#684).
+İkinci inceleme repoda hiç iz bırakmamıştı (sadece geçici keşif betiği commit'lemiş);
+bulguları maintainer sohbete yapıştırınca doğrulayıp açtım (#689–#692). Ders: oturum-task
+URL'i verilirse ya karşılık gelen PR'ı bul, ya da içeriği iste — sayfayı fetch etme.
+
+**i18n TR ekindeki tuzaktan kaçış:** "3 aydır/gündür/yıldır" gibi ekli ifadeler ünlü
+uyumu yüzünden template'le zor; `durationSince()` yalnızca `{count, unit}` döndürüp ismi
+(gün/ay/yıl) sözlükten aldım ve cümleyi "Üyelik süresi: {d}" / "Projede: {d}" gibi ek
+gerektirmeyen kalıba kurdum. `.replace('{d}', ...)` deseni repoda zaten standart.
+
+**Tarayıcı bildirimi (foreground) deseni:** izin cihaz-başına olduğu için tercih
+`localStorage`'da (DB'de değil). Popup patlamasını önlemek için `NotificationBell`'de
+ilk poll yalnızca "görülen id" baseline'ı kurar, sonraki poll'larda yeni-okunmamış id'ler
+için tek tek `new Notification()` atılır.
+
+**Bu oturumda inen (hepsi self-hosted deploy + health-check ile prod'da doğrulandı):**
+üyelik süresi göstergesi (0.12.0), foreground tarayıcı bildirimleri #675-K1 (0.13.0),
+projeye mentee üye + işlevsel rol #51 (0.14.0), meet-link "Google Meet"→"Meeting link"
+düzeltmesi (0.14.1). Prod health `0.14.1-beta`/`593656f`.
+
 ## 2026-07-07 — Test tooling, a session-null fix, an email-in-history purge, and relicensing
 
 **What shipped (all merged to `main`):**
