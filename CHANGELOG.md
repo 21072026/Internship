@@ -10,6 +10,20 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-21
+
+### Added
+- **White-label chrome — tenant brand applied to the live app (part of #546 /
+  story #522).** The app wordmark (sidebar header + mobile top bar across the
+  admin/mentor/portal/company/source shells) now renders the signed-in user's
+  **organization brand name and logo** instead of the hardcoded "Internship CRM".
+  A new self-resolving `BrandWordmark` server component reads the org branding
+  (`getOrgBranding`) and falls back to the product default when the org has no
+  branding or there's no org, so single-tenant chrome is unchanged. Branding is
+  managed at `/admin/organizations` (already shipped). Follow-ups tracked
+  separately: applying `brandColor` to the accent palette, per-recipient email
+  branding, and custom pipeline stages (#546 remainder).
+
 ## [0.21.0] - 2026-07-21
 
 ### Added

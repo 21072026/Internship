@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.22.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['White-label: an organization’s own brand name and logo now appear in the app’s sidebar and top bar (set them under Admin → Organizations).'],
+      tr: ['White-label: bir organizasyonun kendi marka adı ve logosu artık uygulamanın kenar çubuğunda ve üst barında görünüyor (Admin → Organizasyonlar’dan ayarla).'],
+      de: ['White-Label: Der eigene Markenname und das Logo einer Organisation erscheinen jetzt in der Seitenleiste und der obersten Leiste der App (unter Admin → Organisationen einstellbar).'],
+    },
+  },
+  {
     version: '0.21.0-beta',
     date: '2026-07-21',
     highlights: {
