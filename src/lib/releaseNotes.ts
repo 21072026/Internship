@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.16.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Admins can now log an interaction directly from a candidate’s page and send targeted email to mentees from a new Email page — matching what mentors can do.'],
+      tr: ['Adminler artık bir adayın sayfasından doğrudan etkileşim ekleyebilir ve yeni E-posta sayfasından mentee’lere hedefli e-posta gönderebilir — tıpkı mentörler gibi.'],
+      de: ['Admins können jetzt direkt auf der Seite einer Kandidatin/eines Kandidaten eine Interaktion erfassen und über eine neue E-Mail-Seite gezielt E-Mails an Mentees senden — genau wie Mentoren.'],
+    },
+  },
+  {
     version: '0.15.0-beta',
     date: '2026-07-21',
     highlights: {
