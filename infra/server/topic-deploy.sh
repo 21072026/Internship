@@ -65,6 +65,21 @@ fi
 HOST="crm-${TOPIC}.${BASE_DOMAIN}"
 URL="https://${HOST}"
 CONTAINER="internship-crm-${TOPIC}"
+CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"
+
+# ── Fail fast if the wildcard TLS cert is missing ────────────────────────────
+# The topic nginx block terminates TLS with the one wildcard cert. If it isn't on
+# the box yet, don't do any container/DB work — and, crucially, don't leave a
+# route file pointing at a non-existent cert (that would make `nginx -t` fail for
+# EVERY reload afterwards). Remove any stale route for this topic and reload so
+# the server's nginx stays valid, then exit with an actionable message.
+if [ ! -f "${CERT_DIR}/${BASE_DOMAIN}.cer" ] || [ ! -f "${CERT_DIR}/${BASE_DOMAIN}.key" ]; then
+  if [ -f "$CONF" ]; then rm -f "$CONF"; eval "$NGINX_RELOAD_CMD" || true; fi
+  echo "ERROR: wildcard TLS cert not found at ${CERT_DIR}/${BASE_DOMAIN}.cer (+ .key)." >&2
+  echo "       Issue it once on the server with infra/acme-issue-wildcard.sh (or the" >&2
+  echo "       infra-setup workflow), or set CERT_DIR to where the wildcard cert lives." >&2
+  exit 1
+fi
 
 echo "==> Deploying topic '${TOPIC}' → ${URL} (container ${CONTAINER}, port ${PORT})"
 
@@ -106,8 +121,8 @@ docker run -d \
   "$IMAGE"
 
 # Routing: self-contained nginx server block for this topic, terminating TLS with
-# the one wildcard cert. Written fresh each deploy (idempotent).
-CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"
+# the one wildcard cert (CONF path + cert presence already validated above).
+# Written fresh each deploy (idempotent).
 cat > "$CONF" <<NGINX
 # Managed by infra/server/topic-deploy.sh — topic '${TOPIC}'. Do not edit by hand.
 server {
@@ -136,7 +151,14 @@ server {
 NGINX
 
 echo "==> Reloading nginx"
-eval "$NGINX_RELOAD_CMD"
+# If the reload fails for any reason, roll the route back out so the server's
+# nginx config stays valid (a lingering bad block breaks every later reload).
+if ! eval "$NGINX_RELOAD_CMD"; then
+  echo "ERROR: nginx reload failed — removing this topic's route and restoring" >&2
+  rm -f "$CONF"
+  eval "$NGINX_RELOAD_CMD" || true
+  exit 1
+fi
 
 # Reclaim space from older images.
 docker image prune -af >/dev/null 2>&1 || true
