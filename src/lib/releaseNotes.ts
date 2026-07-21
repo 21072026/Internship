@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.2-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Fixed a broken app icon (the `/icon.svg` address returned an error).'],
+      tr: ['Bozuk uygulama simgesi düzeltildi (`/icon.svg` adresi hata veriyordu).'],
+      de: ['Ein defektes App-Symbol behoben (die Adresse `/icon.svg` gab einen Fehler zurück).'],
+    },
+  },
+  {
     version: '0.14.1-beta',
     date: '2026-07-20',
     highlights: {

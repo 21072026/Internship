@@ -10,6 +10,15 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-07-21
+
+### Fixed
+- **`/icon.svg` 500 (closes #689)** — `public/icon.svg` and `src/app/icon.svg`
+  both claimed the `/icon.svg` route (the App Router serves `src/app/icon.svg`
+  as `/icon.svg` automatically, and the `public/` copy collided). Removed the
+  duplicate `public/icon.svg`; the app-router icon still serves the favicon and
+  manifest/layout references.
+
 ## [0.14.1] - 2026-07-20
 
 ### Fixed
