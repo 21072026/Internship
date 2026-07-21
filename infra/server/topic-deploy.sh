@@ -65,21 +65,6 @@ fi
 HOST="crm-${TOPIC}.${BASE_DOMAIN}"
 URL="https://${HOST}"
 CONTAINER="internship-crm-${TOPIC}"
-CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"
-
-# ── Fail fast if the wildcard TLS cert is missing ────────────────────────────
-# The topic nginx block terminates TLS with the one wildcard cert. If it isn't on
-# the box yet, don't do any container/DB work — and, crucially, don't leave a
-# route file pointing at a non-existent cert (that would make `nginx -t` fail for
-# EVERY reload afterwards). Remove any stale route for this topic and reload so
-# the server's nginx stays valid, then exit with an actionable message.
-if [ ! -f "${CERT_DIR}/${BASE_DOMAIN}.cer" ] || [ ! -f "${CERT_DIR}/${BASE_DOMAIN}.key" ]; then
-  if [ -f "$CONF" ]; then rm -f "$CONF"; eval "$NGINX_RELOAD_CMD" || true; fi
-  echo "ERROR: wildcard TLS cert not found at ${CERT_DIR}/${BASE_DOMAIN}.cer (+ .key)." >&2
-  echo "       Issue it once on the server with infra/acme-issue-wildcard.sh (or the" >&2
-  echo "       infra-setup workflow), or set CERT_DIR to where the wildcard cert lives." >&2
-  exit 1
-fi
 
 echo "==> Deploying topic '${TOPIC}' → ${URL} (container ${CONTAINER}, port ${PORT})"
 
@@ -120,47 +105,33 @@ docker run -d \
   -e SMTP_FROM="${SMTP_FROM:-}" \
   "$IMAGE"
 
-# Routing: self-contained nginx server block for this topic, terminating TLS with
-# the one wildcard cert (CONF path + cert presence already validated above).
-# Written fresh each deploy (idempotent).
-cat > "$CONF" <<NGINX
-# Managed by infra/server/topic-deploy.sh — topic '${TOPIC}'. Do not edit by hand.
-server {
-    listen 80;
-    server_name ${HOST};
-    return 301 https://\$host\$request_uri;
-}
-server {
-    listen 443 ssl;
-    server_name ${HOST};
+# ── Container health (local) ─────────────────────────────────────────────────
+sleep 3
+code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/api/health" 2>/dev/null || echo "ERR")
+echo "==> Container health http://127.0.0.1:${PORT}/api/health -> ${code}"
 
-    ssl_certificate     ${CERT_DIR}/${BASE_DOMAIN}.cer;
-    ssl_certificate_key ${CERT_DIR}/${BASE_DOMAIN}.key;
-
-    location / {
-        proxy_pass http://127.0.0.1:${PORT};
-        proxy_http_version 1.1;
-        proxy_set_header Host              \$host;
-        proxy_set_header X-Real-IP         \$remote_addr;
-        proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header Upgrade           \$http_upgrade;
-        proxy_set_header Connection        "upgrade";
-    }
-}
-NGINX
-
-echo "==> Reloading nginx"
-# If the reload fails for any reason, roll the route back out so the server's
-# nginx config stays valid (a lingering bad block breaks every later reload).
-if ! eval "$NGINX_RELOAD_CMD"; then
-  echo "ERROR: nginx reload failed — removing this topic's route and restoring" >&2
-  rm -f "$CONF"
-  eval "$NGINX_RELOAD_CMD" || true
-  exit 1
-fi
+# ── Routing: Plesk-native (DIAGNOSTIC pass) ──────────────────────────────────
+# This box serves every subdomain as a Plesk domain, so a raw conf.d server block
+# for a non-Plesk host is shadowed by Plesk's default vhost (it answers with the
+# Plesk panel / login_up.php → 404 for our paths). We will route via a Plesk
+# subdomain instead. First, dump how an existing working sibling (crm-preview) is
+# wired so the next revision mirrors it exactly.
+PREVIEW_FQDN="crm-preview.${BASE_DOMAIN}"
+PREVIEW_CONF_DIR="/var/www/vhosts/system/${PREVIEW_FQDN}/conf"
+echo "──────── PLESK DIAGNOSTICS (mirror crm-preview) ────────"
+(plesk version 2>&1 | head -3) || echo "(plesk CLI not found on PATH)"
+echo "--- ${PREVIEW_CONF_DIR} listing ---"
+ls -la "${PREVIEW_CONF_DIR}/" 2>&1 | head -40 || true
+echo "--- crm-preview custom nginx directives (vhost_nginx.conf) ---"
+cat "${PREVIEW_CONF_DIR}/vhost_nginx.conf" 2>&1 | head -80 || true
+echo "--- crm-preview generated nginx: proxy_pass / location / server_name / listen ---"
+grep -rnsE 'proxy_pass|location |server_name|listen ' "${PREVIEW_CONF_DIR}/" 2>/dev/null | head -60 || true
+echo "--- running nginx -T: crm-preview & default_server ownership ---"
+(nginx -T 2>/dev/null | grep -nE 'server_name (crm-preview|crm-pr)|default_server' | head -30) || true
+echo "--- plesk subdomain --info crm-preview (proxy/hosting type) ---"
+(plesk bin subdomain --info "${PREVIEW_FQDN}" 2>&1 | grep -iE 'hosting|proxy|nginx|ssl|ip_address|www_root' | head -20) || true
+echo "──────── END DIAGNOSTICS ────────"
+echo "==> Topic '${TOPIC}' container is up on :${PORT}; Plesk routing will be applied in the next revision (mirroring crm-preview above). URL target: ${URL}"
 
 # Reclaim space from older images.
 docker image prune -af >/dev/null 2>&1 || true
-
-echo "==> Topic '${TOPIC}' is live at ${URL}"
