@@ -36,6 +36,7 @@ export function EvaluationPanel({
   const [comment, setComment] = useState('');
   const [type, setType] = useState<'INTERIM' | 'FINAL'>('INTERIM');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const formCriteria = audience === 'MENTOR' ? MENTOR_CRITERIA : EVAL_CRITERIA;
 
@@ -48,6 +49,7 @@ export function EvaluationPanel({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch('/api/evaluations', {
         method: 'POST',
@@ -55,6 +57,10 @@ export function EvaluationPanel({
         body: JSON.stringify({ relationId, scores, comment, type }),
       });
       if (res.ok) { setScores({}); setComment(''); setType('INTERIM'); await load(); }
+      else setError(t.common.error);
+    } catch (err) {
+      console.error('[evaluations] submit failed', err);
+      setError(t.common.error);
     } finally {
       setSaving(false);
     }
@@ -102,6 +108,7 @@ export function EvaluationPanel({
             placeholder={t.evaluation.comment}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           />
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
           <Button type="submit" size="sm" loading={saving} disabled={Object.keys(scores).length === 0}>
             {t.evaluation.add}
           </Button>

@@ -10,6 +10,17 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.14.6] - 2026-07-21
+
+### Fixed
+- **Silent API failures swallowed with `.catch(() => {})` (closes #679)** — the
+  admin analytics page and the candidate-detail dropdowns dropped fetch errors
+  on the floor, so a failed load looked like empty data with no signal. The
+  analytics page now surfaces a load error banner (and logs it); the
+  candidate-detail project/cohort/source dropdown loads log their failures
+  instead of swallowing them; and the evaluation panel shows an inline error
+  when a submission fails instead of silently doing nothing.
+
 ## [0.14.5] - 2026-07-21
 
 ### Fixed
