@@ -10,6 +10,57 @@ Newest entries on top.
 
 ---
 
+## 2026-07-21 — Otomatik PR-başına topic preview (Plesk-native routing) (#583, 0.14.6→0.14.7)
+
+Bu oturumda `#679` + `#690` prod'a çıktı (0.14.7) ve **her PR'a otomatik topic
+preview** özelliği canlıya alındı (`crm-pr<N>.ersah.in`). Uzun ve öğretici bir
+altyapı yolculuğuydu; tekrar kullanılabilir dersler:
+
+**Self-hosted runner = sunucunun kendisi → SSH gerekmez, loglardan iterate et.**
+Sandbox'ta `ssh`/`gh` binary'si YOK. Ama `topic-preview.yml`/`deploy-prod.yml`
+`runs-on: self-hosted` ile sunucuda çalışıyor. Sunucuyu teşhis/onarmak için
+komutları workflow adımına koyup `mcp__github__get_job_logs` ile oku — cert
+sorununu, 404'ü, Plesk desenini hep böyle çözdüm (SSH'siz).
+
+**Plesk kutusunda ham `conf.d` nginx bloğu KAZANMAZ.** Her site Plesk vhost'u ve
+`listen <IP>:443 ssl` ile **spesifik IP**'ye bind. Ham `listen 443 ssl`
+(tüm-adres) bloğu nginx'in adres-grubu eşleşmesini kaybeder → `server_name`'in hiç
+değerlendirilmez → istek Plesk default vhost'una (`login_up.php` / 404) düşer.
+Belirti: `curl /` → 303 → `login_up.php`, `<title>Plesk Obsidian`. Çözüm:
+**Plesk-native subdomain** (`plesk bin subdomain --create <label> -domain <parent>`)
++ ters proxy'yi Plesk'in desteklediği `vhost_nginx.conf`'a yaz
+(`location ~ ^/.* { proxy_pass http://0.0.0.0:<port>; }`, crm-preview deseni) +
+`plesk sbin httpdmng --reconfigure-domain <fqdn>`. Teardown:
+`plesk bin subdomain --remove`.
+
+**Bir sibling'i (crm-preview) diagnostik dök, deseni birebir kopyala.** Kör Plesk
+CLI yazmak yerine önce `/var/www/vhosts/system/<fqdn>/conf/` + `plesk bin subdomain
+--info` + `nginx -T | grep` çıktısını log'a döktürdüm; `proxy_pass 0.0.0.0:3201`
+ve spesifik-IP `listen`'i oradan öğrendim.
+
+**Wildcard cert'i Plesk'e import edip subdomain'e ata.** `*.ersah.in` acme.sh
+fullchain'i `/etc/nginx/ssl/`'de. Fullchain'i leaf + CA olarak ayır (`awk`),
+`plesk bin certificate --create <name> -domain <parent> -cert-file <leaf>
+-key-file <key> -cacert-file <chain>`, sonra `plesk bin subdomain --update ...
+-certificate-name <name>`. Per-topic LE gerekmez.
+
+**Cloudflare-proxied wildcard DNS + edge TLS:** `infra-setup.yml` DNS (`*.ersah.in`
+A, proxied) + acme.sh wildcard cert'i tek dispatch'te kurar; **`CF_API_TOKEN`
+secret'ı şart** (yoksa DNS adımı 7 sn'de düşer). Token'ı chat'e aldırma —
+`gh secret set` ile kullanıcı eklesin.
+
+**Sandbox TLS doğrulaması yanıltıcı:** Anthropic egress-gateway HTTPS'i MITM'liyor;
+`curl` cert subject/issuer'ı proxy'nin, `ssl_verify_result`/`-k`'sız hata sitenin
+değil. Servisin gerçekten çalıştığını **HTTP status + gövde** ile doğrula
+(`/api/health` → 200 + JSON), cert zinciriyle değil.
+
+**`set -euo pipefail` + bloğu silerken değişken tanımı:** cert-precheck bloğunu
+silince onunla gelen `CONF=` tanımı da gitti; ilerideki referans `unbound variable`
+ile deploy'u container ayağa kalktıktan sonra düşürdü. Blok silerken o bloğun
+tanımladığı ama sonrasında kullanılan değişkenleri koru.
+
+---
+
 ## 2026-07-21 — Transfer sonrası: yazma yolu, CI kotası reset, backlog süpürmesi (0.12.0→0.14.1)
 
 **Repo `mersahin/Internship` → `21072026/Internship`'e taşındı.** Bu oturumun büyük
