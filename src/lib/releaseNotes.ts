@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.4-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Contacting your mentor from the portal is more reliable — use the in-app “Message mentor” button; the email address is now a clickable link.'],
+      tr: ['Portaldan mentörünle iletişim daha güvenilir — uygulama-içi “Mentöre mesaj” butonunu kullan; e-posta adresi artık tıklanabilir bir bağlantı.'],
+      de: ['Die Kontaktaufnahme mit deinem Mentor über das Portal ist zuverlässiger — nutze die In-App-Schaltfläche „Mentor benachrichtigen“; die E-Mail-Adresse ist jetzt ein anklickbarer Link.'],
+    },
+  },
+  {
     version: '0.14.2-beta',
     date: '2026-07-21',
     highlights: {
