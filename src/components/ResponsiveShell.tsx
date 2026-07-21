@@ -14,10 +14,14 @@ export function ResponsiveShell({
   sidebar,
   children,
   headerExtra,
+  brand,
 }: {
   sidebar: React.ReactNode;
   children: React.ReactNode;
   headerExtra?: React.ReactNode;
+  // White-label wordmark for the mobile top bar (#546); falls back to the
+  // product name when not provided.
+  brand?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -25,7 +29,7 @@ export function ResponsiveShell({
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 lg:flex">
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-4">
-        <span className="font-bold text-gray-900 dark:text-gray-100">InternshipCRM</span>
+        {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100">InternshipCRM</span>}
         <BetaBadge className="ml-2" />
         <div className="flex items-center gap-1">
           <MessagesButton />

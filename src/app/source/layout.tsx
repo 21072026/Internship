@@ -4,10 +4,11 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
-import { GraduationCap, LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
+import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
 
@@ -22,12 +23,12 @@ export default async function SourceLayout({ children }: { children: React.React
 
   return (
     <ResponsiveShell
+      brand={<BrandWordmark />}
       sidebar={
         <aside className="w-64 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center gap-2">
-              <GraduationCap className="h-7 w-7 text-blue-600" />
-              <span className="font-bold text-gray-900">InternshipCRM</span>
+              <BrandWordmark />
               <BetaBadge />
             </div>
             <p className="text-xs text-gray-500 mt-1">{t.panel.source}</p>
