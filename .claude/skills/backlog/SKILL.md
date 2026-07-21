@@ -39,14 +39,21 @@ not a coder. Author issues; do not implement unless explicitly told to.
    (server-side, not just UI), rate-limiting/spam, notifications, i18n, empty
    states, "don't break the free core". Make vague asks precise.
 
-5. **Choose the right granularity.**
-   - Trivial, one-file → a single **Task** issue.
+5. **Choose the right granularity — strict Epic → Story → Task tree.**
+   - Trivial, one-file → a single **Task** issue (still under a Story — see below).
    - A capability with several parts → one **Story** + **Task** sub-issues.
    - A large theme spanning stories → an **Epic** (`epic` label) + Story
      sub-issues, tasks under stories.
    - Split large work into **small, independently-shippable** tasks. Mark the
      ones that are isolated and well-scoped as **junior-friendly**.
    - State the **dependency chain** between tasks (what must land first).
+   - **No empty / orphan nodes (maintainer rule):** every **Story lives under an
+     Epic**, and every **Task under a Story** — a Story with no Task or an Epic
+     with no Story should not exist. If a task has no natural Story, create a
+     small umbrella Story (and an Epic for it if none fits — e.g. this session's
+     #717 İletişim, #718 Arayüz/UX, #719 Admin epics grouped orphan stories). If
+     an epic/story has no open children left, **close it** (completed) rather than
+     leave it empty (e.g. #439, #523 were closed once their work was done).
 
 6. **Write each work item** in **Turkish** (repo convention), with these sections:
    - `## Amaç` — one paragraph, the why.
@@ -55,8 +62,13 @@ not a coder. Author issues; do not implement unless explicitly told to.
    - `## Kabul kriterleri` — checklist, includes `npm run build` (and
      `npm run check:i18n` if UI text changes; `prisma validate` if schema).
    - `**Zorluk** · **Tahmini**` and bağımlılık note where useful.
-   Titles: `[Area] Story · …`, `[Area/Sub] Task · …`, `🐛 …` for bugs,
-   prefix stajyer tasks with a short 🌱 note if desired (see existing #472–#478).
+   **Titles MUST state the item type (maintainer rule).** Every title contains
+   its type word — `Epic`, `Story`, or `Task`:
+   - Epic: `<emoji> Epic · …` (e.g. `💎 Epic · Premium …`, `🌱 Epic · Stajyer …`).
+   - Story: `[Area] Story · …` (e.g. `[Messaging] Story · …`).
+   - Task: `[Area] Task · …`, or with a leading kind emoji `🐛 Task · …` (bug) /
+     `🌱 Task · …` (junior). The type marker goes **after** any leading emoji and
+     any `[Area]` bracket, before the description (`🐛 [Comms] Task · …`).
 
 7. **Labels.** GitHub auto-creates missing labels on issue create/update.
    - **Priority (always set):** `P0` critical/prod-down (drop everything —
