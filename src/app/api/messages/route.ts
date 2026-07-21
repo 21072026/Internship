@@ -22,11 +22,40 @@ export async function GET(request: Request) {
   const rel = await getThreadIfAllowed(session.user, relationId);
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const messages = await prisma.message.findMany({
-    where: { relationId },
+  const rows = await prisma.message.findMany({
+    // Exclude messages this viewer deleted "for me".
+    where: { relationId, hiddenFor: { none: { userId: session.user.id } } },
     orderBy: { createdAt: 'asc' },
     include: { attachments: { select: ATTACHMENT_SELECT } },
   });
+
+  // Mask "deleted for everyone" messages server-side so the original body/
+  // attachments never leak; the client renders a placeholder instead.
+  const messages = rows.map((m) =>
+    m.deletedForEveryoneAt
+      ? {
+          id: m.id,
+          senderId: m.senderId,
+          body: '',
+          channel: m.channel,
+          readAt: m.readAt,
+          createdAt: m.createdAt,
+          editedAt: null,
+          deleted: true,
+          attachments: [],
+        }
+      : {
+          id: m.id,
+          senderId: m.senderId,
+          body: m.body,
+          channel: m.channel,
+          readAt: m.readAt,
+          createdAt: m.createdAt,
+          editedAt: m.editedAt,
+          deleted: false,
+          attachments: m.attachments,
+        },
+  );
 
   // Mark the viewer's incoming unread messages as read.
   await prisma.message.updateMany({
