@@ -94,34 +94,44 @@ reload nginx afterwards.
 
 ## How this is wired (#583)
 
-`.github/workflows/topic-preview.yml` parses a `topicN` token from the branch name:
+`.github/workflows/topic-preview.yml` runs on the **self-hosted runner** (no
+GitHub-hosted Actions minutes) and gives **every open PR** its own environment,
+keyed by PR number — no branch-naming convention needed:
 
-- **no token** → this workflow no-ops; `deploy.yml` deploys the shared
-  `crm-preview.ersah.in` as before. (deploy.yml now **skips** topic branches so a
-  topic PR isn't deployed twice.)
-- **token present** (`me/branch_name_topic5`) → build image, then over SSH run
-  `infra/server/topic-deploy.sh`: start `internship-crm-topic5` on its port, write
-  the nginx route, reload. Posts the `crm-topic5.ersah.in` URL on the PR.
+- **PR opened / pushed to / reopened** → build the image locally on the server,
+  then `infra/server/topic-deploy.sh` starts `internship-crm-pr<N>` on its derived
+  port (3300–3399, `3300 + N%100`), writes the nginx route for
+  `crm-pr<N>.ersah.in`, and reloads. A bot comment on the PR carries the URL
+  (updated on every push).
 - **PR merged/closed** → `infra/server/topic-teardown.sh` stops/removes the
   container + image and the nginx route, then reloads.
 
-**Database: a single shared preview DB** (`DATABASE_URL_PREVIEW`). No per-topic DB,
-so no DB-admin secret is needed. ⚠️ Trade-off: all topics share schema/data — two
-concurrent topics with divergent schema changes can drift (`prisma db push` is
-global). Coordinate schema changes across simultaneous topics, or switch to
-per-topic DBs later (would need a `CREATE/DROP DATABASE`-capable secret).
+Because the runner is on the server, there is **no SSH and no GHCR round-trip**:
+`topic-deploy.sh` is called with `SKIP_PULL=1` (image already built locally) and
+`ENV_FILE=/etc/internship-crm/preview.env` (secrets sourced directly, same file
+`deploy-preview.yml` uses). The script still supports the old hosted flow (GHCR
+`IMAGE` + `ACTOR`/`B64_TOKEN` + `B64_*` secrets) for backward compatibility.
 
-### Secrets / vars used (already present unless noted)
-`SSH_HOST`, `SSH_USER`, `SSH_PORT`, `SSH_PRIVATE_KEY`, `DATABASE_URL_PREVIEW`,
-`NEXTAUTH_SECRET`, `SMTP_*`, `GITHUB_TOKEN`. Base domain is the `BASE_DOMAIN` env in
-the workflow (default `ersah.in`).
+**Database: a single shared preview DB.** No per-topic DB, so no DB-admin secret
+is needed. ⚠️ Trade-off: all topics share schema/data — two concurrent PRs with
+divergent schema changes can drift (`prisma db push` is global). Coordinate schema
+changes across simultaneous topics, or switch to per-topic DBs later (would need a
+`CREATE/DROP DATABASE`-capable secret).
 
-### Still needs a real-topic test
+### Prerequisites on the server
+- Self-hosted runner registered; its user can run `docker` **and** write
+  `$NGINX_CONF_DIR` + reload nginx. If the runner user isn't root, set
+  `NGINX_RELOAD_CMD` to a sudo-wrapped command and add the matching sudoers entry.
+- Wildcard DNS `*.ersah.in` → the server, and a wildcard TLS cert in `$CERT_DIR`.
+- `/etc/internship-crm/preview.env` (chmod 600) with `DATABASE_URL` (the shared
+  preview DB), `NEXTAUTH_SECRET`, `SMTP_*`.
+
+### Still needs a real-PR test
 The scripts follow standard Plesk/nginx conventions but haven't been run against
-the live box. First validation: open a PR from a `…_topicN` branch and confirm the
-container comes up, `crm-topicN.ersah.in` serves over TLS, and closing the PR tears
-it down (`docker ps` + `$NGINX_CONF_DIR` clean). Adjust `NGINX_CONF_DIR` /
-`NGINX_RELOAD_CMD` / `CERT_DIR` if paths differ.
+the live box in this self-hosted shape. First validation: open a PR and confirm
+the bot comments a `crm-pr<N>.ersah.in` URL, the container comes up, the URL serves
+over TLS, and closing the PR tears it down (`docker ps` + `$NGINX_CONF_DIR` clean).
+Adjust `NGINX_CONF_DIR` / `NGINX_RELOAD_CMD` / `CERT_DIR` if paths differ.
 
 ---
 

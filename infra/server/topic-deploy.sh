@@ -16,28 +16,51 @@
 #     can drift — coordinate schema changes across concurrent topics.
 #
 # Required env (set by the workflow):
-#   TOPIC PORT IMAGE ACTOR BASE_DOMAIN
-#   B64_TOKEN B64_DB B64_SEC B64_SMTP_HOST B64_SMTP_PORT B64_SMTP_USER B64_SMTP_PASS B64_SMTP_FROM
+#   TOPIC PORT IMAGE BASE_DOMAIN
+#
+# Image source — one of:
+#   (a) GHCR pull  (hosted workflow): ACTOR + B64_TOKEN, IMAGE is a ghcr.io ref.
+#   (b) Local build (self-hosted runner): SKIP_PULL=1 and IMAGE already exists
+#       locally (the workflow `docker build`s it on the server) — no registry.
+#
+# Secrets — one of:
+#   (a) B64_DB B64_SEC B64_SMTP_HOST B64_SMTP_PORT B64_SMTP_USER B64_SMTP_PASS
+#       B64_SMTP_FROM   (base64, piped over SSH by the hosted workflow), or
+#   (b) ENV_FILE=/path/to/preview.env — sourced directly (self-hosted runner;
+#       same file deploy-preview uses). Provides DATABASE_URL, NEXTAUTH_SECRET,
+#       SMTP_*. NEXTAUTH_URL from the file is ignored — it's set per-topic below.
+#
 # Optional overrides (server paths / commands):
 #   NGINX_CONF_DIR    (default /etc/nginx/conf.d)
 #   NGINX_RELOAD_CMD  (default "nginx -t && systemctl reload nginx")
 #   CERT_DIR          (default /etc/nginx/ssl)  — wildcard cert from acme-issue-wildcard.sh
+#   SKIP_PULL=1       — image is already present locally; skip ghcr login + pull.
 #
 set -euo pipefail
 
-: "${TOPIC:?}" "${PORT:?}" "${IMAGE:?}" "${ACTOR:?}" "${BASE_DOMAIN:?}"
+: "${TOPIC:?}" "${PORT:?}" "${IMAGE:?}" "${BASE_DOMAIN:?}"
 NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-nginx -t && systemctl reload nginx}"
 CERT_DIR="${CERT_DIR:-/etc/nginx/ssl}"
 
-GH_TOKEN=$(printf '%s' "$B64_TOKEN" | base64 -d)
-DATABASE_URL=$(printf '%s' "$B64_DB" | base64 -d)
-NEXTAUTH_SECRET=$(printf '%s' "$B64_SEC" | base64 -d)
-SMTP_HOST=$(printf '%s' "$B64_SMTP_HOST" | base64 -d)
-SMTP_PORT=$(printf '%s' "$B64_SMTP_PORT" | base64 -d)
-SMTP_USER=$(printf '%s' "$B64_SMTP_USER" | base64 -d)
-SMTP_PASS=$(printf '%s' "$B64_SMTP_PASS" | base64 -d)
-SMTP_FROM=$(printf '%s' "$B64_SMTP_FROM" | base64 -d)
+# ── Secrets: explicit base64 (hosted) OR an env file (self-hosted) ───────────
+if [ -n "${B64_DB:-}" ]; then
+  DATABASE_URL=$(printf '%s' "$B64_DB" | base64 -d)
+  NEXTAUTH_SECRET=$(printf '%s' "$B64_SEC" | base64 -d)
+  SMTP_HOST=$(printf '%s' "${B64_SMTP_HOST:-}" | base64 -d)
+  SMTP_PORT=$(printf '%s' "${B64_SMTP_PORT:-}" | base64 -d)
+  SMTP_USER=$(printf '%s' "${B64_SMTP_USER:-}" | base64 -d)
+  SMTP_PASS=$(printf '%s' "${B64_SMTP_PASS:-}" | base64 -d)
+  SMTP_FROM=$(printf '%s' "${B64_SMTP_FROM:-}" | base64 -d)
+elif [ -n "${ENV_FILE:-}" ] && [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  set -a; . "$ENV_FILE"; set +a
+else
+  echo "ERROR: no secrets — set the B64_* vars or point ENV_FILE at a readable env file" >&2
+  exit 1
+fi
+: "${DATABASE_URL:?DATABASE_URL missing (B64_DB or ENV_FILE)}"
+: "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET missing (B64_SEC or ENV_FILE)}"
 
 HOST="crm-${TOPIC}.${BASE_DOMAIN}"
 URL="https://${HOST}"
@@ -45,8 +68,15 @@ CONTAINER="internship-crm-${TOPIC}"
 
 echo "==> Deploying topic '${TOPIC}' → ${URL} (container ${CONTAINER}, port ${PORT})"
 
-echo "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
-docker pull "$IMAGE"
+# ── Image: pull from GHCR unless it was built locally (self-hosted) ──────────
+if [ "${SKIP_PULL:-0}" != "1" ]; then
+  printf '%s' "${B64_TOKEN:?B64_TOKEN required when SKIP_PULL!=1}" | base64 -d \
+    | docker login ghcr.io -u "${ACTOR:?ACTOR required when SKIP_PULL!=1}" --password-stdin
+  docker pull "$IMAGE"
+else
+  docker image inspect "$IMAGE" >/dev/null 2>&1 || {
+    echo "ERROR: SKIP_PULL=1 but image '$IMAGE' is not present locally" >&2; exit 1; }
+fi
 
 # Shared preview DB: reach the host's MySQL the same way the preview deploy does.
 CONTAINER_DB=$(echo "$DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s|127\.0\.0\.1|host.docker.internal|g')
@@ -68,11 +98,11 @@ docker run -d \
   -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
   -e NEXTAUTH_URL="$URL" \
   -e NEXT_PUBLIC_APP_URL="$URL" \
-  -e SMTP_HOST="$SMTP_HOST" \
-  -e SMTP_PORT="$SMTP_PORT" \
-  -e SMTP_USER="$SMTP_USER" \
-  -e SMTP_PASS="$SMTP_PASS" \
-  -e SMTP_FROM="$SMTP_FROM" \
+  -e SMTP_HOST="${SMTP_HOST:-}" \
+  -e SMTP_PORT="${SMTP_PORT:-}" \
+  -e SMTP_USER="${SMTP_USER:-}" \
+  -e SMTP_PASS="${SMTP_PASS:-}" \
+  -e SMTP_FROM="${SMTP_FROM:-}" \
   "$IMAGE"
 
 # Routing: self-contained nginx server block for this topic, terminating TLS with
