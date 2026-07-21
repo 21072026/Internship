@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.20.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['If you miss messages, you now get a single hourly “unread messages” email summary instead of one email per message — and only if you haven’t opted out.'],
+      tr: ['Mesajları kaçırırsan, artık her mesaj için ayrı e-posta yerine saatte bir tek “okunmamış mesajlar” özeti alıyorsun — ve yalnızca kapatmadıysan.'],
+      de: ['Wenn du Nachrichten verpasst, erhältst du jetzt eine einzige stündliche „ungelesene Nachrichten“-Zusammenfassung statt einer E-Mail pro Nachricht — und nur, wenn du es nicht deaktiviert hast.'],
+    },
+  },
+  {
     version: '0.19.0-beta',
     date: '2026-07-21',
     highlights: {
