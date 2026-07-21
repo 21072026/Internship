@@ -87,45 +87,36 @@ not a coder. Author issues; do not implement unless explicitly told to.
     findings from step 2 (especially "already partly exists"), the dependency
     order, and a recommended next item. Do not paste full issue bodies back.
 
-11. **Put every new issue on the board (see conventions below).** After creating
-    an issue: (a) link it as a sub-issue of its parent Story/Epic; (b) it needs a
-    board **Katman** (Epic/Story/Task) and **Prio** (P1–P3) value. The agent's
-    GitHub App usually **cannot write GitHub Projects** ("Resource not accessible
-    by integration") — sub-issue linking and labels DO work, but field/board
-    writes must be done with `gh` on a human's machine. So: do the linking +
-    labels yourself, and hand the maintainer the ready-to-run `gh` block from the
-    board section to set Katman/Prio and add items.
+11. **Link it into the hierarchy — that's all the board needs.** After creating an
+    issue, link it as a sub-issue of its parent Story/Epic with
+    `mcp__github__sub_issue_write`. Do **not** add custom board fields — the
+    board stays **GitHub-standard** (see below). Sub-issue linking + labels both
+    work with the agent's App; that's everything the board needs.
 
 ## GitHub Project board — conventions (org `21072026`, project `1`)
 
-Board: **https://github.com/orgs/21072026/projects/1**. Keep issues organized so
-the board stays legible as it grows.
+Board: **https://github.com/orgs/21072026/projects/1**. Keep it **GitHub-standard —
+no custom fields to maintain.** (We tried custom `Katman`/`Prio` single-selects +
+a bulk `gh` script + an auto-field workflow; it was over-engineering — everything
+they encoded is already carried natively. Reverted. Don't reintroduce them.)
 
-- **Hierarchy = native sub-issues**, not labels: **Epic → Story → Task** via
+- **Hierarchy = native sub-issues** (Epic → Story → Task) via
   `mcp__github__sub_issue_write` (method `add`, needs the child's internal `id`).
-  Stajyer tasks hang off the stajyer epic **#478**; premium work off **#517**
-  (→ story #522 for Faz-3 MT tasks); messaging off #663; dark-mode off #657.
-  When a cluster of orphan tasks shares a theme but has no home, create a small
-  umbrella **Story** and nest them (e.g. #704 pipeline, #705 comms). Don't force
-  artificial parents, and don't make one mega-parent — "No Parent" always holds
-  the top-level epics/stories, and that's correct (a tree always has roots).
-- **Two CUSTOM single-select fields drive the board** (the built-in "Type" and
-  "Priority" are derived/empty — do NOT use them):
-  - **Katman** = `Epic` / `Story` / `Task` → the board groups by this for a clean
-    epic/story/task split (better than group-by-Parent, which lumps all
-    parentless epics together).
-  - **Prio** = `P1` / `P2` / `P3` → mirrors the priority label; the Priority-board
-    view groups/sorts by it.
-- **Derive field values from labels/title:** `epic` label → Katman=Epic; title
-  contains `] Story` → Story; else Task. Prio from the `P1|P2|P3` label. Move P1
-  bugs to **Status=Ready** so they surface.
-- **`gh` block for the maintainer** (fresh GraphQL quota; bash-3.2 safe; idempotent).
-  IDs: project `PVT_kwDOElD6r84Bd9cf`, Status field `PVTSSF_lADOElD6r84Bd9cfzhYbJt4`.
-  Re-run any time — creates missing fields, adds all open issues, sets Katman+Prio,
-  P1→Ready. (Full script lives in `docs/agent-experience.md` 2026-07-21 entry.)
-- **Env limits:** this sandbox has **no `gh`** and the App lacks Projects write
-  scope; GraphQL quota is the *human's* (`gh api rate_limit`), exhausted by bursts
-  of `gh project` mutations — add `sleep 0.5` between edits and retry after reset.
+  The board's **Group by → Parent issue** then gives the epic/story/task swimlanes
+  for free — no "layer"/type field needed. Stajyer tasks hang off epic **#478**;
+  premium off **#517** (→ story #522 for Faz-3 MT tasks); messaging #663;
+  dark-mode #657; pipeline #704; comms #705. For an orphan cluster with a shared
+  theme, create a small umbrella **Story** and nest them. Never a mega-parent —
+  "No Parent" always holds the top-level epics/stories, and that's correct
+  (a tree always has roots).
+- **Priority = the `P1`/`P2`/`P3` label.** Don't create a priority field — the
+  label already carries it and the board can group/sort/filter by label.
+- **Status** = the built-in workflow column (Backlog → Ready → In progress →
+  In review → Done). Move a P1 bug to Ready so it surfaces.
+- **Env note:** the agent's App can't write GitHub Projects fields and this sandbox
+  has no `gh` — but with the standard approach nothing needs writing: labels +
+  sub-issues go through the normal issue API, and grouping is a one-time board
+  setting the maintainer makes in the UI.
 
 ## Repo facts to reuse (verify, don't assume they're still true)
 
