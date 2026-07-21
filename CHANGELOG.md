@@ -10,6 +10,19 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-07-21
+
+### Added
+- **Unread-message email digest (closes #667)** — an hourly cron
+  (`sendUnreadMessageDigests`) gathers messages left unread for over an hour,
+  groups them per recipient, and sends **one** summary email (sender + preview +
+  "Open" link) instead of nagging per message. Idempotent via a new
+  `Message.digestedAt` flag (a message is never digested twice), and it respects
+  each recipient's email opt-out (`emailAllowed(user, 'messages')`). The instant
+  in-app notification is unchanged; this is an additive "still unread" reminder.
+  Completes the WhatsApp-like messaging story (#663) under the Communication
+  epic (#717).
+
 ## [0.19.0] - 2026-07-21
 
 ### Added

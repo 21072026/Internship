@@ -785,6 +785,75 @@ export async function sendWeeklyAnalyticsReport() {
   return { locked: false, sent };
 }
 
+// Unread-message digest (#667): once an hour, gather messages that have been
+// unread for over UNREAD_DIGEST_AFTER_MIN minutes and not yet digested, group by
+// recipient, and send ONE summary email (opt-in). Complements the instant in-app
+// notification without spamming per message. Idempotent via Message.digestedAt,
+// so a message is never included in more than one digest.
+const UNREAD_DIGEST_AFTER_MIN = 60;
+
+export async function sendUnreadMessageDigests() {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - UNREAD_DIGEST_AFTER_MIN * 60 * 1000);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+  const userSelect = { id: true, fullName: true, email: true, emailNotifications: true, notificationPrefs: true } as const;
+  const msgs = await prisma.message.findMany({
+    where: { readAt: null, digestedAt: null, deletedForEveryoneAt: null, createdAt: { lt: cutoff } },
+    orderBy: { createdAt: 'asc' },
+    include: {
+      relation: { include: { mentor: { select: userSelect }, mentee: { select: userSelect } } },
+    },
+  });
+
+  // Group unread messages by recipient (the participant who is NOT the sender).
+  type Recipient = (typeof msgs)[number]['relation']['mentor'];
+  const byRecipient = new Map<string, { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }>();
+  const allIds: string[] = [];
+  for (const m of msgs) {
+    allIds.push(m.id);
+    const rel = m.relation;
+    const recipient = m.senderId === rel.mentorId ? rel.mentee : rel.mentor;
+    const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
+    if (!recipient?.email) continue;
+    const entry = byRecipient.get(recipient.id) ?? { recipient, items: [] };
+    entry.items.push({ relationId: rel.id, from: sender?.fullName ?? 'Someone', preview: m.body.slice(0, 120) });
+    byRecipient.set(recipient.id, entry);
+  }
+
+  let sent = 0;
+  for (const { recipient, items } of byRecipient.values()) {
+    if (!emailAllowed(recipient, 'messages')) continue;
+    const rows = items
+      .map((it) => {
+        const safe = it.preview.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+        return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a></li>`;
+      })
+      .join('');
+    try {
+      await sendEmail({
+        to: recipient.email!,
+        subject: `You have ${items.length} unread message${items.length === 1 ? '' : 's'}`,
+        html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+          <h2 style="color:#2563eb;">Unread messages</h2>
+          <p>Hi ${recipient.fullName}, you have ${items.length} unread message${items.length === 1 ? '' : 's'} waiting:</p>
+          <ul style="padding-left:18px;">${rows}</ul>
+        </div>`,
+      });
+      sent++;
+    } catch (e) {
+      console.error('Unread message digest failed:', e);
+    }
+  }
+
+  // Mark every considered message as digested (even for opted-out recipients) so
+  // the cron never reprocesses them.
+  if (allIds.length) {
+    await prisma.message.updateMany({ where: { id: { in: allIds } }, data: { digestedAt: now } });
+  }
+  return { sent, considered: allIds.length };
+}
+
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
 export function initCronJobs() {
@@ -853,6 +922,17 @@ export function initCronJobs() {
     }
   });
   scheduledTasks.set('activity-digest', activityTask);
+
+  // Unread-message digest — hourly at :20 (offset from the other hourly jobs).
+  const unreadDigestTask = cron.schedule('20 * * * *', async () => {
+    try {
+      const r = await sendUnreadMessageDigests();
+      if (r.sent) console.log(`[Cron] Unread message digests sent: ${r.sent}`);
+    } catch (e) {
+      console.error('[Cron] Unread message digest error:', e);
+    }
+  });
+  scheduledTasks.set('unread-message-digest', unreadDigestTask);
 
   console.log('[Cron] Scheduled jobs initialized');
 }

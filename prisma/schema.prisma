@@ -296,6 +296,9 @@ model Message {
   channel              MessageChannel @default(IN_APP)
   readAt               DateTime?
   createdAt            DateTime       @default(now())
+  // Set once this message has been included in an unread-digest email so the
+  // hourly digest cron never re-sends the same message (#667).
+  digestedAt           DateTime?
   // Set when the sender edits the message (shows an "(edited)" label).
   editedAt             DateTime?
   // Set when the sender (or an admin) deletes the message for everyone; the body
