@@ -100,11 +100,24 @@ keyed by PR number — no branch-naming convention needed:
 
 - **PR opened / pushed to / reopened** → build the image locally on the server,
   then `infra/server/topic-deploy.sh` starts `internship-crm-pr<N>` on its derived
-  port (3300–3399, `3300 + N%100`), writes the nginx route for
-  `crm-pr<N>.ersah.in`, and reloads. A bot comment on the PR carries the URL
+  port (3300–3399, `3300 + N%100`) and **routes it through a Plesk subdomain**
+  `crm-pr<N>.ersah.in` (see below). A bot comment on the PR carries the URL
   (updated on every push).
-- **PR merged/closed** → `infra/server/topic-teardown.sh` stops/removes the
-  container + image and the nginx route, then reloads.
+- **PR merged/closed** → `infra/server/topic-teardown.sh` removes the Plesk
+  subdomain, stops/removes the container + image, and cleans any legacy route.
+
+**Routing is Plesk-native (mirrors crm-preview).** Every site on this box is a
+Plesk vhost bound to the server IP (`listen <IP>:443 ssl`); a raw all-addresses
+`listen 443 ssl` block in `conf.d` loses the nginx address-group match, so its
+`server_name` is never evaluated and requests fall to Plesk's default vhost
+(`login_up.php` / 404). So `topic-deploy.sh` instead:
+1. `plesk bin subdomain --create crm-pr<N> -domain ersah.in -ssl true` (idempotent),
+2. writes the same reverse proxy crm-preview uses into Plesk's supported custom
+   include `/var/www/vhosts/system/<fqdn>/conf/vhost_nginx.conf`:
+   `location ~ ^/.* { proxy_pass http://0.0.0.0:<port>; … }`,
+3. `plesk sbin httpdmng --reconfigure-domain <fqdn>`.
+TLS is handled by Plesk (+ Cloudflare at the edge). Teardown does
+`plesk bin subdomain --remove`.
 
 Because the runner is on the server, there is **no SSH and no GHCR round-trip**:
 `topic-deploy.sh` is called with `SKIP_PULL=1` (image already built locally) and
@@ -119,19 +132,18 @@ changes across simultaneous topics, or switch to per-topic DBs later (would need
 `CREATE/DROP DATABASE`-capable secret).
 
 ### Prerequisites on the server
-- Self-hosted runner registered; its user can run `docker` **and** write
-  `$NGINX_CONF_DIR` + reload nginx. If the runner user isn't root, set
-  `NGINX_RELOAD_CMD` to a sudo-wrapped command and add the matching sudoers entry.
-- Wildcard DNS `*.ersah.in` → the server, and a wildcard TLS cert in `$CERT_DIR`.
+- Self-hosted runner registered; its user (root here) can run `docker` and the
+  `plesk` CLI (`plesk bin subdomain`, `plesk sbin httpdmng`).
+- Wildcard DNS `*.ersah.in` → the server (Cloudflare-proxied), so `crm-pr<N>`
+  resolves. Plesk issues/uses the subdomain's TLS; Cloudflare terminates at the edge.
 - `/etc/internship-crm/preview.env` (chmod 600) with `DATABASE_URL` (the shared
   preview DB), `NEXTAUTH_SECRET`, `SMTP_*`.
 
-### Still needs a real-PR test
-The scripts follow standard Plesk/nginx conventions but haven't been run against
-the live box in this self-hosted shape. First validation: open a PR and confirm
-the bot comments a `crm-pr<N>.ersah.in` URL, the container comes up, the URL serves
-over TLS, and closing the PR tears it down (`docker ps` + `$NGINX_CONF_DIR` clean).
-Adjust `NGINX_CONF_DIR` / `NGINX_RELOAD_CMD` / `CERT_DIR` if paths differ.
+### Verified live
+Confirmed end-to-end on the live box: opening a PR builds the image, creates the
+`crm-pr<N>.ersah.in` Plesk subdomain proxying to the container, comments the URL,
+and serves the app (`/api/health` → 200); closing the PR removes the subdomain and
+container.
 
 ---
 
