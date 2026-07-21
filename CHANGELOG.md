@@ -10,6 +10,16 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-07-21
+
+### Changed
+- **WhatsApp-style read receipts (closes #664)** — in a conversation thread, your
+  own messages now show tick icons instead of a "Sent/Read" text label: a single
+  tick (✓) when delivered and a blue double tick (✓✓) once the other party has
+  opened the thread. Shown on every message you sent (not just the last), with
+  accessible `Sent`/`Read` labels retained on the icons. Part of the WhatsApp-like
+  messaging story (#663) under the Communication epic (#717).
+
 ## [0.17.1] - 2026-07-21
 
 ### Fixed
