@@ -1,25 +1,36 @@
-name: Topic Preview
+name: Topic Preview (self-hosted, auto per-PR)
 
-# Per-topic ephemeral preview environments (issue #583).
+# Per-PR ephemeral preview environments (issue #583).
 #
-# Branch name carries a `topicN` token (prefix or suffix), e.g. `me/feature_topic5`
-#   → deploy an isolated container at crm-topic5.ersah.in (own container + port).
-# Branch WITHOUT a topic token → this workflow no-ops; the normal shared preview in
-#   deploy.yml handles it (deploy.yml skips topic branches to avoid double-deploy).
-# PR merged/closed → the topic environment is torn down (container + image + route)
-#   so it stops consuming server resources.
+# Every open PR automatically gets its own isolated environment:
+#   PR #123 → container internship-crm-pr123 on a dedicated port →
+#             https://crm-pr123.ersah.in  (wildcard *.ersah.in DNS + TLS)
+# A bot comment on the PR carries the URL (updated on every push). When the PR
+# is merged or closed, the environment (container + image + nginx route) is torn
+# down so it stops consuming server resources.
 #
-# Decisions (see infra/README.md): Plesk-native nginx routing + a single shared
-# preview DB (no per-topic DB, so no DB admin secret needed).
+# RUNS ON THE SERVER via the self-hosted runner (same as deploy-prod.yml), so it
+# costs no GitHub-hosted Actions minutes — cheap enough to run on every push. The
+# image is built locally on the server (no GHCR round-trip) and the topic scripts
+# do the container swap + nginx routing.
+#
+# PREREQUISITES (one-time, on the Plesk server — see infra/README.md):
+#   1. The self-hosted runner is registered and its user can run docker AND
+#      write ${NGINX_CONF_DIR} + reload nginx (topic-deploy.sh does both). If the
+#      runner user isn't root, set NGINX_RELOAD_CMD to a sudo-wrapped command and
+#      grant the matching sudoers entry.
+#   2. Wildcard DNS *.ersah.in → the server (infra/setup-dns-cloudflare.sh) and a
+#      wildcard TLS cert in ${CERT_DIR} (infra/acme-issue-wildcard.sh).
+#   3. /etc/internship-crm/preview.env (chmod 600) with DATABASE_URL (the SHARED
+#      preview DB), NEXTAUTH_SECRET, SMTP_* — the same file deploy-preview uses.
+#
+# ⚠️ The preview DB is SHARED across all topics (see infra/README.md) — a schema
+# `db push` here affects every topic. Coordinate concurrent schema changes.
 
 on:
-  # PAUSED (GitHub Actions quota exhausted) — auto-triggers disabled so failing
-  # hosted runs stop emailing the team. Re-enable the pull_request block below
-  # once the quota is restored. Manual runs still work via "Run workflow".
-  workflow_dispatch:
-  # pull_request:
-  #   types: [opened, synchronize, reopened, closed]
-  #   branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
 
 # One in-flight run per PR; a new push cancels the previous deploy.
 concurrency:
@@ -28,115 +39,49 @@ concurrency:
 
 env:
   BASE_DOMAIN: ersah.in
+  # Where the shared preview secrets live on the server (same as deploy-preview).
+  ENV_FILE: /etc/internship-crm/preview.env
 
 jobs:
   topic:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: read
-      packages: write
       pull-requests: write
     steps:
-      - name: Parse topic token from branch
+      - name: Derive topic + port from PR number
         id: t
         run: |
-          # First `topicN` token anywhere in the branch name (case-insensitive).
-          TOPIC=$(printf '%s' "${{ github.head_ref }}" | grep -oiE 'topic[0-9a-z]+' | head -1 | tr '[:upper:]' '[:lower:]' || true)
-          echo "topic=$TOPIC" >> "$GITHUB_OUTPUT"
-          if [ -n "$TOPIC" ]; then
-            # Deterministic, collision-avoiding port in 3300–3399 (prod=3200, preview=3201).
-            NUM=$(printf '%s' "$TOPIC" | grep -oE '[0-9]+' | head -1 || true)
-            if [ -z "$NUM" ]; then NUM=$(printf '%s' "$TOPIC" | cksum | cut -d' ' -f1); fi
-            echo "port=$((3300 + NUM % 100))" >> "$GITHUB_OUTPUT"
-            echo "has_topic=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_topic=false" >> "$GITHUB_OUTPUT"
-          fi
+          PR='${{ github.event.pull_request.number }}'
+          echo "topic=pr${PR}" >> "$GITHUB_OUTPUT"
+          # Deterministic port in 3300–3399 (prod=3200, preview=3201). 100 slots;
+          # PRs whose numbers collide mod 100 would clash — fine at our volume.
+          echo "port=$((3300 + PR % 100))" >> "$GITHUB_OUTPUT"
+          echo "image=internship-crm:topic-pr${PR}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
-        if: steps.t.outputs.has_topic == 'true'
         uses: actions/checkout@v4
 
-      # ── Build & push image (only when deploying, i.e. PR not closed) ──────────
-      - name: Log in to GHCR
-        if: steps.t.outputs.has_topic == 'true' && github.event.action != 'closed'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # ── Deploy / update (PR opened, pushed to, or reopened) ──────────────────
+      - name: Build image locally
+        if: github.event.action != 'closed'
+        run: docker build --build-arg GIT_SHA=${{ github.sha }} -t "${{ steps.t.outputs.image }}" .
 
-      - name: Image metadata
-        if: steps.t.outputs.has_topic == 'true'
-        id: meta
-        run: |
-          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "tag=ghcr.io/${REPO}:topic-${{ steps.t.outputs.topic }}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Buildx
-        if: steps.t.outputs.has_topic == 'true' && github.event.action != 'closed'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build & push
-        if: steps.t.outputs.has_topic == 'true' && github.event.action != 'closed'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tag }}
-          build-args: GIT_SHA=${{ github.sha }}
-
-      # ── SSH key (shared by deploy & teardown) ────────────────────────────────
-      - name: Setup SSH key
-        if: steps.t.outputs.has_topic == 'true'
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-        run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H -p "${SSH_PORT:-22}" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null \
-            || ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-
-      # ── Deploy (PR opened / updated / reopened) ──────────────────────────────
       - name: Deploy topic environment
-        if: steps.t.outputs.has_topic == 'true' && github.event.action != 'closed'
+        if: github.event.action != 'closed'
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-          IMAGE: ${{ steps.meta.outputs.tag }}
           TOPIC: ${{ steps.t.outputs.topic }}
           PORT: ${{ steps.t.outputs.port }}
-          ACTOR: ${{ github.actor }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL_PREVIEW }}
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          IMAGE: ${{ steps.t.outputs.image }}
+          BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+          ENV_FILE: ${{ env.ENV_FILE }}
+          SKIP_PULL: '1'
         run: |
-          REMOTE_ENV=$(cat <<EOF
-          TOPIC='${TOPIC}' PORT='${PORT}' IMAGE='${IMAGE}' ACTOR='${ACTOR}' BASE_DOMAIN='${BASE_DOMAIN}' \
-          B64_TOKEN='$(printf '%s' "$GH_TOKEN" | base64 -w0)' \
-          B64_DB='$(printf '%s' "$DATABASE_URL" | base64 -w0)' \
-          B64_SEC='$(printf '%s' "$NEXTAUTH_SECRET" | base64 -w0)' \
-          B64_SMTP_HOST='$(printf '%s' "$SMTP_HOST" | base64 -w0)' \
-          B64_SMTP_PORT='$(printf '%s' "$SMTP_PORT" | base64 -w0)' \
-          B64_SMTP_USER='$(printf '%s' "$SMTP_USER" | base64 -w0)' \
-          B64_SMTP_PASS='$(printf '%s' "$SMTP_PASS" | base64 -w0)' \
-          B64_SMTP_FROM='$(printf '%s' "$SMTP_FROM" | base64 -w0)'
-          EOF
-          )
-          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
-            "${SSH_USER}@${SSH_HOST}" "${REMOTE_ENV} bash -s" < infra/server/topic-deploy.sh
+          chmod +x infra/server/topic-deploy.sh
+          ./infra/server/topic-deploy.sh
 
-      - name: Comment topic URL
-        if: steps.t.outputs.has_topic == 'true' && github.event.action != 'closed'
+      - name: Comment topic URL on the PR
+        if: github.event.action != 'closed'
         uses: actions/github-script@v7
         with:
           script: |
@@ -145,8 +90,9 @@ jobs:
             const marker = '<!-- topic-preview -->';
             const body = `${marker}\n### 🧪 Topic preview ready\n\n` +
               `Branch **\`${{ github.head_ref }}\`** → **${url}**\n\n` +
-              `> Isolated container for topic \`${topic}\`. Updated on every push; ` +
-              `torn down automatically when this PR is merged or closed.`;
+              `> Isolated environment for this PR (container \`internship-crm-${topic}\`). ` +
+              `Rebuilt on every push; torn down automatically when this PR is merged or closed.\n` +
+              `> Shares the preview database with other topics — coordinate schema changes.`;
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number,
             });
@@ -159,13 +105,10 @@ jobs:
 
       # ── Teardown (PR merged / closed) ────────────────────────────────────────
       - name: Tear down topic environment
-        if: steps.t.outputs.has_topic == 'true' && github.event.action == 'closed'
+        if: github.event.action == 'closed'
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
           TOPIC: ${{ steps.t.outputs.topic }}
+          BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
         run: |
-          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
-            "${SSH_USER}@${SSH_HOST}" "TOPIC='${TOPIC}' BASE_DOMAIN='${BASE_DOMAIN}' bash -s" \
-            < infra/server/topic-teardown.sh
+          chmod +x infra/server/topic-teardown.sh
+          ./infra/server/topic-teardown.sh

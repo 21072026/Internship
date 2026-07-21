@@ -19,6 +19,8 @@ NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-nginx -t && systemctl reload nginx}"
 
 CONTAINER="internship-crm-${TOPIC}"
+SUBLABEL="crm-${TOPIC}"
+FQDN="crm-${TOPIC}.${BASE_DOMAIN}"
 CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"
 
 echo "==> Tearing down topic '${TOPIC}'"
@@ -30,12 +32,19 @@ docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
 [ -n "$IMG" ] && docker rmi "$IMG" 2>/dev/null || true
 
+# Remove the Plesk subdomain (this drops its nginx vhost + route). Idempotent.
+if command -v plesk >/dev/null && plesk bin subdomain --info "$FQDN" >/dev/null 2>&1; then
+  echo "==> Removing Plesk subdomain ${FQDN}"
+  plesk bin subdomain --remove "$SUBLABEL" -domain "$BASE_DOMAIN" || true
+else
+  echo "==> No Plesk subdomain ${FQDN} (already gone)"
+fi
+
+# Clean up any legacy raw-nginx route from the pre-Plesk approach.
 if [ -f "$CONF" ]; then
   rm -f "$CONF"
-  echo "==> Removed nginx route ${CONF}; reloading nginx"
-  eval "$NGINX_RELOAD_CMD"
-else
-  echo "==> No nginx route file for topic '${TOPIC}' (already gone)"
+  echo "==> Removed legacy nginx route ${CONF}; reloading nginx"
+  eval "$NGINX_RELOAD_CMD" || true
 fi
 
 docker image prune -af >/dev/null 2>&1 || true
