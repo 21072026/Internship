@@ -10,6 +10,17 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.14.7] - 2026-07-21
+
+### Fixed
+- **Mentor onboarding checklist never dismissed (closes #690)** — the
+  `scheduleMeeting` step was hard-coded `done: false` and, being counted by the
+  `steps.every(done)` check, kept the checklist on screen forever even after the
+  mentor finished everything. `scheduleMeeting.done` is now computed from the
+  mentor's actual meeting count, and `OnboardingChecklist` decides completion
+  from **required** steps only, so an optional step can no longer pin the
+  checklist open.
+
 ## [0.14.6] - 2026-07-21
 
 ### Fixed

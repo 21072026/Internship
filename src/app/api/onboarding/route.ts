@@ -27,16 +27,17 @@ export async function GET() {
   }
 
   if (role === 'MENTOR') {
-    const [mentees, interactions] = await Promise.all([
+    const [mentees, interactions, meetings] = await Promise.all([
       prisma.mentorshipRelation.count({ where: { mentorId: id } }),
       prisma.interactionLog.count({ where: { relation: { mentorId: id } } }),
+      prisma.meeting.count({ where: { relation: { mentorId: id } } }),
     ]);
     return NextResponse.json({
       role,
       steps: [
         { key: 'addMentee', done: mentees > 0, href: '/mentor/mentees/new' },
         { key: 'logInteraction', done: interactions > 0, href: '/mentor/mentees' },
-        { key: 'scheduleMeeting', done: false, href: '/mentor/meetings', optional: true },
+        { key: 'scheduleMeeting', done: meetings > 0, href: '/mentor/meetings', optional: true },
       ].slice(0, mentees > 0 ? 3 : 2),
     });
   }

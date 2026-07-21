@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.7-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['The mentor getting-started checklist now disappears once you’ve completed the essential steps (scheduling a meeting is correctly optional).'],
+      tr: ['Mentör başlangıç kontrol listesi, temel adımları tamamlayınca artık kayboluyor (toplantı planlamak doğru şekilde isteğe bağlı).'],
+      de: ['Die Mentor-Startcheckliste verschwindet jetzt, sobald du die wesentlichen Schritte erledigt hast (das Planen eines Meetings ist korrekt optional).'],
+    },
+  },
+  {
     version: '0.14.6-beta',
     date: '2026-07-21',
     highlights: {
