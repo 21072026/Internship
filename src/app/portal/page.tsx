@@ -15,7 +15,7 @@ import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
-import { User, Building2, BookOpen, ExternalLink, MessageCircle, Mail, Github, Linkedin } from 'lucide-react';
+import { User, Building2, BookOpen, ExternalLink, MessageCircle, Github, Linkedin } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 
@@ -247,7 +247,7 @@ export default async function PortalDashboard() {
                   {t.portal.yourMentor}
                 </p>
                 <p className="font-semibold text-gray-900">{activeRelation.mentor.fullName}</p>
-                <p className="text-sm text-gray-600">{activeRelation.mentor.email}</p>
+                <a href={`mailto:${activeRelation.mentor.email}`} className="text-sm text-gray-600 hover:text-blue-600 hover:underline break-all">{activeRelation.mentor.email}</a>
                 {activeRelation.mentor.phone && (
                   <p className="text-sm text-gray-600">{activeRelation.mentor.phone}</p>
                 )}
@@ -259,10 +259,6 @@ export default async function PortalDashboard() {
                     <MessageCircle className="h-4 w-4" />
                     {t.portal.messageMentor}
                   </Link>
-                  <a href={`mailto:${activeRelation.mentor.email}`} className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-700 text-sm px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-                    <Mail className="h-4 w-4" />
-                    {t.portal.emailMentor}
-                  </a>
                 </div>
               </div>
 

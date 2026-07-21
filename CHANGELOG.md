@@ -10,6 +10,15 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-07-21
+
+### Fixed
+- **Portal "email mentor" dead button (closes #654)** — the mentee portal had a
+  bare `mailto:` button that did nothing when no mail client was configured.
+  Removed it; the reliable **in-app "Message mentor"** button (already primary)
+  stays, and the mentor's email address is now a `mailto:` link itself (visible +
+  copyable + best-effort), so contact works in every environment.
+
 ## [0.14.3] - 2026-07-21
 
 ### Fixed
