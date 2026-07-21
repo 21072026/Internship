@@ -43,10 +43,16 @@ jobs:
       - name: Deploy
         run: |
           chmod +x infra/deploy-prod.sh
+          ENV_FILE="${ENV_FILE:-/etc/internship-crm/preview.env}"
+          # Preview has no hand-written secrets file; deploy-prod.sh derives one
+          # from the running preview container. Remove any previously-derived
+          # file first so the derivation always regenerates cleanly (self-healing
+          # if an older run wrote a malformed one).
+          rm -f "$ENV_FILE" || true
           # Same script as prod, with preview container/port/image/env overrides.
           BRANCH="${{ inputs.ref }}" \
           CONTAINER=internship-crm-preview \
           PORT=3201 \
           IMAGE=internship-crm-preview:local \
-          ENV_FILE="${ENV_FILE:-/etc/internship-crm/preview.env}" \
+          ENV_FILE="$ENV_FILE" \
           ./infra/deploy-prod.sh --no-pull

@@ -68,7 +68,11 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
   : > "$ENV_FILE"; chmod 600 "$ENV_FILE"
   for k in DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
-    [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> "$ENV_FILE"
+    # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
+    # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
+    # shell would otherwise try to expand or execute. Embedded single quotes are
+    # escaped the standard '\'' way.
+    [ -n "$v" ] && printf "%s='%s'\n" "$k" "$(printf '%s' "$v" | sed "s/'/'\\\\''/g")" >> "$ENV_FILE"
   done
 fi
 if [ ! -f "$ENV_FILE" ]; then
