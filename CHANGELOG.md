@@ -10,6 +10,20 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-21
+
+### Added
+- **Candidate list: filter by pipeline stage (closes #691)** — the admin
+  candidates filter panel now has a pipeline-stage dropdown (bound to the existing
+  `statusFilter`, so it stays in sync with the dashboard bars, the `?status=` URL
+  param, and Saved Views). Clear-filters resets it too.
+
+### Changed
+- **Portal journey tracker moved above the fold (closes #692)** — a mentee now
+  sees their pipeline stage as soon as the portal loads, above the (longer)
+  mentorship card, instead of having to scroll past it.
+- Both complete the Pipeline stage-visibility story (#704) under the UX epic (#718).
+
 ## [0.16.0] - 2026-07-21
 
 ### Added

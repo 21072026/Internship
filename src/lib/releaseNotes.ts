@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.17.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Filter the candidate list by pipeline stage, and — in the mentee portal — your journey/pipeline stage now shows at the top of the page without scrolling.'],
+      tr: ['Aday listesini pipeline aşamasına göre filtrele; mentee portalında ise yolculuk/pipeline aşaman artık sayfanın en üstünde, kaydırmadan görünüyor.'],
+      de: ['Filtere die Kandidatenliste nach Pipeline-Phase; im Mentee-Portal wird deine Journey-/Pipeline-Phase jetzt ganz oben ohne Scrollen angezeigt.'],
+    },
+  },
+  {
     version: '0.16.0-beta',
     date: '2026-07-21',
     highlights: {

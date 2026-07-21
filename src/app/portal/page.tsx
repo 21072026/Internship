@@ -123,6 +123,15 @@ export default async function PortalDashboard() {
 
       {!activeRelation && <MentorshipRequestPanel />}
 
+      {/* Journey / pipeline stage — kept above the fold so a mentee sees where
+          they are as soon as the portal loads (#692), before the longer
+          mentorship card. */}
+      {activeRelation && (
+        <div className="mb-6">
+          <JourneyTracker status={activeRelation.pipelineStatus} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Summary */}
         <Card>
@@ -313,9 +322,6 @@ export default async function PortalDashboard() {
 
       {activeRelation && (
         <>
-          <div className="mt-6">
-            <JourneyTracker status={activeRelation.pipelineStatus} />
-          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
             <GoalsPanel relationId={activeRelation.id} />
             <EvaluationPanel relationId={activeRelation.id} audience="MENTOR" />

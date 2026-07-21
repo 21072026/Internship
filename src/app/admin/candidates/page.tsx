@@ -7,7 +7,7 @@ import { AssignMentorInline } from '@/components/admin/AssignMentorInline';
 import { EmptyState } from '@/components/EmptyState';
 import Link from "next/link";
 import { useT, useLocale } from "@/i18n/client";
-import { pipelineLabel } from '@/lib/pipeline';
+import { pipelineLabel, pipelineOptions } from '@/lib/pipeline';
 import { Card } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
@@ -290,8 +290,14 @@ export default function CandidatesPage() {
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
           />
+          <Select
+            aria-label={t.candidates.allStages}
+            options={[{ value: '', label: t.candidates.allStages }, ...pipelineOptions(locale)]}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          />
         </div>
-        {(search || skillFilter || yearFilter || cityFilter || projectFilter || sourceFilter) && (
+        {(search || skillFilter || yearFilter || cityFilter || projectFilter || sourceFilter || statusFilter) && (
           <Button
             variant="ghost"
             size="sm"
@@ -303,6 +309,7 @@ export default function CandidatesPage() {
               setCityFilter('');
               setProjectFilter('');
               setSourceFilter('');
+              setStatusFilter('');
             }}
           >
             {t.candidates.clearFilters}
