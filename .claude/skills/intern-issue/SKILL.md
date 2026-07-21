@@ -8,7 +8,7 @@ arguments: [issue]
 
 # Intern issue pipeline
 
-Process GitHub issue **#$issue** in this repo (`mersahin/Internship`) completely autonomously,
+Process GitHub issue **#$issue** in this repo (`21072026/Internship`) completely autonomously,
 ending with a squash-merge to `main`. This mirrors the exact workflow used to clear issues
 #463–#477 from the intern backlog (#478) in a prior session.
 
@@ -154,14 +154,26 @@ gh pr view <PR> --json state,mergedAt -q '.state, .mergedAt'   # confirm MERGED
 
 ## 9. Update the GitHub Project board
 
+New board after the repo transfer: **`https://github.com/orgs/21072026/projects/1`**
+(org `21072026`, project number `1`).
+
+> ⚠️ **One-time: refresh the node-IDs.** The `--field-id` / `--project-id` /
+> `--single-select-option-id` below are the *old* mersahin board's and will NOT
+> match the new project 1. Fetch the new board's IDs once and paste them in:
+> ```
+> gh project view 1 --owner 21072026 --format json          # → project node id (PVT_…)
+> gh project field-list 1 --owner 21072026 --format json    # → Status field id (PVTSSF_…) + option ids
+> ```
+
 ```
-ITEM_ID=$(gh project item-add 2 --owner mersahin --url https://github.com/mersahin/Internship/issues/$issue --format json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
-gh project item-edit --id "$ITEM_ID" --field-id PVTSSF_lAHOADrM1M4BbnzxzhWXFDs --project-id PVT_kwHOADrM1M4Bbnzx --single-select-option-id 98236657
+ITEM_ID=$(gh project item-add 1 --owner 21072026 --url https://github.com/21072026/Internship/issues/$issue --format json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+# Replace <PROJECT_ID> / <STATUS_FIELD_ID> / <DONE_OPTION_ID> with the new board's IDs (see above):
+gh project item-edit --id "$ITEM_ID" --field-id <STATUS_FIELD_ID> --project-id <PROJECT_ID> --single-select-option-id <DONE_OPTION_ID>
 ```
 
-(Project 2, "Status" field `PVTSSF_lAHOADrM1M4BbnzxzhWXFDs`, "Done" option `98236657`. Other
-option ids on this field if ever needed: Backlog `f75ad846`, Ready `61e4505c`, In progress
-`47fc9ee4`, In review `df73e18b`.)
+(OLD mersahin board, for reference only — do NOT reuse: Project 2, "Status" field
+`PVTSSF_lAHOADrM1M4BbnzxzhWXFDs`, "Done" option `98236657`; Backlog `f75ad846`, Ready
+`61e4505c`, In progress `47fc9ee4`, In review `df73e18b`.)
 
 ## 10. Sync and report
 

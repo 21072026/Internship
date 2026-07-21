@@ -71,6 +71,7 @@ export default function AdminAnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [aging, setAging] = useState<Aging | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangePreset>('6m');
   // Premium tier state (#540): drives the full-report export buttons. Detected
   // via the (server-gated) cohorts endpoint — 403 means the tier is off.
@@ -79,18 +80,20 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     const qs = rangeQuery(range);
     setLoading(true);
+    setError(null);
     fetch(`/api/admin/analytics${qs}`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((d) => setData(d))
+      .catch((e) => { console.error('[analytics]', e); setError(t.common.error); })
       .finally(() => setLoading(false));
     fetch(`/api/admin/analytics/aging${qs}`)
       .then((r) => r.json())
       .then((d) => setAging(d))
-      .catch(() => {});
-  }, [range]);
+      .catch((e) => console.error('[analytics/aging]', e));
+  }, [range, t.common.error]);
 
   useEffect(() => {
-    fetch('/api/admin/analytics/cohorts').then((r) => setPremium(r.ok)).catch(() => {});
+    fetch('/api/admin/analytics/cohorts').then((r) => setPremium(r.ok)).catch((e) => console.error('[analytics/cohorts]', e));
   }, []);
 
   const maxFunnel = data ? Math.max(1, ...PIPELINE_STATUSES.map((s) => data.funnel[s] || 0)) : 1;
@@ -161,6 +164,13 @@ export default function AdminAnalyticsPage() {
           )}
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-12 text-gray-400">{t.common.loading}</div>

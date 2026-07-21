@@ -33,3 +33,17 @@ export function formatDateTime(date: Date | string, locale: string): string {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
   }).format(d);
 }
+
+// How long ago a date is, as a positive duration ("15 days", "3 months"), for
+// membership/tenure labels like "member for 3 months". Unlike relativeTime this
+// returns just the magnitude — the caller supplies the surrounding phrase.
+// Returns { count, unit } where unit ∈ 'day' | 'month' | 'year' so callers can
+// localize the noun (day/month/year) themselves; anything under a day is a
+// single day so a brand-new member never reads as "0 days".
+export function durationSince(date: Date | string): { count: number; unit: 'day' | 'month' | 'year' } {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const days = Math.max(1, Math.floor((Date.now() - d.getTime()) / 86400000));
+  if (days >= 365) return { count: Math.floor(days / 365), unit: 'year' };
+  if (days >= 30) return { count: Math.floor(days / 30), unit: 'month' };
+  return { count: days, unit: 'day' };
+}

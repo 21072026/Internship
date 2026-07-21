@@ -13,7 +13,7 @@ description: >-
 # Backlog / Work-Item generation
 
 You turn a rough bug/feature description into **precise, code-grounded GitHub
-issues** for the `mersahin/internship` repo. You are a product owner + tech lead,
+issues** for the `21072026/internship` repo. You are a product owner + tech lead,
 not a coder. Author issues; do not implement unless explicitly told to.
 
 ## Operating rules (in order)
@@ -39,14 +39,21 @@ not a coder. Author issues; do not implement unless explicitly told to.
    (server-side, not just UI), rate-limiting/spam, notifications, i18n, empty
    states, "don't break the free core". Make vague asks precise.
 
-5. **Choose the right granularity.**
-   - Trivial, one-file → a single **Task** issue.
+5. **Choose the right granularity — strict Epic → Story → Task tree.**
+   - Trivial, one-file → a single **Task** issue (still under a Story — see below).
    - A capability with several parts → one **Story** + **Task** sub-issues.
    - A large theme spanning stories → an **Epic** (`epic` label) + Story
      sub-issues, tasks under stories.
    - Split large work into **small, independently-shippable** tasks. Mark the
      ones that are isolated and well-scoped as **junior-friendly**.
    - State the **dependency chain** between tasks (what must land first).
+   - **No empty / orphan nodes (maintainer rule):** every **Story lives under an
+     Epic**, and every **Task under a Story** — a Story with no Task or an Epic
+     with no Story should not exist. If a task has no natural Story, create a
+     small umbrella Story (and an Epic for it if none fits — e.g. this session's
+     #717 İletişim, #718 Arayüz/UX, #719 Admin epics grouped orphan stories). If
+     an epic/story has no open children left, **close it** (completed) rather than
+     leave it empty (e.g. #439, #523 were closed once their work was done).
 
 6. **Write each work item** in **Turkish** (repo convention), with these sections:
    - `## Amaç` — one paragraph, the why.
@@ -55,8 +62,13 @@ not a coder. Author issues; do not implement unless explicitly told to.
    - `## Kabul kriterleri` — checklist, includes `npm run build` (and
      `npm run check:i18n` if UI text changes; `prisma validate` if schema).
    - `**Zorluk** · **Tahmini**` and bağımlılık note where useful.
-   Titles: `[Area] Story · …`, `[Area/Sub] Task · …`, `🐛 …` for bugs,
-   prefix stajyer tasks with a short 🌱 note if desired (see existing #472–#478).
+   **Titles MUST state the item type (maintainer rule).** Every title contains
+   its type word — `Epic`, `Story`, or `Task`:
+   - Epic: `<emoji> Epic · …` (e.g. `💎 Epic · Premium …`, `🌱 Epic · Stajyer …`).
+   - Story: `[Area] Story · …` (e.g. `[Messaging] Story · …`).
+   - Task: `[Area] Task · …`, or with a leading kind emoji `🐛 Task · …` (bug) /
+     `🌱 Task · …` (junior). The type marker goes **after** any leading emoji and
+     any `[Area]` bracket, before the description (`🐛 [Comms] Task · …`).
 
 7. **Labels.** GitHub auto-creates missing labels on issue create/update.
    - **Priority (always set):** `P0` critical/prod-down (drop everything —
@@ -65,8 +77,10 @@ not a coder. Author issues; do not implement unless explicitly told to.
    - **Type:** `bug` or `enhancement`.
    - **Junior:** `good first issue` + `stajyer` for small, isolated, well-scoped
      tasks.
-   - **Area (only if it already exists):** `area:infra`, `area:comms`,
-     `area:pipeline`. Don't invent area labels; check with `get_label` if unsure.
+   - **Area (prefer an existing one):** the repo now uses `area:infra`,
+     `area:comms`, `area:pipeline`, `area:admin`, `area:mentor`, `area:ux`,
+     `area:i18n`, `area:testing`, `area:projects`, `area:security`,
+     `area:migration`. Reuse these; only add a new `area:*` when none fits.
    - Note: updating labels via `issue_write` **replaces** the whole set — always
      resend existing labels plus the new one.
 
@@ -84,6 +98,47 @@ not a coder. Author issues; do not implement unless explicitly told to.
 10. **Report** a tight summary: the hierarchy (numbers + titles), priorities, key
     findings from step 2 (especially "already partly exists"), the dependency
     order, and a recommended next item. Do not paste full issue bodies back.
+
+11. **Link it in + set the official Priority.** After creating an issue: (a) link
+    it as a sub-issue of its parent Story/Epic with `mcp__github__sub_issue_write`;
+    (b) set the board's native **Priority** field via `mcp__github__issue_write`
+    (`issue_fields`, mapped from the P-label — see the board section). Do **not**
+    add *custom* board fields — the board stays **GitHub-standard**. Sub-issue
+    linking, labels, and the org Priority field all work with the agent's App.
+
+## GitHub Project board — conventions (org `21072026`, project `1`)
+
+Board: **https://github.com/orgs/21072026/projects/1**. Keep it **GitHub-standard —
+no custom fields to maintain.** (We tried custom `Katman`/`Prio` single-selects +
+a bulk `gh` script + an auto-field workflow; it was over-engineering — everything
+they encoded is already carried natively. Reverted. Don't reintroduce them.)
+
+- **Hierarchy = native sub-issues** (Epic → Story → Task) via
+  `mcp__github__sub_issue_write` (method `add`, needs the child's internal `id`).
+  The board's **Group by → Parent issue** then gives the epic/story/task swimlanes
+  for free — no "layer"/type field needed. Stajyer tasks hang off epic **#478**;
+  premium off **#517** (→ story #522 for Faz-3 MT tasks); messaging #663;
+  dark-mode #657; pipeline #704; comms #705. For an orphan cluster with a shared
+  theme, create a small umbrella **Story** and nest them. Never a mega-parent —
+  "No Parent" always holds the top-level epics/stories, and that's correct
+  (a tree always has roots).
+- **Priority** — set the `P0`–`P3` **label** (for filtering/at-a-glance) AND the
+  board's **official org "Priority" field** (options **Urgent/High/Medium/Low**).
+  The Priority field is an **org-level issue field** (`list_issue_fields` shows it),
+  so — unlike a project custom field — the agent's App **CAN write it** via
+  `mcp__github__issue_write` (method `update`, `issue_fields:
+  [{field_name:"Priority", field_option_name:"High"}]`). Set it on every issue,
+  mapping the label: **P0→Urgent, P1→High, P2→Medium, P3→Low**. This is a native
+  GitHub field (not the custom `Prio` we removed), so it's fine — it drives the
+  board's Priority view/sort. (`Effort`, `Start date`, `Target date` org fields
+  also exist and are settable the same way if ever needed.)
+- **Status** = the built-in workflow column (Backlog → Ready → In progress →
+  In review → Done). Move a P0/P1 bug to Ready so it surfaces.
+- **What the agent CAN vs CAN'T write:** CAN — labels, sub-issue links, and the
+  **org-level issue fields** (Priority/Effort/dates) via `issue_write`. CANNOT —
+  project-scoped custom fields / board item placement (needs `gh` + Projects
+  scope). So set Priority via `issue_write`; leave board grouping to the one-time
+  UI setting. (`list_issue_fields` needs BOTH owner+repo; owner-only 403s.)
 
 ## Repo facts to reuse (verify, don't assume they're still true)
 

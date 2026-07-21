@@ -10,6 +10,135 @@ Newest entries on top.
 
 ---
 
+## 2026-07-21 — Otomatik PR-başına topic preview (Plesk-native routing) (#583, 0.14.6→0.14.7)
+
+Bu oturumda `#679` + `#690` prod'a çıktı (0.14.7) ve **her PR'a otomatik topic
+preview** özelliği canlıya alındı (`crm-pr<N>.ersah.in`). Uzun ve öğretici bir
+altyapı yolculuğuydu; tekrar kullanılabilir dersler:
+
+**Self-hosted runner = sunucunun kendisi → SSH gerekmez, loglardan iterate et.**
+Sandbox'ta `ssh`/`gh` binary'si YOK. Ama `topic-preview.yml`/`deploy-prod.yml`
+`runs-on: self-hosted` ile sunucuda çalışıyor. Sunucuyu teşhis/onarmak için
+komutları workflow adımına koyup `mcp__github__get_job_logs` ile oku — cert
+sorununu, 404'ü, Plesk desenini hep böyle çözdüm (SSH'siz).
+
+**Plesk kutusunda ham `conf.d` nginx bloğu KAZANMAZ.** Her site Plesk vhost'u ve
+`listen <IP>:443 ssl` ile **spesifik IP**'ye bind. Ham `listen 443 ssl`
+(tüm-adres) bloğu nginx'in adres-grubu eşleşmesini kaybeder → `server_name`'in hiç
+değerlendirilmez → istek Plesk default vhost'una (`login_up.php` / 404) düşer.
+Belirti: `curl /` → 303 → `login_up.php`, `<title>Plesk Obsidian`. Çözüm:
+**Plesk-native subdomain** (`plesk bin subdomain --create <label> -domain <parent>`)
++ ters proxy'yi Plesk'in desteklediği `vhost_nginx.conf`'a yaz
+(`location ~ ^/.* { proxy_pass http://0.0.0.0:<port>; }`, crm-preview deseni) +
+`plesk sbin httpdmng --reconfigure-domain <fqdn>`. Teardown:
+`plesk bin subdomain --remove`.
+
+**Bir sibling'i (crm-preview) diagnostik dök, deseni birebir kopyala.** Kör Plesk
+CLI yazmak yerine önce `/var/www/vhosts/system/<fqdn>/conf/` + `plesk bin subdomain
+--info` + `nginx -T | grep` çıktısını log'a döktürdüm; `proxy_pass 0.0.0.0:3201`
+ve spesifik-IP `listen`'i oradan öğrendim.
+
+**Wildcard cert'i Plesk'e import edip subdomain'e ata.** `*.ersah.in` acme.sh
+fullchain'i `/etc/nginx/ssl/`'de. Fullchain'i leaf + CA olarak ayır (`awk`),
+`plesk bin certificate --create <name> -domain <parent> -cert-file <leaf>
+-key-file <key> -cacert-file <chain>`, sonra `plesk bin subdomain --update ...
+-certificate-name <name>`. Per-topic LE gerekmez.
+
+**Cloudflare-proxied wildcard DNS + edge TLS:** `infra-setup.yml` DNS (`*.ersah.in`
+A, proxied) + acme.sh wildcard cert'i tek dispatch'te kurar; **`CF_API_TOKEN`
+secret'ı şart** (yoksa DNS adımı 7 sn'de düşer). Token'ı chat'e aldırma —
+`gh secret set` ile kullanıcı eklesin.
+
+**Sandbox TLS doğrulaması yanıltıcı:** Anthropic egress-gateway HTTPS'i MITM'liyor;
+`curl` cert subject/issuer'ı proxy'nin, `ssl_verify_result`/`-k`'sız hata sitenin
+değil. Servisin gerçekten çalıştığını **HTTP status + gövde** ile doğrula
+(`/api/health` → 200 + JSON), cert zinciriyle değil.
+
+**`set -euo pipefail` + bloğu silerken değişken tanımı:** cert-precheck bloğunu
+silince onunla gelen `CONF=` tanımı da gitti; ilerideki referans `unbound variable`
+ile deploy'u container ayağa kalktıktan sonra düşürdü. Blok silerken o bloğun
+tanımladığı ama sonrasında kullanılan değişkenleri koru.
+
+---
+
+## 2026-07-21 — Transfer sonrası: yazma yolu, CI kotası reset, backlog süpürmesi (0.12.0→0.14.1)
+
+**Repo `mersahin/Internship` → `21072026/Internship`'e taşındı.** Bu oturumun büyük
+teması transfer artıklarını temizlemek + kotanın reset'inden faydalanmak oldu.
+
+**GitHub Project board — GitHub-standardında kal (over-engineering dersi):** Board
+org `21072026` proje `1`. İş üretirken (bkz. `backlog` skill) hiyerarşi **native
+sub-issue** ile kurulur (Epic→Story→Task); board'da **Group by → Parent issue**
+epic/story/task şeritlerini bedavaya verir. Öncelik **P1/P2/P3 label**'dır (board
+etikete göre grupla/sırala); akış **Status** kolonları. **Custom alan yok.**
+> Bu oturumda önce custom `Katman` (Epic/Story/Task) + `Prio` (P1-P3) single-select
+> alanları + toplu `gh` script (`board.sh`) + bir issue-açılışı auto-field workflow'u
+> kurdum — maintainer haklı olarak "gereksiz iş yükü, GitHub-standardında kalalım"
+> dedi ve geri aldık. **Ders:** native sub-issue hiyerarşisi + P-etiketleri zaten
+> tür ve önceliği taşıyor; bunları custom alanla kopyalamak = kalıcı bakım yükü
+> (her issue'da alan doldurma, PAT secret, workflow). Yerlisi neyi ifade ediyorsa
+> onu tekrar üretme. Sub-issue linkleme + etiketleme agent'ın App'iyle çalışır;
+> *proje-scope'lu* custom alan/board yerleşimi yazılamaz.
+
+**AMA resmî org "Priority" alanı YAZILABİLİR (önemli düzeltme):** Board'daki resmî
+Priority, proje custom alanı değil bir **org-seviyesi issue alanı** (Urgent/High/
+Medium/Low; `Effort`, `Start date`, `Target date` de öyle). `mcp__github__list_issue_fields`
+(owner+repo ile; owner-only 403) görür, ve agent bunu **`mcp__github__issue_write`**
+(`method:update`, `issue_fields:[{field_name:"Priority",field_option_name:"High"}]`)
+ile **set edebilir**. Bu yüzden custom "Prio" gereksizdi — resmî alanı P-etiketinden
+doldur: **P0→Urgent, P1→High, P2→Medium, P3→Low**. (Bu oturumda 33 açık issue'ya
+tek tek uygulandı, `list_issues` field_filter=Priority ile doğrulandı.)
+
+**Transfer yazma yolunu AÇTI (önceki oturum 403 alıyordu):** yeni repoya scoped
+oturumda `git push` + `mcp__github__*` sorunsuz çalıştı. Transfer sonrası ilk iş:
+repo-path referanslarını güncelle (ONBOARDING clone URL, CHANGELOG footer link'leri,
+infra/README issue link'i, backlog+intern-issue skill'lerindeki repo adı, deploy-prod.yml
+runner-setup yorumu). **GitHub Project board repo ile TAŞINMIYOR** —
+`e2e/project-board-url.spec.ts` ve intern-issue skill'indeki `gh project --owner mersahin`
++ proje/field ID'leri hâlâ eski board'a bakıyor; yeni board URL'i olmadan bunları
+güncelleyemedim (maintainer'a soruldu, beklemede).
+
+**Transfer GitHub Actions kotasını SIFIRLADI (temiz ~2000h/ay).** Kota tükendiği için
+`workflow_dispatch`-only'e duraklatılmış hosted workflow'ları dikkatli geri açtım:
+- **Aç:** `ci.yml` (~2 dk) + `e2e.yml` (@smoke, ~3.5 dk) → `push`+`pull_request`. PR
+  başına ~6 dk, ayda binlerce PR bile <100h.
+- **Dispatch-only KALSIN:** `e2e-full` (4×/gün × 4 shard ≈ aylık kotanın çoğunu yiyen
+  asıl tüketici), `stress`, `topic-preview`. Bütçeyi bunlar belirliyor, PR gate'i değil.
+- **`deploy.yml` PAUSED kalsın:** prod artık self-hosted `deploy-prod` ile iniyor; hosted
+  deploy hem kota yer hem çift-deploy riski. Doğrulama: re-enable PR'ının KENDİSİNDE
+  iki check de yeşil koştu (gate uçtan uca kanıtlandı).
+
+**`infra/deploy-prod.sh` tamamen parametrik → preview deploy bedava geldi.** Script
+`CONTAINER`/`PORT`/`IMAGE`/`ENV_FILE` env override'larını kabul ediyor; preview =
+aynı script'i `internship-crm-preview` / `:3201` / `preview.env` ile çağırmak. Yeni
+`deploy-preview.yml` (self-hosted, dispatch-only) bunu yapıyor. Env dosyası yoksa script
+çalışan preview container'ından türetiyor (satır ~65), yani ek kurulum gerekmedi. Preview
+hosted deploy duraklayınca 0.7.0'da kalmıştı; bu workflow ile prod+preview birlikte
+güncellenebilir.
+
+**Claude Code / Copilot oturum-task sayfaları DIŞARIDAN OKUNMUYOR:**
+`github.com/OWNER/REPO/tasks/<uuid>` linkleri WebFetch'te 404/auth veriyor. Copilot
+uygulama-denetimi task'ı aslında **taslak bir PR'a** dönüşmüştü (#676) — bulguları o PR
+gövdesinden okudum, kodda `file:line` ile doğruladım, 7 backlog issue açtım (#678–#684).
+İkinci inceleme repoda hiç iz bırakmamıştı (sadece geçici keşif betiği commit'lemiş);
+bulguları maintainer sohbete yapıştırınca doğrulayıp açtım (#689–#692). Ders: oturum-task
+URL'i verilirse ya karşılık gelen PR'ı bul, ya da içeriği iste — sayfayı fetch etme.
+
+**i18n TR ekindeki tuzaktan kaçış:** "3 aydır/gündür/yıldır" gibi ekli ifadeler ünlü
+uyumu yüzünden template'le zor; `durationSince()` yalnızca `{count, unit}` döndürüp ismi
+(gün/ay/yıl) sözlükten aldım ve cümleyi "Üyelik süresi: {d}" / "Projede: {d}" gibi ek
+gerektirmeyen kalıba kurdum. `.replace('{d}', ...)` deseni repoda zaten standart.
+
+**Tarayıcı bildirimi (foreground) deseni:** izin cihaz-başına olduğu için tercih
+`localStorage`'da (DB'de değil). Popup patlamasını önlemek için `NotificationBell`'de
+ilk poll yalnızca "görülen id" baseline'ı kurar, sonraki poll'larda yeni-okunmamış id'ler
+için tek tek `new Notification()` atılır.
+
+**Bu oturumda inen (hepsi self-hosted deploy + health-check ile prod'da doğrulandı):**
+üyelik süresi göstergesi (0.12.0), foreground tarayıcı bildirimleri #675-K1 (0.13.0),
+projeye mentee üye + işlevsel rol #51 (0.14.0), meet-link "Google Meet"→"Meeting link"
+düzeltmesi (0.14.1). Prod health `0.14.1-beta`/`593656f`.
+
 ## 2026-07-07 — Test tooling, a session-null fix, an email-in-history purge, and relicensing
 
 **What shipped (all merged to `main`):**

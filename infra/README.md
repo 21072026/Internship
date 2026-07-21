@@ -1,6 +1,6 @@
 # Infra — Wildcard TLS & topic-based preview environments
 
-Runbook for the automation behind [#583](https://github.com/mersahin/Internship/issues/583)
+Runbook for the automation behind [#583](https://github.com/21072026/Internship/issues/583)
 (per-topic ephemeral preview environments at `crm-<topic>.ersah.in`).
 
 The whole design rests on **three one-time foundations**, after which spinning a
@@ -94,34 +94,56 @@ reload nginx afterwards.
 
 ## How this is wired (#583)
 
-`.github/workflows/topic-preview.yml` parses a `topicN` token from the branch name:
+`.github/workflows/topic-preview.yml` runs on the **self-hosted runner** (no
+GitHub-hosted Actions minutes) and gives **every open PR** its own environment,
+keyed by PR number — no branch-naming convention needed:
 
-- **no token** → this workflow no-ops; `deploy.yml` deploys the shared
-  `crm-preview.ersah.in` as before. (deploy.yml now **skips** topic branches so a
-  topic PR isn't deployed twice.)
-- **token present** (`me/branch_name_topic5`) → build image, then over SSH run
-  `infra/server/topic-deploy.sh`: start `internship-crm-topic5` on its port, write
-  the nginx route, reload. Posts the `crm-topic5.ersah.in` URL on the PR.
-- **PR merged/closed** → `infra/server/topic-teardown.sh` stops/removes the
-  container + image and the nginx route, then reloads.
+- **PR opened / pushed to / reopened** → build the image locally on the server,
+  then `infra/server/topic-deploy.sh` starts `internship-crm-pr<N>` on its derived
+  port (3300–3399, `3300 + N%100`) and **routes it through a Plesk subdomain**
+  `crm-pr<N>.ersah.in` (see below). A bot comment on the PR carries the URL
+  (updated on every push).
+- **PR merged/closed** → `infra/server/topic-teardown.sh` removes the Plesk
+  subdomain, stops/removes the container + image, and cleans any legacy route.
 
-**Database: a single shared preview DB** (`DATABASE_URL_PREVIEW`). No per-topic DB,
-so no DB-admin secret is needed. ⚠️ Trade-off: all topics share schema/data — two
-concurrent topics with divergent schema changes can drift (`prisma db push` is
-global). Coordinate schema changes across simultaneous topics, or switch to
-per-topic DBs later (would need a `CREATE/DROP DATABASE`-capable secret).
+**Routing is Plesk-native (mirrors crm-preview).** Every site on this box is a
+Plesk vhost bound to the server IP (`listen <IP>:443 ssl`); a raw all-addresses
+`listen 443 ssl` block in `conf.d` loses the nginx address-group match, so its
+`server_name` is never evaluated and requests fall to Plesk's default vhost
+(`login_up.php` / 404). So `topic-deploy.sh` instead:
+1. `plesk bin subdomain --create crm-pr<N> -domain ersah.in -ssl true` (idempotent),
+2. writes the same reverse proxy crm-preview uses into Plesk's supported custom
+   include `/var/www/vhosts/system/<fqdn>/conf/vhost_nginx.conf`:
+   `location ~ ^/.* { proxy_pass http://0.0.0.0:<port>; … }`,
+3. `plesk sbin httpdmng --reconfigure-domain <fqdn>`.
+TLS is handled by Plesk (+ Cloudflare at the edge). Teardown does
+`plesk bin subdomain --remove`.
 
-### Secrets / vars used (already present unless noted)
-`SSH_HOST`, `SSH_USER`, `SSH_PORT`, `SSH_PRIVATE_KEY`, `DATABASE_URL_PREVIEW`,
-`NEXTAUTH_SECRET`, `SMTP_*`, `GITHUB_TOKEN`. Base domain is the `BASE_DOMAIN` env in
-the workflow (default `ersah.in`).
+Because the runner is on the server, there is **no SSH and no GHCR round-trip**:
+`topic-deploy.sh` is called with `SKIP_PULL=1` (image already built locally) and
+`ENV_FILE=/etc/internship-crm/preview.env` (secrets sourced directly, same file
+`deploy-preview.yml` uses). The script still supports the old hosted flow (GHCR
+`IMAGE` + `ACTOR`/`B64_TOKEN` + `B64_*` secrets) for backward compatibility.
 
-### Still needs a real-topic test
-The scripts follow standard Plesk/nginx conventions but haven't been run against
-the live box. First validation: open a PR from a `…_topicN` branch and confirm the
-container comes up, `crm-topicN.ersah.in` serves over TLS, and closing the PR tears
-it down (`docker ps` + `$NGINX_CONF_DIR` clean). Adjust `NGINX_CONF_DIR` /
-`NGINX_RELOAD_CMD` / `CERT_DIR` if paths differ.
+**Database: a single shared preview DB.** No per-topic DB, so no DB-admin secret
+is needed. ⚠️ Trade-off: all topics share schema/data — two concurrent PRs with
+divergent schema changes can drift (`prisma db push` is global). Coordinate schema
+changes across simultaneous topics, or switch to per-topic DBs later (would need a
+`CREATE/DROP DATABASE`-capable secret).
+
+### Prerequisites on the server
+- Self-hosted runner registered; its user (root here) can run `docker` and the
+  `plesk` CLI (`plesk bin subdomain`, `plesk sbin httpdmng`).
+- Wildcard DNS `*.ersah.in` → the server (Cloudflare-proxied), so `crm-pr<N>`
+  resolves. Plesk issues/uses the subdomain's TLS; Cloudflare terminates at the edge.
+- `/etc/internship-crm/preview.env` (chmod 600) with `DATABASE_URL` (the shared
+  preview DB), `NEXTAUTH_SECRET`, `SMTP_*`.
+
+### Verified live
+Confirmed end-to-end on the live box: opening a PR builds the image, creates the
+`crm-pr<N>.ersah.in` Plesk subdomain proxying to the container, comments the URL,
+and serves the app (`/api/health` → 200); closing the PR removes the subdomain and
+container.
 
 ---
 

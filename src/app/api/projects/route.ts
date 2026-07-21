@@ -19,7 +19,7 @@ const include = {
   },
   members: {
     orderBy: { addedAt: 'asc' },
-    select: { role: true, user: { select: { id: true, fullName: true, role: true } } },
+    select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, role: true } } },
   },
   _count: { select: { relations: true } },
 } as const;

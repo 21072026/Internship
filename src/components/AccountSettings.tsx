@@ -11,6 +11,8 @@ import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
+import { durationSince } from '@/lib/relativeTime';
+import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -30,10 +32,14 @@ export function AccountSettings() {
   const [savingPw, setSavingPw] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null } | null>(null);
+  const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null; createdAt: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
   const [savingPrefs, setSavingPrefs] = useState(false);
+  // Browser (foreground) notifications — per-device, not stored server-side (#675).
+  const [browserNotif, setBrowserNotif] = useState(false);
+  const [browserNotifSupported, setBrowserNotifSupported] = useState(false);
+  const [browserNotifDenied, setBrowserNotifDenied] = useState(false);
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
@@ -55,16 +61,58 @@ export function AccountSettings() {
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
         setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
-        setLanguage(user.preferredLanguage ?? 'en');
+        // The language selector must reflect the EFFECTIVE locale, not just the
+        // DB preference: getLocale() lets the `locale` cookie win, so a cookie of
+        // `tr` with a `preferredLanguage` of `en`/null renders a Turkish UI while
+        // the selector said "English" (#653). Prefer the cookie, and converge the
+        // DB preference to it so the two never diverge again.
+        const m = document.cookie.match(new RegExp('(?:^|; )' + LOCALE_COOKIE + '=([^;]*)'));
+        const cookieLocale = m ? decodeURIComponent(m[1]) : null;
+        const validCookie = cookieLocale && (locales as readonly string[]).includes(cookieLocale) ? cookieLocale : null;
+        setLanguage(validCookie ?? user.preferredLanguage ?? 'en');
+        if (validCookie && validCookie !== user.preferredLanguage) {
+          fetch('/api/profile', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preferredLanguage: validCookie }),
+          }).catch(() => {});
+        }
         setTheme(user.theme ?? 'system');
         setAccent(resolveAccent(user.accentColor));
         setRole(user.role ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
-        setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null });
+        setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt ?? null });
       });
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const supported = canUseBrowserNotifications();
+    setBrowserNotifSupported(supported);
+    if (supported) {
+      setBrowserNotifDenied(Notification.permission === 'denied');
+      setBrowserNotif(browserNotificationsPrefOn() && Notification.permission === 'granted');
+    }
+  }, []);
+
+  const toggleBrowserNotif = async (next: boolean) => {
+    if (!next) {
+      setBrowserNotif(false);
+      setBrowserNotificationsPref(false);
+      return;
+    }
+    let perm = Notification.permission;
+    if (perm === 'default') perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      setBrowserNotif(true);
+      setBrowserNotificationsPref(true);
+      setBrowserNotifDenied(false);
+    } else {
+      setBrowserNotif(false);
+      setBrowserNotificationsPref(false);
+      setBrowserNotifDenied(perm === 'denied');
+    }
+  };
 
   const twoFa = async (action: 'setup' | 'enable' | 'disable') => {
     setTwoFaBusy(true);
@@ -122,7 +170,7 @@ export function AccountSettings() {
 
   const changeLanguage = async (next: string) => {
     setLanguage(next);
-    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${60 * 60 * 24 * 365}`;
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
     try {
       await fetch('/api/profile', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -267,11 +315,23 @@ export function AccountSettings() {
     }
   };
 
+  // "Member for 3 months" — the magnitude comes from durationSince, the noun
+  // and surrounding phrase from the localized membership block.
+  const membershipLabel = (() => {
+    if (!me?.createdAt) return null;
+    const { count, unit } = durationSince(me.createdAt);
+    const noun = count === 1 ? t.membership[unit] : t.membership[`${unit}s` as 'days' | 'months' | 'years'];
+    return t.membership.inSystemFor.replace('{d}', `${count} ${noun}`);
+  })();
+
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">{t.account.title}</h1>
         <p className="text-gray-500 mt-1">{t.account.subtitle}</p>
+        {membershipLabel && (
+          <p className="text-xs text-gray-400 mt-1" data-testid="membership-duration">{membershipLabel}</p>
+        )}
       </div>
 
       {msg && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">✓ {msg}</div>}
@@ -375,6 +435,24 @@ export function AccountSettings() {
             </label>
           ))}
         </div>
+
+        {browserNotifSupported && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <label className="flex items-center gap-3 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={browserNotif}
+                disabled={browserNotifDenied}
+                onChange={(e) => toggleBrowserNotif(e.target.checked)}
+                data-testid="browser-notif-toggle"
+              />
+              {t.account.browserNotifications}
+            </label>
+            <p className="text-xs text-gray-400 mt-1">
+              {browserNotifDenied ? t.account.browserNotificationsDenied : t.account.browserNotificationsHint}
+            </p>
+          </div>
+        )}
 
         <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
           <div>

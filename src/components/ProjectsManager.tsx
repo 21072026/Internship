@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2 } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { formatDate, durationSince } from '@/lib/relativeTime';
 
 interface Task {
   id: string;
@@ -34,7 +34,7 @@ interface Project {
   ownerCompany?: { id: string; name: string } | null;
   tasks?: Task[];
   relations?: { mentee: { id: string; fullName: string } }[];
-  members?: { role: 'OWNER' | 'MENTOR'; user: { id: string; fullName: string; role: string } }[];
+  members?: { role: 'OWNER' | 'MENTOR' | 'MENTEE'; functionalRole?: 'DEVELOPER' | 'TESTER' | 'MARKETING' | null; addedAt?: string; user: { id: string; fullName: string; role: string } }[];
   _count?: { relations: number };
 }
 
@@ -56,6 +56,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
+  const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [ownerType, setOwnerType] = useState('ADMIN');
   const [ownerUserId, setOwnerUserId] = useState('');
@@ -72,7 +73,11 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => {
     // Mentors get a minimal directory too — needed for the member picker (#618).
     fetch('/api/users').then((r) => (r.ok ? r.json() : { users: [] }))
-      .then((d) => setMentors((d.users ?? []).filter((u: { role: string }) => u.role === 'MENTOR' || u.role === 'ADMIN')))
+      .then((d) => {
+        const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
+        setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));
+        setMentees(users.filter((u) => u.role === 'MENTEE'));
+      })
       .catch(() => {});
     if (!isAdmin) return;
     fetch('/api/companies').then((r) => r.json()).then((d) => setCompanies(d.companies ?? []));
@@ -184,6 +189,10 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const [manageId, setManageId] = useState<string | null>(null);
   const [addUserId, setAddUserId] = useState('');
   const [addRole, setAddRole] = useState<'OWNER' | 'MENTOR'>('MENTOR');
+  // Mentee members (#51): a separate picker so a mentee can be added with a
+  // functional (job) role, kept distinct from the owner/mentor management row.
+  const [addMenteeId, setAddMenteeId] = useState('');
+  const [addFunc, setAddFunc] = useState<'DEVELOPER' | 'TESTER' | 'MARKETING'>('DEVELOPER');
   const [memberErr, setMemberErr] = useState('');
   const canManageMembers = (p: Project) =>
     isAdmin || (p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER');
@@ -209,6 +218,10 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const addMember = (projectId: string) => {
     if (!addUserId) return;
     memberCall(projectId, 'POST', { userId: addUserId, role: addRole }).then((ok) => { if (ok) setAddUserId(''); });
+  };
+  const addMenteeMember = (projectId: string) => {
+    if (!addMenteeId) return;
+    memberCall(projectId, 'POST', { userId: addMenteeId, role: 'MENTEE', functionalRole: addFunc }).then((ok) => { if (ok) setAddMenteeId(''); });
   };
   // Transfer = make the target an OWNER, then step down yourself.
   const transferTo = async (projectId: string) => {
@@ -408,10 +421,22 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                     <div className="space-y-1 mb-3">
                       {(p.members ?? []).map((m) => (
                         <div key={m.user.id} className="flex items-center gap-2 text-sm">
-                          <Badge variant={m.role === 'OWNER' ? 'info' : 'default'} className="text-xs">
-                            {m.role === 'OWNER' ? t.projects.roleOwner : t.projects.roleMentorMember}
+                          <Badge variant={m.role === 'OWNER' ? 'info' : m.role === 'MENTEE' ? 'purple' : 'default'} className="text-xs">
+                            {m.role === 'OWNER' ? t.projects.roleOwner : m.role === 'MENTEE' ? t.projects.roleMentee : t.projects.roleMentorMember}
                           </Badge>
-                          <span className="flex-1 text-gray-800 dark:text-gray-200">{m.user.fullName}</span>
+                          {m.role === 'MENTEE' && m.functionalRole && (
+                            <Badge variant="default" className="text-xs">
+                              {(t.projects.functionalRoles as Record<string, string>)[m.functionalRole]}
+                            </Badge>
+                          )}
+                          <span className="flex-1 text-gray-800 dark:text-gray-200">
+                            {m.user.fullName}
+                            {m.addedAt && (() => {
+                              const { count, unit } = durationSince(m.addedAt);
+                              const noun = count === 1 ? t.membership[unit] : t.membership[`${unit}s` as 'days' | 'months' | 'years'];
+                              return <span className="ml-1.5 text-xs text-gray-400">· {t.membership.inProjectFor.replace('{d}', `${count} ${noun}`)}</span>;
+                            })()}
+                          </span>
                           <button onClick={() => memberCall(p.id, 'DELETE', { userId: m.user.id })} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
                       ))}
@@ -436,6 +461,32 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                         <Button type="button" size="sm" variant="secondary" disabled={!addUserId} onClick={() => transferTo(p.id)} data-testid="member-transfer">
                           {t.projects.transfer}
                         </Button>
+                      )}
+                    </div>
+
+                    {/* Mentee members with a functional (job) role (#51). */}
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{t.projects.addMenteeMember}</p>
+                      <div className="flex gap-2 flex-wrap items-center">
+                        <select value={addMenteeId} onChange={(e) => setAddMenteeId(e.target.value)} data-testid="mentee-picker"
+                          className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-sm">
+                          <option value="">—</option>
+                          {mentees.filter((m) => !(p.members ?? []).some((x) => x.user.id === m.id)).map((m) => (
+                            <option key={m.id} value={m.id}>{m.fullName}</option>
+                          ))}
+                        </select>
+                        <select value={addFunc} onChange={(e) => setAddFunc(e.target.value as 'DEVELOPER' | 'TESTER' | 'MARKETING')} data-testid="functional-role-picker"
+                          className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-sm">
+                          {(['DEVELOPER', 'TESTER', 'MARKETING'] as const).map((fr) => (
+                            <option key={fr} value={fr}>{(t.projects.functionalRoles as Record<string, string>)[fr]}</option>
+                          ))}
+                        </select>
+                        <Button type="button" size="sm" variant="outline" disabled={!addMenteeId} onClick={() => addMenteeMember(p.id)} data-testid="mentee-add">
+                          {t.projects.add}
+                        </Button>
+                      </div>
+                      {mentees.length === 0 && (
+                        <p className="text-xs text-gray-400 mt-1.5">{t.projects.noMenteesToAdd}</p>
                       )}
                     </div>
                   </div>

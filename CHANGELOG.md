@@ -10,7 +10,120 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.10.0] - 2026-07-20
+## [0.14.7] - 2026-07-21
+
+### Fixed
+- **Mentor onboarding checklist never dismissed (closes #690)** — the
+  `scheduleMeeting` step was hard-coded `done: false` and, being counted by the
+  `steps.every(done)` check, kept the checklist on screen forever even after the
+  mentor finished everything. `scheduleMeeting.done` is now computed from the
+  mentor's actual meeting count, and `OnboardingChecklist` decides completion
+  from **required** steps only, so an optional step can no longer pin the
+  checklist open.
+
+## [0.14.6] - 2026-07-21
+
+### Fixed
+- **Silent API failures swallowed with `.catch(() => {})` (closes #679)** — the
+  admin analytics page and the candidate-detail dropdowns dropped fetch errors
+  on the floor, so a failed load looked like empty data with no signal. The
+  analytics page now surfaces a load error banner (and logs it); the
+  candidate-detail project/cohort/source dropdown loads log their failures
+  instead of swallowing them; and the evaluation panel shows an inline error
+  when a submission fails instead of silently doing nothing.
+
+## [0.14.5] - 2026-07-21
+
+### Fixed
+- **Account language selector out of sync with the UI (closes #653)** — the
+  selector read the DB `preferredLanguage` while `getLocale()` lets the `locale`
+  cookie win, so a `tr` cookie + `en`/null preference showed "English" over a
+  Turkish UI. The selector now reflects the effective (cookie-first) locale and
+  converges `preferredLanguage` to it so they can't diverge again; the locale
+  cookie is written with `samesite=lax` (matching theme/accent).
+
+## [0.14.4] - 2026-07-21
+
+### Fixed
+- **Portal "email mentor" dead button (closes #654)** — the mentee portal had a
+  bare `mailto:` button that did nothing when no mail client was configured.
+  Removed it; the reliable **in-app "Message mentor"** button (already primary)
+  stays, and the mentor's email address is now a `mailto:` link itself (visible +
+  copyable + best-effort), so contact works in every environment.
+
+## [0.14.3] - 2026-07-21
+
+### Fixed
+- **CSV bulk import now sets `orgId` (closes #678)** — imported MENTEE users
+  inherited no org, so they fell outside the tenant's plan-limit counts and
+  (with `MT_ENFORCE_ISOLATION`) isolation. `POST /api/admin/import` now sets
+  `orgId: resolveOrgId(session)` on create, matching every other create path
+  (mentor add-mentee, apply). Null-org admins are unaffected (single-tenant).
+
+## [0.14.2] - 2026-07-21
+
+### Fixed
+- **`/icon.svg` 500 (closes #689)** — `public/icon.svg` and `src/app/icon.svg`
+  both claimed the `/icon.svg` route (the App Router serves `src/app/icon.svg`
+  as `/icon.svg` automatically, and the `public/` copy collided). Removed the
+  duplicate `public/icon.svg`; the app-router icon still serves the favicon and
+  manifest/layout references.
+
+## [0.14.1] - 2026-07-20
+
+### Fixed
+- **Meeting links were mislabeled "Google Meet"** — the app auto-generates
+  **Jitsi** meeting links, but the invite email and the scheduler label called
+  them "Google Meet". Relabeled to a provider-neutral "Meeting link"
+  (email template + `meetLink` in EN/TR/DE), and corrected the feature-catalog
+  comms description ("video meeting invites" instead of "Google Meet invites").
+
+## [0.14.0] - 2026-07-20
+
+### Added
+- **Mentee project members with functional roles (#51)** — projects can now
+  include **mentee** members, each tagged with a functional (job) role:
+  Developer, Tester, or Marketing. Managed from the project owners/members panel
+  (`/admin/projects`, `/mentor/projects`) via a dedicated mentee picker.
+  - Schema: `ProjectMember.functionalRole` (nullable enum
+    `ProjectFunctionalRole`), plus `MENTEE` added to `ProjectMemberRole`
+    (additive, safe `db push`).
+  - `POST /api/projects/[id]/members` accepts `role: 'MENTEE'` + `functionalRole`;
+    mentees can never be owners, and the last-owner protection is unchanged.
+
+## [0.13.0] - 2026-07-20
+
+### Added
+- **Browser notifications for new messages (foreground, #675 Kademe 1)** — when
+  the user opts in (Account → Notifications) and grants the browser permission,
+  a desktop notification fires for each new unread in-app notification while the
+  app is open in a tab. Per-device preference in `localStorage` (no schema
+  change); dedupes by notification id and never bursts on the first poll. New
+  `src/lib/browserNotifications.ts` helper, wired into `NotificationBell`.
+  Background web-push (Kademe 2) remains a separate follow-up.
+
+## [0.12.0] - 2026-07-20
+
+### Added
+- **Membership duration indicator** — the account page now shows how long you've
+  been a member ("Member for 3 months", from `User.createdAt`), and the project
+  owners/members panel shows how long each person has been on that project (from
+  `ProjectMember.addedAt`). New `durationSince` helper in `src/lib/relativeTime.ts`
+  and a localized `membership` i18n block (EN/TR/DE). `/api/projects` now includes
+  `addedAt` on member rows.
+
+## [0.11.0] - 2026-07-20
+
+### Added
+- **Paste images into a message** — paste from the clipboard straight into the
+  reply box; pasted images (and picked files) appear as instant thumbnails you
+  can click to preview and remove before sending.
+- **Multiple attachments per message** (closes #655) — the compose box and
+  `POST /api/messages` now accept several files at once (`form.getAll('file')`,
+  capped at 10); each becomes a `MessageAttachment`.
+- **Attachments are included in the notification email** — pasted images and
+  files are mirrored into the recipient's email as attachments (`sendEmail` now
+  supports `attachments`).
 
 ### Added
 - **"Select all" in the meeting scheduler** — one checkbox to select every
@@ -290,6 +403,6 @@ interaction logging, Kanban board, calendar & reminders, analytics, document
 uploads with versioning, two-factor authentication, invitation-based
 registration, and English/Turkish/German localization.
 
-[Unreleased]: https://github.com/mersahin/Internship/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/mersahin/Internship/releases/tag/v0.2.0
-[0.1.0]: https://github.com/mersahin/Internship/releases/tag/v0.1.0
+[Unreleased]: https://github.com/21072026/Internship/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/21072026/Internship/releases/tag/v0.2.0
+[0.1.0]: https://github.com/21072026/Internship/releases/tag/v0.1.0

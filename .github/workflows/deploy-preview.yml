@@ -1,0 +1,62 @@
+name: Deploy preview (self-hosted, manual)
+
+# CI-independent PREVIEW deploy — the sibling of deploy-prod.yml. Runs ON THE
+# SERVER via the self-hosted runner (no GitHub-hosted quota cost), so preview
+# (https://crm-preview.ersah.in, container internship-crm-preview on :3201) can
+# be kept in step with prod even while the hosted deploy.yml is paused.
+#
+# It reuses infra/deploy-prod.sh unchanged — that script is fully parameterized
+# (CONTAINER / PORT / IMAGE / ENV_FILE), so preview is just the prod deploy with
+# preview overrides.
+#
+# SECRETS: read from /etc/internship-crm/preview.env on the server (same shape as
+# prod.env: DATABASE_URL[_PREVIEW], NEXTAUTH_SECRET, NEXTAUTH_URL=the preview URL,
+# SMTP_*). If that file is absent, deploy-prod.sh derives it from the currently
+# running internship-crm-preview container, so no manual setup is needed as long
+# as a preview container already exists.
+#
+# ⚠️ The preview DB is SHARED across all previews (see CLAUDE.md) — a schema
+# `db push` here affects every preview. That is unchanged from the old
+# deploy.yml behavior.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch/tag/SHA to deploy to preview (default: main)'
+        required: false
+        default: 'main'
+
+concurrency:
+  group: deploy-preview-self-hosted
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.ref }} to preview
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Deploy
+        run: |
+          chmod +x infra/deploy-prod.sh
+          ENV_FILE="${ENV_FILE:-/etc/internship-crm/preview.env}"
+          # Preview has no hand-written secrets file; deploy-prod.sh derives one
+          # from the running preview container. Remove any previously-derived
+          # file first so the derivation always regenerates cleanly (self-healing
+          # if an older run wrote a malformed one).
+          rm -f "$ENV_FILE" || true
+          # Same script as prod, with preview container/port/image/env overrides.
+          # NETWORK=bridge: the preview DB user is granted from the docker
+          # gateway (host.docker.internal), not localhost, so preview uses bridge
+          # networking + a published port instead of host networking.
+          BRANCH="${{ inputs.ref }}" \
+          CONTAINER=internship-crm-preview \
+          PORT=3201 \
+          IMAGE=internship-crm-preview:local \
+          NETWORK=bridge \
+          ENV_FILE="$ENV_FILE" \
+          ./infra/deploy-prod.sh --no-pull

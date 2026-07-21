@@ -13,6 +13,129 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.7-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['The mentor getting-started checklist now disappears once you’ve completed the essential steps (scheduling a meeting is correctly optional).'],
+      tr: ['Mentör başlangıç kontrol listesi, temel adımları tamamlayınca artık kayboluyor (toplantı planlamak doğru şekilde isteğe bağlı).'],
+      de: ['Die Mentor-Startcheckliste verschwindet jetzt, sobald du die wesentlichen Schritte erledigt hast (das Planen eines Meetings ist korrekt optional).'],
+    },
+  },
+  {
+    version: '0.14.6-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['When a page fails to load its data, you now see a clear error instead of a blank screen, and saving an evaluation shows an error if it doesn’t go through.'],
+      tr: ['Bir sayfa verisini yükleyemediğinde artık boş ekran yerine net bir hata görüyorsun; bir değerlendirme kaydedilmezse hata gösteriliyor.'],
+      de: ['Wenn eine Seite ihre Daten nicht laden kann, siehst du jetzt einen klaren Fehler statt eines leeren Bildschirms, und beim Speichern einer Bewertung wird ein Fehler angezeigt, falls es nicht klappt.'],
+    },
+  },
+  {
+    version: '0.14.5-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['The language shown in Account settings now always matches the actual interface language.'],
+      tr: ['Hesap ayarlarında görünen dil artık her zaman arayüzün gerçek diliyle aynı.'],
+      de: ['Die in den Kontoeinstellungen angezeigte Sprache stimmt jetzt immer mit der tatsächlichen Oberflächensprache überein.'],
+    },
+  },
+  {
+    version: '0.14.4-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Contacting your mentor from the portal is more reliable — use the in-app “Message mentor” button; the email address is now a clickable link.'],
+      tr: ['Portaldan mentörünle iletişim daha güvenilir — uygulama-içi “Mentöre mesaj” butonunu kullan; e-posta adresi artık tıklanabilir bir bağlantı.'],
+      de: ['Die Kontaktaufnahme mit deinem Mentor über das Portal ist zuverlässiger — nutze die In-App-Schaltfläche „Mentor benachrichtigen“; die E-Mail-Adresse ist jetzt ein anklickbarer Link.'],
+    },
+  },
+  {
+    version: '0.14.2-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Fixed a broken app icon (the `/icon.svg` address returned an error).'],
+      tr: ['Bozuk uygulama simgesi düzeltildi (`/icon.svg` adresi hata veriyordu).'],
+      de: ['Ein defektes App-Symbol behoben (die Adresse `/icon.svg` gab einen Fehler zurück).'],
+    },
+  },
+  {
+    version: '0.14.1-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: ['Meeting invite emails now correctly say “Meeting link” instead of “Google Meet” (the links are Jitsi).'],
+      tr: ['Toplantı davet e-postaları artık “Google Meet” yerine doğru şekilde “Toplantı bağlantısı” diyor (bağlantılar Jitsi).'],
+      de: ['Meeting-Einladungs-E-Mails sagen jetzt korrekt „Meeting-Link“ statt „Google Meet“ (die Links sind Jitsi).'],
+    },
+  },
+  {
+    version: '0.14.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'Add mentees to a project with a functional role — Developer, Tester, or Marketing — so a project shows who does what.',
+      ],
+      tr: [
+        'Projeye mentee’leri işlevsel rolüyle ekle — Geliştirici, Test uzmanı veya Pazarlama — böylece projede kimin ne yaptığı görünür.',
+      ],
+      de: [
+        'Füge Mentees mit einer funktionalen Rolle zu einem Projekt hinzu — Entwickler, Tester oder Marketing — damit ersichtlich ist, wer was macht.',
+      ],
+    },
+  },
+  {
+    version: '0.13.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'Browser notifications — turn them on in Account → Notifications and get a desktop popup for new messages while the app is open.',
+      ],
+      tr: [
+        'Tarayıcı bildirimleri — Hesap → Bildirimler’den aç, uygulama açıkken yeni mesajlarda masaüstü bildirimi al.',
+      ],
+      de: [
+        'Browser-Benachrichtigungen — aktiviere sie unter Konto → Benachrichtigungen und erhalte bei neuen Nachrichten ein Desktop-Popup, solange die App geöffnet ist.',
+      ],
+    },
+  },
+  {
+    version: '0.12.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'See how long you’ve been a member — your account page now shows “Member for 3 months”.',
+        'Project members now show how long each person has been on the project.',
+      ],
+      tr: [
+        'Ne zamandır üye olduğunu gör — hesap sayfanda artık “Üyelik süresi: 3 ay” yazıyor.',
+        'Proje üyelerinde her kişinin projede ne kadar süredir olduğu görünüyor.',
+      ],
+      de: [
+        'Sieh, wie lange du schon Mitglied bist — deine Kontoseite zeigt jetzt „Mitglied seit 3 Monaten“.',
+        'Bei Projektmitgliedern wird jetzt angezeigt, wie lange jede Person schon im Projekt ist.',
+      ],
+    },
+  },
+  {
+    version: '0.11.0-beta',
+    date: '2026-07-20',
+    highlights: {
+      en: [
+        'Paste images into messages — copy an image and paste it right into the reply box; it shows as a thumbnail you can preview and remove, and it’s sent with your message.',
+        'Attach several files at once to a single message.',
+        'Message attachments (including pasted images) now also arrive in the email notification.',
+      ],
+      tr: [
+        'Mesajlara resim yapıştır — bir resmi kopyalayıp doğrudan yanıt kutusuna yapıştır; önizleyip kaldırabileceğin bir küçük resim olarak görünür ve mesajınla birlikte gönderilir.',
+        'Tek mesaja aynı anda birden çok dosya ekle.',
+        'Mesaj ekleri (yapıştırılan resimler dâhil) artık e-posta bildiriminde de geliyor.',
+      ],
+      de: [
+        'Bilder in Nachrichten einfügen — ein Bild kopieren und direkt ins Antwortfeld einfügen; es erscheint als Miniaturansicht zum Vorschauen und Entfernen und wird mit der Nachricht gesendet.',
+        'Mehrere Dateien gleichzeitig an eine Nachricht anhängen.',
+        'Nachrichtenanhänge (auch eingefügte Bilder) kommen jetzt auch in der E-Mail-Benachrichtigung an.',
+      ],
+    },
+  },
+  {
     version: '0.10.0-beta',
     date: '2026-07-20',
     highlights: {

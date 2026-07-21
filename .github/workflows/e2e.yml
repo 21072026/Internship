@@ -1,14 +1,14 @@
 name: E2E Tests
 
 on:
-  # PAUSED (GitHub Actions quota exhausted) — auto-triggers disabled so failing
-  # hosted runs stop emailing the team. Re-enable by restoring the push/
-  # pull_request blocks below. Manual runs still work via "Run workflow".
+  # Re-enabled 2026-07-21 after the repo transfer reset the Actions quota. This
+  # is the @smoke-only PR gate (~3.5 min) — cheap enough to run per PR. The full
+  # suite (e2e-full) stays workflow_dispatch-only to protect the monthly budget.
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 # Cancel superseded runs on the same ref so the gate stays fast.
 concurrency:

@@ -12,7 +12,8 @@ import { notify } from '@/lib/notify';
 
 const addSchema = z.object({
   userId: z.string().min(1),
-  role: z.enum(['OWNER', 'MENTOR']).default('MENTOR'),
+  role: z.enum(['OWNER', 'MENTOR', 'MENTEE']).default('MENTOR'),
+  functionalRole: z.enum(['DEVELOPER', 'TESTER', 'MARKETING']).nullable().optional(),
 });
 const removeSchema = z.object({ userId: z.string().min(1) });
 
@@ -36,7 +37,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const members = await prisma.projectMember.findMany({
     where: { projectId: id },
     orderBy: { addedAt: 'asc' },
-    select: { role: true, addedAt: true, user: { select: { id: true, fullName: true, role: true } } },
+    select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, role: true } } },
   });
   return NextResponse.json({ members });
 }
@@ -53,23 +54,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const parsed = addSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { userId, role } = parsed.data;
+  // Functional role only applies to mentee members; ignore it for owners/mentors.
+  const functionalRole = role === 'MENTEE' ? parsed.data.functionalRole ?? null : null;
 
   const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, isActive: true } });
-  if (!target || !target.isActive || (target.role !== 'MENTOR' && target.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Member must be an active mentor or admin' }, { status: 400 });
+  if (!target || !target.isActive) {
+    return NextResponse.json({ error: 'Member must be an active user' }, { status: 400 });
+  }
+  // Structural role must match who the person is: mentees join as MENTEE
+  // (contributors), mentors/admins as OWNER or MENTOR.
+  if (role === 'MENTEE') {
+    if (target.role !== 'MENTEE') {
+      return NextResponse.json({ error: 'Only a mentee can be added as a mentee member' }, { status: 400 });
+    }
+  } else if (target.role !== 'MENTOR' && target.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'An owner or mentor member must be an active mentor or admin' }, { status: 400 });
   }
 
-  // Demoting the last OWNER to MENTOR would leave the project ownerless.
+  // Demoting the last OWNER to a non-owner role would leave the project ownerless.
   const owners = project.members.filter((m) => m.role === 'OWNER');
-  if (role === 'MENTOR' && owners.length === 1 && owners[0].userId === userId) {
+  if (role !== 'OWNER' && owners.length === 1 && owners[0].userId === userId) {
     return NextResponse.json({ error: 'A project must keep at least one owner', code: 'last_owner' }, { status: 409 });
   }
 
   const member = await prisma.projectMember.upsert({
     where: { projectId_userId: { projectId: id, userId } },
-    update: { role },
-    create: { projectId: id, userId, role },
-    select: { role: true, user: { select: { id: true, fullName: true } } },
+    update: { role, functionalRole },
+    create: { projectId: id, userId, role, functionalRole },
+    select: { role: true, functionalRole: true, user: { select: { id: true, fullName: true } } },
   });
   if (userId !== session.user.id) {
     await notify(userId, 'project', `You were added to project "${project.name}".`, '/projects/' + id);

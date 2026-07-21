@@ -52,11 +52,13 @@ export async function sendEmail({
   subject,
   html,
   replyTo,
+  attachments,
 }: {
   to: string;
   subject: string;
   html: string;
   replyTo?: string;
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }) {
   if (!process.env.SMTP_USER) {
     console.log(`[Email skipped - no SMTP config] To: ${to}, Subject: ${subject}`);
@@ -70,6 +72,7 @@ export async function sendEmail({
     html,
     text: htmlToText(html),
     ...(replyTo ? { replyTo } : {}),
+    ...(attachments?.length ? { attachments } : {}),
   });
 }
 
@@ -252,7 +255,7 @@ export async function sendMeetingInviteEmail({
         ${fullName ? `<p>Hi ${fullName},</p>` : ''}
         <p>You're invited to a meeting.</p>
         ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
-        ${meetLink ? `<p><strong>Google Meet:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
+        ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
         ${when ? `
         <p style="margin-top: 20px;">Can you make it?</p>
         <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
