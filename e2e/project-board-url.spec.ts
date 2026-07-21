@@ -9,7 +9,9 @@ test('a project can store a board URL and surface it on the public showcase', as
   const adminEmail = uniqueEmail('pb-admin');
   const admin = await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'PB Admin');
   let projectId = '';
-  const board = 'https://github.com/users/mersahin/projects/2';
+  // Arbitrary fixture URL — the test only checks it round-trips through the API
+  // and renders on the showcase; it does not require a real board to exist.
+  const board = 'https://github.com/orgs/21072026/projects/2';
 
   try {
     await page.goto('/auth/signin');
