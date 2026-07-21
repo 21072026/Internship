@@ -50,9 +50,13 @@ jobs:
           # if an older run wrote a malformed one).
           rm -f "$ENV_FILE" || true
           # Same script as prod, with preview container/port/image/env overrides.
+          # NETWORK=bridge: the preview DB user is granted from the docker
+          # gateway (host.docker.internal), not localhost, so preview uses bridge
+          # networking + a published port instead of host networking.
           BRANCH="${{ inputs.ref }}" \
           CONTAINER=internship-crm-preview \
           PORT=3201 \
           IMAGE=internship-crm-preview:local \
+          NETWORK=bridge \
           ENV_FILE="$ENV_FILE" \
           ./infra/deploy-prod.sh --no-pull

@@ -102,8 +102,24 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   docker build --build-arg GIT_SHA="$GIT_SHA" -t "$IMAGE" .
 fi
 
-run_tool() { # run a one-off tool container on host networking with the prod DB
-  docker run --rm --network=host -e DATABASE_URL="$DATABASE_URL" "$IMAGE" "$@"
+# Networking mode (#preview): prod runs on host networking with the DB at
+# localhost. Preview's DB user is only granted from the docker gateway (not
+# localhost), so preview must use bridge networking + host.docker.internal and
+# a published port. Default 'host' keeps prod behavior byte-for-byte.
+NETWORK="${NETWORK:-host}"
+if [ "$NETWORK" = host ]; then
+  APP_NET_ARGS=(--network=host)
+  APP_PORT_ARGS=(-e PORT="$PORT")
+  TOOL_NET_ARGS=(--network=host)
+else
+  # bridge: reach the host DB via host.docker.internal, publish the app port.
+  APP_NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "$PORT:3000")
+  APP_PORT_ARGS=()
+  TOOL_NET_ARGS=(--add-host=host.docker.internal:host-gateway)
+fi
+
+run_tool() { # run a one-off tool container against the DB (network per $NETWORK)
+  docker run --rm "${TOOL_NET_ARGS[@]}" -e DATABASE_URL="$DATABASE_URL" "$IMAGE" "$@"
 }
 
 # ── 3. Schema sync ────────────────────────────────────────────────────────────
@@ -122,9 +138,9 @@ docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
 docker run -d \
   --name "$CONTAINER" \
-  --network=host \
+  "${APP_NET_ARGS[@]}" \
   --restart=unless-stopped \
-  -e PORT="$PORT" \
+  "${APP_PORT_ARGS[@]}" \
   -e DATABASE_URL="$DATABASE_URL" \
   -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
   -e NEXTAUTH_URL="$NEXTAUTH_URL" \
