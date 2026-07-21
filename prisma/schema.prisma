@@ -306,8 +306,26 @@ model Message {
   attachments MessageAttachment[]
   // Per-user "delete for me" — hides the message only from these users' view.
   hiddenFor   MessageHiddenFor[]
+  // Emoji reactions (👍❤️😂…) from thread participants.
+  reactions   MessageReaction[]
 
   @@index([relationId])
+}
+
+// A single emoji reaction on a message by one user (WhatsApp/Slack style).
+// One row per (message, user, emoji) — a user can add several distinct emojis to
+// the same message but not the same emoji twice.
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 // "Delete for me": a message hidden from a single user's view (the message and
