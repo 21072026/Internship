@@ -61,7 +61,21 @@ export function AccountSettings() {
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
         setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
-        setLanguage(user.preferredLanguage ?? 'en');
+        // The language selector must reflect the EFFECTIVE locale, not just the
+        // DB preference: getLocale() lets the `locale` cookie win, so a cookie of
+        // `tr` with a `preferredLanguage` of `en`/null renders a Turkish UI while
+        // the selector said "English" (#653). Prefer the cookie, and converge the
+        // DB preference to it so the two never diverge again.
+        const m = document.cookie.match(new RegExp('(?:^|; )' + LOCALE_COOKIE + '=([^;]*)'));
+        const cookieLocale = m ? decodeURIComponent(m[1]) : null;
+        const validCookie = cookieLocale && (locales as readonly string[]).includes(cookieLocale) ? cookieLocale : null;
+        setLanguage(validCookie ?? user.preferredLanguage ?? 'en');
+        if (validCookie && validCookie !== user.preferredLanguage) {
+          fetch('/api/profile', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preferredLanguage: validCookie }),
+          }).catch(() => {});
+        }
         setTheme(user.theme ?? 'system');
         setAccent(resolveAccent(user.accentColor));
         setRole(user.role ?? '');
@@ -156,7 +170,7 @@ export function AccountSettings() {
 
   const changeLanguage = async (next: string) => {
     setLanguage(next);
-    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${60 * 60 * 24 * 365}`;
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
     try {
       await fetch('/api/profile', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
