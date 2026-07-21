@@ -137,6 +137,37 @@ else
   plesk bin subdomain --create "$SUBLABEL" -domain "$BASE_DOMAIN" -ssl true
 fi
 
+# ── Assign the existing *.${BASE_DOMAIN} wildcard cert to this subdomain ──────
+# The wildcard already covers crm-pr<N>.${BASE_DOMAIN}, so we import that one cert
+# into Plesk (idempotent) and assign it — no per-topic Let's Encrypt issuance.
+# Non-fatal: if anything here fails the subdomain still serves with its default
+# cert (Cloudflare terminates TLS at the edge anyway).
+WILDCARD_CERT_NAME="wildcard-${BASE_DOMAIN}"
+if [ -f "${CERT_DIR}/${BASE_DOMAIN}.cer" ] && [ -f "${CERT_DIR}/${BASE_DOMAIN}.key" ]; then
+  if ! plesk bin certificate --info "$WILDCARD_CERT_NAME" -domain "$BASE_DOMAIN" >/dev/null 2>&1; then
+    echo "==> Importing wildcard cert into Plesk as '${WILDCARD_CERT_NAME}'"
+    # acme.sh writes a fullchain to .cer — split leaf (first block) from the CA chain.
+    LEAF=$(mktemp); CHAIN=$(mktemp)
+    awk 'BEGIN{n=0} /-BEGIN CERTIFICATE-/{n++} { if(n<=1) print > leaf; else print > chain }' \
+      leaf="$LEAF" chain="$CHAIN" "${CERT_DIR}/${BASE_DOMAIN}.cer"
+    if [ -s "$CHAIN" ]; then
+      plesk bin certificate --create "$WILDCARD_CERT_NAME" -domain "$BASE_DOMAIN" \
+        -cert-file "$LEAF" -key-file "${CERT_DIR}/${BASE_DOMAIN}.key" -cacert-file "$CHAIN" \
+        || echo "WARN: wildcard cert import failed — keeping default cert"
+    else
+      plesk bin certificate --create "$WILDCARD_CERT_NAME" -domain "$BASE_DOMAIN" \
+        -cert-file "${CERT_DIR}/${BASE_DOMAIN}.cer" -key-file "${CERT_DIR}/${BASE_DOMAIN}.key" \
+        || echo "WARN: wildcard cert import failed — keeping default cert"
+    fi
+    rm -f "$LEAF" "$CHAIN"
+  fi
+  echo "==> Assigning '${WILDCARD_CERT_NAME}' to ${FQDN}"
+  plesk bin subdomain --update "$SUBLABEL" -domain "$BASE_DOMAIN" -ssl true \
+    -certificate-name "$WILDCARD_CERT_NAME" || echo "WARN: cert assignment failed — keeping default cert"
+else
+  echo "==> No wildcard cert files at ${CERT_DIR}/${BASE_DOMAIN}.cer(.key); using subdomain default cert"
+fi
+
 # Inject the reverse proxy to the container via Plesk's supported custom-nginx
 # include, then have Plesk regenerate the vhost config (idempotent — rewritten
 # each deploy).
