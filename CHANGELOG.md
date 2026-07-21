@@ -10,6 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-07-22
+
+### Fixed
+- **"Enter to send" toggle knob overlapped the label** — the switch knob's travel
+  overshot the track and clipped the first letter of the label when on; the knob
+  now stays within the track (`translate-x-3`, `shrink-0`).
+
+### Added
+- **Composer hint + edit-last shortcut** — a small hint under the reply box notes
+  you can paste an image and that **↑ (ArrowUp)** on an empty box edits your last
+  message (WhatsApp/Slack/Telegram style).
+
 ## [0.23.0] - 2026-07-22
 
 ### Added
