@@ -96,30 +96,77 @@ html.dark .text-amber-900 { color: #fde68a; }
 html.dark .bg-blue-50.text-blue-700,
 html.dark .bg-blue-50 .text-blue-700,
 html.dark .bg-blue-50 .text-blue-600,
+html.dark .bg-blue-50.text-blue-800,
+html.dark .bg-blue-50 .text-blue-800,
+html.dark .bg-blue-50.text-blue-900,
+html.dark .bg-blue-50 .text-blue-900,
+html.dark .bg-blue-50.text-blue-500,
+html.dark .bg-blue-50 .text-blue-500,
 html.dark .hover\:text-blue-700:hover,
 html.dark .group:hover .group-hover\:text-blue-600 { color: #93c5fd; } /* blue-300 */
 
 /*
- * Same dark-on-dark fix for the other accent colors (#503): mid-tone
- * text-*-600/700 on a retinted bg-*-50 box → the color's -300 shade. Only the
- * combinations that actually occur in the app are covered (green, red, amber,
- * indigo, yellow); *-600/700 on chips that stay light (bg-*-100) is untouched.
+ * Same dark-on-dark fix for the other accent colors (#503, extended in #658):
+ * mid-tone / strong text-*-500/600/700/800/900 on a retinted bg-*-50 box →
+ * the color's -300 shade. Covering the darker 800/900 and the lighter 500 too
+ * makes this a durable safety net (e.g. the portal's text-yellow-800 heading and
+ * text-blue-500 label), so most boxes need no per-element dark: utilities.
+ * *-* on chips that stay light (bg-*-100) is untouched.
  */
 html.dark .bg-green-50.text-green-700,
 html.dark .bg-green-50 .text-green-700,
-html.dark .bg-green-50 .text-green-600 { color: #86efac; } /* green-300 */
+html.dark .bg-green-50 .text-green-600,
+html.dark .bg-green-50.text-green-800,
+html.dark .bg-green-50 .text-green-800,
+html.dark .bg-green-50.text-green-900,
+html.dark .bg-green-50 .text-green-900,
+html.dark .bg-green-50.text-green-500,
+html.dark .bg-green-50 .text-green-500 { color: #86efac; } /* green-300 */
 html.dark .bg-red-50.text-red-700,
 html.dark .bg-red-50 .text-red-700,
-html.dark .bg-red-50 .text-red-600 { color: #fca5a5; } /* red-300 */
+html.dark .bg-red-50 .text-red-600,
+html.dark .bg-red-50.text-red-800,
+html.dark .bg-red-50 .text-red-800,
+html.dark .bg-red-50.text-red-900,
+html.dark .bg-red-50 .text-red-900,
+html.dark .bg-red-50.text-red-500,
+html.dark .bg-red-50 .text-red-500 { color: #fca5a5; } /* red-300 */
 html.dark .bg-amber-50.text-amber-700,
 html.dark .bg-amber-50 .text-amber-700,
-html.dark .bg-amber-50 .text-amber-600 { color: #fcd34d; } /* amber-300 */
+html.dark .bg-amber-50 .text-amber-600,
+html.dark .bg-amber-50.text-amber-800,
+html.dark .bg-amber-50 .text-amber-800,
+html.dark .bg-amber-50.text-amber-900,
+html.dark .bg-amber-50 .text-amber-900,
+html.dark .bg-amber-50.text-amber-500,
+html.dark .bg-amber-50 .text-amber-500 { color: #fcd34d; } /* amber-300 */
 html.dark .bg-indigo-50.text-indigo-700,
 html.dark .bg-indigo-50 .text-indigo-700,
-html.dark .bg-indigo-50 .text-indigo-600 { color: #a5b4fc; } /* indigo-300 */
+html.dark .bg-indigo-50 .text-indigo-600,
+html.dark .bg-indigo-50.text-indigo-800,
+html.dark .bg-indigo-50 .text-indigo-800,
+html.dark .bg-indigo-50.text-indigo-900,
+html.dark .bg-indigo-50 .text-indigo-900,
+html.dark .bg-indigo-50.text-indigo-500,
+html.dark .bg-indigo-50 .text-indigo-500 { color: #a5b4fc; } /* indigo-300 */
 html.dark .bg-yellow-50.text-yellow-700,
 html.dark .bg-yellow-50 .text-yellow-700,
-html.dark .bg-yellow-50 .text-yellow-600 { color: #fde047; } /* yellow-300 */
+html.dark .bg-yellow-50 .text-yellow-600,
+html.dark .bg-yellow-50.text-yellow-800,
+html.dark .bg-yellow-50 .text-yellow-800,
+html.dark .bg-yellow-50.text-yellow-900,
+html.dark .bg-yellow-50 .text-yellow-900,
+html.dark .bg-yellow-50.text-yellow-500,
+html.dark .bg-yellow-50 .text-yellow-500 { color: #fde047; } /* yellow-300 */
+html.dark .bg-purple-50.text-purple-700,
+html.dark .bg-purple-50 .text-purple-700,
+html.dark .bg-purple-50 .text-purple-600,
+html.dark .bg-purple-50.text-purple-800,
+html.dark .bg-purple-50 .text-purple-800,
+html.dark .bg-purple-50.text-purple-900,
+html.dark .bg-purple-50 .text-purple-900,
+html.dark .bg-purple-50.text-purple-500,
+html.dark .bg-purple-50 .text-purple-500 { color: #d8b4fe; } /* purple-300 */
 
 /*
  * Accent color system.

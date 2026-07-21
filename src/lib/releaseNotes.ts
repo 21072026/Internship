@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.17.1-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Dark mode: text inside colored info boxes (like the portal’s “complete your profile” note) is now readable instead of dark-on-dark.'],
+      tr: ['Koyu tema: renkli bilgi kutularındaki yazılar (ör. portaldaki “profilini tamamla” notu) artık koyu-üstüne-koyu yerine okunaklı.'],
+      de: ['Dunkelmodus: Text in farbigen Infoboxen (z. B. der Hinweis „Profil vervollständigen“ im Portal) ist jetzt lesbar statt dunkel auf dunkel.'],
+    },
+  },
+  {
     version: '0.17.0-beta',
     date: '2026-07-21',
     highlights: {

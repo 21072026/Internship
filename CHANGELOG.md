@@ -10,6 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-07-21
+
+### Fixed
+- **Dark-mode contrast on colored info boxes (closes #658, #659)** — the compound
+  dark-mode override "safety net" in `globals.css` now also remaps the darker
+  `text-*-800/900` and lighter `text-*-500` shades (not just 600/700) on
+  `bg-*-50` boxes, for blue/green/red/amber/indigo/yellow/**purple**. This fixes
+  the dark-on-dark text on the portal's amber "complete your profile" heading
+  (`text-yellow-800`) and blue/green labels (`text-blue-500`, `text-green-500`)
+  without per-element `dark:` utilities, and covers the same class of boxes
+  app-wide. Completes the dark-mode contrast story (#657) under the UX epic (#718).
+
 ## [0.17.0] - 2026-07-21
 
 ### Added
