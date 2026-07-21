@@ -10,6 +10,22 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-07-21
+
+### Added
+- **Message editing + advanced delete (closes #666)** — in a conversation thread
+  you can now **edit** your own messages (an "edited" label appears) and **delete**
+  them WhatsApp-style: **delete for everyone** (sender/admin — the message is
+  masked server-side and shows a "This message was deleted" placeholder for both
+  sides, body + attachments dropped) or **delete for me** (any participant — hides
+  it from your own view only).
+  - Schema: `Message.editedAt`, `Message.deletedForEveryoneAt`, and a new
+    `MessageHiddenFor` model for per-user hiding (additive `db push`).
+  - API: `PATCH /api/messages/[id]` (edit, sender-only) and
+    `DELETE /api/messages/[id]?scope=everyone|me` with server-side authorization;
+    `GET /api/messages` masks deleted-for-everyone bodies and filters out
+    hidden-for-me messages so nothing leaks.
+
 ## [0.14.7] - 2026-07-21
 
 ### Fixed

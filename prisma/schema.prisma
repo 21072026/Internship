@@ -289,18 +289,39 @@ enum MessageChannel {
 // A message in a mentorship thread (the thread is the MentorshipRelation).
 // Sent in-app or mirrored from an email; powers mentor ↔ mentee conversations.
 model Message {
-  id         String         @id @default(cuid())
-  relationId String
-  senderId   String
-  body       String         @db.Text
-  channel    MessageChannel @default(IN_APP)
-  readAt     DateTime?
-  createdAt  DateTime       @default(now())
+  id                   String         @id @default(cuid())
+  relationId           String
+  senderId             String
+  body                 String         @db.Text
+  channel              MessageChannel @default(IN_APP)
+  readAt               DateTime?
+  createdAt            DateTime       @default(now())
+  // Set when the sender edits the message (shows an "(edited)" label).
+  editedAt             DateTime?
+  // Set when the sender (or an admin) deletes the message for everyone; the body
+  // is masked server-side and a "message deleted" placeholder is shown to all.
+  deletedForEveryoneAt DateTime?
 
   relation    MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
   attachments MessageAttachment[]
+  // Per-user "delete for me" — hides the message only from these users' view.
+  hiddenFor   MessageHiddenFor[]
 
   @@index([relationId])
+}
+
+// "Delete for me": a message hidden from a single user's view (the message and
+// attachments stay for everyone else). WhatsApp-style per-user deletion.
+model MessageHiddenFor {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
 }
 
 // A file/image attached to a message (DB bytes, same approach as CvFile/

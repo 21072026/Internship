@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.15.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Edit and delete your messages — fix a typo (shows an “edited” label), or delete a message for everyone (leaves a “deleted” placeholder) or just for yourself.'],
+      tr: ['Mesajlarını düzenle ve sil — bir yazım hatasını düzelt (“düzenlendi” etiketi görünür) ya da bir mesajı herkesten sil (“silindi” yer tutucusu kalır) veya yalnızca kendinden sil.'],
+      de: ['Nachrichten bearbeiten und löschen — einen Tippfehler korrigieren (zeigt „bearbeitet“), oder eine Nachricht für alle löschen (hinterlässt einen „gelöscht“-Platzhalter) oder nur für dich.'],
+    },
+  },
+  {
     version: '0.14.7-beta',
     date: '2026-07-21',
     highlights: {
