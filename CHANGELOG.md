@@ -10,6 +10,15 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-07-21
+
+### Fixed
+- **CSV bulk import now sets `orgId` (closes #678)** — imported MENTEE users
+  inherited no org, so they fell outside the tenant's plan-limit counts and
+  (with `MT_ENFORCE_ISOLATION`) isolation. `POST /api/admin/import` now sets
+  `orgId: resolveOrgId(session)` on create, matching every other create path
+  (mentor add-mentee, apply). Null-org admins are unaffected (single-tenant).
+
 ## [0.14.2] - 2026-07-21
 
 ### Fixed
