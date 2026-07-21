@@ -15,6 +15,60 @@ Newest entries on top.
 **Repo `mersahin/Internship` → `21072026/Internship`'e taşındı.** Bu oturumun büyük
 teması transfer artıklarını temizlemek + kotanın reset'inden faydalanmak oldu.
 
+**GitHub Project board düzeni (standing convention — yeni board org `21072026`
+proje `1`):** İş üretirken (bkz. `backlog` skill) hiyerarşi **native sub-issue**
+ile kurulur (Epic→Story→Task), etiketle değil. Board iki **custom** single-select
+alanla düzenlenir — yerleşik "Type"/"Priority" türetilmiş/boş, KULLANMA:
+- **Katman** = Epic/Story/Task → board bunu `Group by` yapınca temiz şeritler
+  (group-by-Parent tüm parent'sız epic'leri bir araya yığdığı için daha kötü).
+- **Prio** = P1/P2/P3 → priority etiketini yansıtır.
+Değerler etiket/başlıktan türetilir: `epic` label→Epic; başlıkta `] Story`→Story;
+değilse Task. P1 bug'lar Status=Ready'ye alınır. Sub-issue linkleme + etiketleme
+**agent'ın App'iyle çalışır**; ama **Projects yazma yetkisi yok** ("Resource not
+accessible by integration") — alan/board yazımı `gh` ile (insan makinesinde). Bu
+sandbox'ta `gh` yok. GraphQL kotası **insanın** (`gh api rate_limit`); `gh project`
+mutation patlaması onu tüketir → editler arası `sleep 0.5` + reset sonrası tekrar.
+
+Maintainer'ın tek-paste board script'i (kota tazeyken; bash-3.2 güvenli; idempotent —
+custom alanları yaratır, tüm açık issue'ları ekler, Katman+Prio doldurur, P1→Ready):
+```bash
+cat > ~/board.sh <<'SH'
+#!/usr/bin/env bash
+set -uo pipefail
+OWNER=21072026; PROJ=1; REPO=21072026/Internship
+PID=PVT_kwDOElD6r84Bd9cf
+gh project field-create $PROJ --owner $OWNER --name "Prio" \
+  --data-type SINGLE_SELECT --single-select-options "P1,P2,P3" >/dev/null 2>&1 || true
+gh project field-create $PROJ --owner $OWNER --name "Katman" \
+  --data-type SINGLE_SELECT --single-select-options "Epic,Story,Task" >/dev/null 2>&1 || true
+gh issue list -R $REPO --state open --limit 200 --json url -q '.[].url' \
+  | while IFS= read -r u; do gh project item-add $PROJ --owner $OWNER --url "$u" >/dev/null 2>&1; done
+F=$(gh project field-list $PROJ --owner $OWNER --format json)
+PRIO=$(echo "$F" | jq -r '.fields[]|select(.name=="Prio")|.id')
+KAT=$(echo "$F"  | jq -r '.fields[]|select(.name=="Katman")|.id')
+STAT=$(echo "$F" | jq -r '.fields[]|select(.name=="Status")|.id')
+oid(){ echo "$F" | jq -r --arg f "$1" --arg o "$2" '.fields[]|select(.name==$f)|.options[]?|select(.name==$o)|.id'; }
+IT=$(gh project item-list $PROJ --owner $OWNER --format json --limit 200)
+iid(){ echo "$IT" | jq -r --argjson n "$1" '.items[]|select(.content.number==$n)|.id'; }
+setf(){ [ -n "$1" ]&&[ -n "$2" ]&&[ -n "$3" ]&& gh project item-edit --id "$1" --project-id "$PID" --field-id "$2" --single-select-option-id "$3" >/dev/null 2>&1; }
+gh issue list -R $REPO --state open --limit 200 --json number,labels,title | jq -c '.[]' | while read -r r; do
+  n=$(jq .number <<<"$r"); t=$(jq -r .title <<<"$r"); L=$(jq -r '.labels[].name' <<<"$r")
+  I=$(iid "$n"); [ -z "$I" ] && continue
+  K=Task; grep -qx epic <<<"$L" && K=Epic; [ "$K" = Task ] && case "$t" in *"] Story"*) K=Story;; esac
+  setf "$I" "$KAT" "$(oid Katman "$K")"
+  P=$(grep -E '^P[123]$' <<<"$L" | head -1); [ -n "$P" ] && setf "$I" "$PRIO" "$(oid Prio "$P")"
+  echo "#$n → Katman=$K${P:+, Prio=$P}"; sleep 0.5
+done
+READY=$(oid Status "Ready"); for n in 689 678; do setf "$(iid $n)" "$STAT" "$READY"; done
+echo "done."
+SH
+bash ~/board.sh
+```
+Sonra board UI'da **Group by → Katman** (yerleşik boş "Type" yerine). `date -r <reset>`
+ile kota reset saati görülür; `#!/usr/bin/env` içeren script'i **doğrudan** interaktif
+zsh'e yapıştırma (`event not found` — `!` history expansion); `<<'SH'` heredoc'la dosyaya
+yaz. macOS `/bin/bash` 3.2 → `declare -A` YOK.
+
 **Transfer yazma yolunu AÇTI (önceki oturum 403 alıyordu):** yeni repoya scoped
 oturumda `git push` + `mcp__github__*` sorunsuz çalıştı. Transfer sonrası ilk iş:
 repo-path referanslarını güncelle (ONBOARDING clone URL, CHANGELOG footer link'leri,
