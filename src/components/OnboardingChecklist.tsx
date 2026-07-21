@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { CheckCircle2, Circle, X, Rocket } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
-interface Step { key: string; done: boolean; href: string }
+interface Step { key: string; done: boolean; href: string; optional?: boolean }
 
 // Role-aware first-run checklist shown on the dashboard. Hides itself when all
 // steps are done or the user dismisses it (remembered per role in localStorage).
@@ -27,7 +27,9 @@ export function OnboardingChecklist() {
   }, []);
 
   if (!steps || steps.length === 0 || dismissed) return null;
-  const allDone = steps.every((s) => s.done);
+  // Only required steps decide completion — an optional step (e.g. the mentor's
+  // "schedule a meeting") must never keep the checklist open forever.
+  const allDone = steps.filter((s) => !s.optional).every((s) => s.done);
   if (allDone) return null;
 
   const labels = t.checklist.steps as Record<string, string>;
