@@ -110,28 +110,59 @@ sleep 3
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/api/health" 2>/dev/null || echo "ERR")
 echo "==> Container health http://127.0.0.1:${PORT}/api/health -> ${code}"
 
-# ── Routing: Plesk-native (DIAGNOSTIC pass) ──────────────────────────────────
-# This box serves every subdomain as a Plesk domain, so a raw conf.d server block
-# for a non-Plesk host is shadowed by Plesk's default vhost (it answers with the
-# Plesk panel / login_up.php → 404 for our paths). We will route via a Plesk
-# subdomain instead. First, dump how an existing working sibling (crm-preview) is
-# wired so the next revision mirrors it exactly.
-PREVIEW_FQDN="crm-preview.${BASE_DOMAIN}"
-PREVIEW_CONF_DIR="/var/www/vhosts/system/${PREVIEW_FQDN}/conf"
-echo "──────── PLESK DIAGNOSTICS (mirror crm-preview) ────────"
-(plesk version 2>&1 | head -3) || echo "(plesk CLI not found on PATH)"
-echo "--- ${PREVIEW_CONF_DIR} listing ---"
-ls -la "${PREVIEW_CONF_DIR}/" 2>&1 | head -40 || true
-echo "--- crm-preview custom nginx directives (vhost_nginx.conf) ---"
-cat "${PREVIEW_CONF_DIR}/vhost_nginx.conf" 2>&1 | head -80 || true
-echo "--- crm-preview generated nginx: proxy_pass / location / server_name / listen ---"
-grep -rnsE 'proxy_pass|location |server_name|listen ' "${PREVIEW_CONF_DIR}/" 2>/dev/null | head -60 || true
-echo "--- running nginx -T: crm-preview & default_server ownership ---"
-(nginx -T 2>/dev/null | grep -nE 'server_name (crm-preview|crm-pr)|default_server' | head -30) || true
-echo "--- plesk subdomain --info crm-preview (proxy/hosting type) ---"
-(plesk bin subdomain --info "${PREVIEW_FQDN}" 2>&1 | grep -iE 'hosting|proxy|nginx|ssl|ip_address|www_root' | head -20) || true
-echo "──────── END DIAGNOSTICS ────────"
-echo "==> Topic '${TOPIC}' container is up on :${PORT}; Plesk routing will be applied in the next revision (mirroring crm-preview above). URL target: ${URL}"
+# ── Routing: Plesk-native subdomain (mirrors crm-preview) ────────────────────
+# On this Plesk box every site is a Plesk vhost bound to the server IP
+# (`listen <IP>:443 ssl`). A raw all-addresses `listen 443 ssl` block in conf.d
+# loses the address-group match to those specific-IP vhosts, so its server_name
+# is never considered and the request falls to Plesk's default vhost
+# (login_up.php / 404). So we route the topic through a real Plesk subdomain and
+# inject the same reverse-proxy crm-preview uses:
+#     location ~ ^/.* { proxy_pass http://0.0.0.0:<container port>; }
+SUBLABEL="crm-${TOPIC}"                 # e.g. crm-pr725
+FQDN="crm-${TOPIC}.${BASE_DOMAIN}"      # e.g. crm-pr725.ersah.in
+VHOST_CONF_DIR="/var/www/vhosts/system/${FQDN}/conf"
+
+# Remove any leftover raw-nginx route from the earlier (pre-Plesk) approach so it
+# can't linger with a duplicate server_name.
+if [ -f "$CONF" ]; then rm -f "$CONF"; fi
+
+command -v plesk >/dev/null || { echo "ERROR: plesk CLI not found on PATH" >&2; exit 1; }
+
+# Create the subdomain (physical hosting + SSL) if it doesn't exist yet.
+if plesk bin subdomain --info "$FQDN" >/dev/null 2>&1; then
+  echo "==> Plesk subdomain ${FQDN} already exists"
+else
+  echo "==> Creating Plesk subdomain ${FQDN}"
+  plesk bin subdomain --create "$SUBLABEL" -domain "$BASE_DOMAIN" -ssl true
+fi
+
+# Inject the reverse proxy to the container via Plesk's supported custom-nginx
+# include, then have Plesk regenerate the vhost config (idempotent — rewritten
+# each deploy).
+mkdir -p "$VHOST_CONF_DIR"
+cat > "${VHOST_CONF_DIR}/vhost_nginx.conf" <<NGINX
+# Managed by infra/server/topic-deploy.sh — topic '${TOPIC}'. Do not edit by hand.
+location ~ ^/.* {
+    proxy_pass http://0.0.0.0:${PORT};
+    proxy_http_version 1.1;
+    proxy_set_header Host              \$host;
+    proxy_set_header X-Real-IP         \$remote_addr;
+    proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header Upgrade           \$http_upgrade;
+    proxy_set_header Connection        "upgrade";
+}
+NGINX
+
+echo "==> Reconfiguring Plesk vhost for ${FQDN}"
+plesk sbin httpdmng --reconfigure-domain "$FQDN"
+
+# Verify the route resolves to the app locally (Host header hits the new vhost).
+sleep 2
+rcode=$(curl -s -k -o /dev/null -w '%{http_code}' -H "Host: ${FQDN}" "https://127.0.0.1/api/health" 2>/dev/null || echo "ERR")
+echo "==> Route check (Host: ${FQDN}) -> ${rcode}"
 
 # Reclaim space from older images.
 docker image prune -af >/dev/null 2>&1 || true
+
+echo "==> Topic '${TOPIC}' is live at ${URL}"
