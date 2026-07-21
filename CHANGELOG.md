@@ -10,6 +10,16 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-07-21
+
+### Fixed
+- **Account language selector out of sync with the UI (closes #653)** — the
+  selector read the DB `preferredLanguage` while `getLocale()` lets the `locale`
+  cookie win, so a `tr` cookie + `en`/null preference showed "English" over a
+  Turkish UI. The selector now reflects the effective (cookie-first) locale and
+  converges `preferredLanguage` to it so they can't diverge again; the locale
+  cookie is written with `samesite=lax` (matching theme/accent).
+
 ## [0.14.4] - 2026-07-21
 
 ### Fixed

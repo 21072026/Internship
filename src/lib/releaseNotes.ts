@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.5-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['The language shown in Account settings now always matches the actual interface language.'],
+      tr: ['Hesap ayarlarında görünen dil artık her zaman arayüzün gerçek diliyle aynı.'],
+      de: ['Die in den Kontoeinstellungen angezeigte Sprache stimmt jetzt immer mit der tatsächlichen Oberflächensprache überein.'],
+    },
+  },
+  {
     version: '0.14.4-beta',
     date: '2026-07-21',
     highlights: {
