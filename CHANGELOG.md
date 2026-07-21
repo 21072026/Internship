@@ -10,6 +10,20 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-21
+
+### Added
+- **Admin ⊇ mentor parity — completes the Admin Capabilities epic (#719; closes
+  #661, #707, #708).** Admins can now do, from their own UI, what a mentor can:
+  - **Log an interaction** from the candidate detail screen (Meeting/Feedback/
+    Email/Call/WhatsApp) via a new inline `AddInteractionForm` — `POST
+    /api/interactions` already authorized ADMIN.
+  - **Send targeted email to mentees** from a new `/admin/email` page (AdminNav
+    entry). The mentor and admin screens now share a `TargetedEmailComposer`
+    component; `/api/mentor/email` already authorized ADMIN and respects each
+    recipient's email opt-out.
+  - (Meeting parity + copy-link shipped earlier in 0.9.0.)
+
 ## [0.15.0] - 2026-07-21
 
 ### Added

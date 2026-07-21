@@ -953,6 +953,14 @@ const en = {
     deleteFailed: 'Could not delete the message. Please try again.',
     messageActions: 'Message actions',
   },
+  logInteraction: {
+    add: 'Log interaction',
+    type: 'Type',
+    date: 'Date',
+    subject: 'Subject (optional)',
+    notes: 'Notes',
+    failed: 'Could not log the interaction. Please try again.',
+  },
   announcements: {
     title: 'Announcements',
     subtitle: 'Broadcast a message to every active user',
@@ -2409,6 +2417,14 @@ const tr: Dict = {
     deleteFailed: 'Mesaj silinemedi. Lütfen tekrar deneyin.',
     messageActions: 'Mesaj işlemleri',
   },
+  logInteraction: {
+    add: 'Etkileşim ekle',
+    type: 'Tür',
+    date: 'Tarih',
+    subject: 'Konu (isteğe bağlı)',
+    notes: 'Notlar',
+    failed: 'Etkileşim eklenemedi. Lütfen tekrar deneyin.',
+  },
   announcements: {
     title: 'Duyurular',
     subtitle: 'Tüm aktif kullanıcılara bir mesaj yayınla',
@@ -3862,6 +3878,14 @@ const de: Dict = {
     editFailed: 'Nachricht konnte nicht bearbeitet werden. Bitte versuche es erneut.',
     deleteFailed: 'Nachricht konnte nicht gelöscht werden. Bitte versuche es erneut.',
     messageActions: 'Nachrichtenaktionen',
+  },
+  logInteraction: {
+    add: 'Interaktion erfassen',
+    type: 'Typ',
+    date: 'Datum',
+    subject: 'Betreff (optional)',
+    notes: 'Notizen',
+    failed: 'Interaktion konnte nicht erfasst werden. Bitte versuche es erneut.',
   },
   announcements: {
     title: 'Ankündigungen',

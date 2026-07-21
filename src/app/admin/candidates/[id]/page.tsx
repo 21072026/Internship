@@ -18,6 +18,7 @@ import { MeetingSchedulerPanel } from '@/components/MeetingSchedulerPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
+import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
@@ -439,6 +440,7 @@ export default function AdminMenteeDetailPage() {
                     ))}
                   </div>
                 )}
+                <AddInteractionForm relationId={rel.id} onAdded={load} />
               </div>
             </div>
           )}
