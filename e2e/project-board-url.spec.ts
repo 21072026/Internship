@@ -11,7 +11,7 @@ test('a project can store a board URL and surface it on the public showcase', as
   let projectId = '';
   // Arbitrary fixture URL — the test only checks it round-trips through the API
   // and renders on the showcase; it does not require a real board to exist.
-  const board = 'https://github.com/orgs/21072026/projects/2';
+  const board = 'https://github.com/orgs/21072026/projects/1';
 
   try {
     await page.goto('/auth/signin');
