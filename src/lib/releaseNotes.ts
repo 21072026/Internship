@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.6-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['When a page fails to load its data, you now see a clear error instead of a blank screen, and saving an evaluation shows an error if it doesn’t go through.'],
+      tr: ['Bir sayfa verisini yükleyemediğinde artık boş ekran yerine net bir hata görüyorsun; bir değerlendirme kaydedilmezse hata gösteriliyor.'],
+      de: ['Wenn eine Seite ihre Daten nicht laden kann, siehst du jetzt einen klaren Fehler statt eines leeren Bildschirms, und beim Speichern einer Bewertung wird ein Fehler angezeigt, falls es nicht klappt.'],
+    },
+  },
+  {
     version: '0.14.5-beta',
     date: '2026-07-21',
     highlights: {

@@ -187,15 +187,15 @@ export default function AdminMenteeDetailPage() {
     fetch('/api/projects')
       .then((r) => (r.ok ? r.json() : { projects: [] }))
       .then((d) => setProjects(d.projects ?? []))
-      .catch(() => {});
+      .catch((e) => console.error('[candidate] projects load failed', e));
     fetch('/api/cohorts')
       .then((r) => (r.ok ? r.json() : { cohorts: [] }))
       .then((d) => setCohorts(d.cohorts ?? []))
-      .catch(() => {});
+      .catch((e) => console.error('[candidate] cohorts load failed', e));
     fetch('/api/admin/sources')
       .then((r) => (r.ok ? r.json() : { sources: [] }))
       .then((d) => setSources(d.sources ?? []))
-      .catch(() => {});
+      .catch((e) => console.error('[candidate] sources load failed', e));
   }, [id]);
 
   const changeSource = useCallback(
