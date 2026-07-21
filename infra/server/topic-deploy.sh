@@ -65,6 +65,7 @@ fi
 HOST="crm-${TOPIC}.${BASE_DOMAIN}"
 URL="https://${HOST}"
 CONTAINER="internship-crm-${TOPIC}"
+CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"  # legacy raw route (cleaned up below)
 
 echo "==> Deploying topic '${TOPIC}' → ${URL} (container ${CONTAINER}, port ${PORT})"
 
