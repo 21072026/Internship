@@ -1,14 +1,15 @@
 name: CI
 
 on:
-  # PAUSED (GitHub Actions quota exhausted) — auto-triggers disabled so failing
-  # hosted runs stop emailing the team. Re-enable by restoring the push/
-  # pull_request blocks below. Manual runs still work via "Run workflow".
+  # Re-enabled 2026-07-21 after the repo transfer reset the Actions quota
+  # (clean 2000h/month). PR gate is cheap (~2 min); the heavy scheduled
+  # workflows (e2e-full, stress, topic-preview) stay workflow_dispatch-only to
+  # keep the monthly budget comfortable.
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
