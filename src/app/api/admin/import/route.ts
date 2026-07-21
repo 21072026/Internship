@@ -6,6 +6,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { logActivity } from '@/lib/activity';
+import { resolveOrgId } from '@/lib/orgScope';
 
 const schema = z.object({ csv: z.string().min(1).max(200_000), dryRun: z.boolean().optional() });
 
@@ -72,6 +73,9 @@ export async function POST(request: Request) {
         fullName: fullName || email.split('@')[0],
         password,
         role: 'MENTEE',
+        // Inherit the importing admin's org so CSV-imported users stay inside
+        // the tenant's counts/isolation, like every other create path (#678).
+        orgId: resolveOrgId(session),
         phone: phone || null,
         university: university || null,
         department: department || null,
