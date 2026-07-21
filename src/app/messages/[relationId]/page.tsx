@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Paperclip, X, FileText, Download, MoreVertical } from 'lucide-react';
+import { Paperclip, X, FileText, Download, MoreVertical, Check, CheckCheck } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
@@ -173,10 +173,8 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
           <p className="text-center py-10 text-gray-400 text-sm">{t.messages.empty}</p>
         ) : (
           <div className="space-y-3 max-h-[55vh] overflow-y-auto">
-            {messages.map((m, i) => {
+            {messages.map((m) => {
               const mine = m.senderId === myId;
-              // Show a read receipt on my latest message only.
-              const isMyLast = mine && !messages.slice(i + 1).some((x) => x.senderId === myId);
               return (
                 <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${mine ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
@@ -223,7 +221,17 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                     <p className={`text-[10px] mt-1 flex items-center gap-1 ${mine ? 'text-blue-100' : 'text-gray-400'}`}>
                       {m.channel === 'EMAIL' ? '✉ ' : ''}{formatDateTime(m.createdAt, locale)}
                       {m.editedAt && !m.deleted && <span>· {t.messages.edited}</span>}
-                      {isMyLast && !m.deleted && <span>· {m.readAt ? t.messages.read : t.messages.sent}</span>}
+                      {mine && !m.deleted && (
+                        <span
+                          className="inline-flex"
+                          title={m.readAt ? t.messages.read : t.messages.sent}
+                          aria-label={m.readAt ? t.messages.read : t.messages.sent}
+                        >
+                          {m.readAt
+                            ? <CheckCheck className="h-3.5 w-3.5 text-sky-300" aria-hidden />
+                            : <Check className="h-3.5 w-3.5" aria-hidden />}
+                        </span>
+                      )}
                       {!m.deleted && editId !== m.id && (
                         <button
                           type="button"

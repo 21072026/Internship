@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.18.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Messages now show WhatsApp-style read receipts — a single tick when delivered and a blue double tick once your message has been read.'],
+      tr: ['Mesajlarda artık WhatsApp tarzı okundu tikleri var — iletildiğinde tek tik, mesajın okunduğunda mavi çift tik.'],
+      de: ['Nachrichten zeigen jetzt WhatsApp-artige Lesebestätigungen — ein Häkchen bei Zustellung und ein blaues Doppelhäkchen, sobald deine Nachricht gelesen wurde.'],
+    },
+  },
+  {
     version: '0.17.1-beta',
     date: '2026-07-21',
     highlights: {
