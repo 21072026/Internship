@@ -1,0 +1,71 @@
+name: Project auto-field (Katman + Prio)
+
+# Automatically organizes every issue on the org board
+# (https://github.com/orgs/21072026/projects/1): adds it to the project and sets
+# the custom single-select fields **Katman** (Epic/Story/Task) and **Prio**
+# (P1/P2/P3) from the issue's labels/title. Runs on issue open/reopen/label, so
+# nobody has to run infra/board.sh by hand for new issues.
+#
+# ONE-TIME SETUP (maintainer, once): create a token that can write the ORG
+# project and read issues, and store it as the repo secret `PROJECT_TOKEN`:
+#   - Fine-grained PAT: Resource owner = 21072026 org, **Projects: Read & write**,
+#     Repository → Issues: Read (for the Internship repo). OR
+#   - Classic PAT with scopes: `project` + `repo`.
+#   Settings → Secrets and variables → Actions → New repository secret →
+#   name `PROJECT_TOKEN`. The default GITHUB_TOKEN CANNOT write org projects, so
+#   this secret is required; without it the job no-ops (safe).
+on:
+  issues:
+    types: [opened, reopened, labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: project-autofield-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  organize:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+      OWNER: '21072026'
+      REPO: Internship
+      PROJ: '1'
+      NUM: ${{ github.event.issue.number }}
+      TITLE: ${{ github.event.issue.title }}
+    steps:
+      - name: Add to board + set Katman/Prio from labels/title
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "PROJECT_TOKEN secret not set — skipping (add it to enable auto-fields)."
+            exit 0
+          fi
+          set -euo pipefail
+
+          # Labels (newline-separated) — read from the API so re-labels stay in sync.
+          LABELS=$(gh issue view "$NUM" -R "$OWNER/$REPO" --json labels -q '.labels[].name')
+
+          # Katman: epic label -> Epic; title contains "] Story" -> Story; else Task.
+          K=Task
+          grep -qx epic <<<"$LABELS" && K=Epic
+          [ "$K" = Task ] && case "$TITLE" in *"] Story"*) K=Story;; esac
+          # Prio: first P1/P2/P3 label.
+          P=$(grep -E '^P[123]$' <<<"$LABELS" | head -1 || true)
+
+          PID=$(gh project view "$PROJ" --owner "$OWNER" --format json | jq -r .id)
+          F=$(gh project field-list "$PROJ" --owner "$OWNER" --format json)
+          fid(){ echo "$F" | jq -r --arg f "$1" '.fields[]|select(.name==$f)|.id'; }
+          oid(){ echo "$F" | jq -r --arg f "$1" --arg o "$2" '.fields[]|select(.name==$f)|.options[]?|select(.name==$o)|.id'; }
+
+          URL="https://github.com/$OWNER/$REPO/issues/$NUM"
+          ITEM=$(gh project item-add "$PROJ" --owner "$OWNER" --url "$URL" --format json | jq -r .id)
+
+          gh project item-edit --id "$ITEM" --project-id "$PID" \
+            --field-id "$(fid Katman)" --single-select-option-id "$(oid Katman "$K")"
+          if [ -n "$P" ]; then
+            gh project item-edit --id "$ITEM" --project-id "$PID" \
+              --field-id "$(fid Prio)" --single-select-option-id "$(oid Prio "$P")"
+          fi
+          echo "#$NUM → Katman=$K${P:+, Prio=$P}"
