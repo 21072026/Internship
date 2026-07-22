@@ -253,7 +253,7 @@ export default async function AdminDashboard() {
           <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
             <div className="flex items-center gap-3">
               <Building2 className="h-5 w-5 text-blue-600" />
-              <span className="font-medium text-gray-700">Manage Companies</span>
+              <span className="font-medium text-gray-700">{t.dashboard.quickActions.manageCompanies}</span>
             </div>
           </Card>
         </Link>
@@ -261,7 +261,7 @@ export default async function AdminDashboard() {
           <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5 text-blue-600" />
-              <span className="font-medium text-gray-700">Browse Candidates</span>
+              <span className="font-medium text-gray-700">{t.dashboard.quickActions.browseCandidates}</span>
             </div>
           </Card>
         </Link>
@@ -269,7 +269,7 @@ export default async function AdminDashboard() {
           <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
             <div className="flex items-center gap-3">
               <Bell className="h-5 w-5 text-blue-600" />
-              <span className="font-medium text-gray-700">Send Invitations</span>
+              <span className="font-medium text-gray-700">{t.dashboard.quickActions.sendInvitations}</span>
             </div>
           </Card>
         </Link>

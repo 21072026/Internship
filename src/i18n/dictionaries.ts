@@ -171,6 +171,11 @@ const en = {
     newCandidates: 'New Candidates',
     recentlyRegistered: 'Recently registered mentees',
     noCandidates: 'No candidates yet',
+    quickActions: {
+      manageCompanies: 'Manage Companies',
+      browseCandidates: 'Browse Candidates',
+      sendInvitations: 'Send Invitations',
+    },
   },
   candidates: {
     selectAll: 'Select all',
@@ -1616,6 +1621,11 @@ const tr: Dict = {
     newCandidates: 'Yeni Adaylar',
     recentlyRegistered: 'Yeni kaydolan mentee’ler',
     noCandidates: 'Henüz aday yok',
+    quickActions: {
+      manageCompanies: 'Şirketleri Yönet',
+      browseCandidates: 'Adayları Görüntüle',
+      sendInvitations: 'Davet Gönder',
+    },
   },
   candidates: {
     selectAll: 'Tümünü seç',
@@ -3059,6 +3069,11 @@ const de: Dict = {
     newCandidates: 'Neue Kandidaten',
     recentlyRegistered: 'Kürzlich registrierte Mentees',
     noCandidates: 'Noch keine Kandidaten',
+    quickActions: {
+      manageCompanies: 'Unternehmen verwalten',
+      browseCandidates: 'Bewerber anzeigen',
+      sendInvitations: 'Einladungen senden',
+    },
   },
   candidates: {
     selectAll: 'Alle auswählen',
