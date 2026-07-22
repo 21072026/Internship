@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.24.0-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Behind the scenes: groundwork for hosting multiple organizations on one platform, with strict data separation between them. No change to how the app works today — it stays fully single-tenant until enabled.'],
+      tr: ['Arka planda: tek platformda birden fazla organizasyonu barındırmak için altyapı hazırlığı yapıldı; aralarında katı veri ayrımı var. Bugünkü çalışma şekli değişmiyor — etkinleştirilene kadar tamamen tek kiracılı kalıyor.'],
+      de: ['Im Hintergrund: Grundlage dafür, mehrere Organisationen auf einer Plattform zu hosten, mit strikter Datentrennung zwischen ihnen. Am heutigen Verhalten ändert sich nichts — die App bleibt vollständig einmandantenfähig, bis es aktiviert wird.'],
+    },
+  },
+  {
     version: '0.23.3-beta',
     date: '2026-07-22',
     highlights: {

@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { orgScoped, assertSameOrg, requireOrg, isIsolationEnforced } from '../src/lib/orgScope';
+import { prisma as appPrisma } from '../src/lib/prisma';
+import { runWithOrg } from '../src/lib/orgContext';
 
 // Tenant isolation building blocks (#543). These prove that the orgScope
 // helpers genuinely separate two tenants at the DB level — the guarantee the
@@ -73,5 +75,58 @@ test('with enforcement off, helpers are no-ops (single-tenant unchanged)', () =>
     expect(requireOrg({ user: {} } as never)).toBeNull();
   } finally {
     if (prev !== undefined) process.env.MT_ENFORCE_ISOLATION = prev;
+  }
+});
+
+// The central middleware (#543) is the "can't forget the filter" guarantee: a
+// query that NEVER calls orgScoped() is still isolated, purely because it ran
+// inside runWithOrg() with enforcement on. This is what makes criterion 1 —
+// "every tenant-scoped query returns only its tenant's data" — hold app-wide.
+test('central middleware auto-scopes a plain (non-orgScoped) query under runWithOrg', async () => {
+  const stamp = uniqueEmail('mw').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const orgA = await prisma.organization.create({ data: { name: `MW A ${stamp}`, slug: `mwa-${stamp}` } });
+  const orgB = await prisma.organization.create({ data: { name: `MW B ${stamp}`, slug: `mwb-${stamp}` } });
+
+  // Seed with the plain helper client (no middleware) so seeding is never scoped.
+  const emailA = uniqueEmail('mw-a');
+  const emailB = uniqueEmail('mw-b');
+  const userA = await prisma.user.create({ data: { email: emailA, password: 'x', role: 'MENTEE', fullName: 'MW A', skills: [], orgId: orgA.id } });
+  const userB = await prisma.user.create({ data: { email: emailB, password: 'x', role: 'MENTEE', fullName: 'MW B', skills: [], orgId: orgB.id } });
+
+  const prev = process.env.MT_ENFORCE_ISOLATION;
+  const ids = { id: { in: [userA.id, userB.id] } };
+  try {
+    process.env.MT_ENFORCE_ISOLATION = 'true';
+
+    // Plain findMany — NO orgScoped() — bound to org A sees only A's user.
+    const seenByA = await runWithOrg(orgA.id, () => appPrisma.user.findMany({ where: ids }));
+    expect(seenByA.map((u) => u.id)).toEqual([userA.id]);
+
+    const seenByB = await runWithOrg(orgB.id, () => appPrisma.user.findMany({ where: ids }));
+    expect(seenByB.map((u) => u.id)).toEqual([userB.id]);
+
+    // findUnique across tenants returns null (extendedWhereUnique + orgId).
+    const crossTenant = await runWithOrg(orgB.id, () => appPrisma.user.findUnique({ where: { id: userA.id } }));
+    expect(crossTenant).toBeNull();
+
+    // create auto-stamps the bound org even when data omits orgId.
+    const emailC = uniqueEmail('mw-c');
+    const created = await runWithOrg(orgA.id, () =>
+      appPrisma.user.create({ data: { email: emailC, password: 'x', role: 'MENTEE', fullName: 'MW C', skills: [] } })
+    );
+    expect(created.orgId).toBe(orgA.id);
+    await prisma.user.delete({ where: { id: created.id } });
+
+    // Flag OFF: the same bound query is a no-op — both tenants are visible.
+    process.env.MT_ENFORCE_ISOLATION = 'false';
+    const seenBoth = await runWithOrg(orgA.id, () => appPrisma.user.findMany({ where: ids }));
+    expect(seenBoth.map((u) => u.id).sort()).toEqual([userA.id, userB.id].sort());
+  } finally {
+    if (prev === undefined) delete process.env.MT_ENFORCE_ISOLATION;
+    else process.env.MT_ENFORCE_ISOLATION = prev;
+    await cleanupByEmail(emailA);
+    await cleanupByEmail(emailB);
+    await prisma.organization.deleteMany({ where: { id: { in: [orgA.id, orgB.id] } } });
+    await appPrisma.$disconnect();
   }
 });

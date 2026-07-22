@@ -10,6 +10,31 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-07-22
+
+### Added
+- **Tenant isolation enforcement engine (part of #543 / story #522).** A single
+  central Prisma `$use` middleware, driven by a request-scoped
+  `AsyncLocalStorage` org context (`src/lib/orgContext.ts`), now auto-scopes
+  every query on a tenant-anchored model (`User`, `Source`, `Company`,
+  `Project`, `Cohort`, `MentorshipRelation`) to the current request's
+  organization — the "can't forget the filter" guarantee behind the guarded
+  multi-tenancy rollout. Reads/updates/deletes get an `orgId` `where` filter
+  (Prisma 5 `extendedWhereUnique` covers `findUnique`/`update`/`delete`);
+  `create`/`createMany`/`upsert` get `orgId` stamped into their data.
+  - Route handlers opt in by wrapping their body in
+    `withTenantScope(session, …)`; adopted on `GET/POST /api/mentorship`,
+    `/api/companies`, `/api/projects` as the reference implementation (the rest
+    roll out incrementally).
+  - **Entirely gated behind `MT_ENFORCE_ISOLATION` (default off):** when the
+    flag is off, `withTenantScope`/`runWithOrg` are straight passthroughs and
+    the middleware early-returns, so single-tenant production is unchanged. The
+    engine is server-only (`node:async_hooks`) and kept out of `prisma.ts` so it
+    never enters a client bundle.
+  - `e2e/tenant-isolation.spec.ts` now proves a **plain query that never called
+    `orgScoped()`** is still isolated purely by running inside `runWithOrg()`
+    with the flag on — and is a no-op with the flag off.
+
 ## [0.23.3] - 2026-07-22
 
 ### Added
