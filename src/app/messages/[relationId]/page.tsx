@@ -312,15 +312,25 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                     </p>
 
                     {/* Emoji picker */}
-                    {reactId === m.id && !m.deleted && (
-                      <div className="mt-1.5 flex gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit">
-                        {REACTIONS.map((emoji) => (
-                          <button key={emoji} type="button" onClick={() => react(m.id, emoji)} className="text-base leading-none hover:scale-125 transition-transform" aria-label={emoji}>
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    {reactId === m.id && !m.deleted && (() => {
+                      const myEmoji = m.reactions.find((r) => r.mine)?.emoji;
+                      return (
+                        <div className="mt-1.5 flex gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit">
+                          {REACTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => react(m.id, emoji)}
+                              className={`text-base leading-none hover:scale-125 transition-transform rounded ${myEmoji === emoji ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                              aria-label={emoji}
+                              aria-pressed={myEmoji === emoji}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
 
                     {/* Reaction chips */}
                     {!m.deleted && m.reactions.length > 0 && (
@@ -329,7 +339,16 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                           <button
                             key={r.emoji}
                             type="button"
-                            onClick={() => react(m.id, r.emoji)}
+                            onClick={() => {
+                              if (r.mine) {
+                                // Open the picker so the user can switch to a different emoji
+                                // instead of immediately removing their reaction.
+                                setReactId(reactId === m.id ? null : m.id);
+                                setMenuId(null);
+                              } else {
+                                react(m.id, r.emoji);
+                              }
+                            }}
                             aria-pressed={r.mine}
                             className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border ${r.mine ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-white/90 border-black/5 text-gray-700'}`}
                           >

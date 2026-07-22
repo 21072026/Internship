@@ -10,6 +10,20 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-07-22
+
+### Fixed
+- **Emoji reaction can now be changed, not just removed (closes #735).** Previously,
+  clicking a different emoji in the picker when you already had a reaction would add a
+  *second* reaction alongside the existing one; clicking your own reaction chip would
+  immediately remove it with no way to swap it for another. Now:
+  - Selecting a **different** emoji atomically replaces the current reaction (server
+    deletes the old row and inserts the new one in a single transaction).
+  - Clicking your **own** reaction chip opens the emoji picker so you can choose a
+    new emoji or click the same one to remove it.
+  - The picker **highlights** the emoji you have already selected, making the current
+    state immediately visible.
+
 ## [0.23.1] - 2026-07-22
 
 ### Fixed
