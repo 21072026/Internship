@@ -19,6 +19,13 @@ tenant's own IdP instead of email+password.
     complete.
 - The API never returns the raw certificate; the list only exposes
   `ssoCertificateSet` and `active`.
+- **JIT provisioning** (`src/lib/ssoProvisioning.ts`): `provisionSsoUser()` maps a
+  verified IdP identity to a `User` in the tenant org — creating one on first
+  login (default least-privilege `MENTEE`, or an IdP-mapped role), adopting a
+  not-yet-tenanted user into the org, and refusing to relocate an email that
+  already belongs to a different tenant. Idempotent per email; unit-tested in
+  `e2e/sso-provisioning.spec.ts`. It trusts its inputs, so the callback must only
+  call it AFTER verifying the signed assertion.
 
 ## What's NOT wired yet (and why)
 
@@ -44,9 +51,9 @@ customer's own credentials.
 2. Resolve the tenant from the request (subdomain or work-email lookup).
 3. If `isSsoActive(org)`: build the AuthnRequest from `ssoEntryPoint` /
    `ssoIssuer`, redirect to the IdP.
-4. On callback: verify the signed assertion against `ssoCertificate`, map the
-   IdP subject/email to a `User` in that org (JIT-provision if desired), then
-   issue the NextAuth session.
+4. On callback: verify the signed assertion against `ssoCertificate`, then call
+   `provisionSsoUser({ orgId, email, fullName, role })` (already implemented) to
+   map the IdP subject to a `User` in that org, and issue the NextAuth session.
 5. Fall back to password login whenever SSO is not active for the tenant.
 
 ### Operator notes

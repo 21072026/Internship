@@ -10,7 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.24.2] - 2026-07-22
+## [0.24.3] - 2026-07-22
+
+### Added
+- **SSO just-in-time (JIT) provisioning (part of #545 / story #522).** New
+  `provisionSsoUser()` (`src/lib/ssoProvisioning.ts`) maps a verified IdP identity
+  to a `User` in the tenant org — creating one on first login (default
+  least-privilege `MENTEE`, or an IdP-mapped role), adopting a not-yet-tenanted
+  user into the org, and refusing to relocate an email that already belongs to a
+  different tenant. Idempotent per email; covered by
+  `e2e/sso-provisioning.spec.ts`. This is the tenant-mapping half of #545's
+  criteria; the live SAML/OIDC round-trip that calls it stays deferred until a
+  real tenant IdP is available (see `docs/sso-saml.md`). No runtime auth change.
 
 ### Changed
 - **Tenant isolation rolled out to all authenticated API routes (part of #543 /
