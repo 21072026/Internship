@@ -27,6 +27,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
   { href: '/admin/calendar', icon: CalendarDays, key: 'calendar' },
   { href: '/admin/announcements', icon: Megaphone, key: 'announcements' },
+  { href: '/admin/email', icon: Mail, key: 'email' },
   { href: '/admin/documents', icon: FileText, key: 'documents' },
   { href: '/admin/support', icon: LifeBuoy, key: 'support' },
   { href: '/admin/activity', icon: ScrollText, key: 'activity' },
