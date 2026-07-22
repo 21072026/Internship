@@ -10,6 +10,20 @@ Newest entries on top.
 
 ---
 
+## 2026-07-22 — 4-lens roadmap features: analytics pages, bulk stage-advance, milestone badges (#370, 0.22.0→0.23.0)
+
+**TR locale apostrophe in single-quoted strings.** The TR locale in both `src/i18n/dictionaries.ts` and `src/lib/releaseNotes.ts` uses single-quoted JS strings. Any Turkish word with a possessive/suffix apostrophe (e.g., `banner'ı`) must use the Unicode RIGHT SINGLE QUOTATION MARK U+2019 (`'`) rather than the straight ASCII apostrophe `'` — otherwise the string terminates early and the build fails with a cryptic "Expected ',', got 'ı'" syntax error. Pattern seen twice in this session; always check after writing any TR string containing an apostrophe.
+
+**Remove redundant type casts after Prisma schema is exact.** If `pipelineStatus` is typed as the Prisma enum (exact same type as `PIPELINE_STATUSES[number]`), there's no need for `as (typeof PIPELINE_STATUSES)[number]`. The code reviewer caught this; trust TypeScript rather than casting away what you know.
+
+**`package-lock.json` version must match `package.json`.** After bumping the semver in `package.json`, run `npm install` to regenerate the lockfile so its top-level `"version"` field also updates. Skipping this creates a mismatch flagged by automated code review.
+
+**Build-errors-only grep pattern.** When checking build output, grep for `(error|Error|FAILED|failed)` rather than the full build output — keeps the signal clean. On a success the build output shows only page sizes at the end; if you see "Build failed because of webpack errors", scroll up or re-run with a grep for the surrounding lines to find the filename + line number.
+
+**`node_modules` is not pre-installed in the sandbox.** Claude Code web containers require `npm install` before `npm run lint` / `npm run build` — otherwise `next: not found`. Run it first if `node_modules/` is missing.
+
+---
+
 ## 2026-07-21 — Otomatik PR-başına topic preview (Plesk-native routing) (#583, 0.14.6→0.14.7)
 
 Bu oturumda `#679` + `#690` prod'a çıktı (0.14.7) ve **her PR'a otomatik topic
