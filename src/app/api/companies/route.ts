@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { withTenantScope } from '@/lib/orgContext';
 
 const companySchema = z.object({
   name: z.string().min(1, 'Company name is required'),
@@ -32,15 +33,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const companies = await prisma.company.findMany({
-      include: {
-        needs: true,
-        _count: { select: { mentorships: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+    return await withTenantScope(session, async () => {
+      const companies = await prisma.company.findMany({
+        include: {
+          needs: true,
+          _count: { select: { mentorships: true } },
+        },
+        orderBy: { name: 'asc' },
+      });
 
-    return NextResponse.json({ companies });
+      return NextResponse.json({ companies });
+    });
   } catch (error) {
     console.error('Get companies error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -55,6 +58,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    return await withTenantScope(session, async () => {
     const body = await request.json();
     const parsed = companySchema.safeParse(body);
 
@@ -81,6 +85,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ company }, { status: 201 });
+    });
   } catch (error) {
     console.error('Create company error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

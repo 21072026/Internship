@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { resolveOwner } from '@/lib/projectAccess';
 import { logActivity } from '@/lib/activity';
+import { withTenantScope } from '@/lib/orgContext';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
@@ -29,6 +30,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return withTenantScope(session, async () => {
   let where: Prisma.ProjectWhereInput = {};
   // Mentors see projects they own OR are members of (#617/#619).
   if (session.user.role === 'MENTOR') {
@@ -46,6 +48,7 @@ export async function GET() {
     });
   }
   return NextResponse.json({ projects });
+  });
 }
 
 const schema = z.object({
@@ -71,6 +74,7 @@ export async function POST(request: Request) {
   if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  return withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
@@ -108,4 +112,5 @@ export async function POST(request: Request) {
   });
   await logActivity({ action: 'project.create', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'project', targetId: project.id });
   return NextResponse.json({ project }, { status: 201 });
+  });
 }

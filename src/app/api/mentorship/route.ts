@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
+import { withTenantScope } from '@/lib/orgContext';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -22,6 +23,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Bind the request's tenant so every query below is auto-scoped once
+    // MT_ENFORCE_ISOLATION is on (no-op while it's off). See orgContext.ts (#543).
+    return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const search = searchParams.get('search');
@@ -87,6 +91,7 @@ export async function GET(request: Request) {
     ]);
 
     return NextResponse.json({ relations, total, page, pageSize });
+    });
   } catch (error) {
     console.error('Get mentorships error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -101,6 +106,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    return await withTenantScope(session, async () => {
     const body = await request.json();
     const parsed = createRelationSchema.safeParse(body);
 
@@ -165,6 +171,7 @@ export async function POST(request: Request) {
 
     await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null });
     return NextResponse.json({ relation }, { status: 201 });
+    });
   } catch (error) {
     console.error('Create mentorship error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
