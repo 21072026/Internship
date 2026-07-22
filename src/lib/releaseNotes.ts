@@ -13,6 +13,30 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.23.3-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: [
+        'Mentors now have a dedicated Analytics page — see your pipeline funnel, total interactions, active mentee count, and hired outcomes at a glance.',
+        'Companies get their own Analytics page — view candidate stage distribution and interest signals (interested / shortlisted / pass) in one place.',
+        'Admins can bulk-advance candidates: select multiple candidates and click "Advance stage" to move them all one pipeline step forward.',
+        'Milestone celebrations: the mentee portal now shows a trophy banner at key career milestones — internship starting, in-progress, completed, hired, and employed.',
+      ],
+      tr: [
+        'Mentörler artık ayrılmış bir Analitik sayfasına sahip — pipeline hunisi, toplam etkileşimler, aktif mentee sayısı ve işe alım sonuçlarını bir bakışta görün.',
+        'Şirketler kendi Analitik sayfalarını alıyor — aday aşama dağılımını ve ilgi sinyallerini (ilgileniyor / kısa listeye aldı / geçti) tek yerden görün.',
+        'Yöneticiler adayları toplu olarak ilerletebilir: birden fazla aday seçin ve "Aşamayı ilerlet" e tıklayarak hepsini bir adım öne taşıyın.',
+        'Kilometre taşı kutlamaları: mentee portalı artık staj başlangıcı, devam, tamamlama, işe alındı ve iş bulundu gibi önemli kariyer aşamalarında kupa banner’ı gösteriyor.',
+      ],
+      de: [
+        'Mentoren haben jetzt eine eigene Analyseseite — sehen Sie auf einen Blick Ihren Pipeline-Trichter, Gesamtinteraktionen, aktive Mentee-Anzahl und Einstellungsergebnisse.',
+        'Unternehmen erhalten ihre eigene Analyseseite — Kandidaten-Stufenverteilung und Interessenssignale (interessiert / vorgemerkt / abgelehnt) an einem Ort.',
+        'Admins können Kandidaten im Bulk-Verfahren voranschreiben: mehrere Kandidaten auswählen und auf „Stufe voranschreiten" klicken, um sie alle einen Schritt weiterzubringen.',
+        'Meilenstein-Feiern: Das Mentee-Portal zeigt jetzt ein Pokal-Banner bei wichtigen Karriere-Meilensteinen — Praktikum beginnt, läuft, abgeschlossen, eingestellt und beschäftigt.',
+      ],
+    },
+  },
+  {
     version: '0.23.2-beta',
     date: '2026-07-22',
     highlights: {

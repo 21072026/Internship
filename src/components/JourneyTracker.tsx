@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Compass } from 'lucide-react';
+import { Check, Compass, Trophy } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { pipelineLabel, pipelineGuidance } from '@/lib/pipeline';
 import { useT, useLocale } from '@/i18n/client';
@@ -22,6 +22,16 @@ const PATH = [
 ];
 const OFF_PATH = ['INTERNSHIP_DROPPED_460', 'INTERNSHIP_FOUND_ELSEWHERE_800'];
 
+// Key achievement stages that warrant a milestone banner
+// (EPIC: achievements / milestone recognition, roadmap #370).
+const MILESTONE_STAGES = new Set([
+  'INTERNSHIP_STARTING_300',
+  'INTERNSHIP_IN_PROGRESS_450',
+  'INTERNSHIP_COMPLETED_490',
+  'HIRED_660',
+  'EMPLOYED_700',
+]);
+
 export function JourneyTracker({ status }: { status: string }) {
   const t = useT();
   const locale = useLocale();
@@ -30,10 +40,22 @@ export function JourneyTracker({ status }: { status: string }) {
   const pct = idx >= 0 ? Math.round(((idx + 1) / PATH.length) * 100) : 0;
   const next = idx >= 0 && idx < PATH.length - 1 ? PATH[idx + 1] : null;
   const guidance = !offPath ? pipelineGuidance(status, locale) : null;
+  const isMilestone = MILESTONE_STAGES.has(status);
 
   return (
     <Card>
       <CardHeader><CardTitle>{t.portal.journey.title}</CardTitle></CardHeader>
+
+      {/* Milestone achievement banner for key stages */}
+      {isMilestone && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-950/30 px-3 py-2.5">
+          <Trophy className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+          <div>
+            <p className="text-xs font-semibold text-yellow-800 dark:text-yellow-200">{t.portal.journey.milestoneReached}</p>
+            <p className="text-sm text-yellow-900 dark:text-yellow-100 mt-0.5">{pipelineLabel(status, locale)}</p>
+          </div>
+        </div>
+      )}
 
       {offPath ? (
         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
