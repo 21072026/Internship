@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const token = await createPasswordResetToken(user.id, 'SET_INITIAL');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   try {
-    await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, purpose: 'SET_INITIAL' });
+    await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, purpose: 'SET_INITIAL', orgId: user.orgId });
   } catch (e) {
     console.error('Source-user set-password email failed:', e);
   }

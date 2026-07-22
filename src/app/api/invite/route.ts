@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendInvitationEmail } from '@/services/emailService';
+import { resolveOrgId } from '@/lib/orgScope';
 import { z } from 'zod';
 import crypto from 'crypto';
 
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
     // status instead of 500-ing.
     let emailSent = false;
     try {
-      await sendInvitationEmail({ to: email, token, role });
+      await sendInvitationEmail({ to: email, token, role, orgId: resolveOrgId(session) });
       emailSent = !!process.env.SMTP_USER;
     } catch (mailErr) {
       console.error('Invitation email failed (token still valid):', mailErr);

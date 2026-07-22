@@ -24,7 +24,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const resetUrl = `${appUrl}/auth/reset?token=${token}`;
   try {
-    await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName });
+    await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
   } catch (e) {
     console.error('Admin reset email failed:', e);
   }

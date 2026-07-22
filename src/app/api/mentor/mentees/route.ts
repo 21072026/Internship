@@ -90,6 +90,7 @@ export async function POST(request: Request) {
           token,
           fullName: mentee.fullName,
           purpose: 'SET_INITIAL',
+          orgId,
         });
       } catch (e) {
         console.error('Mentee set-password email failed:', e);
