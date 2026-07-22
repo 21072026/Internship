@@ -21,6 +21,34 @@ export const PIPELINE_STATUSES = [
 
 export type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
 
+// The linear "happy path" a mentee progresses along, excluding the two off-path
+// terminal states (dropped / found-internship-elsewhere). This is the order the
+// journey tracker and any "advance one stage" action must follow — the raw
+// PIPELINE_STATUSES array interleaves the off-path stages, so stepping through it
+// by index would wrongly send an in-progress internship to "dropped" and an
+// employed mentee to "found elsewhere".
+export const ON_PATH_STATUSES = [
+  'APPLICATION_100',
+  'APPROVAL_PENDING_220',
+  'INTERVIEW_PENDING_250',
+  'INTRODUCTION_PENDING_270',
+  'INTERNSHIP_STARTING_300',
+  'INTERNSHIP_IN_PROGRESS_450',
+  'INTERNSHIP_COMPLETED_490',
+  'JOB_SEEKING_500',
+  'HIREABLE_600',
+  'HIRED_660',
+  'EMPLOYED_700',
+] as const satisfies readonly PipelineStatus[];
+
+// The next stage along the happy path, or null when the current stage is the
+// terminal state (EMPLOYED_700) or an off-path status not on the sequence.
+export function nextOnPathStatus(current: string): PipelineStatus | null {
+  const idx = (ON_PATH_STATUSES as readonly string[]).indexOf(current);
+  if (idx < 0 || idx >= ON_PATH_STATUSES.length - 1) return null;
+  return ON_PATH_STATUSES[idx + 1];
+}
+
 const LABELS: Record<Locale, Record<PipelineStatus, string>> = {
   tr: {
     APPLICATION_100: '100 · İlk temas',

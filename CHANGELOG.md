@@ -10,6 +10,25 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.23.3] - 2026-07-22
+
+### Added
+- **Mentor analytics page** (`/mentor/analytics`) — mentor-scoped pipeline funnel,
+  interaction total, active mentee count, hired/employed outcomes, and goal summary;
+  part of issue #370 Mentor lens.
+- **Company analytics page** (`/company/analytics`) — company-scoped candidate funnel
+  by pipeline stage plus interest-signal breakdown (interested / shortlisted / pass /
+  pending); part of issue #370 Company lens.
+- **Bulk stage-advance for candidates** — admins can now multi-select candidates on
+  `/admin/candidates` and click "Advance stage" to push all selected mentees one
+  pipeline step forward along the on-path sequence (with `StatusChange` audit records);
+  part of issue #370 HR lens.
+- **Milestone recognition banner** in the mentee portal journey tracker — a gold Trophy
+  banner appears at key stages (internship starting, in-progress, completed, hired,
+  employed) to celebrate progress; part of issue #370 Mentee lens.
+- Navigation links added to mentor and company sidebars for their respective analytics
+  pages.
+
 ## [0.23.2] - 2026-07-22
 
 ### Fixed

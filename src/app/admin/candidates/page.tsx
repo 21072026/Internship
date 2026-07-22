@@ -189,7 +189,7 @@ export default function CandidatesPage() {
     });
   };
 
-  const runBulkAction = async (action: 'activate' | 'deactivate') => {
+  const runBulkAction = async (action: 'activate' | 'deactivate' | 'advanceStage') => {
     setBulkBusy(true);
     try {
       const res = await fetch('/api/admin/candidates/bulk', {
@@ -352,6 +352,9 @@ export default function CandidatesPage() {
             </Button>
             <Button size="sm" variant="outline" loading={bulkBusy} onClick={() => runBulkAction('activate')}>
               {t.candidates.bulkActivate}
+            </Button>
+            <Button size="sm" variant="outline" loading={bulkBusy} onClick={() => runBulkAction('advanceStage')}>
+              {t.candidates.bulkAdvanceStage}
             </Button>
             <button onClick={() => setSelected(new Set())} className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300">
               {t.candidates.clearSelection}
