@@ -321,7 +321,7 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                               key={emoji}
                               type="button"
                               onClick={() => react(m.id, emoji)}
-                              className={`text-base leading-none hover:scale-125 transition-transform rounded ${myEmoji === emoji ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                              className={`text-base leading-none hover:scale-125 transition-transform rounded ${myEmoji === emoji ? 'ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-800' : ''}`}
                               aria-label={emoji}
                               aria-pressed={myEmoji === emoji}
                             >
