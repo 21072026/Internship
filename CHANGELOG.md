@@ -10,6 +10,11 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-07-22
+
+### Added
+- **Inline editing for mentee portal notes (closes #656)** — mentees can now edit their own notes directly in the portal, save or cancel their changes, and receive validation and update feedback. Related E2E coverage verifies editing, cancellation, whitespace validation, and owner-only authorization.
+
 ## [0.22.0] - 2026-07-21
 
 ### Added

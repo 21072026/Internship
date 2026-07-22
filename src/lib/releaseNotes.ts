@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.23.0-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['You can now edit your own notes directly in the portal, then save or cancel your changes.'],
+      tr: ['Artık portalda kendi notlarınızı doğrudan düzenleyebilir, ardından değişiklikleri kaydedebilir veya iptal edebilirsiniz.'],
+      de: ['Du kannst deine eigenen Notizen jetzt direkt im Portal bearbeiten und die Änderungen anschließend speichern oder verwerfen.'],
+    },
+  },
+  {
     version: '0.22.0-beta',
     date: '2026-07-21',
     highlights: {

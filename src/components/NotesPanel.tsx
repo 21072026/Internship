@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Trash2, Lock } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Trash2, Lock, Pencil } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -27,6 +27,10 @@ export function NotesPanel() {
   const [category, setCategory] = useState<Category>('PERSONAL');
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | Category>('ALL');
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const editSavingRef = useRef(false);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/notes');
@@ -53,6 +57,35 @@ export function NotesPanel() {
     await fetch(`/api/notes/${id}`, { method: 'DELETE' });
     await load();
     toast(t.portal.notes.deleted);
+  };
+
+  const startEdit = (note: Note) => {
+    if (editSavingRef.current) return;
+    setEditingId(note.id);
+    setEditBody(note.body);
+  };
+  const cancelEdit = () => { setEditingId(null); setEditBody(''); };
+  const saveEdit = async (id: string) => {
+    const trimmedBody = editBody.trim();
+    if (!trimmedBody || editSavingRef.current) return;
+    editSavingRef.current = true;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/notes/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: trimmedBody }),
+      });
+      if (!res.ok) { toast(t.common.error); return; }
+      cancelEdit();
+      await load();
+      toast(t.portal.notes.updated);
+    } catch {
+      toast(t.common.error);
+    } finally {
+      editSavingRef.current = false;
+      setEditSaving(false);
+    }
   };
 
   const shown = categoryFilter === 'ALL' ? notes : notes.filter((n) => n.category === categoryFilter);
@@ -123,11 +156,36 @@ export function NotesPanel() {
             <div key={n.id} data-testid={`note-${n.id}`} className="group flex items-start justify-between gap-2 rounded-lg border border-gray-100 p-2.5">
               <div className="flex-1 min-w-0">
                 <Badge variant="default" className="text-[10px] mb-1">{t.portal.notes.categories[n.category]}</Badge>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{n.body}</p>
+                {editingId === n.id ? (
+                  <div>
+                    <textarea
+                      value={editBody}
+                      onChange={(e) => setEditBody(e.target.value)}
+                      rows={3}
+                      maxLength={5000}
+                      autoFocus
+                      aria-label={t.portal.notes.placeholder}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                    />
+                    <div className="flex gap-2">
+                      <Button type="button" size="sm" loading={editSaving} disabled={!editBody.trim() || editSaving} onClick={() => saveEdit(n.id)}>{t.common.save}</Button>
+                      <Button type="button" size="sm" variant="outline" disabled={editSaving} onClick={cancelEdit}>{t.common.cancel}</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{n.body}</p>
+                )}
               </div>
-              <button onClick={() => remove(n.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600 flex-shrink-0">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {editingId !== n.id && (
+                <div className="flex items-center gap-2">
+                  <button type="button" disabled={editSaving} onClick={() => startEdit(n)} aria-label={t.common.edit} className="text-gray-300 hover:text-blue-600 flex-shrink-0 disabled:cursor-not-allowed disabled:opacity-50">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={() => remove(n.id)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600 flex-shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

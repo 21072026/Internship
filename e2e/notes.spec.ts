@@ -5,7 +5,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('mentee can create and delete private personal notes (owner-only)', async ({ page }) => {
+test('mentee can create, edit, and delete private personal notes (owner-only)', async ({ page }) => {
   const email = uniqueEmail('note-mentee');
   const other = await seedUser(uniqueEmail('note-other'), 'x', 'MENTEE', 'Other');
   await seedUser(email, 'MenteePass123', 'MENTEE', 'Note Mentee');
@@ -25,8 +25,32 @@ test('mentee can create and delete private personal notes (owner-only)', async (
     const list = await (await page.request.get('/api/notes')).json();
     expect(list.notes.some((n: { id: string }) => n.id === noteId)).toBeTruthy();
 
+    await page.goto('/portal/notes');
+    const note = page.getByTestId(`note-${noteId}`);
+    await expect(note.getByText('Prep for interview')).toBeVisible();
+
+    // Cancelling an edit keeps the original note unchanged.
+    await note.getByLabel('Edit').click();
+    await note.locator('textarea').fill('Discard this draft');
+    await note.getByRole('button', { name: 'Cancel' }).click();
+    await expect(note.getByText('Prep for interview')).toBeVisible();
+    await expect(note.getByText('Discard this draft')).toHaveCount(0);
+
+    // Whitespace-only content cannot be submitted.
+    await note.getByLabel('Edit').click();
+    await note.locator('textarea').fill('   ');
+    await expect(note.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    // Saving through the UI persists and displays the revised note.
+    await note.locator('textarea').fill('Prepare portfolio for interview');
+    await note.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Prepare portfolio for interview')).toBeVisible({ timeout: 10_000 });
+    expect((await prisma.personalNote.findUnique({ where: { id: noteId } }))?.body).toBe('Prepare portfolio for interview');
+
     // Another user cannot edit/delete it (owner-only).
     const otherNote = await prisma.personalNote.create({ data: { userId: other.id, body: 'theirs' } });
+    const forbiddenEdit = await page.request.patch(`/api/notes/${otherNote.id}`, { data: { body: 'not allowed' } });
+    expect(forbiddenEdit.status()).toBe(403);
     const forbidden = await page.request.delete(`/api/notes/${otherNote.id}`);
     expect(forbidden.status()).toBe(403);
 
