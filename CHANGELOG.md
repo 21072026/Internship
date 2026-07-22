@@ -10,6 +10,29 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-07-22
+
+### Added
+- **Enterprise SSO — live SAML sign-in (closes the wiring for #545 / story #522).**
+  The SP-initiated SAML round-trip is now implemented with
+  `@node-saml/node-saml`, gated behind `isSsoActive(org)`:
+  - `/auth/sso` (linked from the sign-in page) → `/api/auth/sso/[slug]/login`
+    builds the AuthnRequest and redirects to the tenant's IdP.
+  - `/api/auth/sso/[slug]/acs` verifies the signed assertion against the org's
+    stored certificate (audience/recipient/expiry checked), maps the profile
+    (`mapSamlProfile`), JIT-provisions the user (`provisionSsoUser`), and mints a
+    single-use `SsoLoginGrant`.
+  - A new `sso` NextAuth Credentials provider consumes that grant on
+    `/auth/sso/complete` to issue the session — mirroring the impersonation grant
+    flow. No password, no IdP secret stored in our env.
+  - New `SsoLoginGrant` model (single-use, short-lived; additive `db push`).
+  - **Gated + non-breaking:** SSO only activates for a tenant whose config is
+    complete and enabled; password login is unchanged for everyone else. No org
+    has SSO enabled in production, so this is inert there until configured.
+  - Verify on preview with mock-saml.com (no real IdP needed) — see
+    `docs/sso-saml.md`. Pointing at a real Okta/Azure/Auth0 IdP is a config-only
+    step (paste issuer / SSO URL / signing cert into Admin → Organizations).
+
 ## [0.24.3] - 2026-07-22
 
 ### Added

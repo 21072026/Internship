@@ -1036,6 +1036,19 @@ model ImpersonationGrant {
   expiresAt DateTime
 }
 
+// Single-use bridge token minted by the SSO ACS route AFTER a signed SAML
+// assertion is verified, then consumed by the `sso` NextAuth provider to issue a
+// session (#545). Mirrors ImpersonationGrant: short-lived + single-use, so a
+// verified IdP login can't be replayed.
+model SsoLoginGrant {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
 enum LogLevel {
   DEBUG
   INFO

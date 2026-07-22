@@ -190,6 +190,10 @@ export default function SignInPage() {
             <Link href="/auth/forgot" className="text-blue-600 hover:underline">
               {t.auth.forgotLink}
             </Link>
+            <span className="mx-2 text-gray-300">·</span>
+            <Link href="/auth/sso" className="text-blue-600 hover:underline">
+              {t.auth.ssoLink}
+            </Link>
           </p>
 
           <p className="text-center text-sm text-gray-500 mt-6">

@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.0-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Enterprise single sign-on (SAML) is here: organizations can connect their own identity provider so their people sign in with corporate credentials — new users are created automatically on first login. Off by default; enable it per organization under Admin → Organizations.'],
+      tr: ['Kurumsal tek oturum açma (SAML) geldi: organizasyonlar kendi kimlik sağlayıcılarını bağlayıp kullanıcıların kurumsal hesaplarıyla giriş yapmasını sağlayabilir — yeni kullanıcılar ilk girişte otomatik oluşturulur. Varsayılan kapalı; Admin → Organizasyonlar altından organizasyon bazında açılır.'],
+      de: ['Enterprise Single Sign-on (SAML) ist da: Organisationen können ihren eigenen Identity Provider anbinden, damit sich ihre Leute mit Unternehmens-Anmeldedaten anmelden — neue Nutzer werden beim ersten Login automatisch angelegt. Standardmäßig aus; pro Organisation unter Admin → Organisationen aktivierbar.'],
+    },
+  },
+  {
     version: '0.24.1-beta',
     date: '2026-07-22',
     highlights: {
