@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
     const token = await createEmailVerificationToken(user.id);
     try {
-      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName });
+      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
     } catch (e) {
       console.error('Resend verification email failed:', e);
       return NextResponse.json({ error: 'Could not send the verification email. Please try again shortly.' }, { status: 502 });
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   if (user && !user.emailVerified) {
     const token = await createEmailVerificationToken(user.id);
     try {
-      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName });
+      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
     } catch (e) {
       console.error('Resend verification email failed (public path):', e);
     }

@@ -10,7 +10,19 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.24.0] - 2026-07-22
+## [0.24.1] - 2026-07-22
+
+### Added
+- **Tenant-branded transactional emails (part of #546 / story #522).** The
+  account-lifecycle emails (invitation, password reset / set-initial, email
+  verification) now render the recipient organization's white-label brand — brand
+  name in the subject + From display name + heading, the org logo when set, and
+  the org accent color on the heading/button — resolved via `getOrgBranding`.
+  Callers that have the recipient's `orgId` (invite, forgot-password, admin
+  reset/company-user/source-user creation, apply, mentee creation, verification
+  resend) pass it through; when no org resolves it falls back to the product
+  defaults, so single-tenant emails are unchanged. `sendEmail` gained an optional
+  `fromName` override.
 
 ### Added
 - **Tenant isolation enforcement engine (part of #543 / story #522).** A single

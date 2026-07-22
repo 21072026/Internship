@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { sendInvitationEmail } from '@/services/emailService';
+import { resolveOrgId } from '@/lib/orgScope';
 
 // POST — resend an invitation. Re-emails the link; if the token has expired it
 // is extended by 7 days. Used (accepted) invitations cannot be resent.
@@ -24,7 +25,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const registerUrl = `${appUrl}/auth/register?token=${invite.token}`;
   let emailSent = false;
   try {
-    await sendInvitationEmail({ to: invite.email, token: invite.token, role: invite.role });
+    await sendInvitationEmail({ to: invite.email, token: invite.token, role: invite.role, orgId: resolveOrgId(session) });
     emailSent = !!process.env.SMTP_USER;
   } catch (e) {
     console.error('Resend invitation email failed (token still valid):', e);

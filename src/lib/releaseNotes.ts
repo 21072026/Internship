@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.24.1-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Invitation, password-reset and email-verification messages now carry your organization’s brand — its name, logo and accent color — when one is configured (unchanged for the default single-tenant setup).'],
+      tr: ['Davet, parola sıfırlama ve e-posta doğrulama mesajları artık—yapılandırıldıysa—organizasyonunuzun markasını (adı, logosu ve vurgu rengi) taşıyor (varsayılan tek kiracılı kurulumda değişiklik yok).'],
+      de: ['Einladungs-, Passwort-Reset- und E-Mail-Bestätigungsnachrichten tragen jetzt — sofern konfiguriert — die Marke deiner Organisation (Name, Logo und Akzentfarbe) (bei der standardmäßigen Einzelmandanten-Einrichtung unverändert).'],
+    },
+  },
+  {
     version: '0.24.0-beta',
     date: '2026-07-22',
     highlights: {
