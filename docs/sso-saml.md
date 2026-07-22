@@ -27,36 +27,59 @@ tenant's own IdP instead of email+password.
   `e2e/sso-provisioning.spec.ts`. It trusts its inputs, so the callback must only
   call it AFTER verifying the signed assertion.
 
-## What's NOT wired yet (and why)
+## The live round-trip (now wired)
 
-The **live login redirect is intentionally not connected**. Turning a stored
-config into a working sign-in needs two things this slice deliberately stops
-short of, because neither can be exercised safely without a real tenant IdP:
+The SP-initiated SAML flow is implemented with `@node-saml/node-saml`
+(`src/lib/ssoSaml.ts`) and stays **gated** — it only activates for a tenant when
+`isSsoActive(org)` is true, so password login is unchanged everywhere else:
 
-1. **A SAML/OIDC library + endpoints** — e.g. `@node-saml/node-saml` for the
-   AuthnRequest/ACS round-trip, or an OIDC client for the code flow. Adding an
-   untested assertion-verification path to a live auth system is a security risk.
-2. **Tenant resolution** — knowing which org (hence which IdP) a login belongs
-   to, which arrives with the `#543` query-isolation slice (subdomain/host or a
-   pre-entered work email).
+1. **Entry** — `/auth/sso` (linked from the sign-in page) asks for the org code
+   (slug) and sends the browser to `/api/auth/sso/[slug]/login`.
+2. **Login route** — resolves the org; if SSO is active, builds a signed-nothing
+   AuthnRequest and redirects to `ssoEntryPoint` (the IdP).
+3. **ACS** — `POST /api/auth/sso/[slug]/acs` verifies the posted assertion's
+   signature against the org's `ssoCertificate` (audience + recipient + expiry
+   checked by node-saml), maps the profile (`mapSamlProfile`), JIT-provisions the
+   user (`provisionSsoUser`), then mints a **single-use `SsoLoginGrant`**.
+4. **Session** — the browser lands on `/auth/sso/complete`, which consumes the
+   grant via the `sso` NextAuth Credentials provider (mirrors the impersonation
+   grant flow) to issue the session. No password, no IdP secret in our env.
 
-So today the config is **managed, validated and gated** but `isSsoActive()` has
-no live consumer. This mirrors how Google Calendar OAuth (#417) waits on the
-customer's own credentials.
+`validateInResponseTo` is `never` (stateless SP, no shared request cache; also
+allows IdP-initiated). The assertion signature + audience/recipient/expiry are
+the security anchors.
 
-## Wiring checklist (next slice — needs the tenant's IdP metadata)
+### SP identifiers to register in the IdP (per tenant)
+For a tenant with slug `<slug>` on base URL `<BASE>` (e.g.
+`https://crm-preview.ersah.in`):
+- **ACS / Reply URL:** `<BASE>/api/auth/sso/<slug>/acs`
+- **SP Entity ID / Audience:** `<BASE>/sso/<slug>`
+- **NameID format:** emailAddress; email in NameID or an `email` attribute;
+  optional `name` / `firstName`+`lastName` for the display name.
 
-1. Add the SSO library dependency and an ACS/callback route
-   (`/api/auth/sso/[org]/callback`).
-2. Resolve the tenant from the request (subdomain or work-email lookup).
-3. If `isSsoActive(org)`: build the AuthnRequest from `ssoEntryPoint` /
-   `ssoIssuer`, redirect to the IdP.
-4. On callback: verify the signed assertion against `ssoCertificate`, then call
-   `provisionSsoUser({ orgId, email, fullName, role })` (already implemented) to
-   map the IdP subject to a `User` in that org, and issue the NextAuth session.
-5. Fall back to password login whenever SSO is not active for the tenant.
+## Verifying on preview with mock-saml.com (no real IdP needed)
+
+[mocksaml.com](https://mocksaml.com) is a free public test IdP. To verify the
+round-trip end-to-end on the preview environment:
+
+1. **Admin → Organizations** → create an org, e.g. name *SSO Test*, slug
+   `sso-test`. Open its **Enterprise SSO** card and set:
+   - Provider: `saml`
+   - Issuer: `https://saml.example.com/entityid`
+   - Entry point: `https://mocksaml.com/api/saml/sso`
+   - Certificate (PEM): mock-saml's public signing cert (from
+     `https://mocksaml.com/api/saml/metadata`)
+   - **Enable SSO** ✅ (validation requires all fields first)
+2. Sign out. Go to **/auth/sso**, enter `sso-test`, **Continue** → you're sent to
+   mock-saml. Enter any email (e.g. `you@example.com`), submit.
+3. mock-saml posts the signed assertion to our ACS → you land signed in as a
+   JIT-provisioned MENTEE in the *SSO Test* org.
+
+To point at a **real** IdP (Okta/Azure/Auth0) later, just paste that IdP's
+issuer / SSO URL / signing certificate into the same card — no code change.
 
 ### Operator notes
-- The IdP's ACS/redirect URL will be the callback route above; give it to the
-  customer's IdP admin along with our SP entity ID.
+- Give the IdP admin the ACS + SP Entity ID above.
 - Store only the IdP's **public** signing certificate; never a private key.
+- Turning on production SSO for a tenant is purely a config step (fill the card +
+  enable); it does not require the `MT_ENFORCE_ISOLATION` isolation flag.
