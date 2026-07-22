@@ -73,9 +73,22 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
     });
   };
 
-  // Enter/Shift+Enter behaviour depends on the preference above.
+  // Enter/Shift+Enter behaviour depends on the preference above; ArrowUp on an
+  // empty box edits your last message (WhatsApp/Slack/Telegram style).
   const onComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'ArrowUp' && !body && editId === null) {
+      const lastMine = [...messages].reverse().find((m) => m.senderId === myId && !m.deleted);
+      if (lastMine) {
+        e.preventDefault();
+        setMenuId(null);
+        setReactId(null);
+        setEditId(lastMine.id);
+        setEditBody(lastMine.body);
+      }
+      return;
+    }
+    if (e.key !== 'Enter') return;
     const shouldSend = enterToSend ? !e.shiftKey : e.shiftKey;
     if (shouldSend) {
       e.preventDefault();
@@ -403,17 +416,18 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
         />
         <Button type="submit" loading={sending} disabled={!body.trim() && attachments.length === 0}>{t.messages.send}</Button>
       </form>
-      <div className="mt-1.5 flex justify-end">
+      <div className="mt-1.5 flex items-center justify-between gap-3">
+        <span className="text-xs text-gray-400 truncate">{t.messages.pasteHint}</span>
         <button
           type="button"
           role="switch"
           aria-checked={enterToSend}
           onClick={toggleEnterToSend}
           title={enterToSend ? t.messages.enterToSendOnHint : t.messages.enterToSendOffHint}
-          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 shrink-0"
         >
-          <span className={`relative inline-block h-4 w-7 rounded-full transition-colors ${enterToSend ? 'bg-blue-600' : 'bg-gray-300'}`}>
-            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enterToSend ? 'translate-x-[15px]' : 'translate-x-0.5'}`} />
+          <span className={`relative inline-block h-4 w-7 shrink-0 rounded-full transition-colors ${enterToSend ? 'bg-blue-600' : 'bg-gray-300'}`}>
+            <span className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enterToSend ? 'translate-x-3' : 'translate-x-0'}`} />
           </span>
           {t.messages.enterToSend}
         </button>

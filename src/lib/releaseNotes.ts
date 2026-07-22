@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.23.1-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Message box polish: fixed the “Enter to send” switch overlapping its label, and pressing ↑ on an empty box now edits your last message.'],
+      tr: ['Mesaj kutusu rötuşu: “Enter ile gönder” anahtarının etiketle çakışması düzeltildi; boş kutuda ↑ tuşuna basınca son mesajını düzenliyorsun.'],
+      de: ['Feinschliff im Nachrichtenfeld: Der Schalter „Mit Enter senden“ überlappt sein Label nicht mehr, und ↑ im leeren Feld bearbeitet jetzt deine letzte Nachricht.'],
+    },
+  },
+  {
     version: '0.23.0-beta',
     date: '2026-07-22',
     highlights: {

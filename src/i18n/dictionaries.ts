@@ -957,6 +957,7 @@ const en = {
     enterToSend: 'Enter to send',
     enterToSendOnHint: 'Enter sends · Shift+Enter adds a new line',
     enterToSendOffHint: 'Enter adds a new line · Shift+Enter sends',
+    pasteHint: 'Tip: you can paste an image, and ↑ edits your last message',
   },
   logInteraction: {
     add: 'Log interaction',
@@ -2426,6 +2427,7 @@ const tr: Dict = {
     enterToSend: 'Enter ile gönder',
     enterToSendOnHint: 'Enter gönderir · Shift+Enter alt satıra geçer',
     enterToSendOffHint: 'Enter alt satıra geçer · Shift+Enter gönderir',
+    pasteHint: 'İpucu: resim yapıştırabilirsin, ↑ ile son mesajını düzenlersin',
   },
   logInteraction: {
     add: 'Etkileşim ekle',
@@ -3893,6 +3895,7 @@ const de: Dict = {
     enterToSend: 'Mit Enter senden',
     enterToSendOnHint: 'Enter sendet · Umschalt+Enter fügt eine neue Zeile ein',
     enterToSendOffHint: 'Enter fügt eine neue Zeile ein · Umschalt+Enter sendet',
+    pasteHint: 'Tipp: Du kannst ein Bild einfügen, ↑ bearbeitet deine letzte Nachricht',
   },
   logInteraction: {
     add: 'Interaktion erfassen',
