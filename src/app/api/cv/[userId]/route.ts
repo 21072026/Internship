@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { canAccessCv } from '@/lib/cvAccess';
 
 // GET — download a user's CV (access-controlled).
@@ -14,6 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  return await withTenantScope(session, async () => {
   const cv = await prisma.cvFile.findUnique({ where: { userId } });
   if (!cv) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -23,6 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
       'Content-Disposition': `inline; filename="${cv.filename.replace(/"/g, '')}"`,
       'Content-Length': String(cv.size),
     },
+  });
   });
 }
 
@@ -36,7 +39,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  return await withTenantScope(session, async () => {
   await prisma.cvFile.deleteMany({ where: { userId } });
   await prisma.user.update({ where: { id: userId }, data: { cvUrl: null } });
   return NextResponse.json({ ok: true });
+  });
 }

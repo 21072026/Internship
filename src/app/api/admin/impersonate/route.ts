@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { createImpersonationGrant } from '@/lib/impersonation';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
+import { withTenantScope } from '@/lib/orgContext';
 
 const schema = z.object({ targetUserId: z.string().min(1), reason: z.string().max(300).optional() });
 
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: 'targetUserId is required' }, { status: 400 });
@@ -54,4 +56,5 @@ export async function POST(request: Request) {
   await notify(target.id, 'impersonation', `An administrator accessed your account${reason ? ` (${reason})` : ''}.`);
 
   return NextResponse.json({ grant });
+  });
 }

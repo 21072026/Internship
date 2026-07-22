@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
+import { withTenantScope } from '@/lib/orgContext';
 
 // Admin queue for mentee mentorship requests (#590): list PENDING requests,
 // approve (pick a mentor → MentorshipRelation) or reject. The mentee is
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  return await withTenantScope(session, async () => {
   const statusParam = new URL(request.url).searchParams.get('status');
   const status = statusParam === 'APPROVED' || statusParam === 'REJECTED' ? statusParam : 'PENDING';
 
@@ -33,6 +35,7 @@ export async function GET(request: Request) {
     },
   });
   return NextResponse.json({ requests });
+  });
 }
 
 const decideSchema = z.object({
@@ -49,6 +52,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  return await withTenantScope(session, async () => {
   const parsed = decideSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { requestId, action, mentorId } = parsed.data;
@@ -97,4 +101,5 @@ export async function PUT(request: Request) {
   });
   await notify(req.menteeId, 'mentorship_request', 'Your mentorship request was reviewed but could not be approved right now.', '/portal');
   return NextResponse.json({ ok: true });
+  });
 }

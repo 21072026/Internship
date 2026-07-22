@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
+import { withTenantScope } from '@/lib/orgContext';
 
 const HIRED = new Set(['HIRED_660', 'EMPLOYED_700']);
 
@@ -18,6 +19,7 @@ export async function GET() {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 
+  return await withTenantScope(session, async () => {
   const sources = await prisma.source.findMany({
     orderBy: { name: 'asc' },
     select: {
@@ -49,4 +51,5 @@ export async function GET() {
   const unsourced = await prisma.user.count({ where: { role: 'MENTEE', sourceId: null } });
 
   return NextResponse.json({ sources: rows, unsourced });
+  });
 }

@@ -65,10 +65,16 @@ never called `orgScoped()`** is still isolated purely because it ran inside
 ### Per-route rollout status
 
 Handlers adopt the engine by wrapping their body in `withTenantScope(session, …)`.
-Adopted so far: `GET/POST /api/mentorship`, `GET/POST /api/companies`,
-`GET/POST /api/projects`. The remaining tenant-scoped routes are wrapped
-incrementally; because the flag is off, an un-wrapped route simply isn't
-enforced yet and never leaks more than today's single-tenant app.
+**All authenticated API routes that query a tenant-anchored model are now
+wrapped** — every such handler binds the request's org, so with the flag on the
+central middleware scopes all of its queries. Wrapping is behavior-neutral while
+the flag is off (`withTenantScope` is a pure passthrough).
+
+Public / token-based routes (registration, apply, forgot-password, invite
+acceptance) are intentionally not wrapped: they have no session and resolve their
+subject from the invite/reset token, not a tenant context. Routes that only ever
+read the caller's own rows (account, profile, avatar, cv) are wrapped too for
+uniformity, though scoping is redundant there.
 
 ## Turning enforcement on (the guarded rollout)
 

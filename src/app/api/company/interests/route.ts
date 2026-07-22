@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 
 const bodySchema = z.object({
@@ -18,14 +19,17 @@ export async function GET(request: Request) {
   if (session.user.role !== 'COMPANY' || !session.user.companyId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  const companyId = session.user.companyId;
 
+  return await withTenantScope(session, async () => {
   const menteeId = new URL(request.url).searchParams.get('menteeId');
   if (!menteeId) return NextResponse.json({ error: 'menteeId is required' }, { status: 400 });
 
   const interest = await prisma.companyInterest.findUnique({
-    where: { companyId_menteeId: { companyId: session.user.companyId, menteeId } },
+    where: { companyId_menteeId: { companyId, menteeId } },
   });
   return NextResponse.json({ interest });
+  });
 }
 
 // POST — set (create or update) the requester company's interest on a
@@ -37,30 +41,32 @@ export async function POST(request: Request) {
   if (session.user.role !== 'COMPANY' || !session.user.companyId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  const companyId = session.user.companyId;
 
+  return await withTenantScope(session, async () => {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { menteeId, status, note } = parsed.data;
 
   const relation = await prisma.mentorshipRelation.findFirst({
-    where: { companyId: session.user.companyId, menteeId },
+    where: { companyId, menteeId },
     select: { mentorId: true, mentee: { select: { fullName: true } } },
   });
   if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const company = await prisma.company.findUnique({ where: { id: session.user.companyId }, select: { name: true } });
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
 
   // Was there already an interest, and is this a genuine status change? Note-only
   // updates (e.g. the debounced note auto-save) must NOT re-notify the mentor.
   const existing = await prisma.companyInterest.findUnique({
-    where: { companyId_menteeId: { companyId: session.user.companyId, menteeId } },
+    where: { companyId_menteeId: { companyId, menteeId } },
     select: { status: true },
   });
   const statusChanged = !existing || existing.status !== status;
 
   const interest = await prisma.companyInterest.upsert({
-    where: { companyId_menteeId: { companyId: session.user.companyId, menteeId } },
-    create: { companyId: session.user.companyId, menteeId, status, note },
+    where: { companyId_menteeId: { companyId, menteeId } },
+    create: { companyId, menteeId, status, note },
     update: { status, note },
   });
 
@@ -88,4 +94,5 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ interest });
+  });
 }

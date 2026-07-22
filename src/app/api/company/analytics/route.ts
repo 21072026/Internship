@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 
 // GET — company-scoped analytics: stage distribution, interest summary and
 // basic engagement for the company's linked candidates
@@ -19,6 +20,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  return await withTenantScope(session, async () => {
   const companyId = session.user.role === 'COMPANY' ? session.user.companyId : undefined;
 
   const relations = await prisma.mentorshipRelation.findMany({
@@ -75,5 +77,6 @@ export async function GET() {
     funnel,
     total: relations.length,
     interestCounts,
+  });
   });
 }

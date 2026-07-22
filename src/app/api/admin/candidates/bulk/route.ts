@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { nextOnPathStatus, type PipelineStatus } from '@/lib/pipeline';
+import { withTenantScope } from '@/lib/orgContext';
 
 const bodySchema = z.object({
   candidateIds: z.array(z.string().min(1)).min(1).max(200),
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  return await withTenantScope(session, async () => {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { candidateIds, action } = parsed.data;
@@ -88,4 +90,5 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  });
 }

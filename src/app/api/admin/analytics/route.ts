@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 
 // GET — aggregate analytics for the admin dashboard:
 // pipeline funnel, mentor workload/outcomes, engagement and RSVP rate.
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  return await withTenantScope(session, async () => {
   const { searchParams } = new URL(request.url);
   const now = new Date();
   const parseDate = (v: string | null): Date | null => {
@@ -110,5 +112,6 @@ export async function GET(request: Request) {
     rsvp: { ...rsvp, responded: rsvpResponded, acceptanceRate: rsvpAcceptanceRate },
     trends,
     range,
+  });
   });
 }
