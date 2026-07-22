@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.23.2-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Emoji reactions can now be changed: tap your own reaction chip to open the picker and switch to a different emoji, or tap the same emoji again to remove it. Your current selection is highlighted in the picker.'],
+      tr: ['Emoji tepkileri artık değiştirilebilir: kendi tepki chipine dokun, açılan seçiciden farklı bir emoji seç ya da aynı emojiye tekrar dokun ve kaldır. Seçtiğin emoji seçicide vurgulanır.'],
+      de: ['Emoji-Reaktionen können jetzt geändert werden: Tippe auf deinen eigenen Reaktions-Chip, um den Picker zu öffnen und zu einem anderen Emoji zu wechseln, oder tippe erneut auf dasselbe Emoji, um es zu entfernen. Deine aktuelle Auswahl wird im Picker hervorgehoben.'],
+    },
+  },
+  {
     version: '0.23.1-beta',
     date: '2026-07-22',
     highlights: {
