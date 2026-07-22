@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { passwordSchema } from '@/lib/password';
 import { logActivity } from '@/lib/activity';
 import { hardDeleteUser } from '@/lib/accountErasure';
+import { withTenantScope } from '@/lib/orgContext';
 
 const schema = z.object({
   email: z.string().email().optional(),
@@ -24,6 +25,7 @@ export async function PUT(request: Request) {
     if (session.user.impersonatorId) {
       return NextResponse.json({ error: 'Cannot change account credentials while impersonating' }, { status: 400 });
     }
+    return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
@@ -70,6 +72,7 @@ export async function PUT(request: Request) {
       await logActivity({ action: 'account.password_change', level: 'warning', actorId: user.id, actorEmail: user.email });
     }
     return NextResponse.json({ message: 'Account updated', emailChanged: !!data.email });
+    });
   } catch (error) {
     console.error('Account update error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -87,6 +90,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Cannot delete an account while impersonating it' }, { status: 400 });
     }
 
+    return await withTenantScope(session, async () => {
     const id = session.user.id;
 
     // Re-authenticate with the current password before destroying the account.
@@ -109,6 +113,7 @@ export async function DELETE(request: Request) {
 
     await logActivity({ action: 'account.delete', level: 'warning', actorId: id, actorEmail: session.user.email ?? null });
     return NextResponse.json({ ok: true });
+    });
   } catch (error) {
     console.error('Account delete error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

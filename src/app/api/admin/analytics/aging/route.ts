@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  return await withTenantScope(session, async () => {
   // Optional date-range window (?from=YYYY-MM-DD&to=YYYY-MM-DD): only stage
   // transitions that COMPLETED (i.e. the candidate left the stage) within the
   // window feed stageAging. oldestStuck/overdue describe the present, so they
@@ -106,4 +108,5 @@ export async function GET(request: Request) {
   const overdue = items.filter((it) => it.overdue).sort((a, b) => b.daysInStage - a.daysInStage);
 
   return NextResponse.json({ stageAging, oldestStuck, overdue, overdueCount: overdue.length });
+  });
 }

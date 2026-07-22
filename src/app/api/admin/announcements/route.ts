@@ -7,6 +7,7 @@ import { logActivity } from '@/lib/activity';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { withTenantScope } from '@/lib/orgContext';
 
 const schema = z.object({
   text: z.string().min(1).max(2000),
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   const { searchParams } = new URL(request.url);
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const pageSize = 20;
@@ -42,6 +44,7 @@ export async function GET(request: Request) {
     page,
     pageSize,
   });
+  });
 }
 
 // POST — broadcast an announcement to every active user as an in-app
@@ -50,6 +53,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const { text, link, email } = parsed.data;
@@ -86,4 +90,5 @@ export async function POST(request: Request) {
 
   await logActivity({ action: 'announcement.broadcast', actorId: session.user.id, actorEmail: session.user.email ?? null });
   return NextResponse.json({ recipients: users.length, emailed }, { status: 201 });
+  });
 }

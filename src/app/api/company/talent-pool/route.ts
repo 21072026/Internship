@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature } from '@/lib/entitlements';
 import { getSetting } from '@/lib/settings';
 
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'feature_locked' }, { status: 403 });
   }
 
+  return await withTenantScope(session, async () => {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get('q') || '').trim().slice(0, 100);
   const skill = (searchParams.get('skill') || '').trim().slice(0, 60).toLowerCase();
@@ -81,4 +83,5 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ candidates });
+  });
 }

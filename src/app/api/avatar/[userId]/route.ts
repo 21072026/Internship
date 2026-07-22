@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 
 // GET — fetch a user's avatar. Any authenticated user may view avatars
 // (they're shown across lists, sidebars and profiles).
@@ -14,6 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
     if (!u?.publicProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  return await withTenantScope(session, async () => {
   const avatar = await prisma.avatarFile.findUnique({ where: { userId } });
   if (!avatar) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -23,6 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
       'Content-Length': String(avatar.size),
       'Cache-Control': 'private, max-age=300',
     },
+  });
   });
 }
 
@@ -36,7 +39,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  return await withTenantScope(session, async () => {
   await prisma.avatarFile.deleteMany({ where: { userId } });
   await prisma.user.update({ where: { id: userId }, data: { avatarUrl: null } });
   return NextResponse.json({ ok: true });
+  });
 }

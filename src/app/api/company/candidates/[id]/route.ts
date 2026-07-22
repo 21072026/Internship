@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature } from '@/lib/entitlements';
 
 // GET — read-only candidate detail for a COMPANY user (EPIC: company
@@ -16,6 +17,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  return await withTenantScope(session, async () => {
   const { id } = await params;
   const relation = await prisma.mentorshipRelation.findFirst({
     where: { companyId: session.user.companyId, menteeId: id },
@@ -114,5 +116,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({
     candidate: { ...candidate, pipelineStatus: relation.pipelineStatus, mentorName: relation.mentor.fullName },
     verified,
+  });
   });
 }

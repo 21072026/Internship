@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasConsent } from '@/lib/consent';
+import { withTenantScope } from '@/lib/orgContext';
 
 // Cap dwell time per hit so a backgrounded tab / clock skew can't inflate the
 // "time on site" total (30 min is well beyond a single active page view).
@@ -29,27 +30,28 @@ function cleanPath(raw: string): string {
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return new NextResponse(null, { status: 204 });
+  return await withTenantScope(session, async () => {
+    const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return new NextResponse(null, { status: 204 });
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return new NextResponse(null, { status: 204 });
+    // Don't track while impersonating — that activity isn't the user's own.
+    if (session.user.impersonatorId) return new NextResponse(null, { status: 204 });
 
-  // Don't track while impersonating — that activity isn't the user's own.
-  if (session.user.impersonatorId) return new NextResponse(null, { status: 204 });
+    if (!(await hasConsent(session.user.id, 'ACTIVITY_TRACKING'))) {
+      return new NextResponse(null, { status: 204 });
+    }
 
-  if (!(await hasConsent(session.user.id, 'ACTIVITY_TRACKING'))) {
+    const duration = Math.min(parsed.data.durationSec ?? 0, MAX_DURATION_SEC);
+    try {
+      await prisma.$transaction([
+        prisma.pageView.create({
+          data: { userId: session.user.id, path: cleanPath(parsed.data.path), durationSec: duration },
+        }),
+        prisma.user.update({ where: { id: session.user.id }, data: { lastSeenAt: new Date() } }),
+      ]);
+    } catch {
+      // Never let telemetry break navigation.
+    }
     return new NextResponse(null, { status: 204 });
-  }
-
-  const duration = Math.min(parsed.data.durationSec ?? 0, MAX_DURATION_SEC);
-  try {
-    await prisma.$transaction([
-      prisma.pageView.create({
-        data: { userId: session.user.id, path: cleanPath(parsed.data.path), durationSec: duration },
-      }),
-      prisma.user.update({ where: { id: session.user.id }, data: { lastSeenAt: new Date() } }),
-    ]);
-  } catch {
-    // Never let telemetry break navigation.
-  }
-  return new NextResponse(null, { status: 204 });
+  });
 }

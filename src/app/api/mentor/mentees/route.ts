@@ -9,6 +9,7 @@ import { sendPasswordResetEmail } from '@/services/emailService';
 import { slugify } from '@/lib/transliterate';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { withTenantScope } from '@/lib/orgContext';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -28,76 +29,78 @@ export async function POST(request: Request) {
     if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const parsed = schema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
-    }
-    const { fullName, email, ...rest } = parsed.data;
-
-    // A real email means the mentee can be invited to set a password and log in.
-    // No email → a deterministic placeholder for a tracking-only mentee (no login).
-    const hasRealEmail = !!(email && email.length > 0);
-    const finalEmail = hasRealEmail
-      ? email!
-      : `mentee.${slugify(fullName)}.${crypto.randomBytes(2).toString('hex')}@import.local`;
-
-    const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
-    if (existing) {
-      return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
-    }
-
-    // Plan gate (#547): a new mentee here means a new active relation. Gate on
-    // the creating user's tenant before creating anything. No-op for the
-    // unlimited default org.
-    const orgId = resolveOrgId(session);
-    const gate = await checkActiveRelationLimit(orgId);
-    if (!gate.allowed) {
-      return NextResponse.json(planLimitError(gate), { status: 403 });
-    }
-
-    const mentee = await prisma.user.create({
-      data: {
-        email: finalEmail,
-        password: '!created-no-login',
-        role: 'MENTEE',
-        fullName,
-        orgId,
-        skills: [],
-        phone: rest.phone || null,
-        whatsapp: rest.whatsapp || null,
-        city: rest.city || null,
-        university: rest.university || null,
-        department: rest.department || null,
-        referralSource: rest.referralSource || null,
-      },
-    });
-
-    await prisma.mentorshipRelation.create({
-      data: { mentorId: session.user.id, menteeId: mentee.id, orgId },
-    });
-
-    // If the mentee has a real email, send a "set your password" link so they
-    // can activate their account. The link is also returned so the UI can show
-    // it (and the mentor can share it manually) even if the email fails.
-    let setPasswordUrl: string | null = null;
-    if (hasRealEmail) {
-      const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
-      try {
-        await sendPasswordResetEmail({
-          to: mentee.email,
-          token,
-          fullName: mentee.fullName,
-          purpose: 'SET_INITIAL',
-          orgId,
-        });
-      } catch (e) {
-        console.error('Mentee set-password email failed:', e);
+    return await withTenantScope(session, async () => {
+      const parsed = schema.safeParse(await request.json());
+      if (!parsed.success) {
+        return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
       }
-    }
+      const { fullName, email, ...rest } = parsed.data;
 
-    return NextResponse.json({ menteeId: mentee.id, setPasswordUrl }, { status: 201 });
+      // A real email means the mentee can be invited to set a password and log in.
+      // No email → a deterministic placeholder for a tracking-only mentee (no login).
+      const hasRealEmail = !!(email && email.length > 0);
+      const finalEmail = hasRealEmail
+        ? email!
+        : `mentee.${slugify(fullName)}.${crypto.randomBytes(2).toString('hex')}@import.local`;
+
+      const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
+      if (existing) {
+        return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
+      }
+
+      // Plan gate (#547): a new mentee here means a new active relation. Gate on
+      // the creating user's tenant before creating anything. No-op for the
+      // unlimited default org.
+      const orgId = resolveOrgId(session);
+      const gate = await checkActiveRelationLimit(orgId);
+      if (!gate.allowed) {
+        return NextResponse.json(planLimitError(gate), { status: 403 });
+      }
+
+      const mentee = await prisma.user.create({
+        data: {
+          email: finalEmail,
+          password: '!created-no-login',
+          role: 'MENTEE',
+          fullName,
+          orgId,
+          skills: [],
+          phone: rest.phone || null,
+          whatsapp: rest.whatsapp || null,
+          city: rest.city || null,
+          university: rest.university || null,
+          department: rest.department || null,
+          referralSource: rest.referralSource || null,
+        },
+      });
+
+      await prisma.mentorshipRelation.create({
+        data: { mentorId: session.user.id, menteeId: mentee.id, orgId },
+      });
+
+      // If the mentee has a real email, send a "set your password" link so they
+      // can activate their account. The link is also returned so the UI can show
+      // it (and the mentor can share it manually) even if the email fails.
+      let setPasswordUrl: string | null = null;
+      if (hasRealEmail) {
+        const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
+        try {
+          await sendPasswordResetEmail({
+            to: mentee.email,
+            token,
+            fullName: mentee.fullName,
+            purpose: 'SET_INITIAL',
+            orgId,
+          });
+        } catch (e) {
+          console.error('Mentee set-password email failed:', e);
+        }
+      }
+
+      return NextResponse.json({ menteeId: mentee.id, setPasswordUrl }, { status: 201 });
+    });
   } catch (error) {
     console.error('Create mentee error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

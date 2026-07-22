@@ -3,11 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
+import { withTenantScope } from '@/lib/orgContext';
 
 // GET — the current user downloads all of their own data as JSON (GDPR-style).
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const id = session.user.id;
 
   const user = await prisma.user.findUnique({
@@ -45,5 +47,6 @@ export async function GET() {
       'Content-Type': 'application/json',
       'Content-Disposition': `attachment; filename="my-data.json"`,
     },
+  });
   });
 }

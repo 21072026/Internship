@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
+import { withTenantScope } from '@/lib/orgContext';
 
 // Stages that are terminal — an overdue deadline on these is not actionable.
 const TERMINAL = ['HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'];
@@ -13,6 +14,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   const { id, role } = session.user;
   const relWhere: Prisma.MentorshipRelationWhereInput =
     role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id };
@@ -72,4 +74,5 @@ export async function GET() {
   ];
 
   return NextResponse.json({ events });
+  });
 }

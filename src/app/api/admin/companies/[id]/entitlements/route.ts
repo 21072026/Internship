@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getCompanyFeatures, setCompanyFeature, isPremiumFeature } from '@/lib/entitlements';
 import { logActivity } from '@/lib/activity';
+import { withTenantScope } from '@/lib/orgContext';
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -16,10 +17,12 @@ async function requireAdmin() {
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const { id } = await params;
   const company = await prisma.company.findUnique({ where: { id }, select: { id: true } });
   if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
   return NextResponse.json({ features: await getCompanyFeatures(id) });
+  });
 }
 
 const putSchema = z.object({ feature: z.string(), enabled: z.boolean() });
@@ -28,6 +31,7 @@ const putSchema = z.object({ feature: z.string(), enabled: z.boolean() });
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const { id } = await params;
 
   const parsed = putSchema.safeParse(await request.json().catch(() => null));
@@ -48,4 +52,5 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     detail: parsed.data.feature,
   });
   return NextResponse.json({ features: await getCompanyFeatures(id) });
+  });
 }

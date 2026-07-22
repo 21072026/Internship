@@ -5,13 +5,16 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { generateSecret, verifyTotp, otpauthUrl } from '@/lib/totp';
 import { logActivity } from '@/lib/activity';
+import { withTenantScope } from '@/lib/orgContext';
 
 // GET — current 2FA status.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { twoFactorEnabled: true } });
   return NextResponse.json({ enabled: !!user?.twoFactorEnabled });
+  });
 }
 
 const schema = z.object({
@@ -23,6 +26,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const { action, code } = parsed.data;
@@ -55,4 +59,5 @@ export async function POST(request: Request) {
   await prisma.user.update({ where: { id: session.user.id }, data: { twoFactorEnabled: false, twoFactorSecret: null } });
   await logActivity({ action: '2fa.disable', level: 'warning', actorId: session.user.id, actorEmail: session.user.email ?? null });
   return NextResponse.json({ enabled: false });
+  });
 }

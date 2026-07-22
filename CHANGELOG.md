@@ -10,7 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.24.1] - 2026-07-22
+## [0.24.2] - 2026-07-22
+
+### Changed
+- **Tenant isolation rolled out to all authenticated API routes (part of #543 /
+  story #522).** Every API route handler that queries a tenant-anchored model now
+  wraps its body in `withTenantScope(session, …)`, so the central enforcement
+  middleware auto-scopes all of its queries to the request's organization once
+  `MT_ENFORCE_ISOLATION` is enabled. Behavior-neutral while the flag is off
+  (`withTenantScope` is a pure passthrough), so single-tenant production is
+  unchanged. Public/token-based routes (register, apply, forgot-password, invite
+  acceptance) are intentionally left unscoped (no session; subject resolved from
+  the token).
 
 ### Added
 - **Tenant-branded transactional emails (part of #546 / story #522).** The
