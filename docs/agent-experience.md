@@ -368,3 +368,51 @@ komşu satır) ve `assert count==1` ile doğrula; sonra `npm run check:i18n`.
 **Squash sadece ilk commit'i alma tuzağı (hatırlatma):** PR açtıktan SONRA
 push'lanan commit'ler squash'a girmeyebiliyor — branch'i PR'dan önce tam hazırla,
 ya da tek commit tut.
+
+---
+
+## 2026-07-22 (öğleden sonra) — MT enforcement engine, contributor PR entegrasyonu
+
+**Tenant izolasyonunu "unutulamaz" hale getir: gated Prisma `$use` middleware +
+AsyncLocalStorage.** Opt-in `orgScoped()` helper'ları "her sorgu izole" kriterini
+garanti edemez (çağıran unutabilir). Çözüm: `runWithOrg(orgId, fn)` bir
+`AsyncLocalStorage` context'i bağlar; tek bir `prisma.$use` middleware'i
+tenant-anchor modellerinde (`User/Source/Company/Project/Cohort/
+MentorshipRelation`) `where`/`data`'ya `orgId` enjekte eder. Tamamen
+`MT_ENFORCE_ISOLATION` (default off) arkasında: kapalıyken `runWithOrg` düz
+passthrough, middleware erken döner → tek-kiracılı prod bit-bit aynı.
+
+**`node:async_hooks`'u `prisma.ts`'e KOYMA — client bundle patlar.** prisma.ts
+onlarca client-erişilebilir modül tarafından (sabit sızıntıları üzerinden)
+import ediliyor; `async_hooks` eklemek `UnhandledSchemeError` veriyor. Middleware +
+ALS'i ayrı **server-only** `orgContext.ts`'e koy (yalnızca route handler'lar
+import eder), `prisma.ts`'i minimal tut. Middleware'i `runWithOrg` ilk
+çağrıldığında lazy + global-guard ile kaydet.
+
+**Prisma 5 `extendedWhereUnique`:** `findUnique`/`update`/`delete` artık `where`'de
+unique alanın YANINA ekstra filtre (ör. `orgId`) kabul ediyor — cross-tenant
+`findUnique` null döner. Middleware'de tüm where-tabanlı action'lar için tek tip
+`{...where, orgId}` merge yeterli; create/createMany/upsert için `data`'ya enjekte.
+
+**İzolasyon testini middleware'i uçtan uca kanıtlar şekilde yaz:** helper unit
+testi yetmez; app `prisma`'sını + `runWithOrg`'u kullanıp `orgScoped()` HİÇ
+çağırmayan düz bir `findMany`'nin bayrak açıkken izole, kapalıyken no-op olduğunu
+doğrula (seed'i middleware'siz `helpers/db` client'ıyla yap).
+
+**Contributor/Copilot PR'ını merge'den önce adversarial review + düzelt:** #740'ta
+bir subagent review'ı iki gerçek bug yakaladı (bulk "advance stage" ham enum
+`indexOf+1` ile in-progress stajı "dropped"a itiyordu; company-analytics
+`companyId` null olan COMPANY kullanıcıya TÜM veriyi sızdırıyordu). Rebase +
+düzelt + i18n/build yeşil + kısa açıklayıcı PR yorumu, sonra squash.
+
+**Sürüm çakışması:** paralel PR'lar aynı `x.y.z`'yi almaya çalışır (intern #656 +
+benim #739 ikisi de 0.23.0). Rebase'te CHANGELOG/releaseNotes/package(-lock).json
+çakışmalarını yeni sürümü en üste koyacak şekilde elle çöz; `git checkout --ours`
+sadece benim tarafım tümüyle doğruysa. `get_check_runs` CI'ın tek doğru kaynağı
+(get_status legacy commit-status API'si total_count 0 gösteriyor); self-hosted
+"topic" check'i de yeşil olmalı.
+
+**Ağır alt-işi kendi issue'suna böl:** #546'nın "özel pipeline aşamaları
+(enum→dinamik)" parçası çok geniş/kesişen — `sub_issue_write` ile #747 olarak
+ayırıp #546 altına bağladım (dikkat: `sub_issue_id` node **id**'si, issue numarası
+değil).
