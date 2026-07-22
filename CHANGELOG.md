@@ -10,10 +10,128 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.14.8] - 2026-07-22
+## [0.23.0] - 2026-07-22
 
 ### Added
 - **Inline editing for mentee portal notes (closes #656)** — mentees can now edit their own notes directly in the portal, save or cancel their changes, and receive validation and update feedback. Related E2E coverage verifies editing, cancellation, whitespace validation, and owner-only authorization.
+
+## [0.22.0] - 2026-07-21
+
+### Added
+- **White-label chrome — tenant brand applied to the live app (part of #546 /
+  story #522).** The app wordmark (sidebar header + mobile top bar across the
+  admin/mentor/portal/company/source shells) now renders the signed-in user's
+  **organization brand name and logo** instead of the hardcoded "Internship CRM".
+  A new self-resolving `BrandWordmark` server component reads the org branding
+  (`getOrgBranding`) and falls back to the product default when the org has no
+  branding or there's no org, so single-tenant chrome is unchanged. Branding is
+  managed at `/admin/organizations` (already shipped). Follow-ups tracked
+  separately: applying `brandColor` to the accent palette, per-recipient email
+  branding, and custom pipeline stages (#546 remainder).
+
+## [0.21.0] - 2026-07-21
+
+### Added
+- **"Enter to send" toggle in the message composer** — a small per-user switch
+  under the reply box lets you choose how Enter behaves. When on, **Enter sends**
+  and **Shift+Enter** inserts a new line; when off (the default), **Enter** inserts
+  a new line and **Shift+Enter** sends. The choice is remembered per device
+  (`localStorage`). Handles IME composition (won't send mid-composition).
+
+## [0.20.0] - 2026-07-21
+
+### Added
+- **Unread-message email digest (closes #667)** — an hourly cron
+  (`sendUnreadMessageDigests`) gathers messages left unread for over an hour,
+  groups them per recipient, and sends **one** summary email (sender + preview +
+  "Open" link) instead of nagging per message. Idempotent via a new
+  `Message.digestedAt` flag (a message is never digested twice), and it respects
+  each recipient's email opt-out (`emailAllowed(user, 'messages')`). The instant
+  in-app notification is unchanged; this is an additive "still unread" reminder.
+  Completes the WhatsApp-like messaging story (#663) under the Communication
+  epic (#717).
+
+## [0.19.0] - 2026-07-21
+
+### Added
+- **Emoji reactions on messages (closes #665)** — react to a message with 👍 ❤️
+  😂 😮 🎉 (WhatsApp/Slack style). Reaction chips show the emoji + count and
+  highlight the ones you added; tapping a chip or picking from the emoji button
+  toggles your reaction.
+  - Schema: new `MessageReaction` model (`@@unique([messageId, userId, emoji])`),
+    `Message.reactions` (additive `db push`).
+  - API: `POST /api/messages/[id]/reactions` toggles the caller's reaction
+    (thread participants/admin only; emoji restricted to the fixed set);
+    `GET /api/messages` returns a per-message reaction summary (emoji → count +
+    whether you reacted).
+  - Advances the WhatsApp-like messaging story (#663) under the Communication
+    epic (#717).
+
+## [0.18.0] - 2026-07-21
+
+### Changed
+- **WhatsApp-style read receipts (closes #664)** — in a conversation thread, your
+  own messages now show tick icons instead of a "Sent/Read" text label: a single
+  tick (✓) when delivered and a blue double tick (✓✓) once the other party has
+  opened the thread. Shown on every message you sent (not just the last), with
+  accessible `Sent`/`Read` labels retained on the icons. Part of the WhatsApp-like
+  messaging story (#663) under the Communication epic (#717).
+
+## [0.17.1] - 2026-07-21
+
+### Fixed
+- **Dark-mode contrast on colored info boxes (closes #658, #659)** — the compound
+  dark-mode override "safety net" in `globals.css` now also remaps the darker
+  `text-*-800/900` and lighter `text-*-500` shades (not just 600/700) on
+  `bg-*-50` boxes, for blue/green/red/amber/indigo/yellow/**purple**. This fixes
+  the dark-on-dark text on the portal's amber "complete your profile" heading
+  (`text-yellow-800`) and blue/green labels (`text-blue-500`, `text-green-500`)
+  without per-element `dark:` utilities, and covers the same class of boxes
+  app-wide. Completes the dark-mode contrast story (#657) under the UX epic (#718).
+
+## [0.17.0] - 2026-07-21
+
+### Added
+- **Candidate list: filter by pipeline stage (closes #691)** — the admin
+  candidates filter panel now has a pipeline-stage dropdown (bound to the existing
+  `statusFilter`, so it stays in sync with the dashboard bars, the `?status=` URL
+  param, and Saved Views). Clear-filters resets it too.
+
+### Changed
+- **Portal journey tracker moved above the fold (closes #692)** — a mentee now
+  sees their pipeline stage as soon as the portal loads, above the (longer)
+  mentorship card, instead of having to scroll past it.
+- Both complete the Pipeline stage-visibility story (#704) under the UX epic (#718).
+
+## [0.16.0] - 2026-07-21
+
+### Added
+- **Admin ⊇ mentor parity — completes the Admin Capabilities epic (#719; closes
+  #661, #707, #708).** Admins can now do, from their own UI, what a mentor can:
+  - **Log an interaction** from the candidate detail screen (Meeting/Feedback/
+    Email/Call/WhatsApp) via a new inline `AddInteractionForm` — `POST
+    /api/interactions` already authorized ADMIN.
+  - **Send targeted email to mentees** from a new `/admin/email` page (AdminNav
+    entry). The mentor and admin screens now share a `TargetedEmailComposer`
+    component; `/api/mentor/email` already authorized ADMIN and respects each
+    recipient's email opt-out.
+  - (Meeting parity + copy-link shipped earlier in 0.9.0.)
+
+## [0.15.0] - 2026-07-21
+
+### Added
+- **Message editing + advanced delete (closes #666)** — in a conversation thread
+  you can now **edit** your own messages (an "edited" label appears) and **delete**
+  them WhatsApp-style: **delete for everyone** (sender/admin — the message is
+  masked server-side and shows a "This message was deleted" placeholder for both
+  sides, body + attachments dropped) or **delete for me** (any participant — hides
+  it from your own view only).
+  - Schema: `Message.editedAt`, `Message.deletedForEveryoneAt`, and a new
+    `MessageHiddenFor` model for per-user hiding (additive `db push`).
+  - API: `PATCH /api/messages/[id]` (edit, sender-only) and
+    `DELETE /api/messages/[id]?scope=everyone|me` with server-side authorization;
+    `GET /api/messages` masks deleted-for-everyone bodies and filters out
+    hidden-for-me messages so nothing leaks.
 
 ## [0.14.7] - 2026-07-21
 

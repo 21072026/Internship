@@ -13,12 +13,93 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.14.8-beta',
+    version: '0.23.0-beta',
     date: '2026-07-22',
     highlights: {
       en: ['You can now edit your own notes directly in the portal, then save or cancel your changes.'],
       tr: ['Artık portalda kendi notlarınızı doğrudan düzenleyebilir, ardından değişiklikleri kaydedebilir veya iptal edebilirsiniz.'],
       de: ['Du kannst deine eigenen Notizen jetzt direkt im Portal bearbeiten und die Änderungen anschließend speichern oder verwerfen.'],
+    },
+  },
+  {
+    version: '0.22.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['White-label: an organization’s own brand name and logo now appear in the app’s sidebar and top bar (set them under Admin → Organizations).'],
+      tr: ['White-label: bir organizasyonun kendi marka adı ve logosu artık uygulamanın kenar çubuğunda ve üst barında görünüyor (Admin → Organizasyonlar’dan ayarla).'],
+      de: ['White-Label: Der eigene Markenname und das Logo einer Organisation erscheinen jetzt in der Seitenleiste und der obersten Leiste der App (unter Admin → Organisationen einstellbar).'],
+    },
+  },
+  {
+    version: '0.21.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['New “Enter to send” toggle in the message box — turn it on to send with Enter (Shift+Enter for a new line), or leave it off to send with Shift+Enter. Your choice is remembered.'],
+      tr: ['Mesaj kutusunda yeni “Enter ile gönder” anahtarı — açarsan Enter ile gönderirsin (Shift+Enter alt satır), kapalı bırakırsan Shift+Enter ile gönderirsin. Tercihin hatırlanır.'],
+      de: ['Neuer Schalter „Mit Enter senden“ im Nachrichtenfeld — aktiviert sendest du mit Enter (Umschalt+Enter für neue Zeile), deaktiviert sendest du mit Umschalt+Enter. Deine Wahl wird gemerkt.'],
+    },
+  },
+  {
+    version: '0.20.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['If you miss messages, you now get a single hourly “unread messages” email summary instead of one email per message — and only if you haven’t opted out.'],
+      tr: ['Mesajları kaçırırsan, artık her mesaj için ayrı e-posta yerine saatte bir tek “okunmamış mesajlar” özeti alıyorsun — ve yalnızca kapatmadıysan.'],
+      de: ['Wenn du Nachrichten verpasst, erhältst du jetzt eine einzige stündliche „ungelesene Nachrichten“-Zusammenfassung statt einer E-Mail pro Nachricht — und nur, wenn du es nicht deaktiviert hast.'],
+    },
+  },
+  {
+    version: '0.19.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['React to messages with emoji (👍 ❤️ 😂 😮 🎉) — tap the reaction button on any message and see reaction counts, just like WhatsApp or Slack.'],
+      tr: ['Mesajlara emoji ile tepki ver (👍 ❤️ 😂 😮 🎉) — herhangi bir mesajdaki tepki butonuna dokun, tepki sayılarını gör; tıpkı WhatsApp veya Slack gibi.'],
+      de: ['Reagiere auf Nachrichten mit Emojis (👍 ❤️ 😂 😮 🎉) — tippe bei einer Nachricht auf die Reaktionsschaltfläche und sieh die Reaktionszahlen, wie bei WhatsApp oder Slack.'],
+    },
+  },
+  {
+    version: '0.18.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Messages now show WhatsApp-style read receipts — a single tick when delivered and a blue double tick once your message has been read.'],
+      tr: ['Mesajlarda artık WhatsApp tarzı okundu tikleri var — iletildiğinde tek tik, mesajın okunduğunda mavi çift tik.'],
+      de: ['Nachrichten zeigen jetzt WhatsApp-artige Lesebestätigungen — ein Häkchen bei Zustellung und ein blaues Doppelhäkchen, sobald deine Nachricht gelesen wurde.'],
+    },
+  },
+  {
+    version: '0.17.1-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Dark mode: text inside colored info boxes (like the portal’s “complete your profile” note) is now readable instead of dark-on-dark.'],
+      tr: ['Koyu tema: renkli bilgi kutularındaki yazılar (ör. portaldaki “profilini tamamla” notu) artık koyu-üstüne-koyu yerine okunaklı.'],
+      de: ['Dunkelmodus: Text in farbigen Infoboxen (z. B. der Hinweis „Profil vervollständigen“ im Portal) ist jetzt lesbar statt dunkel auf dunkel.'],
+    },
+  },
+  {
+    version: '0.17.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Filter the candidate list by pipeline stage, and — in the mentee portal — your journey/pipeline stage now shows at the top of the page without scrolling.'],
+      tr: ['Aday listesini pipeline aşamasına göre filtrele; mentee portalında ise yolculuk/pipeline aşaman artık sayfanın en üstünde, kaydırmadan görünüyor.'],
+      de: ['Filtere die Kandidatenliste nach Pipeline-Phase; im Mentee-Portal wird deine Journey-/Pipeline-Phase jetzt ganz oben ohne Scrollen angezeigt.'],
+    },
+  },
+  {
+    version: '0.16.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Admins can now log an interaction directly from a candidate’s page and send targeted email to mentees from a new Email page — matching what mentors can do.'],
+      tr: ['Adminler artık bir adayın sayfasından doğrudan etkileşim ekleyebilir ve yeni E-posta sayfasından mentee’lere hedefli e-posta gönderebilir — tıpkı mentörler gibi.'],
+      de: ['Admins können jetzt direkt auf der Seite einer Kandidatin/eines Kandidaten eine Interaktion erfassen und über eine neue E-Mail-Seite gezielt E-Mails an Mentees senden — genau wie Mentoren.'],
+    },
+  },
+  {
+    version: '0.15.0-beta',
+    date: '2026-07-21',
+    highlights: {
+      en: ['Edit and delete your messages — fix a typo (shows an “edited” label), or delete a message for everyone (leaves a “deleted” placeholder) or just for yourself.'],
+      tr: ['Mesajlarını düzenle ve sil — bir yazım hatasını düzelt (“düzenlendi” etiketi görünür) ya da bir mesajı herkesten sil (“silindi” yer tutucusu kalır) veya yalnızca kendinden sil.'],
+      de: ['Nachrichten bearbeiten und löschen — einen Tippfehler korrigieren (zeigt „bearbeitet“), oder eine Nachricht für alle löschen (hinterlässt einen „gelöscht“-Platzhalter) oder nur für dich.'],
     },
   },
   {
