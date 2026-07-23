@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.8-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Fixed: admins can now publish long announcements (release notes, articles). Longer messages were previously rejected with a "Validation failed" error.'],
+      tr: ['Düzeltildi: yöneticiler artık uzun duyurular (sürüm notları, makaleler) yayınlayabiliyor. Daha uzun mesajlar önceden "Validation failed" hatasıyla reddediliyordu.'],
+      de: ['Behoben: Admins können jetzt lange Ankündigungen (Release Notes, Artikel) veröffentlichen. Längere Nachrichten wurden zuvor mit einem „Validation failed“-Fehler abgelehnt.'],
+    },
+  },
+  {
     version: '0.25.7-beta',
     date: '2026-07-23',
     highlights: {
