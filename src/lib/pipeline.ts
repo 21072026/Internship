@@ -173,3 +173,48 @@ const GUIDANCE: Record<Locale, Partial<Record<PipelineStatus, string>>> = {
 export function pipelineGuidance(status: string, locale: Locale = 'en'): string | null {
   return GUIDANCE[locale]?.[status as PipelineStatus] ?? GUIDANCE.en[status as PipelineStatus] ?? null;
 }
+
+// ── Resolved (possibly per-tenant) stages (#747) ─────────────────────────────
+// Client-safe shape + canonical defaults. The DB-backed resolver
+// (resolvePipelineStages) lives in src/lib/pipelineStages.ts (server-only); these
+// pure helpers are here so client components can share the type + default set
+// without pulling in Prisma.
+export interface ResolvedStage {
+  key: string;
+  label: string;
+  order: number;
+  isTerminal: boolean;
+  isOffPath: boolean;
+  color: string | null;
+}
+
+const DEFAULT_OFF_PATH = new Set<string>(['INTERNSHIP_DROPPED_460', 'INTERNSHIP_FOUND_ELSEWHERE_800']);
+const DEFAULT_TERMINAL = new Set<string>([
+  'EMPLOYED_700',
+  'INTERNSHIP_DROPPED_460',
+  'INTERNSHIP_FOUND_ELSEWHERE_800',
+]);
+
+// The product's canonical stage set, derived from the enum (single source of
+// truth). Used whenever a tenant hasn't customized its pipeline.
+export function defaultPipelineStages(locale: Locale = 'en'): ResolvedStage[] {
+  return PIPELINE_STATUSES.map((key, i) => ({
+    key,
+    label: pipelineLabel(key, locale),
+    order: i,
+    isTerminal: DEFAULT_TERMINAL.has(key),
+    isOffPath: DEFAULT_OFF_PATH.has(key),
+    color: null,
+  }));
+}
+
+// The happy-path key sequence (excludes off-path), sorted by order.
+export function onPathKeys(stages: ResolvedStage[]): string[] {
+  return stages.filter((s) => !s.isOffPath).sort((a, b) => a.order - b.order).map((s) => s.key);
+}
+
+// Label lookup over a resolved set, falling back to the canonical label and then
+// the raw key — so a custom key always renders something sensible.
+export function stageLabel(stages: ResolvedStage[], key: string, locale: Locale = 'en'): string {
+  return stages.find((s) => s.key === key)?.label ?? pipelineLabel(key, locale);
+}

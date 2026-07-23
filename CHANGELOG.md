@@ -10,7 +10,19 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.25.3] - 2026-07-23
+## [0.25.4] - 2026-07-23
+
+### Changed
+- **Per-tenant pipeline stages on the mentee journey (#747, Slice B — chunk 1).**
+  The portal Journey tracker now renders the viewer tenant's resolved stages
+  (custom labels / order / on-path / terminal) instead of the hardcoded canonical
+  path — via a server-fed client context (`PipelineStagesProvider` +
+  `useResolvedStages`/`useStageLabel`) wrapped in the portal layout. The pure
+  stage helpers (`ResolvedStage`, `defaultPipelineStages`, `onPathKeys`,
+  `stageLabel`) moved to the client-safe `src/lib/pipeline.ts`. Behavior-preserving
+  for the default single-tenant setup (falls back to the canonical, locale-aware
+  defaults). Remaining surfaces (board / candidate filter / analytics) follow in
+  the next chunk.
 
 ### Changed
 - **Pipeline stage storage is now a free String (#747, Slice C).**
