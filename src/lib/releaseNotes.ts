@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.6-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Customizable pipeline stages: an organization can now rename, reorder, recolor and define its own pipeline stages (Admin → Organizations → Edit stages), and they appear across the board, candidate filters, analytics and the mentee journey. Off by default — the standard stages are unchanged until a tenant customizes them.'],
+      tr: ['Özelleştirilebilir pipeline aşamaları: bir organizasyon artık kendi aşamalarını yeniden adlandırabilir, sıralayabilir, renklendirebilir ve tanımlayabilir (Admin → Organizasyonlar → Aşamaları düzenle); bunlar board, aday filtreleri, analitik ve mentee sürecinde görünür. Varsayılan kapalı — bir kiracı özelleştirene kadar standart aşamalar değişmez.'],
+      de: ['Anpassbare Pipeline-Phasen: Eine Organisation kann ihre Phasen jetzt umbenennen, neu anordnen, umfärben und eigene definieren (Admin → Organisationen → Phasen bearbeiten); sie erscheinen im Board, in Kandidatenfiltern, in der Analyse und im Mentee-Verlauf. Standardmäßig aus — die Standardphasen bleiben unverändert, bis ein Mandant sie anpasst.'],
+    },
+  },
+  {
     version: '0.25.0-beta',
     date: '2026-07-22',
     highlights: {

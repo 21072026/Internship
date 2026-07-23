@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { ArrowLeft, Users, Star } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { pipelineLabel } from '@/lib/pipeline';
-import { useT, useLocale } from '@/i18n/client';
+import { useStageLabel } from '@/lib/pipelineStagesClient';
+import { useT } from '@/i18n/client';
 
 interface MentorRelation {
   id: string;
@@ -30,7 +30,7 @@ interface MentorDetail {
 export default function AdminMentorDetailPage() {
   const id = useParams().id as string;
   const t = useT();
-  const locale = useLocale();
+  const label = useStageLabel();
   const [user, setUser] = useState<MentorDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -117,7 +117,7 @@ export default function AdminMentorDetailPage() {
                       {r.mentee.email}{r.company ? ` · ${r.company.name}` : ''}
                     </p>
                   </div>
-                  <Badge variant="default" className="flex-shrink-0">{pipelineLabel(r.pipelineStatus, locale)}</Badge>
+                  <Badge variant="default" className="flex-shrink-0">{label(r.pipelineStatus)}</Badge>
                 </div>
               ))}
             </div>

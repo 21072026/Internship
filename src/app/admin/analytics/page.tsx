@@ -7,11 +7,11 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
-import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { CohortComparison } from '@/components/admin/CohortComparison';
 import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
-import { useT, useLocale } from '@/i18n/client';
+import { useT } from '@/i18n/client';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -67,7 +67,8 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 export default function AdminAnalyticsPage() {
   const t = useT();
-  const locale = useLocale();
+  const label = useStageLabel();
+  const stages = useResolvedStages();
   const [data, setData] = useState<Analytics | null>(null);
   const [aging, setAging] = useState<Aging | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,12 +97,12 @@ export default function AdminAnalyticsPage() {
     fetch('/api/admin/analytics/cohorts').then((r) => setPremium(r.ok)).catch((e) => console.error('[analytics/cohorts]', e));
   }, []);
 
-  const maxFunnel = data ? Math.max(1, ...PIPELINE_STATUSES.map((s) => data.funnel[s] || 0)) : 1;
+  const maxFunnel = data ? Math.max(1, ...stages.map((s) => data.funnel[s.key] || 0)) : 1;
 
   const exportExcel = async () => {
     if (!data) return;
     const { exportXlsx } = await import('@/lib/excel');
-    const rows = PIPELINE_STATUSES.map((s) => [pipelineLabel(s, locale), data.funnel[s] || 0]);
+    const rows = stages.map((s) => [label(s.key), data.funnel[s.key] || 0]);
     await exportXlsx(`analytics-${new Date().toISOString().slice(0, 10)}`, ['Stage', 'Count'], rows, 'Funnel');
   };
 
@@ -119,7 +120,7 @@ export default function AdminAnalyticsPage() {
     const { exportXlsxSheets } = await import('@/lib/excel');
     const a = t.analytics;
     await exportXlsxSheets(`analytics-full-${new Date().toISOString().slice(0, 10)}`, [
-      { name: 'Funnel', columns: ['Stage', 'Count'], rows: PIPELINE_STATUSES.map((s) => [pipelineLabel(s, locale), data.funnel[s] || 0]) },
+      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), data.funnel[s.key] || 0]) },
       ...(data.trends ? [{
         name: 'Trends',
         columns: [a.fullReportMonth, a.trendNewRelations, a.trendInteractions],
@@ -189,11 +190,11 @@ export default function AdminAnalyticsPage() {
         <Card>
           <CardHeader><CardTitle>{t.analytics.funnel}</CardTitle></CardHeader>
           <div className="space-y-1.5">
-            {PIPELINE_STATUSES.map((s) => {
-              const n = data.funnel[s] || 0;
+            {stages.map((s) => {
+              const n = data.funnel[s.key] || 0;
               return (
-                <div key={s} className="flex items-center gap-2 text-sm">
-                  <span className="w-48 truncate text-gray-600 flex-shrink-0">{pipelineLabel(s, locale)}</span>
+                <div key={s.key} className="flex items-center gap-2 text-sm">
+                  <span className="w-48 truncate text-gray-600 flex-shrink-0">{s.label}</span>
                   <div className="flex-1 bg-gray-100 rounded h-4 overflow-hidden">
                     <div className="bg-blue-500 h-full" style={{ width: `${(n / maxFunnel) * 100}%` }} />
                   </div>
@@ -288,7 +289,7 @@ export default function AdminAnalyticsPage() {
               <div className="divide-y divide-gray-50 dark:divide-gray-800">
                 {aging.stageAging.map((s) => (
                   <div key={s.pipelineStatus} className="flex items-center justify-between py-2 text-sm">
-                    <span className="truncate">{pipelineLabel(s.pipelineStatus, locale)}</span>
+                    <span className="truncate">{label(s.pipelineStatus)}</span>
                     <span className="text-gray-500 flex-shrink-0">
                       {t.analytics.aging.avg} {s.avgDays}{t.analytics.aging.days} · {t.analytics.aging.median} {s.medianDays}{t.analytics.aging.days} · {s.count} {t.analytics.aging.candidates}
                     </span>
@@ -312,7 +313,7 @@ export default function AdminAnalyticsPage() {
                   >
                     <div className="min-w-0">
                       <p className="truncate">{it.menteeName}</p>
-                      <p className="text-xs text-gray-400 truncate">{pipelineLabel(it.pipelineStatus, locale)}</p>
+                      <p className="text-xs text-gray-400 truncate">{label(it.pipelineStatus)}</p>
                     </div>
                     <span className="flex items-center gap-1.5 flex-shrink-0">
                       {it.overdue && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
