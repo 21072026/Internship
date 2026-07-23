@@ -8,7 +8,6 @@ import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
-import type { PipelineStatus } from '@prisma/client';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -410,7 +409,7 @@ export async function checkStageDeadlineReminders() {
       status: 'ACTIVE',
       stageDeadline: { lt: now },
       deadlineReminderSentAt: null,
-      pipelineStatus: { notIn: TERMINAL as unknown as PipelineStatus[] },
+      pipelineStatus: { notIn: [...TERMINAL] },
     },
     include: { mentor: true, mentee: true },
   });

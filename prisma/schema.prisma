@@ -810,7 +810,11 @@ model MentorshipRelation {
   cohortId                String?
   startDate               DateTime         @default(now())
   status                  MentorshipStatus @default(ACTIVE)
-  pipelineStatus          PipelineStatus   @default(APPLICATION_100)
+  // Stage key. Free String (was the PipelineStatus enum) so tenants can define
+  // their own stages (#747). The enum below is kept as the canonical default
+  // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
+  // them), so single-tenant behaviour is identical.
+  pipelineStatus          String           @default("APPLICATION_100")
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
   stageDeadline           DateTime?
@@ -998,12 +1002,12 @@ model Meeting {
 
 // Audit trail of pipeline stage changes for a mentorship.
 model StatusChange {
-  id          String         @id @default(cuid())
+  id          String   @id @default(cuid())
   relationId  String
-  fromStatus  PipelineStatus
-  toStatus    PipelineStatus
+  fromStatus  String
+  toStatus    String
   changedById String
-  createdAt   DateTime       @default(now())
+  createdAt   DateTime @default(now())
 
   relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   changedBy User               @relation("StatusChangedBy", fields: [changedById], references: [id])

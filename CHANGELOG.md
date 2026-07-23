@@ -10,7 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.25.2] - 2026-07-23
+## [0.25.3] - 2026-07-23
+
+### Changed
+- **Pipeline stage storage is now a free String (#747, Slice C).**
+  `MentorshipRelation.pipelineStatus` and `StatusChange.fromStatus/toStatus`
+  changed from the `PipelineStatus` enum to `String`, so a tenant can store its
+  **own** stage keys (not just the canonical 13). **Data-safe:** MySQL
+  `ENUM → VARCHAR` preserves every existing value, and the canonical keys/labels
+  still live in `src/lib/pipeline.ts` (the enum block is retained as the default
+  key registry), so single-tenant behaviour is identical. Covered by
+  `e2e/pipeline-custom-key.spec.ts` (custom keys persist; canonical keys still
+  work). Surfaces rendering resolved custom stages land in Slice B.
 
 ### Added
 - **Per-tenant pipeline stages — admin UI (#747, Slice A.2).** Admin →
