@@ -10,6 +10,17 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.8] - 2026-07-23
+
+### Fixed
+- **Admins can now publish long announcements.** `POST /api/admin/announcements`
+  capped `text` at 2 000 chars and returned a bare `400 Validation failed`, so
+  long-form broadcasts (release notes, articles) were rejected. The cap is raised
+  to 20 000 chars, and `Announcement.text` / `Notification.text` are widened from
+  the Prisma default `VARCHAR(191)` to `@db.Text` so the longer text is actually
+  stored (otherwise raising the cap would just move the failure to a DB 500). The
+  400 response now also includes the zod `details` for easier debugging.
+
 ## [0.25.7] - 2026-07-23
 
 ### Fixed
