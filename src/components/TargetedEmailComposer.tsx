@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 
@@ -130,12 +131,13 @@ export function TargetedEmailComposer() {
             <Input label={t.mentorEmail.subject} value={subject} onChange={(e) => setSubject(e.target.value)} />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t.mentorEmail.message}</label>
-              <textarea
+              <Textarea
                 rows={8}
                 aria-label={t.mentorEmail.message}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 focus:outline-none"
+                maxLength={10000}
+                showCounter
               />
             </div>
             <Button onClick={send} loading={sending} disabled={chosen.length === 0 || !subject || !body}>

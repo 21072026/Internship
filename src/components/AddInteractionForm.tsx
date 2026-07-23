@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 
 const TYPES = ['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] as const;
@@ -86,12 +87,13 @@ export function AddInteractionForm({ relationId, onAdded }: { relationId: string
         placeholder={t.logInteraction.subject}
         className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
       />
-      <textarea
+      <Textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={2}
+        maxLength={5000}
         placeholder={t.logInteraction.notes}
-        className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
+        showCounter
       />
       {error && <p className="text-xs text-red-600" role="alert">{error}</p>}
       <div className="flex gap-2">
