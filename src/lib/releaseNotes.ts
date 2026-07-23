@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.9-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Foundation for recurring meetings: the database now tracks meeting series (recurrence rules). This is an internal schema update — the recurring-meeting scheduling UI is coming soon.'],
+      tr: ['Tekrarlayan toplantılar için temel: veritabanı artık toplantı serilerini (tekrarlama kurallarını) takip ediyor. Bu dahili bir şema güncellemesidir — tekrarlayan toplantı planlama arayüzü çok yakında geliyor.'],
+      de: ['Grundlage für wiederkehrende Meetings: Die Datenbank speichert jetzt Meeting-Serien (Wiederholungsregeln). Dies ist ein internes Schema-Update — die Benutzeroberfläche für wiederkehrende Meetings folgt bald.'],
+    },
+  },
+  {
     version: '0.25.8-beta',
     date: '2026-07-23',
     highlights: {
