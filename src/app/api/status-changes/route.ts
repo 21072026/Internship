@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import type { PipelineStatus } from '@prisma/client';
 import { PIPELINE_STATUSES } from '@/lib/pipeline';
 import { withTenantScope } from '@/lib/orgContext';
 
@@ -36,8 +35,8 @@ export async function POST(request: Request) {
     const change = await prisma.statusChange.create({
       data: {
         relationId,
-        fromStatus: fromStatus as PipelineStatus,
-        toStatus: toStatus as PipelineStatus,
+        fromStatus,
+        toStatus,
         changedById: session.user.id,
         ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
       },

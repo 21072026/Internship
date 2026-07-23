@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { PipelineStatus } from '@prisma/client';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 
 // Pipeline stages that count as a successful outcome for conversion stats.
-const HIRED: PipelineStatus[] = [PipelineStatus.HIRED_660, PipelineStatus.EMPLOYED_700];
+const HIRED: string[] = ['HIRED_660', 'EMPLOYED_700'];
 
 // GET — all sources with mentee counts + conversion (hired) breakdown (admin).
 export async function GET() {
