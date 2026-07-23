@@ -78,7 +78,7 @@ async function generateForSeries(series: {
   timeOfDay: string;
   fixedLink: string | null;
   active: boolean;
-}, actorId: string, weeksAhead: number, role: string) {
+}, sessionUserId: string, weeksAhead: number, role: string) {
   if (!series.active || !series.projectId) return { created: 0, fixedLink: series.fixedLink };
 
   const memberMentees = await prisma.projectMember.findMany({
@@ -91,7 +91,7 @@ async function generateForSeries(series: {
     where: {
       projectId: series.projectId,
       status: 'ACTIVE',
-      ...(role === 'MENTOR' ? { mentorId: actorId } : {}),
+      ...(role === 'MENTOR' ? { mentorId: sessionUserId } : {}),
       ...(menteeIds.length > 0 ? { menteeId: { in: menteeIds } } : {}),
     },
     include: { mentee: { select: { email: true, fullName: true } } },
@@ -131,7 +131,7 @@ async function generateForSeries(series: {
           scheduledAt: when,
           meetLink: fixedLink,
           rsvpToken,
-          createdById: actorId,
+          createdById: sessionUserId,
           seriesId: series.id,
         },
       });

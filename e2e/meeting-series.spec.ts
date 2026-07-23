@@ -5,7 +5,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('meeting series auto-generates project-member meetings, stays idempotent, and stops after cancel', async ({ page }) => {
+test('auto-generates project-member meetings, reruns idempotently, and stops on cancel', async ({ page }) => {
   const mentorEmail = uniqueEmail('ms-mentor');
   const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Series Mentor');
   const mentee = await seedUser(uniqueEmail('ms-mentee'), 'x', 'MENTEE', 'Series Mentee');
