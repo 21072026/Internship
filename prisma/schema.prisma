@@ -90,12 +90,37 @@ model Organization {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  users     User[]
-  sources   Source[]
-  cohorts   Cohort[]
-  companies Company[]
-  projects  Project[]
-  relations MentorshipRelation[]
+  users          User[]
+  sources        Source[]
+  cohorts        Cohort[]
+  companies      Company[]
+  projects       Project[]
+  relations      MentorshipRelation[]
+  pipelineStages PipelineStage[]
+}
+
+// Per-tenant customizable pipeline stages (#747, part of white-label #546).
+// Phase A is additive + behavior-preserving: an org with NO rows here uses the
+// built-in canonical stages (the PipelineStatus enum, src/lib/pipeline.ts), so
+// single-tenant production is unchanged. An org that defines rows overrides the
+// label / order / color / on-path grouping for the stages it lists. `key` is the
+// stable identifier (the enum value for the canonical set; a slug for custom
+// stages once storage moves off the enum in a later slice).
+model PipelineStage {
+  id         String       @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key        String
+  label      String
+  order      Int
+  isTerminal Boolean      @default(false)
+  isOffPath  Boolean      @default(false)
+  color      String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([orgId, key])
+  @@index([orgId, order])
 }
 
 model User {

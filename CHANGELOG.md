@@ -10,7 +10,19 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.25.0] - 2026-07-22
+## [0.25.1] - 2026-07-22
+
+### Added
+- **Per-tenant pipeline stages — foundation (#747, part of white-label #546).**
+  New `PipelineStage` model (per-org: key / label / order / on-path / terminal /
+  color) plus a resolution layer (`src/lib/pipelineStages.ts`,
+  `resolvePipelineStages`) that falls back to the built-in canonical 13 stages
+  when a tenant has none — so single-tenant production is unchanged. Admin-only,
+  premium-gated management API at
+  `/api/admin/organizations/[id]/pipeline-stages` (GET / PUT / DELETE-reset).
+  Relations still store the `PipelineStatus` enum in this phase (no data
+  migration); applying resolved stages to the board/filters/analytics/journey and
+  moving storage off the enum land in later slices. Additive `db push`.
 
 ### Added
 - **Enterprise SSO — live SAML sign-in (closes the wiring for #545 / story #522).**
