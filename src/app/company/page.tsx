@@ -7,8 +7,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { pipelineLabel, pipelineOptions } from '@/lib/pipeline';
-import { useT, useLocale } from '@/i18n/client';
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { useT } from '@/i18n/client';
 
 interface Relation {
   id: string;
@@ -20,7 +20,8 @@ interface Relation {
 // Read-only company overview: the mentees linked to this company.
 export default function CompanyOverviewPage() {
   const t = useT();
-  const locale = useLocale();
+  const label = useStageLabel();
+  const stages = useResolvedStages();
   const [relations, setRelations] = useState<Relation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -58,7 +59,7 @@ export default function CompanyOverviewPage() {
           />
           <div className="w-56">
             <Select value={stage} onChange={(e) => setStage(e.target.value)}
-              options={[{ value: '', label: t.company.allStages }, ...pipelineOptions(locale)]} />
+              options={[{ value: '', label: t.company.allStages }, ...stages.map((s) => ({ value: s.key, label: s.label }))]} />
           </div>
         </div>
       )}
@@ -87,7 +88,7 @@ export default function CompanyOverviewPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Badge variant="info">{pipelineLabel(r.pipelineStatus, locale)}</Badge>
+                  <Badge variant="info">{label(r.pipelineStatus)}</Badge>
                   <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600" />
                 </div>
               </Link>

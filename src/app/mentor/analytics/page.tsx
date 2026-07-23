@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { BarChart3, Users, BookOpen, Target, TrendingUp, Award } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
-import { useT, useLocale } from '@/i18n/client';
+import { useResolvedStages } from '@/lib/pipelineStagesClient';
+import { useT } from '@/i18n/client';
 
 interface MentorAnalytics {
   funnel: Record<string, number>;
@@ -39,7 +39,7 @@ function StatCard({ icon: Icon, value, label, color }: { icon: React.ElementType
 // stats for the signed-in mentor (EPIC: mentor analytics, roadmap #370).
 export default function MentorAnalyticsPage() {
   const t = useT();
-  const locale = useLocale();
+  const stages = useResolvedStages();
   const [data, setData] = useState<MentorAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export default function MentorAnalyticsPage() {
 
   const ma = t.mentorAnalytics;
 
-  const maxFunnel = data ? Math.max(1, ...PIPELINE_STATUSES.map((s) => data.funnel[s] || 0)) : 1;
+  const maxFunnel = data ? Math.max(1, ...stages.map((s) => data.funnel[s.key] || 0)) : 1;
 
   return (
     <div>
@@ -93,13 +93,13 @@ export default function MentorAnalyticsPage() {
                 <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">{ma.noData}</p>
               ) : (
                 <div className="space-y-2">
-                  {PIPELINE_STATUSES.filter((s) => (data.funnel[s] ?? 0) > 0).map((s) => {
-                    const count = data.funnel[s] ?? 0;
+                  {stages.filter((s) => (data.funnel[s.key] ?? 0) > 0).map((s) => {
+                    const count = data.funnel[s.key] ?? 0;
                     const pct = Math.round((count / maxFunnel) * 100);
                     return (
-                      <div key={s}>
+                      <div key={s.key}>
                         <div className="flex items-center justify-between text-sm mb-1">
-                          <span className="text-gray-700 dark:text-gray-300 truncate">{pipelineLabel(s, locale)}</span>
+                          <span className="text-gray-700 dark:text-gray-300 truncate">{s.label}</span>
                           <span className="font-semibold text-gray-900 dark:text-gray-100 ml-2 flex-shrink-0">{count}</span>
                         </div>
                         <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -111,7 +111,7 @@ export default function MentorAnalyticsPage() {
                       </div>
                     );
                   })}
-                  {PIPELINE_STATUSES.every((s) => !data.funnel[s]) && (
+                  {stages.every((s) => !data.funnel[s.key]) && (
                     <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">{ma.noData}</p>
                   )}
                 </div>

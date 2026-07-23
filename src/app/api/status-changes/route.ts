@@ -3,10 +3,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { PIPELINE_STATUSES } from '@/lib/pipeline';
 import { withTenantScope } from '@/lib/orgContext';
 
-const stage = z.enum(PIPELINE_STATUSES as unknown as [string, ...string[]]);
+// Stage key is a free string now (#747) so tenant-defined stages are accepted.
+const stage = z.string().min(1).max(60);
 const schema = z.object({
   relationId: z.string().min(1),
   fromStatus: stage,

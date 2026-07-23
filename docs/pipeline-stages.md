@@ -9,9 +9,27 @@ single-tenant production is never at risk.
 | Slice | What | State |
 |-------|------|-------|
 | A (foundation) | `PipelineStage` model + resolution layer + admin API | **done** |
-| A.2 | Admin UI to edit stages (label / order / color / on-path) | planned |
-| B | Apply resolved stages across board / filters / analytics / journey / bulk-advance | planned |
-| C | Move storage off the enum (`MentorshipRelation.pipelineStatus` enum → String) so tenants can define **new** stage keys, with a data-safe migration | planned |
+| A.2 | Admin UI to edit stages (label / order / color / on-path) | **done** |
+| C | Move storage off the enum (`MentorshipRelation.pipelineStatus` enum → String) so tenants can define **new** stage keys, with a data-safe migration | **done** |
+| B | Apply resolved stages across journey / board / filters / analytics + accept dynamic keys on the write path | **done** |
+
+### Slice B — what renders resolved stages
+Every stage-rendering surface now reads the viewer tenant's resolved stages via a
+server-fed client context (`PipelineStagesProvider` in the admin/mentor/company/
+portal layouts) + `useResolvedStages()`/`useStageLabel()`, or server-side
+`resolvePipelineStages()` on server pages: the mentee **journey**, admin & mentor
+**kanban boards**, the candidate **filter** + list + export, and the admin/mentor/
+company **analytics funnels** + dashboards. The write path (`PUT /api/mentorship/[id]`,
+`POST /api/status-changes`) accepts free-string stage keys so custom stages can be
+assigned.
+
+### Known limitations (canonical-model, acceptable for now)
+- The kanban board's **three-phase grouping** (`PIPELINE_GROUPS`: pre / internship /
+  result) is the canonical model. Relabels/reorder/colors show through; a tenant's
+  brand-new keys that aren't among the canonical set won't appear under a phase
+  group (they still work everywhere else). Per-tenant grouping is a future refinement.
+- **Bulk "advance stage"** advances along the canonical on-path order
+  (`nextOnPathStatus`); for a fully custom key set it no-ops rather than guessing.
 
 ## How it works (Slice A)
 

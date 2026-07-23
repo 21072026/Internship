@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { GraduationCap } from 'lucide-react';
-import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
-import { useT, useLocale } from '@/i18n/client';
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { useT } from '@/i18n/client';
 
 interface Mentee {
   id: string;
@@ -21,7 +21,8 @@ interface Relation {
 
 export default function MentorBoardPage() {
   const t = useT();
-  const locale = useLocale();
+  const label = useStageLabel();
+  const stages = useResolvedStages();
   const router = useRouter();
   const [relations, setRelations] = useState<Relation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +67,8 @@ export default function MentorBoardPage() {
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {PIPELINE_STATUSES.map((status) => {
+        {stages.map((s) => {
+          const status = s.key;
           const items = relations.filter((r) => r.pipelineStatus === status);
           return (
             <div
@@ -75,7 +77,7 @@ export default function MentorBoardPage() {
                 e.preventDefault();
                 setDragOver(status);
               }}
-              onDragLeave={() => setDragOver((s) => (s === status ? null : s))}
+              onDragLeave={() => setDragOver((prev) => (prev === status ? null : prev))}
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOver(null);
@@ -87,7 +89,7 @@ export default function MentorBoardPage() {
               }`}
             >
               <div className="flex items-center justify-between mb-3 px-1">
-                <span className="text-xs font-semibold text-gray-700">{pipelineLabel(status, locale)}</span>
+                <span className="text-xs font-semibold text-gray-700">{label(status)}</span>
                 <span className="text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5">
                   {items.length}
                 </span>

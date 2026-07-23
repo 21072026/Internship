@@ -12,6 +12,8 @@ import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
+import { resolveCustomStages } from '@/lib/pipelineStages';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -26,6 +28,7 @@ export default async function MentorLayout({ children }: { children: React.React
 
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
+  const customStages = await resolveCustomStages(session.user.orgId);
 
   // Auth hardening: hold in-scope roles at the 2FA setup gate until enabled.
   // Skipped while impersonating (the admin behind it is already authenticated).
@@ -140,7 +143,7 @@ export default async function MentorLayout({ children }: { children: React.React
         </aside>
       }
     >
-      {children}
+      <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
     </ResponsiveShell>
   );
 }

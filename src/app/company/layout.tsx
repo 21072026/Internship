@@ -12,6 +12,8 @@ import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
 import { hasFeature } from '@/lib/entitlements';
+import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
+import { resolveCustomStages } from '@/lib/pipelineStages';
 
 export default async function CompanyLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -24,6 +26,7 @@ export default async function CompanyLayout({ children }: { children: React.Reac
   // Show the premium talent-pool link only when the company is entitled (admins
   // always see it for support).
   const showTalentPool = session.user.role === 'ADMIN' || (await hasFeature(session.user.companyId, 'TALENT_POOL_SEARCH'));
+  const customStages = await resolveCustomStages(session.user.orgId);
 
   return (
     <ResponsiveShell
@@ -78,7 +81,7 @@ export default async function CompanyLayout({ children }: { children: React.Reac
         </aside>
       }
     >
-      {children}
+      <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
     </ResponsiveShell>
   );
 }

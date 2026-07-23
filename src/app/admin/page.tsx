@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Ca
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Users, Building2, BookOpen, Bell } from 'lucide-react';
 import Link from 'next/link';
-import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
+import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getServerDictionary } from '@/i18n/server';
 
 async function getStats() {
@@ -61,9 +61,10 @@ async function getStats() {
 }
 
 export default async function AdminDashboard() {
-  await getServerSession(authOptions);
+  const session = await getServerSession(authOptions);
   const stats = await getStats();
   const { locale, t } = await getServerDictionary();
+  const stages = await resolvePipelineStages(session?.user.orgId, locale);
 
   return (
     <div>
@@ -139,18 +140,18 @@ export default async function AdminDashboard() {
           <CardDescription>{t.dashboard.perStage}</CardDescription>
         </CardHeader>
         {(() => {
-          const max = Math.max(1, ...PIPELINE_STATUSES.map((s) => stats.pipelineCounts[s] ?? 0));
+          const max = Math.max(1, ...stages.map((s) => stats.pipelineCounts[s.key] ?? 0));
           return (
             <div className="space-y-2">
-              {PIPELINE_STATUSES.map((s) => {
-                const count = stats.pipelineCounts[s] ?? 0;
+              {stages.map((s) => {
+                const count = stats.pipelineCounts[s.key] ?? 0;
                 return (
                   <Link
-                    key={s}
-                    href={`/admin/candidates?status=${s}`}
+                    key={s.key}
+                    href={`/admin/candidates?status=${s.key}`}
                     className="flex items-center gap-3 rounded-lg px-1 py-0.5 hover:bg-blue-50 transition-colors"
                   >
-                    <span className="text-xs text-gray-600 w-56 flex-shrink-0 truncate">{pipelineLabel(s, locale)}</span>
+                    <span className="text-xs text-gray-600 w-56 flex-shrink-0 truncate">{s.label}</span>
                     <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
                       <div
                         className="bg-blue-500 h-full rounded-full"

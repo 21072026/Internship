@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Lock, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { PIPELINE_STATUSES, pipelineLabel } from '@/lib/pipeline';
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 
 interface Analytics {
@@ -37,6 +37,8 @@ const td = 'py-1.5 pr-4 text-sm border-b border-gray-100';
 export default function AnalyticsReportPage() {
   const t = useT();
   const locale = useLocale();
+  const label = useStageLabel();
+  const stages = useResolvedStages();
   const c = t.analytics;
   const [data, setData] = useState<Analytics | null>(null);
   const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
@@ -101,8 +103,8 @@ export default function AnalyticsReportPage() {
         <table className="w-full"><thead><tr>
           <th className={th}>{c.funnel}</th><th className={th}>#</th>
         </tr></thead><tbody>
-          {PIPELINE_STATUSES.map((s) => (
-            <tr key={s}><td className={td}>{pipelineLabel(s, locale)}</td><td className={td}>{data.funnel[s] || 0}</td></tr>
+          {stages.map((s) => (
+            <tr key={s.key}><td className={td}>{label(s.key)}</td><td className={td}>{data.funnel[s.key] || 0}</td></tr>
           ))}
         </tbody></table>
       </Section>

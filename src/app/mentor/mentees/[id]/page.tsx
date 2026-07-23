@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Plus, Trash2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
-import { pipelineOptions, pipelineLabel } from '@/lib/pipeline';
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
@@ -75,6 +75,8 @@ export default function MenteeDetailPage() {
   const id = params.id as string;
   const t = useT();
   const locale = useLocale();
+  const label = useStageLabel();
+  const stages = useResolvedStages();
   const toast = useToast();
 
   const [relation, setRelation] = useState<RelationDetail | null>(null);
@@ -174,7 +176,7 @@ export default function MenteeDetailPage() {
             <div className="w-full">
               <Select
                 label={t.mentor.pipelineStage}
-                options={pipelineOptions(locale)}
+                options={stages.map((s) => ({ value: s.key, label: s.label }))}
                 value={relation.pipelineStatus}
                 disabled={savingStage}
                 onChange={(e) => handlePipelineChange(e.target.value)}
@@ -304,9 +306,9 @@ export default function MenteeDetailPage() {
               {relation.statusChanges.map((sc) => (
                 <li key={sc.id} className="text-sm border-l-2 border-blue-100 pl-3">
                   <p className="text-gray-700">
-                    <span className="text-gray-400">{pipelineLabel(sc.fromStatus, locale)}</span>
+                    <span className="text-gray-400">{label(sc.fromStatus)}</span>
                     {' → '}
-                    <span className="font-medium text-gray-900">{pipelineLabel(sc.toStatus, locale)}</span>
+                    <span className="font-medium text-gray-900">{label(sc.toStatus)}</span>
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {sc.changedBy.fullName} · {formatDateTime(sc.createdAt, locale)}

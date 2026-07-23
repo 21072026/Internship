@@ -7,12 +7,14 @@ import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { dispatchWebhook } from '@/lib/webhooks';
-import { PIPELINE_STATUSES } from '@/lib/pipeline';
 import { withTenantScope } from '@/lib/orgContext';
 
 const updateRelationSchema = z.object({
   status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
-  pipelineStatus: z.enum(PIPELINE_STATUSES).optional(),
+  // Stage key is a free string now (#747) so tenants can use their own stages;
+  // the UI only offers the tenant's resolved stages. Bounded to the PipelineStage
+  // key constraint.
+  pipelineStatus: z.string().min(1).max(60).optional(),
   companyId: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
   cohortId: z.string().nullable().optional(),

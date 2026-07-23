@@ -10,7 +10,20 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.25.5] - 2026-07-23
+## [0.25.6] - 2026-07-23
+
+### Changed
+- **Per-tenant pipeline stages across all remaining surfaces (#747, Slice B —
+  final).** The mentor & company shells now provide the stage context; the
+  mentor/company/admin **analytics funnels** + dashboards, the mentor **kanban
+  board**, and the candidate/mentor/company **detail** views all render the
+  viewer tenant's resolved stage labels/order/colors. The write path
+  (`PUT /api/mentorship/[id]`, `POST /api/status-changes`) now accepts free-string
+  stage keys so custom stages can be assigned. Behavior-preserving for the default
+  single-tenant setup. **Completes #747** — a tenant can define its own pipeline
+  stages (Admin → Organizations → Edit stages) and see them everywhere. Known
+  canonical-model limitations (board 3-phase grouping, bulk advance) documented in
+  `docs/pipeline-stages.md`.
 
 ### Changed
 - **Per-tenant pipeline stages on the admin board + candidate filter (#747,
