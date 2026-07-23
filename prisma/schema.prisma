@@ -206,31 +206,32 @@ model User {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
-  mentorRelations         MentorshipRelation[]     @relation("MentorRelations")
-  menteeRelations         MentorshipRelation[]     @relation("MenteeRelations")
-  statusChanges           StatusChange[]           @relation("StatusChangedBy")
-  passwordResetTokens     PasswordResetToken[]
-  emailVerificationTokens EmailVerificationToken[]
-  cvFile                  CvFile?
-  avatarFile              AvatarFile?
-  notifications           Notification[]
-  ownedProjects           Project[]                @relation("ProjectOwner")
-  projectMemberships      ProjectMember[]          @relation("ProjectMemberships")
-  availabilitySlots       AvailabilitySlot[]
-  company                 Company?                 @relation("CompanyUsers", fields: [companyId], references: [id])
-  source                  Source?                  @relation(fields: [sourceId], references: [id])
-  documents               Document[]               @relation("DocumentOwner")
-  personalNotes           PersonalNote[]
-  consents                UserConsent[]
-  companyInterests        CompanyInterest[]        @relation("CompanyInterestMentee")
-  companyNeedAlerts       CompanyNeedAlert[]       @relation("CompanyNeedAlertMentee")
-  mentorshipRequests      MentorshipRequest[]      @relation("MentorshipRequests")
-  decidedRequests         MentorshipRequest[]      @relation("DecidedMentorshipRequests")
-  supportTickets          SupportTicket[]          @relation("SupportRequester")
-  assignedSupportTickets  SupportTicket[]          @relation("SupportAssignee")
-  supportMessages         SupportMessage[]         @relation("SupportMessageSender")
-  authoredRelationNotes   RelationNote[]           @relation("RelationNoteAuthor")
-  pageViews               PageView[]
+  mentorRelations          MentorshipRelation[]      @relation("MentorRelations")
+  menteeRelations          MentorshipRelation[]      @relation("MenteeRelations")
+  statusChanges            StatusChange[]            @relation("StatusChangedBy")
+  passwordResetTokens      PasswordResetToken[]
+  emailVerificationTokens  EmailVerificationToken[]
+  cvFile                   CvFile?
+  avatarFile               AvatarFile?
+  notifications            Notification[]
+  conversationParticipants ConversationParticipant[]
+  ownedProjects            Project[]                 @relation("ProjectOwner")
+  projectMemberships       ProjectMember[]           @relation("ProjectMemberships")
+  availabilitySlots        AvailabilitySlot[]
+  company                  Company?                  @relation("CompanyUsers", fields: [companyId], references: [id])
+  source                   Source?                   @relation(fields: [sourceId], references: [id])
+  documents                Document[]                @relation("DocumentOwner")
+  personalNotes            PersonalNote[]
+  consents                 UserConsent[]
+  companyInterests         CompanyInterest[]         @relation("CompanyInterestMentee")
+  companyNeedAlerts        CompanyNeedAlert[]        @relation("CompanyNeedAlertMentee")
+  mentorshipRequests       MentorshipRequest[]       @relation("MentorshipRequests")
+  decidedRequests          MentorshipRequest[]       @relation("DecidedMentorshipRequests")
+  supportTickets           SupportTicket[]           @relation("SupportRequester")
+  assignedSupportTickets   SupportTicket[]           @relation("SupportAssignee")
+  supportMessages          SupportMessage[]          @relation("SupportMessageSender")
+  authoredRelationNotes    RelationNote[]            @relation("RelationNoteAuthor")
+  pageViews                PageView[]
 
   @@index([role])
 }
@@ -311,10 +312,48 @@ enum MessageChannel {
   EMAIL
 }
 
-// A message in a mentorship thread (the thread is the MentorshipRelation).
+// Conversation layer for messaging: DIRECT is 1:1, GROUP is project/group chat.
+model Conversation {
+  id        String           @id @default(cuid())
+  type      ConversationType
+  // Group conversations can be bound to a project; DIRECT conversations may
+  // leave this null.
+  projectId String?
+  createdAt DateTime         @default(now())
+
+  project      Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([projectId])
+}
+
+enum ConversationType {
+  DIRECT
+  GROUP
+}
+
+// Membership for a conversation. Authorization can be derived from
+// participants rather than MentorshipRelation ownership.
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  addedAt        DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+// A message in a mentorship thread (legacy) and/or a conversation (new).
 // Sent in-app or mirrored from an email; powers mentor ↔ mentee conversations.
 model Message {
   id                   String         @id @default(cuid())
+  // New conversation-layer link. Nullable for backward compatibility while
+  // legacy relation-bound messages still rely on relationId.
+  conversationId       String?
   relationId           String
   senderId             String
   body                 String         @db.Text
@@ -330,13 +369,15 @@ model Message {
   // is masked server-side and a "message deleted" placeholder is shown to all.
   deletedForEveryoneAt DateTime?
 
-  relation    MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  attachments MessageAttachment[]
+  relation     MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  conversation Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  attachments  MessageAttachment[]
   // Per-user "delete for me" — hides the message only from these users' view.
-  hiddenFor   MessageHiddenFor[]
+  hiddenFor    MessageHiddenFor[]
   // Emoji reactions (👍❤️😂…) from thread participants.
-  reactions   MessageReaction[]
+  reactions    MessageReaction[]
 
+  @@index([conversationId])
   @@index([relationId])
 }
 
@@ -713,6 +754,7 @@ model Project {
   relations     MentorshipRelation[]
   tasks         ProjectTask[]
   members       ProjectMember[]
+  conversations Conversation[]
   meetingSeries MeetingSeries[]
 
   @@index([ownerUserId])
