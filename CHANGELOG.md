@@ -10,6 +10,15 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.9] - 2026-07-23
+
+### Added
+- **Schema: `MeetingSeries` model + `Meeting.seriesId`** — foundation for recurring
+  meetings. `MeetingSeries` stores the recurrence rule (`daysOfWeek`, `timeOfDay`,
+  optional `projectId` / `fixedLink`). `Meeting.seriesId` (nullable) links
+  auto-generated meeting instances back to their series; manually scheduled
+  meetings are unaffected (backward-compatible, `seriesId` stays `null`).
+
 ## [0.25.8] - 2026-07-23
 
 ### Fixed
