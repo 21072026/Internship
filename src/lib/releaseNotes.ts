@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.24.0-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['You can now attach PNG or JPEG images and PDF documents to support messages, preview images before sending, and remove files you no longer want to include.'],
+      tr: ['Artık destek mesajlarına PNG veya JPEG görselleri ve PDF belgeleri ekleyebilir, görselleri göndermeden önce önizleyebilir ve istemediğiniz dosyaları kaldırabilirsiniz.'],
+      de: ['Du kannst jetzt PNG- oder JPEG-Bilder und PDF-Dokumente an Support-Nachrichten anhängen, Bilder vor dem Senden ansehen und nicht benötigte Dateien entfernen.'],
+    },
+  },
+  {
     version: '0.23.0-beta',
     date: '2026-07-22',
     highlights: {

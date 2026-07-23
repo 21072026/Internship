@@ -10,6 +10,11 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+### Added
+- Support messages now accept up to 10 PNG, JPEG, or PDF attachments with
+  client-side previews and validation. Attachments are stored atomically with
+  their message and are available to the requester and support admins.
+
 ## [0.23.0] - 2026-07-22
 
 ### Added

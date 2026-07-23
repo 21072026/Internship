@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 
+const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
+
 // Admin side of the support channel (#594): the queue at /admin/support.
 // Admins see every ticket, reply into the thread, move tickets through
 // OPEN → IN_PROGRESS → CLOSED (and back), and take assignment.
@@ -52,7 +54,11 @@ export async function GET(request: Request) {
       messages: {
         orderBy: { createdAt: 'asc' },
         take: 100,
-        select: { id: true, body: true, createdAt: true, senderId: true, readAt: true, sender: { select: { fullName: true, role: true } } },
+        select: {
+          id: true, body: true, createdAt: true, senderId: true, readAt: true,
+          sender: { select: { fullName: true, role: true } },
+          attachments: { select: ATTACHMENT_SELECT },
+        },
       },
     },
   });
