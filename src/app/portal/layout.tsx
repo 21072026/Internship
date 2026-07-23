@@ -10,6 +10,8 @@ import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
+import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
+import { resolveCustomStages } from '@/lib/pipelineStages';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -32,6 +34,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true } });
+  const customStages = await resolveCustomStages(session.user.orgId);
 
   return (
     <ResponsiveShell
@@ -64,7 +67,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </aside>
       }
     >
-      {children}
+      <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
     </ResponsiveShell>
   );
 }
