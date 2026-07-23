@@ -6,8 +6,8 @@ import { SavedViews } from '@/components/SavedViews';
 import { AssignMentorInline } from '@/components/admin/AssignMentorInline';
 import { EmptyState } from '@/components/EmptyState';
 import Link from "next/link";
-import { useT, useLocale } from "@/i18n/client";
-import { pipelineLabel, pipelineOptions } from '@/lib/pipeline';
+import { useT } from "@/i18n/client";
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { Card } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
@@ -46,7 +46,8 @@ const gradYears = Array.from({ length: MAX_GRAD_YEAR - MIN_GRAD_YEAR + 1 }, (_, 
 
 export default function CandidatesPage() {
   const t = useT();
-  const locale = useLocale();
+  const stages = useResolvedStages();
+  const label = useStageLabel();
   const { data: session } = useSession();
   const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -72,7 +73,7 @@ export default function CandidatesPage() {
     return [
       c.fullName, c.email, c.phone, c.whatsapp, c.city, c.university, c.department,
       c.graduationYear, c.skills.join('; '),
-      rel?.pipelineStatus ? pipelineLabel(rel.pipelineStatus, locale) : '',
+      rel?.pipelineStatus ? label(rel.pipelineStatus) : '',
       rel?.company?.name ?? '', rel?.mentor?.fullName ?? '',
     ];
   };
@@ -214,7 +215,7 @@ export default function CandidatesPage() {
         <p className="text-gray-500 mt-1">{t.candidates.subtitle}</p>
         {statusFilter && (
           <div className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm text-blue-700">
-            {pipelineLabel(statusFilter, locale)}
+            {label(statusFilter)}
             <button
               type="button"
               onClick={() => {
@@ -292,7 +293,7 @@ export default function CandidatesPage() {
           />
           <Select
             aria-label={t.candidates.allStages}
-            options={[{ value: '', label: t.candidates.allStages }, ...pipelineOptions(locale)]}
+            options={[{ value: '', label: t.candidates.allStages }, ...stages.map((s) => ({ value: s.key, label: s.label }))]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />
