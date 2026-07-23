@@ -11,6 +11,8 @@ import { AdminNav } from '@/components/AdminNav';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
+import { resolveCustomStages } from '@/lib/pipelineStages';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -25,6 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
+  const customStages = await resolveCustomStages(session.user.orgId);
 
   // Auth hardening: when the org requires 2FA for this role, hold the user at a
   // setup gate until they enable it. Skipped while impersonating (the admin is
@@ -62,7 +65,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </aside>
       }
     >
-      {children}
+      <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
     </ResponsiveShell>
   );
 }

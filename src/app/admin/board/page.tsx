@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { GraduationCap, User, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
-import { PIPELINE_STATUSES, PIPELINE_GROUPS, pipelineLabel, type PipelineGroupKey } from '@/lib/pipeline';
-import { useT, useLocale } from '@/i18n/client';
+import { PIPELINE_GROUPS, type PipelineGroupKey } from '@/lib/pipeline';
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { useT } from '@/i18n/client';
 
 interface Relation {
   id: string;
@@ -23,7 +24,8 @@ const WIP_LIMIT = 8;
 // Stages are grouped into three collapsible phases so 13 columns don't sprawl.
 export default function AdminBoardPage() {
   const t = useT();
-  const locale = useLocale();
+  const stages = useResolvedStages();
+  const label = useStageLabel();
   const router = useRouter();
   const [relations, setRelations] = useState<Relation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +96,7 @@ export default function AdminBoardPage() {
         }`}
       >
         <div className="flex items-center justify-between mb-3 px-1">
-          <span className="text-xs font-semibold text-gray-700">{pipelineLabel(status, locale)}</span>
+          <span className="text-xs font-semibold text-gray-700">{label(status)}</span>
           <span
             title={overLimit ? t.adminBoard.wipWarning : undefined}
             className={`text-xs rounded-full px-2 py-0.5 border ${
@@ -148,8 +150,8 @@ export default function AdminBoardPage() {
                   onChange={(e) => { e.stopPropagation(); moveTo(r.id, e.target.value); }}
                   className="mt-2 w-full rounded border border-gray-200 px-1.5 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
                 >
-                  {PIPELINE_STATUSES.map((sv) => (
-                    <option key={sv} value={sv}>{pipelineLabel(sv, locale)}</option>
+                  {stages.map((sv) => (
+                    <option key={sv.key} value={sv.key}>{sv.label}</option>
                   ))}
                 </select>
               </div>

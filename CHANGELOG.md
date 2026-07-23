@@ -10,7 +10,17 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.25.4] - 2026-07-23
+## [0.25.5] - 2026-07-23
+
+### Changed
+- **Per-tenant pipeline stages on the admin board + candidate filter (#747,
+  Slice B — chunk 2).** The admin Kanban board (stage labels + the per-card
+  "move to" stage picker) and the candidates page (pipeline-stage filter dropdown
+  + stage labels + CSV/Excel export) now render the viewer tenant's resolved
+  stages via the shared context (`PipelineStagesProvider` now wired into the admin
+  layout too). Behavior-preserving for the default single-tenant setup; the board's
+  three-phase grouping remains the canonical model (custom relabels/colors show
+  through). Remaining: analytics funnels + mentor/company mirror surfaces.
 
 ### Changed
 - **Per-tenant pipeline stages on the mentee journey (#747, Slice B — chunk 1).**
