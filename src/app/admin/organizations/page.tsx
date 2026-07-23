@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -329,6 +330,7 @@ export default function AdminOrganizationsPage() {
                   <th className="py-2 pr-4">{t.organizations.companies}</th>
                   <th className="py-2 pr-4">{t.organizations.cohorts}</th>
                   <th className="py-2 pr-4">{t.organizations.sources}</th>
+                  <th className="py-2 pr-4">{t.organizations.pipeline}</th>
                 </tr>
               </thead>
               <tbody>
@@ -354,6 +356,11 @@ export default function AdminOrganizationsPage() {
                     <td className="py-2 pr-4">{o.counts.companies}</td>
                     <td className="py-2 pr-4">{o.counts.cohorts}</td>
                     <td className="py-2 pr-4">{o.counts.sources}</td>
+                    <td className="py-2 pr-4">
+                      <Link href={`/admin/organizations/${o.id}/pipeline`} className="text-blue-600 hover:underline text-xs">
+                        {t.organizations.editPipeline}
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -10,6 +10,17 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-07-23
+
+### Added
+- **Per-tenant pipeline stages — admin UI (#747, Slice A.2).** Admin →
+  Organizations now has an **Edit stages** link per tenant → a
+  `/admin/organizations/[id]/pipeline` editor to relabel, reorder (▲/▼),
+  recolor, and mark stages on-path/terminal, or reset to the built-in defaults.
+  Backed by the Slice-A management API; premium-gated (saving disabled on FREE)
+  and behavior-preserving (a tenant with no custom stages still uses the
+  canonical defaults).
+
 ## [0.25.1] - 2026-07-22
 
 ### Added
