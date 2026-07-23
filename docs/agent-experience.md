@@ -10,6 +10,44 @@ Newest entries on top.
 
 ---
 
+## 2026-07-23 — Bulk meeting shared-link bug fix (#759, 0.25.7-beta)
+
+**Bug pattern — resource generated inside a per-item loop.** `POST /api/meetings`
+(`src/app/api/meetings/route.ts`) built the auto Jitsi link *inside* the
+`for (const rel of relations)` loop, so a bulk ("select all") schedule gave every
+mentee a *different* room instead of one shared meeting. Fix = hoist the
+link generation above the loop; keep the genuinely per-person bits (here
+`rsvpToken`) inside. When triaging "bulk does N separate things instead of one",
+look first for a shared resource created per-iteration.
+
+**Fresh worktree is missing installed deps → build fails on unrelated modules.**
+The build died on `Module not found: @node-saml/node-saml` (SSO code, nothing to
+do with my change) because the worktree's `node_modules` was incomplete. `npm
+install` in the worktree fixed it. Run `npm install` first in a new worktree
+before trusting a build failure — the module-not-found may be a stale tree, not
+your diff.
+
+**This repo has NO PR CI checks + auto-merge is disabled.** `gh pr checks` reports
+"no checks reported", `statusCheckRollup` is empty, and REST `check-runs`
+total_count is 0 — there is no PR quality gate wired on the PR branch (the e2e
+smoke workflow doesn't trigger here), and `gh pr merge --auto` errors with
+"Auto merge is not allowed for this repository". So: gate locally with `npm run
+build` (+ `npm run check:i18n`), then merge manually with `gh pr merge <n>
+--squash --delete-branch`. Don't sit waiting for checks that never arrive.
+
+**Version-bump conflicts on rebase (recurring).** While this PR sat, `main`
+shipped #760 as `0.25.6`, colliding on exactly the version-bump files
+(`package.json`, `package-lock.json`, `CHANGELOG.md`, `releaseNotes.ts`). Resolve
+by taking my bump to the *next* free version (`0.25.7-beta`) and placing my
+CHANGELOG/releaseNotes block as its own section above main's — never `--ours` the
+whole file (you'd drop main's release entry). Same lesson as the earlier "Sürüm
+çakışması" note; it keeps happening, so rebase-before-merge is the habit.
+
+**Remote moved to the org.** `git push` prints "This repository moved" — the local
+remote still points at `mersahin/Internship` but redirects to `21072026/Internship`
+(the canonical location for `gh --repo`). Pushes work through the redirect; use the
+`21072026/Internship` slug for all `gh` calls.
+
 ## 2026-07-22 — 4-lens roadmap features: analytics pages, bulk stage-advance, milestone badges (#370, 0.22.0→0.23.0)
 
 **TR locale apostrophe in single-quoted strings.** The TR locale in both `src/i18n/dictionaries.ts` and `src/lib/releaseNotes.ts` uses single-quoted JS strings. Any Turkish word with a possessive/suffix apostrophe (e.g., `banner'ı`) must use the Unicode RIGHT SINGLE QUOTATION MARK U+2019 (`'`) rather than the straight ASCII apostrophe `'` — otherwise the string terminates early and the build fails with a cryptic "Expected ',', got 'ı'" syntax error. Pattern seen twice in this session; always check after writing any TR string containing an apostrophe.
