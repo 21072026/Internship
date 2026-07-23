@@ -423,7 +423,7 @@ export function AccountSettings() {
         <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
 
         <div className={`mt-3 space-y-1.5 pl-6 ${emailNotifications ? '' : 'opacity-40 pointer-events-none'}`}>
-          {(['messages', 'announcements', 'deadlines', 'digest'] as const).map((cat) => (
+          {(['messages', 'announcements', 'deadlines', 'digest', 'meetingReminders'] as const).map((cat) => (
             <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
               <input
                 type="checkbox"
