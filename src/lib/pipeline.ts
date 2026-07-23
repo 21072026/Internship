@@ -21,6 +21,34 @@ export const PIPELINE_STATUSES = [
 
 export type PipelineStatus = (typeof PIPELINE_STATUSES)[number];
 
+// The linear "happy path" a mentee progresses along, excluding the two off-path
+// terminal states (dropped / found-internship-elsewhere). This is the order the
+// journey tracker and any "advance one stage" action must follow — the raw
+// PIPELINE_STATUSES array interleaves the off-path stages, so stepping through it
+// by index would wrongly send an in-progress internship to "dropped" and an
+// employed mentee to "found elsewhere".
+export const ON_PATH_STATUSES = [
+  'APPLICATION_100',
+  'APPROVAL_PENDING_220',
+  'INTERVIEW_PENDING_250',
+  'INTRODUCTION_PENDING_270',
+  'INTERNSHIP_STARTING_300',
+  'INTERNSHIP_IN_PROGRESS_450',
+  'INTERNSHIP_COMPLETED_490',
+  'JOB_SEEKING_500',
+  'HIREABLE_600',
+  'HIRED_660',
+  'EMPLOYED_700',
+] as const satisfies readonly PipelineStatus[];
+
+// The next stage along the happy path, or null when the current stage is the
+// terminal state (EMPLOYED_700) or an off-path status not on the sequence.
+export function nextOnPathStatus(current: string): PipelineStatus | null {
+  const idx = (ON_PATH_STATUSES as readonly string[]).indexOf(current);
+  if (idx < 0 || idx >= ON_PATH_STATUSES.length - 1) return null;
+  return ON_PATH_STATUSES[idx + 1];
+}
+
 const LABELS: Record<Locale, Record<PipelineStatus, string>> = {
   tr: {
     APPLICATION_100: '100 · İlk temas',
@@ -144,4 +172,49 @@ const GUIDANCE: Record<Locale, Partial<Record<PipelineStatus, string>>> = {
 
 export function pipelineGuidance(status: string, locale: Locale = 'en'): string | null {
   return GUIDANCE[locale]?.[status as PipelineStatus] ?? GUIDANCE.en[status as PipelineStatus] ?? null;
+}
+
+// ── Resolved (possibly per-tenant) stages (#747) ─────────────────────────────
+// Client-safe shape + canonical defaults. The DB-backed resolver
+// (resolvePipelineStages) lives in src/lib/pipelineStages.ts (server-only); these
+// pure helpers are here so client components can share the type + default set
+// without pulling in Prisma.
+export interface ResolvedStage {
+  key: string;
+  label: string;
+  order: number;
+  isTerminal: boolean;
+  isOffPath: boolean;
+  color: string | null;
+}
+
+const DEFAULT_OFF_PATH = new Set<string>(['INTERNSHIP_DROPPED_460', 'INTERNSHIP_FOUND_ELSEWHERE_800']);
+const DEFAULT_TERMINAL = new Set<string>([
+  'EMPLOYED_700',
+  'INTERNSHIP_DROPPED_460',
+  'INTERNSHIP_FOUND_ELSEWHERE_800',
+]);
+
+// The product's canonical stage set, derived from the enum (single source of
+// truth). Used whenever a tenant hasn't customized its pipeline.
+export function defaultPipelineStages(locale: Locale = 'en'): ResolvedStage[] {
+  return PIPELINE_STATUSES.map((key, i) => ({
+    key,
+    label: pipelineLabel(key, locale),
+    order: i,
+    isTerminal: DEFAULT_TERMINAL.has(key),
+    isOffPath: DEFAULT_OFF_PATH.has(key),
+    color: null,
+  }));
+}
+
+// The happy-path key sequence (excludes off-path), sorted by order.
+export function onPathKeys(stages: ResolvedStage[]): string[] {
+  return stages.filter((s) => !s.isOffPath).sort((a, b) => a.order - b.order).map((s) => s.key);
+}
+
+// Label lookup over a resolved set, falling back to the canonical label and then
+// the raw key — so a custom key always renders something sensible.
+export function stageLabel(stages: ResolvedStage[], key: string, locale: Locale = 'en'): string {
+  return stages.find((s) => s.key === key)?.label ?? pipelineLabel(key, locale);
 }

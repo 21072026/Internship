@@ -136,6 +136,40 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    // Enterprise SSO sign-in (#545). The SAML assertion is verified in the ACS
+    // route, which mints a single-use SsoLoginGrant; here we only consume it and
+    // issue the session — mirroring the impersonation grant flow. No password.
+    CredentialsProvider({
+      id: 'sso',
+      name: 'sso',
+      credentials: { grant: { label: 'grant', type: 'text' } },
+      async authorize(credentials) {
+        const token = credentials?.grant;
+        if (!token) throw new Error('grant is required');
+
+        const grant = await prisma.ssoLoginGrant.findUnique({ where: { token } });
+        if (!grant || grant.used || grant.expiresAt < new Date()) {
+          throw new Error('Invalid or expired SSO grant');
+        }
+        await prisma.ssoLoginGrant.update({ where: { id: grant.id }, data: { used: true } });
+
+        const user = await prisma.user.findUnique({ where: { id: grant.userId } });
+        if (!user) throw new Error('User not found');
+        if (!user.isActive) {
+          throw new Error('This account has been deactivated. Please contact an administrator.');
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.fullName,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          companyId: user.companyId,
+          orgId: user.orgId,
+        };
+      },
+    }),
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {

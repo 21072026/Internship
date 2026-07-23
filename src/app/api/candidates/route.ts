@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 
 export async function GET(request: Request) {
   try {
@@ -11,6 +12,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);
     const skills = searchParams.get('skills');
     const graduationYear = searchParams.get('graduationYear');
@@ -116,6 +118,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ candidates, total, page, pageSize });
+    });
   } catch (error) {
     console.error('Get candidates error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

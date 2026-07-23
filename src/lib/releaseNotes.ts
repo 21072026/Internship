@@ -13,12 +13,99 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.24.0-beta',
+    version: '0.25.7-beta',
     date: '2026-07-23',
     highlights: {
-      en: ['You can now attach PNG or JPEG images and PDF documents to support messages, preview images before sending, and remove files you no longer want to include.'],
-      tr: ['Artık destek mesajlarına PNG veya JPEG görselleri ve PDF belgeleri ekleyebilir, görselleri göndermeden önce önizleyebilir ve istemediğiniz dosyaları kaldırabilirsiniz.'],
-      de: ['Du kannst jetzt PNG- oder JPEG-Bilder und PDF-Dokumente an Support-Nachrichten anhängen, Bilder vor dem Senden ansehen und nicht benötigte Dateien entfernen.'],
+      en: [
+        'You can now attach PNG or JPEG images and PDF documents to support messages, preview images before sending, and remove files you no longer want to include.',
+        'Fixed: when you schedule a meeting for several mentees at once, everyone now gets the same meeting link and joins one shared call — instead of each person getting a separate room.',
+      ],
+      tr: [
+        'Artık destek mesajlarına PNG veya JPEG görselleri ve PDF belgeleri ekleyebilir, görselleri göndermeden önce önizleyebilir ve istemediğiniz dosyaları kaldırabilirsiniz.',
+        'Düzeltildi: birden çok menteeye aynı anda toplantı planladığınızda artık herkese aynı toplantı linki gidiyor ve tek bir ortak görüşmede buluşuluyor — önceki gibi herkese ayrı oda oluşturulmuyor.',
+      ],
+      de: [
+        'Du kannst jetzt PNG- oder JPEG-Bilder und PDF-Dokumente an Support-Nachrichten anhängen, Bilder vor dem Senden ansehen und nicht benötigte Dateien entfernen.',
+        'Behoben: Wenn du ein Meeting für mehrere Mentees gleichzeitig planst, erhalten jetzt alle denselben Meeting-Link und treffen sich in einem gemeinsamen Call — statt dass jede Person einen eigenen Raum bekommt.',
+      ],
+    },
+  },
+  {
+    version: '0.25.6-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Customizable pipeline stages: an organization can now rename, reorder, recolor and define its own pipeline stages (Admin → Organizations → Edit stages), and they appear across the board, candidate filters, analytics and the mentee journey. Off by default — the standard stages are unchanged until a tenant customizes them.'],
+      tr: ['Özelleştirilebilir pipeline aşamaları: bir organizasyon artık kendi aşamalarını yeniden adlandırabilir, sıralayabilir, renklendirebilir ve tanımlayabilir (Admin → Organizasyonlar → Aşamaları düzenle); bunlar board, aday filtreleri, analitik ve mentee sürecinde görünür. Varsayılan kapalı — bir kiracı özelleştirene kadar standart aşamalar değişmez.'],
+      de: ['Anpassbare Pipeline-Phasen: Eine Organisation kann ihre Phasen jetzt umbenennen, neu anordnen, umfärben und eigene definieren (Admin → Organisationen → Phasen bearbeiten); sie erscheinen im Board, in Kandidatenfiltern, in der Analyse und im Mentee-Verlauf. Standardmäßig aus — die Standardphasen bleiben unverändert, bis ein Mandant sie anpasst.'],
+    },
+  },
+  {
+    version: '0.25.0-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Enterprise single sign-on (SAML) is here: organizations can connect their own identity provider so their people sign in with corporate credentials — new users are created automatically on first login. Off by default; enable it per organization under Admin → Organizations.'],
+      tr: ['Kurumsal tek oturum açma (SAML) geldi: organizasyonlar kendi kimlik sağlayıcılarını bağlayıp kullanıcıların kurumsal hesaplarıyla giriş yapmasını sağlayabilir — yeni kullanıcılar ilk girişte otomatik oluşturulur. Varsayılan kapalı; Admin → Organizasyonlar altından organizasyon bazında açılır.'],
+      de: ['Enterprise Single Sign-on (SAML) ist da: Organisationen können ihren eigenen Identity Provider anbinden, damit sich ihre Leute mit Unternehmens-Anmeldedaten anmelden — neue Nutzer werden beim ersten Login automatisch angelegt. Standardmäßig aus; pro Organisation unter Admin → Organisationen aktivierbar.'],
+    },
+  },
+  {
+    version: '0.24.1-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Invitation, password-reset and email-verification messages now carry your organization’s brand — its name, logo and accent color — when one is configured (unchanged for the default single-tenant setup).'],
+      tr: ['Davet, parola sıfırlama ve e-posta doğrulama mesajları artık—yapılandırıldıysa—organizasyonunuzun markasını (adı, logosu ve vurgu rengi) taşıyor (varsayılan tek kiracılı kurulumda değişiklik yok).'],
+      de: ['Einladungs-, Passwort-Reset- und E-Mail-Bestätigungsnachrichten tragen jetzt — sofern konfiguriert — die Marke deiner Organisation (Name, Logo und Akzentfarbe) (bei der standardmäßigen Einzelmandanten-Einrichtung unverändert).'],
+    },
+  },
+  {
+    version: '0.24.0-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Behind the scenes: groundwork for hosting multiple organizations on one platform, with strict data separation between them. No change to how the app works today — it stays fully single-tenant until enabled.'],
+      tr: ['Arka planda: tek platformda birden fazla organizasyonu barındırmak için altyapı hazırlığı yapıldı; aralarında katı veri ayrımı var. Bugünkü çalışma şekli değişmiyor — etkinleştirilene kadar tamamen tek kiracılı kalıyor.'],
+      de: ['Im Hintergrund: Grundlage dafür, mehrere Organisationen auf einer Plattform zu hosten, mit strikter Datentrennung zwischen ihnen. Am heutigen Verhalten ändert sich nichts — die App bleibt vollständig einmandantenfähig, bis es aktiviert wird.'],
+    },
+  },
+  {
+    version: '0.23.3-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: [
+        'Mentors now have a dedicated Analytics page — see your pipeline funnel, total interactions, active mentee count, and hired outcomes at a glance.',
+        'Companies get their own Analytics page — view candidate stage distribution and interest signals (interested / shortlisted / pass) in one place.',
+        'Admins can bulk-advance candidates: select multiple candidates and click "Advance stage" to move them all one pipeline step forward.',
+        'Milestone celebrations: the mentee portal now shows a trophy banner at key career milestones — internship starting, in-progress, completed, hired, and employed.',
+      ],
+      tr: [
+        'Mentörler artık ayrılmış bir Analitik sayfasına sahip — pipeline hunisi, toplam etkileşimler, aktif mentee sayısı ve işe alım sonuçlarını bir bakışta görün.',
+        'Şirketler kendi Analitik sayfalarını alıyor — aday aşama dağılımını ve ilgi sinyallerini (ilgileniyor / kısa listeye aldı / geçti) tek yerden görün.',
+        'Yöneticiler adayları toplu olarak ilerletebilir: birden fazla aday seçin ve "Aşamayı ilerlet" e tıklayarak hepsini bir adım öne taşıyın.',
+        'Kilometre taşı kutlamaları: mentee portalı artık staj başlangıcı, devam, tamamlama, işe alındı ve iş bulundu gibi önemli kariyer aşamalarında kupa banner’ı gösteriyor.',
+      ],
+      de: [
+        'Mentoren haben jetzt eine eigene Analyseseite — sehen Sie auf einen Blick Ihren Pipeline-Trichter, Gesamtinteraktionen, aktive Mentee-Anzahl und Einstellungsergebnisse.',
+        'Unternehmen erhalten ihre eigene Analyseseite — Kandidaten-Stufenverteilung und Interessenssignale (interessiert / vorgemerkt / abgelehnt) an einem Ort.',
+        'Admins können Kandidaten im Bulk-Verfahren voranschreiben: mehrere Kandidaten auswählen und auf „Stufe voranschreiten" klicken, um sie alle einen Schritt weiterzubringen.',
+        'Meilenstein-Feiern: Das Mentee-Portal zeigt jetzt ein Pokal-Banner bei wichtigen Karriere-Meilensteinen — Praktikum beginnt, läuft, abgeschlossen, eingestellt und beschäftigt.',
+      ],
+    },
+  },
+  {
+    version: '0.23.2-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Emoji reactions can now be changed: tap your own reaction chip to open the picker and switch to a different emoji, or tap the same emoji again to remove it. Your current selection is highlighted in the picker.'],
+      tr: ['Emoji tepkileri artık değiştirilebilir: kendi tepki chipine dokun, açılan seçiciden farklı bir emoji seç ya da aynı emojiye tekrar dokun ve kaldır. Seçtiğin emoji seçicide vurgulanır.'],
+      de: ['Emoji-Reaktionen können jetzt geändert werden: Tippe auf deinen eigenen Reaktions-Chip, um den Picker zu öffnen und zu einem anderen Emoji zu wechseln, oder tippe erneut auf dasselbe Emoji, um es zu entfernen. Deine aktuelle Auswahl wird im Picker hervorgehoben.'],
+    },
+  },
+  {
+    version: '0.23.1-beta',
+    date: '2026-07-22',
+    highlights: {
+      en: ['Message box polish: fixed the “Enter to send” switch overlapping its label, and pressing ↑ on an empty box now edits your last message.'],
+      tr: ['Mesaj kutusu rötuşu: “Enter ile gönder” anahtarının etiketle çakışması düzeltildi; boş kutuda ↑ tuşuna basınca son mesajını düzenliyorsun.'],
+      de: ['Feinschliff im Nachrichtenfeld: Der Schalter „Mit Enter senden“ überlappt sein Label nicht mehr, und ↑ im leeren Feld bearbeitet jetzt deine letzte Nachricht.'],
     },
   },
   {

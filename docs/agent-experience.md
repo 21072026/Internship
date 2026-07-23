@@ -10,6 +10,58 @@ Newest entries on top.
 
 ---
 
+## 2026-07-23 — Bulk meeting shared-link bug fix (#759, 0.25.7-beta)
+
+**Bug pattern — resource generated inside a per-item loop.** `POST /api/meetings`
+(`src/app/api/meetings/route.ts`) built the auto Jitsi link *inside* the
+`for (const rel of relations)` loop, so a bulk ("select all") schedule gave every
+mentee a *different* room instead of one shared meeting. Fix = hoist the
+link generation above the loop; keep the genuinely per-person bits (here
+`rsvpToken`) inside. When triaging "bulk does N separate things instead of one",
+look first for a shared resource created per-iteration.
+
+**Fresh worktree is missing installed deps → build fails on unrelated modules.**
+The build died on `Module not found: @node-saml/node-saml` (SSO code, nothing to
+do with my change) because the worktree's `node_modules` was incomplete. `npm
+install` in the worktree fixed it. Run `npm install` first in a new worktree
+before trusting a build failure — the module-not-found may be a stale tree, not
+your diff.
+
+**This repo has NO PR CI checks + auto-merge is disabled.** `gh pr checks` reports
+"no checks reported", `statusCheckRollup` is empty, and REST `check-runs`
+total_count is 0 — there is no PR quality gate wired on the PR branch (the e2e
+smoke workflow doesn't trigger here), and `gh pr merge --auto` errors with
+"Auto merge is not allowed for this repository". So: gate locally with `npm run
+build` (+ `npm run check:i18n`), then merge manually with `gh pr merge <n>
+--squash --delete-branch`. Don't sit waiting for checks that never arrive.
+
+**Version-bump conflicts on rebase (recurring).** While this PR sat, `main`
+shipped #760 as `0.25.6`, colliding on exactly the version-bump files
+(`package.json`, `package-lock.json`, `CHANGELOG.md`, `releaseNotes.ts`). Resolve
+by taking my bump to the *next* free version (`0.25.7-beta`) and placing my
+CHANGELOG/releaseNotes block as its own section above main's — never `--ours` the
+whole file (you'd drop main's release entry). Same lesson as the earlier "Sürüm
+çakışması" note; it keeps happening, so rebase-before-merge is the habit.
+
+**Remote moved to the org.** `git push` prints "This repository moved" — the local
+remote still points at `mersahin/Internship` but redirects to `21072026/Internship`
+(the canonical location for `gh --repo`). Pushes work through the redirect; use the
+`21072026/Internship` slug for all `gh` calls.
+
+## 2026-07-22 — 4-lens roadmap features: analytics pages, bulk stage-advance, milestone badges (#370, 0.22.0→0.23.0)
+
+**TR locale apostrophe in single-quoted strings.** The TR locale in both `src/i18n/dictionaries.ts` and `src/lib/releaseNotes.ts` uses single-quoted JS strings. Any Turkish word with a possessive/suffix apostrophe (e.g., `banner'ı`) must use the Unicode RIGHT SINGLE QUOTATION MARK U+2019 (`'`) rather than the straight ASCII apostrophe `'` — otherwise the string terminates early and the build fails with a cryptic "Expected ',', got 'ı'" syntax error. Pattern seen twice in this session; always check after writing any TR string containing an apostrophe.
+
+**Remove redundant type casts after Prisma schema is exact.** If `pipelineStatus` is typed as the Prisma enum (exact same type as `PIPELINE_STATUSES[number]`), there's no need for `as (typeof PIPELINE_STATUSES)[number]`. The code reviewer caught this; trust TypeScript rather than casting away what you know.
+
+**`package-lock.json` version must match `package.json`.** After bumping the semver in `package.json`, run `npm install` to regenerate the lockfile so its top-level `"version"` field also updates. Skipping this creates a mismatch flagged by automated code review.
+
+**Build-errors-only grep pattern.** When checking build output, grep for `(error|Error|FAILED|failed)` rather than the full build output — keeps the signal clean. On a success the build output shows only page sizes at the end; if you see "Build failed because of webpack errors", scroll up or re-run with a grep for the surrounding lines to find the filename + line number.
+
+**`node_modules` is not pre-installed in the sandbox.** Claude Code web containers require `npm install` before `npm run lint` / `npm run build` — otherwise `next: not found`. Run it first if `node_modules/` is missing.
+
+---
+
 ## 2026-07-21 — Otomatik PR-başına topic preview (Plesk-native routing) (#583, 0.14.6→0.14.7)
 
 Bu oturumda `#679` + `#690` prod'a çıktı (0.14.7) ve **her PR'a otomatik topic
@@ -354,3 +406,120 @@ komşu satır) ve `assert count==1` ile doğrula; sonra `npm run check:i18n`.
 **Squash sadece ilk commit'i alma tuzağı (hatırlatma):** PR açtıktan SONRA
 push'lanan commit'ler squash'a girmeyebiliyor — branch'i PR'dan önce tam hazırla,
 ya da tek commit tut.
+
+---
+
+## 2026-07-22 (öğleden sonra) — MT enforcement engine, contributor PR entegrasyonu
+
+**Tenant izolasyonunu "unutulamaz" hale getir: gated Prisma `$use` middleware +
+AsyncLocalStorage.** Opt-in `orgScoped()` helper'ları "her sorgu izole" kriterini
+garanti edemez (çağıran unutabilir). Çözüm: `runWithOrg(orgId, fn)` bir
+`AsyncLocalStorage` context'i bağlar; tek bir `prisma.$use` middleware'i
+tenant-anchor modellerinde (`User/Source/Company/Project/Cohort/
+MentorshipRelation`) `where`/`data`'ya `orgId` enjekte eder. Tamamen
+`MT_ENFORCE_ISOLATION` (default off) arkasında: kapalıyken `runWithOrg` düz
+passthrough, middleware erken döner → tek-kiracılı prod bit-bit aynı.
+
+**`node:async_hooks`'u `prisma.ts`'e KOYMA — client bundle patlar.** prisma.ts
+onlarca client-erişilebilir modül tarafından (sabit sızıntıları üzerinden)
+import ediliyor; `async_hooks` eklemek `UnhandledSchemeError` veriyor. Middleware +
+ALS'i ayrı **server-only** `orgContext.ts`'e koy (yalnızca route handler'lar
+import eder), `prisma.ts`'i minimal tut. Middleware'i `runWithOrg` ilk
+çağrıldığında lazy + global-guard ile kaydet.
+
+**Prisma 5 `extendedWhereUnique`:** `findUnique`/`update`/`delete` artık `where`'de
+unique alanın YANINA ekstra filtre (ör. `orgId`) kabul ediyor — cross-tenant
+`findUnique` null döner. Middleware'de tüm where-tabanlı action'lar için tek tip
+`{...where, orgId}` merge yeterli; create/createMany/upsert için `data`'ya enjekte.
+
+**İzolasyon testini middleware'i uçtan uca kanıtlar şekilde yaz:** helper unit
+testi yetmez; app `prisma`'sını + `runWithOrg`'u kullanıp `orgScoped()` HİÇ
+çağırmayan düz bir `findMany`'nin bayrak açıkken izole, kapalıyken no-op olduğunu
+doğrula (seed'i middleware'siz `helpers/db` client'ıyla yap).
+
+**Contributor/Copilot PR'ını merge'den önce adversarial review + düzelt:** #740'ta
+bir subagent review'ı iki gerçek bug yakaladı (bulk "advance stage" ham enum
+`indexOf+1` ile in-progress stajı "dropped"a itiyordu; company-analytics
+`companyId` null olan COMPANY kullanıcıya TÜM veriyi sızdırıyordu). Rebase +
+düzelt + i18n/build yeşil + kısa açıklayıcı PR yorumu, sonra squash.
+
+**Sürüm çakışması:** paralel PR'lar aynı `x.y.z`'yi almaya çalışır (intern #656 +
+benim #739 ikisi de 0.23.0). Rebase'te CHANGELOG/releaseNotes/package(-lock).json
+çakışmalarını yeni sürümü en üste koyacak şekilde elle çöz; `git checkout --ours`
+sadece benim tarafım tümüyle doğruysa. `get_check_runs` CI'ın tek doğru kaynağı
+(get_status legacy commit-status API'si total_count 0 gösteriyor); self-hosted
+"topic" check'i de yeşil olmalı.
+
+**Ağır alt-işi kendi issue'suna böl:** #546'nın "özel pipeline aşamaları
+(enum→dinamik)" parçası çok geniş/kesişen — `sub_issue_write` ile #747 olarak
+ayırıp #546 altına bağladım (dikkat: `sub_issue_id` node **id**'si, issue numarası
+değil).
+
+---
+
+## 2026-07-23 — #517 (Premium/Enterprise epic) kapatıldı: MT izolasyon + SSO + özel pipeline
+
+**Enum → String prod göçünü dilimle + `db push`'u topic'te önce doğrula.** `#747`
+için `MentorshipRelation.pipelineStatus` (+ `StatusChange`) Prisma **enum**'unu
+**String**'e çevirdim. Kilit noktalar: (a) MySQL `ENUM → VARCHAR` mevcut değerleri
+**korur** (veri-güvenli), (b) bir Prisma enum'u **hiçbir model alanı** referans
+etmeyince Prisma client onu **artık export etmez** → `import { X } from
+'@prisma/client'` kırılır; enum'u kanonik "varsayılan anahtar kaydı" olarak
+şemada bıraktım ama 3 çağrı yerini `@/lib/pipeline` string-union'ına / string
+literal'a taşıdım. (c) Göçün gerçek testi topic-preview'ın data-taşıyan DB'sinde
+`db push`; smoke fresh-DB olduğu için ENUM→VARCHAR ALTER'ı test etmez. (d) Yazma
+yolundaki zod doğrulayıcıları da enum→`z.string()` yapmayı unutma (yoksa özel
+anahtar 400 yer): `PUT /api/mentorship/[id]`, `POST /api/status-changes`.
+
+**Geniş, tekdüze UI dönüşümlerini paralel subagent'lara böl (disjoint dosyalar).**
+17 dosyalık pipeline-etiketi dönüşümünü (server sayfa + client component karışık)
+3 subagent'a bölüp her birine kesin kontrat + `npx tsc --noEmit | grep <kendi
+dosyaları>` self-check verdim; sonra tek `npm run build` ile entegre ettim. Aynı
+deseni #543'ün 63-route sarımında da kullandım. Server/client ayrımı: server
+sayfa `await resolvePipelineStages(orgId, locale)` + `stageLabel(...)`; client
+component `PipelineStagesProvider` (role layout'ta) + `useResolvedStages()/
+useStageLabel()`. `node:async_hooks`/DB import'unu client'a sokmamak için saf
+yardımcıları (`ResolvedStage`, `defaultPipelineStages`, `stageLabel`) client-safe
+`pipeline.ts`'e taşı; DB'li `resolvePipelineStages` ayrı server modülde kalsın.
+Dikkat: bir hook'u `useState(...)` başlangıç değerinde kullanacaksan hook'u
+bileşenin EN başında, useState'lerden önce çağır.
+
+**Client'a taşıyınca `locale` "unused" olup build'i kırar.** `pipelineLabel(x,
+locale)` → `label(x)` (hook) yapınca `const locale = useLocale()` çoğu dosyada
+kullanılmaz kalıyor; `@typescript-eslint/no-unused-vars` bu repoda **ERROR**.
+Dönüşüm sonrası kullanılmayan `locale`/`useLocale`/`pipelineLabel` import'larını
+temizle (subagent kontratına ekle).
+
+**GitHub GraphQL kotası REST'ten ayrı ve bu oturumda tükendi.** Onlarca
+merge/issue-update sonrası GraphQL (`issue_write` node-id, `list_issue_fields`,
+Projects) "rate limit exceeded" verdi ~saatlik; REST (get_me, `create_pull_request`,
+`merge_pull_request`, get_check_runs) çalışmaya devam etti. Yani kota tükenince
+PR açıp merge edebilirsin ama issue **kapatamazsın/board yazamazsın** — bekle ya
+da REST-tabanlı adımları sürdür.
+
+**Board Status kolonu (Ready/In Progress/In Review) mevcut GitHub MCP araçlarıyla
+YAZILAMIYOR.** `list_issue_fields` yalnızca Priority/Effort/tarih alanlarını
+döndürüyor; Projects v2 **Status** alanı yok. Kullanıcının "işi Ready→In
+Progress→In Review taşı" süreç kuralını ancak **assignee + PR açık/merge** ile
+sinyalleyebildim. Kolon otomasyonu gerekiyorsa ayrı bir GitHub Action lazım.
+
+**Self-hosted "topic" check'i dalgalı — iki farklı infra hatası gördüm:** (1)
+`next build` sırasında OOM (exit 255), (2) `P1001: Can't reach database server at
+host.docker.internal:3306` (preview DB anlık düşük). İkisi de kod/göç hatası
+DEĞİL (build+smoke yeşilken). `rerun_failed_jobs` + birkaç dk bekleme genelde
+yeşile çeviriyor; kullanıcının "yeşil olmadan merge etme" kuralı gereği topic
+yeşile dönene kadar bekledim (kod tarafı build+smoke ile zaten doğrulanmış olsa
+da). Ayrıca: bir PR'da GitHub Actions hiç tetiklenmedi (event düşmedi); boş commit
+(`git commit --allow-empty`) ile yeniden tetikledim.
+
+**Contributor/Copilot PR'ını merge'den önce adversarial review + rebase.** #740'ta
+subagent review'ı iki gerçek bug yakaladı (bulk advance off-path'e itiyor;
+company-analytics companyId'siz kullanıcıya tüm veriyi sızdırıyor); rebase +
+düzelt + yeşil + kısa açıklayıcı yorum, sonra squash.
+
+**Test edilemeyen auth'u da gerçek IdP ile doğrula: mock-saml.com.** #545 SAML
+round-trip'ini gerçek IdP olmadan bitiremiyordum; `mocksaml.com` (BoxyHQ) ücretsiz
+public test IdP — metadata/sertifikası public, sunucu ACS'yi tarayıcı üzerinden
+POST'ladığı için sandbox'tan erişim gerekmiyor. Kullanıcı 3 adımda (org oluştur +
+mocksaml config yapıştır + /auth/sso) prod'da uçtan uca doğruladı; gerçek Okta/
+Azure'a geçiş sadece config yapıştırmak.

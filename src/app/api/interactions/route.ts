@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);
     const relationId = searchParams.get('relationId');
 
@@ -49,6 +51,7 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ interactions });
+    });
   } catch (error) {
     console.error('Get interactions error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    return await withTenantScope(session, async () => {
     const body = await request.json();
     const parsed = createInteractionSchema.safeParse(body);
 
@@ -102,6 +106,7 @@ export async function POST(request: Request) {
 
     await dispatchWebhook('interaction.logged', { relationId, type, date: interaction.date.toISOString() });
     return NextResponse.json({ interaction }, { status: 201 });
+    });
   } catch (error) {
     console.error('Create interaction error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

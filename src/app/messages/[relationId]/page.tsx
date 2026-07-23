@@ -73,9 +73,22 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
     });
   };
 
-  // Enter/Shift+Enter behaviour depends on the preference above.
+  // Enter/Shift+Enter behaviour depends on the preference above; ArrowUp on an
+  // empty box edits your last message (WhatsApp/Slack/Telegram style).
   const onComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'ArrowUp' && !body && editId === null) {
+      const lastMine = [...messages].reverse().find((m) => m.senderId === myId && !m.deleted);
+      if (lastMine) {
+        e.preventDefault();
+        setMenuId(null);
+        setReactId(null);
+        setEditId(lastMine.id);
+        setEditBody(lastMine.body);
+      }
+      return;
+    }
+    if (e.key !== 'Enter') return;
     const shouldSend = enterToSend ? !e.shiftKey : e.shiftKey;
     if (shouldSend) {
       e.preventDefault();
@@ -299,15 +312,25 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                     </p>
 
                     {/* Emoji picker */}
-                    {reactId === m.id && !m.deleted && (
-                      <div className="mt-1.5 flex gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit">
-                        {REACTIONS.map((emoji) => (
-                          <button key={emoji} type="button" onClick={() => react(m.id, emoji)} className="text-base leading-none hover:scale-125 transition-transform" aria-label={emoji}>
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    {reactId === m.id && !m.deleted && (() => {
+                      const myEmoji = m.reactions.find((r) => r.mine)?.emoji;
+                      return (
+                        <div className="mt-1.5 flex gap-1 rounded-lg bg-white/90 border border-black/5 px-1.5 py-1 w-fit">
+                          {REACTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => react(m.id, emoji)}
+                              className={`text-base leading-none hover:scale-125 transition-transform rounded ${myEmoji === emoji ? 'ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-800' : ''}`}
+                              aria-label={emoji}
+                              aria-pressed={myEmoji === emoji}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
 
                     {/* Reaction chips */}
                     {!m.deleted && m.reactions.length > 0 && (
@@ -316,7 +339,16 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
                           <button
                             key={r.emoji}
                             type="button"
-                            onClick={() => react(m.id, r.emoji)}
+                            onClick={() => {
+                              if (r.mine) {
+                                // Open the picker so the user can switch to a different emoji
+                                // instead of immediately removing their reaction.
+                                setReactId(reactId === m.id ? null : m.id);
+                                setMenuId(null);
+                              } else {
+                                react(m.id, r.emoji);
+                              }
+                            }}
                             aria-pressed={r.mine}
                             className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs border ${r.mine ? 'bg-blue-100 border-blue-300 text-blue-800' : 'bg-white/90 border-black/5 text-gray-700'}`}
                           >
@@ -403,17 +435,18 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
         />
         <Button type="submit" loading={sending} disabled={!body.trim() && attachments.length === 0}>{t.messages.send}</Button>
       </form>
-      <div className="mt-1.5 flex justify-end">
+      <div className="mt-1.5 flex items-center justify-between gap-3">
+        <span className="text-xs text-gray-400 truncate">{t.messages.pasteHint}</span>
         <button
           type="button"
           role="switch"
           aria-checked={enterToSend}
           onClick={toggleEnterToSend}
           title={enterToSend ? t.messages.enterToSendOnHint : t.messages.enterToSendOffHint}
-          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 shrink-0"
         >
-          <span className={`relative inline-block h-4 w-7 rounded-full transition-colors ${enterToSend ? 'bg-blue-600' : 'bg-gray-300'}`}>
-            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enterToSend ? 'translate-x-[15px]' : 'translate-x-0.5'}`} />
+          <span className={`relative inline-block h-4 w-7 shrink-0 rounded-full transition-colors ${enterToSend ? 'bg-blue-600' : 'bg-gray-300'}`}>
+            <span className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform ${enterToSend ? 'translate-x-3' : 'translate-x-0'}`} />
           </span>
           {t.messages.enterToSend}
         </button>

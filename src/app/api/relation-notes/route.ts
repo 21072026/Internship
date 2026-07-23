@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 
 const bodySchema = z.object({
   relationId: z.string().min(1),
@@ -22,37 +23,39 @@ async function canAccessRelation(userId: string, role: string, relationId: strin
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
+    const relationId = new URL(request.url).searchParams.get('relationId');
+    if (!relationId) return NextResponse.json({ error: 'relationId is required' }, { status: 400 });
+    if (!(await canAccessRelation(session.user.id, session.user.role, relationId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-  const relationId = new URL(request.url).searchParams.get('relationId');
-  if (!relationId) return NextResponse.json({ error: 'relationId is required' }, { status: 400 });
-  if (!(await canAccessRelation(session.user.id, session.user.role, relationId))) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const notes = await prisma.relationNote.findMany({
-    where: { relationId },
-    orderBy: { createdAt: 'desc' },
-    include: { author: { select: { fullName: true } } },
+    const notes = await prisma.relationNote.findMany({
+      where: { relationId },
+      orderBy: { createdAt: 'desc' },
+      include: { author: { select: { fullName: true } } },
+    });
+    return NextResponse.json({ notes });
   });
-  return NextResponse.json({ notes });
 }
 
 // POST — add a note.
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
+    const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    const { relationId, body } = parsed.data;
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  const { relationId, body } = parsed.data;
+    if (!(await canAccessRelation(session.user.id, session.user.role, relationId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-  if (!(await canAccessRelation(session.user.id, session.user.role, relationId))) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const note = await prisma.relationNote.create({
-    data: { relationId, authorId: session.user.id, body },
-    include: { author: { select: { fullName: true } } },
+    const note = await prisma.relationNote.create({
+      data: { relationId, authorId: session.user.id, body },
+      include: { author: { select: { fullName: true } } },
+    });
+    return NextResponse.json({ note }, { status: 201 });
   });
-  return NextResponse.json({ note }, { status: 201 });
 }

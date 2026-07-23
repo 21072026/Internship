@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   // Let the applicant set a password so they can sign in to the portal.
   const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
   try {
-    await sendPasswordResetEmail({ to: mentee.email, token, fullName: mentee.fullName, purpose: 'SET_INITIAL' });
+    await sendPasswordResetEmail({ to: mentee.email, token, fullName: mentee.fullName, purpose: 'SET_INITIAL', orgId: mentee.orgId });
   } catch (e) {
     console.error('Applicant set-password email failed:', e);
   }

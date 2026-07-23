@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.24.0-beta",
+  "version": "0.25.7-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "prisma": {
@@ -26,6 +26,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.109.0",
     "@hookform/resolvers": "^3.9.0",
+    "@node-saml/node-saml": "^5.1.0",
     "@prisma/client": "^5.16.1",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",

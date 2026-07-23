@@ -14,16 +14,15 @@ Multi-tenancy shipped in additive phases:
 | #547   | Per-tenant plan tiers + advisory limits                             | live  |
 | #546   | Per-tenant white-label branding                                    | live  |
 | #545   | Per-tenant SSO config + gating                                    | live  |
-| #543-2 | **Enforcement** — scope every query to the request's org           | **foundation only** |
+| #543-2 | **Enforcement** — scope every query to the request's org           | **engine shipped, gated off; per-route rollout ongoing** |
 
 Every existing row is backfilled to a single `default` org, so the live app is
-effectively single-tenant and **nothing filters by `orgId` yet**.
+effectively single-tenant and **nothing filters by `orgId` in production** (the
+flag is off).
 
 ## The enforcement building blocks (`src/lib/orgScope.ts`)
 
-Rather than a global Prisma middleware that silently rewrites every query
-(easy to get wrong, impossible to verify without a real multi-tenant DB), the
-enforcement primitives are explicit and opt-in:
+Explicit, opt-in primitives for scoping an individual query:
 
 - `resolveOrgId(session)` — the org a request belongs to (today: the signed-in
   user's `orgId`, now carried in the JWT/session).
@@ -34,9 +33,48 @@ enforcement primitives are explicit and opt-in:
   find-by-id handlers.
 - `isIsolationEnforced()` — reads `MT_ENFORCE_ISOLATION` (default **off**).
 
-All of this is exercised by `e2e/org-isolation.spec.ts` against a real DB
-(scoped queries return only one tenant's rows; guards fail-closed only when the
-flag is on).
+## The central enforcement engine (`src/lib/orgContext.ts`)
+
+Opt-in helpers guarantee correctness only for the call sites that remember to
+use them. The acceptance criterion is stronger — *every* tenant-scoped query
+must be isolated — so #543-2 adds a "can't forget the filter" layer:
+
+- `runWithOrg(orgId, fn)` — binds `orgId` to the current request via an
+  `AsyncLocalStorage` and runs `fn` inside it.
+- `withTenantScope(session, fn)` — the route-handler convenience wrapper
+  (`runWithOrg(resolveOrgId(session), fn)`).
+- A single **Prisma `$use` middleware** (installed lazily by `runWithOrg`) then
+  auto-injects `orgId` into every query on a tenant-anchored model
+  (`User`, `Source`, `Company`, `Project`, `Cohort`, `MentorshipRelation`) for
+  the duration of that request — `where` for reads/updates/deletes (Prisma 5
+  `extendedWhereUnique` lets `findUnique`/`update`/`delete` carry the extra
+  filter), `data` for `create`/`createMany`/`upsert`.
+
+This engine is **entirely dormant unless `MT_ENFORCE_ISOLATION=true`**:
+`runWithOrg` is a straight passthrough when the flag is off (no context is
+established, the middleware early-returns), so single-tenant production is byte
+-for-byte unchanged. It lives in `orgContext.ts` (server-only — it imports
+`node:async_hooks`) and is deliberately kept out of the widely-imported
+`prisma.ts` so it never enters a client bundle.
+
+All of this is exercised against a real DB by `e2e/org-isolation.spec.ts` and
+`e2e/tenant-isolation.spec.ts` — the latter proves that a **plain query which
+never called `orgScoped()`** is still isolated purely because it ran inside
+`runWithOrg()` with the flag on, and is a no-op with the flag off.
+
+### Per-route rollout status
+
+Handlers adopt the engine by wrapping their body in `withTenantScope(session, …)`.
+**All authenticated API routes that query a tenant-anchored model are now
+wrapped** — every such handler binds the request's org, so with the flag on the
+central middleware scopes all of its queries. Wrapping is behavior-neutral while
+the flag is off (`withTenantScope` is a pure passthrough).
+
+Public / token-based routes (registration, apply, forgot-password, invite
+acceptance) are intentionally not wrapped: they have no session and resolve their
+subject from the invite/reset token, not a tenant context. Routes that only ever
+read the caller's own rows (account, profile, avatar, cv) are wrapped too for
+uniformity, though scoping is redundant there.
 
 ## Turning enforcement on (the guarded rollout)
 
@@ -47,9 +85,11 @@ is done and verified in a preview/staging environment first:
    multiple tenants exist, ensure every user/row has the correct `orgId`.
 2. **Plumb request→org resolution** everywhere reads/writes happen — either via
    the session `orgId` (done) or host/subdomain for public routes.
-3. **Adopt the helpers** in each API route and query: wrap list/read `where`
-   with `orgScoped(where, requireOrg(session))`, and call `assertSameOrg` after
-   every find-by-id. Add per-org uniqueness where needed (e.g. slugs).
+3. **Wrap every API route** body in `withTenantScope(session, …)` so the central
+   middleware auto-scopes all its queries. (The `orgScoped`/`assertSameOrg`
+   helpers remain available for call sites that want explicit, local scoping —
+   e.g. background jobs with no session context.) Add per-org uniqueness where
+   needed (e.g. slugs).
 4. **Run the full isolation suite** with `MT_ENFORCE_ISOLATION=true` against a
    seeded two-tenant DB; confirm no cross-tenant read/write passes.
 5. **Flip the flag** in one environment, watch, then production. It is a single

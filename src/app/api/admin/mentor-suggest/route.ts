@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { runAiGated } from '@/lib/aiGate';
 import { aiRankMentors, type MatchCandidate } from '@/lib/aiMentorMatch';
+import { withTenantScope } from '@/lib/orgContext';
 
 const schema = z.object({ menteeId: z.string().min(1) });
 
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
 
@@ -108,4 +110,5 @@ export async function POST(request: Request) {
   const rest = base.filter((b) => !rankedIds.has(b.mentorId));
 
   return NextResponse.json({ suggestions: [...ranked, ...rest], aiUsed: true });
+  });
 }

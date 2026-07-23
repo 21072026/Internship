@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
 
@@ -16,6 +17,7 @@ async function relationIfAllowed(userId: string, role: string, relationId: strin
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const relationId = new URL(request.url).searchParams.get('relationId') || '';
 
   const rel = await relationIfAllowed(session.user.id, session.user.role, relationId);
@@ -23,6 +25,7 @@ export async function GET(request: Request) {
 
   const goals = await prisma.goal.findMany({ where: { relationId }, orderBy: { createdAt: 'asc' } });
   return NextResponse.json({ goals });
+  });
 }
 
 const schema = z.object({
@@ -37,6 +40,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
@@ -54,4 +58,5 @@ export async function POST(request: Request) {
     },
   });
   return NextResponse.json({ goal }, { status: 201 });
+  });
 }

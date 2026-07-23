@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
 import { ALL_CRITERIA, EVALUATION_TYPES } from '@/lib/evaluation';
 import { dispatchWebhook } from '@/lib/webhooks';
@@ -10,6 +11,7 @@ import { dispatchWebhook } from '@/lib/webhooks';
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const relationId = new URL(request.url).searchParams.get('relationId') || '';
 
   const rel = await prisma.mentorshipRelation.findUnique({ where: { id: relationId } });
@@ -24,6 +26,7 @@ export async function GET(request: Request) {
       ...e,
       direction: e.authorId === rel.menteeId ? 'MENTEE_ON_MENTOR' : 'MENTOR_ON_MENTEE',
     })),
+  });
   });
 }
 
@@ -41,6 +44,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
 
@@ -62,4 +66,5 @@ export async function POST(request: Request) {
   });
   await dispatchWebhook('evaluation.added', { relationId: rel.id, type: evaluation.type, authorId: session.user.id });
   return NextResponse.json({ evaluation }, { status: 201 });
+  });
 }

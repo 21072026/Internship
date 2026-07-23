@@ -10,8 +10,10 @@ const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '🎉'] as const;
 
 const schema = z.object({ emoji: z.enum(REACTION_EMOJIS) });
 
-// POST — toggle the current user's reaction with the given emoji on a message.
-// Thread participants (and admins) only. Adding the same emoji again removes it.
+// POST — toggle or replace the current user's reaction on a message.
+// Thread participants (and admins) only.
+// - Clicking the same emoji the user already has → removes it (toggle off).
+// - Clicking a different emoji → atomically replaces the previous reaction (change).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -26,12 +28,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (message.deletedForEveryoneAt) return NextResponse.json({ error: 'Message deleted' }, { status: 409 });
 
-  const key = { messageId_userId_emoji: { messageId: id, userId: session.user.id, emoji: parsed.data.emoji } };
+  const newEmoji = parsed.data.emoji;
+  const key = { messageId_userId_emoji: { messageId: id, userId: session.user.id, emoji: newEmoji } };
   const existing = await prisma.messageReaction.findUnique({ where: key });
   if (existing) {
+    // Same emoji clicked again → toggle off.
     await prisma.messageReaction.delete({ where: key });
     return NextResponse.json({ ok: true, active: false });
   }
-  await prisma.messageReaction.create({ data: { messageId: id, userId: session.user.id, emoji: parsed.data.emoji } });
+  // Different emoji (or no prior reaction): replace any existing reaction by this user
+  // on this message atomically, then add the new one. This ensures a user has at most
+  // one active reaction per message and "change" works as expected.
+  await prisma.$transaction([
+    prisma.messageReaction.deleteMany({ where: { messageId: id, userId: session.user.id } }),
+    prisma.messageReaction.create({ data: { messageId: id, userId: session.user.id, emoji: newEmoji } }),
+  ]);
   return NextResponse.json({ ok: true, active: true });
 }

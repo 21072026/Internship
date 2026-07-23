@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -13,6 +14,7 @@ const schema = z.object({
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const { id } = await params;
 
   const parsed = schema.safeParse(await request.json());
@@ -26,6 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     },
   });
   return NextResponse.json({ cohort });
+  });
 }
 
 // DELETE — remove a cohort (admin). Relations keep their record; their cohortId
@@ -33,9 +36,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const { id } = await params;
 
   await prisma.mentorshipRelation.updateMany({ where: { cohortId: id }, data: { cohortId: null } });
   await prisma.cohort.delete({ where: { id } }).catch(() => null);
   return NextResponse.json({ ok: true });
+  });
 }

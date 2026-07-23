@@ -7,7 +7,29 @@ import { emailAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
-import type { PipelineStatus } from '@prisma/client';
+import { getOrgBranding } from '@/lib/orgBranding';
+
+// Resolved branding for a transactional email (#546). When no orgId is given
+// (single-tenant, or a caller without tenant context) this returns the product
+// defaults, so behavior is unchanged. The accent falls back to the product blue.
+const DEFAULT_ACCENT = '#2563eb';
+async function emailBrand(orgId?: string | null) {
+  const b = await getOrgBranding(orgId ?? null);
+  return {
+    name: b.name,
+    accent: b.color || DEFAULT_ACCENT,
+    logoUrl: b.logoUrl,
+    supportEmail: b.supportEmail,
+  };
+}
+
+// A small brand header (logo if the tenant set one, otherwise the heading text).
+function brandHeader(brand: { name: string; accent: string; logoUrl: string | null }, heading: string): string {
+  const logo = brand.logoUrl
+    ? `<img src="${brand.logoUrl}" alt="${brand.name}" style="max-height:40px;margin-bottom:12px;" />`
+    : '';
+  return `${logo}<h2 style="color: ${brand.accent};">${heading}</h2>`;
+}
 
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
 const transporter = nodemailer.createTransport({
@@ -40,10 +62,10 @@ function htmlToText(html: string): string {
 // A From header with a display name ("Internship CRM <noreply@…>") looks less
 // like bulk/spam than a bare address. Honor an address that already includes a
 // name; otherwise wrap the configured address.
-function fromHeader(): string {
+function fromHeader(brandName?: string | null): string {
   const addr = process.env.SMTP_FROM || process.env.SMTP_USER || '';
   if (addr.includes('<') || !addr) return addr;
-  const name = process.env.MAIL_FROM_NAME || 'Internship CRM';
+  const name = brandName || process.env.MAIL_FROM_NAME || 'Internship CRM';
   return `${name} <${addr}>`;
 }
 
@@ -53,12 +75,16 @@ export async function sendEmail({
   html,
   replyTo,
   attachments,
+  fromName,
 }: {
   to: string;
   subject: string;
   html: string;
   replyTo?: string;
   attachments?: { filename: string; content: Buffer; contentType?: string }[];
+  // Overrides the From display name (e.g. a tenant's brand name, #546). Falls
+  // back to MAIL_FROM_NAME / "Internship CRM" when omitted.
+  fromName?: string | null;
 }) {
   if (!process.env.SMTP_USER) {
     console.log(`[Email skipped - no SMTP config] To: ${to}, Subject: ${subject}`);
@@ -66,7 +92,7 @@ export async function sendEmail({
   }
 
   await transporter.sendMail({
-    from: fromHeader(),
+    from: fromHeader(fromName),
     to,
     subject,
     html,
@@ -93,25 +119,29 @@ export async function sendInvitationEmail({
   to,
   token,
   role,
+  orgId,
 }: {
   to: string;
   token: string;
   role: string;
+  orgId?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const registerUrl = `${appUrl}/auth/register?token=${token}`;
+  const brand = await emailBrand(orgId);
 
   await sendEmail({
     to,
-    subject: 'You have been invited to Internship CRM',
+    fromName: brand.name,
+    subject: `You have been invited to ${brand.name}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">Welcome to Internship CRM</h2>
+        ${brandHeader(brand, `Welcome to ${brand.name}`)}
         <p>You have been invited to join as a <strong>${role}</strong>.</p>
         <p>Click the button below to complete your registration:</p>
         <a href="${registerUrl}" style="
           display: inline-block;
-          background-color: #2563eb;
+          background-color: ${brand.accent};
           color: white;
           padding: 12px 24px;
           text-decoration: none;
@@ -136,33 +166,37 @@ export async function sendPasswordResetEmail({
   token,
   fullName,
   purpose = 'RESET',
+  orgId,
 }: {
   to: string;
   token: string;
   fullName?: string | null;
   purpose?: 'RESET' | 'SET_INITIAL';
+  orgId?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const resetUrl = `${appUrl}/auth/reset?token=${token}`;
   const isInitial = purpose === 'SET_INITIAL';
+  const brand = await emailBrand(orgId);
 
   const heading = isInitial ? 'Set your password' : 'Reset your password';
   const intro = isInitial
-    ? 'An account has been created for you on Internship CRM. Set a password to activate it and sign in.'
+    ? `An account has been created for you on ${brand.name}. Set a password to activate it and sign in.`
     : 'We received a request to reset your password. Click the button below to choose a new one.';
   const cta = isInitial ? 'Set password' : 'Reset password';
 
   await sendEmail({
     to,
-    subject: isInitial ? 'Activate your Internship CRM account' : 'Reset your Internship CRM password',
+    fromName: brand.name,
+    subject: isInitial ? `Activate your ${brand.name} account` : `Reset your ${brand.name} password`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">${heading}</h2>
+        ${brandHeader(brand, heading)}
         ${fullName ? `<p>Hi ${fullName},</p>` : ''}
         <p>${intro}</p>
         <a href="${resetUrl}" style="
           display: inline-block;
-          background-color: #2563eb;
+          background-color: ${brand.accent};
           color: white;
           padding: 12px 24px;
           text-decoration: none;
@@ -186,25 +220,29 @@ export async function sendVerificationEmail({
   to,
   token,
   fullName,
+  orgId,
 }: {
   to: string;
   token: string;
   fullName?: string | null;
+  orgId?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const verifyUrl = `${appUrl}/auth/verify?token=${token}`;
+  const brand = await emailBrand(orgId);
 
   await sendEmail({
     to,
-    subject: 'Verify your Internship CRM email',
+    fromName: brand.name,
+    subject: `Verify your ${brand.name} email`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">Confirm your email</h2>
+        ${brandHeader(brand, 'Confirm your email')}
         ${fullName ? `<p>Hi ${fullName},</p>` : ''}
         <p>Please confirm your email address to activate full access to your account.</p>
         <a href="${verifyUrl}" style="
           display: inline-block;
-          background-color: #2563eb;
+          background-color: ${brand.accent};
           color: white;
           padding: 12px 24px;
           text-decoration: none;
@@ -371,7 +409,7 @@ export async function checkStageDeadlineReminders() {
       status: 'ACTIVE',
       stageDeadline: { lt: now },
       deadlineReminderSentAt: null,
-      pipelineStatus: { notIn: TERMINAL as unknown as PipelineStatus[] },
+      pipelineStatus: { notIn: [...TERMINAL] },
     },
     include: { mentor: true, mentee: true },
   });

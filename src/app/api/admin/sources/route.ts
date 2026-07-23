@@ -2,17 +2,18 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { PipelineStatus } from '@prisma/client';
 import { z } from 'zod';
+import { withTenantScope } from '@/lib/orgContext';
 
 // Pipeline stages that count as a successful outcome for conversion stats.
-const HIRED: PipelineStatus[] = [PipelineStatus.HIRED_660, PipelineStatus.EMPLOYED_700];
+const HIRED: string[] = ['HIRED_660', 'EMPLOYED_700'];
 
 // GET — all sources with mentee counts + conversion (hired) breakdown (admin).
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   const sources = await prisma.source.findMany({
     orderBy: { name: 'asc' },
     include: { _count: { select: { users: true } } },
@@ -46,6 +47,7 @@ export async function GET() {
       };
     }),
   });
+  });
 }
 
 const schema = z.object({
@@ -58,6 +60,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const { name, contactName, contactEmail } = parsed.data;
@@ -67,4 +70,5 @@ export async function POST(request: Request) {
     data: { name, contactName: contactName || null, contactEmail: contactEmail || null },
   });
   return NextResponse.json({ source }, { status: 201 });
+  });
 }

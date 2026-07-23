@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
+import { withTenantScope } from '@/lib/orgContext';
 
 const schema = z.object({ csv: z.string().min(1).max(200_000), dryRun: z.boolean().optional() });
 
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
@@ -90,4 +92,5 @@ export async function POST(request: Request) {
   }
   await logActivity({ action: 'users.bulk_import', actorId: session.user.id, actorEmail: session.user.email ?? null, detail: `created ${created}` });
   return NextResponse.json({ created, skipped: skipped.length, errors: errors.length, rows });
+  });
 }

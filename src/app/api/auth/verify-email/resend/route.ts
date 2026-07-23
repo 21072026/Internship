@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { withTenantScope } from '@/lib/orgContext';
 
 // POST — re-send the verification email.
 // - Authenticated: for the current user. The caller already proved who they
@@ -18,18 +19,20 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
   if (session) {
+    return await withTenantScope(session, async () => {
     const user = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     if (user.emailVerified) return NextResponse.json({ ok: true, alreadyVerified: true });
 
     const token = await createEmailVerificationToken(user.id);
     try {
-      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName });
+      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
     } catch (e) {
       console.error('Resend verification email failed:', e);
       return NextResponse.json({ error: 'Could not send the verification email. Please try again shortly.' }, { status: 502 });
     }
     return NextResponse.json({ ok: true });
+    });
   }
 
   const limited = enforceRateLimit(request, 'verify-resend', { limit: 5, windowMs: 15 * 60 * 1000 });
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
   if (user && !user.emailVerified) {
     const token = await createEmailVerificationToken(user.id);
     try {
-      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName });
+      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
     } catch (e) {
       console.error('Resend verification email failed (public path):', e);
     }

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
+import { withTenantScope } from '@/lib/orgContext';
 
 const schema = z.object({
   sourceId: z.string().min(1),
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const { sourceId, email, fullName } = parsed.data;
@@ -38,10 +40,11 @@ export async function POST(request: Request) {
   const token = await createPasswordResetToken(user.id, 'SET_INITIAL');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   try {
-    await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, purpose: 'SET_INITIAL' });
+    await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, purpose: 'SET_INITIAL', orgId: user.orgId });
   } catch (e) {
     console.error('Source-user set-password email failed:', e);
   }
 
   return NextResponse.json({ ok: true, setPasswordUrl: `${appUrl}/auth/reset?token=${token}` });
+  });
 }

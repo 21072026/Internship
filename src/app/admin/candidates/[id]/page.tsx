@@ -9,7 +9,7 @@ import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { ArrowLeft, KeyRound, Trash2, Plus } from 'lucide-react';
-import { pipelineLabel, pipelineOptions, PIPELINE_STATUSES } from '@/lib/pipeline';
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { CvManager } from '@/components/CvManager';
 import { nextAction } from '@/lib/matching';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
@@ -71,6 +71,8 @@ export default function AdminMenteeDetailPage() {
   const id = useParams().id as string;
   const t = useT();
   const locale = useLocale();
+  const label = useStageLabel();
+  const stages = useResolvedStages();
   const toast = useToast();
   const [user, setUser] = useState<MenteeDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,8 +146,8 @@ export default function AdminMenteeDetailPage() {
   }, [id]);
 
   // Manual stage-history corrections (S9.4): add or remove audit entries.
-  const [histFrom, setHistFrom] = useState(PIPELINE_STATUSES[0] as string);
-  const [histTo, setHistTo] = useState(PIPELINE_STATUSES[0] as string);
+  const [histFrom, setHistFrom] = useState(stages[0]?.key ?? '');
+  const [histTo, setHistTo] = useState(stages[0]?.key ?? '');
   const [histDate, setHistDate] = useState('');
   const [histBusy, setHistBusy] = useState(false);
 
@@ -255,7 +257,7 @@ export default function AdminMenteeDetailPage() {
             <p className="text-gray-500">{user.email}</p>
           </div>
           <div className="flex items-center gap-3">
-            {rel && <Badge variant="info">{pipelineLabel(rel.pipelineStatus, locale)}</Badge>}
+            {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
             <Button variant="outline" size="sm" loading={resetting} onClick={resetPassword}>
               <KeyRound className="h-4 w-4 mr-1" />
               {t.candidateDetail.resetPassword}
@@ -322,7 +324,7 @@ export default function AdminMenteeDetailPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg">
                 <Select
                   label={t.candidateDetail.stage}
-                  options={pipelineOptions(locale)}
+                  options={stages.map((s) => ({ value: s.key, label: s.label }))}
                   value={rel.pipelineStatus}
                   disabled={saving}
                   onChange={(e) => changeStage(rel.id, e.target.value)}
@@ -382,9 +384,9 @@ export default function AdminMenteeDetailPage() {
                     {rel.statusChanges.map((sc) => (
                       <li key={sc.id} className="group flex items-center gap-2 text-sm border-l-2 border-blue-100 pl-3">
                         <span className="flex-1 min-w-0">
-                          <span className="text-gray-400">{pipelineLabel(sc.fromStatus, locale)}</span>
+                          <span className="text-gray-400">{label(sc.fromStatus)}</span>
                           {' → '}
-                          <span className="font-medium">{pipelineLabel(sc.toStatus, locale)}</span>
+                          <span className="font-medium">{label(sc.toStatus)}</span>
                           <span className="text-xs text-gray-400"> · {sc.changedBy.fullName} · {formatDate(sc.createdAt, locale)}</span>
                         </span>
                         <button
@@ -402,10 +404,10 @@ export default function AdminMenteeDetailPage() {
                 {/* Manually add a correcting history entry */}
                 <div className="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-gray-100 bg-gray-50 p-3">
                   <div className="w-40">
-                    <Select label={t.candidateDetail.from} options={pipelineOptions(locale)} value={histFrom} onChange={(e) => setHistFrom(e.target.value)} />
+                    <Select label={t.candidateDetail.from} options={stages.map((s) => ({ value: s.key, label: s.label }))} value={histFrom} onChange={(e) => setHistFrom(e.target.value)} />
                   </div>
                   <div className="w-40">
-                    <Select label={t.candidateDetail.to} options={pipelineOptions(locale)} value={histTo} onChange={(e) => setHistTo(e.target.value)} />
+                    <Select label={t.candidateDetail.to} options={stages.map((s) => ({ value: s.key, label: s.label }))} value={histTo} onChange={(e) => setHistTo(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">{t.candidateDetail.date}</label>

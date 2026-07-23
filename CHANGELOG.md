@@ -10,11 +10,220 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-### Added
-- Support messages now accept up to 10 PNG, JPEG, or PDF attachments with
-  client-side previews and validation. Attachments are stored atomically with
-  their message and are available to the requester and support admins.
+## [0.25.7] - 2026-07-23
 
+### Added
+- **Attachments for support messages.** Support messages now accept up to 10
+  PNG, JPEG, or PDF attachments with client-side previews and validation.
+  Attachments are stored atomically with their message and are available only
+  to the requester and support admins.
+
+### Fixed
+- **Bulk meeting scheduling now creates one shared link (#759).** When
+  scheduling a meeting for several mentees at once ("select all") without pasting
+  a link, the auto-generated Jitsi room was created *inside* the per-relation loop
+  — so each participant got a different room instead of joining the same meeting.
+  The link is now generated once and shared across all selected participants; the
+  per-person RSVP token stays unique. `src/app/api/meetings/route.ts`; regression
+  test in `e2e/auto-meet-link.spec.ts`.
+
+## [0.25.6] - 2026-07-23
+
+### Changed
+- **Per-tenant pipeline stages across all remaining surfaces (#747, Slice B —
+  final).** The mentor & company shells now provide the stage context; the
+  mentor/company/admin **analytics funnels** + dashboards, the mentor **kanban
+  board**, and the candidate/mentor/company **detail** views all render the
+  viewer tenant's resolved stage labels/order/colors. The write path
+  (`PUT /api/mentorship/[id]`, `POST /api/status-changes`) now accepts free-string
+  stage keys so custom stages can be assigned. Behavior-preserving for the default
+  single-tenant setup. **Completes #747** — a tenant can define its own pipeline
+  stages (Admin → Organizations → Edit stages) and see them everywhere. Known
+  canonical-model limitations (board 3-phase grouping, bulk advance) documented in
+  `docs/pipeline-stages.md`.
+
+## [0.25.5] - 2026-07-23
+
+### Changed
+- **Per-tenant pipeline stages on the admin board + candidate filter (#747,
+  Slice B — chunk 2).** The admin Kanban board (stage labels + the per-card
+  "move to" stage picker) and the candidates page (pipeline-stage filter dropdown
+  + stage labels + CSV/Excel export) now render the viewer tenant's resolved
+  stages via the shared context (`PipelineStagesProvider` now wired into the admin
+  layout too). Behavior-preserving for the default single-tenant setup; the board's
+  three-phase grouping remains the canonical model (custom relabels/colors show
+  through). Remaining: analytics funnels + mentor/company mirror surfaces.
+
+### Changed
+- **Per-tenant pipeline stages on the mentee journey (#747, Slice B — chunk 1).**
+  The portal Journey tracker now renders the viewer tenant's resolved stages
+  (custom labels / order / on-path / terminal) instead of the hardcoded canonical
+  path — via a server-fed client context (`PipelineStagesProvider` +
+  `useResolvedStages`/`useStageLabel`) wrapped in the portal layout. The pure
+  stage helpers (`ResolvedStage`, `defaultPipelineStages`, `onPathKeys`,
+  `stageLabel`) moved to the client-safe `src/lib/pipeline.ts`. Behavior-preserving
+  for the default single-tenant setup (falls back to the canonical, locale-aware
+  defaults). Remaining surfaces (board / candidate filter / analytics) follow in
+  the next chunk.
+
+### Changed
+- **Pipeline stage storage is now a free String (#747, Slice C).**
+  `MentorshipRelation.pipelineStatus` and `StatusChange.fromStatus/toStatus`
+  changed from the `PipelineStatus` enum to `String`, so a tenant can store its
+  **own** stage keys (not just the canonical 13). **Data-safe:** MySQL
+  `ENUM → VARCHAR` preserves every existing value, and the canonical keys/labels
+  still live in `src/lib/pipeline.ts` (the enum block is retained as the default
+  key registry), so single-tenant behaviour is identical. Covered by
+  `e2e/pipeline-custom-key.spec.ts` (custom keys persist; canonical keys still
+  work). Surfaces rendering resolved custom stages land in Slice B.
+
+### Added
+- **Per-tenant pipeline stages — admin UI (#747, Slice A.2).** Admin →
+  Organizations now has an **Edit stages** link per tenant → a
+  `/admin/organizations/[id]/pipeline` editor to relabel, reorder (▲/▼),
+  recolor, and mark stages on-path/terminal, or reset to the built-in defaults.
+  Backed by the Slice-A management API; premium-gated (saving disabled on FREE)
+  and behavior-preserving (a tenant with no custom stages still uses the
+  canonical defaults).
+
+## [0.25.1] - 2026-07-22
+
+### Added
+- **Per-tenant pipeline stages — foundation (#747, part of white-label #546).**
+  New `PipelineStage` model (per-org: key / label / order / on-path / terminal /
+  color) plus a resolution layer (`src/lib/pipelineStages.ts`,
+  `resolvePipelineStages`) that falls back to the built-in canonical 13 stages
+  when a tenant has none — so single-tenant production is unchanged. Admin-only,
+  premium-gated management API at
+  `/api/admin/organizations/[id]/pipeline-stages` (GET / PUT / DELETE-reset).
+  Relations still store the `PipelineStatus` enum in this phase (no data
+  migration); applying resolved stages to the board/filters/analytics/journey and
+  moving storage off the enum land in later slices. Additive `db push`.
+
+### Added
+- **Enterprise SSO — live SAML sign-in (closes the wiring for #545 / story #522).**
+  The SP-initiated SAML round-trip is now implemented with
+  `@node-saml/node-saml`, gated behind `isSsoActive(org)`:
+  - `/auth/sso` (linked from the sign-in page) → `/api/auth/sso/[slug]/login`
+    builds the AuthnRequest and redirects to the tenant's IdP.
+  - `/api/auth/sso/[slug]/acs` verifies the signed assertion against the org's
+    stored certificate (audience/recipient/expiry checked), maps the profile
+    (`mapSamlProfile`), JIT-provisions the user (`provisionSsoUser`), and mints a
+    single-use `SsoLoginGrant`.
+  - A new `sso` NextAuth Credentials provider consumes that grant on
+    `/auth/sso/complete` to issue the session — mirroring the impersonation grant
+    flow. No password, no IdP secret stored in our env.
+  - New `SsoLoginGrant` model (single-use, short-lived; additive `db push`).
+  - **Gated + non-breaking:** SSO only activates for a tenant whose config is
+    complete and enabled; password login is unchanged for everyone else. No org
+    has SSO enabled in production, so this is inert there until configured.
+  - Verify on preview with mock-saml.com (no real IdP needed) — see
+    `docs/sso-saml.md`. Pointing at a real Okta/Azure/Auth0 IdP is a config-only
+    step (paste issuer / SSO URL / signing cert into Admin → Organizations).
+
+## [0.24.3] - 2026-07-22
+
+### Added
+- **SSO just-in-time (JIT) provisioning (part of #545 / story #522).** New
+  `provisionSsoUser()` (`src/lib/ssoProvisioning.ts`) maps a verified IdP identity
+  to a `User` in the tenant org — creating one on first login (default
+  least-privilege `MENTEE`, or an IdP-mapped role), adopting a not-yet-tenanted
+  user into the org, and refusing to relocate an email that already belongs to a
+  different tenant. Idempotent per email; covered by
+  `e2e/sso-provisioning.spec.ts`. This is the tenant-mapping half of #545's
+  criteria; the live SAML/OIDC round-trip that calls it stays deferred until a
+  real tenant IdP is available (see `docs/sso-saml.md`). No runtime auth change.
+
+### Changed
+- **Tenant isolation rolled out to all authenticated API routes (part of #543 /
+  story #522).** Every API route handler that queries a tenant-anchored model now
+  wraps its body in `withTenantScope(session, …)`, so the central enforcement
+  middleware auto-scopes all of its queries to the request's organization once
+  `MT_ENFORCE_ISOLATION` is enabled. Behavior-neutral while the flag is off
+  (`withTenantScope` is a pure passthrough), so single-tenant production is
+  unchanged. Public/token-based routes (register, apply, forgot-password, invite
+  acceptance) are intentionally left unscoped (no session; subject resolved from
+  the token).
+
+### Added
+- **Tenant-branded transactional emails (part of #546 / story #522).** The
+  account-lifecycle emails (invitation, password reset / set-initial, email
+  verification) now render the recipient organization's white-label brand — brand
+  name in the subject + From display name + heading, the org logo when set, and
+  the org accent color on the heading/button — resolved via `getOrgBranding`.
+  Callers that have the recipient's `orgId` (invite, forgot-password, admin
+  reset/company-user/source-user creation, apply, mentee creation, verification
+  resend) pass it through; when no org resolves it falls back to the product
+  defaults, so single-tenant emails are unchanged. `sendEmail` gained an optional
+  `fromName` override.
+
+### Added
+- **Tenant isolation enforcement engine (part of #543 / story #522).** A single
+  central Prisma `$use` middleware, driven by a request-scoped
+  `AsyncLocalStorage` org context (`src/lib/orgContext.ts`), now auto-scopes
+  every query on a tenant-anchored model (`User`, `Source`, `Company`,
+  `Project`, `Cohort`, `MentorshipRelation`) to the current request's
+  organization — the "can't forget the filter" guarantee behind the guarded
+  multi-tenancy rollout. Reads/updates/deletes get an `orgId` `where` filter
+  (Prisma 5 `extendedWhereUnique` covers `findUnique`/`update`/`delete`);
+  `create`/`createMany`/`upsert` get `orgId` stamped into their data.
+  - Route handlers opt in by wrapping their body in
+    `withTenantScope(session, …)`; adopted on `GET/POST /api/mentorship`,
+    `/api/companies`, `/api/projects` as the reference implementation (the rest
+    roll out incrementally).
+  - **Entirely gated behind `MT_ENFORCE_ISOLATION` (default off):** when the
+    flag is off, `withTenantScope`/`runWithOrg` are straight passthroughs and
+    the middleware early-returns, so single-tenant production is unchanged. The
+    engine is server-only (`node:async_hooks`) and kept out of `prisma.ts` so it
+    never enters a client bundle.
+  - `e2e/tenant-isolation.spec.ts` now proves a **plain query that never called
+    `orgScoped()`** is still isolated purely by running inside `runWithOrg()`
+    with the flag on — and is a no-op with the flag off.
+
+## [0.23.3] - 2026-07-22
+
+### Added
+- **Mentor analytics page** (`/mentor/analytics`) — mentor-scoped pipeline funnel,
+  interaction total, active mentee count, hired/employed outcomes, and goal summary;
+  part of issue #370 Mentor lens.
+- **Company analytics page** (`/company/analytics`) — company-scoped candidate funnel
+  by pipeline stage plus interest-signal breakdown (interested / shortlisted / pass /
+  pending); part of issue #370 Company lens.
+- **Bulk stage-advance for candidates** — admins can now multi-select candidates on
+  `/admin/candidates` and click "Advance stage" to push all selected mentees one
+  pipeline step forward along the on-path sequence (with `StatusChange` audit records);
+  part of issue #370 HR lens.
+- **Milestone recognition banner** in the mentee portal journey tracker — a gold Trophy
+  banner appears at key stages (internship starting, in-progress, completed, hired,
+  employed) to celebrate progress; part of issue #370 Mentee lens.
+- Navigation links added to mentor and company sidebars for their respective analytics
+  pages.
+
+## [0.23.2] - 2026-07-22
+
+### Fixed
+- **Emoji reaction can now be changed, not just removed (closes #735).** Previously,
+  clicking a different emoji in the picker when you already had a reaction would add a
+  *second* reaction alongside the existing one; clicking your own reaction chip would
+  immediately remove it with no way to swap it for another. Now:
+  - Selecting a **different** emoji atomically replaces the current reaction (server
+    deletes the old row and inserts the new one in a single transaction).
+  - Clicking your **own** reaction chip opens the emoji picker so you can choose a
+    new emoji or click the same one to remove it.
+  - The picker **highlights** the emoji you have already selected, making the current
+    state immediately visible.
+
+## [0.23.1] - 2026-07-22
+
+### Fixed
+- **"Enter to send" toggle knob overlapped the label** — the switch knob's travel
+  overshot the track and clipped the first letter of the label when on; the knob
+  now stays within the track (`translate-x-3`, `shrink-0`).
+
+### Added
+- **Composer hint + edit-last shortcut** — a small hint under the reply box notes
+  you can paste an image and that **↑ (ArrowUp)** on an empty box edits your last
+  message (WhatsApp/Slack/Telegram style).
 ## [0.23.0] - 2026-07-22
 
 ### Added

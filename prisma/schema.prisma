@@ -90,12 +90,37 @@ model Organization {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  users     User[]
-  sources   Source[]
-  cohorts   Cohort[]
-  companies Company[]
-  projects  Project[]
-  relations MentorshipRelation[]
+  users          User[]
+  sources        Source[]
+  cohorts        Cohort[]
+  companies      Company[]
+  projects       Project[]
+  relations      MentorshipRelation[]
+  pipelineStages PipelineStage[]
+}
+
+// Per-tenant customizable pipeline stages (#747, part of white-label #546).
+// Phase A is additive + behavior-preserving: an org with NO rows here uses the
+// built-in canonical stages (the PipelineStatus enum, src/lib/pipeline.ts), so
+// single-tenant production is unchanged. An org that defines rows overrides the
+// label / order / color / on-path grouping for the stages it lists. `key` is the
+// stable identifier (the enum value for the canonical set; a slug for custom
+// stages once storage moves off the enum in a later slice).
+model PipelineStage {
+  id         String       @id @default(cuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key        String
+  label      String
+  order      Int
+  isTerminal Boolean      @default(false)
+  isOffPath  Boolean      @default(false)
+  color      String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([orgId, key])
+  @@index([orgId, order])
 }
 
 model User {
@@ -800,7 +825,11 @@ model MentorshipRelation {
   cohortId                String?
   startDate               DateTime         @default(now())
   status                  MentorshipStatus @default(ACTIVE)
-  pipelineStatus          PipelineStatus   @default(APPLICATION_100)
+  // Stage key. Free String (was the PipelineStatus enum) so tenants can define
+  // their own stages (#747). The enum below is kept as the canonical default
+  // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
+  // them), so single-tenant behaviour is identical.
+  pipelineStatus          String           @default("APPLICATION_100")
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
   stageDeadline           DateTime?
@@ -988,12 +1017,12 @@ model Meeting {
 
 // Audit trail of pipeline stage changes for a mentorship.
 model StatusChange {
-  id          String         @id @default(cuid())
+  id          String   @id @default(cuid())
   relationId  String
-  fromStatus  PipelineStatus
-  toStatus    PipelineStatus
+  fromStatus  String
+  toStatus    String
   changedById String
-  createdAt   DateTime       @default(now())
+  createdAt   DateTime @default(now())
 
   relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   changedBy User               @relation("StatusChangedBy", fields: [changedById], references: [id])
@@ -1046,6 +1075,19 @@ model ImpersonationGrant {
   adminId   String // the real admin
   targetId  String // who to become (the target on START, the admin on STOP)
   kind      String // START | STOP
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+// Single-use bridge token minted by the SSO ACS route AFTER a signed SAML
+// assertion is verified, then consumed by the `sso` NextAuth provider to issue a
+// session (#545). Mirrors ImpersonationGrant: short-lived + single-use, so a
+// verified IdP login can't be replayed.
+model SsoLoginGrant {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
