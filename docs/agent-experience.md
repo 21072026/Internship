@@ -454,3 +454,72 @@ sadece benim tarafım tümüyle doğruysa. `get_check_runs` CI'ın tek doğru ka
 (enum→dinamik)" parçası çok geniş/kesişen — `sub_issue_write` ile #747 olarak
 ayırıp #546 altına bağladım (dikkat: `sub_issue_id` node **id**'si, issue numarası
 değil).
+
+---
+
+## 2026-07-23 — #517 (Premium/Enterprise epic) kapatıldı: MT izolasyon + SSO + özel pipeline
+
+**Enum → String prod göçünü dilimle + `db push`'u topic'te önce doğrula.** `#747`
+için `MentorshipRelation.pipelineStatus` (+ `StatusChange`) Prisma **enum**'unu
+**String**'e çevirdim. Kilit noktalar: (a) MySQL `ENUM → VARCHAR` mevcut değerleri
+**korur** (veri-güvenli), (b) bir Prisma enum'u **hiçbir model alanı** referans
+etmeyince Prisma client onu **artık export etmez** → `import { X } from
+'@prisma/client'` kırılır; enum'u kanonik "varsayılan anahtar kaydı" olarak
+şemada bıraktım ama 3 çağrı yerini `@/lib/pipeline` string-union'ına / string
+literal'a taşıdım. (c) Göçün gerçek testi topic-preview'ın data-taşıyan DB'sinde
+`db push`; smoke fresh-DB olduğu için ENUM→VARCHAR ALTER'ı test etmez. (d) Yazma
+yolundaki zod doğrulayıcıları da enum→`z.string()` yapmayı unutma (yoksa özel
+anahtar 400 yer): `PUT /api/mentorship/[id]`, `POST /api/status-changes`.
+
+**Geniş, tekdüze UI dönüşümlerini paralel subagent'lara böl (disjoint dosyalar).**
+17 dosyalık pipeline-etiketi dönüşümünü (server sayfa + client component karışık)
+3 subagent'a bölüp her birine kesin kontrat + `npx tsc --noEmit | grep <kendi
+dosyaları>` self-check verdim; sonra tek `npm run build` ile entegre ettim. Aynı
+deseni #543'ün 63-route sarımında da kullandım. Server/client ayrımı: server
+sayfa `await resolvePipelineStages(orgId, locale)` + `stageLabel(...)`; client
+component `PipelineStagesProvider` (role layout'ta) + `useResolvedStages()/
+useStageLabel()`. `node:async_hooks`/DB import'unu client'a sokmamak için saf
+yardımcıları (`ResolvedStage`, `defaultPipelineStages`, `stageLabel`) client-safe
+`pipeline.ts`'e taşı; DB'li `resolvePipelineStages` ayrı server modülde kalsın.
+Dikkat: bir hook'u `useState(...)` başlangıç değerinde kullanacaksan hook'u
+bileşenin EN başında, useState'lerden önce çağır.
+
+**Client'a taşıyınca `locale` "unused" olup build'i kırar.** `pipelineLabel(x,
+locale)` → `label(x)` (hook) yapınca `const locale = useLocale()` çoğu dosyada
+kullanılmaz kalıyor; `@typescript-eslint/no-unused-vars` bu repoda **ERROR**.
+Dönüşüm sonrası kullanılmayan `locale`/`useLocale`/`pipelineLabel` import'larını
+temizle (subagent kontratına ekle).
+
+**GitHub GraphQL kotası REST'ten ayrı ve bu oturumda tükendi.** Onlarca
+merge/issue-update sonrası GraphQL (`issue_write` node-id, `list_issue_fields`,
+Projects) "rate limit exceeded" verdi ~saatlik; REST (get_me, `create_pull_request`,
+`merge_pull_request`, get_check_runs) çalışmaya devam etti. Yani kota tükenince
+PR açıp merge edebilirsin ama issue **kapatamazsın/board yazamazsın** — bekle ya
+da REST-tabanlı adımları sürdür.
+
+**Board Status kolonu (Ready/In Progress/In Review) mevcut GitHub MCP araçlarıyla
+YAZILAMIYOR.** `list_issue_fields` yalnızca Priority/Effort/tarih alanlarını
+döndürüyor; Projects v2 **Status** alanı yok. Kullanıcının "işi Ready→In
+Progress→In Review taşı" süreç kuralını ancak **assignee + PR açık/merge** ile
+sinyalleyebildim. Kolon otomasyonu gerekiyorsa ayrı bir GitHub Action lazım.
+
+**Self-hosted "topic" check'i dalgalı — iki farklı infra hatası gördüm:** (1)
+`next build` sırasında OOM (exit 255), (2) `P1001: Can't reach database server at
+host.docker.internal:3306` (preview DB anlık düşük). İkisi de kod/göç hatası
+DEĞİL (build+smoke yeşilken). `rerun_failed_jobs` + birkaç dk bekleme genelde
+yeşile çeviriyor; kullanıcının "yeşil olmadan merge etme" kuralı gereği topic
+yeşile dönene kadar bekledim (kod tarafı build+smoke ile zaten doğrulanmış olsa
+da). Ayrıca: bir PR'da GitHub Actions hiç tetiklenmedi (event düşmedi); boş commit
+(`git commit --allow-empty`) ile yeniden tetikledim.
+
+**Contributor/Copilot PR'ını merge'den önce adversarial review + rebase.** #740'ta
+subagent review'ı iki gerçek bug yakaladı (bulk advance off-path'e itiyor;
+company-analytics companyId'siz kullanıcıya tüm veriyi sızdırıyor); rebase +
+düzelt + yeşil + kısa açıklayıcı yorum, sonra squash.
+
+**Test edilemeyen auth'u da gerçek IdP ile doğrula: mock-saml.com.** #545 SAML
+round-trip'ini gerçek IdP olmadan bitiremiyordum; `mocksaml.com` (BoxyHQ) ücretsiz
+public test IdP — metadata/sertifikası public, sunucu ACS'yi tarayıcı üzerinden
+POST'ladığı için sandbox'tan erişim gerekmiyor. Kullanıcı 3 adımda (org oluştur +
+mocksaml config yapıştır + /auth/sso) prod'da uçtan uca doğruladı; gerçek Okta/
+Azure'a geçiş sadece config yapıştırmak.
