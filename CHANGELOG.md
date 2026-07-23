@@ -10,6 +10,17 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.7] - 2026-07-23
+
+### Fixed
+- **Bulk meeting scheduling now creates one shared link (#759).** When
+  scheduling a meeting for several mentees at once ("select all") without pasting
+  a link, the auto-generated Jitsi room was created *inside* the per-relation loop
+  — so each participant got a different room instead of joining the same meeting.
+  The link is now generated once and shared across all selected participants; the
+  per-person RSVP token stays unique. `src/app/api/meetings/route.ts`; regression
+  test in `e2e/auto-meet-link.spec.ts`.
+
 ## [0.25.6] - 2026-07-23
 
 ### Changed
@@ -24,6 +35,8 @@ version is shown in the sidebar footer of every page (links to the
   stages (Admin → Organizations → Edit stages) and see them everywhere. Known
   canonical-model limitations (board 3-phase grouping, bulk advance) documented in
   `docs/pipeline-stages.md`.
+
+## [0.25.5] - 2026-07-23
 
 ### Changed
 - **Per-tenant pipeline stages on the admin board + candidate filter (#747,
