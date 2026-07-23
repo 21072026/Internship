@@ -58,12 +58,15 @@ export async function POST(request: Request) {
       include: { mentee: { select: { email: true, fullName: true } } },
     });
 
+    // Bulk scheduling creates ONE shared meeting: everyone selected joins the
+    // same room, so the video link is generated once (Jitsi, no account needed)
+    // when the organizer didn't paste one. The per-person RSVP token stays
+    // unique — each participant confirms attendance individually.
+    const link = meetLink || `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
+
     let created = 0;
     for (const rel of relations) {
       const rsvpToken = randomBytes(24).toString('hex');
-      // Auto-generate a ready-to-use video link (Jitsi, no account needed) when
-      // the organizer didn't paste one — each meeting gets its own room.
-      const link = meetLink || `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
       await prisma.meeting.create({
         data: {
           relationId: rel.id,

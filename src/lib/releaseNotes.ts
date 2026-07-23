@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.7-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Fixed: when you schedule a meeting for several mentees at once, everyone now gets the same meeting link and joins one shared call — instead of each person getting a separate room.'],
+      tr: ['Düzeltildi: birden çok menteeye aynı anda toplantı planladığınızda artık herkese aynı toplantı linki gidiyor ve tek bir ortak görüşmede buluşuluyor — önceki gibi herkese ayrı oda oluşturulmuyor.'],
+      de: ['Behoben: Wenn du ein Meeting für mehrere Mentees gleichzeitig planst, erhalten jetzt alle denselben Meeting-Link und treffen sich in einem gemeinsamen Call — statt dass jede Person einen eigenen Raum bekommt.'],
+    },
+  },
+  {
     version: '0.25.6-beta',
     date: '2026-07-23',
     highlights: {
