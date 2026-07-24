@@ -10,6 +10,13 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.10] - 2026-07-24
+
+### Added
+- **Improved goal management (#785).** Goals can now be sorted newest or oldest
+  first and edited inline. Completed goals are kept separate in a collapsible
+  archive, where they can still be reopened or deleted.
+
 ## [0.25.9] - 2026-07-23
 
 ### Added
