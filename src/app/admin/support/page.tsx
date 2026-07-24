@@ -7,10 +7,12 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
+import { SupportAttachmentList } from '@/components/SupportAttachmentList';
+import type { SupportAttachmentMeta } from '@/lib/supportAttachments';
 
 type Status = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
 
-interface Msg { id: string; body: string; createdAt: string; senderId: string; readAt?: string | null; sender: { fullName: string; role: string } }
+interface Msg { id: string; body: string; createdAt: string; senderId: string; readAt?: string | null; sender: { fullName: string; role: string }; attachments: SupportAttachmentMeta[] }
 interface Ticket {
   id: string;
   status: Status;
@@ -188,6 +190,7 @@ export default function AdminSupportPage() {
                           }`}>
                             <p className="text-[11px] font-medium opacity-70 mb-0.5">{m.sender.fullName}</p>
                             {m.body}
+                            <SupportAttachmentList attachments={m.attachments ?? []} />
                           </div>
                         </div>
                       ))}

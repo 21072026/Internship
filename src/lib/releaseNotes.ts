@@ -25,9 +25,18 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.25.9-beta',
     date: '2026-07-23',
     highlights: {
-      en: ['Foundation for recurring meetings: the database now tracks meeting series (recurrence rules). This is an internal schema update — the recurring-meeting scheduling UI is coming soon.'],
-      tr: ['Tekrarlayan toplantılar için temel: veritabanı artık toplantı serilerini (tekrarlama kurallarını) takip ediyor. Bu dahili bir şema güncellemesidir — tekrarlayan toplantı planlama arayüzü çok yakında geliyor.'],
-      de: ['Grundlage für wiederkehrende Meetings: Die Datenbank speichert jetzt Meeting-Serien (Wiederholungsregeln). Dies ist ein internes Schema-Update — die Benutzeroberfläche für wiederkehrende Meetings folgt bald.'],
+      en: [
+        'Foundation for recurring meetings: the database now tracks meeting series (recurrence rules). This is an internal schema update — the recurring-meeting scheduling UI is coming soon.',
+        'Support conversations now match the rest of the messaging experience, and you can send text, attachments, or both.',
+      ],
+      tr: [
+        'Tekrarlayan toplantılar için temel: veritabanı artık toplantı serilerini (tekrarlama kurallarını) takip ediyor. Bu dahili bir şema güncellemesidir — tekrarlayan toplantı planlama arayüzü çok yakında geliyor.',
+        'Destek konuşmaları artık uygulamadaki diğer mesajlaşma deneyimiyle eşleşiyor; metin, ek veya ikisini birlikte gönderebilirsiniz.',
+      ],
+      de: [
+        'Grundlage für wiederkehrende Meetings: Die Datenbank speichert jetzt Meeting-Serien (Wiederholungsregeln). Dies ist ein internes Schema-Update — die Benutzeroberfläche für wiederkehrende Meetings folgt bald.',
+        'Support-Unterhaltungen entsprechen jetzt dem übrigen Nachrichtenerlebnis; du kannst Text, Anhänge oder beides senden.',
+      ],
     },
   },
   {
@@ -43,9 +52,18 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     version: '0.25.7-beta',
     date: '2026-07-23',
     highlights: {
-      en: ['Fixed: when you schedule a meeting for several mentees at once, everyone now gets the same meeting link and joins one shared call — instead of each person getting a separate room.'],
-      tr: ['Düzeltildi: birden çok menteeye aynı anda toplantı planladığınızda artık herkese aynı toplantı linki gidiyor ve tek bir ortak görüşmede buluşuluyor — önceki gibi herkese ayrı oda oluşturulmuyor.'],
-      de: ['Behoben: Wenn du ein Meeting für mehrere Mentees gleichzeitig planst, erhalten jetzt alle denselben Meeting-Link und treffen sich in einem gemeinsamen Call — statt dass jede Person einen eigenen Raum bekommt.'],
+      en: [
+        'You can now attach PNG or JPEG images and PDF documents to support messages, preview images before sending, and remove files you no longer want to include.',
+        'Fixed: when you schedule a meeting for several mentees at once, everyone now gets the same meeting link and joins one shared call — instead of each person getting a separate room.',
+      ],
+      tr: [
+        'Artık destek mesajlarına PNG veya JPEG görselleri ve PDF belgeleri ekleyebilir, görselleri göndermeden önce önizleyebilir ve istemediğiniz dosyaları kaldırabilirsiniz.',
+        'Düzeltildi: birden çok menteeye aynı anda toplantı planladığınızda artık herkese aynı toplantı linki gidiyor ve tek bir ortak görüşmede buluşuluyor — önceki gibi herkese ayrı oda oluşturulmuyor.',
+      ],
+      de: [
+        'Du kannst jetzt PNG- oder JPEG-Bilder und PDF-Dokumente an Support-Nachrichten anhängen, Bilder vor dem Senden ansehen und nicht benötigte Dateien entfernen.',
+        'Behoben: Wenn du ein Meeting für mehrere Mentees gleichzeitig planst, erhalten jetzt alle denselben Meeting-Link und treffen sich in einem gemeinsamen Call — statt dass jede Person einen eigenen Raum bekommt.',
+      ],
     },
   },
   {
