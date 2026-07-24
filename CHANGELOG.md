@@ -10,6 +10,20 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.10] - 2026-07-23
+
+### Added
+- **Recurring meeting-series API with automatic forward generation (#774).**
+  Added `POST/PUT/DELETE /api/meeting-series` (ADMIN/MENTOR) to create, edit and
+  cancel recurring meeting rules. A series rule (`daysOfWeek` + `timeOfDay` +
+  horizon window) now auto-generates forward `Meeting` rows with `seriesId`
+  linkage, deriving participants from project-member mentees and their active
+  `MentorshipRelation`s (no manual relation selection). If no link is provided, a
+  single stable Jitsi room is generated once per series and reused across all
+  generated instances. Generation is idempotent per `seriesId + relationId +
+  scheduledAt` (re-runs skip existing rows). Cancelling (`DELETE` / `active=false`)
+  keeps existing meetings but stops new generation.
+
 ## [0.25.9] - 2026-07-23
 
 ### Added
