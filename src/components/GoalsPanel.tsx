@@ -101,14 +101,14 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
     }
   };
 
-  const done = goals.filter((g) => g.status === 'DONE').length;
-  const progress = goals.length ? Math.round((done / goals.length) * 100) : 0;
   const sortGoals = (items: Goal[]) => [...items].sort((a, b) => {
     const difference = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     return sortOrder === 'oldest' ? difference : -difference;
   });
   const activeGoals = sortGoals(goals.filter((g) => g.status === 'OPEN'));
   const archivedGoals = sortGoals(goals.filter((g) => g.status === 'DONE'));
+  const done = activeGoals.filter((g) => g.status === 'DONE').length;
+  const progress = activeGoals.length ? Math.round((done / activeGoals.length) * 100) : 0;
 
   const goalRow = (g: Goal, editable: boolean) => (
     <div key={g.id} data-testid={`goal-${g.id}`} className="flex items-center gap-2 text-sm">
@@ -209,10 +209,10 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
         </div>
       </CardHeader>
 
-      {goals.length > 0 && (
+      {activeGoals.length > 0 && (
         <div className="mb-4">
           <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>{done}/{goals.length} {t.goals.completed}</span>
+            <span>{done}/{activeGoals.length} {t.goals.completed}</span>
             <span>{progress}%</span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">

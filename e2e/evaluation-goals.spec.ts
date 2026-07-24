@@ -64,6 +64,8 @@ test('two-way evaluations with interim/final type, and goal tracking', async ({ 
     await page.goto('/portal');
     const activeGoals = page.getByTestId('active-goals').locator('[data-testid^="goal-"]');
     await expect(activeGoals).toHaveCount(2);
+    await expect(page.getByText('0/2 completed')).toBeVisible();
+    await expect(page.getByText('0/2 completed').locator('..').getByText('0%', { exact: true })).toBeVisible();
     await expect(activeGoals.nth(0)).toContainText('Newer active goal');
     await expect(page.getByTestId('active-goals').getByText('Ship the project')).toHaveCount(0);
     await expect(page.getByTestId('goals-archive')).toHaveCount(0);
