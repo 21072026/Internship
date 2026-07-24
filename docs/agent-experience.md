@@ -523,3 +523,17 @@ public test IdP — metadata/sertifikası public, sunucu ACS'yi tarayıcı üzer
 POST'ladığı için sandbox'tan erişim gerekmiyor. Kullanıcı 3 adımda (org oluştur +
 mocksaml config yapıştır + /auth/sso) prod'da uçtan uca doğruladı; gerçek Okta/
 Azure'a geçiş sadece config yapıştırmak.
+
+## 2026-07-24 — #782 Textarea character counter
+
+**Versioning üçlüsünü her PR'da birlikte yap; hiç atlama.** `package.json` bump +
+`CHANGELOG.md` entry + `src/lib/releaseNotes.ts` entry — üçü birden gerekli.
+CLAUDE.md'deki versioning kuralı zaten mevcut ama bu PR'da atlandı ve reviewer
+tarafından sonradan hatırlatıldı. Bu üç dosyayı PR'ın son commitinde birlikte
+güncellemek standart operasyondur; birini bile atlamak eksik kalır.
+
+**Topic Preview'un "build hatası" genellikle kod değil infra sorunudur.** `CI` ve
+`E2E Tests` geçiyorsa (`npm run build` + TypeScript clean) kod sorun değil. Bu
+PR'da iki farklı infra hatası gördüm: (1) Docker build'de OOM (exit 255), (2)
+`prisma db push` sırasında `P1001: Can't reach host.docker.internal:3306`.
+İkisi de sunucu tarafı — kod değişikliği gerekmez, sadece infra durumunu açıkla.

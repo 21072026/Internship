@@ -174,6 +174,11 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
   app version is read from `package.json` at build time (`src/lib/version.ts`); the git SHA is
   baked into the Docker image via a build arg — no other wiring is needed. (Trivial non-user-
   facing changes — pure docs, CI config — don't need a bump.)
+  **Versioning checklist — do ALL of these before the final commit of every user-visible PR:**
+  1. Bump `package.json` → `"version"` (patch `0.x.y` → `0.x.y+1`, or minor for large features).
+  2. Add a `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md` (developer-facing, Keep a Changelog).
+  3. Prepend an entry to `RELEASE_NOTES` in `src/lib/releaseNotes.ts` (user-facing EN/TR/DE strings).
+  Missing any one of these three is a checklist failure — reviewers will call it out.
 - **E2E locator pitfalls** (hit repeatedly): `AdminNav` renders its own sidebar
   `input[type="search"]` filter box present on every admin page — an unscoped
   `input[type="search"]` selector in a new test will hit that instead of a page-level search

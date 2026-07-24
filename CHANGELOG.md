@@ -10,6 +10,25 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.10] - 2026-07-24
+
+### Added
+- **Reusable `Textarea` component** (`src/components/ui/Textarea.tsx`) with
+  built-in character counting and visual feedback. Extends native `<textarea>`
+  with `maxLength` and `showCounter` props. Counter displays current/max (e.g.
+  "42/2000") and transitions: normal (gray) → warning (amber, 80 %+) → error
+  (red, 100 %). Forwards ref; inherits dark-mode styling from the design system.
+- **`useCharacterCounter` hook** (`src/hooks/useCharacterCounter.ts`) — returns
+  `count`, `remaining`, `percentage`, and `state`; memoized to avoid unnecessary
+  re-renders.
+- Replaced every raw `<textarea>` across the app with the new component:
+  `NotesPanel` (3 000), `RelationNotesPanel` (5 000), `QuestionsPanel` (2 000),
+  `ProjectsManager` (5 000), `MentorshipRequestPanel` (2 000),
+  `AddInteractionForm` (5 000), `EvaluationPanel` (2 000),
+  `TargetedEmailComposer` (10 000), `CompanyForm` (2 000),
+  `PublicContactForm` (5 000). All instances now have consistent styling, dark-mode
+  support, and live character feedback.
+
 ## [0.25.9] - 2026-07-23
 
 ### Added
