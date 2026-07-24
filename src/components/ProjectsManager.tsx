@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
@@ -254,8 +255,8 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
           {!editingOwner && !!editingId && <p className="text-xs text-gray-400 -mt-2">{t.projects.ownerOnlyHint}</p>}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.projects.description}</label>
-            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={3} className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm" />
+            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={3} maxLength={5000} showCounter />
           </div>
           <Input label={t.projects.technologies} hint={t.projects.techHint} value={form.technologies} onChange={(e) => setForm({ ...form, technologies: e.target.value })} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -283,8 +284,8 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.projects.goals}</label>
-            <textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })}
-              rows={2} className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm" />
+            <Textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })}
+              rows={2} maxLength={5000} showCounter />
           </div>
 
           {isAdmin && (

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Textarea } from '@/components/ui/Textarea';
 import { EVAL_CRITERIA, MENTOR_CRITERIA } from '@/lib/evaluation';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
@@ -101,12 +102,13 @@ export function EvaluationPanel({
               <option value="FINAL">{t.evaluation.final}</option>
             </select>
           </div>
-          <textarea
+          <Textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={2}
+            maxLength={2000}
             placeholder={t.evaluation.comment}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            showCounter
           />
           {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
           <Button type="submit" size="sm" loading={saving} disabled={Object.keys(scores).length === 0}>

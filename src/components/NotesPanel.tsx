@@ -5,6 +5,7 @@ import { Trash2, Lock, Pencil } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 
@@ -98,12 +99,13 @@ export function NotesPanel() {
       <p className="text-xs text-gray-400 mb-3">{t.portal.notes.privateHint}</p>
 
       <form onSubmit={add} className="space-y-2 mb-4">
-        <textarea
+        <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={2}
+          maxLength={3000}
           placeholder={t.portal.notes.placeholder}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+          showCounter
         />
         <div data-testid="note-category-picker" className="flex flex-wrap items-center gap-1.5">
           {CATEGORIES.map((c) => (
@@ -158,14 +160,15 @@ export function NotesPanel() {
                 <Badge variant="default" className="text-[10px] mb-1">{t.portal.notes.categories[n.category]}</Badge>
                 {editingId === n.id ? (
                   <div>
-                    <textarea
+                    <Textarea
                       value={editBody}
                       onChange={(e) => setEditBody(e.target.value)}
                       rows={3}
-                      maxLength={5000}
+                      maxLength={3000}
                       autoFocus
                       aria-label={t.portal.notes.placeholder}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                      showCounter
+                      className="mb-2"
                     />
                     <div className="flex gap-2">
                       <Button type="button" size="sm" loading={editSaving} disabled={!editBody.trim() || editSaving} onClick={() => saveEdit(n.id)}>{t.common.save}</Button>

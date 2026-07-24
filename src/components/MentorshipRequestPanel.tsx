@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Send, Clock, CheckCircle2, XCircle, ListChecks } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 
 interface Gate { profile: boolean; cv: boolean; complete: boolean; missing: ('profile' | 'cv')[] }
@@ -86,13 +87,14 @@ export function MentorshipRequestPanel() {
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{q.hint}</p>
-          <textarea
+          <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder={q.messagePlaceholder}
             rows={3}
-            maxLength={1000}
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-2"
+            maxLength={2000}
+            showCounter
+            className="mb-2"
           />
           {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
           {gate && !gate.complete && (

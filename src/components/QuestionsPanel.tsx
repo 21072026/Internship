@@ -5,6 +5,7 @@ import { HelpCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 
 interface Q {
@@ -66,12 +67,13 @@ export function QuestionsPanel({ relationId, mode }: { relationId: string; mode:
 
       {mode === 'ask' && (
         <form onSubmit={ask} className="space-y-2 mb-4">
-          <textarea
+          <Textarea
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             rows={2}
+            maxLength={2000}
             placeholder={t.portal.qa.placeholder}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+            showCounter
           />
           <Button type="submit" size="sm" loading={busy} disabled={!question.trim()}>{t.portal.qa.ask}</Button>
         </form>
@@ -90,12 +92,14 @@ export function QuestionsPanel({ relationId, mode }: { relationId: string; mode:
               {q.answer && <p className="text-sm text-gray-600 mt-2 pl-3 border-l-2 border-green-200 whitespace-pre-wrap">{q.answer}</p>}
               {mode === 'answer' && !q.answer && (
                 <div className="mt-2 flex flex-wrap items-end gap-2">
-                  <textarea
+                  <Textarea
                     value={drafts[q.id] ?? ''}
                     onChange={(e) => setDrafts((p) => ({ ...p, [q.id]: e.target.value }))}
                     rows={2}
+                    maxLength={2000}
                     placeholder={t.portal.qa.answerPlaceholder}
-                    className="flex-1 min-w-[200px] rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    showCounter
+                    className="flex-1 min-w-[200px]"
                   />
                   <Button size="sm" loading={busy} disabled={!(drafts[q.id] ?? '').trim()} onClick={() => answer(q.id)}>{t.portal.qa.answer}</Button>
                 </div>
