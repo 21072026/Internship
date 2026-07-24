@@ -10,6 +10,19 @@ Newest entries on top.
 
 ---
 
+## 2026-07-23 — Meeting series auto-generation API (#774, 0.25.10-beta)
+
+**Playwright in this sandbox needs two env prerequisites before tests even boot:**
+`NEXTAUTH_SECRET` (otherwise NextAuth throws `NO_SECRET` and webServer times out)
+and `DATABASE_URL` (otherwise Prisma seeding in e2e helpers fails immediately with
+`Environment variable not found: DATABASE_URL`). When a new API e2e test appears
+"broken" at startup, check env first before debugging test logic.
+
+**Recurring generation idempotency is easiest at the leaf key level.** For
+`MeetingSeries` with per-relation `Meeting` rows, de-dup on
+`seriesId + relationId + scheduledAt` and skip existing keys during forward-fill.
+That keeps reruns safe without changing legacy manual meetings (`seriesId = null`).
+
 ## 2026-07-23 — Bulk meeting shared-link bug fix (#759, 0.25.7-beta)
 
 **Bug pattern — resource generated inside a per-item loop.** `POST /api/meetings`

@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.10-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Recurring meetings now support automatic forward scheduling from a reusable series rule. Participants are derived from project members, duplicate future instances are prevented, and cancelling a series stops new auto-created meetings.'],
+      tr: ['Tekrarlayan toplantılar artık seri kuralından ileri tarihli otomatik planlama yapıyor. Katılımcılar proje üyelerinden türetiliyor, yinelenen gelecek kayıtlar engelleniyor ve seri iptal edilince yeni otomatik toplantı üretimi duruyor.'],
+      de: ['Wiederkehrende Meetings unterstützen jetzt die automatische Vorausplanung aus einer Serienregel. Teilnehmende werden aus Projektmitgliedern abgeleitet, doppelte zukünftige Einträge werden verhindert, und das Abbrechen einer Serie stoppt neue automatische Meetings.'],
+    },
+  },
+  {
+    version: '0.25.9-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Foundation for recurring meetings: the database now tracks meeting series (recurrence rules). This is an internal schema update — the recurring-meeting scheduling UI is coming soon.'],
+      tr: ['Tekrarlayan toplantılar için temel: veritabanı artık toplantı serilerini (tekrarlama kurallarını) takip ediyor. Bu dahili bir şema güncellemesidir — tekrarlayan toplantı planlama arayüzü çok yakında geliyor.'],
+      de: ['Grundlage für wiederkehrende Meetings: Die Datenbank speichert jetzt Meeting-Serien (Wiederholungsregeln). Dies ist ein internes Schema-Update — die Benutzeroberfläche für wiederkehrende Meetings folgt bald.'],
+    },
+  },
+  {
     version: '0.25.8-beta',
     date: '2026-07-23',
     highlights: {
