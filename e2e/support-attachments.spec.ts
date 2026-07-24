@@ -114,7 +114,7 @@ test('support attachments: file-only message allowed (text not required)', async
 // UI: removing a pending attachment before sending.
 test('support attachments: removing a pending attachment', async ({ page }) => {
   const email = uniqueEmail('sa-rm');
-  await seedUser(email, 'AttPass123', 'MENTEE', 'SA Remove User');
+  const user = await seedUser(email, 'AttPass123', 'MENTEE', 'SA Remove User');
   try {
     await signIn(page, email, 'AttPass123', '/portal');
     await page.goto('/messages/support');
@@ -134,14 +134,14 @@ test('support attachments: removing a pending attachment', async ({ page }) => {
     await expect(page.locator('img[alt="screenshot.png"]')).not.toBeVisible();
     await expect(page.getByTestId('support-send')).toBeDisabled();
   } finally {
-    await cleanupByEmail(email);
+    await cleanupSupportData(user.id, email);
   }
 });
 
 // UI: unsupported file type shows a client-side error.
 test('support attachments: unsupported file type shows error', async ({ page }) => {
   const email = uniqueEmail('sa-bad');
-  await seedUser(email, 'AttPass123', 'MENTEE', 'SA Bad User');
+  const user = await seedUser(email, 'AttPass123', 'MENTEE', 'SA Bad User');
   try {
     await signIn(page, email, 'AttPass123', '/portal');
     await page.goto('/messages/support');
@@ -157,7 +157,7 @@ test('support attachments: unsupported file type shows error', async ({ page }) 
     await expect(page.locator('p.text-red-600, [role="alert"]')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('support-send')).toBeDisabled();
   } finally {
-    await cleanupByEmail(email);
+    await cleanupSupportData(user.id, email);
   }
 });
 
