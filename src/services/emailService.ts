@@ -360,36 +360,40 @@ export async function checkMentorInteractionReminders() {
       ? Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
-    await sendEmail({
-      to: relation.mentor.email,
-      subject: `Reminder: Log interaction with ${relation.mentee.fullName}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2563eb;">Interaction Reminder</h2>
-          <p>Hi ${relation.mentor.fullName},</p>
-          <p>
-            ${
-              daysSince
-                ? `It has been <strong>${daysSince} days</strong> since you last logged an interaction`
-                : 'You have not yet logged any interactions'
-            }
-            with your mentee <strong>${relation.mentee.fullName}</strong>.
-          </p>
-          <p>Please log your recent interactions to keep the mentorship record up to date.</p>
-          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/mentor" style="
-            display: inline-block;
-            background-color: #2563eb;
-            color: white;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 6px;
-            margin: 16px 0;
-          ">
-            Go to Mentor Dashboard
-          </a>
-        </div>
-      `,
-    });
+    try {
+      await sendEmail({
+        to: relation.mentor.email,
+        subject: `Reminder: Log interaction with ${relation.mentee.fullName}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Interaction Reminder</h2>
+            <p>Hi ${relation.mentor.fullName},</p>
+            <p>
+              ${
+                daysSince
+                  ? `It has been <strong>${daysSince} days</strong> since you last logged an interaction`
+                  : 'You have not yet logged any interactions'
+              }
+              with your mentee <strong>${relation.mentee.fullName}</strong>.
+            </p>
+            <p>Please log your recent interactions to keep the mentorship record up to date.</p>
+            <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/mentor" style="
+              display: inline-block;
+              background-color: #2563eb;
+              color: white;
+              padding: 12px 24px;
+              text-decoration: none;
+              border-radius: 6px;
+              margin: 16px 0;
+            ">
+              Go to Mentor Dashboard
+            </a>
+          </div>
+        `,
+      });
+    } catch (e) {
+      console.error('checkMentorInteractionReminders email failed:', { relationId: relation.id, mentorId: relation.mentorId, error: e });
+    }
   }
 
   return {
@@ -421,7 +425,9 @@ export async function checkStageDeadlineReminders() {
         to: rel.mentor.email,
         subject: `Overdue: ${rel.mentee.fullName}'s stage deadline`,
         html: `<p>Hi ${rel.mentor.fullName},</p><p>The stage deadline for <strong>${rel.mentee.fullName}</strong> has passed. Please review their progress.</p>`,
-      }).catch(() => {});
+      }).catch((error) => {
+        console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
+      });
     }
     await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { deadlineReminderSentAt: now } });
   }
@@ -647,20 +653,24 @@ export async function checkRetentionReminders() {
   for (const u of users) {
     const renewUrl = `${appUrl}/consent/renew?token=${makeConsentRenewToken(u.id)}`;
     // Legal/retention notice — always sent (not gated by marketing opt-out).
-    await sendEmail({
-      to: u.email,
-      subject: 'Please confirm you still want us to keep your data',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">Do you want to keep your data with us?</h2>
-          <p>Hi ${u.fullName},</p>
-          <p>It has been more than ${months} months since you agreed to us storing your
-          data (profile, CV and interaction history). To keep it, please confirm below.
-          If you don't, an administrator will review your record for deletion.</p>
-          <a href="${renewUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">Keep my data</a>
-          <p style="color:#6b7280;font-size:12px;">You can also download or delete your data anytime from Account settings.</p>
-        </div>`,
-    });
+    try {
+      await sendEmail({
+        to: u.email,
+        subject: 'Please confirm you still want us to keep your data',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color:#2563eb;">Do you want to keep your data with us?</h2>
+            <p>Hi ${u.fullName},</p>
+            <p>It has been more than ${months} months since you agreed to us storing your
+            data (profile, CV and interaction history). To keep it, please confirm below.
+            If you don't, an administrator will review your record for deletion.</p>
+            <a href="${renewUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">Keep my data</a>
+            <p style="color:#6b7280;font-size:12px;">You can also download or delete your data anytime from Account settings.</p>
+          </div>`,
+      });
+    } catch (e) {
+      console.error('checkRetentionReminders email failed:', { userId: u.id, error: e });
+    }
     await notify(u.id, 'retention', 'Please confirm you still want us to keep your data.', `/consent/renew?token=${makeConsentRenewToken(u.id)}`);
     await prisma.user.update({ where: { id: u.id }, data: { retentionReminderSentAt: new Date() } });
     reminded += 1;
@@ -765,7 +775,9 @@ export async function checkCompanyNeedMatches() {
               <p><strong>${cand.fullName}</strong> matches one of ${company.name}'s open positions${cand.targetPosition ? ` (${cand.targetPosition})` : ''}.</p>
               <p><a href="${appUrl}${link}">View profile</a></p>
             </div>`,
-          }).catch(() => {});
+          }).catch((error) => {
+            console.error('checkCompanyNeedMatches email failed:', { companyId: company.id, userId: u.id, error });
+          });
         }
       }
     }
@@ -817,7 +829,9 @@ export async function sendWeeklyAnalyticsReport() {
         <table style="font-size:14px;border-collapse:collapse;">${stageRows}</table>
         <p><a href="${appUrl}/admin/analytics">Open the analytics dashboard</a></p>
       </div>`,
-    }).catch(() => {});
+    }).catch((error) => {
+      console.error('sendWeeklyAnalyticsReport email failed:', { userId: a.id, error });
+    });
     sent++;
   }
   return { locked: false, sent };

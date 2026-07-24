@@ -7,6 +7,7 @@ import { sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { withTenantScope } from '@/lib/orgContext';
+import { emailAllowed } from '@/lib/notificationPrefs';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
         : { id: { in: relationIds }, mentorId: session.user.id };
     const relations = await prisma.mentorshipRelation.findMany({
       where,
-      include: { mentee: { select: { email: true, fullName: true } } },
+      include: { mentee: { select: { email: true, fullName: true, emailNotifications: true, notificationPrefs: true } } },
     });
 
     // Template placeholders (e.g. "{name}") are filled per recipient with the
@@ -55,11 +56,13 @@ export async function POST(request: Request) {
         .split('\n')
         .map((l) => `<p>${l || '&nbsp;'}</p>`)
         .join('')}</div>`;
-      try {
-        // Reply-To routes mentee replies back into this thread (inbound email).
-        await sendEmail({ to: rel.mentee.email, subject: personalSubject, html, replyTo: replyAddress(rel.id) });
-      } catch (e) {
-        console.error('Mentor email failed for', rel.mentee.email, e);
+      if (emailAllowed(rel.mentee, 'messages')) {
+        try {
+          // Reply-To routes mentee replies back into this thread (inbound email).
+          await sendEmail({ to: rel.mentee.email, subject: personalSubject, html, replyTo: replyAddress(rel.id) });
+        } catch (e) {
+          console.error('Mentor email failed for', rel.mentee.email, e);
+        }
       }
       await prisma.interactionLog.create({
         data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${personalSubject} — ${personalBody}` },

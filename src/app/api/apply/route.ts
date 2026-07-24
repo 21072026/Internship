@@ -7,6 +7,7 @@ import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
+import { emailAllowed } from '@/lib/notificationPrefs';
 
 // GET ?mentorId= — public: validate the link and return the mentor's name so
 // the application page can greet the applicant.
@@ -89,14 +90,16 @@ export async function POST(request: Request) {
     console.error('Applicant set-password email failed:', e);
   }
   // Notify the mentor.
-  try {
-    await sendEmail({
-      to: mentor.email,
-      subject: `New application: ${fullName}`,
-      html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
-    });
-  } catch (e) {
-    console.error('Mentor notification email failed:', e);
+  if (emailAllowed(mentor, 'applications')) {
+    try {
+      await sendEmail({
+        to: mentor.email,
+        subject: `New application: ${fullName}`,
+        html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
+      });
+    } catch (e) {
+      console.error('Mentor notification email failed:', e);
+    }
   }
 
   return NextResponse.json({ ok: true });
