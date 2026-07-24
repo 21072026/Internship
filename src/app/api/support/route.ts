@@ -88,12 +88,12 @@ export async function POST(request: Request) {
       }
 
       payload = {
-        body: form.get('body'),
+        body: form.get('body') ?? '',
       };
 
       files = form
         .getAll('files')
-        .filter((value): value is File => value instanceof File);
+        .filter((value): value is File => typeof value !== 'string');
     } else {
       // Eski JSON text-only API desteği korunur.
       payload = await request.json().catch(() => null);

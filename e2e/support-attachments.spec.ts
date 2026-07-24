@@ -154,8 +154,9 @@ test('support attachments: unsupported file type shows error', async ({ page }) 
     });
 
     // An error message should appear; the send button stays disabled.
-    await expect(page.locator('p.text-red-600, [role="alert"]')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('support-send')).toBeDisabled();
+await expect(
+  page.getByText('notes.txt is not a supported file', { exact: false })
+).toBeVisible({ timeout: 5_000 });    await expect(page.getByTestId('support-send')).toBeDisabled();
   } finally {
     await cleanupSupportData(user.id, email);
   }
