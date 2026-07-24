@@ -27,6 +27,18 @@ async function signIn(
   await page.waitForURL((u) => u.pathname.startsWith(home), { timeout: 20_000 });
 }
 
+/** Delete all support data seeded for a user and then remove the user record. */
+async function cleanupSupportData(userId: string, email: string) {
+  const msgs = await prisma.supportMessage.findMany({
+    where: { ticket: { requesterId: userId } },
+    select: { id: true },
+  });
+  await prisma.supportAttachment.deleteMany({ where: { messageId: { in: msgs.map((m) => m.id) } } });
+  await prisma.supportMessage.deleteMany({ where: { ticket: { requesterId: userId } } });
+  await prisma.supportTicket.deleteMany({ where: { requesterId: userId } });
+  await cleanupByEmail(email);
+}
+
 // UI: attach an image, see the preview chip, send, and verify it renders in the thread.
 test('support attachments: image preview in composer, send, renders inline in thread', async ({ page }) => {
   const email = uniqueEmail('sa-img');
@@ -61,11 +73,7 @@ test('support attachments: image preview in composer, send, renders inline in th
     await expect(page.locator('a[href*="/api/support/attachments/"]')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('screenshot.png', { exact: false })).toBeVisible();
   } finally {
-    const msgs = await prisma.supportMessage.findMany({ where: { ticket: { requesterId: user.id } }, select: { id: true } });
-    await prisma.supportAttachment.deleteMany({ where: { messageId: { in: msgs.map((m) => m.id) } } });
-    await prisma.supportMessage.deleteMany({ where: { ticket: { requesterId: user.id } } });
-    await prisma.supportTicket.deleteMany({ where: { requesterId: user.id } });
-    await cleanupByEmail(email);
+    await cleanupSupportData(user.id, email);
   }
 });
 
@@ -99,11 +107,7 @@ test('support attachments: file-only message allowed (text not required)', async
     // Attachment link visible in thread.
     await expect(page.locator('a[href*="/api/support/attachments/"]')).toBeVisible({ timeout: 10_000 });
   } finally {
-    const msgs = await prisma.supportMessage.findMany({ where: { ticket: { requesterId: user.id } }, select: { id: true } });
-    await prisma.supportAttachment.deleteMany({ where: { messageId: { in: msgs.map((m) => m.id) } } });
-    await prisma.supportMessage.deleteMany({ where: { ticket: { requesterId: user.id } } });
-    await prisma.supportTicket.deleteMany({ where: { requesterId: user.id } });
-    await cleanupByEmail(email);
+    await cleanupSupportData(user.id, email);
   }
 });
 
@@ -196,6 +200,7 @@ test('support attachments: download access control', async ({ browser }) => {
     await signIn(adminPage, adminEmail, pw, '/admin');
     const adminRes = await adminPage.request.get(`/api/support/attachments/${attachment.id}`);
     expect(adminRes.status()).toBe(200);
+    expect(adminRes.headers()['content-type']).toContain('image/png');
 
     const outsiderPage = await outsiderCtx.newPage();
     await signIn(outsiderPage, outsiderEmail, pw, '/portal');
@@ -272,10 +277,6 @@ test('support attachments API: text-only and attachment-only both accepted', asy
     expect(stored).not.toBeNull();
     expect(stored!.filename).toBe('screenshot.png');
   } finally {
-    const msgs = await prisma.supportMessage.findMany({ where: { ticket: { requesterId: user.id } }, select: { id: true } });
-    await prisma.supportAttachment.deleteMany({ where: { messageId: { in: msgs.map((m) => m.id) } } });
-    await prisma.supportMessage.deleteMany({ where: { ticket: { requesterId: user.id } } });
-    await prisma.supportTicket.deleteMany({ where: { requesterId: user.id } });
-    await cleanupByEmail(email);
+    await cleanupSupportData(user.id, email);
   }
 });
