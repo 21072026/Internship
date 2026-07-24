@@ -442,23 +442,29 @@ export async function sendMeetingReminders() {
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const meetings = await prisma.meeting.findMany({
     where: { scheduledAt: { gt: now, lte: in24h }, reminderSentAt: null },
-    include: { relation: { include: { mentee: { select: { email: true, fullName: true } } } } },
+    include: {
+      relation: {
+        include: { mentee: { select: { email: true, fullName: true, emailNotifications: true, notificationPrefs: true } } },
+      },
+    },
   });
 
   let reminded = 0;
   for (const m of meetings) {
-    try {
-      await sendEmail({
-        to: m.relation.mentee.email,
-        subject: `Reminder: ${m.title}`,
-        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">Upcoming meeting</h2>
-          <p>Hi ${m.relation.mentee.fullName}, this is a reminder for <strong>${m.title}</strong> at ${m.scheduledAt!.toLocaleString('en-GB')}.</p>
-          ${m.meetLink ? `<p><a href="${m.meetLink}">${m.meetLink}</a></p>` : ''}
-        </div>`,
-      });
-    } catch (e) {
-      console.error('Meeting reminder failed:', e);
+    if (emailAllowed(m.relation.mentee, 'meetingReminders')) {
+      try {
+        await sendEmail({
+          to: m.relation.mentee.email,
+          subject: `Reminder: ${m.title}`,
+          html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color:#2563eb;">Upcoming meeting</h2>
+            <p>Hi ${m.relation.mentee.fullName}, this is a reminder for <strong>${m.title}</strong> at ${m.scheduledAt!.toLocaleString('en-GB')}.</p>
+            ${m.meetLink ? `<p><a href="${m.meetLink}">${m.meetLink}</a></p>` : ''}
+          </div>`,
+        });
+      } catch (e) {
+        console.error('Meeting reminder failed:', e);
+      }
     }
     await prisma.meeting.update({ where: { id: m.id }, data: { reminderSentAt: new Date() } });
     reminded++;
