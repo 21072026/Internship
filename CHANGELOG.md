@@ -10,6 +10,16 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.8] - 2026-07-24
+
+### Changed
+- **Support conversations now use the shared messaging UI.** Support message
+  bubbles, pending-attachment previews, composer spacing, attachment button, and
+  send button now come from the same shared components as mentorship messages.
+  Support messages may contain text, attachments, or both; only an empty trimmed
+  message with no attachments is rejected. Existing file validation, protected
+  downloads, storage, and authorization are unchanged.
+
 ## [0.25.7] - 2026-07-23
 
 ### Added

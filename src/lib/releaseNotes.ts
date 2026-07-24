@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.8-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: ['Support conversations now match the rest of the messaging experience, and you can send text, attachments, or both.'],
+      tr: ['Destek konuşmaları artık uygulamadaki diğer mesajlaşma deneyimiyle eşleşiyor; metin, ek veya ikisini birlikte gönderebilirsiniz.'],
+      de: ['Support-Unterhaltungen entsprechen jetzt dem übrigen Nachrichtenerlebnis; du kannst Text, Anhänge oder beides senden.'],
+    },
+  },
+  {
     version: '0.25.7-beta',
     date: '2026-07-23',
     highlights: {

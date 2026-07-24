@@ -10,6 +10,20 @@ Newest entries on top.
 
 ---
 
+## 2026-07-24 — Shared messaging UI and attachment-only support messages
+
+**Extract UI primitives before aligning parallel chat pages.** The mentorship
+thread and support thread had independently implemented composers, pending-file
+previews, and bubbles. Moving the stable presentation into
+`components/MessageThread.tsx` let both pages use identical spacing and controls
+without coupling their different APIs, file rules, or authorization models.
+
+**Validate the message/attachment combination after multipart parsing.** An
+optional body schema alone is insufficient: trim the body, then reject only when
+the trimmed body and parsed file list are both empty. For attachment-only ticket
+creation, derive the ticket subject from the first filename while leaving
+attachment validation and transactional storage untouched.
+
 ## 2026-07-23 — Bulk meeting shared-link bug fix (#759, 0.25.7-beta)
 
 **Bug pattern — resource generated inside a per-item loop.** `POST /api/meetings`

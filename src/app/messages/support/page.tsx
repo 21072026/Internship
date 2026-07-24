@@ -2,13 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, FileText, LifeBuoy, Paperclip, Send, X } from 'lucide-react';
+import { ArrowLeft, LifeBuoy } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
 import { SupportAttachmentList } from '@/components/SupportAttachmentList';
+import {
+  MessageBubble,
+  MessageComposer,
+  PendingAttachmentList,
+  type PendingMessageAttachment,
+} from '@/components/MessageThread';
 import {
   SUPPORT_ATTACHMENT_ACCEPT,
   SUPPORT_ATTACHMENT_MAX_COUNT,
@@ -37,7 +42,7 @@ export default function SupportChatPage() {
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<PendingMessageAttachment[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +57,7 @@ export default function SupportChatPage() {
 
   const send = async () => {
     const text = body.trim();
-    if (!text) return;
+    if (!text && attachments.length === 0) return;
     setBusy(true);
     setErr('');
     try {
@@ -61,13 +66,14 @@ export default function SupportChatPage() {
         body: (() => {
           const form = new FormData();
           form.append('body', text);
-          files.forEach((file) => form.append('files', file));
+          attachments.forEach(({ file }) => form.append('files', file));
           return form;
         })(),
       });
       if (res.ok) {
         setBody('');
-        setFiles([]);
+        attachments.forEach(({ url }) => URL.revokeObjectURL(url));
+        setAttachments([]);
         if (fileRef.current) fileRef.current.value = '';
         await load();
       } else {
@@ -83,9 +89,9 @@ export default function SupportChatPage() {
   const addFiles = async (selected: FileList | null) => {
     if (!selected?.length) return;
     setErr('');
-    const next = [...files];
+    const next = [...attachments];
     for (const file of Array.from(selected)) {
-      const duplicate = next.some((current) =>
+      const duplicate = next.some(({ file: current }) =>
         current.name === file.name && current.size === file.size &&
         current.type === file.type && current.lastModified === file.lastModified
       );
@@ -107,9 +113,9 @@ export default function SupportChatPage() {
         setErr(label.replace('{name}', file.name));
         continue;
       }
-      next.push(file);
+      next.push({ file, url: URL.createObjectURL(file) });
     }
-    setFiles(next);
+    setAttachments(next);
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -129,8 +135,9 @@ export default function SupportChatPage() {
       </div>
       <p className="text-gray-500 mb-6">{s.subtitle}</p>
 
-      <Card data-testid="support-chat">
-        {tickets === null ? (
+      <div data-testid="support-chat">
+        <Card className="mb-4">
+          {tickets === null ? (
           <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
         ) : tickets.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{s.empty}</p>
@@ -144,78 +151,48 @@ export default function SupportChatPage() {
                 </div>
                 <div className="space-y-2">
                   {ticket.messages.map((m) => (
-                    <div key={m.id} className={`flex ${m.senderId === me ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm whitespace-pre-line ${
-                        m.senderId === me
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
-                      }`}>
-                        {m.senderId !== me && <p className="text-[11px] font-medium opacity-70 mb-0.5">{s.teamLabel}</p>}
-                        {m.body}
+                    <MessageBubble key={m.id} mine={m.senderId === me} senderLabel={m.senderId !== me ? s.teamLabel : undefined}>
+                        {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                         <SupportAttachmentList attachments={m.attachments ?? []} />
-                      </div>
-                    </div>
+                    </MessageBubble>
                   ))}
                 </div>
               </div>
             ))}
             <div ref={bottomRef} />
           </div>
-        )}
-
-        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-          {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
-          {files.length > 0 && (
-            <ul className="mb-3 grid gap-2 sm:grid-cols-2" aria-label={s.selectedAttachments}>
-              {files.map((file) => {
-                const image = file.type.startsWith('image/');
-                const preview = image ? URL.createObjectURL(file) : '';
-                return (
-                  <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 p-2">
-                    {image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={preview} onLoad={() => URL.revokeObjectURL(preview)} alt="" className="h-12 w-12 rounded object-cover" />
-                    ) : <FileText className="h-8 w-8 text-red-500" />}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-medium">{file.name}</span>
-                      <span className="block text-[11px] text-gray-500">{file.type} · {Math.max(1, Math.round(file.size / 1024))} KB</span>
-                    </span>
-                    <button type="button" onClick={() => setFiles((current) => current.filter((item) => item !== file))} aria-label={`${s.removeAttachment}: ${file.name}`} className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-800">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
           )}
-          <div className="flex flex-wrap gap-2">
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder={s.placeholder}
-              rows={2}
-              maxLength={5000}
-              className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-              data-testid="support-input"
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              accept={SUPPORT_ATTACHMENT_ACCEPT}
-              className="sr-only"
-              onChange={(event) => addFiles(event.target.files)}
-              data-testid="support-file-input"
-            />
-            <Button type="button" variant="outline" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="support-attach">
-              <Paperclip className="h-4 w-4 mr-1" /> {s.attach}
-            </Button>
-            <Button type="button" loading={busy} disabled={!body.trim()} onClick={send} data-testid="support-send">
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </Card>
+        </Card>
+
+        {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+        <PendingAttachmentList
+          attachments={attachments}
+          removeLabel={s.removeAttachment}
+          onRemove={(index) => setAttachments((current) => {
+            const next = [...current];
+            const [removed] = next.splice(index, 1);
+            if (removed) URL.revokeObjectURL(removed.url);
+            return next;
+          })}
+        />
+        <MessageComposer
+          body={body}
+          onBodyChange={setBody}
+          onSubmit={send}
+          sending={busy}
+          hasAttachments={attachments.length > 0}
+          placeholder={s.placeholder}
+          sendLabel={t.messages.send}
+          attachLabel={s.attach}
+          fileInputRef={fileRef}
+          accept={SUPPORT_ATTACHMENT_ACCEPT}
+          onFilesSelected={(selected) => void addFiles(selected)}
+          textareaTestId="support-input"
+          inputTestId="support-file-input"
+          attachTestId="support-attach"
+          sendTestId="support-send"
+        />
+      </div>
     </div>
   );
 }

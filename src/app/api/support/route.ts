@@ -15,7 +15,7 @@ import { withTenantScope } from '@/lib/orgContext';
 // the user's open (OPEN/IN_PROGRESS) ticket; a closed ticket means the next
 // message opens a fresh one. Separate from the mentorship message API.
 
-const postSchema = z.object({ body: z.string().min(1).max(5000) });
+const postSchema = z.object({ body: z.string().max(5000).optional().default('') });
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
 // GET — the caller's tickets (newest first) with their messages. Admin replies
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
 
     const body = parsed.data.body.trim();
 
-    if (!body) {
+    if (!body && files.length === 0) {
       return NextResponse.json(
         { error: 'Invalid request' },
         { status: 400 },
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
         ticket = await tx.supportTicket.create({
           data: {
             requesterId: session.user.id,
-            subject: body.slice(0, 80),
+            subject: (body || files[0]?.name || 'Attachment').slice(0, 80),
           },
           select: {
             id: true,
