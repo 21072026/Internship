@@ -10,7 +10,10 @@ import { emailAllowed } from '@/lib/notificationPrefs';
 import { withTenantScope } from '@/lib/orgContext';
 
 const schema = z.object({
-  text: z.string().min(1).max(2000),
+  // Long-form announcements (release notes, articles) are allowed; the previous
+  // 2 000-char cap rejected them with a bare 400. Kept bounded to protect the
+  // per-user notification fan-out.
+  text: z.string().min(1).max(20000),
   link: z.string().max(500).optional(),
   email: z.boolean().optional(),
 });
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const { text, link, email } = parsed.data;
 
   const users = await prisma.user.findMany({

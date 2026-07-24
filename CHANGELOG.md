@@ -10,7 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.25.8] - 2026-07-24
+## [0.25.9] - 2026-07-23
+
+### Added
+- **Schema: `MeetingSeries` model + `Meeting.seriesId`** — foundation for recurring
+  meetings. `MeetingSeries` stores the recurrence rule (`daysOfWeek`, `timeOfDay`,
+  optional `projectId` / `fixedLink`). `Meeting.seriesId` (nullable) links
+  auto-generated meeting instances back to their series; manually scheduled
+  meetings are unaffected (backward-compatible, `seriesId` stays `null`).
+- **Attachments for support messages.** Support messages now accept up to 10
+  PNG, JPEG, or PDF attachments with client-side previews and validation.
+  Attachments are stored atomically with their message and are available only
+  to the requester and support admins.
 
 ### Changed
 - **Support conversations now use the shared messaging UI.** Support message
@@ -20,13 +31,18 @@ version is shown in the sidebar footer of every page (links to the
   message with no attachments is rejected. Existing file validation, protected
   downloads, storage, and authorization are unchanged.
 
-## [0.25.7] - 2026-07-23
+## [0.25.8] - 2026-07-23
 
-### Added
-- **Attachments for support messages.** Support messages now accept up to 10
-  PNG, JPEG, or PDF attachments with client-side previews and validation.
-  Attachments are stored atomically with their message and are available only
-  to the requester and support admins.
+### Fixed
+- **Admins can now publish long announcements.** `POST /api/admin/announcements`
+  capped `text` at 2 000 chars and returned a bare `400 Validation failed`, so
+  long-form broadcasts (release notes, articles) were rejected. The cap is raised
+  to 20 000 chars, and `Announcement.text` / `Notification.text` are widened from
+  the Prisma default `VARCHAR(191)` to `@db.Text` so the longer text is actually
+  stored (otherwise raising the cap would just move the failure to a DB 500). The
+  400 response now also includes the zod `details` for easier debugging.
+
+## [0.25.7] - 2026-07-23
 
 ### Fixed
 - **Bulk meeting scheduling now creates one shared link (#759).** When
@@ -234,6 +250,7 @@ version is shown in the sidebar footer of every page (links to the
 - **Composer hint + edit-last shortcut** — a small hint under the reply box notes
   you can paste an image and that **↑ (ArrowUp)** on an empty box edits your last
   message (WhatsApp/Slack/Telegram style).
+
 ## [0.23.0] - 2026-07-22
 
 ### Added

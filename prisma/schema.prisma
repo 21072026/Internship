@@ -391,7 +391,9 @@ model Notification {
   id        String   @id @default(cuid())
   userId    String
   type      String
-  text      String
+  // Long-form text (e.g. a broadcast announcement fanned out to every user) —
+  // TEXT, not the default VARCHAR(191), so long messages aren't truncated/rejected.
+  text      String   @db.Text
   link      String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -406,7 +408,9 @@ model Notification {
 // what was sent, by whom, and to how many people.
 model Announcement {
   id             String   @id @default(cuid())
-  text           String
+  // Broadcast body — TEXT, not the default VARCHAR(191), so admins can publish
+  // long-form announcements (release notes, articles) without hitting a limit.
+  text           String   @db.Text
   link           String?
   sentById       String
   recipientCount Int
@@ -719,11 +723,12 @@ model Project {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  ownerUser    User?                @relation("ProjectOwner", fields: [ownerUserId], references: [id])
-  ownerCompany Company?             @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
-  relations    MentorshipRelation[]
-  tasks        ProjectTask[]
-  members      ProjectMember[]
+  ownerUser     User?                @relation("ProjectOwner", fields: [ownerUserId], references: [id])
+  ownerCompany  Company?             @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
+  relations     MentorshipRelation[]
+  tasks         ProjectTask[]
+  members       ProjectMember[]
+  meetingSeries MeetingSeries[]
 
   @@index([ownerUserId])
   @@index([ownerCompanyId])
@@ -1009,10 +1014,35 @@ model Meeting {
   createdById    String
   reminderSentAt DateTime?
   createdAt      DateTime   @default(now())
+  // Null for manually scheduled meetings; set for auto-generated series instances.
+  seriesId       String?
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  series   MeetingSeries?     @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 
   @@index([relationId])
+  @@index([seriesId])
+}
+
+// A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;
+// manually scheduled meetings leave seriesId null (backward-compatible).
+model MeetingSeries {
+  id          String   @id @default(cuid())
+  projectId   String?
+  title       String
+  // Days of week as a JSON array of integers (0=Sun … 6=Sat), e.g. [1,4] = Mon+Thu.
+  daysOfWeek  Json
+  // Wall-clock start time in "HH:mm" format (24-hour), e.g. "09:30".
+  timeOfDay   String
+  fixedLink   String?
+  active      Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  meetings Meeting[]
+
+  @@index([projectId])
 }
 
 // Audit trail of pipeline stage changes for a mentorship.

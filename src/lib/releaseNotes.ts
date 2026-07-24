@@ -13,12 +13,30 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.25.8-beta',
-    date: '2026-07-24',
+    version: '0.25.9-beta',
+    date: '2026-07-23',
     highlights: {
-      en: ['Support conversations now match the rest of the messaging experience, and you can send text, attachments, or both.'],
-      tr: ['Destek konuşmaları artık uygulamadaki diğer mesajlaşma deneyimiyle eşleşiyor; metin, ek veya ikisini birlikte gönderebilirsiniz.'],
-      de: ['Support-Unterhaltungen entsprechen jetzt dem übrigen Nachrichtenerlebnis; du kannst Text, Anhänge oder beides senden.'],
+      en: [
+        'Foundation for recurring meetings: the database now tracks meeting series (recurrence rules). This is an internal schema update — the recurring-meeting scheduling UI is coming soon.',
+        'Support conversations now match the rest of the messaging experience, and you can send text, attachments, or both.',
+      ],
+      tr: [
+        'Tekrarlayan toplantılar için temel: veritabanı artık toplantı serilerini (tekrarlama kurallarını) takip ediyor. Bu dahili bir şema güncellemesidir — tekrarlayan toplantı planlama arayüzü çok yakında geliyor.',
+        'Destek konuşmaları artık uygulamadaki diğer mesajlaşma deneyimiyle eşleşiyor; metin, ek veya ikisini birlikte gönderebilirsiniz.',
+      ],
+      de: [
+        'Grundlage für wiederkehrende Meetings: Die Datenbank speichert jetzt Meeting-Serien (Wiederholungsregeln). Dies ist ein internes Schema-Update — die Benutzeroberfläche für wiederkehrende Meetings folgt bald.',
+        'Support-Unterhaltungen entsprechen jetzt dem übrigen Nachrichtenerlebnis; du kannst Text, Anhänge oder beides senden.',
+      ],
+    },
+  },
+  {
+    version: '0.25.8-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Fixed: admins can now publish long announcements (release notes, articles). Longer messages were previously rejected with a "Validation failed" error.'],
+      tr: ['Düzeltildi: yöneticiler artık uzun duyurular (sürüm notları, makaleler) yayınlayabiliyor. Daha uzun mesajlar önceden "Validation failed" hatasıyla reddediliyordu.'],
+      de: ['Behoben: Admins können jetzt lange Ankündigungen (Release Notes, Artikel) veröffentlichen. Längere Nachrichten wurden zuvor mit einem „Validation failed“-Fehler abgelehnt.'],
     },
   },
   {

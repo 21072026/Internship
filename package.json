@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.25.8-beta",
+  "version": "0.25.9-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "prisma": {
