@@ -6,6 +6,9 @@ import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { withTenantScope } from '@/lib/orgContext';
+import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendEmail } from '@/services/emailService';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -170,6 +173,36 @@ export async function POST(request: Request) {
     });
 
     await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null });
+
+    // In-app + (opt-in) email notifications for the direct admin assignment.
+    // Fired only after the relation is durably created above.
+    await notify(mentee.id, 'mentorship_request', `You have been assigned a mentor: ${mentor.fullName}.`, '/portal');
+    await notify(mentor.id, 'mentorship_request', `A new mentee was assigned to you: ${mentee.fullName}.`, '/mentor');
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    if (emailAllowed(mentee, 'mentorshipRequests')) {
+      try {
+        await sendEmail({
+          to: mentee.email,
+          subject: 'You have been assigned a mentor',
+          html: `<p>Hi ${mentee.fullName},</p><p>You have been assigned a mentor: <strong>${mentor.fullName}</strong>.</p><p><a href="${appUrl}/portal">Open your portal</a></p>`,
+        });
+      } catch (e) {
+        console.error('Mentorship assignment email failed:', { recipientRole: 'MENTEE', userId: mentee.id, error: e });
+      }
+    }
+    if (emailAllowed(mentor, 'mentorshipRequests')) {
+      try {
+        await sendEmail({
+          to: mentor.email,
+          subject: `New mentee assigned: ${mentee.fullName}`,
+          html: `<p>Hi ${mentor.fullName},</p><p>A new mentee was assigned to you: <strong>${mentee.fullName}</strong>.</p><p><a href="${appUrl}/mentor">Open your dashboard</a></p>`,
+        });
+      } catch (e) {
+        console.error('Mentorship assignment email failed:', { recipientRole: 'MENTOR', userId: mentor.id, error: e });
+      }
+    }
+
     return NextResponse.json({ relation }, { status: 201 });
     });
   } catch (error) {

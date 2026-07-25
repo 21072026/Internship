@@ -6,6 +6,7 @@ export const NOTIFICATION_CATEGORIES = [
   'deadlines',
   'digest',
   'meetingReminders',
+  'mentorshipRequests',
 ] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
