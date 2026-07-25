@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { getMenteeRequestGate } from '@/lib/requestGate';
 import { withTenantScope } from '@/lib/orgContext';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendEmail } from '@/services/emailService';
 
 // Mentee-side mentorship requests (#590): a mentee asks for a mentor; an admin
 // approves (creating the MentorshipRelation) or rejects via the admin queue.
@@ -80,9 +82,30 @@ export async function POST(request: Request) {
       select: { id: true, status: true, createdAt: true },
     });
 
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+    });
     await Promise.all(
       admins.map((a) => notify(a.id, 'mentorship_request', `New mentorship request from ${session.user.name ?? 'a mentee'}.`, '/admin/mentorship'))
+    );
+
+    // Opt-in email mirror of the same notification, sent to the same admin
+    // recipients — fired only after the request row above is durably created.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    await Promise.all(
+      admins.map(async (a) => {
+        if (!emailAllowed(a, 'mentorshipRequests')) return;
+        try {
+          await sendEmail({
+            to: a.email,
+            subject: 'New mentorship request',
+            html: `<p>${session.user.name ?? 'A mentee'} requested a mentor.</p><p><a href="${appUrl}/admin/mentorship">Review the request</a></p>`,
+          });
+        } catch (e) {
+          console.error('Mentorship request created email failed:', { recipientRole: 'ADMIN', userId: a.id, error: e });
+        }
+      })
     );
 
     return NextResponse.json({ request: created }, { status: 201 });
