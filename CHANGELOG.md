@@ -10,6 +10,16 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.11] - 2026-07-27
+
+### Added
+- **Attachments in admin support replies.** Admins can now attach up to 10 PNG,
+  JPEG, or PDF files/images when replying to a support ticket, reusing the same
+  composer, image preview, pre-send removal, and client/server validation as the
+  requester's side. A reply may contain text only, attachment(s) only, or both.
+  Sent attachments render in the thread and remain downloadable by the requester
+  and support admins via the existing protected attachment route.
+
 ## [0.25.10] - 2026-07-23
 
 ### Added

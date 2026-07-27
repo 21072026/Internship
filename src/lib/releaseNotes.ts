@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.11-beta',
+    date: '2026-07-27',
+    highlights: {
+      en: [
+        'Admins can now attach images or PDF files when replying to a support ticket — with the same preview and pre-send removal as the requester side. Replies can include text, an attachment, or both.',
+      ],
+      tr: [
+        'Adminler artık bir destek talebine yanıt verirken görsel veya PDF dosyası ekleyebiliyor — talep sahibi tarafındaki gibi aynı önizleme ve gönderim öncesi kaldırma özellikleriyle. Yanıtlar metin, ek veya ikisini birden içerebilir.',
+      ],
+      de: [
+        'Admins können jetzt beim Antworten auf ein Support-Ticket Bilder oder PDF-Dateien anhängen — mit derselben Vorschau und Entfernung vor dem Senden wie auf der Anfragerseite. Antworten können Text, einen Anhang oder beides enthalten.',
+      ],
+    },
+  },
+  {
     version: '0.25.10-beta',
     date: '2026-07-23',
     highlights: {
