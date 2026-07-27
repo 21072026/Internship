@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Trash2, Lock, Pencil } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Textarea';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
 
@@ -82,12 +83,14 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{c.hint}</p>
 
       <form onSubmit={add} className="mb-4">
-        <textarea
+        <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder={c.placeholder}
           rows={3}
-          className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-2"
+          maxLength={5000}
+          showCounter
+          className="mb-2"
         />
         <Button type="submit" size="sm" loading={saving} disabled={!body.trim()}>{c.add}</Button>
       </form>
@@ -100,11 +103,13 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
             <div key={n.id} className="rounded-lg border border-gray-100 dark:border-gray-800 p-3">
               {editingId === n.id ? (
                 <div>
-                  <textarea
+                  <Textarea
                     value={editBody}
                     onChange={(e) => setEditBody(e.target.value)}
                     rows={3}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-2"
+                    maxLength={5000}
+                    showCounter
+                    className="mb-2"
                   />
                   <div className="flex gap-2">
                     <Button size="sm" loading={saving} disabled={!editBody.trim()} onClick={() => saveEdit(n.id)}>{t.common.save}</Button>
