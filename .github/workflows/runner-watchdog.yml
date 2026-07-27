@@ -86,8 +86,8 @@ jobs:
             exit 1
           fi
 
-          # 2) Fallback: no systemd unit — drive svc.sh directly from the runner dir.
-          echo "No systemd unit found; locating svc.sh..."
+          # 2) No systemd unit found. Locate the runner dir and recover it.
+          echo "No systemd unit found; locating the runner directory..."
           SVC="$(find /root /home /opt -maxdepth 5 -name svc.sh -path '*actions-runner*' 2>/dev/null | head -1)"
           if [ -z "$SVC" ]; then
             echo "ERROR: could not locate the runner (no actions.runner.* unit, no svc.sh)."
@@ -96,13 +96,35 @@ jobs:
           RUNNER_DIR="$(dirname "$SVC")"
           echo "Runner dir: $RUNNER_DIR"
           cd "$RUNNER_DIR"
-          if $SUDO ./svc.sh status 2>/dev/null | grep -qiE 'active \(running\)|is running'; then
-            echo "OK: runner is running (svc.sh)."
+
+          # Already up (e.g. run.sh started manually)? Then nothing to do.
+          if pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+            echo "OK: runner process (Runner.Listener) already running."
             exit 0
           fi
-          echo "Runner not running — starting via svc.sh..."
-          $SUDO ./svc.sh start || { echo "ERROR: svc.sh start failed"; exit 1; }
-          sleep 3
-          $SUDO ./svc.sh status 2>/dev/null | tail -5 || true
-          echo "svc.sh start issued."
+
+          # The runner was running UNMANAGED (no service) and died on reboot. Install
+          # it as a systemd service so it survives future reboots, then start it.
+          # RUNNER_ALLOW_RUNASROOT=1 because this runner lives under /root.
+          echo "Runner down and not installed as a service — installing + starting..."
+          $SUDO env RUNNER_ALLOW_RUNASROOT=1 ./svc.sh install 2>&1 | tail -5 || true
+          $SUDO env RUNNER_ALLOW_RUNASROOT=1 ./svc.sh start   2>&1 | tail -5 || true
+          sleep 4
+          if $SUDO ./svc.sh status 2>/dev/null | grep -qiE 'active \(running\)|is running' \
+             || pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+            echo "RECOVERED: runner installed as a service and started (survives reboot)."
+            exit 0
+          fi
+
+          # Last resort: launch run.sh fully detached so the queue drains right now.
+          echo "Service route failed — launching run.sh detached as a fallback..."
+          $SUDO bash -c "cd '$RUNNER_DIR' && RUNNER_ALLOW_RUNASROOT=1 setsid nohup ./run.sh >/tmp/gha-runner.log 2>&1 </dev/null &"
+          sleep 6
+          if pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+            echo "RECOVERED (unmanaged): runner launched via run.sh. NOTE: reboot persistence still needs the service."
+            exit 0
+          fi
+          echo "ERROR: could not start the runner. Recent run.sh log:"
+          tail -25 /tmp/gha-runner.log 2>/dev/null || true
+          exit 1
           REMOTE
