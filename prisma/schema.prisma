@@ -552,10 +552,25 @@ model SupportMessage {
   createdAt DateTime  @default(now())
   readAt    DateTime?
 
-  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender User          @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  ticket      SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender      User                @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  attachments SupportAttachment[]
 
   @@index([ticketId])
+}
+
+model SupportAttachment {
+  id          String   @id @default(cuid())
+  messageId   String
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  message SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
 }
 
 // A mentee's self-serve request for mentorship (#590). One PENDING request at

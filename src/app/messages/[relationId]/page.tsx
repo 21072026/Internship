@@ -2,11 +2,16 @@
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Paperclip, X, FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus } from 'lucide-react';
+import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import {
+  MessageComposer,
+  PendingAttachmentList,
+  type PendingMessageAttachment,
+} from '@/components/MessageThread';
 
 interface Attachment {
   id: string;
@@ -43,7 +48,7 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
   const [body, setBody] = useState('');
   // Pending attachments (picked files + pasted images), each with an object URL
   // for an instant thumbnail/preview. Uploaded with the message on send.
-  const [attachments, setAttachments] = useState<{ file: File; url: string }[]>([]);
+  const [attachments, setAttachments] = useState<PendingMessageAttachment[]>([]);
   const [attachError, setAttachError] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -385,56 +390,23 @@ export default function ThreadPage({ params }: { params: Promise<{ relationId: s
       </Card>
 
       {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap items-start gap-2 mb-2">
-          {attachments.map((a, idx) => (
-            <div key={a.url} className="relative group">
-              {a.file.type.startsWith('image/') ? (
-                <a href={a.url} target="_blank" rel="noopener noreferrer" title={a.file.name}>
-                  <img src={a.url} alt={a.file.name} className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
-                </a>
-              ) : (
-                <div className="flex items-center gap-2 text-xs bg-gray-100 rounded-lg px-2.5 py-1.5 h-16">
-                  <FileText className="h-3.5 w-3.5 text-gray-500" />
-                  <span className="text-gray-700 max-w-[8rem] truncate">{a.file.name}</span>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => removeAttachment(idx)}
-                aria-label={t.common.delete}
-                className="absolute -top-1.5 -right-1.5 bg-white rounded-full border border-gray-200 text-gray-400 hover:text-red-600 shadow-sm"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      <form onSubmit={send} className="flex gap-2">
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          data-testid="message-attachment-input"
-          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"
-          className="hidden"
-          onChange={(e) => { if (e.target.files) addFiles(e.target.files); }}
-        />
-        <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} aria-label={t.messages.attach} title={t.messages.attach}>
-          <Paperclip className="h-4 w-4" />
-        </Button>
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onPaste={onPaste}
-          onKeyDown={onComposerKeyDown}
-          rows={2}
-          placeholder={t.messages.replyPlaceholder}
-          className="flex-1 rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none"
-        />
-        <Button type="submit" loading={sending} disabled={!body.trim() && attachments.length === 0}>{t.messages.send}</Button>
-      </form>
+      <PendingAttachmentList attachments={attachments} onRemove={removeAttachment} removeLabel={t.common.delete} />
+      <MessageComposer
+        body={body}
+        onBodyChange={setBody}
+        onSubmit={() => void send()}
+        sending={sending}
+        hasAttachments={attachments.length > 0}
+        placeholder={t.messages.replyPlaceholder}
+        sendLabel={t.messages.send}
+        attachLabel={t.messages.attach}
+        fileInputRef={fileRef}
+        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"
+        onFilesSelected={addFiles}
+        onPaste={onPaste}
+        onKeyDown={onComposerKeyDown}
+        inputTestId="message-attachment-input"
+      />
       <div className="mt-1.5 flex items-center justify-between gap-3">
         <span className="text-xs text-gray-400 truncate">{t.messages.pasteHint}</span>
         <button

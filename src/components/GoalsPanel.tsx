@@ -9,6 +9,8 @@ import { Select } from '@/components/ui/Select';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 
+const ARCHIVE_PAGE_SIZE = 10;
+
 interface Goal {
   id: string;
   title: string;
@@ -30,6 +32,7 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
   const [saving, setSaving] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [showArchive, setShowArchive] = useState(false);
+  const [showAllArchived, setShowAllArchived] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDueDate, setEditDueDate] = useState('');
@@ -200,7 +203,10 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
               size="sm"
               variant={showArchive ? 'secondary' : 'outline'}
               aria-expanded={showArchive}
-              onClick={() => setShowArchive((shown) => !shown)}
+              onClick={() => {
+                setShowArchive((shown) => !shown);
+                setShowAllArchived(false);
+              }}
             >
               <Archive className="h-4 w-4" />
               {t.goals.archive}
@@ -240,9 +246,22 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
       {showArchive && (
         <section className="mt-6 border-t border-gray-200 pt-4" data-testid="goals-archive">
           <h3 className="mb-3 text-sm font-semibold text-gray-700">{t.goals.archive}</h3>
-          {archivedGoals.length === 0
-            ? <p className="text-sm text-gray-400">{t.goals.noneArchived}</p>
-            : <div className="space-y-2">{archivedGoals.map((g) => goalRow(g, false))}</div>}
+          {archivedGoals.length === 0 ? (
+            <p className="text-sm text-gray-400">{t.goals.noneArchived}</p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {(showAllArchived ? archivedGoals : archivedGoals.slice(0, ARCHIVE_PAGE_SIZE)).map((g) => goalRow(g, false))}
+              </div>
+              {archivedGoals.length > ARCHIVE_PAGE_SIZE && (
+                <div className="mt-3">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setShowAllArchived((shown) => !shown)}>
+                    {showAllArchived ? t.goals.showLess : t.goals.showAll}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </section>
       )}
     </Card>

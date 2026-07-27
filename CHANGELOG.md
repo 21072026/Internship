@@ -17,6 +17,18 @@ version is shown in the sidebar footer of every page (links to the
   first and edited inline. Completed goals are kept separate in a collapsible
   archive, where they can still be reopened or deleted.
 
+### Added
+- **Recurring meeting-series API with automatic forward generation (#774).**
+  Added `POST/PUT/DELETE /api/meeting-series` (ADMIN/MENTOR) to create, edit and
+  cancel recurring meeting rules. A series rule (`daysOfWeek` + `timeOfDay` +
+  horizon window) now auto-generates forward `Meeting` rows with `seriesId`
+  linkage, deriving participants from project-member mentees and their active
+  `MentorshipRelation`s (no manual relation selection). If no link is provided, a
+  single stable Jitsi room is generated once per series and reused across all
+  generated instances. Generation is idempotent per `seriesId + relationId +
+  scheduledAt` (re-runs skip existing rows). Cancelling (`DELETE` / `active=false`)
+  keeps existing meetings but stops new generation.
+
 ## [0.25.9] - 2026-07-23
 
 ### Added
@@ -25,6 +37,18 @@ version is shown in the sidebar footer of every page (links to the
   optional `projectId` / `fixedLink`). `Meeting.seriesId` (nullable) links
   auto-generated meeting instances back to their series; manually scheduled
   meetings are unaffected (backward-compatible, `seriesId` stays `null`).
+- **Attachments for support messages.** Support messages now accept up to 10
+  PNG, JPEG, or PDF attachments with client-side previews and validation.
+  Attachments are stored atomically with their message and are available only
+  to the requester and support admins.
+
+### Changed
+- **Support conversations now use the shared messaging UI.** Support message
+  bubbles, pending-attachment previews, composer spacing, attachment button, and
+  send button now come from the same shared components as mentorship messages.
+  Support messages may contain text, attachments, or both; only an empty trimmed
+  message with no attachments is rejected. Existing file validation, protected
+  downloads, storage, and authorization are unchanged.
 
 ## [0.25.8] - 2026-07-23
 
