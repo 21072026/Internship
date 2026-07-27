@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import {
+  SUPPORT_ATTACHMENT_MAX_COUNT,
+  validateSupportFile,
+} from '@/lib/supportAttachments';
 
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
@@ -13,7 +17,7 @@ const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: t
 
 const replySchema = z.object({
   ticketId: z.string().min(1),
-  body: z.string().min(1).max(5000),
+  body: z.string().max(5000).optional().default(''),
 });
 
 const updateSchema = z.object({
@@ -73,10 +77,57 @@ export async function POST(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const parsed = replySchema.safeParse(await request.json().catch(() => null));
+  let payload: unknown;
+  let files: File[] = [];
+
+  if (request.headers.get('content-type')?.includes('multipart/form-data')) {
+    const form = await request.formData().catch(() => null);
+    if (!form) return NextResponse.json({ error: 'Invalid multipart request' }, { status: 400 });
+    payload = { ticketId: form.get('ticketId'), body: form.get('body') ?? '' };
+    files = form.getAll('files').filter((value): value is File => typeof value !== 'string');
+  } else {
+    payload = await request.json().catch(() => null);
+  }
+
+  const parsed = replySchema.safeParse(payload);
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const body = parsed.data.body.trim();
-  if (!body) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  if (!body && files.length === 0) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+
+  if (files.length > SUPPORT_ATTACHMENT_MAX_COUNT) {
+    return NextResponse.json(
+      { error: `Too many attachments (max ${SUPPORT_ATTACHMENT_MAX_COUNT})` },
+      { status: 400 },
+    );
+  }
+
+  const fileKeys = new Set<string>();
+  for (const file of files) {
+    const key = [file.name, file.size, file.type, file.lastModified].join('\0');
+    if (fileKeys.has(key)) {
+      return NextResponse.json({ error: `Duplicate attachment: ${file.name}` }, { status: 400 });
+    }
+    fileKeys.add(key);
+
+    const validationError = await validateSupportFile(file);
+    if (validationError) {
+      const errors = {
+        unsupported: `Unsupported file type: ${file.name}`,
+        tooLarge: `File too large: ${file.name}`,
+        unreadable: `File is empty, corrupted, or unreadable: ${file.name}`,
+      };
+      return NextResponse.json({ error: errors[validationError] }, { status: 400 });
+    }
+  }
+
+  const attachments = await Promise.all(
+    files.map(async (file) => ({
+      filename: file.name,
+      contentType: file.type,
+      size: file.size,
+      data: Buffer.from(await file.arrayBuffer()),
+    })),
+  );
 
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: parsed.data.ticketId },
@@ -85,7 +136,12 @@ export async function POST(request: Request) {
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const message = await prisma.supportMessage.create({
-    data: { ticketId: ticket.id, senderId: session.user.id, body },
+    data: {
+      ticketId: ticket.id,
+      senderId: session.user.id,
+      body,
+      attachments: attachments.length ? { create: attachments } : undefined,
+    },
     select: { id: true },
   });
   await prisma.supportTicket.update({
