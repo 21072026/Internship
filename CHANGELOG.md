@@ -10,6 +10,14 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.12] - 2026-07-27
+
+### Fixed
+- **Projects list heading flashed a stale count while loading.** The "All
+  projects" heading in `ProjectsManager` now only shows the `(N)` count after
+  the initial fetch finishes, instead of showing `(0)` during the loading
+  state.
+
 ## [0.25.11] - 2026-07-27
 
 ### Added

@@ -311,7 +311,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
       </Card>
       )}
 
-      <h2 className="text-sm font-medium text-gray-500 mb-3">{t.projects.allProjects} ({projects.length})</h2>
+      <h2 className="text-sm font-medium text-gray-500 mb-3">{t.projects.allProjects}{!loading && ` (${projects.length})`}</h2>
       {loading ? (
         <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
       ) : projects.length === 0 ? (

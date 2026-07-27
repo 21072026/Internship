@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.12-beta',
+    date: '2026-07-27',
+    highlights: {
+      en: ['Fixed the Projects page briefly showing "(0)" next to "All projects" while the list was still loading.'],
+      tr: ['Projeler sayfasında liste henüz yüklenirken "Tüm projeler" yazısının yanında kısaca "(0)" görünmesi giderildi.'],
+      de: ['Behoben: Auf der Projekte-Seite zeigte "Alle Projekte" beim Laden kurzzeitig "(0)" an.'],
+    },
+  },
+  {
     version: '0.25.11-beta',
     date: '2026-07-27',
     highlights: {
