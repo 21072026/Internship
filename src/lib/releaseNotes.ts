@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.13-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: [
+        'You now have finer control over email notifications: separate opt-out toggles for new applications and mentorship updates were added to Account settings, and more of the app\'s emails now respect these preferences. Reliability also improved — a single failed email no longer interrupts scheduled email jobs.',
+      ],
+      tr: [
+        'E-posta bildirimleri üzerinde artık daha ayrıntılı kontrolünüz var: Hesap ayarlarına yeni başvurular ve mentorluk güncellemeleri için ayrı kapatma seçenekleri eklendi ve uygulamanın daha fazla e-postası bu tercihlere uyuyor. Güvenilirlik de arttı — tek bir başarısız e-posta artık zamanlanmış e-posta işlerini kesintiye uğratmıyor.',
+      ],
+      de: [
+        'Du hast jetzt feinere Kontrolle über E-Mail-Benachrichtigungen: In den Kontoeinstellungen wurden separate Opt-out-Schalter für neue Bewerbungen und Mentoring-Aktualisierungen ergänzt, und mehr E-Mails der App berücksichtigen diese Einstellungen. Auch die Zuverlässigkeit wurde verbessert — eine einzelne fehlgeschlagene E-Mail unterbricht geplante E-Mail-Jobs nicht mehr.',
+      ],
+    },
+  },
+  {
     version: '0.25.11-beta',
     date: '2026-07-24',
     highlights: {

@@ -10,6 +10,18 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.13] - 2026-07-24
+
+### Fixed
+- **Email-delivery audit & preference gating (#668).** Added `applications` and
+  `mentorshipRequests` opt-out categories (plus wiring `meetingReminders`), and
+  gated the corresponding emails on them: new-application emails to mentors,
+  mentor→mentee message emails (`messages`), meeting reminders, and mentorship
+  request created/approved/rejected + direct-assignment emails now respect the
+  recipient's preferences (required transactional mail stays exempt). Cron email
+  failures are wrapped in try/catch so one failed send no longer aborts the whole
+  job, and previously-swallowed errors are now logged with context.
+
 ## [0.25.11] - 2026-07-24
 
 ### Added
