@@ -1,0 +1,130 @@
+name: Runner Watchdog (self-hosted health)
+
+# Keeps the self-hosted runner (Plesk server) alive.
+#
+# Runs on a GitHub-HOSTED runner ON PURPOSE: if the self-hosted runner is down
+# (e.g. after a server reboot its `svc.sh` service didn't come back up), a
+# self-hosted watchdog could never run — it would just queue behind the dead
+# runner. This one SSHes in from a hosted runner, checks the runner service, and
+# (re)starts + enables it, unblocking every queued `topic-preview` job.
+#
+# Requires the same SSH_* secrets the deploy workflow uses:
+#   SSH_PRIVATE_KEY, SSH_HOST, SSH_USER, SSH_PORT
+# The SSH user must be root, or have (passwordless) sudo for systemctl.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # every 15 minutes
+  workflow_dispatch: {}
+
+concurrency:
+  group: runner-watchdog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Setup SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          # Write via env var (not inline interpolation) to preserve exact OpenSSH format.
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H -p "${SSH_PORT:-22}" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || \
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Check & (re)start the self-hosted runner service
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE'
+          set -uo pipefail
+
+          # Use sudo only when we're not already root and it's available non-interactively.
+          SUDO=""
+          if [ "$(id -u)" -ne 0 ]; then
+            if sudo -n true 2>/dev/null; then SUDO="sudo -n"; fi
+          fi
+
+          # 1) Preferred path: the systemd unit created by `svc.sh install`
+          #    (named actions.runner.<org>-<repo>.<name>.service).
+          UNIT="$($SUDO systemctl list-unit-files --type=service --no-legend 'actions.runner.*' 2>/dev/null | awk '{print $1}' | head -1)"
+          if [ -z "$UNIT" ]; then
+            UNIT="$($SUDO systemctl list-units --type=service --all --no-legend 'actions.runner.*' 2>/dev/null | awk '{print $1}' | head -1)"
+          fi
+
+          if [ -n "$UNIT" ]; then
+            echo "Runner service: $UNIT"
+            if $SUDO systemctl is-active --quiet "$UNIT"; then
+              echo "OK: runner service already active."
+              exit 0
+            fi
+            echo "Runner service NOT active — starting..."
+            $SUDO systemctl start "$UNIT" || { echo "ERROR: failed to start $UNIT"; $SUDO systemctl status "$UNIT" --no-pager -l 2>/dev/null | tail -20; exit 1; }
+            # Enable so a future server reboot brings it back automatically (root cause fix).
+            $SUDO systemctl enable "$UNIT" 2>/dev/null || true
+            sleep 3
+            if $SUDO systemctl is-active --quiet "$UNIT"; then
+              echo "RECOVERED: runner service is now active (and enabled on boot)."
+              exit 0
+            fi
+            echo "ERROR: runner still not active after start."
+            $SUDO systemctl status "$UNIT" --no-pager -l 2>/dev/null | tail -20
+            exit 1
+          fi
+
+          # 2) No systemd unit found. Locate the runner dir and recover it.
+          echo "No systemd unit found; locating the runner directory..."
+          SVC="$(find /root /home /opt -maxdepth 5 -name svc.sh -path '*actions-runner*' 2>/dev/null | head -1)"
+          if [ -z "$SVC" ]; then
+            echo "ERROR: could not locate the runner (no actions.runner.* unit, no svc.sh)."
+            exit 1
+          fi
+          RUNNER_DIR="$(dirname "$SVC")"
+          echo "Runner dir: $RUNNER_DIR"
+          cd "$RUNNER_DIR"
+
+          # Already up (e.g. run.sh started manually)? Then nothing to do.
+          if pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+            echo "OK: runner process (Runner.Listener) already running."
+            exit 0
+          fi
+
+          # The runner was running UNMANAGED (no service) and died on reboot. Install
+          # it as a systemd service so it survives future reboots, then start it.
+          # RUNNER_ALLOW_RUNASROOT=1 because this runner lives under /root.
+          echo "Runner down and not installed as a service — installing + starting..."
+          $SUDO env RUNNER_ALLOW_RUNASROOT=1 ./svc.sh install 2>&1 | tail -5 || true
+          $SUDO env RUNNER_ALLOW_RUNASROOT=1 ./svc.sh start   2>&1 | tail -5 || true
+          sleep 4
+          if $SUDO ./svc.sh status 2>/dev/null | grep -qiE 'active \(running\)|is running' \
+             || pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+            echo "RECOVERED: runner installed as a service and started (survives reboot)."
+            exit 0
+          fi
+
+          # Last resort: launch run.sh fully detached so the queue drains right now.
+          echo "Service route failed — launching run.sh detached as a fallback..."
+          $SUDO bash -c "cd '$RUNNER_DIR' && RUNNER_ALLOW_RUNASROOT=1 setsid nohup ./run.sh >/tmp/gha-runner.log 2>&1 </dev/null &"
+          sleep 6
+          if pgrep -f "Runner.Listener" >/dev/null 2>&1; then
+            echo "RECOVERED (unmanaged): runner launched via run.sh. NOTE: reboot persistence still needs the service."
+            exit 0
+          fi
+          echo "ERROR: could not start the runner. Recent run.sh log:"
+          tail -25 /tmp/gha-runner.log 2>/dev/null || true
+          exit 1
+          REMOTE

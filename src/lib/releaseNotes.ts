@@ -13,35 +13,44 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-  version: '0.25.10-beta',
-  date: '2026-07-24',
-  highlights: {
-    en: [
-      'Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
-    ],
-    tr: [
-      'Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
-    ],
-    de: [
-      'Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
-    ],
+    version: '0.25.12-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: [
+        'Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
+      ],
+      tr: [
+        'Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
+      ],
+      de: [
+        'Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
+      ],
+    },
   },
-},
-{
-  version: '0.25.10-beta',
-  date: '2026-07-23',
-  highlights: {
-    en: [
-      'Recurring meetings now support automatic forward scheduling from a reusable series rule. Participants are derived from project members, duplicate future instances are prevented, and cancelling a series stops new auto-created meetings.',
-    ],
-    tr: [
-      'Tekrarlayan toplantılar artık seri kuralından ileri tarihli otomatik planlama yapıyor. Katılımcılar proje üyelerinden türetiliyor, yinelenen gelecek kayıtlar engelleniyor ve seri iptal edilince yeni otomatik toplantı üretimi duruyor.',
-    ],
-    de: [
-      'Wiederkehrende Meetings unterstützen jetzt die automatische Vorausplanung aus einer Serienregel. Teilnehmende werden aus Projektmitgliedern abgeleitet, doppelte zukünftige Einträge werden verhindert, und das Abbrechen einer Serie stoppt neue automatische Meetings.',
-    ],
+  {
+    version: '0.25.11-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: [
+        'All text areas now show a live character counter — you can see how many characters you\'ve used and how many remain (e.g. "42 / 2 000"). The counter turns amber when you approach the limit and red when you\'re at it, so you never hit an unexpected cutoff.',
+      ],
+      tr: [
+        'Tüm metin alanları artık canlı karakter sayacı gösteriyor — kaç karakter kullandığınızı ve kaç karakter kaldığını görebilirsiniz (ör. "42 / 2 000"). Sayaç limite yaklaştığınızda kehribar rengine, limite ulaştığınızda kırmızıya döner; böylece beklenmedik bir kesilmeyle karşılaşmazsınız.',
+      ],
+      de: [
+        'Alle Textfelder zeigen jetzt einen Live-Zeichenzähler — du siehst, wie viele Zeichen du verwendet hast und wie viele noch übrig sind (z. B. „42 / 2 000"). Der Zähler wechselt zu Amber, wenn du dich dem Limit näherst, und zu Rot, wenn du es erreichst — damit du nie an einem unerwarteten Abschnitt scheiterst.',
+      ],
+    },
   },
-},
+  {
+    version: '0.25.10-beta',
+    date: '2026-07-23',
+    highlights: {
+      en: ['Recurring meetings now support automatic forward scheduling from a reusable series rule. Participants are derived from project members, duplicate future instances are prevented, and cancelling a series stops new auto-created meetings.'],
+      tr: ['Tekrarlayan toplantılar artık seri kuralından ileri tarihli otomatik planlama yapıyor. Katılımcılar proje üyelerinden türetiliyor, yinelenen gelecek kayıtlar engelleniyor ve seri iptal edilince yeni otomatik toplantı üretimi duruyor.'],
+      de: ['Wiederkehrende Meetings unterstützen jetzt die automatische Vorausplanung aus einer Serienregel. Teilnehmende werden aus Projektmitgliedern abgeleitet, doppelte zukünftige Einträge werden verhindert, und das Abbrechen einer Serie stoppt neue automatische Meetings.'],
+    },
+  },
   {
     version: '0.25.9-beta',
     date: '2026-07-23',
