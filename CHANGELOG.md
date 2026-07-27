@@ -32,6 +32,18 @@ version is shown in the sidebar footer of every page (links to the
   optional `projectId` / `fixedLink`). `Meeting.seriesId` (nullable) links
   auto-generated meeting instances back to their series; manually scheduled
   meetings are unaffected (backward-compatible, `seriesId` stays `null`).
+- **Attachments for support messages.** Support messages now accept up to 10
+  PNG, JPEG, or PDF attachments with client-side previews and validation.
+  Attachments are stored atomically with their message and are available only
+  to the requester and support admins.
+
+### Changed
+- **Support conversations now use the shared messaging UI.** Support message
+  bubbles, pending-attachment previews, composer spacing, attachment button, and
+  send button now come from the same shared components as mentorship messages.
+  Support messages may contain text, attachments, or both; only an empty trimmed
+  message with no attachments is rejected. Existing file validation, protected
+  downloads, storage, and authorization are unchanged.
 
 ## [0.25.8] - 2026-07-23
 

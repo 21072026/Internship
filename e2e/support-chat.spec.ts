@@ -65,6 +65,36 @@ test('support chat: first message opens a ticket, next one appends, admin is not
     await expect(page.getByText('Sent from the chat box.', { exact: false })).toBeVisible({ timeout: 10_000 });
     expect(await prisma.supportMessage.count({ where: { ticketId: firstJson.ticketId } })).toBe(3);
 
+    // Text is optional when at least one valid attachment is present.
+    const attachmentOnly = await page.request.post('/api/support', {
+      multipart: {
+        body: '',
+        files: {
+          name: 'details.pdf',
+          mimeType: 'application/pdf',
+          buffer: Buffer.from('%PDF-1.4 support details'),
+        },
+      },
+    });
+    expect(attachmentOnly.status()).toBe(201);
+
+    // Text and attachments can still be sent together.
+    const textAndAttachment = await page.request.post('/api/support', {
+      multipart: {
+        body: 'Screenshot and details attached.',
+        files: {
+          name: 'screenshot.png',
+          mimeType: 'image/png',
+          buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]),
+        },
+      },
+    });
+    expect(textAndAttachment.status()).toBe(201);
+
+    // Only a truly empty submission is rejected.
+    const empty = await page.request.post('/api/support', { data: { body: '   ' } });
+    expect(empty.status()).toBe(400);
+
     // Admins were notified about the new ticket.
     expect(await prisma.notification.count({ where: { userId: admin.id, type: 'support' } })).toBeGreaterThanOrEqual(1);
 
