@@ -139,6 +139,7 @@ export default function AdminUsersPage() {
         ))}
         <input
           type="search"
+          data-testid="users-search"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder={t.usersAdmin.searchPlaceholder}

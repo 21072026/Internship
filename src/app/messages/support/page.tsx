@@ -12,13 +12,12 @@ import {
   MessageBubble,
   MessageComposer,
   PendingAttachmentList,
-  type PendingMessageAttachment,
 } from '@/components/MessageThread';
 import {
+  appendSupportAttachments,
   SUPPORT_ATTACHMENT_ACCEPT,
-  SUPPORT_ATTACHMENT_MAX_COUNT,
+  type PendingSupportAttachment,
   type SupportAttachmentMeta,
-  validateSupportFile,
 } from '@/lib/supportAttachments';
 
 interface SupportMsg { id: string; body: string; createdAt: string; senderId: string; sender: { fullName: string; role: string }; attachments: SupportAttachmentMeta[] }
@@ -42,7 +41,7 @@ export default function SupportChatPage() {
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [attachments, setAttachments] = useState<PendingMessageAttachment[]>([]);
+  const [attachments, setAttachments] = useState<PendingSupportAttachment[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -88,34 +87,9 @@ export default function SupportChatPage() {
 
   const addFiles = async (selected: FileList | null) => {
     if (!selected?.length) return;
-    setErr('');
-    const next = [...attachments];
-    for (const file of Array.from(selected)) {
-      const duplicate = next.some(({ file: current }) =>
-        current.name === file.name && current.size === file.size &&
-        current.type === file.type && current.lastModified === file.lastModified
-      );
-      if (duplicate) {
-        setErr(s.attachmentDuplicate.replace('{name}', file.name));
-        continue;
-      }
-      if (next.length >= SUPPORT_ATTACHMENT_MAX_COUNT) {
-        setErr(s.attachmentTooMany.replace('{count}', String(SUPPORT_ATTACHMENT_MAX_COUNT)));
-        break;
-      }
-      const validation = await validateSupportFile(file);
-      if (validation) {
-        const label = {
-          unsupported: s.attachmentUnsupported,
-          tooLarge: s.attachmentTooLarge,
-          unreadable: s.attachmentUnreadable,
-        }[validation];
-        setErr(label.replace('{name}', file.name));
-        continue;
-      }
-      next.push({ file, url: URL.createObjectURL(file) });
-    }
-    setAttachments(next);
+    const result = await appendSupportAttachments(attachments, selected, s);
+    setAttachments(result.attachments);
+    setErr(result.error);
     if (fileRef.current) fileRef.current.value = '';
   };
 

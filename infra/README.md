@@ -187,6 +187,41 @@ Add a cron entry on the server — every 5 min it deploys only if `main` moved:
 ```
 No inbound port, no listener — just `git fetch` + the deploy script, lock-guarded.
 
+> Redundant now that `deploy-prod.yml` follows `main` on the self-hosted runner (see
+> below) — keep it only as a belt-and-braces poller. It is safe to run alongside the
+> workflow: `deploy-prod.sh`'s `FORWARD_ONLY=1` guard stops the two from deploying
+> out of order.
+
+### Automatic deploys on the self-hosted runner
+Once the runner is registered (see *Permanent fix* below), `main` reaches both
+long-lived environments by itself — no dispatch, no SSH:
+
+| Workflow | Env | Container | Port | Triggers |
+|----------|-----|-----------|------|----------|
+| `deploy-preview.yml` | https://crm-preview.ersah.in | `internship-crm-preview` | 3201 | push to `main`, every 6h (`:23`), manual |
+| `deploy-prod.yml` | https://crm.ersah.in | `internship-crm` | 3200 | push to `main`, every 6h (`:53`), manual |
+
+Both wrap this same `deploy-prod.sh`; preview just overrides
+`CONTAINER`/`PORT`/`IMAGE`/`ENV_FILE` and sets `NETWORK=bridge` (its DB user is
+granted from the docker gateway, not localhost).
+
+**Drift gate.** Automatic runs first read the live container's `/api/health` `sha` and
+compare it to `origin/main`. Equal → the run exits without building, so the 6-hourly
+schedule is free unless something was actually missed (a push that arrived while the
+runner was offline — see `runner-watchdog.yml`) or the container is unreachable, which
+counts as drift so the deploy also repairs it. A manual `workflow_dispatch` skips the
+gate entirely: it always rebuilds, and accepts any branch/tag/SHA.
+
+**Preview secrets** live in `/etc/internship-crm/preview.env`, same shape as `prod.env`
+but with `NEXTAUTH_URL=https://crm-preview.ersah.in`. There is no need to write it by
+hand: when absent, `deploy-prod.sh` derives it from the running preview container. The
+workflow keeps a valid file and only deletes one that fails to `source` or has no
+`DATABASE_URL`, so an automatic run can never destroy the only copy of those values.
+
+> **Future:** prod moves to a weekly release train while preview keeps tracking `main`.
+> The switch is one edit in `deploy-prod.yml` — drop the `push:` block, uncomment the
+> weekly `schedule:` entry.
+
 ### Topic-preview foundations without Actions
 ```bash
 # DNS (from anywhere): wildcard *.ersah.in A record

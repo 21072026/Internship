@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 
@@ -88,15 +89,19 @@ export async function POST(request: Request) {
   } catch (e) {
     console.error('Applicant set-password email failed:', e);
   }
-  // Notify the mentor.
-  try {
-    await sendEmail({
-      to: mentor.email,
-      subject: `New application: ${fullName}`,
-      html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
-    });
-  } catch (e) {
-    console.error('Mentor notification email failed:', e);
+  // Notify the mentor — honoring their email opt-out (#668: this send used to
+  // ignore notificationPrefs entirely, so a mentor with email notifications off
+  // still received it).
+  if (emailAllowed(mentor, 'mentorship')) {
+    try {
+      await sendEmail({
+        to: mentor.email,
+        subject: `New application: ${fullName}`,
+        html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
+      });
+    } catch (e) {
+      console.error('Mentor notification email failed:', e);
+    }
   }
 
   return NextResponse.json({ ok: true });

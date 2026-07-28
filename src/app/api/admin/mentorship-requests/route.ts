@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendMentorshipDecisionEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
 import { withTenantScope } from '@/lib/orgContext';
 
@@ -59,7 +61,15 @@ export async function PUT(request: Request) {
 
   const req = await prisma.mentorshipRequest.findUnique({
     where: { id: requestId },
-    select: { id: true, status: true, menteeId: true, mentee: { select: { fullName: true } } },
+    select: {
+      id: true,
+      status: true,
+      menteeId: true,
+      message: true,
+      mentee: {
+        select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
+      },
+    },
   });
   if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (req.status !== 'PENDING') {
@@ -68,7 +78,19 @@ export async function PUT(request: Request) {
 
   if (action === 'approve') {
     if (!mentorId) return NextResponse.json({ error: 'mentorId is required to approve' }, { status: 400 });
-    const mentor = await prisma.user.findUnique({ where: { id: mentorId }, select: { id: true, role: true, isActive: true } });
+    const mentor = await prisma.user.findUnique({
+      where: { id: mentorId },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+        fullName: true,
+        email: true,
+        orgId: true,
+        emailNotifications: true,
+        notificationPrefs: true,
+      },
+    });
     if (!mentor || !mentor.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Invalid mentor' }, { status: 400 });
     }
@@ -92,6 +114,35 @@ export async function PUT(request: Request) {
     ]);
     await notify(req.menteeId, 'mentorship_request', 'Your mentorship request was approved — say hi to your mentor!', '/portal');
     await notify(mentorId, 'mentorship_request', `A new mentee was assigned to you: ${req.mentee.fullName}.`, '/mentor');
+
+    // Email both sides (#668) — the decision used to be in-app only, so a mentee
+    // who wasn't logged in never learned they had a mentor. Opt-out respected;
+    // failures are logged and never fail the approval.
+    if (req.mentee.email && emailAllowed(req.mentee, 'mentorship')) {
+      try {
+        await sendMentorshipDecisionEmail({
+          to: req.mentee.email,
+          fullName: req.mentee.fullName,
+          approved: true,
+          mentorName: mentor.fullName,
+          orgId: req.mentee.orgId,
+        });
+      } catch (e) {
+        console.error('Mentorship approval email failed:', e);
+      }
+    }
+    if (mentor.email && emailAllowed(mentor, 'mentorship')) {
+      try {
+        await sendMenteeAssignedEmail({
+          to: mentor.email,
+          mentorName: mentor.fullName,
+          menteeName: req.mentee.fullName,
+          orgId: mentor.orgId,
+        });
+      } catch (e) {
+        console.error('Mentee assignment email failed:', e);
+      }
+    }
     return NextResponse.json({ ok: true, relationId: relation.id });
   }
 
@@ -100,6 +151,18 @@ export async function PUT(request: Request) {
     data: { status: 'REJECTED', decidedById: session.user.id, decidedAt: new Date() },
   });
   await notify(req.menteeId, 'mentorship_request', 'Your mentorship request was reviewed but could not be approved right now.', '/portal');
+  if (req.mentee.email && emailAllowed(req.mentee, 'mentorship')) {
+    try {
+      await sendMentorshipDecisionEmail({
+        to: req.mentee.email,
+        fullName: req.mentee.fullName,
+        approved: false,
+        orgId: req.mentee.orgId,
+      });
+    } catch (e) {
+      console.error('Mentorship rejection email failed:', e);
+    }
+  }
   return NextResponse.json({ ok: true });
   });
 }

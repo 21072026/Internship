@@ -1,10 +1,29 @@
-name: Deploy prod (self-hosted, manual)
+name: Deploy prod (self-hosted, auto on main)
 
 # CI-independent production deploy that RUNS ON THE SERVER via a self-hosted
 # runner (#636). Because self-hosted minutes don't count against the
 # GitHub-hosted quota, this works even while that quota is exhausted — and it
 # can be triggered remotely (e.g. by an agent over the GitHub API) so a deploy
 # no longer needs a human at an SSH prompt.
+#
+# WHY THIS IS AUTOMATIC (#800): this workflow was dispatch-only, so "merging to
+# main deploys to production" (CLAUDE.md) held only as long as somebody
+# remembered to click Run workflow — 44 consecutive manual dispatches. It now
+# follows main by itself:
+#
+#   push to main   → deploy (the normal path; PRs already passed the smoke gate
+#                    in e2e.yml before they could merge)
+#   every 6 hours  → deploy ONLY if prod drifted from origin/main; the
+#                    self-hosted runner can be offline when a push arrives (see
+#                    runner-watchdog.yml) and that deploy would otherwise be lost
+#                    silently. A no-op when prod is already current.
+#   manual         → deploy any branch/tag/SHA, unconditionally.
+#
+# ── FUTURE: weekly release train ────────────────────────────────────────────
+# The plan is for main to flow continuously to preview and reach production on a
+# weekly cadence instead. To switch, delete the `push:` block below and uncomment
+# the weekly `schedule` entry — nothing else changes, and deploy-preview.yml keeps
+# tracking main so preview stays the always-current staging environment.
 #
 # PREREQUISITES (one-time, on the Plesk server):
 #   1. Register a self-hosted runner for this repo (Settings → Actions →
@@ -14,9 +33,19 @@ name: Deploy prod (self-hosted, manual)
 #   2. Create /etc/internship-crm/prod.env (chmod 600) with the production
 #      secrets — see infra/README.md. The runner's user must be able to read it
 #      and run docker.
-#
-# After that, dispatch this workflow (UI "Run workflow", or the API) any time.
 on:
+  # No paths-ignore: the drift gate below already skips redundant builds, and
+  # filtering docs-only merges out here would only delay them until the next
+  # scheduled tick (the gate compares commit shas, so it would rebuild anyway).
+  # Deploying every merge keeps the invariant simple: prod == origin/main.
+  push:
+    branches: [main]
+  schedule:
+    # Drift safety net; offset from deploy-preview.yml's so the two don't
+    # contend for the single self-hosted runner.
+    - cron: '53 */6 * * *'
+    # Weekly release train — see "FUTURE" above. Mondays 06:00 UTC.
+    # - cron: '0 6 * * 1'
   workflow_dispatch:
     inputs:
       ref:
@@ -24,27 +53,73 @@ on:
         required: false
         default: 'main'
 
+# Never cancel a deploy mid-container-swap — queue instead. Queued runs are cheap:
+# the drift gate below turns a run whose commit is already live into a no-op.
 concurrency:
   group: deploy-prod-self-hosted
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.ref }} to production
+    name: Deploy ${{ inputs.ref || 'main' }} to production
     runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || 'main' }}
+
+      - name: Decide whether a deploy is needed
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ inputs.ref || 'main' }}
+          HEALTH_URL: http://127.0.0.1:3200/api/health
+        run: |
+          # A manual dispatch is the explicit override: always deploy, even the
+          # commit that is already live (that's how you force a rebuild).
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "### Production: deploying \`$REF\` (manual dispatch)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Ask the remote directly rather than trusting a local ref: this job's
+          # workspace is shared and shallow, so refs/remotes/origin/main can be
+          # stale or absent here.
+          TARGET="$(git ls-remote origin refs/heads/main | cut -c1-7)"
+          [ -n "$TARGET" ] || { echo "could not resolve origin/main" >&2; exit 1; }
+          # Ground truth for what is actually live: the container reports the
+          # GIT_SHA baked into its image at /api/health. An unreachable endpoint
+          # (container down or wedged) counts as drift, so the deploy repairs it.
+          LIVE="$(curl -fsS --max-time 10 "$HEALTH_URL" \
+                  | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+          if [ "$LIVE" = "$TARGET" ]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "### Production already current at \`$TARGET\` — nothing to deploy" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "### Production drifted: live \`${LIVE:-unreachable}\` → deploying \`$TARGET\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Deploy
+        if: steps.gate.outputs.deploy == 'true'
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ inputs.ref || 'main' }}
         run: |
           chmod +x infra/deploy-prod.sh
-          # deploy-prod.sh syncs to origin/<ref> (hard reset — NOT --no-pull, so
-          # the build reflects origin/main at deploy time rather than whatever the
-          # shared self-hosted workspace happened to be left at), builds from
-          # source, migrates, seeds, swaps the container and health-checks.
+          # Automatic runs deploy the TIP of origin/main: deploy-prod.sh syncs to
+          # it (hard reset — NOT --no-pull, so the build reflects origin/main at
+          # deploy time rather than whatever the shared self-hosted workspace
+          # happened to be left at). A manual dispatch of a NON-main ref keeps
+          # --no-pull so an arbitrary tag/SHA deploys exactly as checked out.
+          PULL_ARGS=()
+          if [ "$EVENT" = workflow_dispatch ] && [ "$REF" != main ]; then
+            PULL_ARGS=(--no-pull)
+          fi
           # FORWARD_ONLY=1 makes prod refuse to regress to an older commit.
           # Secrets come from the server-side env file, never from the repo/workflow.
-          BRANCH="${{ inputs.ref }}" FORWARD_ONLY=1 ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" ./infra/deploy-prod.sh
+          BRANCH="$REF" \
+          FORWARD_ONLY=1 \
+          ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" \
+          ./infra/deploy-prod.sh "${PULL_ARGS[@]}"

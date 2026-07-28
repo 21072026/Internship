@@ -110,17 +110,30 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 
 ## Deployment
 
-`.github/workflows/deploy.yml` runs on push to `main` (production) and on PRs (preview):
-1. Build Docker image, push to `ghcr.io`.
-2. SSH to the Plesk server, `docker run` the image, `prisma db push --accept-data-loss`.
+All three environments deploy **on the self-hosted runner** (the Plesk server itself), so
+they cost no GitHub-hosted Actions minutes. Each builds the image locally from source,
+runs `prisma db push --accept-data-loss`, swaps its container and health-checks it.
 
-| Env | Container | Port | URL |
-|-----|-----------|------|-----|
-| Production | `internship-crm` | 3200 | https://crm.ersah.in |
-| Preview (PRs) | `internship-crm-preview` | 3201 | https://crm-preview.ersah.in |
+| Env | Container | Port | URL | Trigger |
+|-----|-----------|------|-----|---------|
+| Production | `internship-crm` | 3200 | https://crm.ersah.in | push to `main` (+6h drift check, manual) |
+| Preview | `internship-crm-preview` | 3201 | https://crm-preview.ersah.in | push to `main` (+6h drift check, manual) |
+| Topic (per PR) | `internship-crm-pr<N>` | 33xx | `https://crm-pr<N>.ersah.in` | every push to the PR |
 
-⚠️ **All open PRs share one preview container** (tracked in issue #39).
-⚠️ The preview DB is **shared** — `prisma db push` there affects everyone's preview.
+- `deploy-prod.yml` / `deploy-preview.yml` — **both follow `main` automatically**. Every merge
+  lands on preview and prod. Each has a *drift gate*: it reads the live container's
+  `/api/health` `sha` and skips the build when it already matches `origin/main`, so the
+  6-hourly scheduled run is a no-op unless a push was missed (the runner can be offline —
+  see `runner-watchdog.yml`). A manual `workflow_dispatch` always deploys, and takes any
+  branch/tag/SHA. Prod additionally runs with `FORWARD_ONLY=1` so it can never regress to
+  an older commit (`FORCE=1` for a deliberate rollback).
+- **Planned:** prod moves to a weekly release train while preview keeps tracking `main`.
+  The switch is documented in the header of `deploy-prod.yml` (drop `push:`, uncomment the
+  weekly `schedule:`).
+- `topic-preview.yml` — per-PR isolated environment, torn down when the PR closes (#583).
+- `deploy.yml` is the **legacy hosted** pipeline (ghcr.io + SSH), **paused** — don't extend it.
+- ⚠️ The preview DB is **shared** by the shared preview *and* every topic env —
+  `prisma db push` there affects everyone.
 
 ## Conventions & gotchas for agents
 

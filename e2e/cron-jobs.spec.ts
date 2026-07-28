@@ -18,7 +18,18 @@ test('admin cron run sends meeting reminders and stamps reminderSentAt', async (
     data: {
       relationId: rel.id,
       title: 'Soon Meeting',
-      scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      // Inside the 60-minute reminder window (#777) — a meeting further out is
+      // deliberately NOT reminded yet.
+      scheduledAt: new Date(Date.now() + 30 * 60 * 1000),
+      rsvpToken: randomBytes(12).toString('hex'),
+      createdById: mentor.id,
+    },
+  });
+  const farMeeting = await prisma.meeting.create({
+    data: {
+      relationId: rel.id,
+      title: 'Later Meeting',
+      scheduledAt: new Date(Date.now() + 6 * 60 * 60 * 1000),
       rsvpToken: randomBytes(12).toString('hex'),
       createdById: mentor.id,
     },
@@ -38,7 +49,27 @@ test('admin cron run sends meeting reminders and stamps reminderSentAt', async (
 
     const after = await prisma.meeting.findUnique({ where: { id: meeting.id } });
     expect(after!.reminderSentAt).not.toBeNull();
+
+    // A meeting outside the 60-minute window is left alone.
+    const later = await prisma.meeting.findUnique({ where: { id: farMeeting.id } });
+    expect(later!.reminderSentAt).toBeNull();
+
+    // In-app notification for BOTH participants, regardless of email prefs.
+    for (const userId of [mentee.id, mentor.id]) {
+      const notes = await prisma.notification.findMany({ where: { userId, type: 'meeting_reminder' } });
+      expect(notes.length).toBe(1);
+      expect(notes[0].text).toContain('Soon Meeting');
+    }
+
+    // Idempotent: a second run must not produce a second reminder.
+    const res2 = await page.request.get('/api/cron');
+    expect(res2.ok()).toBeTruthy();
+    for (const userId of [mentee.id, mentor.id]) {
+      const notes = await prisma.notification.count({ where: { userId, type: 'meeting_reminder' } });
+      expect(notes).toBe(1);
+    }
   } finally {
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
     await prisma.meeting.deleteMany({ where: { relationId: rel.id } });
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
     await cleanupByEmail(menteeEmail);
