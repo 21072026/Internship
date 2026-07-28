@@ -13,6 +13,57 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.26.1-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'Meeting reminders now arrive about an hour before the meeting instead of a day ahead — and they go to everyone involved, mentor and mentee alike, not just the mentee. You always get the reminder in the app; the email version follows your notification settings, so you can switch it off and still see the reminder on your bell. Each meeting is only ever reminded once.',
+      ],
+      tr: [
+        'Toplantı hatırlatmaları artık bir gün önce değil, toplantıdan yaklaşık bir saat önce geliyor — ve yalnızca mentiye değil, mentor ve menti dahil tüm katılımcılara gidiyor. Hatırlatmayı uygulama içinde her zaman alıyorsunuz; e-posta olarak gönderilmesi bildirim tercihlerinize bağlı, yani e-postayı kapatsanız bile hatırlatma bildirim zilinizde görünmeye devam ediyor. Her toplantı için hatırlatma yalnızca bir kez gönderiliyor.',
+      ],
+      de: [
+        'Terminerinnerungen kommen jetzt etwa eine Stunde vor dem Termin statt einen Tag vorher — und sie gehen an alle Beteiligten, Mentor und Mentee, nicht nur an den Mentee. In der App erhältst du die Erinnerung immer; ob sie zusätzlich per E-Mail kommt, richtet sich nach deinen Benachrichtigungseinstellungen — schaltest du die E-Mail ab, erscheint die Erinnerung weiterhin in deiner Glocke. Pro Termin wird nur ein einziges Mal erinnert.',
+      ],
+    },
+  },
+  {
+    version: '0.26.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'Important events now reach you by email, not just in the app: a mentorship request being approved or rejected, a new request landing in the admin queue, an enquiry from your public profile (you can reply straight to the sender), and meeting requests being sent, accepted or declined. Everything respects your notification settings, and there is a new "Mentorship updates" switch to turn just those off.',
+        'Goals can be sorted newest-first or oldest-first, and completed goals move out of your active list into a new Archive tab — where they keep their completion date and can be reopened at any time.',
+        'Support: admins can now attach files and images to their replies — a message on its own, files on their own, or both together. Images can be previewed and any file removed before sending, using the same file types and size limits as the rest of the support conversation.',
+      ],
+      tr: [
+        'Önemli olaylar artık yalnızca uygulama içinde değil, e-posta ile de size ulaşıyor: mentorluk talebinizin onaylanması veya reddedilmesi, yönetici kuyruğuna yeni bir talep düşmesi, herkese açık profilinizden gelen bir başvuru (doğrudan gönderene yanıt verebilirsiniz) ve toplantı taleplerinin gönderilmesi, kabul edilmesi veya reddedilmesi. Tümü bildirim tercihlerinize saygı gösteriyor; sadece bunları kapatmak için yeni bir "Mentorluk güncellemeleri" anahtarı var.',
+        'Hedefler yeniden eskiye veya eskiden yeniye sıralanabiliyor ve tamamlanan hedefler aktif listenizden çıkıp yeni Arşiv sekmesine taşınıyor — tamamlanma tarihlerini koruyorlar ve istediğiniz zaman yeniden açılabiliyorlar.',
+        'Destek: yöneticiler artık yanıtlarına dosya ve görsel ekleyebiliyor — yalnızca mesaj, yalnızca dosya veya ikisi birlikte. Görseller gönderilmeden önce önizlenebiliyor ve eklenen dosyalar kaldırılabiliyor; destek konuşmasının geri kalanıyla aynı dosya türleri ve boyut limitleri geçerli.',
+      ],
+      de: [
+        'Wichtige Ereignisse erreichen dich jetzt auch per E-Mail und nicht nur in der App: die Annahme oder Ablehnung einer Mentoring-Anfrage, eine neue Anfrage in der Admin-Warteschlange, eine Anfrage über dein öffentliches Profil (du kannst direkt dem Absender antworten) sowie gesendete, angenommene oder abgelehnte Terminanfragen. Alles berücksichtigt deine Benachrichtigungseinstellungen, und mit dem neuen Schalter "Mentoring-Updates" schaltest du genau diese ab.',
+        'Ziele lassen sich nach neuesten oder ältesten sortieren, und abgeschlossene Ziele wandern aus der aktiven Liste in einen neuen Archiv-Tab — dort behalten sie ihr Abschlussdatum und können jederzeit wieder geöffnet werden.',
+        'Support: Admins können ihren Antworten jetzt Dateien und Bilder anhängen — nur eine Nachricht, nur Dateien oder beides. Bilder lassen sich vor dem Senden in der Vorschau ansehen und angehängte Dateien entfernen; es gelten dieselben Dateitypen und Größenlimits wie im restlichen Support-Verlauf.',
+      ],
+    },
+  },
+  {
+    version: '0.25.15-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'The projects list no longer flashes "(0)" while it is still loading — the project count now appears only once the data has arrived, so an empty list is never mistaken for a slow one.',
+      ],
+      tr: [
+        'Projeler listesi yüklenirken artık "(0)" göstermiyor — proje sayısı yalnızca veriler geldikten sonra çıkıyor, böylece boş liste ile yavaş yüklenen liste karışmıyor.',
+      ],
+      de: [
+        'Die Projektliste zeigt beim Laden nicht mehr "(0)" — die Projektanzahl erscheint erst, wenn die Daten geladen sind, sodass eine leere Liste nicht mit einer langsam ladenden verwechselt wird.',
+      ],
+    },
+  },
+  {
     version: '0.25.14-beta',
     date: '2026-07-24',
     highlights: {

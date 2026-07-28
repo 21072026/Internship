@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { getThreadIfAllowed } from '@/lib/messaging';
+import { canAccessMessage } from '@/lib/conversations';
 
 // Fixed reaction set — keeps input bounded (no arbitrary strings stored).
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '🎉'] as const;
@@ -22,10 +22,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-  const message = await prisma.message.findUnique({ where: { id }, select: { relationId: true, deletedForEveryoneAt: true } });
+  const message = await prisma.message.findUnique({
+    where: { id },
+    select: { relationId: true, conversationId: true, deletedForEveryoneAt: true },
+  });
   if (!message) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  const rel = await getThreadIfAllowed({ id: session.user.id, role: session.user.role }, message.relationId);
-  if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const allowed = await canAccessMessage({ id: session.user.id, role: session.user.role }, message);
+  if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (message.deletedForEveryoneAt) return NextResponse.json({ error: 'Message deleted' }, { status: 409 });
 
   const newEmoji = parsed.data.emoji;

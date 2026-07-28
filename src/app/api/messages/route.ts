@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
+import { getConversationIfAllowed, otherConversationParticipants } from '@/lib/conversations';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { sendEmail } from '@/services/emailService';
@@ -20,13 +21,26 @@ export async function GET(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   return await withTenantScope(session, async () => {
-    const relationId = new URL(request.url).searchParams.get('relationId') || '';
-    const rel = await getThreadIfAllowed(session.user, relationId);
-    if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const params = new URL(request.url).searchParams;
+    const relationId = params.get('relationId') || '';
+    const conversationId = params.get('conversationId') || '';
+    if (!relationId && !conversationId) {
+      return NextResponse.json({ error: 'relationId or conversationId required' }, { status: 400 });
+    }
+
+    // Authorize through whichever layer the caller addressed: a mentorship
+    // thread (legacy relationId) or a conversation (#769). Both fail closed.
+    const rel = relationId ? await getThreadIfAllowed(session.user, relationId) : null;
+    const conversation = conversationId ? await getConversationIfAllowed(session.user, conversationId) : null;
+    if (!rel && !conversation) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    // Exactly one link is queried — never an OR across both, which would leak
+    // messages from the sibling layer into this thread's view.
+    const scope = rel ? { relationId: rel.id } : { conversationId: conversation!.id };
 
     const rows = await prisma.message.findMany({
       // Exclude messages this viewer deleted "for me".
-      where: { relationId, hiddenFor: { none: { userId: session.user.id } } },
+      where: { ...scope, hiddenFor: { none: { userId: session.user.id } } },
       orderBy: { createdAt: 'asc' },
       include: { attachments: { select: ATTACHMENT_SELECT }, reactions: { select: { emoji: true, userId: true } } },
     });
@@ -75,20 +89,42 @@ export async function GET(request: Request) {
 
     // Mark the viewer's incoming unread messages as read.
     await prisma.message.updateMany({
-      where: { relationId, senderId: { not: session.user.id }, readAt: null },
+      where: { ...scope, senderId: { not: session.user.id }, readAt: null },
       data: { readAt: new Date() },
     });
 
+    // Conversations also carry a per-participant read cursor.
+    if (conversation) {
+      await prisma.conversationParticipant.updateMany({
+        where: { conversationId: conversation.id, userId: session.user.id },
+        data: { lastReadAt: new Date() },
+      });
+    }
+
     return NextResponse.json({
-      relationId,
-      mentor: rel.mentor,
-      mentee: rel.mentee,
+      ...(rel
+        ? { relationId: rel.id, mentor: rel.mentor, mentee: rel.mentee }
+        : {
+            conversationId: conversation!.id,
+            participants: conversation!.participants.map((p) => ({ id: p.user.id, fullName: p.user.fullName })),
+          }),
       messages,
     });
   });
 }
 
-const schema = z.object({ relationId: z.string().min(1), body: z.string().min(1).max(5000) });
+// Either relationId (mentorship thread) or conversationId (#769) identifies the
+// target; `body` may be empty only on the multipart path, where files can stand
+// in for text.
+const schema = z
+  .object({
+    relationId: z.string().min(1).optional(),
+    conversationId: z.string().min(1).optional(),
+    body: z.string().min(1).max(5000),
+  })
+  .refine((d) => Boolean(d.relationId) || Boolean(d.conversationId), {
+    message: 'relationId or conversationId required',
+  });
 
 // POST — post a message to a thread (participants/admin). Notifies the other
 // party. Accepts either JSON (text-only, the original shape) or multipart
@@ -99,17 +135,19 @@ export async function POST(request: Request) {
 
   return await withTenantScope(session, async () => {
     const contentType = request.headers.get('content-type') || '';
-    let relationId: string;
+    let relationId = '';
+    let conversationId = '';
     let body: string;
     let files: File[] = [];
 
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData();
       relationId = String(form.get('relationId') || '');
+      conversationId = String(form.get('conversationId') || '');
       body = String(form.get('body') || '');
       // Accept multiple files (pasted images + picked files). Cap the count.
       files = form.getAll('file').filter((f): f is File => f instanceof File && f.size > 0).slice(0, 10);
-      if (!relationId || (!body.trim() && files.length === 0) || body.length > 5000) {
+      if ((!relationId && !conversationId) || (!body.trim() && files.length === 0) || body.length > 5000) {
         return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
       }
       for (const file of files) {
@@ -123,12 +161,15 @@ export async function POST(request: Request) {
     } else {
       const parsed = schema.safeParse(await request.json().catch(() => null));
       if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
-      relationId = parsed.data.relationId;
+      relationId = parsed.data.relationId ?? '';
+      conversationId = parsed.data.conversationId ?? '';
       body = parsed.data.body;
     }
 
-    const rel = await getThreadIfAllowed(session.user, relationId);
-    if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Same two-layer authorization as GET; both paths fail closed.
+    const rel = relationId ? await getThreadIfAllowed(session.user, relationId) : null;
+    const conversation = conversationId ? await getConversationIfAllowed(session.user, conversationId) : null;
+    if (!rel && !conversation) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Read each file once into a Buffer, reused for both DB storage and the
     // recipient's email attachments.
@@ -138,7 +179,9 @@ export async function POST(request: Request) {
 
     const message = await prisma.message.create({
       data: {
-        relationId: rel.id,
+        // Exactly one link is set: a conversation message leaves relationId null
+        // (and vice versa), which is what the nullable columns from #768 allow.
+        ...(rel ? { relationId: rel.id } : { conversationId: conversation!.id }),
         senderId: session.user.id,
         body,
         channel: 'IN_APP',
@@ -149,10 +192,16 @@ export async function POST(request: Request) {
       include: { attachments: { select: ATTACHMENT_SELECT } },
     });
 
-    // Notify the other participant (unless an admin is posting to someone else's thread).
-    const recipient = otherParticipant(rel, session.user.id);
-    if (recipient && recipient !== session.user.id) {
-      await notify(recipient, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, `/messages/${rel.id}`);
+    // Notify everyone but the sender — the single other party on a mentorship
+    // thread, or every other participant of a conversation. An admin posting
+    // into someone else's thread isn't a recipient of their own message.
+    const recipients = (
+      rel ? [otherParticipant(rel, session.user.id)] : otherConversationParticipants(conversation!, session.user.id)
+    ).filter((id) => id && id !== session.user.id);
+    const link = rel ? `/messages/${rel.id}` : `/messages/c/${conversation!.id}`;
+
+    for (const recipient of recipients) {
+      await notify(recipient, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, link);
 
       // Mirror the message to the recipient's inbox (unless they opted out). The
       // Reply-To routes email replies back into this thread via /api/inbound-email.
@@ -168,7 +217,10 @@ export async function POST(request: Request) {
           to: rcpt.email,
           subject: `New message from ${sender}`,
           html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>Reply to this email or open the conversation in the app.</p>`,
-          replyTo: replyAddress(rel.id),
+          // Email replies are routed by a relation-scoped token, so only the
+          // mentorship path can offer reply-by-email today; conversation
+          // recipients get the same notification without a Reply-To.
+          ...(rel ? { replyTo: replyAddress(rel.id) } : {}),
           // Mirror the attachments (incl. pasted images) into the email too.
           attachments: fileBufs.map((fb) => ({ filename: fb.filename, content: fb.data, contentType: fb.contentType })),
         }).catch((e) => logger.error('Failed to mirror message email', { error: String(e) }));

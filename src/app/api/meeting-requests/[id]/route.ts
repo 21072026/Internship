@@ -5,8 +5,29 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendMeetingRequestDecisionEmail } from '@/services/emailService';
 
 const schema = z.object({ action: z.enum(['accept', 'decline']) });
+
+// Email the requester the outcome (#668) — previously in-app only, so a mentee
+// waiting on a slot had no way to learn it was confirmed. Opt-out respected and
+// failures are logged, never surfaced as a failed decision.
+async function emailDecision(
+  requestedById: string,
+  args: { topic: string; accepted: boolean; scheduledAt?: Date | null; meetLink?: string | null; link: string }
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: requestedById },
+    select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
+  });
+  if (!user?.email || !emailAllowed(user, 'meetingReminders')) return;
+  try {
+    await sendMeetingRequestDecisionEmail({ to: user.email, fullName: user.fullName, orgId: user.orgId, ...args });
+  } catch (e) {
+    console.error('Meeting request decision email failed:', e);
+  }
+}
 
 // PATCH — the mentor (or admin) accepts or declines a meeting request.
 // Accepting creates a confirmed Meeting (with an auto video link) and notifies
@@ -29,6 +50,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (parsed.data.action === 'decline') {
     await prisma.meetingRequest.update({ where: { id }, data: { status: 'DECLINED' } });
     await notify(req.requestedById, 'meeting_request', 'Your meeting request was declined.', '/portal');
+    await emailDecision(req.requestedById, { topic: req.topic, accepted: false, link: '/portal' });
     return NextResponse.json({ ok: true, status: 'DECLINED' });
   }
 
@@ -46,5 +68,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
   await prisma.meetingRequest.update({ where: { id }, data: { status: 'ACCEPTED' } });
   await notify(req.requestedById, 'meeting_request', `Your meeting request was accepted: ${req.topic}.`, `/messages/${rel.id}`);
+  await emailDecision(req.requestedById, {
+    topic: req.topic,
+    accepted: true,
+    scheduledAt: meeting.scheduledAt,
+    meetLink: meeting.meetLink,
+    link: `/messages/${rel.id}`,
+  });
   return NextResponse.json({ ok: true, status: 'ACCEPTED', meetingId: meeting.id });
 }

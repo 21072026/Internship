@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import {
+  buildSupportAttachments,
+  readSupportMessageRequest,
+} from '@/lib/supportMessageRequest';
 
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
@@ -11,9 +15,10 @@ const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: t
 // Admins see every ticket, reply into the thread, move tickets through
 // OPEN → IN_PROGRESS → CLOSED (and back), and take assignment.
 
+// A reply needs text, at least one attachment, or both (#788).
 const replySchema = z.object({
   ticketId: z.string().min(1),
-  body: z.string().min(1).max(5000),
+  body: z.string().max(5000).optional().default(''),
 });
 
 const updateSchema = z.object({
@@ -66,17 +71,26 @@ export async function GET(request: Request) {
   return NextResponse.json({ tickets, me: session.user.id });
 }
 
-// POST — reply into a ticket. Replying moves an OPEN ticket to IN_PROGRESS,
-// takes assignment if the ticket has none, marks the requester's messages
-// read, and notifies the requester.
+// POST — reply into a ticket, optionally with attachments. Replying moves an
+// OPEN ticket to IN_PROGRESS, takes assignment if the ticket has none, marks
+// the requester's messages read, and notifies the requester.
 export async function POST(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const parsed = replySchema.safeParse(await request.json().catch(() => null));
+  // multipart (text + files) or the original JSON text-only shape.
+  const read = await readSupportMessageRequest(request);
+  if (!read.ok) return NextResponse.json({ error: read.error }, { status: read.status });
+
+  const parsed = replySchema.safeParse(read.payload);
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const body = parsed.data.body.trim();
-  if (!body) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  if (!body && read.files.length === 0) {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  }
+
+  const built = await buildSupportAttachments(read.files);
+  if (!built.ok) return NextResponse.json({ error: built.error }, { status: built.status });
 
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: parsed.data.ticketId },
@@ -85,7 +99,12 @@ export async function POST(request: Request) {
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const message = await prisma.supportMessage.create({
-    data: { ticketId: ticket.id, senderId: session.user.id, body },
+    data: {
+      ticketId: ticket.id,
+      senderId: session.user.id,
+      body,
+      attachments: built.attachments.length ? { create: built.attachments } : undefined,
+    },
     select: { id: true },
   });
   await prisma.supportTicket.update({
