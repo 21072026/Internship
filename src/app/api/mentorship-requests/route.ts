@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendMentorshipRequestEmail } from '@/services/emailService';
 import { getMenteeRequestGate } from '@/lib/requestGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -72,19 +74,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please wait before submitting another request', code: 'rate_limited' }, { status: 429 });
     }
 
+    const message = parsed.data.message?.trim() || null;
+    const targetPosition = parsed.data.targetPosition?.trim() || null;
+
     const created = await prisma.mentorshipRequest.create({
-      data: {
-        menteeId: session.user.id,
-        message: parsed.data.message?.trim() || null,
-        targetPosition: parsed.data.targetPosition?.trim() || null,
-      },
+      data: { menteeId: session.user.id, message, targetPosition },
       select: { id: true, status: true, createdAt: true },
     });
 
-    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+    const menteeName = session.user.name ?? 'a mentee';
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN', isActive: true },
+      select: { id: true, fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
+    });
     await Promise.all(
-      admins.map((a) => notify(a.id, 'mentorship_request', `New mentorship request from ${session.user.name ?? 'a mentee'}.`, '/admin/mentorship'))
+      admins.map((a) => notify(a.id, 'mentorship_request', `New mentorship request from ${menteeName}.`, '/admin/mentorship'))
     );
+
+    // Email the admin queue too (#668): a pending request used to be visible only
+    // to an admin who happened to log in. Opt-out respected, failures logged.
+    for (const a of admins) {
+      if (!a.email || !emailAllowed(a, 'mentorship')) continue;
+      try {
+        await sendMentorshipRequestEmail({
+          to: a.email,
+          adminName: a.fullName,
+          menteeName,
+          targetPosition,
+          message,
+          orgId: a.orgId,
+        });
+      } catch (e) {
+        console.error('Mentorship request admin email failed:', e);
+      }
+    }
 
     return NextResponse.json({ request: created }, { status: 201 });
   });

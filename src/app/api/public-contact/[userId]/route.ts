@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendPublicContactEmail } from '@/services/emailService';
 
 // Public contact form → a notification to the profile owner (EPIC: public
 // profile). Anti-spam without an external captcha (blocked by our CSP): a
@@ -36,7 +38,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
   // Only owners with a public profile can be contacted.
   const owner = await prisma.user.findFirst({
     where: { id: userId, publicProfile: true },
-    select: { id: true },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      orgId: true,
+      emailNotifications: true,
+      notificationPrefs: true,
+    },
   });
   if (!owner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -48,6 +57,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
       text: `${name} (${email}): ${preview}`,
     },
   });
+
+  // Email the owner too (#668) — an outside enquiry is the most time-sensitive
+  // thing a public profile receives and used to be in-app only. Opt-out
+  // respected; a mail failure must not turn into a 500 for the sender (which
+  // would also leak that the profile exists), so it is logged and swallowed.
+  if (owner.email && emailAllowed(owner, 'messages')) {
+    try {
+      await sendPublicContactEmail({
+        to: owner.email,
+        ownerName: owner.fullName,
+        fromName: name,
+        fromEmail: email,
+        message,
+        orgId: owner.orgId,
+      });
+    } catch (e) {
+      console.error('Public contact email failed:', e);
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

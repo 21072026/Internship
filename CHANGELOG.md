@@ -10,50 +10,7 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-### Changed
-- **Preview and production now deploy automatically on every merge to `main`.** Both
-  `deploy-preview.yml` and `deploy-prod.yml` were `workflow_dispatch`-only, so
-  "merging to `main` deploys" held only while someone remembered to click *Run
-  workflow*. Prod survived on 44 consecutive manual dispatches; the shared preview
-  did not — once per-PR topic previews (#583) took over the per-PR job, nobody
-  dispatched the shared one and https://crm-preview.ersah.in sat **72 commits / 11
-  minor versions behind** prod (0.14.1-beta vs 0.25.14-beta) for a week. Both
-  workflows now trigger on `push` to `main` (plus a 6-hourly safety net and manual
-  dispatch), keeping preview as the always-current staging environment ahead of the
-  planned weekly production release train — the switch to which is documented in
-  `deploy-prod.yml`'s header.
-  - **Drift gate:** automatic runs compare the live container's `/api/health` `sha`
-    with `origin/main` and exit without building when they match, so the scheduled
-    run is a no-op unless a push was genuinely missed (the self-hosted runner can be
-    offline) — and an unreachable container counts as drift, so the deploy also
-    repairs a down environment. `workflow_dispatch` bypasses the gate and still takes
-    any branch/tag/SHA.
-  - Automatic runs deploy the **tip of `origin/main`** rather than the commit they
-    checked out, so a run queued behind a newer one can never land an older commit on
-    top of it (the regression class fixed for prod in #794, now closed for preview too).
-  - `deploy-preview.yml` no longer deletes `/etc/internship-crm/preview.env` on every
-    run. It validates the file and removes it only when it fails to `source` or lacks
-    `DATABASE_URL` — a workflow that now runs unattended must not be able to destroy
-    the only copy of secrets derived from a container that may since have gone away.
-  - A manual dispatch of a **tag or SHA** now deploys it correctly (previously
-    `git reset --hard origin/<tag>` would have failed; non-branch refs deploy as
-    checked out).
-  - Infra/CI only; no application change, so no version bump. Closes #800.
-
-### Fixed
-- **Production deploys are now forward-only and deterministic (deploy oscillation).**
-  Prod could regress to an older version after some merges ("one step forward, one
-  step back"): the `deploy-prod.yml` / `deploy-preview.yml` jobs share one
-  self-hosted runner workspace and called `deploy-prod.sh --no-pull`, which builds
-  whatever commit the shared workspace was left at rather than `origin/main`; and
-  two uncoordinated deployers (the cron `autodeploy.sh` poller + the workflow) write
-  the prod container with no guard against out-of-order builds. Prod deploy now
-  hard-resets to `origin/main` at deploy time (dropped `--no-pull`) and a
-  `FORWARD_ONLY=1` guard in `deploy-prod.sh` refuses to deploy a commit older than
-  the one already live (recorded per-container; `FORCE=1` overrides for a deliberate
-  rollback). Preview/topic deploys are unaffected. Infra-only; no app change.
-
-## [0.26.0] - 2026-07-28
+## [0.27.0] - 2026-07-28
 
 ### Fixed
 - **Character limits now match the database, and the counter no longer advertises a
@@ -121,6 +78,193 @@ version is shown in the sidebar footer of every page (links to the
   pattern). A failed swap leaves no container running — `docker stop` precedes
   `docker run` — and was previously just a red tick in the Actions tab. Refusals and
   skips now emit `::warning::` and a step-summary line instead of hiding in a green log.
+
+## [0.26.2-beta] - 2026-07-28
+
+### Added
+- **1:1 direct-message API for project co-members** (#769), building on the #768
+  authorization layer. No user-visible surface yet — nothing in the UI calls these
+  endpoints; the `/messages` picker (#770) is what will expose them, so no release note
+  accompanies this entry.
+  - `POST /api/conversations` — create-or-get the DIRECT conversation with another user.
+    Idempotent, and 403 when `canMessage()` says no. Authorization lives *inside*
+    `findOrCreateDirectConversation()` rather than in the route, so no future caller can
+    skip it.
+  - `GET`/`POST /api/messages` now accept **`conversationId`** alongside the existing
+    `relationId` (JSON *and* multipart/attachment paths). Exactly one link is queried per
+    request — never an `OR` across both, which would leak the sibling layer's messages
+    into a thread view. Posting notifies **every** other participant
+    (`otherConversationParticipants`) and mirrors to email for those who haven't opted
+    out of `messages`.
+  - The message sub-routes — `PATCH`/`DELETE /api/messages/[id]`,
+    `POST /api/messages/[id]/reactions`, `GET /api/messages/attachments/[id]` — now
+    authorize through a shared `canAccessMessage()` that follows whichever link the
+    message carries. Without this they would have kept failing closed on conversation
+    messages (`relationId` is null there since #768), i.e. a DM could be sent but never
+    edited, deleted, reacted to, or have its attachments downloaded.
+  - `GET /api/messages/unread` counts conversation messages too, so project DMs reach the
+    unread badge instead of being invisible to it.
+  - Reply-by-email stays mentorship-only: the `Reply-To` token is relation-scoped
+    (`replyAddress(relationId)`), so conversation recipients get the notification email
+    without a `Reply-To` rather than one that would bounce into nowhere.
+
+### Schema
+- `Conversation.directKey String? @unique` — the two participant ids sorted and joined,
+  giving a DIRECT conversation one deterministic identity. Create-or-get leans on the
+  constraint (catching `P2002`) instead of a read-then-write race, so two simultaneous
+  "message this person" clicks can't create two conversations for the same pair. Matching
+  on the key also means a GROUP conversation, or one containing both users *plus a third*,
+  can never be returned by mistake. Null for groups — MySQL allows many NULLs in a unique
+  index.
+
+## [0.26.1-beta] - 2026-07-28
+
+### Changed
+- **Meeting reminders now fire ~1 hour before the meeting, reach both participants, and
+  respect notification preferences** (#777). `sendMeetingReminders()` looked 24 hours
+  ahead, emailed the **mentee only**, sent **no in-app notification**, and ignored the
+  category opt-outs entirely — the one notification path the #668 audit left unfixed.
+  It now scans a 60-minute window (`MEETING_REMINDER_WINDOW_MINUTES`) and, for every
+  participant (mentee *and* mentor):
+  - posts an in-app notification **unconditionally** (bell items aren't subject to the
+    email category switches), and
+  - sends email **only** when `emailAllowed(user, 'meetingReminders')` is on, using the
+    org-branded template (`emailBrand`/`brandHeader`/`ctaBlock`) with an escaped title
+    and a role-aware deep link (`/portal` for mentees, `/mentor/meetings` otherwise).
+  - The cron moved from hourly to `*/15 * * * *`: a 60-minute window on an hourly tick
+    fired anywhere from 0 to 60 minutes ahead (a meeting could be "reminded" 3 minutes
+    before), so a quarter-hourly tick is what actually delivers 45–60 minutes' notice.
+  - **Idempotency:** `reminderSentAt` is now *claimed before sending* via
+    `updateMany({ where: { id, reminderSentAt: null } })` and skipped when
+    `count === 0`, so overlapping ticks can't double-send and the in-app notification
+    and the email sit behind a single marker. A mid-send failure loses a reminder rather
+    than duplicating one — the deliberate trade-off for a 4×-per-hour cron. Email errors
+    stay swallowed-and-logged so one bad address can't stop the remaining participants.
+
+### Added
+- **Server-side messaging authorization derived from project membership** (#768) —
+  `src/lib/conversations.ts`: `canMessage()` (same project **or** a mentorship, admins
+  always allowed), `sharesProject()`, `hasMentorship()`, `projectMemberIds()`,
+  `messageableUserIds()` and `getConversationIfAllowed()` (participants or admin only).
+  Mentorship remains an *additional* permission source, so the existing mentor ↔ mentee
+  thread path is untouched. Foundation only — no user-visible surface yet; the DM API
+  (#769) and the `/messages` picker (#770) build on this.
+
+### Schema
+- `Conversation.updatedAt` (`@updatedAt`) and `ConversationParticipant.lastReadAt` +
+  `@@index([userId])` added; the `Conversation`/`ConversationParticipant` models
+  themselves already landed with #784. `ConversationParticipant.addedAt` was **kept**
+  (the spec called it `joinedAt`) because the column is already deployed — renaming it
+  would drop data on `prisma db push` against the shared preview/prod DB.
+- `Message.relationId` is now **nullable** (`String?`, relation `MentorshipRelation?`) so
+  conversation-only messages can be written. Every pre-existing row keeps its
+  `relationId`, so the mentorship messaging path is unchanged; `getThreadIfAllowed()`
+  now takes `string | null | undefined` and **fails closed** on a missing id, which
+  keeps the legacy message/reaction/attachment routes safe (a conversation-only message
+  is simply unreachable through them). `sendUnreadMessageDigests()` filters on
+  `relationId: { not: null }`.
+
+### Changed
+- **Preview and production now deploy automatically on every merge to `main`.** Both
+  `deploy-preview.yml` and `deploy-prod.yml` were `workflow_dispatch`-only, so
+  "merging to `main` deploys" held only while someone remembered to click *Run
+  workflow*. Prod survived on 44 consecutive manual dispatches; the shared preview
+  did not — once per-PR topic previews (#583) took over the per-PR job, nobody
+  dispatched the shared one and https://crm-preview.ersah.in sat **72 commits / 11
+  minor versions behind** prod (0.14.1-beta vs 0.25.14-beta) for a week. Both
+  workflows now trigger on `push` to `main` (plus a 6-hourly safety net and manual
+  dispatch), keeping preview as the always-current staging environment ahead of the
+  planned weekly production release train — the switch to which is documented in
+  `deploy-prod.yml`'s header.
+  - **Drift gate:** automatic runs compare the live container's `/api/health` `sha`
+    with `origin/main` and exit without building when they match, so the scheduled
+    run is a no-op unless a push was genuinely missed (the self-hosted runner can be
+    offline) — and an unreachable container counts as drift, so the deploy also
+    repairs a down environment. `workflow_dispatch` bypasses the gate and still takes
+    any branch/tag/SHA.
+  - Automatic runs deploy the **tip of `origin/main`** rather than the commit they
+    checked out, so a run queued behind a newer one can never land an older commit on
+    top of it (the regression class fixed for prod in #794, now closed for preview too).
+  - `deploy-preview.yml` no longer deletes `/etc/internship-crm/preview.env` on every
+    run. It validates the file and removes it only when it fails to `source` or lacks
+    `DATABASE_URL` — a workflow that now runs unattended must not be able to destroy
+    the only copy of secrets derived from a container that may since have gone away.
+  - A manual dispatch of a **tag or SHA** now deploys it correctly (previously
+    `git reset --hard origin/<tag>` would have failed; non-branch refs deploy as
+    checked out).
+  - Infra/CI only; no application change, so no version bump. Closes #800.
+
+### Fixed
+- **Production deploys are now forward-only and deterministic (deploy oscillation).**
+  Prod could regress to an older version after some merges ("one step forward, one
+  step back"): the `deploy-prod.yml` / `deploy-preview.yml` jobs share one
+  self-hosted runner workspace and called `deploy-prod.sh --no-pull`, which builds
+  whatever commit the shared workspace was left at rather than `origin/main`; and
+  two uncoordinated deployers (the cron `autodeploy.sh` poller + the workflow) write
+  the prod container with no guard against out-of-order builds. Prod deploy now
+  hard-resets to `origin/main` at deploy time (dropped `--no-pull`) and a
+  `FORWARD_ONLY=1` guard in `deploy-prod.sh` refuses to deploy a commit older than
+  the one already live (recorded per-container; `FORCE=1` overrides for a deliberate
+  rollback). Preview/topic deploys are unaffected. Infra-only; no app change.
+
+## [0.26.0] - 2026-07-28
+
+### Added
+- **Email-delivery audit — seven "in-app notification, no email" gaps closed** (#668).
+  Audited every notification-producing event (all `notify()` call sites, the three
+  direct `prisma.notification.create` sites, and every `@/services/emailService`
+  importer) against "does it email → which function → consent check → error
+  handling". 16 transactional emails and 9 cron digests were already correct; the
+  gaps fixed are:
+  - Mentorship request **approved** → email to the mentee *and* to the newly
+    assigned mentor; **rejected** → email to the mentee
+    (`api/admin/mentorship-requests`, was `notify()`-only).
+  - **New mentorship request** → email to active admins (`api/mentorship-requests`)
+    — the queue was in-app-only, so a request was invisible until an admin logged in.
+  - **Public-profile contact form** → email to the profile owner with `Reply-To` set
+    to the sender (`api/public-contact/[userId]`) — an outside enquiry could
+    previously sit unseen indefinitely.
+  - **Meeting request** created / accepted / declined → email to the mentor and
+    back to the requester (accept carries the time + Jitsi link).
+  - `api/apply` mentor notification now honours the opt-out (it emailed
+    unconditionally, ignoring `emailNotifications`).
+
+  New templates follow the existing `emailBrand`/`brandHeader` pattern and route
+  through `sendEmail`, so the no-SMTP silent-skip and swallow-but-log error
+  handling are preserved. Adds a `mentorship` opt-out category
+  (`NOTIFICATION_CATEGORIES`), and `AccountSettings` now renders that constant
+  instead of a hard-coded list so a new email category cannot ship without a
+  toggle. Nine events are deliberately left in-app-only with a written rationale
+  (pipeline stage changes, goal/evaluation updates and similar high-frequency,
+  low-signal events).
+- **Goals: sorting and an archive for completed goals** (#785). The goals panel
+  gains a **Newest → Oldest / Oldest → Newest** selector (default newest-first,
+  applied to both lists) and an **Active | Archive** toggle following the same
+  `role="tablist"` pattern as the candidates archive (#0.25.14). Marking a goal
+  done moves it out of the active list into the archive, where it keeps its
+  completion date and can be reopened. Derived from the existing `Goal.status` and
+  `Goal.completedAt` — **no schema change and no API change**.
+- **Support: attachments on admin replies** (#788). Admins replying to a support
+  ticket can now attach files and images — message only, attachments only, or
+  both. The admin reply box reuses the shared `MessageComposer` /
+  `PendingAttachmentList` components and the same validation as the user side
+  (PNG/JPEG/PDF, ≤10 MB, ≤10 files, magic-byte checks, duplicate rejection), with
+  previews and per-file removal before sending. Object URLs are revoked on send
+  and when switching tickets. `POST /api/admin/support` now accepts
+  `multipart/form-data` in addition to the original JSON text-only shape.
+
+### Changed
+- Support attachment validation is now shared between the user channel and the
+  admin reply endpoint (`src/lib/supportAttachments.ts` gains
+  `appendSupportAttachments`; new `src/lib/supportMessageRequest.ts` holds the
+  server-side `readSupportMessageRequest` / `buildSupportAttachments`), replacing
+  the duplicated logic in `api/support` and `messages/support`. Behaviour,
+  error messages and status codes are unchanged.
+
+### Tests
+- `e2e/goals-archive-sort.spec.ts` (new) and additions to
+  `e2e/support-attachments.spec.ts`. Neither is `@smoke`-tagged, keeping the PR
+  gate fast.
 
 ## [0.25.15] - 2026-07-28
 

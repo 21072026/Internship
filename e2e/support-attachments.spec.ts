@@ -227,6 +227,152 @@ test('support attachments: download access control', async ({ browser }) => {
   }
 });
 
+// Admin side (#788): reply with an attachment from the support queue and verify
+// the requester sees it in their own thread.
+test('support attachments: admin replies with an attachment', async ({ browser }) => {
+  const userEmail = uniqueEmail('sa-adm-user');
+  const adminEmail = uniqueEmail('sa-adm-admin');
+  const pw = 'AttAdmin123';
+  const user = await seedUser(userEmail, pw, 'MENTEE', 'SA Admin Thread User');
+  await seedUser(adminEmail, pw, 'ADMIN', 'SA Admin Replier');
+
+  const ticket = await prisma.supportTicket.create({
+    data: { requesterId: user.id, subject: 'Need a document' },
+  });
+  await prisma.supportMessage.create({
+    data: { ticketId: ticket.id, senderId: user.id, body: 'Can you send me the form?' },
+  });
+
+  const adminCtx = await browser.newContext();
+  const userCtx = await browser.newContext();
+  try {
+    const adminPage = await adminCtx.newPage();
+    await signIn(adminPage, adminEmail, pw, '/admin');
+    await adminPage.goto('/admin/support');
+
+    // Expand the ticket to reveal the reply composer.
+    await adminPage.getByTestId(`admin-ticket-${ticket.id}`).click();
+    await expect(adminPage.getByTestId('admin-reply-input')).toBeVisible({ timeout: 10_000 });
+
+    // Empty composer — send disabled.
+    await expect(adminPage.getByTestId('admin-reply-send')).toBeDisabled();
+
+    // Attach a PDF only (no text) — send becomes enabled.
+    await adminPage.getByTestId('admin-reply-file-input').setInputFiles({
+      name: 'form.pdf',
+      mimeType: 'application/pdf',
+      buffer: PDF_BYTES,
+    });
+    await expect(adminPage.getByTestId('admin-reply-send')).toBeEnabled();
+
+    // A pending attachment can be removed again before sending.
+    await adminPage.locator('button[aria-label*="form.pdf"]').click();
+    await expect(adminPage.getByTestId('admin-reply-send')).toBeDisabled();
+
+    // Re-attach, add text, and send message + file together.
+    await adminPage.getByTestId('admin-reply-file-input').setInputFiles({
+      name: 'form.pdf',
+      mimeType: 'application/pdf',
+      buffer: PDF_BYTES,
+    });
+    await adminPage.getByTestId('admin-reply-input').fill('Here is the form.');
+
+    const done = adminPage.waitForResponse(
+      (r) => r.url().includes('/api/admin/support') && r.request().method() === 'POST',
+    );
+    await adminPage.getByTestId('admin-reply-send').click();
+    expect((await done).status()).toBe(201);
+
+    // Persisted against an admin-sent message on this ticket.
+    const stored = await prisma.supportAttachment.findFirst({
+      where: { message: { ticketId: ticket.id, senderId: { not: user.id } } },
+    });
+    expect(stored).not.toBeNull();
+    expect(stored!.filename).toBe('form.pdf');
+
+    // Unsupported types are rejected client-side in the admin composer too.
+    await adminPage.getByTestId('admin-reply-file-input').setInputFiles({
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('nope'),
+    });
+    await expect(
+      adminPage.getByText('notes.txt is not a supported file', { exact: false }),
+    ).toBeVisible({ timeout: 5_000 });
+
+    // The requester sees the admin's attachment in their own thread.
+    const userPage = await userCtx.newPage();
+    await signIn(userPage, userEmail, pw, '/portal');
+    await userPage.goto('/messages/support');
+    await expect(userPage.getByTestId('support-chat')).toBeVisible({ timeout: 10_000 });
+    await expect(
+      userPage.locator(`a[href="/api/support/attachments/${stored!.id}"]`),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // ...and can download it.
+    const download = await userPage.request.get(`/api/support/attachments/${stored!.id}`);
+    expect(download.status()).toBe(200);
+    expect(download.headers()['content-type']).toContain('application/pdf');
+  } finally {
+    await adminCtx.close();
+    await userCtx.close();
+    await cleanupSupportData(user.id, userEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+// API: admin reply with neither text nor files is rejected; text-only still works.
+test('support attachments API: admin reply requires text or a file', async ({ page }) => {
+  const userEmail = uniqueEmail('sa-adm-api-user');
+  const adminEmail = uniqueEmail('sa-adm-api-admin');
+  const pw = 'AttAdmin123';
+  const user = await seedUser(userEmail, pw, 'MENTEE', 'SA Admin API User');
+  await seedUser(adminEmail, pw, 'ADMIN', 'SA Admin API Admin');
+
+  const ticket = await prisma.supportTicket.create({
+    data: { requesterId: user.id, subject: 'API check' },
+  });
+
+  try {
+    await signIn(page, adminEmail, pw, '/admin');
+
+    // Neither text nor files → 400.
+    const empty = await page.request.post('/api/admin/support', {
+      multipart: { ticketId: ticket.id, body: '   ' },
+    });
+    expect(empty.status()).toBe(400);
+
+    // The original JSON text-only shape still works.
+    const textOnly = await page.request.post('/api/admin/support', {
+      data: { ticketId: ticket.id, body: 'Text-only reply.' },
+    });
+    expect(textOnly.status()).toBe(201);
+
+    // Unsupported type rejected server-side.
+    const badType = await page.request.post('/api/admin/support', {
+      multipart: {
+        ticketId: ticket.id,
+        body: '',
+        files: { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('nope') },
+      },
+    });
+    expect(badType.status()).toBe(400);
+
+    // Attachment-only reply accepted.
+    const fileOnly = await page.request.post('/api/admin/support', {
+      multipart: {
+        ticketId: ticket.id,
+        body: '',
+        files: { name: 'shot.png', mimeType: 'image/png', buffer: PNG_BYTES },
+      },
+    });
+    expect(fileOnly.status()).toBe(201);
+  } finally {
+    await cleanupSupportData(user.id, userEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});
+
 // API: empty body and no files returns 400.
 test('support attachments API: empty submission rejected', async ({ page }) => {
   const email = uniqueEmail('sa-empty');
