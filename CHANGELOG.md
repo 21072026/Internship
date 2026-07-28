@@ -53,6 +53,75 @@ version is shown in the sidebar footer of every page (links to the
   the one already live (recorded per-container; `FORCE=1` overrides for a deliberate
   rollback). Preview/topic deploys are unaffected. Infra-only; no app change.
 
+## [0.26.0] - 2026-07-28
+
+### Fixed
+- **Character limits now match the database, and the counter no longer advertises a
+  limit the write cannot honour** (#782 follow-up). The counter PR set `maxLength` on
+  the client independently of the `zod` cap on the server and of the column width in
+  `schema.prisma`; all three had drifted apart, which inverted the feature's purpose.
+  - `InteractionLog.notes` was a bare `String` — VARCHAR(191) in MySQL — while the log
+    form offered 5 000 characters and `/api/interactions` had **no** cap. A
+    three-sentence meeting note (192 chars) raised Prisma P2000 and surfaced as a 500.
+    `/api/mentor/email` writes `"<subject> — <body>"` into the same column *after* the
+    mail is sent, so overflowing it failed the request post-delivery and a retry
+    re-mailed every recipient.
+  - `Company.description` (2 000 offered) and `CompanyInterest.note` (1 000 accepted,
+    uncapped in the form) had the same VARCHAR(191) column; `Announcement.link` /
+    `Notification.link` were VARCHAR(191) against a 500-char `zod` cap.
+  - All widened to `@db.Text` (`link` to `@db.VarChar(500)`), and the client/server
+    caps unified in a new **`src/lib/textLimits.ts`** imported by both the `zod`
+    schemas and the `maxLength` props, so the two can no longer disagree. That also
+    corrects the mentorship-request box (advertised 2 000 against a 1 000 server cap —
+    a regression introduced by #782 raising the client number alone) and the public
+    contact form (5 000 against 2 000).
+- **The company description box could not be typed into at all.** `Textarea`
+  hard-bound `value={value}` with a `''` default, and `CompanyForm` passes
+  `{...register('description')}`, which supplies no `value` — making it a controlled
+  input pinned to the empty string. `Textarea` now binds `value` only when the caller
+  provides one and mirrors uncontrolled text into state so the counter still tracks.
+- **The counter reached six more textareas, including Announcements.** The #782 sweep
+  only walked `src/components/**`, so nine raw `<textarea>`s survived — among them the
+  Duyurular message box, where an invisible 20 000-character cap presented as an
+  untranslated "Validation failed" *after* the admin finished writing. The CSV import
+  and SSO certificate boxes stay raw deliberately. `CHANGELOG.md`'s earlier claim that
+  every raw textarea had been replaced was inaccurate.
+- **Counter no longer blocks the resize handle or overlaps text** — it sits on the
+  native grabber, so it gains `pointer-events-none`, and the textarea gains `pb-7`
+  when a counter is shown. New `wrapperClassName` prop for layout classes that belong
+  on the positioning wrapper (`flex-1`) rather than the inner textarea.
+
+### Added
+- **`e2e/text-limits.spec.ts`** — there was no e2e assertion anywhere in the suite for
+  the counter or for any text length, and `announcements.spec.ts` posts a ~25-char
+  string, so none of the above was reachable from CI on either the smoke gate or the
+  4×-daily full run. Covers counter render/count/warning-band transitions (via a new
+  `data-counter-state` attribute rather than colour classes), long-form announcement
+  submission, a 900-char company description round-trip, and a direct-to-API
+  over-limit post returning 400 rather than 500. The 1 200-char interaction-note
+  persistence test is tagged `@smoke`.
+
+### Changed
+- **The production forward-only guard fails closed instead of open** (`infra/deploy-prod.sh`).
+  No workflow set `fetch-depth`, so `actions/checkout` cloned depth 1 and the guard's
+  `git cat-file -e` / `git merge-base --is-ancestor` could not answer; AND-chained with
+  stderr suppressed, an unanswerable question read as "not older than live" and the
+  deploy proceeded — precisely inverted. Now `fetch-depth: 0`, unshallow before asking,
+  and refuse (`FORCE=1` overrides) when ancestry cannot be proven. The baseline also
+  comes from the container's `/api/health` rather than a state file only this script
+  writes, and the ancestor/descendant deadlock — which pinned prod off-`main` while
+  every 6-hourly run reported SUCCESS — now deploys forward and warns.
+- **Deploy health check verifies what is actually running.** It curled the root page,
+  which answers 200 from a container with a broken `DATABASE_URL` and reveals nothing
+  about which build is live — while the drift gate decides "already current" from that
+  same endpoint's `sha`, so a stale-but-answering container could suppress every future
+  build. Now probes `/api/health?db=1` and asserts `status`, `db`, and that the served
+  `sha` is the commit just built.
+- **Both deploy workflows email on failure** (the `stress.yml` `ALERT_EMAIL_TO`
+  pattern). A failed swap leaves no container running — `docker stop` precedes
+  `docker run` — and was previously just a red tick in the Actions tab. Refusals and
+  skips now emit `::warning::` and a step-summary line instead of hiding in a green log.
+
 ## [0.25.15] - 2026-07-28
 
 ### Fixed

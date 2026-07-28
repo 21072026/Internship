@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.26.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'The Announcements box now has the live character counter too, and stops you at the 20 000-character limit as you type — instead of accepting a long message and then failing with an untranslated "Validation failed" after you pressed Broadcast.',
+        'Long text now saves everywhere it said it would. Meeting notes, company descriptions and shortlist notes were being cut off by a database limit far smaller than the counter promised, so a normal paragraph could fail to save — in the case of a bulk mentor email, only after the email had already gone out. Every one of those fields now genuinely holds what the counter shows.',
+        'Fixed a company description box that could not be typed into at all, and a counter that sat on top of the resize handle so a textarea could not be dragged bigger.',
+      ],
+      tr: [
+        'Duyurular kutusunda da artık canlı karakter sayacı var ve yazarken 20 000 karakter sınırında sizi durduruyor — uzun bir mesajı kabul edip, siz Yayınla\'ya bastıktan sonra çevrilmemiş bir "Validation failed" hatasıyla başarısız olmak yerine.',
+        'Uzun metinler artık söz verilen her yerde kaydediliyor. Görüşme notları, şirket açıklamaları ve kısa liste notları, sayacın belirttiğinden çok daha küçük bir veritabanı sınırına takılıyordu; yani normal uzunlukta bir paragraf kaydedilemiyordu — toplu mentor e-postasında ise ancak e-posta gönderildikten sonra. Bu alanların hepsi artık sayacın gösterdiği kadarını gerçekten tutuyor.',
+        'Hiç yazı yazılamayan şirket açıklaması kutusu düzeltildi; ayrıca yeniden boyutlandırma tutamacının üstüne binen ve metin alanının büyütülmesini engelleyen sayaç sorunu giderildi.',
+      ],
+      de: [
+        'Auch das Ankündigungsfeld hat jetzt den Live-Zeichenzähler und stoppt dich beim Tippen an der Grenze von 20 000 Zeichen — statt eine lange Nachricht anzunehmen und nach dem Senden mit einem unübersetzten „Validation failed" zu scheitern.',
+        'Lange Texte werden jetzt überall dort gespeichert, wo es versprochen war. Gesprächsnotizen, Firmenbeschreibungen und Shortlist-Notizen liefen gegen ein Datenbanklimit, das weit kleiner war als der Zähler anzeigte — ein normaler Absatz konnte also nicht gespeichert werden, bei einer Mentor-Sammelmail sogar erst nachdem die E-Mail schon raus war. Alle diese Felder halten jetzt wirklich so viel, wie der Zähler anzeigt.',
+        'Ein Firmenbeschreibungsfeld, in das man überhaupt nicht schreiben konnte, ist behoben — ebenso ein Zähler, der auf dem Anfasser zum Vergrößern lag, sodass sich das Textfeld nicht ziehen ließ.',
+      ],
+    },
+  },
+  {
     version: '0.25.15-beta',
     date: '2026-07-28',
     highlights: {
