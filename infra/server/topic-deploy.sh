@@ -19,9 +19,11 @@
 #   TOPIC PORT IMAGE BASE_DOMAIN
 #
 # Image source — one of:
-#   (a) GHCR pull  (hosted workflow): ACTOR + B64_TOKEN, IMAGE is a ghcr.io ref.
-#   (b) Local build (self-hosted runner): SKIP_PULL=1 and IMAGE already exists
-#       locally (the workflow `docker build`s it on the server) — no registry.
+#   (a) GHCR pull (the normal path): IMAGE is a ghcr.io ref, built on a
+#       GitHub-hosted runner. Credentials as GHCR_USER + GHCR_TOKEN, or as
+#       ACTOR + B64_TOKEN when they have to survive an SSH hop.
+#   (b) Local build: SKIP_PULL=1 and IMAGE already exists locally. Kept for a
+#       manual deploy from a shell on the server; CI no longer builds here.
 #
 # Secrets — one of:
 #   (a) B64_DB B64_SEC B64_SMTP_HOST B64_SMTP_PORT B64_SMTP_USER B64_SMTP_PASS
@@ -35,6 +37,7 @@
 #   NGINX_RELOAD_CMD  (default "nginx -t && systemctl reload nginx")
 #   CERT_DIR          (default /etc/nginx/ssl)  — wildcard cert from acme-issue-wildcard.sh
 #   SKIP_PULL=1       — image is already present locally; skip ghcr login + pull.
+#   GHCR_USER/GHCR_TOKEN — registry credentials in plain form (see (a) above).
 #
 set -euo pipefail
 
@@ -69,10 +72,15 @@ CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"  # legacy raw route (c
 
 echo "==> Deploying topic '${TOPIC}' → ${URL} (container ${CONTAINER}, port ${PORT})"
 
-# ── Image: pull from GHCR unless it was built locally (self-hosted) ──────────
+# ── Image: pull from GHCR unless it was built locally ────────────────────────
 if [ "${SKIP_PULL:-0}" != "1" ]; then
-  printf '%s' "${B64_TOKEN:?B64_TOKEN required when SKIP_PULL!=1}" | base64 -d \
-    | docker login ghcr.io -u "${ACTOR:?ACTOR required when SKIP_PULL!=1}" --password-stdin
+  if [ -n "${GHCR_TOKEN:-}" ]; then
+    printf '%s' "$GHCR_TOKEN" \
+      | docker login ghcr.io -u "${GHCR_USER:-github-actions}" --password-stdin
+  else
+    printf '%s' "${B64_TOKEN:?GHCR_TOKEN or B64_TOKEN required when SKIP_PULL!=1}" | base64 -d \
+      | docker login ghcr.io -u "${ACTOR:?ACTOR required with B64_TOKEN}" --password-stdin
+  fi
   docker pull "$IMAGE"
 else
   docker image inspect "$IMAGE" >/dev/null 2>&1 || {

@@ -1,16 +1,21 @@
-name: Deploy prod (self-hosted, auto on main)
+name: Deploy prod (hosted build → server swap, auto on main)
 
-# CI-independent production deploy that RUNS ON THE SERVER via a self-hosted
-# runner (#636). Because self-hosted minutes don't count against the
-# GitHub-hosted quota, this works even while that quota is exhausted — and it
-# can be triggered remotely (e.g. by an agent over the GitHub API) so a deploy
-# no longer needs a human at an SSH prompt.
+# Production deploy. The IMAGE IS BUILT ON A GITHUB-HOSTED RUNNER (build-image.yml)
+# and pushed to ghcr; the Plesk server only pulls it and swaps the container.
 #
-# WHY THIS IS AUTOMATIC (#800): this workflow was dispatch-only, so "merging to
-# main deploys to production" (CLAUDE.md) held only as long as somebody
-# remembered to click Run workflow — 44 consecutive manual dispatches. It now
-# follows main by itself:
+# HISTORY (why it looks like this):
+#   #636  the whole deploy moved onto a self-hosted runner ON THE SERVER because
+#         the private repo's hosted Actions quota was exhausted. That made the
+#         production box run `npm ci` + `next build` for every merge.
+#   #800  it became automatic instead of dispatch-only (44 manual dispatches in a
+#         row is not a pipeline).
+#   now   the repo is PUBLIC, so hosted runners are free and unmetered again. The
+#         build goes back to GitHub; the self-hosted runner keeps only the work
+#         that genuinely has to happen on the server — reading the live health
+#         endpoint, `docker pull`, `prisma db push`, the container swap. Nothing
+#         on the box compiles anymore.
 #
+# HOW IT TRIGGERS:
 #   push to main   → deploy (the normal path; PRs already passed the smoke gate
 #                    in e2e.yml before they could merge)
 #   every 6 hours  → deploy ONLY if prod drifted from origin/main; the
@@ -60,19 +65,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy ${{ inputs.ref || 'main' }} to production
+  # ── 1. Gate (on the server: one curl + one ls-remote) ───────────────────────
+  # Stays on the self-hosted runner because the ground truth it reads is local:
+  # http://127.0.0.1:3200/api/health needs no public reachability, no firewall
+  # exception and no auth. The cost is a curl.
+  gate:
+    name: Check for drift
     runs-on: self-hosted
+    outputs:
+      deploy: ${{ steps.gate.outputs.deploy }}
+      sha: ${{ steps.gate.outputs.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref || 'main' }}
-          # Full history, not the default depth-1: infra/deploy-prod.sh answers
-          # "is the commit I am about to deploy older than what is live?" with
-          # `git merge-base --is-ancestor`, and on a shallow clone that question
-          # cannot be answered at all. The guard used to fail open there.
-          fetch-depth: 0
 
       - name: Decide whether a deploy is needed
         id: gate
@@ -81,18 +86,32 @@ jobs:
           REF: ${{ inputs.ref || 'main' }}
           HEALTH_URL: http://127.0.0.1:3200/api/health
         run: |
+          # Resolve the exact commit to deploy. Everything downstream (the image
+          # tag, the GIT_SHA baked into it, the forward-only guard) is pinned to
+          # this one sha so the build and the deploy can never disagree.
+          #
+          # Automatic runs target the TIP of origin/main rather than github.sha:
+          # a run that queued behind a newer one must not land an older commit on
+          # top of it (the regression #794 fixed for prod). Asking the remote also
+          # beats trusting a local ref — this workspace is shared and shallow.
+          if [ "$EVENT" = workflow_dispatch ]; then
+            SHA="$(git ls-remote origin "refs/heads/$REF" | cut -f1)"
+            [ -n "$SHA" ] || SHA="$(git ls-remote origin "refs/tags/$REF" | cut -f1)"
+            [ -n "$SHA" ] || SHA="$REF"   # not a branch or tag — assume a raw sha
+          else
+            SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
+          fi
+          [ -n "$SHA" ] || { echo "could not resolve '$REF'" >&2; exit 1; }
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          TARGET="${SHA:0:7}"
+
           # A manual dispatch is the explicit override: always deploy, even the
           # commit that is already live (that's how you force a rebuild).
           if [ "$EVENT" = workflow_dispatch ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "### Production: deploying \`$REF\` (manual dispatch)" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Production: deploying \`$REF\` (\`$TARGET\`, manual dispatch)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # Ask the remote directly rather than trusting a local ref: this job's
-          # workspace is shared and shallow, so refs/remotes/origin/main can be
-          # stale or absent here.
-          TARGET="$(git ls-remote origin refs/heads/main | cut -c1-7)"
-          [ -n "$TARGET" ] || { echo "could not resolve origin/main" >&2; exit 1; }
           # Ground truth for what is actually live: the container reports the
           # GIT_SHA baked into its image at /api/health. An unreachable endpoint
           # (container down or wedged) counts as drift, so the deploy repairs it.
@@ -106,34 +125,75 @@ jobs:
             echo "### Production drifted: live \`${LIVE:-unreachable}\` → deploying \`$TARGET\`" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  # ── 2. Build (GitHub-hosted — the expensive part) ───────────────────────────
+  build:
+    name: Build image
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      ref: ${{ needs.gate.outputs.sha }}
+      tag: prod-${{ needs.gate.outputs.sha }}
+      app_env: production
+
+  # ── 3. Swap (on the server: pull + db push + restart) ───────────────────────
+  deploy:
+    name: Swap production container
+    needs: [gate, build]
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout ${{ needs.gate.outputs.sha }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          # Full history: the forward-only guard in deploy-prod.sh asks
+          # `git merge-base --is-ancestor` whether this commit predates the live
+          # one, which a shallow clone can't answer.
+          fetch-depth: 0
+
       - name: Deploy
-        if: steps.gate.outputs.deploy == 'true'
         env:
-          EVENT: ${{ github.event_name }}
-          REF: ${{ inputs.ref || 'main' }}
+          IMAGE: ${{ needs.build.outputs.image }}
+          DEPLOY_SHA: ${{ needs.gate.outputs.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x infra/deploy-prod.sh
-          # Automatic runs deploy the TIP of origin/main: deploy-prod.sh syncs to
-          # it (hard reset — NOT --no-pull, so the build reflects origin/main at
-          # deploy time rather than whatever the shared self-hosted workspace
-          # happened to be left at). A manual dispatch of a NON-main ref keeps
-          # --no-pull so an arbitrary tag/SHA deploys exactly as checked out.
-          PULL_ARGS=()
-          if [ "$EVENT" = workflow_dispatch ] && [ "$REF" != main ]; then
-            PULL_ARGS=(--no-pull)
-          fi
-          # FORWARD_ONLY=1 makes prod refuse to regress to an older commit.
+          # --pull-image: the image was built on the hosted runner, so this box
+          #   only fetches it — no npm ci, no next build, no buildkit.
+          # --no-pull: the checkout above already pinned the exact commit the
+          #   image was built from; don't let the script re-sync to a moving tip.
+          # FORWARD_ONLY=1 makes prod refuse to regress to an older commit
+          #   (FORCE=1 for a deliberate rollback).
           # Secrets come from the server-side env file, never from the repo/workflow.
-          BRANCH="$REF" \
           FORWARD_ONLY=1 \
           ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" \
-          ./infra/deploy-prod.sh "${PULL_ARGS[@]}"
+          ./infra/deploy-prod.sh --no-pull --pull-image
 
-      # A failed deploy leaves the container swapped out, so silence here is the
-      # worst case: the env can be down (or stuck on an old build) with nothing
-      # but a red tick in the Actions tab to say so. Same pattern as stress.yml.
-      - name: Email alert on failure
-        if: failure()
+  # ── 4. Alert ────────────────────────────────────────────────────────────────
+  # A failed deploy leaves the container swapped out (docker stop precedes
+  # docker run), so silence here is the worst case: the env can be down, or
+  # stuck on an older build, with nothing but a red tick in the Actions tab to
+  # say so. Separate GitHub-hosted job on purpose — the server no longer runs
+  # npm at all (#956), and an alert that needs `npm ci` on a box whose deploy
+  # just failed is an alert that may never send.
+  notify:
+    name: Email alert on failure
+    needs: [gate, build, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: Send alert email
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -143,7 +203,7 @@ jobs:
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
           ALERT_SUBJECT: '⚠️ Internship CRM — production deploy FAILED'
           ALERT_BODY: |
-            The production deploy of ${{ inputs.ref || 'main' }} failed (event: ${{ github.event_name }}).
+            The production deploy of ${{ needs.gate.outputs.sha || 'main' }} failed (event: ${{ github.event_name }}).
             The production container may be down or serving an older build — check before assuming a merge is live.
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
