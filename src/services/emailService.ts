@@ -657,35 +657,106 @@ export async function checkStageDeadlineReminders() {
   return { reminded: overdue.length };
 }
 
-// Email reminders for meetings happening within the next 24h that haven't been
-// reminded yet.
+// How far ahead a meeting reminder fires. The cron ticks every 15 minutes
+// (see initCronJobs), so a meeting is reminded 45-60 minutes before it starts —
+// close enough to "one hour before" to be useful, and never late.
+export const MEETING_REMINDER_WINDOW_MINUTES = 60;
+
+// Reminders for meetings starting within the next ~60 minutes that haven't been
+// reminded yet (#777).
+//
+//   • in-app: EVERY participant (mentee *and* mentor) is notified, always —
+//     bell items are not subject to the email category opt-outs.
+//   • email: only participants whose 'meetingReminders' category is on.
+//
+// Idempotency: `reminderSentAt` is claimed *before* anything is sent, with a
+// `reminderSentAt: null` guard so an overlapping cron tick can't double-send.
+// Marking first means a mid-send failure loses a reminder rather than
+// duplicating one — the far less annoying failure mode, and it keeps the in-app
+// notification and the email behind the same single marker.
 export async function sendMeetingReminders() {
   const now = new Date();
-  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const horizon = new Date(now.getTime() + MEETING_REMINDER_WINDOW_MINUTES * 60 * 1000);
+  const participantSelect = {
+    id: true,
+    email: true,
+    fullName: true,
+    role: true,
+    orgId: true,
+    emailNotifications: true,
+    notificationPrefs: true,
+  } as const;
+
   const meetings = await prisma.meeting.findMany({
-    where: { scheduledAt: { gt: now, lte: in24h }, reminderSentAt: null },
-    include: { relation: { include: { mentee: { select: { email: true, fullName: true } } } } },
+    where: { scheduledAt: { gt: now, lte: horizon }, reminderSentAt: null },
+    include: {
+      relation: {
+        include: {
+          mentee: { select: participantSelect },
+          mentor: { select: participantSelect },
+        },
+      },
+    },
   });
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   let reminded = 0;
+  let notified = 0;
+  let emailed = 0;
+
   for (const m of meetings) {
-    try {
-      await sendEmail({
-        to: m.relation.mentee.email,
-        subject: `Reminder: ${m.title}`,
-        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">Upcoming meeting</h2>
-          <p>Hi ${m.relation.mentee.fullName}, this is a reminder for <strong>${m.title}</strong> at ${m.scheduledAt!.toLocaleString('en-GB')}.</p>
-          ${m.meetLink ? `<p><a href="${m.meetLink}">${m.meetLink}</a></p>` : ''}
-        </div>`,
-      });
-    } catch (e) {
-      console.error('Meeting reminder failed:', e);
-    }
-    await prisma.meeting.update({ where: { id: m.id }, data: { reminderSentAt: new Date() } });
+    // Claim it first — see the idempotency note above.
+    const claim = await prisma.meeting.updateMany({
+      where: { id: m.id, reminderSentAt: null },
+      data: { reminderSentAt: new Date() },
+    });
+    if (claim.count === 0) continue;
     reminded++;
+
+    const when = m.scheduledAt!.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+    const minutes = Math.max(1, Math.round((m.scheduledAt!.getTime() - Date.now()) / 60000));
+
+    // Both sides of the relation are participants. Series-generated meetings
+    // (seriesId set) carry the same relation, so they need no special casing.
+    const participants = [m.relation.mentee, m.relation.mentor].filter(
+      (u, i, all) => u && all.findIndex((o) => o?.id === u.id) === i
+    );
+
+    for (const user of participants) {
+      const link = user.role === 'MENTEE' ? '/portal' : '/mentor/meetings';
+      // In-app: unconditional (notify() never throws).
+      await notify(
+        user.id,
+        'meeting_reminder',
+        `Meeting "${m.title}" starts in ${minutes} minute${minutes === 1 ? '' : 's'} (${when}).`,
+        link
+      );
+      notified++;
+
+      if (!user.email || !emailAllowed(user, 'meetingReminders')) continue;
+      try {
+        const brand = await emailBrand(user.orgId);
+        await sendEmail({
+          to: user.email,
+          fromName: brand.name,
+          subject: `Reminder: ${m.title} starts soon`,
+          html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            ${brandHeader(brand, 'Upcoming meeting')}
+            <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(m.title)}</strong>.</p>
+            <p><strong>When:</strong> ${when} (in about ${minutes} minute${minutes === 1 ? '' : 's'})</p>
+            ${m.meetLink ? `<p><strong>Meeting link:</strong> <a href="${m.meetLink}">${esc(m.meetLink)}</a></p>` : ''}
+            ${ctaBlock(brand, `${appUrl}${link}`, 'Open the app')}
+          </div>`,
+        });
+        emailed++;
+      } catch (e) {
+        // Swallowed on purpose: a bad address or an SMTP hiccup must not stop
+        // the remaining participants (or meetings) from being reminded.
+        console.error('Meeting reminder email failed:', e);
+      }
+    }
   }
-  return { checked: meetings.length, reminded };
+  return { checked: meetings.length, reminded, notified, emailed };
 }
 
 // Weekly per-mentor digest: stale mentees, upcoming meetings, new applications.
@@ -1065,7 +1136,10 @@ export async function sendUnreadMessageDigests() {
 
   const userSelect = { id: true, fullName: true, email: true, emailNotifications: true, notificationPrefs: true } as const;
   const msgs = await prisma.message.findMany({
-    where: { readAt: null, digestedAt: null, deletedForEveryoneAt: null, createdAt: { lt: cutoff } },
+    // relationId is nullable since #768; the digest covers mentorship threads
+    // only, so conversation-only messages are skipped (and left un-digested for
+    // the conversation-layer digest to pick up later).
+    where: { readAt: null, digestedAt: null, deletedForEveryoneAt: null, createdAt: { lt: cutoff }, relationId: { not: null } },
     orderBy: { createdAt: 'asc' },
     include: {
       relation: { include: { mentor: { select: userSelect }, mentee: { select: userSelect } } },
@@ -1073,12 +1147,14 @@ export async function sendUnreadMessageDigests() {
   });
 
   // Group unread messages by recipient (the participant who is NOT the sender).
-  type Recipient = (typeof msgs)[number]['relation']['mentor'];
+  type Recipient = NonNullable<(typeof msgs)[number]['relation']>['mentor'];
   const byRecipient = new Map<string, { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }>();
   const allIds: string[] = [];
   for (const m of msgs) {
-    allIds.push(m.id);
     const rel = m.relation;
+    // Defensive: the query filters relationId out, so this cannot normally fire.
+    if (!rel) continue;
+    allIds.push(m.id);
     const recipient = m.senderId === rel.mentorId ? rel.mentee : rel.mentor;
     const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
     if (!recipient?.email) continue;
@@ -1144,11 +1220,16 @@ export function initCronJobs() {
 
   scheduledTasks.set('mentor-reminders', task);
 
-  // Meeting reminders — hourly.
-  const meetingTask = cron.schedule('0 * * * *', async () => {
+  // Meeting reminders — every 15 minutes. The reminder window is 60 minutes
+  // (MEETING_REMINDER_WINDOW_MINUTES); an hourly tick would fire anywhere from
+  // 0 to 60 minutes ahead, so a quarter-hourly tick is what actually delivers
+  // "about an hour before" (45-60 min). reminderSentAt keeps it single-shot.
+  const meetingTask = cron.schedule('*/15 * * * *', async () => {
     try {
       const r = await sendMeetingReminders();
-      console.log(`[Cron] Meeting reminders. Reminded: ${r.reminded}`);
+      if (r.reminded) {
+        console.log(`[Cron] Meeting reminders. Reminded: ${r.reminded}, in-app: ${r.notified}, emails: ${r.emailed}`);
+      }
     } catch (e) {
       console.error('[Cron] Meeting reminder error:', e);
     }

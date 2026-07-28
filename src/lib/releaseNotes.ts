@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.26.1-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'Meeting reminders now arrive about an hour before the meeting instead of a day ahead — and they go to everyone involved, mentor and mentee alike, not just the mentee. You always get the reminder in the app; the email version follows your notification settings, so you can switch it off and still see the reminder on your bell. Each meeting is only ever reminded once.',
+      ],
+      tr: [
+        'Toplantı hatırlatmaları artık bir gün önce değil, toplantıdan yaklaşık bir saat önce geliyor — ve yalnızca mentiye değil, mentor ve menti dahil tüm katılımcılara gidiyor. Hatırlatmayı uygulama içinde her zaman alıyorsunuz; e-posta olarak gönderilmesi bildirim tercihlerinize bağlı, yani e-postayı kapatsanız bile hatırlatma bildirim zilinizde görünmeye devam ediyor. Her toplantı için hatırlatma yalnızca bir kez gönderiliyor.',
+      ],
+      de: [
+        'Terminerinnerungen kommen jetzt etwa eine Stunde vor dem Termin statt einen Tag vorher — und sie gehen an alle Beteiligten, Mentor und Mentee, nicht nur an den Mentee. In der App erhältst du die Erinnerung immer; ob sie zusätzlich per E-Mail kommt, richtet sich nach deinen Benachrichtigungseinstellungen — schaltest du die E-Mail ab, erscheint die Erinnerung weiterhin in deiner Glocke. Pro Termin wird nur ein einziges Mal erinnert.',
+      ],
+    },
+  },
+  {
     version: '0.26.0-beta',
     date: '2026-07-28',
     highlights: {
