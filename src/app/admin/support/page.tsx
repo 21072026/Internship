@@ -1,14 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { LifeBuoy, Send, UserPlus } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { LifeBuoy, UserPlus } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
 import { SupportAttachmentList } from '@/components/SupportAttachmentList';
-import type { SupportAttachmentMeta } from '@/lib/supportAttachments';
+import { MessageComposer, PendingAttachmentList } from '@/components/MessageThread';
+import {
+  appendSupportAttachments,
+  SUPPORT_ATTACHMENT_ACCEPT,
+  type PendingSupportAttachment,
+  type SupportAttachmentMeta,
+} from '@/lib/supportAttachments';
 
 type Status = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
 
@@ -42,6 +48,18 @@ export default function AdminSupportPage() {
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [attachments, setAttachments] = useState<PendingSupportAttachment[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Drop every pending file and its preview URL (on send, or when switching ticket).
+  const resetComposer = useCallback(() => {
+    setReply('');
+    setAttachments((current) => {
+      current.forEach(({ url }) => URL.revokeObjectURL(url));
+      return [];
+    });
+    if (fileRef.current) fileRef.current.value = '';
+  }, []);
 
   const load = useCallback(
     (status: Status | '' = filter) =>
@@ -58,23 +76,39 @@ export default function AdminSupportPage() {
     OPEN: s.statusOpen, IN_PROGRESS: s.statusInProgress, CLOSED: s.statusClosed,
   };
 
+  // Message only, attachments only, or both (#788) — sent as multipart so the
+  // server reuses the shared support attachment validation.
   const sendReply = async (ticketId: string) => {
     const body = reply.trim();
-    if (!body) return;
+    if (!body && attachments.length === 0) return;
     setBusy(true);
     setErr('');
     try {
-      const res = await fetch('/api/admin/support', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticketId, body }),
-      });
-      if (res.ok) { setReply(''); await load(); } else setErr(t.common.error);
+      const form = new FormData();
+      form.append('ticketId', ticketId);
+      form.append('body', body);
+      attachments.forEach(({ file }) => form.append('files', file));
+
+      const res = await fetch('/api/admin/support', { method: 'POST', body: form });
+      if (res.ok) {
+        resetComposer();
+        await load();
+      } else {
+        setErr((await res.json().catch(() => null))?.error || t.common.error);
+      }
     } catch {
       setErr(t.common.error);
     } finally {
       setBusy(false);
     }
+  };
+
+  const addFiles = async (selected: FileList | null) => {
+    if (!selected?.length) return;
+    const result = await appendSupportAttachments(attachments, selected, s);
+    setAttachments(result.attachments);
+    setErr(result.error);
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const update = async (ticketId: string, data: { status?: Status; assignToMe?: boolean }) => {
@@ -117,7 +151,7 @@ export default function AdminSupportPage() {
           <button
             key={f.value || 'all'}
             type="button"
-            onClick={() => { setFilter(f.value); setOpenId(null); }}
+            onClick={() => { setFilter(f.value); setOpenId(null); resetComposer(); setErr(''); }}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               filter === f.value
                 ? 'bg-blue-600 text-white'
@@ -145,7 +179,7 @@ export default function AdminSupportPage() {
                 <button
                   type="button"
                   className="w-full text-left"
-                  onClick={() => { setOpenId(expanded ? null : tk.id); setReply(''); }}
+                  onClick={() => { setOpenId(expanded ? null : tk.id); resetComposer(); setErr(''); }}
                 >
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
@@ -189,26 +223,41 @@ export default function AdminSupportPage() {
                               : 'bg-blue-600 text-white'
                           }`}>
                             <p className="text-[11px] font-medium opacity-70 mb-0.5">{m.sender.fullName}</p>
-                            {m.body}
+                            {m.body && <span className="block break-words">{m.body}</span>}
                             <SupportAttachmentList attachments={m.attachments ?? []} />
                           </div>
                         </div>
                       ))}
                     </div>
 
-                    <div className="flex gap-2 mb-3">
-                      <textarea
-                        value={reply}
-                        onChange={(e) => setReply(e.target.value)}
-                        placeholder={a.replyPlaceholder}
-                        rows={2}
-                        maxLength={5000}
-                        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
-                        data-testid="admin-reply-input"
+                    <div className="mb-3">
+                      <PendingAttachmentList
+                        attachments={attachments}
+                        removeLabel={s.removeAttachment}
+                        onRemove={(index) => setAttachments((current) => {
+                          const next = [...current];
+                          const [removed] = next.splice(index, 1);
+                          if (removed) URL.revokeObjectURL(removed.url);
+                          return next;
+                        })}
                       />
-                      <Button type="button" loading={busy} disabled={!reply.trim()} onClick={() => sendReply(tk.id)} data-testid="admin-reply-send">
-                        <Send className="h-4 w-4" />
-                      </Button>
+                      <MessageComposer
+                        body={reply}
+                        onBodyChange={setReply}
+                        onSubmit={() => sendReply(tk.id)}
+                        sending={busy}
+                        hasAttachments={attachments.length > 0}
+                        placeholder={a.replyPlaceholder}
+                        sendLabel={t.messages.send}
+                        attachLabel={s.attach}
+                        fileInputRef={fileRef}
+                        accept={SUPPORT_ATTACHMENT_ACCEPT}
+                        onFilesSelected={(selected) => void addFiles(selected)}
+                        textareaTestId="admin-reply-input"
+                        inputTestId="admin-reply-file-input"
+                        attachTestId="admin-reply-attach"
+                        sendTestId="admin-reply-send"
+                      />
                     </div>
 
                     <div className="flex gap-2 flex-wrap">
