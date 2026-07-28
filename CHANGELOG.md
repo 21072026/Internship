@@ -10,6 +10,36 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+### Changed
+- **Preview and production now deploy automatically on every merge to `main`.** Both
+  `deploy-preview.yml` and `deploy-prod.yml` were `workflow_dispatch`-only, so
+  "merging to `main` deploys" held only while someone remembered to click *Run
+  workflow*. Prod survived on 44 consecutive manual dispatches; the shared preview
+  did not — once per-PR topic previews (#583) took over the per-PR job, nobody
+  dispatched the shared one and https://crm-preview.ersah.in sat **72 commits / 11
+  minor versions behind** prod (0.14.1-beta vs 0.25.14-beta) for a week. Both
+  workflows now trigger on `push` to `main` (plus a 6-hourly safety net and manual
+  dispatch), keeping preview as the always-current staging environment ahead of the
+  planned weekly production release train — the switch to which is documented in
+  `deploy-prod.yml`'s header.
+  - **Drift gate:** automatic runs compare the live container's `/api/health` `sha`
+    with `origin/main` and exit without building when they match, so the scheduled
+    run is a no-op unless a push was genuinely missed (the self-hosted runner can be
+    offline) — and an unreachable container counts as drift, so the deploy also
+    repairs a down environment. `workflow_dispatch` bypasses the gate and still takes
+    any branch/tag/SHA.
+  - Automatic runs deploy the **tip of `origin/main`** rather than the commit they
+    checked out, so a run queued behind a newer one can never land an older commit on
+    top of it (the regression class fixed for prod in #794, now closed for preview too).
+  - `deploy-preview.yml` no longer deletes `/etc/internship-crm/preview.env` on every
+    run. It validates the file and removes it only when it fails to `source` or lacks
+    `DATABASE_URL` — a workflow that now runs unattended must not be able to destroy
+    the only copy of secrets derived from a container that may since have gone away.
+  - A manual dispatch of a **tag or SHA** now deploys it correctly (previously
+    `git reset --hard origin/<tag>` would have failed; non-branch refs deploy as
+    checked out).
+  - Infra/CI only; no application change, so no version bump. Closes #800.
+
 ### Fixed
 - **Production deploys are now forward-only and deterministic (deploy oscillation).**
   Prod could regress to an older version after some merges ("one step forward, one
