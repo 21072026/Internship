@@ -23,6 +23,7 @@ optional body schema alone is insufficient: trim the body, then reject only when
 the trimmed body and parsed file list are both empty. For attachment-only ticket
 creation, derive the ticket subject from the first filename while leaving
 attachment validation and transactional storage untouched.
+
 ## 2026-07-23 — Meeting series auto-generation API (#774, 0.25.10-beta)
 
 **Playwright in this sandbox needs two env prerequisites before tests even boot:**
@@ -564,6 +565,8 @@ PR'da iki farklı infra hatası gördüm: (1) Docker build'de OOM (exit 255), (2
 `prisma db push` sırasında `P1001: Can't reach host.docker.internal:3306`.
 İkisi de sunucu tarafı — kod değişikliği gerekmez, sadece infra durumunu açıkla.
 
+---
+
 ## 2026-07-28 — #800/#803 Preview & prod otomatik deploy
 
 **"X deploy edilmiyor" şikayetinde ilk iş `event` alanına bakmak.** Preview'in
@@ -619,6 +622,161 @@ atlamaz, sadece geciktirir ve "neden 4 saat sonra deploy oldu?" sorusu doğar.
 **`mcp__github__actions_list` çıktısı bağlamı patlatır (~380 KB).** `minimal_output:
 true` bile işe yaramadı. Tek koşu için `actions_get`, liste için kaydedilen JSON'u
 python ile parse et (`run_number/event/conclusion/head_sha`) — 3 satır yeter.
+
+---
+
+## 2026-07-28 — HR/PO gözüyle uygulama turu + backlog doldurma (#736 altına 8 epic)
+
+Bu oturumda kod yazılmadı: uygulama yerelde ayağa kaldırıldı, Playwright ile 5 rol
+bağlamında 69 sayfa gezildi, bulgular epic/story/task ağacına çevrildi. Aşağıdaki
+notlar ortam kurulumu, MCP araç maliyeti ve backlog konvansiyonu hakkında.
+
+### Ortamı ayağa kaldırma (Claude Code web container)
+
+**Docker daemon çalışmıyor, elle başlatman gerekiyor.** `docker compose -f
+docker-compose.dev.yml up -d` ilk denemede şunu verir: *"failed to connect to the
+docker API at unix:///var/run/docker.sock"*. `docker` ve `dockerd` binary'leri
+kurulu, sadece daemon ayakta değil. Çözüm: `sudo dockerd > /tmp/dockerd.log 2>&1 &`
+sonra `docker info` ile doğrula, sonra compose çalışır. `mysql:8` imajını çekmek
++ MySQL'in hazır olması toplam ~1-2 dk; `docker exec crm-dev-db mysqladmin ping
+-h 127.0.0.1 -proot` ile bekle, sabit `sleep` yazma.
+
+**Yerel kurulumun tam sırası (docs/local-dev.md Option A çalışıyor):** compose up →
+`.env.local` (DATABASE_URL/NEXTAUTH_URL/NEXTAUTH_SECRET) → `DATABASE_URL=... npx
+prisma db push` → `npx prisma db seed` (SEED_ADMIN_* env'leriyle) → `npm run
+seed:demo` → `npm run seed:templates` → `npm run dev`. Prisma CLI `.env.local`
+OKUMAZ, sadece `.env` okur — o yüzden prisma komutlarına `DATABASE_URL=` prefix'i
+şart. `npm install` da gerekli (deps preinstalled değil).
+
+**Demo hesapları:** `admin@local.test` / `admin12345`; `mentor.aylin@demo.example.com`,
+`mentee.gizem@demo.example.com`, `company.1@demo.example.com` — hepsi
+`DemoPass123!`. `seed-demo.mjs` SOURCE rolü için hesap üretmiyor; o rolü test
+etmek isteyen elle oluşturmalı.
+
+### Playwright: pinned build uyumsuzluğunda symlink YETMEZ
+
+CLAUDE.md "pinned browser build eksikse kurulu build'i beklenen sürüm dizinine
+symlink'le" diyor. **Bu oturumda symlink işe yaramadı** ve nedeni önemli: kurulu
+build `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, beklenen ise
+`/opt/pw-browsers/chromium_headless_shell-1228/chrome-headless-shell-linux64/
+chrome-headless-shell`. Yani sadece **sürüm numarası** değil **dizin yapısı ve
+binary adı** da farklı (`chrome-linux` vs `chrome-linux64`), dolayısıyla sürüm
+dizinini symlink'lemek yolu düzeltmiyor.
+
+Çalışan çözüm — launch'a doğrudan yol ver:
+`chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })`.
+(`playwright.config.ts` üzerinden koşuyorsan `use: { launchOptions: { executablePath } }`.)
+
+**`playwright` paketi yok, `@playwright/test` var.** Ad-hoc gezinti script'i
+yazarken `import { chromium } from '@playwright/test'` kullan ve script'i **repo
+kökünden** çalıştır, yoksa `ERR_MODULE_NOT_FOUND` alırsın (scratchpad'den
+çalıştırmak node_modules çözümünü bozuyor).
+
+**Tek script'le çok rollü tur çok verimli.** Rol → sayfa listesi haritası + her
+sayfada `screenshot({ fullPage: true })` + `pageerror`/`console` toplama ile 69
+sayfa tek koşuda geziliyor. İki tuzak: (1) giriş sonrası `page.url()` hâlâ
+`/auth/signin` gösterebilir ama oturum kurulmuştur — sonraki sayfaların 200
+dönmesine bak, login'i "başarısız" sayma; (2) rıza banner'ı tıklamayı ele al
+(`getByRole('button', { name: /kabul|accept|tümünü/i })`) yoksa modal tıklamaları
+yiyor.
+
+### MCP araç maliyeti — bu oturumun en büyük sürprizi
+
+**`sub_issue_write` yanıtı EBEVEYNİN TÜM GÖVDESİNİ döndürüyor.** Uzun epic
+gövdeleriyle her tek bağlama çağrısı ~10-15 KB context yiyor. 8 epic + 20 story +
+12 task'lık bir ağacı bağlamak 40 çağrı = yüz binlerce karakter demek ve context'i
+bitiriyor. Pratik sonuç: **gövdeleri uzun yaz ama ağacı bağlarken bunu bütçele**;
+kısa gövdeli item'ları önce bağla, uzun epic'leri sona bırak. `[_ROOT_]` (#736)
+gövdesi boş olduğu için ona bağlamak neredeyse bedava.
+
+**`list_issues` / `search_issues` token limitini aşıyor** (bu oturumda 56 KB ve
+263 KB). Yanıt dosyaya kaydediliyor; doğru okuma yolu `Read` değil (satırlar çok
+uzun) — `python3 -c "import json; d=json.load(open('...')); ..."` ile sadece
+number/title/labels çıkar. Mükerrer kontrolü için `collections.Counter(titles)`
+tek satırda iş görüyor.
+
+**Priority'yi create çağrısında ver.** `issue_write` (method `create`) `labels` ve
+`issue_fields`'i aynı çağrıda kabul ediyor → P-label + org "Priority" alanı tek
+turda set edilir, ayrı `update` çağrısına gerek yok. Çağrı sayısını yarıya indirir.
+
+### Backlog konvansiyonu: `[_ROOT_]` #736
+
+**Yeni epic açan herkes onu #736 `[_ROOT_]` altına bağlamalı.** Bu repo tüm
+hiyerarşiyi tek kökten indiriyor: `#736 → epic → story → task`. Ben ilk turda
+epic'leri parentless bıraktım (`.claude/skills/backlog` dokümanı "mega-parent
+yapma, kökler No Parent'ta kalsın" diyor) ve kullanıcı düzeltti. **Skill dokümanı
+bu noktada repo pratiğiyle çelişiyor** — güncellenmeli.
+
+### Paralel oturum çakışması gerçek bir risk
+
+Ben backlog doldururken **başka bir oturum aynı repoda ~50 issue açtı** (8 güvenlik
+epic'i + 5 UX epic'i ve alt işleri). Sinyal: oluşturduğun issue numaralarında
+boşluklar (796, 797, ..., 799, **801**, 802, **804**...). Sonuç olarak kapsam
+kesişmesi oluştu (ör. "✨ Arayüz güveni" ↔ benim a11y/boş-durum işlerim;
+"🔔 Bildirim kalitesi" ↔ olumsuz sonuç iletişimi). **Rapor etmeden önce başlık
+bazlı mükerrer kontrolü yap** ve kesişmeleri kullanıcıya triyaj için açıkça söyle;
+"ben şunları oluşturdum" demekle iş bitmiyor.
+
+### Ürün analizi yaparken: "yok" demeden önce grep'le
+
+Bu repo göründüğünden **çok** zengin; ilk izlenimle "eksik" sanılan şeylerin
+yarısı mevcut çıktı. Bu oturumda VAR olduğu için tekrar yazılmaması gerekenler:
+`SavedViews` (kaydedilmiş görünüm), `mentorAttention` (dikkat kuyruğu),
+`analytics/aging` (StatusChange audit izinden gerçek bekleme süresi + SLA overdue),
+`rsvp/[token]` + `replyToken` (girişsiz token'la yanıt), `orgBranding` (white-label),
+`entitlements` (özellik kapısı), `ProgramBenchmark` (anonim toplu raporlama),
+`documentAccess` + erişim log'u, `retention` (KVKK saklama), `MentorshipRequest` /
+`MeetingRequest` ("talep → admin onayı" deseni iki kez çözülmüş).
+
+Gerçekten sıfır olanlar (grep ile doğrulanmış): teklif/`Offer`,
+`StatusChange.reason*`, `tag` modeli, anket/NPS, mükerrer aday tespiti/merge,
+haftalık rapor/devam takibi, sertifika üretimi (enum değeri var, üretici yok),
+`@axe-core/playwright`.
+
+**Ayrım önemli:** "grep sıfır sonuç verdi" ile "ben görmedim" farklı iddialardır.
+Her "Mevcut durum" maddesini `dosya:satır` ile bağla; iddiayı doğrulanabilir yap.
+
+## 2026-07-28 — Güvenlik denetimi (Playwright + hacker gözü) → backlog #814–#903
+
+**Bu container'da Docker daemon YOK; lokal DB için `apt-get install mariadb-server`.**
+`docker compose -f docker-compose.dev.yml up -d` çalışmıyor (`/var/run/docker.sock`
+yok, `service docker start` ulimit hatası veriyor). Çalışan yol: `apt-get update`
+(bu şart — bayat apt listesi 404 veriyor) `&& apt-get install -y mariadb-server`,
+sonra `service mariadb start`. Prisma `mysql` provider'ı MariaDB 10.11 ile
+sorunsuz `db push` yaptı. Root socket-auth kullanıyor, o yüzden Prisma için
+parolalı kullanıcı gerekiyor:
+`CREATE USER 'crm'@'%' IDENTIFIED BY 'crm'; GRANT ALL PRIVILEGES ON *.* TO 'crm'@'%';`
+
+**Playwright: `chromium_headless_shell` symlink'i işe yaramaz, `executablePath` kullan.**
+CLAUDE.md "eksik sürümü symlink'le" diyor ama 1194 build'inin dizin yapısı farklı
+(`chrome-linux/headless_shell`), Playwright 1.61 ise
+`chrome-headless-shell-linux64/chrome-headless-shell` arıyor. Çalışan çözüm:
+`chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })`.
+Ayrıca scratchpad'den çalıştırırken `import ... from '@playwright/test'` çözülmüyor —
+mutlak yol ver: `/home/user/Internship/node_modules/@playwright/test/index.mjs`.
+
+**Login otomasyonunda hidrasyonu bekle — yoksa parola URL'e düşer.**
+`goto` + hemen `click('button[type=submit]')` React hydrate olmadan native GET
+submit tetikliyor ve URL `?email=...&password=...` oluyor. `waitUntil:'networkidle'`
++ ~4 sn bekleyince düzeldi. Bu bir test tuzağı değil, **gerçek bir bulgu** çıktı:
+formlarda `method="post"` yok (#873).
+
+**Yetki testinde status kodu tek başına yeterli DEĞİL.** En kritik bulgu (#847:
+COMPANY/SOURCE tüm görüşme kayıtlarını okuyor) `200` dönüyordu — sızıntı dönen
+satırların içeriğindeydi. Rol matrisi testi her satırın sahipliğini doğrulamalı.
+Ayrıca `405` yanıtları yanlış pozitif üretiyor (route o metodu desteklemiyor),
+bulgu sayarken filtrele.
+
+**`seed:demo` SOURCE kullanıcısı üretmiyor.** Rolü test etmek için elle oluşturmak
+gerekti (`prisma` + `bcrypt.hash`). Kapsamlama boşluğu tam bu rolde çıktı — seed'e
+eklenmesi #899'un kabul kriterlerinde.
+
+**`sub_issue_write` yanıtları ebeveynin TÜM gövdesini geri döndürüyor.** 37 bağlantı
+için bu çok büyük context tüketimi demek. Öğrenilen sıra: önce tüm issue'ları
+oluştur (yanıtlar küçük), ID eşlemesini bir scratchpad dosyasına yaz, bağlantıları
+en sona bırak. Ayrıca issue numaraları oluşturma sırasıyla ardışık gelmiyor
+(814, 816, 818… atlıyor) — gövdede "bkz #N" yazarken numarayı önceden tahmin etme,
+sonradan düzelt.
 
 ## 2026-07-28 (2. tur) — #782 takibi: limitler DB ile uyumsuzdu + deploy güveni
 
