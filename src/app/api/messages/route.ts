@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
-import { getConversationIfAllowed, otherConversationParticipants } from '@/lib/conversations';
+import { getConversationIfAllowed, otherConversationParticipants, canPostToConversation } from '@/lib/conversations';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { sendEmail } from '@/services/emailService';
@@ -107,6 +107,9 @@ export async function GET(request: Request) {
         : {
             conversationId: conversation!.id,
             participants: conversation!.participants.map((p) => ({ id: p.user.id, fullName: p.user.fullName })),
+            // Lets the client render the thread read-only instead of failing on
+            // send. The POST route enforces the same rule regardless (#770).
+            canPost: await canPostToConversation(session.user, conversation!),
           }),
       messages,
     });
@@ -170,6 +173,13 @@ export async function POST(request: Request) {
     const rel = relationId ? await getThreadIfAllowed(session.user, relationId) : null;
     const conversation = conversationId ? await getConversationIfAllowed(session.user, conversationId) : null;
     if (!rel && !conversation) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    // Reading a conversation is permanent for its participants, but posting is
+    // re-checked against the live permission: someone removed from the shared
+    // project can still read the DM's history and no longer add to it (#770).
+    if (conversation && !(await canPostToConversation(session.user, conversation))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Read each file once into a Buffer, reused for both DB storage and the
     // recipient's email attachments.
