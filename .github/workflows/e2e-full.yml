@@ -1,26 +1,23 @@
 name: E2E Full Suite (scheduled)
 
-# The PR gate (e2e.yml) runs only the @smoke subset; this workflow is the
-# safety net behind it (#621/#624): the FULL Playwright suite, once a day, with
-# an email alert to the team when it goes red. Can also be run on demand.
+# The PR gate (e2e.yml) runs only the @smoke subset; this workflow is the safety
+# net behind it (#621/#624): the FULL Playwright suite, 4× a day, 4-way sharded,
+# with an email alert to the team when a run goes red. Can also be run on demand.
 #
-# Cost note (#636): a single job, NOT sharded. Sharding cuts wall-clock but
-# MULTIPLIES billed minutes — each shard repeats the whole setup (npm ci +
-# prisma + build + browser install, several minutes) before running its slice.
-# For a daily safety net wall-clock doesn't matter, so one serial run is the
-# cheapest. Frequency dropped from 4×/day to 1×/day for the same reason.
+# Cost note: this repo is PUBLIC since 2026-07, so GitHub-hosted standard runners
+# are free and unmetered. Sharding multiplies billed minutes (each shard repeats
+# npm ci + prisma + build + browser install) but cuts wall-clock ~4×, and with
+# 200+ spec files at `workers: 1` a serial run is hours long. Free minutes make
+# that trade obvious, so the 4×/day sharded cadence from #627 is back — it had
+# been cut to 1×/day serial while the private-repo quota was exhausted (#636/#648).
 #
 # Note: GitHub scheduled workflows can lag a few minutes and are disabled
 # automatically after 60 days without repository activity.
 on:
-  # PAUSED (GitHub Actions quota exhausted) — the daily schedule is disabled so
-  # failing runs stop emailing the team (this workflow also emails on red via the
-  # notify job). Re-enable the schedule below once the quota is restored. Manual
-  # runs still work via "Run workflow".
+  schedule:
+    # 4× a day at 03/09/15/21 UTC (~05/11/17/23 Europe/Berlin in summer).
+    - cron: '0 3,9,15,21 * * *'
   workflow_dispatch:
-  # schedule:
-  #   # Once a day at 03:00 UTC (~05:00 Europe/Berlin in summer).
-  #   - cron: '0 3 * * *'
 
 concurrency:
   group: e2e-full
@@ -28,8 +25,12 @@ concurrency:
 
 jobs:
   e2e-full:
-    name: Playwright full
+    name: Playwright full (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     services:
       mysql:
@@ -87,19 +88,19 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Run full E2E suite
-        run: npm run test:e2e
+      - name: Run full E2E suite (shard ${{ matrix.shard }}/4)
+        run: npx playwright test --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report-full
+          name: playwright-report-full-shard-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
 
-  # Single alert when the run goes red. Reuses the app's SMTP_* secrets via
-  # scripts/send-alert-email.mjs, same as stress.yml.
+  # Single alert for the whole run (not one per shard). Reuses the app's SMTP_*
+  # secrets via scripts/send-alert-email.mjs, same as stress.yml.
   notify:
     name: Email alert on failure
     runs-on: ubuntu-latest
@@ -122,9 +123,10 @@ jobs:
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
           ALERT_SUBJECT: '⚠️ Internship CRM — scheduled full e2e FAILED'
           ALERT_BODY: |
-            The scheduled full Playwright suite failed.
+            The scheduled full Playwright suite failed (at least one shard red).
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            The report is attached to the run as the playwright-report-full artifact.
+            Per-shard reports are attached to the run as artifacts
+            (playwright-report-full-shard-N).
         run: |
           # Install from the lockfile so nodemailer matches the version the app
           # pins (single source of truth); skip postinstall (prisma generate).

@@ -1,4 +1,4 @@
-name: Topic Preview (self-hosted, auto per-PR)
+name: Topic Preview (hosted build → server swap, auto per-PR)
 
 # Per-PR ephemeral preview environments (issue #583).
 #
@@ -6,19 +6,19 @@ name: Topic Preview (self-hosted, auto per-PR)
 #   PR #123 → container internship-crm-pr123 on a dedicated port →
 #             https://crm-pr123.ersah.in  (wildcard *.ersah.in DNS + TLS)
 # A bot comment on the PR carries the URL (updated on every push). When the PR
-# is merged or closed, the environment (container + image + nginx route) is torn
+# is merged or closed, the environment (container + image + Plesk route) is torn
 # down so it stops consuming server resources.
 #
-# RUNS ON THE SERVER via the self-hosted runner (same as deploy-prod.yml), so it
-# costs no GitHub-hosted Actions minutes — cheap enough to run on every push. The
-# image is built locally on the server (no GHCR round-trip) and the topic scripts
-# do the container swap + nginx routing.
+# THE IMAGE IS BUILT ON A GITHUB-HOSTED RUNNER (build-image.yml) and pushed to
+# ghcr; the server only pulls it and does the container swap + routing. This was
+# the single heaviest load the CI put on the production box: while the repo was
+# private and out of Actions quota (#636) the server ran a full `npm ci` +
+# `next build` for EVERY push to EVERY open PR. The repo is public now, so hosted
+# runners are free — the compiling belongs there.
 #
 # PREREQUISITES (one-time, on the Plesk server — see infra/README.md):
-#   1. The self-hosted runner is registered and its user can run docker AND
-#      write ${NGINX_CONF_DIR} + reload nginx (topic-deploy.sh does both). If the
-#      runner user isn't root, set NGINX_RELOAD_CMD to a sudo-wrapped command and
-#      grant the matching sudoers entry.
+#   1. The self-hosted runner is registered and its user can run docker AND the
+#      `plesk` CLI (topic-deploy.sh creates the subdomain + injects the proxy).
 #   2. Wildcard DNS *.ersah.in → the server (infra/setup-dns-cloudflare.sh) and a
 #      wildcard TLS cert in ${CERT_DIR} (infra/acme-issue-wildcard.sh).
 #   3. /etc/internship-crm/preview.env (chmod 600) with DATABASE_URL (the SHARED
@@ -26,6 +26,11 @@ name: Topic Preview (self-hosted, auto per-PR)
 #
 # ⚠️ The preview DB is SHARED across all topics (see infra/README.md) — a schema
 # `db push` here affects every topic. Coordinate concurrent schema changes.
+#
+# FORK PRs get no topic environment: GitHub keeps their GITHUB_TOKEN read-only
+# (so the image cannot be pushed to ghcr) and withholds repo secrets, and running
+# unreviewed fork code on the production host is not something to work around.
+# ci.yml + e2e.yml still gate those PRs.
 
 on:
   pull_request:
@@ -43,45 +48,64 @@ env:
   ENV_FILE: /etc/internship-crm/preview.env
 
 jobs:
-  topic:
+  # ── Build (GitHub-hosted — the expensive part) ───────────────────────────────
+  # app_env=preview so a topic env wears the green accent + "preview" badge and
+  # can't be mistaken for production (src/lib/appEnv.ts).
+  build:
+    name: Build image
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      # The PR branch tip, not the synthetic merge commit: a topic preview exists
+      # to show the author their own commit, and this sha is what /api/health and
+      # the version footer will report.
+      ref: ${{ github.event.pull_request.head.sha }}
+      tag: topic-pr${{ github.event.pull_request.number }}
+      app_env: preview
+
+  # ── Deploy / update (PR opened, pushed to, or reopened) ──────────────────────
+  deploy:
+    name: Deploy topic environment
+    needs: build
     runs-on: self-hosted
     permissions:
       contents: read
+      packages: read
       pull-requests: write
     steps:
       - name: Derive topic + port from PR number
         id: t
+        env:
+          PR: ${{ github.event.pull_request.number }}
         run: |
-          PR='${{ github.event.pull_request.number }}'
           echo "topic=pr${PR}" >> "$GITHUB_OUTPUT"
           # Deterministic port in 3300–3399 (prod=3200, preview=3201). 100 slots;
           # PRs whose numbers collide mod 100 would clash — fine at our volume.
           echo "port=$((3300 + PR % 100))" >> "$GITHUB_OUTPUT"
-          echo "image=internship-crm:topic-pr${PR}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
-        uses: actions/checkout@v4
-
-      # ── Deploy / update (PR opened, pushed to, or reopened) ──────────────────
-      - name: Build image locally
-        if: github.event.action != 'closed'
-        run: docker build --build-arg GIT_SHA=${{ github.sha }} -t "${{ steps.t.outputs.image }}" .
+        uses: actions/checkout@v7
 
       - name: Deploy topic environment
-        if: github.event.action != 'closed'
         env:
           TOPIC: ${{ steps.t.outputs.topic }}
           PORT: ${{ steps.t.outputs.port }}
-          IMAGE: ${{ steps.t.outputs.image }}
+          IMAGE: ${{ needs.build.outputs.image }}
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
           ENV_FILE: ${{ env.ENV_FILE }}
-          SKIP_PULL: '1'
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x infra/server/topic-deploy.sh
+          # No SKIP_PULL: the image comes from ghcr, built on the hosted runner.
           ./infra/server/topic-deploy.sh
 
       - name: Comment topic URL on the PR
-        if: github.event.action != 'closed'
         uses: actions/github-script@v7
         with:
           script: |
@@ -103,11 +127,20 @@ jobs:
               await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
             }
 
-      # ── Teardown (PR merged / closed) ────────────────────────────────────────
-      - name: Tear down topic environment
-        if: github.event.action == 'closed'
+  # ── Teardown (PR merged / closed) ────────────────────────────────────────────
+  # Runs for fork PRs too: harmless (nothing to remove) and it keeps the teardown
+  # unconditional, so an environment can never outlive its PR.
+  teardown:
+    name: Tear down topic environment
+    if: github.event.action == 'closed'
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Tear down
         env:
-          TOPIC: ${{ steps.t.outputs.topic }}
+          TOPIC: pr${{ github.event.pull_request.number }}
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
         run: |
           chmod +x infra/server/topic-teardown.sh
