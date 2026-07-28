@@ -130,16 +130,25 @@ the stress test nightly and **emails the team on failure**.
 
 ## Deployment
 
-CI/CD via GitHub Actions ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)):
-push to `main` deploys **production**; every PR deploys a **preview**.
+CI/CD via GitHub Actions, running on a **self-hosted runner** (the Plesk host itself, so
+deploys cost no hosted Actions minutes). Every merge to `main` goes to **both** the shared
+preview and production; every PR additionally gets its own throwaway environment.
 
-| Environment | URL | Trigger |
-|-------------|-----|---------|
-| Production | https://crm.ersah.in | push to `main` |
-| Preview | https://crm-preview.ersah.in | pull requests |
+| Environment | URL | Trigger | Workflow |
+|-------------|-----|---------|----------|
+| Production | https://crm.ersah.in | push to `main` | [`deploy-prod.yml`](.github/workflows/deploy-prod.yml) |
+| Preview | https://crm-preview.ersah.in | push to `main` | [`deploy-preview.yml`](.github/workflows/deploy-preview.yml) |
+| Topic (per PR) | `https://crm-pr<N>.ersah.in` | every push to the PR | [`topic-preview.yml`](.github/workflows/topic-preview.yml) |
 
-The pipeline builds a Docker image, pushes it to GitHub Container Registry, then SSHes to the
-Plesk host to run the container and apply the schema with `prisma db push`.
+Each deploy builds the Docker image from source on the server, applies the schema with
+`prisma db push`, swaps the container and health-checks it. Prod and preview also run
+every 6 hours as a safety net: they compare the live container's `/api/health` `sha`
+against `origin/main` and only rebuild if the environment has actually drifted (e.g. a push
+arrived while the runner was offline). Both can be dispatched manually against any
+branch/tag/SHA.
+
+> Production is moving to a **weekly release train** while preview keeps tracking `main`;
+> see the header of `deploy-prod.yml` for the one-line switch.
 
 ## Project structure
 
