@@ -23,6 +23,24 @@ version is shown in the sidebar footer of every page (links to the
   the one already live (recorded per-container; `FORCE=1` overrides for a deliberate
   rollback). Preview/topic deploys are unaffected. Infra-only; no app change.
 
+## [0.25.15] - 2026-07-28
+
+### Fixed
+- **`ProjectsManager` no longer shows a misleading `(0)` while loading** (#682). The
+  "All projects" heading rendered `({projects.length})` from the initial empty array
+  at the same time as the loading indicator, so users could not tell "no projects"
+  from "still loading". The counter is now suppressed until `loading` is false.
+
+### Changed
+- **Page-level search inputs carry a unique `data-testid`** (#702). `AdminNav`
+  renders its own sidebar `input[type="search"]` on every admin page, so an
+  unscoped `input[type="search"]` locator in an e2e spec silently matched the
+  sidebar filter instead of the page's own search box (the pitfall documented in
+  `CLAUDE.md`). Added `mentorship-search`, `users-search`, `board-search`,
+  `mentors-search`, `interactions-search` and `company-search` (cohorts,
+  organizations and sources already had one). Attribute-only; no behaviour change.
+- Synced the stale `version` field in `package-lock.json` with `package.json`.
+
 ## [0.25.14] - 2026-07-24
 
 ### Changed

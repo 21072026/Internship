@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.15-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'The projects list no longer flashes "(0)" while it is still loading — the project count now appears only once the data has arrived, so an empty list is never mistaken for a slow one.',
+      ],
+      tr: [
+        'Projeler listesi yüklenirken artık "(0)" göstermiyor — proje sayısı yalnızca veriler geldikten sonra çıkıyor, böylece boş liste ile yavaş yüklenen liste karışmıyor.',
+      ],
+      de: [
+        'Die Projektliste zeigt beim Laden nicht mehr "(0)" — die Projektanzahl erscheint erst, wenn die Daten geladen sind, sodass eine leere Liste nicht mit einer langsam ladenden verwechselt wird.',
+      ],
+    },
+  },
+  {
     version: '0.25.14-beta',
     date: '2026-07-24',
     highlights: {
