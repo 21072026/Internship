@@ -735,3 +735,89 @@ haftalık rapor/devam takibi, sertifika üretimi (enum değeri var, üretici yok
 **Ayrım önemli:** "grep sıfır sonuç verdi" ile "ben görmedim" farklı iddialardır.
 Her "Mevcut durum" maddesini `dosya:satır` ile bağla; iddiayı doğrulanabilir yap.
 
+
+## 2026-07-28 — Bekleyen backlog işleri (batch), proje tabanlı mesajlaşma zinciri
+
+### Alt-ajanlar bir anda tamamen kullanılamaz hale gelebilir — planı buna göre kur
+
+Bir workflow'un iki ajanı da **hiçbir dosya değiştirmeden** BLOCKED döndü. Sebep
+harness'ın permission katmanıydı: her araç çağrısı şu hatayla reddedildi —
+
+```
+The permission handler returned updatedInput for <Tool> that failed schema validation:
+The required parameter `<param>` is missing
+```
+
+Kaybolan parametreler: `Read`→`file_path`, `Bash`→`command`, `Glob`/`Grep`→`pattern`,
+`Write`→`file_path`+`content` (ikisi birden), `ToolSearch`→`query`. Yani `updatedInput`
+boş obje olarak dönüyor; girdinin bir kısmı değil **tamamı** düşüyor. Deterministik,
+retry çözmüyor. `ToolSearch`'ün de reddedilmesi kritik: deferred araçları yükleyip
+GitHub üzerinden dosya okuma kaçış yolu da kapanıyor.
+
+Dersler: (1) **Ajan raporlarını `git status` ile doğrula** — bu ikisi dürüsttü ama
+"yaptım" diyen bir ajan da olabilirdi. (2) Ajanlar tahmine dayalı kod yazmayı
+reddettiği için doğru davrandı; repoyu okumadan yazılan kod geri uyumu sessizce
+bozardı. (3) Blokaj altyapısalsa aynı görevi tekrar spawn etmek aynı sonucu verir —
+işi kendin yaz. Bu oturumda #769 ve #770'in tamamı elle yazıldı.
+
+### `prisma validate` şema-DB farkını görmez; `db push` tuzakları yalnızca deploy'da patlar
+
+İki kez düştüm, ikisi de yerelde **tamamen sessiz**:
+
+1. **FK kolonuna `@@index` eklemek.** `ConversationParticipant`'a `@@index([userId])`
+   ekledim. MySQL FK için o indeksi zaten tutuyor; Prisma onu `..._userId_idx` adına
+   çevirmek isteyip DROP+CREATE denedi, MySQL de FK'nin dayandığı indeksi düşürmeyi
+   reddetti: `Can't DROP INDEX 'ConversationParticipant_userId_fkey'`. **İnce tarafı:
+   bu tuzak yalnızca tablo zaten deploy edilmişse kurulur** — Prisma tabloyu sıfırdan
+   yaratırken indeksi kendi kurar, FK onu yeniden kullanır, sorun görünmez. FK kolonuna
+   ayrı indeks zaten gereksiz.
+2. **Varsayılansız `NOT NULL` kolon.** `Conversation.updatedAt`'i `@default` olmadan
+   ekledim; tabloda satır olsa `db push` orada duracaktı. `@default(now())` çözdü.
+
+`prisma format`/`validate`/`generate` üçü de geçti — şema geçerliydi, sorun şemanın
+**canlı tabloyla farkı**. Paylaşımlı DB'ye `db push` yasak olduğu için bu sınıfı ancak
+topic deploy gösterir; doğru yerde yakalandı ama hata mesajı **ilk başarısız adımda
+kesiliyor**, o yüzden bir tuzağı düzeltirken sıradakini de arayın.
+
+### Projects v2 kolonu bu ortamdan yazılamıyor — otomasyon tek çıkış
+
+`CLAUDE.md` "kartı ilgili kolona taşı" diyor ama: Projects v2 **yalnızca GraphQL** ile
+yazılır (REST karşılığı yok), GraphQL bu oturumda kapalı ("only the pinned set of
+PR-review operations"), doğrudan REST 403, MCP'de Projects v2 aracı yok. `Status` alanı
+`list_issue_fields`'de de **görünmez** — o yalnızca org seviyesi issue alanlarını
+(`Priority`, `Start date`, `Target date`, `Effort`) döndürür; `Status` board'un kendi
+alanı. Yapılabilen: issue atama + `Start date`. Kalıcı çözüm `.github/workflows/
+project-status.yml` (bu oturumda eklendi) — `PROJECTS_TOKEN` secret'ı gerekiyor,
+çünkü varsayılan `GITHUB_TOKEN` Projects v2'ye yazamaz.
+
+### Küçük ama zaman yakan şeyler
+
+- **`npm run build | head` yapma.** SIGPIPE build'i yarıda kesip `.next`'i bozuk
+  bırakıyor, sonraki koşu yanıltıcı `ENOENT: routes-manifest.json` veriyor. Çıktıyı
+  dosyaya yaz, sonra `grep`le.
+- **Bu konteynerde e2e koşturulamıyor**: `DATABASE_URL` yok, MySQL yok, docker daemon
+  kapalı (`/var/run/docker.sock` yok). Spec yazıp tip kontrolünden geçirebilirsin ama
+  çalıştıramazsın — PR'da bunu açıkça yaz, "test ettim" deme. `@smoke`'a eklemezsen ilk
+  gerçek koşu gecelik tam takımda olur.
+- **e2e locator'ını dil metnine bağlama.** `getByRole('button', {name:/send|gönder/i})`
+  yerine `data-testid`. `MessageComposer` zaten `sendTestId`/`textareaTestId` kabul
+  ediyor.
+- **Merge sonrası dal:** squash merge'den sonra uzak dal squash öncesi commit'i tutuyor
+  ve normal push reddediliyor. `git diff --stat origin/main origin/<dal>` boşsa içerik
+  main'de demektir, `--force-with-lease` güvenli.
+- **Topic imaj derlemesi `main` değişince ~15 dk sürebilir** (katman önbelleği
+  geçersizleşiyor; normalde ~3 dk). `in_progress` uzun sürüyorsa takıldı sanmadan önce
+  `actions_get get_workflow_job` ile adım adım süreleri bak.
+
+### Mevcut nullable kolonun alt uçlarını kontrol et
+
+#768 `Message.relationId`'yi nullable yaptı. Alt uçlar (`PATCH`/`DELETE
+/api/messages/[id]`, `[id]/reactions`, `attachments/[id]`) hepsi
+`getThreadIfAllowed(message.relationId)` ile yetkilendiriyordu ve `null`'da fail-closed
+dönüyordu: konuşma mesajı **gönderilebilir ama düzenlenemez, silinemez, tepki alamaz,
+eki indirilemez**. Ortak bir `canAccessMessage()` gerekti. Bir kolonu nullable yaparken
+onu okuyan **tüm** yetki yollarını greple.
+
+Ayrıca: yetkiyi *katılımcılık* ile *canlı izin* olarak ayırmak gerekti. Okuma kalıcı
+(geçmiş kaybolmasın), yazma yeniden kontrol ediliyor (`canPostToConversation`) — yoksa
+projeden çıkarılan üye süresiz yazmaya devam ederdi.
