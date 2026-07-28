@@ -10,7 +10,20 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
-## [0.25.13] - 2026-07-24
+### Fixed
+- **Production deploys are now forward-only and deterministic (deploy oscillation).**
+  Prod could regress to an older version after some merges ("one step forward, one
+  step back"): the `deploy-prod.yml` / `deploy-preview.yml` jobs share one
+  self-hosted runner workspace and called `deploy-prod.sh --no-pull`, which builds
+  whatever commit the shared workspace was left at rather than `origin/main`; and
+  two uncoordinated deployers (the cron `autodeploy.sh` poller + the workflow) write
+  the prod container with no guard against out-of-order builds. Prod deploy now
+  hard-resets to `origin/main` at deploy time (dropped `--no-pull`) and a
+  `FORWARD_ONLY=1` guard in `deploy-prod.sh` refuses to deploy a commit older than
+  the one already live (recorded per-container; `FORCE=1` overrides for a deliberate
+  rollback). Preview/topic deploys are unaffected. Infra-only; no app change.
+
+## [0.25.15] - 2026-07-28
 
 ### Fixed
 - **Email-delivery audit & preference gating (#668).** Added `applications` and
@@ -21,6 +34,17 @@ version is shown in the sidebar footer of every page (links to the
   recipient's preferences (required transactional mail stays exempt). Cron email
   failures are wrapped in try/catch so one failed send no longer aborts the whole
   job, and previously-swallowed errors are now logged with context.
+
+## [0.25.14] - 2026-07-24
+
+### Changed
+- **Deactivated candidates are archived by default.** The Adaylar (candidates)
+  list now shows only **active** candidates by default; deactivated ("Devre dışı")
+  candidates move to a separate **Archive** view via an Active | Archived toggle.
+  `GET /api/candidates` defaults to `isActive: true` and accepts `?archived=1` to
+  return the deactivated set (the toggle also drives CSV/Excel export, so exports
+  match the visible view). Bulk activate from the archive restores candidates to
+  the active list.
 
 ## [0.25.11] - 2026-07-24
 

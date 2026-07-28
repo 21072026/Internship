@@ -220,6 +220,10 @@ const en = {
     allGradYears: 'All graduation years',
     clearFilters: 'Clear filters',
     found: 'candidates found',
+    viewLabel: 'View',
+    activeTab: 'Active',
+    archivedTab: 'Archived',
+    noneArchived: 'No archived candidates',
   },
   candidateDetail: {
     companyInterest: { interested: 'Company is interested', shortlisted: 'Shortlisted by company', pass: 'Company passed' },
@@ -1737,6 +1741,10 @@ const tr: Dict = {
     allGradYears: 'Tüm mezuniyet yılları',
     clearFilters: 'Filtreleri temizle',
     found: 'aday bulundu',
+    viewLabel: 'Görünüm',
+    activeTab: 'Aktif',
+    archivedTab: 'Arşiv',
+    noneArchived: 'Arşivlenmiş aday yok',
   },
   candidateDetail: {
     companyInterest: { interested: 'Şirket ilgileniyor', shortlisted: 'Şirket kısa listeye aldı', pass: 'Şirket geçti' },
@@ -3252,6 +3260,10 @@ const de: Dict = {
     allGradYears: 'Alle Abschlussjahre',
     clearFilters: 'Filter zurücksetzen',
     found: 'Kandidaten gefunden',
+    viewLabel: 'Ansicht',
+    activeTab: 'Aktiv',
+    archivedTab: 'Archiviert',
+    noneArchived: 'Keine archivierten Kandidaten',
   },
   candidateDetail: {
     companyInterest: { interested: 'Unternehmen interessiert', shortlisted: 'Vom Unternehmen auf die Shortlist gesetzt', pass: 'Unternehmen hat abgesagt' },
