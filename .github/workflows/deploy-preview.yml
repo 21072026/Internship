@@ -64,6 +64,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || 'main' }}
+          # Full history, not the default depth-1: infra/deploy-prod.sh answers
+          # "is the commit I am about to deploy older than what is live?" with
+          # `git merge-base --is-ancestor`, and on a shallow clone that question
+          # cannot be answered at all. The guard used to fail open there.
+          fetch-depth: 0
 
       - name: Decide whether a deploy is needed
         id: gate
@@ -141,3 +146,24 @@ jobs:
           NETWORK=bridge \
           ENV_FILE="$ENV_FILE" \
           ./infra/deploy-prod.sh "${PULL_ARGS[@]}"
+
+      # A failed deploy leaves the container swapped out, so silence here is the
+      # worst case: the env can be down (or stuck on an old build) with nothing
+      # but a red tick in the Actions tab to say so. Same pattern as stress.yml.
+      - name: Email alert on failure
+        if: failure()
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          ALERT_SUBJECT: '⚠️ Internship CRM — preview deploy FAILED'
+          ALERT_BODY: |
+            The preview deploy of ${{ inputs.ref || 'main' }} failed (event: ${{ github.event_name }}).
+            The preview container may be down or serving an older build — check before assuming a merge is live.
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/send-alert-email.mjs
