@@ -619,3 +619,63 @@ atlamaz, sadece geciktirir ve "neden 4 saat sonra deploy oldu?" sorusu doğar.
 **`mcp__github__actions_list` çıktısı bağlamı patlatır (~380 KB).** `minimal_output:
 true` bile işe yaramadı. Tek koşu için `actions_get`, liste için kaydedilen JSON'u
 python ile parse et (`run_number/event/conclusion/head_sha`) — 3 satır yeter.
+
+## 2026-07-28 (2. tur) — #782 takibi: limitler DB ile uyumsuzdu + deploy güveni
+
+**"Özellik canlıda yok" şikâyetini önce shallow clone ile doğrula.** Konteynerdeki
+klon `--depth 50` ile geliyor ve `origin/main` ref'i bayat olabiliyor: `git
+merge-base --is-ancestor 5486563 origin/main` "değil" dedi, `git fetch origin main`
+sonrası aynı commit main'in içinde çıktı. Yani #782 hem merge'lenmişti hem canlıydı.
+Herhangi bir "bu commit main'de mi?" iddiasından önce `git fetch` veya
+`git ls-remote origin refs/heads/main` — yerel ref'e asla güvenme. Aynı tuzağın
+`infra/deploy-prod.sh`'deki FORWARD_ONLY guard'ını da sessizce **fail-open** yaptığını
+bu sayede fark ettim (hiçbir workflow `fetch-depth` set etmiyordu).
+
+**Kullanıcı "canlıda yok" derken çoğu zaman "benim baktığım yerde yok" demek
+istiyor.** Sayaç 12 komponente bağlanmıştı ama sweep sadece `src/components/**`
+altında gezmiş; 9 raw `<textarea>` kalmıştı ve maintainer'ın ekran görüntüsü tam
+olarak onlardan birindeydi (Duyurular). CHANGELOG "her raw textarea değiştirildi"
+diyordu, releaseNotes "tüm metin alanları" diyordu — ikisi de yanlıştı. **Sweep
+yaparken `git grep -l "<textarea"` ile bitir, iddiayı ondan sonra yaz.**
+
+**Client `maxLength` + server `zod` + Prisma kolon genişliği: üçü tek kaynaktan
+gelmeli.** Üçü ayrı ayrı yazıldığı için sayaç, write'ın kaldıramayacağı limitleri
+reklam ediyordu — özelliğin amacının tam tersi. En sinsi hâli: `String` (yani
+VARCHAR(191)) bir kolona 5 000 karakter vaat etmek. 192 karakterlik normal bir not
+Prisma P2000 → 500 veriyordu ve sayaç o noktada hâlâ gri "191/5000" gösteriyordu.
+`src/lib/textLimits.ts` açtım; hem zod hem `maxLength` oradan import ediyor.
+**`@db.Text` 65 535 BYTE'tır, karakter değil** — utf8mb4'te Türkçe/Almanca metin
+karakter başına 2-3 byte, yani güvenli üst sınır ~20 000 karakter.
+
+**Controlled/uncontrolled: `value = ''` default'u react-hook-form'u kırar.**
+`Textarea` `value={value}` bağlıyordu, `register()` ise `value` döndürmüyor →
+CompanyForm'un açıklama kutusu kalıcı olarak boş bir controlled input olmuştu, yani
+**hiç yazı yazılamıyordu**. Ortak bir input komponentine `value` default'u koyma;
+`value !== undefined` ise controlled, değilse state'e mirror'la.
+
+**Ortak komponente sarmalayıcı `div` eklerken çağıran tarafın layout class'ını
+taşı.** `<textarea className="flex-1">` → `<Textarea className="flex-1">` sessiz bir
+layout regresyonu: artık flex child sarmalayıcı div, `flex-1` içteki textarea'ya
+gidiyor ve hiçbir şey yapmıyor. `wrapperClassName` prop'u ekledim.
+
+**Test yokluğu "scheduling" ile açıklanmaz.** Sayaç için 215 spec'lik suite'te tek
+assertion yoktu; `announcements.spec.ts` ~25 karakterlik string post ediyordu, tüm
+interaction spec'leri 'Weekly sync' gibi notlar kullanıyordu. Smoke gate suçlu
+değildi — 4x/gün koşan full suite'te de yoktu. **Bir limiti test edecekseniz limitin
+yakınında bir değer kullanın**; happy-path uzunlukları hiçbir sınırı egzersiz etmez.
+
+**Deploy güvensizliği haklıydı ama sebep tahmin edilenden farklıydı.** Regresyon ya
+da force-push yoktu; ikisi de `workflow_dispatch`-only idi. 46 deploy-prod koşusunun
+#803'ten öncekilerin hepsi manueldi, deploy-preview'un toplam 5 koşusu vardı ve
+preview 07-21'den beri 72 commit geride duruyordu. **"Merge = deploy" invaryantını
+iddia eden her repoda gerçek koşu geçmişini `actions_list` ile doğrula** — header
+yorumu değil, `event` alanı söyler. `git log`'da görünmeyen tek şey neyin deploy
+edildiğidir.
+
+**Yeşil bir job "her şey yolunda" demek değildir.** İki sessiz durum buldum: (1)
+FORWARD_ONLY refuse yolu `exit 0` ile SUCCESS raporluyordu, yani prod main'in
+dışında sonsuza kadar sabitlenebiliyordu; (2) health check kök sayfayı curl ediyordu
+— bozuk `DATABASE_URL`'li konteyner de 200 döner ve hangi build'in koştuğunu
+söylemez, üstelik drift gate kararını aynı endpoint'in `sha`'sından veriyor. Deploy
+sonrası **ne deploy ettiğini doğrula**: `/api/health?db=1` + served `sha == ${GIT_SHA:0:7}`.
+Reddedilen/atlanan deploy `::warning::` + step summary yazsın.
