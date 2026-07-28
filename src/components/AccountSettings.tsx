@@ -13,6 +13,7 @@ import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
 import { durationSince } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
+import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -423,7 +424,9 @@ export function AccountSettings() {
         <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
 
         <div className={`mt-3 space-y-1.5 pl-6 ${emailNotifications ? '' : 'opacity-40 pointer-events-none'}`}>
-          {(['messages', 'announcements', 'deadlines', 'digest', 'meetingReminders'] as const).map((cat) => (
+          {/* Driven by NOTIFICATION_CATEGORIES (#668) so a new email category
+              can't ship without an opt-out toggle here. */}
+          {NOTIFICATION_CATEGORIES.map((cat) => (
             <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
               <input
                 type="checkbox"

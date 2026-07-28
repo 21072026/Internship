@@ -8,16 +8,12 @@ import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
 import { SupportAttachmentList } from '@/components/SupportAttachmentList';
+import { MessageComposer, PendingAttachmentList } from '@/components/MessageThread';
 import {
-  MessageComposer,
-  PendingAttachmentList,
-  type PendingMessageAttachment,
-} from '@/components/MessageThread';
-import {
+  appendSupportAttachments,
   SUPPORT_ATTACHMENT_ACCEPT,
-  SUPPORT_ATTACHMENT_MAX_COUNT,
+  type PendingSupportAttachment,
   type SupportAttachmentMeta,
-  validateSupportFile,
 } from '@/lib/supportAttachments';
 
 type Status = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
@@ -52,8 +48,18 @@ export default function AdminSupportPage() {
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [attachments, setAttachments] = useState<PendingMessageAttachment[]>([]);
+  const [attachments, setAttachments] = useState<PendingSupportAttachment[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Drop every pending file and its preview URL (on send, or when switching ticket).
+  const resetComposer = useCallback(() => {
+    setReply('');
+    setAttachments((current) => {
+      current.forEach(({ url }) => URL.revokeObjectURL(url));
+      return [];
+    });
+    if (fileRef.current) fileRef.current.value = '';
+  }, []);
 
   const load = useCallback(
     (status: Status | '' = filter) =>
@@ -70,6 +76,8 @@ export default function AdminSupportPage() {
     OPEN: s.statusOpen, IN_PROGRESS: s.statusInProgress, CLOSED: s.statusClosed,
   };
 
+  // Message only, attachments only, or both (#788) — sent as multipart so the
+  // server reuses the shared support attachment validation.
   const sendReply = async (ticketId: string) => {
     const body = reply.trim();
     if (!body && attachments.length === 0) return;
@@ -80,12 +88,10 @@ export default function AdminSupportPage() {
       form.append('ticketId', ticketId);
       form.append('body', body);
       attachments.forEach(({ file }) => form.append('files', file));
+
       const res = await fetch('/api/admin/support', { method: 'POST', body: form });
       if (res.ok) {
-        setReply('');
-        attachments.forEach(({ url }) => URL.revokeObjectURL(url));
-        setAttachments([]);
-        if (fileRef.current) fileRef.current.value = '';
+        resetComposer();
         await load();
       } else {
         setErr((await res.json().catch(() => null))?.error || t.common.error);
@@ -99,43 +105,9 @@ export default function AdminSupportPage() {
 
   const addFiles = async (selected: FileList | null) => {
     if (!selected?.length) return;
-    setErr('');
-    const next = [...attachments];
-    for (const file of Array.from(selected)) {
-      const duplicate = next.some(({ file: current }) =>
-        current.name === file.name && current.size === file.size &&
-        current.type === file.type && current.lastModified === file.lastModified
-      );
-      if (duplicate) {
-        setErr(s.attachmentDuplicate.replace('{name}', file.name));
-        continue;
-      }
-      if (next.length >= SUPPORT_ATTACHMENT_MAX_COUNT) {
-        setErr(s.attachmentTooMany.replace('{count}', String(SUPPORT_ATTACHMENT_MAX_COUNT)));
-        break;
-      }
-      const validation = await validateSupportFile(file);
-      if (validation) {
-        const label = {
-          unsupported: s.attachmentUnsupported,
-          tooLarge: s.attachmentTooLarge,
-          unreadable: s.attachmentUnreadable,
-        }[validation];
-        setErr(label.replace('{name}', file.name));
-        continue;
-      }
-      next.push({ file, url: URL.createObjectURL(file) });
-    }
-    setAttachments(next);
-    if (fileRef.current) fileRef.current.value = '';
-  };
-
-  const clearDraft = () => {
-    setReply('');
-    setAttachments((current) => {
-      current.forEach(({ url }) => URL.revokeObjectURL(url));
-      return [];
-    });
+    const result = await appendSupportAttachments(attachments, selected, s);
+    setAttachments(result.attachments);
+    setErr(result.error);
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -179,7 +151,7 @@ export default function AdminSupportPage() {
           <button
             key={f.value || 'all'}
             type="button"
-            onClick={() => { setFilter(f.value); setOpenId(null); }}
+            onClick={() => { setFilter(f.value); setOpenId(null); resetComposer(); setErr(''); }}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               filter === f.value
                 ? 'bg-blue-600 text-white'
@@ -207,7 +179,7 @@ export default function AdminSupportPage() {
                 <button
                   type="button"
                   className="w-full text-left"
-                  onClick={() => { setOpenId(expanded ? null : tk.id); clearDraft(); }}
+                  onClick={() => { setOpenId(expanded ? null : tk.id); resetComposer(); setErr(''); }}
                 >
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
@@ -251,7 +223,7 @@ export default function AdminSupportPage() {
                               : 'bg-blue-600 text-white'
                           }`}>
                             <p className="text-[11px] font-medium opacity-70 mb-0.5">{m.sender.fullName}</p>
-                            {m.body}
+                            {m.body && <span className="block break-words">{m.body}</span>}
                             <SupportAttachmentList attachments={m.attachments ?? []} />
                           </div>
                         </div>
