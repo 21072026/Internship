@@ -10,6 +10,46 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.27.0-beta] - 2026-07-28
+
+### Added
+- **Project co-members can message each other from `/messages`** (#770) — the piece that
+  makes the #768 authorization layer and the #769 API reachable. Two mentees on the same
+  project, with no mentorship between them, can now find each other and start a DM;
+  previously the inbox was built purely from `mentorshipRelation.findMany`, so they were
+  invisible to one another.
+  - A **"New chat" picker** on `/messages` lists the viewer's project co-members. The
+    candidate list is derived **on the server** from `ProjectMember` (membership *is* the
+    permission — see `canMessage`), so the client never decides who is messageable, and
+    `POST /api/conversations` re-checks anyway. People you already have a DM with are
+    filtered out (they're in the thread list), and duplicates from two shared projects are
+    deduped. A filter box appears past six candidates.
+  - **`/messages/c/[conversationId]`** renders conversations. Rather than duplicate ~430
+    lines of message UI, the thread view moved to `src/components/MessageThreadView.tsx`
+    and both routes are thin wrappers over it, so attachments, pasted images, reactions,
+    edit/delete, read receipts and the Enter-to-send preference work identically on both.
+  - Conversations appear in the same inbox list as mentorship threads, sorted together by
+    last activity, with the same unread badge.
+
+### Changed
+- **Losing the shared project makes a DM read-only instead of unreachable** (#770).
+  Reading a conversation stays participant-based and permanent — history doesn't vanish —
+  but posting is re-checked against the live permission by a new
+  `canPostToConversation()`. `POST /api/messages` enforces it (403) and `GET` returns a
+  `canPost` flag so the thread renders a read-only notice instead of a composer that would
+  fail on send. Without this, participation alone would have kept a removed member writing
+  indefinitely, since #769 authorized conversation posts purely by participation.
+  GROUP conversations are governed by their own membership, so participation remains the
+  rule there.
+
+### Tests
+- `e2e/project-dm.spec.ts` — two project co-members (no mentorship) start a DM, the message
+  is stored against the conversation with a null `relationId`, the DM shows up in the
+  inbox, and after removing one from the project the history is still readable while the
+  composer is gone and the API returns 403 to a direct POST. Deliberately **not** `@smoke`,
+  to keep the PR gate small. Locators use `data-testid` (`message-input`, `message-send`,
+  `new-chat-*`) rather than localized button labels.
+
 ## [0.26.2-beta] - 2026-07-28
 
 ### Added

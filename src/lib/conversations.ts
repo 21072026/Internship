@@ -173,6 +173,28 @@ export async function findOrCreateDirectConversation(userAId: string, userBId: s
   }
 }
 
+// May this user still POST into this conversation? (#770)
+//
+// Reading is participant-based and permanent — conversation history stays
+// visible to the people who were in it. Writing is re-checked against the
+// live permission, so someone removed from the shared project can no longer
+// send new messages into a DM that project membership originally unlocked.
+// GROUP conversations are governed by their own membership, so participation
+// is the rule there.
+export async function canPostToConversation(
+  user: SessionUser,
+  conversation: { id: string; type: string; participants: { userId: string }[] },
+): Promise<boolean> {
+  const others = otherConversationParticipants(conversation, user.id);
+  // An admin viewing someone else's conversation isn't a participant and has
+  // nothing to post; participants are what matter here.
+  if (!conversation.participants.some((p) => p.userId === user.id)) return false;
+  if (conversation.type !== 'DIRECT') return true;
+  const other = others[0];
+  if (!other) return false;
+  return canMessage(user.id, other);
+}
+
 // May this user act on this message? A message belongs to a mentorship thread
 // (legacy `relationId`), a conversation (`conversationId`), or — in principle —
 // both. Authorization follows whichever link it has, so the message/reaction/
