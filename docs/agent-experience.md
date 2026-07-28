@@ -777,3 +777,67 @@ oluştur (yanıtlar küçük), ID eşlemesini bir scratchpad dosyasına yaz, ba�
 en sona bırak. Ayrıca issue numaraları oluşturma sırasıyla ardışık gelmiyor
 (814, 816, 818… atlıyor) — gövdede "bkz #N" yazarken numarayı önceden tahmin etme,
 sonradan düzelt.
+
+## 2026-07-28 — CI'ı sunucudan GitHub Actions'a geri taşıma (#955 / PR #956)
+
+**Repo public olunca kota gerekçesiyle alınmış her karar yeniden değerlendirilmeli.**
+Haziran 2026'da hosted Actions kotası tükendiği için build'ler self-hosted runner'a,
+yani *production sunucusunun kendisine* taşınmıştı (#636); e2e-full ve stress cron'ları
+tamamen kapatılmıştı (#648). Repo Temmuz'da public oldu — standart hosted runner'lar
+ücretsiz ve sınırsız. Ama kodda hiçbir şey bunu haber vermiyor: workflow yorumları
+hâlâ "PAUSED (quota exhausted)" diyordu ve kimse geri açmadı. Kota kaynaklı geçici
+çözümlerin yorumuna **hangi koşul değişince geri alınacağını** yaz.
+
+**CLAUDE.md gerçeği yansıtmayabilir — dosyayı oku, dokümanı değil.** CLAUDE.md
+"full suite 4× a day, 4-way sharded" diyordu; `e2e-full.yml`'de schedule tamamen
+yorumdaydı ve tek job'a (sharding yok) indirilmişti. Ters yönde de: `deploy-preview`
+`NEXT_PUBLIC_APP_ENV` build-arg'ını hiç geçmiyordu, yani preview #636'dan beri
+production mavisi giyiyordu — kimse fark etmemiş. Doğrulanmamış her doküman iddiası
+`dosya:satır` ile teyit edilmeli.
+
+**Git geçmişi en iyi "eski hale döndür" kaynağı.** Sharded e2e-full'ü sıfırdan
+yazmak yerine `git log --oneline -- <dosya>` → `git show <sha>:<dosya>` ile #627'deki
+orijinali çıkardım; sonradan eklenen browser-cache adımını üstüne koydum. Uydurmaktan
+hızlı ve niyet kaybı olmuyor.
+
+**Runner'ı tamamen kaldırmak yerine "ne mecburen orada olmalı" diye sor.** SSH+secret
+modeline (legacy `deploy.yml`) dönmek cazipti ama sunucu sırlarını GitHub secrets'a
+taşımak gerekirdi. Bunun yerine deploy'u üçe böldüm: gate (self-hosted, bir curl) →
+build (`ubuntu-latest`) → deploy (self-hosted, sadece pull+swap). Drift gate bilerek
+sunucuda kaldı: okuduğu doğru kaynak `127.0.0.1:<port>/api/health`, dışa açıklık /
+firewall / auth gerektirmiyor. Kanıtı da çıktı: bu oturumda sunucu erişilemez
+durumdaydı ve **dışarıdan `curl https://crm.ersah.in` de timeout veriyordu** — gate
+hosted runner'a taşınmış olsaydı her koşuda "unreachable → drift" deyip boşuna
+deploy tetikleyecekti.
+
+**İki job build'i ve deploy'u ayırıyorsa sha'yı bir kez çöz, aşağıya taşı.** Eski tek
+job'lı akışta `deploy-prod.sh` kendisi `git reset --hard origin/main` yapıyordu; build
+ile deploy ayrıldığında bu, imajın build edildiği commit ile deploy edilen commit'in
+ayrışması demek. Çözüm: gate hedef sha'yı `outputs.sha`'ya yazıyor, image tag'i /
+`GIT_SHA` / checkout / `DEPLOY_SHA` hepsi ona pinlenmiş, script `--no-pull` ile
+çağrılıyor. `FORWARD_ONLY` guard'ı `git merge-base --is-ancestor` kullandığı için o
+job'da `fetch-depth: 0` şart — shallow clone soruyu cevaplayamaz.
+
+**Sunucuya dokunan değişikliği doğrulayamıyorsan hata yolunun güvenli olduğunu göster.**
+Runner offline olduğu için `--pull-image` yolunu canlıda deneyemedim. Bunun yerine
+sıralamayı doğruladım: script `set -euo pipefail` ile 2. adımda imajı alıyor,
+container'a 5. adımda dokunuyor — başarısız bir `docker pull` prod ayakta kalarak
+abort ediyor. "Doğrulanmadı" demek yeterli değil, **doğrulanmamışsa ne olacağını** söyle.
+
+**Kuyrukta bekleyen self-hosted job, hosted job'ın koşmasını engellemiyor.** Runner
+offline iken benim PR'ımın Topic Preview run'ı `in_progress` oldu (build ubuntu'da),
+diğer PR'ların eski tek-job run'ları ise `queued` kaldı. Değişikliğin kendisi
+ücretsiz bir kanıt üretti. Ayrıca `gh api repos/<owner>/<repo>/actions/runners`
+runner sağlığını görmenin en hızlı yolu — SSH'ı beklemeye gerek yok.
+
+**`gh repo view` ile `git remote -v` farklı isim gösterebilir.** origin
+`mersahin/Internship`, kanonik ad `21072026/Internship` (transfer sonrası redirect).
+Push doğru yere gidiyor ama `--repo` bayrağı gereken komutlarda kanonik adı kullan.
+Yerel `gh` token'ında `read:packages` scope'u yok, o yüzden ghcr paket sürümlerini
+API'den listeleyemedim; imajın gerçekten push edildiğini **build job'ının step
+sonuçlarından** doğruladım (`Build and push: success`).
+
+**Worktree'de `git checkout main` çalışmaz.** Ana worktree main'i tutuyor;
+`git checkout -b <yeni> origin/main` diyerek dallandım — ama merge sonrası `git fetch`
+etmediğim için branch bayat bir `origin/main`'e oturdu ve tüm dosyalar "değişmiş"
+göründü. Merge'den sonra dallanmadan önce `git fetch origin`.
