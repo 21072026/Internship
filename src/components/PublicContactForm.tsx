@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Mail, Send, Check } from 'lucide-react';
+import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 
 // Public contact form on a shared profile. Anti-spam is server-side (honeypot +
@@ -62,9 +63,9 @@ export function PublicContactForm({ userId }: { userId: string }) {
           className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
         />
       </div>
-      <textarea
+      <Textarea
         required value={message} onChange={(e) => setMessage(e.target.value)} placeholder={c.message} rows={4}
-        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+        maxLength={5000} showCounter
       />
       {status === 'error' && <p className="text-xs text-red-600">{c.error}</p>}
       <button
