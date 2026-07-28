@@ -320,7 +320,10 @@ model Conversation {
   // leave this null.
   projectId String?
   createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  // @default(now()) as well as @updatedAt: without a default, adding this
+  // required column to the already-deployed table would fail `db push` on any
+  // non-empty Conversation table.
+  updatedAt DateTime         @default(now()) @updatedAt
 
   project      Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   participants ConversationParticipant[]
@@ -349,9 +352,14 @@ model ConversationParticipant {
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // No explicit @@index([userId]): MySQL already maintains an index on the FK
+  // column (ConversationParticipant_userId_fkey), so lookups by userId are
+  // covered. Declaring one here makes `db push` try to *rename* that index into
+  // ConversationParticipant_userId_idx, and MySQL refuses to drop an index a
+  // foreign key depends on ("Can't DROP INDEX ..._userId_fkey"). Harmless when
+  // Prisma creates the table itself, fatal on the already-deployed table (#784).
 
   @@unique([conversationId, userId])
-  @@index([userId])
 }
 
 // A message in a mentorship thread (legacy) and/or a conversation (new).
