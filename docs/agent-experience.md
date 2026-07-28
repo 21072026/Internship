@@ -23,6 +23,7 @@ optional body schema alone is insufficient: trim the body, then reject only when
 the trimmed body and parsed file list are both empty. For attachment-only ticket
 creation, derive the ticket subject from the first filename while leaving
 attachment validation and transactional storage untouched.
+
 ## 2026-07-23 — Meeting series auto-generation API (#774, 0.25.10-beta)
 
 **Playwright in this sandbox needs two env prerequisites before tests even boot:**
@@ -735,3 +736,44 @@ haftalık rapor/devam takibi, sertifika üretimi (enum değeri var, üretici yok
 **Ayrım önemli:** "grep sıfır sonuç verdi" ile "ben görmedim" farklı iddialardır.
 Her "Mevcut durum" maddesini `dosya:satır` ile bağla; iddiayı doğrulanabilir yap.
 
+## 2026-07-28 — Güvenlik denetimi (Playwright + hacker gözü) → backlog #814–#903
+
+**Bu container'da Docker daemon YOK; lokal DB için `apt-get install mariadb-server`.**
+`docker compose -f docker-compose.dev.yml up -d` çalışmıyor (`/var/run/docker.sock`
+yok, `service docker start` ulimit hatası veriyor). Çalışan yol: `apt-get update`
+(bu şart — bayat apt listesi 404 veriyor) `&& apt-get install -y mariadb-server`,
+sonra `service mariadb start`. Prisma `mysql` provider'ı MariaDB 10.11 ile
+sorunsuz `db push` yaptı. Root socket-auth kullanıyor, o yüzden Prisma için
+parolalı kullanıcı gerekiyor:
+`CREATE USER 'crm'@'%' IDENTIFIED BY 'crm'; GRANT ALL PRIVILEGES ON *.* TO 'crm'@'%';`
+
+**Playwright: `chromium_headless_shell` symlink'i işe yaramaz, `executablePath` kullan.**
+CLAUDE.md "eksik sürümü symlink'le" diyor ama 1194 build'inin dizin yapısı farklı
+(`chrome-linux/headless_shell`), Playwright 1.61 ise
+`chrome-headless-shell-linux64/chrome-headless-shell` arıyor. Çalışan çözüm:
+`chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })`.
+Ayrıca scratchpad'den çalıştırırken `import ... from '@playwright/test'` çözülmüyor —
+mutlak yol ver: `/home/user/Internship/node_modules/@playwright/test/index.mjs`.
+
+**Login otomasyonunda hidrasyonu bekle — yoksa parola URL'e düşer.**
+`goto` + hemen `click('button[type=submit]')` React hydrate olmadan native GET
+submit tetikliyor ve URL `?email=...&password=...` oluyor. `waitUntil:'networkidle'`
++ ~4 sn bekleyince düzeldi. Bu bir test tuzağı değil, **gerçek bir bulgu** çıktı:
+formlarda `method="post"` yok (#873).
+
+**Yetki testinde status kodu tek başına yeterli DEĞİL.** En kritik bulgu (#847:
+COMPANY/SOURCE tüm görüşme kayıtlarını okuyor) `200` dönüyordu — sızıntı dönen
+satırların içeriğindeydi. Rol matrisi testi her satırın sahipliğini doğrulamalı.
+Ayrıca `405` yanıtları yanlış pozitif üretiyor (route o metodu desteklemiyor),
+bulgu sayarken filtrele.
+
+**`seed:demo` SOURCE kullanıcısı üretmiyor.** Rolü test etmek için elle oluşturmak
+gerekti (`prisma` + `bcrypt.hash`). Kapsamlama boşluğu tam bu rolde çıktı — seed'e
+eklenmesi #899'un kabul kriterlerinde.
+
+**`sub_issue_write` yanıtları ebeveynin TÜM gövdesini geri döndürüyor.** 37 bağlantı
+için bu çok büyük context tüketimi demek. Öğrenilen sıra: önce tüm issue'ları
+oluştur (yanıtlar küçük), ID eşlemesini bir scratchpad dosyasına yaz, bağlantıları
+en sona bırak. Ayrıca issue numaraları oluşturma sırasıyla ardışık gelmiyor
+(814, 816, 818… atlıyor) — gövdede "bkz #N" yazarken numarayı önceden tahmin etme,
+sonradan düzelt.

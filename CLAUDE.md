@@ -157,6 +157,11 @@ runs `prisma db push --accept-data-loss`, swaps its container and health-checks 
   with the concrete, reusable lessons you learned (environment quirks, tooling limits, process
   gotchas). Read it at the start of a session too — it captures fast-changing tactical tips that
   complement these durable rules.
+- **Security work** starts from [`docs/security-audit-playbook.md`](docs/security-audit-playbook.md):
+  how to stand up a local DB in this container (no Docker daemon — apt MariaDB), the Playwright
+  `executablePath` workaround, the role × endpoint matrix method, **which areas already tested
+  clean** (don't re-litigate them; breaking one is a regression), and what was never examined.
+  Root tracking issue for the 2026-07 audit: **#951**.
 - **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
   (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
   assert exact landing strings (e.g. "Connect Talent with", "Everything you need",
