@@ -10,6 +10,53 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.26.1-beta] - 2026-07-28
+
+### Changed
+- **Meeting reminders now fire ~1 hour before the meeting, reach both participants, and
+  respect notification preferences** (#777). `sendMeetingReminders()` looked 24 hours
+  ahead, emailed the **mentee only**, sent **no in-app notification**, and ignored the
+  category opt-outs entirely — the one notification path the #668 audit left unfixed.
+  It now scans a 60-minute window (`MEETING_REMINDER_WINDOW_MINUTES`) and, for every
+  participant (mentee *and* mentor):
+  - posts an in-app notification **unconditionally** (bell items aren't subject to the
+    email category switches), and
+  - sends email **only** when `emailAllowed(user, 'meetingReminders')` is on, using the
+    org-branded template (`emailBrand`/`brandHeader`/`ctaBlock`) with an escaped title
+    and a role-aware deep link (`/portal` for mentees, `/mentor/meetings` otherwise).
+  - The cron moved from hourly to `*/15 * * * *`: a 60-minute window on an hourly tick
+    fired anywhere from 0 to 60 minutes ahead (a meeting could be "reminded" 3 minutes
+    before), so a quarter-hourly tick is what actually delivers 45–60 minutes' notice.
+  - **Idempotency:** `reminderSentAt` is now *claimed before sending* via
+    `updateMany({ where: { id, reminderSentAt: null } })` and skipped when
+    `count === 0`, so overlapping ticks can't double-send and the in-app notification
+    and the email sit behind a single marker. A mid-send failure loses a reminder rather
+    than duplicating one — the deliberate trade-off for a 4×-per-hour cron. Email errors
+    stay swallowed-and-logged so one bad address can't stop the remaining participants.
+
+### Added
+- **Server-side messaging authorization derived from project membership** (#768) —
+  `src/lib/conversations.ts`: `canMessage()` (same project **or** a mentorship, admins
+  always allowed), `sharesProject()`, `hasMentorship()`, `projectMemberIds()`,
+  `messageableUserIds()` and `getConversationIfAllowed()` (participants or admin only).
+  Mentorship remains an *additional* permission source, so the existing mentor ↔ mentee
+  thread path is untouched. Foundation only — no user-visible surface yet; the DM API
+  (#769) and the `/messages` picker (#770) build on this.
+
+### Schema
+- `Conversation.updatedAt` (`@updatedAt`) and `ConversationParticipant.lastReadAt` +
+  `@@index([userId])` added; the `Conversation`/`ConversationParticipant` models
+  themselves already landed with #784. `ConversationParticipant.addedAt` was **kept**
+  (the spec called it `joinedAt`) because the column is already deployed — renaming it
+  would drop data on `prisma db push` against the shared preview/prod DB.
+- `Message.relationId` is now **nullable** (`String?`, relation `MentorshipRelation?`) so
+  conversation-only messages can be written. Every pre-existing row keeps its
+  `relationId`, so the mentorship messaging path is unchanged; `getThreadIfAllowed()`
+  now takes `string | null | undefined` and **fails closed** on a missing id, which
+  keeps the legacy message/reaction/attachment routes safe (a conversation-only message
+  is simply unreachable through them). `sendUnreadMessageDigests()` filters on
+  `relationId: { not: null }`.
+
 ### Changed
 - **Preview and production now deploy automatically on every merge to `main`.** Both
   `deploy-preview.yml` and `deploy-prod.yml` were `workflow_dispatch`-only, so

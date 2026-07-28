@@ -320,6 +320,10 @@ model Conversation {
   // leave this null.
   projectId String?
   createdAt DateTime         @default(now())
+  // @default(now()) as well as @updatedAt: without a default, adding this
+  // required column to the already-deployed table would fail `db push` on any
+  // non-empty Conversation table.
+  updatedAt DateTime         @default(now()) @updatedAt
 
   project      Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   participants ConversationParticipant[]
@@ -336,13 +340,24 @@ enum ConversationType {
 // Membership for a conversation. Authorization can be derived from
 // participants rather than MentorshipRelation ownership.
 model ConversationParticipant {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   conversationId String
   userId         String
-  addedAt        DateTime @default(now())
+  // When the participant joined the conversation (kept as addedAt for backward
+  // compatibility with the already-deployed column from #784).
+  addedAt        DateTime  @default(now())
+  // Last time this participant read the conversation — powers per-conversation
+  // unread counts without a per-message read row.
+  lastReadAt     DateTime?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // No explicit @@index([userId]): MySQL already maintains an index on the FK
+  // column (ConversationParticipant_userId_fkey), so lookups by userId are
+  // covered. Declaring one here makes `db push` try to *rename* that index into
+  // ConversationParticipant_userId_idx, and MySQL refuses to drop an index a
+  // foreign key depends on ("Can't DROP INDEX ..._userId_fkey"). Harmless when
+  // Prisma creates the table itself, fatal on the already-deployed table (#784).
 
   @@unique([conversationId, userId])
 }
@@ -354,7 +369,10 @@ model Message {
   // New conversation-layer link. Nullable for backward compatibility while
   // legacy relation-bound messages still rely on relationId.
   conversationId       String?
-  relationId           String
+  // Legacy mentorship-thread link. Nullable so conversation-only messages can be
+  // written; every pre-existing row keeps its relationId, so the mentorship
+  // messaging path is untouched.
+  relationId           String?
   senderId             String
   body                 String         @db.Text
   channel              MessageChannel @default(IN_APP)
@@ -369,7 +387,7 @@ model Message {
   // is masked server-side and a "message deleted" placeholder is shown to all.
   deletedForEveryoneAt DateTime?
 
-  relation     MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation     MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
   conversation Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   attachments  MessageAttachment[]
   // Per-user "delete for me" — hides the message only from these users' view.
