@@ -563,3 +563,59 @@ güncellemek standart operasyondur; birini bile atlamak eksik kalır.
 PR'da iki farklı infra hatası gördüm: (1) Docker build'de OOM (exit 255), (2)
 `prisma db push` sırasında `P1001: Can't reach host.docker.internal:3306`.
 İkisi de sunucu tarafı — kod değişikliği gerekmez, sadece infra durumunu açıkla.
+
+## 2026-07-28 — #800/#803 Preview & prod otomatik deploy
+
+**"X deploy edilmiyor" şikayetinde ilk iş `event` alanına bakmak.** Preview'in
+bayatlaması bir *hata* değil, eksik tetikleyiciydi: `deploy-preview.yml` ve
+`deploy-prod.yml` ikisi de `workflow_dispatch`-only'di. `actions_list` çıktısında
+her koşunun `event`'i `workflow_dispatch` görünüyorsa o workflow **otomatik
+değildir** — prod 44 kez elle dispatch edilerek "güncel" görünüyordu, yani
+"canlı sürüm doğru" olması otomasyonun çalıştığını KANITLAMAZ. Preview toplam 3
+kez koşmuş, 7 gün bayat, 72 commit geride. CLAUDE.md/README ise hâlâ durdurulmuş
+`deploy.yml`'i ve "her PR preview deploy eder"i anlatıyordu; bir davranışı
+değiştirmeden önce dokümanın gerçeği yansıttığını doğrula.
+
+**Ortamın gerçekte ne koştuğunu `/api/health` söyler — bu altın kaynak.**
+`{"version","sha"}` döndürüyor (GIT_SHA image'a build-arg ile basılıyor). İki
+ortamı karşılaştırmak sorunu 30 saniyede kanıtladı. Deploy gate'i de bunun
+üzerine kurdum: canlı `sha` == `origin/main` ise build'e girmeden çık.
+
+**Gate'te hedef sha'yı ASLA yerel ref'ten okuma — `git ls-remote` kullan.** Bu
+oturumda yerel `origin/main` `d9894f6` derken gerçek uç `380a47b`'ydi. Self-hosted
+runner workspace'i paylaşımlı ve shallow; `git rev-parse origin/main` sessizce
+yanlış cevap verir. `git ls-remote origin refs/heads/main | cut -c1-7` doğrudan
+remote'a sorar.
+
+**Otomatik deploy'da "checkout edilen commit"i değil `origin/main`'in UCUNU
+deploy et.** Aksi halde kuyrukta bekleyen eski koşu yenisinin üstüne eski kodu
+yazar (#794'ün prod için çözdüğü sınıf; preview'de `--no-pull` ile duruyordu).
+`cancel-in-progress: true` bunun çözümü DEĞİL — container swap'ın ortasında
+iptal ortamı düşürür. Doğrusu: kuyruğa al + gate ile gereksiz koşuyu no-op yap.
+
+**Elle tetiklenen bir workflow otomatikleşince "yıkıcı" adımları tekrar gözden
+geçir.** `deploy-preview.yml` her koşuda `preview.env`'i `rm -f` ediyordu (sırlar
+çalışan container'dan yeniden türetiliyor diye). Gözetimsiz koşan bir workflow
+için bu, container gittiği an sırların tek kopyasını yok etmek demek. Silmek
+yerine doğrula: `( set -a; . "$ENV_FILE"; [ -n "$DATABASE_URL" ] )` başarısızsa sil.
+
+**Sandbox'tan `127.0.0.1`'e curl HTTPS_PROXY'ye takılır.** Gate'i yerel stub
+health endpoint'lerle test ederken proxy araya girip "unreachable" verdi; proxy
+değişkenlerini `unset` etmek gerekti (sunucuda proxy yok, bu sadece test
+artefaktı). Aynı testte gerçek bir kusur da çıktı: `sed` deseni `"sha":"…"`
+bekliyordu, `"sha": "…"` (boşluklu) biçimi kaçırıyordu → `[[:space:]]*` ekledim.
+**Gate mantığını uydurma health payload'larıyla matris hâlinde test et** (güncel /
+bayat / container down / manual) — 11 senaryo, hepsi bash'te, deploy'a dokunmadan.
+
+**Issue numarasını uydurma.** Header'lara `#795` yazdım, sonra `issue_read` ile
+baktığımda #795 zaten merge edilmiş başka bir PR çıktı. Referans vereceksen ya
+issue'yu gerçekten oluştur (ben #800'ü açtım) ya da numara yazma.
+
+**`paths-ignore` + drift gate birlikte çelişir.** Docs-only merge'i `push`'ta
+filtrelersen gate bir sonraki tick'te sha farkını görüp yine build eder — yani
+atlamaz, sadece geciktirir ve "neden 4 saat sonra deploy oldu?" sorusu doğar.
+`paths-ignore`'u kaldırıp "canlı == origin/main" invaryantını korumak daha temiz.
+
+**`mcp__github__actions_list` çıktısı bağlamı patlatır (~380 KB).** `minimal_output:
+true` bile işe yaramadı. Tek koşu için `actions_get`, liste için kaydedilen JSON'u
+python ile parse et (`run_number/event/conclusion/head_sha`) — 3 satır yeter.
