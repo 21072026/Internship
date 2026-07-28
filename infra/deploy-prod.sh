@@ -96,6 +96,26 @@ fi
 GIT_SHA="$(git rev-parse HEAD)"
 log "Deploying $(git rev-parse --short HEAD) — $(node -p "require('./package.json').version" 2>/dev/null || echo '?')"
 
+# ── 1b. Forward-only guard (prod) ────────────────────────────────────────────
+# Production must only ever move FORWARD. Two uncoordinated deployers write the
+# prod container (the cron autodeploy poller + the deploy-prod workflow), and a
+# stale/out-of-order build could otherwise overwrite a newer release with an
+# older commit (the "one step forward, one step back" regressions). When
+# FORWARD_ONLY=1, refuse to deploy a commit that is an ancestor of (i.e. older
+# than) the last one this container successfully deployed. Preview/topic deploys
+# leave FORWARD_ONLY unset so they can still deploy arbitrary/older PR refs.
+# Set FORCE=1 for a deliberate rollback.
+STATE_FILE="${DEPLOY_STATE_FILE:-$(dirname "$ENV_FILE")/.${CONTAINER}.deployed-sha}"
+if [ "${FORWARD_ONLY:-0}" = "1" ] && [ "${FORCE:-0}" != "1" ] && [ -f "$STATE_FILE" ]; then
+  LAST_SHA="$(cat "$STATE_FILE" 2>/dev/null || true)"
+  if [ -n "$LAST_SHA" ] && [ "$LAST_SHA" != "$GIT_SHA" ] \
+     && git cat-file -e "${LAST_SHA}^{commit}" 2>/dev/null \
+     && git merge-base --is-ancestor "$GIT_SHA" "$LAST_SHA" 2>/dev/null; then
+    log "SKIP: $(git rev-parse --short "$GIT_SHA") is older than the live commit ${LAST_SHA:0:7} — refusing to regress $CONTAINER (set FORCE=1 to roll back deliberately)."
+    exit 0
+  fi
+fi
+
 # ── 2. Build image from source ───────────────────────────────────────────────
 if [ "$SKIP_BUILD" -eq 0 ]; then
   log "Building $IMAGE (GIT_SHA=$GIT_SHA)"
@@ -164,6 +184,11 @@ if [ "$ok" -ne 1 ]; then
   docker logs --tail 40 "$CONTAINER" >&2 || true
   exit 1
 fi
+
+# Record the commit now live in this container so the next deploy can enforce
+# forward-only progress (see the guard above).
+mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
+printf '%s\n' "$GIT_SHA" > "$STATE_FILE" 2>/dev/null || true
 
 docker image prune -af >/dev/null 2>&1 || true
 docker builder prune -af --filter until=72h >/dev/null 2>&1 || true

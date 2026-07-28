@@ -41,7 +41,10 @@ jobs:
       - name: Deploy
         run: |
           chmod +x infra/deploy-prod.sh
-          # deploy-prod.sh syncs to origin/<ref>, builds from source, migrates,
-          # seeds, swaps the container and health-checks. Secrets come from the
-          # server-side env file, never from the repo or workflow.
-          BRANCH="${{ inputs.ref }}" ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" ./infra/deploy-prod.sh --no-pull
+          # deploy-prod.sh syncs to origin/<ref> (hard reset — NOT --no-pull, so
+          # the build reflects origin/main at deploy time rather than whatever the
+          # shared self-hosted workspace happened to be left at), builds from
+          # source, migrates, seeds, swaps the container and health-checks.
+          # FORWARD_ONLY=1 makes prod refuse to regress to an older commit.
+          # Secrets come from the server-side env file, never from the repo/workflow.
+          BRANCH="${{ inputs.ref }}" FORWARD_ONLY=1 ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" ./infra/deploy-prod.sh
