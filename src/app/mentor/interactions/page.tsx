@@ -73,6 +73,7 @@ export default function MentorInteractionsPage() {
           ))}
           <input
             type="search"
+            data-testid="interactions-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.mentor.interactionSearchPlaceholder}
