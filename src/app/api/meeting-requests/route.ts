@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendMeetingRequestEmail } from '@/services/emailService';
 
 // GET ?relationId= — meeting requests for a thread (participants/admin).
 export async function GET(request: Request) {
@@ -46,7 +48,30 @@ export async function POST(request: Request) {
   // Notify the other party (the mentor) of the request.
   const recipient = otherParticipant(rel, session.user.id);
   if (recipient && recipient !== session.user.id) {
-    await notify(recipient, 'meeting_request', `${session.user.name ?? 'Your mentee'} requested a meeting.`, `/mentor/mentees/${rel.id}`);
+    const link = `/mentor/mentees/${rel.id}`;
+    await notify(recipient, 'meeting_request', `${session.user.name ?? 'Your mentee'} requested a meeting.`, link);
+
+    // Email it too (#668) — a request the mentor never sees is a request that
+    // never gets answered. Opt-out respected, failures logged.
+    const rcpt = await prisma.user.findUnique({
+      where: { id: recipient },
+      select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
+    });
+    if (rcpt?.email && emailAllowed(rcpt, 'meetingReminders')) {
+      try {
+        await sendMeetingRequestEmail({
+          to: rcpt.email,
+          fullName: rcpt.fullName,
+          requesterName: session.user.name ?? 'Your mentee',
+          topic: req.topic,
+          proposedAt: req.proposedAt,
+          link,
+          orgId: rcpt.orgId,
+        });
+      } catch (e) {
+        console.error('Meeting request email failed:', e);
+      }
+    }
   }
   return NextResponse.json({ request: req }, { status: 201 });
 }

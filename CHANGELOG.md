@@ -53,6 +53,65 @@ version is shown in the sidebar footer of every page (links to the
   the one already live (recorded per-container; `FORCE=1` overrides for a deliberate
   rollback). Preview/topic deploys are unaffected. Infra-only; no app change.
 
+## [0.26.0] - 2026-07-28
+
+### Added
+- **Email-delivery audit — seven "in-app notification, no email" gaps closed** (#668).
+  Audited every notification-producing event (all `notify()` call sites, the three
+  direct `prisma.notification.create` sites, and every `@/services/emailService`
+  importer) against "does it email → which function → consent check → error
+  handling". 16 transactional emails and 9 cron digests were already correct; the
+  gaps fixed are:
+  - Mentorship request **approved** → email to the mentee *and* to the newly
+    assigned mentor; **rejected** → email to the mentee
+    (`api/admin/mentorship-requests`, was `notify()`-only).
+  - **New mentorship request** → email to active admins (`api/mentorship-requests`)
+    — the queue was in-app-only, so a request was invisible until an admin logged in.
+  - **Public-profile contact form** → email to the profile owner with `Reply-To` set
+    to the sender (`api/public-contact/[userId]`) — an outside enquiry could
+    previously sit unseen indefinitely.
+  - **Meeting request** created / accepted / declined → email to the mentor and
+    back to the requester (accept carries the time + Jitsi link).
+  - `api/apply` mentor notification now honours the opt-out (it emailed
+    unconditionally, ignoring `emailNotifications`).
+
+  New templates follow the existing `emailBrand`/`brandHeader` pattern and route
+  through `sendEmail`, so the no-SMTP silent-skip and swallow-but-log error
+  handling are preserved. Adds a `mentorship` opt-out category
+  (`NOTIFICATION_CATEGORIES`), and `AccountSettings` now renders that constant
+  instead of a hard-coded list so a new email category cannot ship without a
+  toggle. Nine events are deliberately left in-app-only with a written rationale
+  (pipeline stage changes, goal/evaluation updates and similar high-frequency,
+  low-signal events).
+- **Goals: sorting and an archive for completed goals** (#785). The goals panel
+  gains a **Newest → Oldest / Oldest → Newest** selector (default newest-first,
+  applied to both lists) and an **Active | Archive** toggle following the same
+  `role="tablist"` pattern as the candidates archive (#0.25.14). Marking a goal
+  done moves it out of the active list into the archive, where it keeps its
+  completion date and can be reopened. Derived from the existing `Goal.status` and
+  `Goal.completedAt` — **no schema change and no API change**.
+- **Support: attachments on admin replies** (#788). Admins replying to a support
+  ticket can now attach files and images — message only, attachments only, or
+  both. The admin reply box reuses the shared `MessageComposer` /
+  `PendingAttachmentList` components and the same validation as the user side
+  (PNG/JPEG/PDF, ≤10 MB, ≤10 files, magic-byte checks, duplicate rejection), with
+  previews and per-file removal before sending. Object URLs are revoked on send
+  and when switching tickets. `POST /api/admin/support` now accepts
+  `multipart/form-data` in addition to the original JSON text-only shape.
+
+### Changed
+- Support attachment validation is now shared between the user channel and the
+  admin reply endpoint (`src/lib/supportAttachments.ts` gains
+  `appendSupportAttachments`; new `src/lib/supportMessageRequest.ts` holds the
+  server-side `readSupportMessageRequest` / `buildSupportAttachments`), replacing
+  the duplicated logic in `api/support` and `messages/support`. Behaviour,
+  error messages and status codes are unchanged.
+
+### Tests
+- `e2e/goals-archive-sort.spec.ts` (new) and additions to
+  `e2e/support-attachments.spec.ts`. Neither is `@smoke`-tagged, keeping the PR
+  gate fast.
+
 ## [0.25.15] - 2026-07-28
 
 ### Fixed

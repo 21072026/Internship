@@ -304,6 +304,234 @@ export async function sendMeetingInviteEmail({
   });
 }
 
+// Minimal HTML escape for user-supplied strings interpolated into templates
+// (names, free-text messages) — keeps a stray "<" from breaking the markup.
+function esc(s: string): string {
+  return s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c] as string);
+}
+
+// A branded button + wrapper shared by the notification templates below.
+function ctaBlock(brand: { accent: string }, url: string, label: string): string {
+  return `<a href="${url}" style="display:inline-block;background-color:${brand.accent};color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">${label}</a>`;
+}
+
+function appUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
+// --- Mentorship request lifecycle (#668) ------------------------------------
+// These events previously produced an in-app notification only, so a mentee who
+// wasn't logged in never learned their request had been decided.
+
+export async function sendMentorshipDecisionEmail({
+  to,
+  fullName,
+  approved,
+  mentorName,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  approved: boolean;
+  mentorName?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const heading = approved ? 'Your mentorship request was approved' : 'Update on your mentorship request';
+  const body = approved
+    ? `<p>Good news — your mentorship request has been approved${mentorName ? ` and <strong>${esc(mentorName)}</strong> is now your mentor` : ''}. Open your portal to say hi and get started.</p>`
+    : `<p>Your mentorship request has been reviewed, but it could not be approved right now. You are welcome to submit a new request later — keeping your profile and CV up to date helps.</p>`;
+
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: approved ? `Your mentorship request was approved` : `Update on your mentorship request`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, heading)}
+        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+        ${body}
+        ${ctaBlock(brand, `${appUrl()}/portal`, 'Open your portal')}
+      </div>
+    `,
+  });
+}
+
+export async function sendMenteeAssignedEmail({
+  to,
+  mentorName,
+  menteeName,
+  orgId,
+}: {
+  to: string;
+  mentorName?: string | null;
+  menteeName: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: `New mentee assigned: ${menteeName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'You have a new mentee')}
+        ${mentorName ? `<p>Hi ${esc(mentorName)},</p>` : ''}
+        <p><strong>${esc(menteeName)}</strong> has been assigned to you as a mentee. Reach out to
+        them to get the mentorship started, and log your first interaction when you do.</p>
+        ${ctaBlock(brand, `${appUrl()}/mentor`, 'Open your dashboard')}
+      </div>
+    `,
+  });
+}
+
+export async function sendMentorshipRequestEmail({
+  to,
+  adminName,
+  menteeName,
+  targetPosition,
+  message,
+  orgId,
+}: {
+  to: string;
+  adminName?: string | null;
+  menteeName: string;
+  targetPosition?: string | null;
+  message?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: `New mentorship request: ${menteeName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'New mentorship request')}
+        ${adminName ? `<p>Hi ${esc(adminName)},</p>` : ''}
+        <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
+        ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
+        ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, 'Review the request')}
+      </div>
+    `,
+  });
+}
+
+// --- Meeting requests (#668) ------------------------------------------------
+
+export async function sendMeetingRequestEmail({
+  to,
+  fullName,
+  requesterName,
+  topic,
+  proposedAt,
+  link,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  requesterName: string;
+  topic: string;
+  proposedAt: Date | null;
+  link: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const when = proposedAt ? proposedAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }) : null;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: `Meeting request: ${topic}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'New meeting request')}
+        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+        <p><strong>${esc(requesterName)}</strong> requested a meeting: <strong>${esc(topic)}</strong>.</p>
+        ${when ? `<p><strong>Proposed time:</strong> ${when}</p>` : ''}
+        ${ctaBlock(brand, `${appUrl()}${link}`, 'Accept or decline')}
+      </div>
+    `,
+  });
+}
+
+export async function sendMeetingRequestDecisionEmail({
+  to,
+  fullName,
+  topic,
+  accepted,
+  scheduledAt,
+  meetLink,
+  link,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  topic: string;
+  accepted: boolean;
+  scheduledAt?: Date | null;
+  meetLink?: string | null;
+  link: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const when = scheduledAt ? scheduledAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }) : null;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: accepted ? `Meeting confirmed: ${topic}` : `Meeting request declined: ${topic}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, accepted ? 'Your meeting is confirmed' : 'Your meeting request was declined')}
+        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+        ${accepted
+          ? `<p>Your meeting request <strong>${esc(topic)}</strong> was accepted.</p>
+             ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
+             ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}`
+          : `<p>Your meeting request <strong>${esc(topic)}</strong> could not be accepted. You can propose another time.</p>`}
+        ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the conversation')}
+      </div>
+    `,
+  });
+}
+
+// --- Public profile contact form (#668) -------------------------------------
+// An outside enquiry (e.g. a recruiter) is the most time-sensitive thing a
+// profile owner can receive, and it was in-app only. Reply-To is set to the
+// sender so the owner can answer straight from their inbox.
+
+export async function sendPublicContactEmail({
+  to,
+  ownerName,
+  fromName,
+  fromEmail,
+  message,
+  orgId,
+}: {
+  to: string;
+  ownerName?: string | null;
+  fromName: string;
+  fromEmail: string;
+  message: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    replyTo: fromEmail,
+    subject: `New message from your public profile: ${fromName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'Someone contacted you')}
+        ${ownerName ? `<p>Hi ${esc(ownerName)},</p>` : ''}
+        <p><strong>${esc(fromName)}</strong> (${esc(fromEmail)}) sent you a message through your public profile:</p>
+        <blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>
+        <p style="color:#6b7280;font-size:14px;">Reply to this email to answer them directly.</p>
+      </div>
+    `,
+  });
+}
+
 export async function checkMentorInteractionReminders() {
   const days = parseInt(await getSetting('reminderDays'), 10) || 14;
   const fourteenDaysAgo = new Date();
