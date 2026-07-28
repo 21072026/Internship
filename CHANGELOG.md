@@ -10,6 +10,17 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.25.14] - 2026-07-24
+
+### Changed
+- **Deactivated candidates are archived by default.** The Adaylar (candidates)
+  list now shows only **active** candidates by default; deactivated ("Devre dışı")
+  candidates move to a separate **Archive** view via an Active | Archived toggle.
+  `GET /api/candidates` defaults to `isActive: true` and accepts `?archived=1` to
+  return the deactivated set (the toggle also drives CSV/Excel export, so exports
+  match the visible view). Bulk activate from the archive restores candidates to
+  the active list.
+
 ## [0.25.11] - 2026-07-24
 
 ### Added

@@ -36,6 +36,11 @@ test('admin can bulk-deactivate and bulk-reactivate selected candidates', async 
       expect(b?.isActive).toBe(false);
     }).toPass({ timeout: 10_000 });
 
+    // Deactivated candidates leave the default (active) view and move to the
+    // Archive tab.
+    await expect(page.getByText('Bulk Candidate A')).toHaveCount(0);
+    await page.getByTestId('candidates-tab-archived').click();
+    await expect(page.getByTestId(`candidate-card-${menteeA.id}`)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Inactive').first()).toBeVisible();
 
     // Reactivate one of them via the API directly (already exercised the UI path above).

@@ -23,6 +23,9 @@ export async function GET(request: Request) {
     const project = searchParams.get('project');
     const cohortId = searchParams.get('cohort');
     const sourceId = searchParams.get('source');
+    // Deactivated ("archived") candidates are hidden by default and only shown
+    // when the archive view is requested (?archived=1).
+    const archived = searchParams.get('archived') === '1';
     // Pagination. `all=1` returns everything (used by CSV/Excel export so the
     // download isn't limited to the current page).
     const all = searchParams.get('all') === '1';
@@ -31,6 +34,8 @@ export async function GET(request: Request) {
 
     const where: Record<string, unknown> = {
       role: 'MENTEE',
+      // Active candidates by default; the archive view flips this to inactive.
+      isActive: !archived,
     };
     if (sourceId) where.sourceId = sourceId;
 

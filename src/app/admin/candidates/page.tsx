@@ -66,6 +66,8 @@ export default function CandidatesPage() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Deactivated candidates are hidden by default and live in the archive view.
+  const [archived, setArchived] = useState(false);
 
   const COLS = ['Name', 'Email', 'Phone', 'WhatsApp', 'City', 'University', 'Department', 'Graduation', 'Skills', 'Stage', 'Project', 'Mentor'];
   const toRow = (c: Candidate) => {
@@ -122,8 +124,9 @@ export default function CandidatesPage() {
     if (cityFilter) params.set('city', cityFilter);
     if (projectFilter) params.set('project', projectFilter);
     if (sourceFilter) params.set('source', sourceFilter);
+    if (archived) params.set('archived', '1');
     return params;
-  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter]);
+  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter, archived]);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -165,10 +168,10 @@ export default function CandidatesPage() {
     return () => clearTimeout(timeout);
   }, [fetchCandidates]);
 
-  // Any filter change returns to the first page.
+  // Any filter change (including switching to/from the archive) returns to page 1.
   useEffect(() => {
     setPage(1);
-  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter]);
+  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter, archived]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -332,6 +335,31 @@ export default function CandidatesPage() {
         </div>
       </div>
 
+      {/* Active vs. archive (deactivated) view */}
+      <div className="mb-4 inline-flex rounded-lg border border-gray-300 dark:border-gray-700 overflow-hidden text-sm" role="tablist" aria-label={t.candidates.viewLabel}>
+        {([false, true] as const).map((isArchive) => (
+          <button
+            key={String(isArchive)}
+            type="button"
+            role="tab"
+            aria-selected={archived === isArchive}
+            data-testid={isArchive ? 'candidates-tab-archived' : 'candidates-tab-active'}
+            onClick={() => {
+              if (archived === isArchive) return;
+              setArchived(isArchive);
+              setSelected(new Set());
+            }}
+            className={`px-4 py-1.5 ${
+              archived === isArchive
+                ? 'bg-blue-600 text-white'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+          >
+            {isArchive ? t.candidates.archivedTab : t.candidates.activeTab}
+          </button>
+        ))}
+      </div>
+
       {/* Results count + bulk selection */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-3">
@@ -369,13 +397,17 @@ export default function CandidatesPage() {
         <Card><SkeletonRows rows={6} /></Card>
       ) : candidates.length === 0 ? (
         <Card>
-          <EmptyState
-            icon={Users}
-            title={t.candidates.none}
-            description={t.emptyState.candidates}
-            actionLabel={t.emptyState.inviteCta}
-            actionHref="/admin/invite"
-          />
+          {archived ? (
+            <EmptyState icon={Users} title={t.candidates.noneArchived} />
+          ) : (
+            <EmptyState
+              icon={Users}
+              title={t.candidates.none}
+              description={t.emptyState.candidates}
+              actionLabel={t.emptyState.inviteCta}
+              actionHref="/admin/invite"
+            />
+          )}
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

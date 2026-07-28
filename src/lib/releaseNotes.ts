@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.25.14-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: [
+        'The Candidates list now hides deactivated candidates by default and keeps them in a separate Archive view — switch between Active and Archived with one click. Exports follow whichever view you\'re in, and you can bulk-reactivate archived candidates to move them back.',
+      ],
+      tr: [
+        'Adaylar listesi artık devre dışı bırakılmış adayları varsayılan olarak gizliyor ve onları ayrı bir Arşiv görünümünde tutuyor — Aktif ve Arşiv arasında tek tıkla geçin. Dışa aktarma bulunduğunuz görünümü izler ve arşivdeki adayları toplu olarak yeniden etkinleştirip geri taşıyabilirsiniz.',
+      ],
+      de: [
+        'Die Kandidatenliste blendet deaktivierte Kandidaten jetzt standardmäßig aus und hält sie in einer separaten Archiv-Ansicht — mit einem Klick zwischen Aktiv und Archiviert wechseln. Exporte folgen der aktuellen Ansicht, und du kannst archivierte Kandidaten per Sammelaktion wieder aktivieren.',
+      ],
+    },
+  },
+  {
     version: '0.25.11-beta',
     date: '2026-07-24',
     highlights: {
