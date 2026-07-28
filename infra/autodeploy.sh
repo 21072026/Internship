@@ -33,7 +33,8 @@ deploy_if_changed() {
   fi
   echo "$(date -u +%FT%TZ) main moved ${local_sha:0:7} → ${remote_sha:0:7}; deploying"
   # deploy-prod.sh does its own git reset --hard to origin/main.
-  ./infra/deploy-prod.sh
+  # FORWARD_ONLY=1: never regress prod to an older commit (see deploy-prod.sh).
+  FORWARD_ONLY=1 ./infra/deploy-prod.sh
 }
 
 # Prevent overlapping runs (cron every 5 min while a build takes longer).

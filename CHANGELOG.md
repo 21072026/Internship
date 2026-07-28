@@ -10,6 +10,19 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+### Fixed
+- **Production deploys are now forward-only and deterministic (deploy oscillation).**
+  Prod could regress to an older version after some merges ("one step forward, one
+  step back"): the `deploy-prod.yml` / `deploy-preview.yml` jobs share one
+  self-hosted runner workspace and called `deploy-prod.sh --no-pull`, which builds
+  whatever commit the shared workspace was left at rather than `origin/main`; and
+  two uncoordinated deployers (the cron `autodeploy.sh` poller + the workflow) write
+  the prod container with no guard against out-of-order builds. Prod deploy now
+  hard-resets to `origin/main` at deploy time (dropped `--no-pull`) and a
+  `FORWARD_ONLY=1` guard in `deploy-prod.sh` refuses to deploy a commit older than
+  the one already live (recorded per-container; `FORCE=1` overrides for a deliberate
+  rollback). Preview/topic deploys are unaffected. Infra-only; no app change.
+
 ## [0.25.14] - 2026-07-24
 
 ### Changed
