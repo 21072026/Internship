@@ -563,3 +563,40 @@ güncellemek standart operasyondur; birini bile atlamak eksik kalır.
 PR'da iki farklı infra hatası gördüm: (1) Docker build'de OOM (exit 255), (2)
 `prisma db push` sırasında `P1001: Can't reach host.docker.internal:3306`.
 İkisi de sunucu tarafı — kod değişikliği gerekmez, sadece infra durumunu açıkla.
+
+## 2026-07-28 — Uygulamayı gerçek kullanıcı gözüyle gezip backlog doldurma (SO/PSO turu)
+
+**Docker olmayan Claude Code web container'ında yerel DB: MariaDB'yi apt ile kur.**
+`docker-compose.dev.yml` bu ortamda çalışmıyor (docker daemon yok). Çalışan yol:
+`apt-get update && apt-get install -y mariadb-server` → `mkdir -p /var/run/mysqld &&
+chmod 777 /var/run/mysqld` (aksi hâlde "Bind on unix socket: No such file or
+directory") → `nohup mariadbd --user=root --datadir=/var/lib/mysql --port=3306 &`.
+MariaDB'de `root` unix_socket ile doğrulanır, Prisma TCP ile bağlandığı için
+"Access denied for user 'root'@'localhost'" alırsınız — ayrı bir kullanıcı açın:
+`CREATE USER 'crm'@'127.0.0.1' IDENTIFIED BY 'crm'; GRANT ALL …`. Sonrası standart:
+`.env` → `prisma db push` → `prisma db seed` → `npm run seed:demo`.
+`apt-get install` ilk denemede 404 verirse önce `apt-get update` çalıştırın.
+
+**Playwright ile tur atarken hidrasyonu bekleyin.** `page.goto` + hemen
+`fill/click` yaparsanız form React hidrasyonundan önce **native GET submit**
+ediyor: `GET /auth/signin?email=…&password=…` → giriş sessizce başarısız, tüm tur
+anonim olarak dönüyor (ve fark etmek zor, çünkü sayfalar 200 dönüyor). `waitUntil:
+'load'` + ~3 sn bekleme + `getByRole('button')` ile tıklama sorunu çözdü. Turun
+gerçekten giriş yaptığını her rol için loglayın (`--- mentor logged in -> /mentor`).
+
+**Ekran turunda "2 saniye" ile "9 saniye" farklı ürünler gösteriyor.** Client
+bileşenleri boş dizi ile başlayıp `useEffect`'te veri çektiği için ilk saniyelerde
+**yanlış boş durum** görünüyor ("Henüz atanmış mentee yok" — oysa 3 mentee var).
+Screenshot'ı 2,5 sn'de alırsanız bunu bug sanır, 9 sn'de alırsanız hiç görmezsiniz.
+Her iki anı da yakalayın: bu, gerçek bir UX bulgusu (#891) ve tek başına en çok
+"bu uygulama veri mi kaybetti?" hissi yaratan sınıf.
+
+**Chromium yolu:** `/opt/pw-browsers/chromium/chrome-linux/chrome` yok;
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome` var. `executablePath` ile
+doğrudan verin, `playwright install` çalıştırmayın.
+
+**MCP `sub_issue_write` yanıtı ebeveyn issue'nun tüm gövdesini döndürüyor.**
+Uzun gövdeli epic/story'lerde her bağlama çağrısı binlerce token; 38 task'ı
+bağlamak bağlam bütçesinin ciddi kısmını yiyor. Önce **tüm** issue'ları oluşturup
+(create yanıtı kısa: id + url), child id → parent number eşlemesini bir dosyaya
+yazın, bağlamayı en sona bırakın — böylece bağlam özetlenirse eşleme kaybolmaz.
