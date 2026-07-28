@@ -3,15 +3,15 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { getThreadIfAllowed } from '@/lib/messaging';
+import { canAccessMessage } from '@/lib/conversations';
 
-// Load a message and confirm the caller may see its thread. Returns the message
-// (with relation ids) or null when not found / not allowed.
+// Load a message and confirm the caller may act on it — via its mentorship
+// thread or its conversation (#769), whichever the message is linked to.
+// Returns the message or null when not found / not allowed.
 async function loadAllowed(userId: string, role: string, messageId: string) {
   const message = await prisma.message.findUnique({ where: { id: messageId } });
   if (!message) return null;
-  const rel = await getThreadIfAllowed({ id: userId, role }, message.relationId);
-  if (!rel) return null;
+  if (!(await canAccessMessage({ id: userId, role }, message))) return null;
   return message;
 }
 

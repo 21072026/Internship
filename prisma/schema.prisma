@@ -319,6 +319,13 @@ model Conversation {
   // Group conversations can be bound to a project; DIRECT conversations may
   // leave this null.
   projectId String?
+  // Deterministic identity for a DIRECT (1:1) conversation: the two participant
+  // ids sorted and joined with '|'. Unique, so create-or-get can lean on the
+  // constraint instead of a read-then-write race (two simultaneous "message
+  // this person" clicks would otherwise create two conversations for the same
+  // pair). Null for GROUP conversations — MySQL permits many NULLs in a unique
+  // index, so groups are unconstrained.
+  directKey String?          @unique
   createdAt DateTime         @default(now())
   // @default(now()) as well as @updatedAt: without a default, adding this
   // required column to the already-deployed table would fail `db push` on any

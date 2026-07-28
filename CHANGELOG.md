@@ -10,6 +10,44 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.26.2-beta] - 2026-07-28
+
+### Added
+- **1:1 direct-message API for project co-members** (#769), building on the #768
+  authorization layer. No user-visible surface yet — nothing in the UI calls these
+  endpoints; the `/messages` picker (#770) is what will expose them, so no release note
+  accompanies this entry.
+  - `POST /api/conversations` — create-or-get the DIRECT conversation with another user.
+    Idempotent, and 403 when `canMessage()` says no. Authorization lives *inside*
+    `findOrCreateDirectConversation()` rather than in the route, so no future caller can
+    skip it.
+  - `GET`/`POST /api/messages` now accept **`conversationId`** alongside the existing
+    `relationId` (JSON *and* multipart/attachment paths). Exactly one link is queried per
+    request — never an `OR` across both, which would leak the sibling layer's messages
+    into a thread view. Posting notifies **every** other participant
+    (`otherConversationParticipants`) and mirrors to email for those who haven't opted
+    out of `messages`.
+  - The message sub-routes — `PATCH`/`DELETE /api/messages/[id]`,
+    `POST /api/messages/[id]/reactions`, `GET /api/messages/attachments/[id]` — now
+    authorize through a shared `canAccessMessage()` that follows whichever link the
+    message carries. Without this they would have kept failing closed on conversation
+    messages (`relationId` is null there since #768), i.e. a DM could be sent but never
+    edited, deleted, reacted to, or have its attachments downloaded.
+  - `GET /api/messages/unread` counts conversation messages too, so project DMs reach the
+    unread badge instead of being invisible to it.
+  - Reply-by-email stays mentorship-only: the `Reply-To` token is relation-scoped
+    (`replyAddress(relationId)`), so conversation recipients get the notification email
+    without a `Reply-To` rather than one that would bounce into nowhere.
+
+### Schema
+- `Conversation.directKey String? @unique` — the two participant ids sorted and joined,
+  giving a DIRECT conversation one deterministic identity. Create-or-get leans on the
+  constraint (catching `P2002`) instead of a read-then-write race, so two simultaneous
+  "message this person" clicks can't create two conversations for the same pair. Matching
+  on the key also means a GROUP conversation, or one containing both users *plus a third*,
+  can never be returned by mistake. Null for groups — MySQL allows many NULLs in a unique
+  index.
+
 ## [0.26.1-beta] - 2026-07-28
 
 ### Changed

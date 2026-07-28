@@ -1,4 +1,6 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { getThreadIfAllowed } from '@/lib/messaging';
 
 interface SessionUser {
   id: string;
@@ -119,4 +121,68 @@ export function otherConversationParticipants(
   senderId: string,
 ): string[] {
   return [...new Set(conversation.participants.map((p) => p.userId))].filter((id) => id !== senderId);
+}
+
+// The unique identity of a DIRECT conversation between two users: their ids
+// sorted, so the pair maps to one key regardless of who starts the chat.
+export function directKeyFor(userAId: string, userBId: string): string {
+  return [userAId, userBId].sort().join('|');
+}
+
+const CONVERSATION_INCLUDE = {
+  participants: {
+    select: { userId: true, lastReadAt: true, user: { select: { id: true, fullName: true } } },
+  },
+} as const;
+
+// Create-or-get the 1:1 conversation between two users (#769).
+// Returns null when the pair isn't allowed to message each other — the caller
+// turns that into a 403. Authorization is checked HERE so no route can skip it.
+//
+// Concurrency: the pair's identity lives in the unique `directKey` column, so
+// two simultaneous requests can't produce two conversations for the same pair —
+// the loser of the race gets a unique-constraint violation and reads the winner's
+// row instead. Matching on `directKey` (rather than scanning participants) also
+// means a GROUP conversation, or a conversation that happens to include both
+// users plus a third, can never be returned by mistake.
+export async function findOrCreateDirectConversation(userAId: string, userBId: string) {
+  if (!(await canMessage(userAId, userBId))) return null;
+
+  const key = directKeyFor(userAId, userBId);
+  const existing = await prisma.conversation.findUnique({
+    where: { directKey: key },
+    include: CONVERSATION_INCLUDE,
+  });
+  if (existing) return existing;
+
+  try {
+    return await prisma.conversation.create({
+      data: {
+        type: 'DIRECT',
+        directKey: key,
+        participants: { create: [{ userId: userAId }, { userId: userBId }] },
+      },
+      include: CONVERSATION_INCLUDE,
+    });
+  } catch (e) {
+    // Lost the race — the other request created it microseconds earlier.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      return prisma.conversation.findUnique({ where: { directKey: key }, include: CONVERSATION_INCLUDE });
+    }
+    throw e;
+  }
+}
+
+// May this user act on this message? A message belongs to a mentorship thread
+// (legacy `relationId`), a conversation (`conversationId`), or — in principle —
+// both. Authorization follows whichever link it has, so the message/reaction/
+// attachment sub-routes work identically on both paths. A message with neither
+// link is unreachable (fail closed).
+export async function canAccessMessage(
+  user: SessionUser,
+  message: { relationId: string | null; conversationId: string | null },
+): Promise<boolean> {
+  if (message.relationId && (await getThreadIfAllowed(user, message.relationId))) return true;
+  if (message.conversationId && (await getConversationIfAllowed(user, message.conversationId))) return true;
+  return false;
 }
