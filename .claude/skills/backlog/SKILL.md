@@ -100,11 +100,22 @@ not a coder. Author issues; do not implement unless explicitly told to.
     order, and a recommended next item. Do not paste full issue bodies back.
 
 11. **Link it in + set the official Priority.** After creating an issue: (a) link
-    it as a sub-issue of its parent Story/Epic with `mcp__github__sub_issue_write`;
+    it as a sub-issue of its parent with `mcp__github__sub_issue_write` — Task →
+    Story, Story → Epic, **Epic → #736 `[_ROOT_]`** (the epic step is the one
+    that gets forgotten; see the board section);
     (b) set the board's native **Priority** field via `mcp__github__issue_write`
     (`issue_fields`, mapped from the P-label — see the board section). Do **not**
     add *custom* board fields — the board stays **GitHub-standard**. Sub-issue
     linking, labels, and the org Priority field all work with the agent's App.
+    **Verify before reporting:** `issue_read` (`get_sub_issues`) on #736 and on
+    each epic — every item you created must appear under exactly one parent.
+    Report the hierarchy only after that check passes.
+
+    *Cost note:* `sub_issue_write` echoes the **parent's whole body** in its
+    response, so linking 38 tasks to long story bodies burns a lot of context.
+    Create every issue first (create responses are just id + url), write the
+    `child id → parent number` map to a scratch file, then do all the linking
+    last — if the context gets summarized mid-way the map survives on disk.
 
 ## GitHub Project board — conventions (org `21072026`, project `1`)
 
@@ -119,9 +130,19 @@ they encoded is already carried natively. Reverted. Don't reintroduce them.)
   for free — no "layer"/type field needed. Stajyer tasks hang off epic **#478**;
   premium off **#517** (→ story #522 for Faz-3 MT tasks); messaging #663;
   dark-mode #657; pipeline #704; comms #705. For an orphan cluster with a shared
-  theme, create a small umbrella **Story** and nest them. Never a mega-parent —
-  "No Parent" always holds the top-level epics/stories, and that's correct
-  (a tree always has roots).
+  theme, create a small umbrella **Story** and nest them.
+- **Epics hang off the root issue #736 `[_ROOT_]`** — this is the actual repo
+  convention (verified 2026-07-28: #736 holds #417, #478, #517, #714, #717,
+  #796–#805 and the epics created since). It exists so the board's
+  *Group by → Parent issue* view shows **one** tree instead of a row of
+  parentless epics. So the tree is **#736 → Epic → Story → Task**: after creating
+  an epic, link it to #736 with `sub_issue_write` exactly as you link a story to
+  its epic. (Earlier guidance here said "never a mega-parent / No Parent holds the
+  top-level epics" — that was wrong for this repo and caused epics #850/#853/#857/
+  #861/#863 to be created orphaned and fixed only after the maintainer asked.
+  Note the 8 security epics #814–#829 are still unlinked — link them when you next
+  touch them.) `[_ROOT_]` itself is a bookkeeping node: no labels, no priority, no
+  body; never close it and never put a Task directly under it.
 - **Priority** — set the `P0`–`P3` **label** (for filtering/at-a-glance) AND the
   board's **official org "Priority" field** (options **Urgent/High/Medium/Low**).
   The Priority field is an **org-level issue field** (`list_issue_fields` shows it),

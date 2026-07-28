@@ -600,3 +600,19 @@ Uzun gövdeli epic/story'lerde her bağlama çağrısı binlerce token; 38 task'
 bağlamak bağlam bütçesinin ciddi kısmını yiyor. Önce **tüm** issue'ları oluşturup
 (create yanıtı kısa: id + url), child id → parent number eşlemesini bir dosyaya
 yazın, bağlamayı en sona bırakın — böylece bağlam özetlenirse eşleme kaybolmaz.
+
+**Hiyerarşiyi bitirdikten sonra kökü de doğrulayın: epic'ler #736 `[_ROOT_]`
+altına bağlanır.** Task→Story ve Story→Epic bağlarını kurup "ağaç tamam" dedim;
+kullanıcı "epic'ler de root'a bağlandı mı?" diye sorunca 5 epic'in de parentsız
+kaldığını gördüm. Bu repoda tek bir kök issue var (#736) ve ürün epic'leri
+(#417, #478, #517, #714, #717, #796–#805) ona bağlı — board'un *Group by →
+Parent issue* görünümü tek ağaç göstersin diye. `backlog` skill'i bunun tersini
+söylüyordu ("never a mega-parent; No Parent holds the top-level epics"); skill'i
+gerçeğe göre düzelttim. Ders: **oluşturma bittiğinde `issue_read`
+(`get_sub_issues`) ile #736'yı ve her epic'i okuyup her kalemin tam olarak bir
+ebeveyni olduğunu doğrulayın**, raporu ondan sonra yazın. (Not: geçen seansın 8
+güvenlik epic'i #814–#829 hâlâ root'a bağlı değil.)
+
+**Skill dosyası ile repo gerçeği çeliştiğinde repoyu kaynak alın ve skill'i
+düzeltin.** Yanlış talimat sessizce yanlış çıktı üretiyor ve bir sonraki oturum
+aynı hatayı tekrarlıyor; düzeltme maliyeti iki satır.
