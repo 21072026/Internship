@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Public contact form → a notification to the profile owner (EPIC: public
 // profile). Anti-spam without an external captcha (blocked by our CSP): a
@@ -9,7 +10,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 const schema = z.object({
   name: z.string().min(1).max(120),
   email: z.string().email().max(200),
-  message: z.string().min(1).max(2000),
+  message: z.string().min(1).max(TEXT_LIMITS.publicContactMessage),
   // Honeypot — accept any string so a filled value passes validation and is
   // dropped silently by the handler (a 400 here would leak the trap to bots).
   website: z.string().max(500).optional(),

@@ -6,12 +6,13 @@ import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { getMenteeRequestGate } from '@/lib/requestGate';
 import { withTenantScope } from '@/lib/orgContext';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Mentee-side mentorship requests (#590): a mentee asks for a mentor; an admin
 // approves (creating the MentorshipRelation) or rejects via the admin queue.
 
 const createSchema = z.object({
-  message: z.string().max(1000).optional(),
+  message: z.string().max(TEXT_LIMITS.mentorshipRequestMessage).optional(),
   targetPosition: z.string().max(120).optional(),
 });
 

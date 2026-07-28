@@ -9,6 +9,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
 import { SupportAttachmentList } from '@/components/SupportAttachmentList';
 import type { SupportAttachmentMeta } from '@/lib/supportAttachments';
+import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 type Status = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
 
@@ -197,13 +199,14 @@ export default function AdminSupportPage() {
                     </div>
 
                     <div className="flex gap-2 mb-3">
-                      <textarea
+                      <Textarea
                         value={reply}
                         onChange={(e) => setReply(e.target.value)}
                         placeholder={a.replyPlaceholder}
                         rows={2}
-                        maxLength={5000}
-                        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+                        maxLength={TEXT_LIMITS.supportMessageBody}
+                        showCounter
+                        wrapperClassName="flex-1"
                         data-testid="admin-reply-input"
                       />
                       <Button type="button" loading={busy} disabled={!reply.trim()} onClick={() => sendReply(tk.id)} data-testid="admin-reply-send">

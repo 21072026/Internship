@@ -3,6 +3,8 @@
 import type { ReactNode, RefObject } from 'react';
 import { FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 export interface PendingMessageAttachment {
   file: File;
@@ -88,7 +90,7 @@ export function MessageComposer({
       <Button type="button" variant="outline" disabled={sending} onClick={() => fileInputRef.current?.click()} aria-label={attachLabel} title={attachLabel} data-testid={attachTestId}>
         <Paperclip className="h-4 w-4" />
       </Button>
-      <textarea value={body} onChange={(event) => onBodyChange(event.target.value)} onPaste={onPaste} onKeyDown={onKeyDown} rows={2} maxLength={5000} placeholder={placeholder} data-testid={textareaTestId} className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 resize-none" />
+      <Textarea value={body} onChange={(event) => onBodyChange(event.target.value)} onPaste={onPaste} onKeyDown={onKeyDown} rows={2} maxLength={TEXT_LIMITS.messageBody} showCounter placeholder={placeholder} data-testid={textareaTestId} wrapperClassName="flex-1" className="resize-none" />
       <Button type="submit" loading={sending} disabled={empty} data-testid={sendTestId}>{sendLabel}</Button>
     </form>
   );
