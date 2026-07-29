@@ -35,7 +35,7 @@ export function PendingAttachmentList({ attachments, onRemove, removeLabel }: {
 }) {
   if (!attachments.length) return null;
   return (
-    <div className="flex flex-wrap items-start gap-2 mb-2">
+    <div data-testid="pending-attachments" className="flex flex-wrap items-start gap-2 mb-2">
       {attachments.map((attachment, index) => (
         <div key={attachment.url} className="relative group">
           {attachment.file.type.startsWith('image/') ? (
