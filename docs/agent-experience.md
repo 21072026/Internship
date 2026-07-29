@@ -778,6 +778,191 @@ en sona bırak. Ayrıca issue numaraları oluşturma sırasıyla ardışık gelm
 (814, 816, 818… atlıyor) — gövdede "bkz #N" yazarken numarayı önceden tahmin etme,
 sonradan düzelt.
 
+## 2026-07-28 — CI'ı sunucudan GitHub Actions'a geri taşıma (#955 / PR #956)
+
+**Repo public olunca kota gerekçesiyle alınmış her karar yeniden değerlendirilmeli.**
+Haziran 2026'da hosted Actions kotası tükendiği için build'ler self-hosted runner'a,
+yani *production sunucusunun kendisine* taşınmıştı (#636); e2e-full ve stress cron'ları
+tamamen kapatılmıştı (#648). Repo Temmuz'da public oldu — standart hosted runner'lar
+ücretsiz ve sınırsız. Ama kodda hiçbir şey bunu haber vermiyor: workflow yorumları
+hâlâ "PAUSED (quota exhausted)" diyordu ve kimse geri açmadı. Kota kaynaklı geçici
+çözümlerin yorumuna **hangi koşul değişince geri alınacağını** yaz.
+
+**CLAUDE.md gerçeği yansıtmayabilir — dosyayı oku, dokümanı değil.** CLAUDE.md
+"full suite 4× a day, 4-way sharded" diyordu; `e2e-full.yml`'de schedule tamamen
+yorumdaydı ve tek job'a (sharding yok) indirilmişti. Ters yönde de: `deploy-preview`
+`NEXT_PUBLIC_APP_ENV` build-arg'ını hiç geçmiyordu, yani preview #636'dan beri
+production mavisi giyiyordu — kimse fark etmemiş. Doğrulanmamış her doküman iddiası
+`dosya:satır` ile teyit edilmeli.
+
+**Git geçmişi en iyi "eski hale döndür" kaynağı.** Sharded e2e-full'ü sıfırdan
+yazmak yerine `git log --oneline -- <dosya>` → `git show <sha>:<dosya>` ile #627'deki
+orijinali çıkardım; sonradan eklenen browser-cache adımını üstüne koydum. Uydurmaktan
+hızlı ve niyet kaybı olmuyor.
+
+**Runner'ı tamamen kaldırmak yerine "ne mecburen orada olmalı" diye sor.** SSH+secret
+modeline (legacy `deploy.yml`) dönmek cazipti ama sunucu sırlarını GitHub secrets'a
+taşımak gerekirdi. Bunun yerine deploy'u üçe böldüm: gate (self-hosted, bir curl) →
+build (`ubuntu-latest`) → deploy (self-hosted, sadece pull+swap). Drift gate bilerek
+sunucuda kaldı: okuduğu doğru kaynak `127.0.0.1:<port>/api/health`, dışa açıklık /
+firewall / auth gerektirmiyor. Kanıtı da çıktı: bu oturumda sunucu erişilemez
+durumdaydı ve **dışarıdan `curl https://crm.ersah.in` de timeout veriyordu** — gate
+hosted runner'a taşınmış olsaydı her koşuda "unreachable → drift" deyip boşuna
+deploy tetikleyecekti.
+
+**İki job build'i ve deploy'u ayırıyorsa sha'yı bir kez çöz, aşağıya taşı.** Eski tek
+job'lı akışta `deploy-prod.sh` kendisi `git reset --hard origin/main` yapıyordu; build
+ile deploy ayrıldığında bu, imajın build edildiği commit ile deploy edilen commit'in
+ayrışması demek. Çözüm: gate hedef sha'yı `outputs.sha`'ya yazıyor, image tag'i /
+`GIT_SHA` / checkout / `DEPLOY_SHA` hepsi ona pinlenmiş, script `--no-pull` ile
+çağrılıyor. `FORWARD_ONLY` guard'ı `git merge-base --is-ancestor` kullandığı için o
+job'da `fetch-depth: 0` şart — shallow clone soruyu cevaplayamaz.
+
+**Sunucuya dokunan değişikliği doğrulayamıyorsan hata yolunun güvenli olduğunu göster.**
+Runner offline olduğu için `--pull-image` yolunu canlıda deneyemedim. Bunun yerine
+sıralamayı doğruladım: script `set -euo pipefail` ile 2. adımda imajı alıyor,
+container'a 5. adımda dokunuyor — başarısız bir `docker pull` prod ayakta kalarak
+abort ediyor. "Doğrulanmadı" demek yeterli değil, **doğrulanmamışsa ne olacağını** söyle.
+
+**Kuyrukta bekleyen self-hosted job, hosted job'ın koşmasını engellemiyor.** Runner
+offline iken benim PR'ımın Topic Preview run'ı `in_progress` oldu (build ubuntu'da),
+diğer PR'ların eski tek-job run'ları ise `queued` kaldı. Değişikliğin kendisi
+ücretsiz bir kanıt üretti. Ayrıca `gh api repos/<owner>/<repo>/actions/runners`
+runner sağlığını görmenin en hızlı yolu — SSH'ı beklemeye gerek yok.
+
+**`gh repo view` ile `git remote -v` farklı isim gösterebilir.** origin
+`mersahin/Internship`, kanonik ad `21072026/Internship` (transfer sonrası redirect).
+Push doğru yere gidiyor ama `--repo` bayrağı gereken komutlarda kanonik adı kullan.
+Yerel `gh` token'ında `read:packages` scope'u yok, o yüzden ghcr paket sürümlerini
+API'den listeleyemedim; imajın gerçekten push edildiğini **build job'ının step
+sonuçlarından** doğruladım (`Build and push: success`).
+
+**Worktree'de `git checkout main` çalışmaz.** Ana worktree main'i tutuyor;
+`git checkout -b <yeni> origin/main` diyerek dallandım — ama merge sonrası `git fetch`
+etmediğim için branch bayat bir `origin/main`'e oturdu ve tüm dosyalar "değişmiş"
+göründü. Merge'den sonra dallanmadan önce `git fetch origin`.
+
+## 2026-07-28 — e2e-full'e her-koşuda Türkçe özet e-postası (+ hızlı-main dersleri)
+
+**Paralel oturum çarpışması (iki kez!):** Aynı gün başka oturumlar (a) smoke gate'i
+çoktan shiplemiş, (b) benim "self-hosted'a taşı" PR'ımın tam tersi yönde #956'yı merge
+etmişti (repo public olunca hosted runner bedava → her şey hosted'a geri). Ders: PR'ı
+yeniden inşa etmeden önce SON main'i tekrar incele ve "bu iş hâlâ gerekli mi, hangi
+parçası kaldı?" sorusunu sor. Ben kapsamı iki kez daralttım: sonunda kalan tek eksik,
+kullanıcının istediği her-koşuda "X/Y test geçti" heartbeat maili idi — onu restore
+edilmiş hosted e2e-full'e ekledim (shard başına JSON raporu + always() report job'ı).
+
+**Conflict'li PR = 0 workflow:** Base'i geride kalmış PR'da `pull_request` check'leri
+HİÇ tetiklenmez (0 check run + `mergeable_state: dirty/unknown`); "CI koşmuyor" diye
+debug etmeden önce buna bak. `merge-tree` ile conflict'i push'lamadan görebilirsin.
+
+**Sharded koşuda özet:** her shard'a `PLAYWRIGHT_JSON_OUTPUT_NAME` + `--reporter=list,html,json`,
+JSON'ları artifact olarak topla, `E2E_EXPECTED_REPORTS` ile "shard çöktü ama rapor yok →
+sahte yeşil" tuzağını kapat. Süre = shard'ların max'ı, toplamı değil.
+
+**Ultracode limiti:** 8 agent'lık workflow hesap limitine takılıp 0 agent'la döndü; ana
+oturum çalışmaya devam edebildi — işi inline bitir, `resumeFromRunId` cebinde dursun.
+
+**Write tool + ESC baytı:** regex'e `\x1b` yazarken dosyaya ham ESC gömülebilir; `cat -A`
+ile kontrol et; ANSI'li fixture'ları heredoc yerine python/json ile üret.
+
+## 2026-07-28 — Bekleyen backlog işleri (batch), proje tabanlı mesajlaşma zinciri
+
+### Alt-ajanlar bir anda tamamen kullanılamaz hale gelebilir — planı buna göre kur
+
+Bir workflow'un iki ajanı da **hiçbir dosya değiştirmeden** BLOCKED döndü. Sebep
+harness'ın permission katmanıydı: her araç çağrısı şu hatayla reddedildi —
+
+```
+The permission handler returned updatedInput for <Tool> that failed schema validation:
+The required parameter `<param>` is missing
+```
+
+Kaybolan parametreler: `Read`→`file_path`, `Bash`→`command`, `Glob`/`Grep`→`pattern`,
+`Write`→`file_path`+`content` (ikisi birden), `ToolSearch`→`query`. Yani `updatedInput`
+boş obje olarak dönüyor; girdinin bir kısmı değil **tamamı** düşüyor. Deterministik,
+retry çözmüyor. `ToolSearch`'ün de reddedilmesi kritik: deferred araçları yükleyip
+GitHub üzerinden dosya okuma kaçış yolu da kapanıyor.
+
+Dersler: (1) **Ajan raporlarını `git status` ile doğrula** — bu ikisi dürüsttü ama
+"yaptım" diyen bir ajan da olabilirdi. (2) Ajanlar tahmine dayalı kod yazmayı
+reddettiği için doğru davrandı; repoyu okumadan yazılan kod geri uyumu sessizce
+bozardı. (3) Blokaj altyapısalsa aynı görevi tekrar spawn etmek aynı sonucu verir —
+işi kendin yaz. Bu oturumda #769 ve #770'in tamamı elle yazıldı.
+
+### `prisma validate` şema-DB farkını görmez; `db push` tuzakları yalnızca deploy'da patlar
+
+İki kez düştüm, ikisi de yerelde **tamamen sessiz**:
+
+1. **FK kolonuna `@@index` eklemek.** `ConversationParticipant`'a `@@index([userId])`
+   ekledim. MySQL FK için o indeksi zaten tutuyor; Prisma onu `..._userId_idx` adına
+   çevirmek isteyip DROP+CREATE denedi, MySQL de FK'nin dayandığı indeksi düşürmeyi
+   reddetti: `Can't DROP INDEX 'ConversationParticipant_userId_fkey'`. **İnce tarafı:
+   bu tuzak yalnızca tablo zaten deploy edilmişse kurulur** — Prisma tabloyu sıfırdan
+   yaratırken indeksi kendi kurar, FK onu yeniden kullanır, sorun görünmez. FK kolonuna
+   ayrı indeks zaten gereksiz.
+2. **Varsayılansız `NOT NULL` kolon.** `Conversation.updatedAt`'i `@default` olmadan
+   ekledim; tabloda satır olsa `db push` orada duracaktı. `@default(now())` çözdü.
+
+`prisma format`/`validate`/`generate` üçü de geçti — şema geçerliydi, sorun şemanın
+**canlı tabloyla farkı**. Paylaşımlı DB'ye `db push` yasak olduğu için bu sınıfı ancak
+topic deploy gösterir; doğru yerde yakalandı ama hata mesajı **ilk başarısız adımda
+kesiliyor**, o yüzden bir tuzağı düzeltirken sıradakini de arayın.
+
+### Projects v2 kolonu bu ortamdan yazılamıyor — otomasyon tek çıkış
+
+`CLAUDE.md` "kartı ilgili kolona taşı" diyor ama: Projects v2 **yalnızca GraphQL** ile
+yazılır (REST karşılığı yok), GraphQL bu oturumda kapalı ("only the pinned set of
+PR-review operations"), doğrudan REST 403, MCP'de Projects v2 aracı yok. `Status` alanı
+`list_issue_fields`'de de **görünmez** — o yalnızca org seviyesi issue alanlarını
+(`Priority`, `Start date`, `Target date`, `Effort`) döndürür; `Status` board'un kendi
+alanı. Yapılabilen: issue atama + `Start date`. Kalıcı çözüm `.github/workflows/
+project-status.yml` (bu oturumda eklendi) — `PROJECTS_TOKEN` secret'ı gerekiyor,
+çünkü varsayılan `GITHUB_TOKEN` Projects v2'ye yazamaz.
+
+### Küçük ama zaman yakan şeyler
+
+- **`npm run build | head` yapma.** SIGPIPE build'i yarıda kesip `.next`'i bozuk
+  bırakıyor, sonraki koşu yanıltıcı `ENOENT: routes-manifest.json` veriyor. Çıktıyı
+  dosyaya yaz, sonra `grep`le.
+- **e2e'yi koşturmak için DB'yi apt'den kur.** Ben "docker yok, o yüzden imkânsız"
+  diye bıraktım ve spec'i çalıştırmadan gönderdim; aynı gün başka bir oturum doğru yolu
+  bulmuş (yukarıdaki güvenlik denetimi girdisi): docker daemon gerçekten yok ama
+  `apt-get update && apt-get install -y mariadb-server` çalışıyor. **Ders: "docker yok"
+  ile "yerel DB imkânsız" aynı şey değil** — paket yöneticisini denemeden vazgeçme.
+  Yine de çalıştıramadıysan PR'da açıkça yaz, "test ettim" deme; `@smoke`'a eklemezsen
+  ilk gerçek koşu gecelik tam takımda olur.
+- **e2e locator'ını dil metnine bağlama.** `getByRole('button', {name:/send|gönder/i})`
+  yerine `data-testid`. `MessageComposer` zaten `sendTestId`/`textareaTestId` kabul
+  ediyor.
+- **Merge sonrası dal:** squash merge'den sonra uzak dal squash öncesi commit'i tutuyor
+  ve normal push reddediliyor. `git diff --stat origin/main origin/<dal>` boşsa içerik
+  main'de demektir, `--force-with-lease` güvenli.
+- **Kuyrukta iş var ama hiçbiri çalışmıyorsa runner ölmüştür — "meşgul" değil.** Bunu
+  ilk seferinde yanlış okudum: `topic` 30 dk "queued" kaldı, ben "runner meşgul" sandım.
+  Doğru sinyal: `list_workflow_runs status=in_progress` → **0** iken `status=queued` → 10.
+  Meşgul bir runner'da en az biri `in_progress` olur. Ayrıca kuyruktaki işin
+  `runner_id: 0` / `runner_name: ""` olması "hiçbir runner almadı" demektir.
+  Kök sebep runner servisi değil sunucunun kendisiydi: `runner-watchdog` (hosted runner'dan
+  SSH deniyor) `Connection timed out` ile patladı — yani watchdog da kurtaramaz, çünkü
+  kurtarmak için SSH gerekiyor. Bu kesinti prod deploy'unu da bloke etti.
+  **Bu tek-runner kırılganlığı #955 ile çözüldü** (imajlar yine GitHub-hosted runner'larda
+  derleniyor), o yüzden "topic ~15 dk sürer" gözlemim artık geçersiz.
+
+### Mevcut nullable kolonun alt uçlarını kontrol et
+
+#768 `Message.relationId`'yi nullable yaptı. Alt uçlar (`PATCH`/`DELETE
+/api/messages/[id]`, `[id]/reactions`, `attachments/[id]`) hepsi
+`getThreadIfAllowed(message.relationId)` ile yetkilendiriyordu ve `null`'da fail-closed
+dönüyordu: konuşma mesajı **gönderilebilir ama düzenlenemez, silinemez, tepki alamaz,
+eki indirilemez**. Ortak bir `canAccessMessage()` gerekti. Bir kolonu nullable yaparken
+onu okuyan **tüm** yetki yollarını greple.
+
+Ayrıca: yetkiyi *katılımcılık* ile *canlı izin* olarak ayırmak gerekti. Okuma kalıcı
+(geçmiş kaybolmasın), yazma yeniden kontrol ediliyor (`canPostToConversation`) — yoksa
+projeden çıkarılan üye süresiz yazmaya devam ederdi.
+
+
 ## 2026-07-28 (2. tur) — #782 takibi: limitler DB ile uyumsuzdu + deploy güveni
 
 **"Özellik canlıda yok" şikâyetini önce shallow clone ile doğrula.** Konteynerdeki
@@ -837,3 +1022,34 @@ dışında sonsuza kadar sabitlenebiliyordu; (2) health check kök sayfayı curl
 söylemez, üstelik drift gate kararını aynı endpoint'in `sha`'sından veriyor. Deploy
 sonrası **ne deploy ettiğini doğrula**: `/api/health?db=1` + served `sha == ${GIT_SHA:0:7}`.
 Reddedilen/atlanan deploy `::warning::` + step summary yazsın.
+
+**Sunucuda build eden bir pipeline, kendi düzeltmesini de rehin alabilir.** 22:00
+civarı `deploy-prod` #51 imajı hâlâ sunucuda build ediyordu (#956 öncesi yol);
+`next build` **exit 255** (bu repoda belgelenen OOM imzası) ile öldü ve hemen
+ardından "The runner has received a shutdown signal" geldi. Sonuç zinciri: box
+SSH'e kapandı (watchdog #19 → `connect ... Connection timed out`, oysa #17/#18
+başarılıydı), üç ortam da 503 döndü (prod + preview + `crm-pr946` topic), ve
+self-hosted runner düştüğü için kuyruktaki deploy'lar (#53, #55) başlayamadı —
+**o kuyrukta duran şey tam olarak sunucuda build etmeyi bitiren #956'ydı.**
+Ders: kök nedeni ortadan kaldıran değişiklik, kök nedenin bozduğu altyapıya
+bağımlıysa kurtarma yolu yoktur. Böyle bir geçişte hosted bir kaçış yolu bırak.
+
+**"Ortam ayakta mı?" sorusunu kendi ağ yolunu doğrulamadan cevaplama.** HTTPS
+`Connection reset by peer` verirken `http://` **503** döndü — yani nginx ayakta,
+container yok. `example.com` ve `api.github.com` 200 dönüyordu, dolayısıyla sorun
+sandbox'ta değildi. Bir kesinti bildirmeden önce: (1) başka bir dış host'a curl,
+(2) 80 ve 443'ü ayrı dene, (3) `$HTTPS_PROXY/__agentproxy/status`. Aksi hâlde
+proxy arızasını prod kesintisi diye rapor etme riski var.
+
+**Container swap'ın geri dönüş hedefi yok — bu artık teorik değil.** PR #946'da
+"kapsam dışı" diye not ettiğim şey aynı gece canlı kesintiye dönüştü:
+`docker stop`/`rm`, `docker run`'dan önce çalışıyor ve `docker image prune -af`
+önceki imajı siliyor. Doğrusu: yeni container'ı geçici adla başlat, health-check
+et, ancak sonra eskiyi kaldır.
+
+**Hızlı akan bir main'de PR'ı elde merge etmeye çalışmak yarış kaybettirir.**
+Bu oturumda main inceleme sırasında ~10 commit ilerledi; üç kez elle merge
+denedim, her seferinde tazE bir çakışma. Doğru hamle: çakışmayı çöz, push et ve
+**auto-merge (squash) aç** — gate yeşile döndüğü anda kendisi girer. Ayrıca
+`topic` check'i self-hosted; runner düşükken sonsuza kadar `queued` kalır, bu
+yüzden onu beklemeyin (zorunlu check değil).
