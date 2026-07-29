@@ -5,9 +5,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import {
-  SUPPORT_ATTACHMENT_MAX_COUNT,
-  validateSupportFile,
-} from '@/lib/supportAttachments';
+  buildSupportAttachments,
+  readSupportMessageRequest,
+} from '@/lib/supportMessageRequest';
 import { withTenantScope } from '@/lib/orgContext';
 
 // User side of the support channel (#593): every role has a pinned "Support"
@@ -70,35 +70,14 @@ export async function POST(request: Request) {
   }
 
   return await withTenantScope(session, async () => {
-    let payload: unknown;
-    let files: File[] = [];
+    // multipart (text + files) or the original JSON text-only shape.
+    const read = await readSupportMessageRequest(request);
 
-    if (
-      request.headers
-        .get('content-type')
-        ?.includes('multipart/form-data')
-    ) {
-      const form = await request.formData().catch(() => null);
-
-      if (!form) {
-        return NextResponse.json(
-          { error: 'Invalid multipart request' },
-          { status: 400 },
-        );
-      }
-
-      payload = {
-        body: form.get('body') ?? '',
-      };
-
-      files = form
-        .getAll('files')
-        .filter((value): value is File => typeof value !== 'string');
-    } else {
-      // Eski JSON text-only API desteği korunur.
-      payload = await request.json().catch(() => null);
+    if (!read.ok) {
+      return NextResponse.json({ error: read.error }, { status: read.status });
     }
 
+    const { payload, files } = read;
     const parsed = postSchema.safeParse(payload);
 
     if (!parsed.success) {
@@ -117,58 +96,13 @@ export async function POST(request: Request) {
       );
     }
 
-    if (files.length > SUPPORT_ATTACHMENT_MAX_COUNT) {
-      return NextResponse.json(
-        {
-          error: `Too many attachments (max ${SUPPORT_ATTACHMENT_MAX_COUNT})`,
-        },
-        { status: 400 },
-      );
+    const built = await buildSupportAttachments(files);
+
+    if (!built.ok) {
+      return NextResponse.json({ error: built.error }, { status: built.status });
     }
 
-    const fileKeys = new Set<string>();
-
-    for (const file of files) {
-      const key = [
-        file.name,
-        file.size,
-        file.type,
-        file.lastModified,
-      ].join('\0');
-
-      if (fileKeys.has(key)) {
-        return NextResponse.json(
-          { error: `Duplicate attachment: ${file.name}` },
-          { status: 400 },
-        );
-      }
-
-      fileKeys.add(key);
-
-      const validationError = await validateSupportFile(file);
-
-      if (validationError) {
-        const errors = {
-          unsupported: `Unsupported file type: ${file.name}`,
-          tooLarge: `File too large: ${file.name}`,
-          unreadable: `File is empty, corrupted, or unreadable: ${file.name}`,
-        };
-
-        return NextResponse.json(
-          { error: errors[validationError] },
-          { status: 400 },
-        );
-      }
-    }
-
-    const attachments = await Promise.all(
-      files.map(async (file) => ({
-        filename: file.name,
-        contentType: file.type,
-        size: file.size,
-        data: Buffer.from(await file.arrayBuffer()),
-      })),
-    );
+    const attachments = built.attachments;
 
     const result = await prisma.$transaction(async (tx) => {
       let ticket = await tx.supportTicket.findFirst({

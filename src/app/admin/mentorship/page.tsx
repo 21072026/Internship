@@ -234,6 +234,7 @@ export default function MentorshipPage() {
         ))}
         <input
           type="search"
+          data-testid="mentorship-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t.mentorships.searchPlaceholder}

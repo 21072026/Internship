@@ -304,6 +304,264 @@ export async function sendMeetingInviteEmail({
   });
 }
 
+// Minimal HTML escape for user-supplied strings interpolated into templates
+// (names, free-text messages) — keeps a stray "<" from breaking the markup.
+function esc(s: string): string {
+  return s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c] as string);
+}
+
+// A branded button + wrapper shared by the notification templates below.
+function ctaBlock(brand: { accent: string }, url: string, label: string): string {
+  return `<a href="${url}" style="display:inline-block;background-color:${brand.accent};color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;margin:16px 0;">${label}</a>`;
+}
+
+function appUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
+// --- Mentorship request lifecycle (#668) ------------------------------------
+// These events previously produced an in-app notification only, so a mentee who
+// wasn't logged in never learned their request had been decided.
+
+export async function sendMentorshipDecisionEmail({
+  to,
+  fullName,
+  approved,
+  mentorName,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  approved: boolean;
+  mentorName?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const heading = approved ? 'Your mentorship request was approved' : 'Update on your mentorship request';
+  const body = approved
+    ? `<p>Good news — your mentorship request has been approved${mentorName ? ` and <strong>${esc(mentorName)}</strong> is now your mentor` : ''}. Open your portal to say hi and get started.</p>`
+    : `<p>Your mentorship request has been reviewed, but it could not be approved right now. You are welcome to submit a new request later — keeping your profile and CV up to date helps.</p>`;
+
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: approved ? `Your mentorship request was approved` : `Update on your mentorship request`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, heading)}
+        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+        ${body}
+        ${ctaBlock(brand, `${appUrl()}/portal`, 'Open your portal')}
+      </div>
+    `,
+  });
+}
+
+export async function sendMenteeAssignedEmail({
+  to,
+  mentorName,
+  menteeName,
+  orgId,
+}: {
+  to: string;
+  mentorName?: string | null;
+  menteeName: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: `New mentee assigned: ${menteeName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'You have a new mentee')}
+        ${mentorName ? `<p>Hi ${esc(mentorName)},</p>` : ''}
+        <p><strong>${esc(menteeName)}</strong> has been assigned to you as a mentee. Reach out to
+        them to get the mentorship started, and log your first interaction when you do.</p>
+        ${ctaBlock(brand, `${appUrl()}/mentor`, 'Open your dashboard')}
+      </div>
+    `,
+  });
+}
+
+// An admin wiring up a mentorship directly (no prior mentee request, #668) —
+// the mentee never asked, so the request-approval copy would not fit.
+export async function sendMentorAssignedEmail({
+  to,
+  menteeName,
+  mentorName,
+  orgId,
+}: {
+  to: string;
+  menteeName?: string | null;
+  mentorName: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: `You have a mentor: ${mentorName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'You have been assigned a mentor')}
+        ${menteeName ? `<p>Hi ${esc(menteeName)},</p>` : ''}
+        <p><strong>${esc(mentorName)}</strong> is now your mentor. Open your portal to say hi
+        and get the mentorship started.</p>
+        ${ctaBlock(brand, `${appUrl()}/portal`, 'Open your portal')}
+      </div>
+    `,
+  });
+}
+
+export async function sendMentorshipRequestEmail({
+  to,
+  adminName,
+  menteeName,
+  targetPosition,
+  message,
+  orgId,
+}: {
+  to: string;
+  adminName?: string | null;
+  menteeName: string;
+  targetPosition?: string | null;
+  message?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: `New mentorship request: ${menteeName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'New mentorship request')}
+        ${adminName ? `<p>Hi ${esc(adminName)},</p>` : ''}
+        <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
+        ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
+        ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, 'Review the request')}
+      </div>
+    `,
+  });
+}
+
+// --- Meeting requests (#668) ------------------------------------------------
+
+export async function sendMeetingRequestEmail({
+  to,
+  fullName,
+  requesterName,
+  topic,
+  proposedAt,
+  link,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  requesterName: string;
+  topic: string;
+  proposedAt: Date | null;
+  link: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const when = proposedAt ? proposedAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }) : null;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: `Meeting request: ${topic}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'New meeting request')}
+        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+        <p><strong>${esc(requesterName)}</strong> requested a meeting: <strong>${esc(topic)}</strong>.</p>
+        ${when ? `<p><strong>Proposed time:</strong> ${when}</p>` : ''}
+        ${ctaBlock(brand, `${appUrl()}${link}`, 'Accept or decline')}
+      </div>
+    `,
+  });
+}
+
+export async function sendMeetingRequestDecisionEmail({
+  to,
+  fullName,
+  topic,
+  accepted,
+  scheduledAt,
+  meetLink,
+  link,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  topic: string;
+  accepted: boolean;
+  scheduledAt?: Date | null;
+  meetLink?: string | null;
+  link: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const when = scheduledAt ? scheduledAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }) : null;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: accepted ? `Meeting confirmed: ${topic}` : `Meeting request declined: ${topic}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, accepted ? 'Your meeting is confirmed' : 'Your meeting request was declined')}
+        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+        ${accepted
+          ? `<p>Your meeting request <strong>${esc(topic)}</strong> was accepted.</p>
+             ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
+             ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}`
+          : `<p>Your meeting request <strong>${esc(topic)}</strong> could not be accepted. You can propose another time.</p>`}
+        ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the conversation')}
+      </div>
+    `,
+  });
+}
+
+// --- Public profile contact form (#668) -------------------------------------
+// An outside enquiry (e.g. a recruiter) is the most time-sensitive thing a
+// profile owner can receive, and it was in-app only. Reply-To is set to the
+// sender so the owner can answer straight from their inbox.
+
+export async function sendPublicContactEmail({
+  to,
+  ownerName,
+  fromName,
+  fromEmail,
+  message,
+  orgId,
+}: {
+  to: string;
+  ownerName?: string | null;
+  fromName: string;
+  fromEmail: string;
+  message: string;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    replyTo: fromEmail,
+    subject: `New message from your public profile: ${fromName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'Someone contacted you')}
+        ${ownerName ? `<p>Hi ${esc(ownerName)},</p>` : ''}
+        <p><strong>${esc(fromName)}</strong> (${esc(fromEmail)}) sent you a message through your public profile:</p>
+        <blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>
+        <p style="color:#6b7280;font-size:14px;">Reply to this email to answer them directly.</p>
+      </div>
+    `,
+  });
+}
+
 export async function checkMentorInteractionReminders() {
   const days = parseInt(await getSetting('reminderDays'), 10) || 14;
   const fourteenDaysAgo = new Date();
@@ -435,41 +693,106 @@ export async function checkStageDeadlineReminders() {
   return { reminded: overdue.length };
 }
 
-// Email reminders for meetings happening within the next 24h that haven't been
-// reminded yet.
+// How far ahead a meeting reminder fires. The cron ticks every 15 minutes
+// (see initCronJobs), so a meeting is reminded 45-60 minutes before it starts —
+// close enough to "one hour before" to be useful, and never late.
+export const MEETING_REMINDER_WINDOW_MINUTES = 60;
+
+// Reminders for meetings starting within the next ~60 minutes that haven't been
+// reminded yet (#777).
+//
+//   • in-app: EVERY participant (mentee *and* mentor) is notified, always —
+//     bell items are not subject to the email category opt-outs.
+//   • email: only participants whose 'meetingReminders' category is on.
+//
+// Idempotency: `reminderSentAt` is claimed *before* anything is sent, with a
+// `reminderSentAt: null` guard so an overlapping cron tick can't double-send.
+// Marking first means a mid-send failure loses a reminder rather than
+// duplicating one — the far less annoying failure mode, and it keeps the in-app
+// notification and the email behind the same single marker.
 export async function sendMeetingReminders() {
   const now = new Date();
-  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const horizon = new Date(now.getTime() + MEETING_REMINDER_WINDOW_MINUTES * 60 * 1000);
+  const participantSelect = {
+    id: true,
+    email: true,
+    fullName: true,
+    role: true,
+    orgId: true,
+    emailNotifications: true,
+    notificationPrefs: true,
+  } as const;
+
   const meetings = await prisma.meeting.findMany({
-    where: { scheduledAt: { gt: now, lte: in24h }, reminderSentAt: null },
+    where: { scheduledAt: { gt: now, lte: horizon }, reminderSentAt: null },
     include: {
       relation: {
-        include: { mentee: { select: { email: true, fullName: true, emailNotifications: true, notificationPrefs: true } } },
+        include: {
+          mentee: { select: participantSelect },
+          mentor: { select: participantSelect },
+        },
       },
     },
   });
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   let reminded = 0;
+  let notified = 0;
+  let emailed = 0;
+
   for (const m of meetings) {
-    if (emailAllowed(m.relation.mentee, 'meetingReminders')) {
+    // Claim it first — see the idempotency note above.
+    const claim = await prisma.meeting.updateMany({
+      where: { id: m.id, reminderSentAt: null },
+      data: { reminderSentAt: new Date() },
+    });
+    if (claim.count === 0) continue;
+    reminded++;
+
+    const when = m.scheduledAt!.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+    const minutes = Math.max(1, Math.round((m.scheduledAt!.getTime() - Date.now()) / 60000));
+
+    // Both sides of the relation are participants. Series-generated meetings
+    // (seriesId set) carry the same relation, so they need no special casing.
+    const participants = [m.relation.mentee, m.relation.mentor].filter(
+      (u, i, all) => u && all.findIndex((o) => o?.id === u.id) === i
+    );
+
+    for (const user of participants) {
+      const link = user.role === 'MENTEE' ? '/portal' : '/mentor/meetings';
+      // In-app: unconditional (notify() never throws).
+      await notify(
+        user.id,
+        'meeting_reminder',
+        `Meeting "${m.title}" starts in ${minutes} minute${minutes === 1 ? '' : 's'} (${when}).`,
+        link
+      );
+      notified++;
+
+      if (!user.email || !emailAllowed(user, 'meetingReminders')) continue;
       try {
+        const brand = await emailBrand(user.orgId);
         await sendEmail({
-          to: m.relation.mentee.email,
-          subject: `Reminder: ${m.title}`,
+          to: user.email,
+          fromName: brand.name,
+          subject: `Reminder: ${m.title} starts soon`,
           html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color:#2563eb;">Upcoming meeting</h2>
-            <p>Hi ${m.relation.mentee.fullName}, this is a reminder for <strong>${m.title}</strong> at ${m.scheduledAt!.toLocaleString('en-GB')}.</p>
-            ${m.meetLink ? `<p><a href="${m.meetLink}">${m.meetLink}</a></p>` : ''}
+            ${brandHeader(brand, 'Upcoming meeting')}
+            <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(m.title)}</strong>.</p>
+            <p><strong>When:</strong> ${when} (in about ${minutes} minute${minutes === 1 ? '' : 's'})</p>
+            ${m.meetLink ? `<p><strong>Meeting link:</strong> <a href="${m.meetLink}">${esc(m.meetLink)}</a></p>` : ''}
+            ${ctaBlock(brand, `${appUrl}${link}`, 'Open the app')}
           </div>`,
         });
+        emailed++;
       } catch (e) {
-        console.error('Meeting reminder failed:', e);
+        // Swallowed on purpose: a bad address or an SMTP hiccup must not stop
+        // the remaining participants (or meetings) from being reminded.
+        console.error('Meeting reminder email failed:', e);
       }
     }
-    await prisma.meeting.update({ where: { id: m.id }, data: { reminderSentAt: new Date() } });
-    reminded++;
   }
-  return { checked: meetings.length, reminded };
+  return { checked: meetings.length, reminded, notified, emailed };
 }
 
 // Weekly per-mentor digest: stale mentees, upcoming meetings, new applications.
@@ -857,7 +1180,10 @@ export async function sendUnreadMessageDigests() {
 
   const userSelect = { id: true, fullName: true, email: true, emailNotifications: true, notificationPrefs: true } as const;
   const msgs = await prisma.message.findMany({
-    where: { readAt: null, digestedAt: null, deletedForEveryoneAt: null, createdAt: { lt: cutoff } },
+    // relationId is nullable since #768; the digest covers mentorship threads
+    // only, so conversation-only messages are skipped (and left un-digested for
+    // the conversation-layer digest to pick up later).
+    where: { readAt: null, digestedAt: null, deletedForEveryoneAt: null, createdAt: { lt: cutoff }, relationId: { not: null } },
     orderBy: { createdAt: 'asc' },
     include: {
       relation: { include: { mentor: { select: userSelect }, mentee: { select: userSelect } } },
@@ -865,12 +1191,14 @@ export async function sendUnreadMessageDigests() {
   });
 
   // Group unread messages by recipient (the participant who is NOT the sender).
-  type Recipient = (typeof msgs)[number]['relation']['mentor'];
+  type Recipient = NonNullable<(typeof msgs)[number]['relation']>['mentor'];
   const byRecipient = new Map<string, { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }>();
   const allIds: string[] = [];
   for (const m of msgs) {
-    allIds.push(m.id);
     const rel = m.relation;
+    // Defensive: the query filters relationId out, so this cannot normally fire.
+    if (!rel) continue;
+    allIds.push(m.id);
     const recipient = m.senderId === rel.mentorId ? rel.mentee : rel.mentor;
     const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
     if (!recipient?.email) continue;
@@ -936,11 +1264,16 @@ export function initCronJobs() {
 
   scheduledTasks.set('mentor-reminders', task);
 
-  // Meeting reminders — hourly.
-  const meetingTask = cron.schedule('0 * * * *', async () => {
+  // Meeting reminders — every 15 minutes. The reminder window is 60 minutes
+  // (MEETING_REMINDER_WINDOW_MINUTES); an hourly tick would fire anywhere from
+  // 0 to 60 minutes ahead, so a quarter-hourly tick is what actually delivers
+  // "about an hour before" (45-60 min). reminderSentAt keeps it single-shot.
+  const meetingTask = cron.schedule('*/15 * * * *', async () => {
     try {
       const r = await sendMeetingReminders();
-      console.log(`[Cron] Meeting reminders. Reminded: ${r.reminded}`);
+      if (r.reminded) {
+        console.log(`[Cron] Meeting reminders. Reminded: ${r.reminded}, in-app: ${r.notified}, emails: ${r.emailed}`);
+      }
     } catch (e) {
       console.error('[Cron] Meeting reminder error:', e);
     }

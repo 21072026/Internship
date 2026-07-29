@@ -1,0 +1,160 @@
+# Keeps the GitHub Project board's Status column in sync with issue/PR activity.
+#
+# Why this exists: Projects v2 can only be written through GraphQL, and agents
+# working in restricted environments often cannot reach it. Running the update
+# here — on GitHub's side — means the board stays accurate no matter who or what
+# does the work.
+#
+# ── Setup (one-time, needs a human) ────────────────────────────────────────────
+# The default GITHUB_TOKEN CANNOT write Projects v2. Create a token with project
+# read+write on this owner and store it as the repository secret PROJECTS_TOKEN:
+#   • classic PAT  → scope `project`
+#   • fine-grained → Organization (or User) permissions ▸ Projects: Read & write
+# Without the secret every run exits 0 with a notice, so nothing turns red.
+#
+# ── Transitions ───────────────────────────────────────────────────────────────
+#   issue assigned                → In progress
+#   issue reopened                → Ready
+#   issue closed                  → Done
+#   PR opened / ready for review  → In review   (for the issues it closes)
+#
+# A merged PR needs no rule: "Closes #N" closes the issue, and the issue-closed
+# trigger above moves it to Done.
+name: Project status
+
+on:
+  issues:
+    types: [assigned, reopened, closed]
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  contents: read
+
+# Serialize writes per item so two events can't race on the same card.
+concurrency:
+  group: project-status-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # A fork PR has no access to the secret; skip instead of failing.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Move the board card
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          PROJECT_TITLE: Internship
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::notice::PROJECTS_TOKEN is not set — skipping. See the header of this workflow for setup."
+            exit 0
+          fi
+
+          # Which column does this event mean?
+          case "${EVENT_NAME}:${EVENT_ACTION}" in
+            issues:assigned)                     TARGET='In progress' ;;
+            issues:reopened)                     TARGET='Ready' ;;
+            issues:closed)                       TARGET='Done' ;;
+            pull_request:opened)                 TARGET='In review' ;;
+            pull_request:ready_for_review)       TARGET='In review' ;;
+            *) echo "::notice::No mapping for ${EVENT_NAME}:${EVENT_ACTION} — nothing to do."; exit 0 ;;
+          esac
+
+          # Projects v2 hangs off the owner, which may be an organization or a
+          # user. Try organization first, fall back to user.
+          projects=$(gh api graphql -f owner="$OWNER" -f query='
+            query($owner: String!) {
+              organization(login: $owner) { projectsV2(first: 100) { nodes { id title } } }
+            }' --jq '.data.organization.projectsV2.nodes' 2>/dev/null || true)
+          if [ -z "${projects:-}" ] || [ "$projects" = "null" ]; then
+            projects=$(gh api graphql -f owner="$OWNER" -f query='
+              query($owner: String!) {
+                user(login: $owner) { projectsV2(first: 100) { nodes { id title } } }
+              }' --jq '.data.user.projectsV2.nodes')
+          fi
+
+          project_id=$(printf '%s' "$projects" \
+            | jq -r --arg t "$PROJECT_TITLE" 'map(select(.title == $t)) | .[0].id // empty')
+          if [ -z "$project_id" ]; then
+            echo "::warning::No project titled '$PROJECT_TITLE' on owner '$OWNER' — skipping."
+            exit 0
+          fi
+
+          # The Status field and its option ids.
+          status_field=$(gh api graphql -f pid="$project_id" -f query='
+            query($pid: ID!) {
+              node(id: $pid) {
+                ... on ProjectV2 {
+                  field(name: "Status") {
+                    ... on ProjectV2SingleSelectField { id options { id name } }
+                  }
+                }
+              }
+            }' --jq '.data.node.field')
+
+          field_id=$(printf '%s' "$status_field" | jq -r '.id // empty')
+          # Match the option name case-insensitively so "In progress" still
+          # resolves if the board is renamed to "In Progress".
+          option_id=$(printf '%s' "$status_field" | jq -r --arg n "$TARGET" \
+            '.options // [] | map(select((.name | ascii_downcase) == ($n | ascii_downcase))) | .[0].id // empty')
+          if [ -z "$field_id" ] || [ -z "$option_id" ]; then
+            echo "::warning::Status field or option '$TARGET' not found on '$PROJECT_TITLE' — skipping."
+            exit 0
+          fi
+
+          # Which issues does this event concern? For a PR, the issues it closes.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            issue_numbers=$(gh api graphql -f owner="$OWNER" -f repo="$REPO" -F number="$PR_NUMBER" -f query='
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 20) { nodes { number } }
+                  }
+                }
+              }' --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[].number')
+            if [ -z "${issue_numbers:-}" ]; then
+              echo "::notice::PR #$PR_NUMBER closes no issue — nothing to move."
+              exit 0
+            fi
+          else
+            issue_numbers="$ISSUE_NUMBER"
+          fi
+
+          # zsh/bash note: read line by line rather than `for n in $(...)`.
+          printf '%s\n' "$issue_numbers" | while IFS= read -r number; do
+            [ -n "$number" ] || continue
+
+            item_id=$(gh api graphql -f owner="$OWNER" -f repo="$REPO" -F number="$number" -f query='
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) {
+                    projectItems(first: 50) { nodes { id project { id } } }
+                  }
+                }
+              }' --jq ".data.repository.issue.projectItems.nodes | map(select(.project.id == \"$project_id\")) | .[0].id // empty")
+
+            if [ -z "$item_id" ]; then
+              echo "::notice::Issue #$number is not on '$PROJECT_TITLE' — skipping it."
+              continue
+            fi
+
+            gh api graphql --silent \
+              -f project="$project_id" -f item="$item_id" -f field="$field_id" -f option="$option_id" -f query='
+              mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $project, itemId: $item, fieldId: $field,
+                  value: { singleSelectOptionId: $option }
+                }) { projectV2Item { id } }
+              }'
+            echo "Issue #$number → $TARGET"
+          done

@@ -44,8 +44,11 @@ boots the dev server; set `BASE_URL=https://crm-preview.ersah.in` to run against
 deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
-The **full suite** also runs on a schedule, 4× a day (`.github/workflows/e2e-full.yml`,
-4-way sharded); a red scheduled run emails the team (`ALERT_EMAIL_TO`, stress.yml pattern).
+The **full suite** also runs on a schedule, 4× a day at 03/09/15/21 UTC
+(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted); after **every** scheduled
+run a Turkish summary email goes out (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`):
+"✅ 238/238 test geçti" heartbeat or the failing tests with error snippets. Set the repo
+variable `E2E_REPORT_MODE=failures` for red-only alerts.
 
 ## Architecture
 
@@ -110,17 +113,43 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
 
 ## Deployment
 
-`.github/workflows/deploy.yml` runs on push to `main` (production) and on PRs (preview):
-1. Build Docker image, push to `ghcr.io`.
-2. SSH to the Plesk server, `docker run` the image, `prisma db push --accept-data-loss`.
+All three environments follow the same shape: the image is **built on a GitHub-hosted
+runner** (`build-image.yml`, pushed to `ghcr.io/21072026/internship`), and the Plesk
+server's **self-hosted runner** only pulls it, runs `prisma db push --accept-data-loss`
++ the idempotent backfills, swaps its container and health-checks it. **Nothing
+compiles on the server** — keep it that way (the repo is public, so `ubuntu-latest`
+is free; between 2026-06 and 2026-07-29 the builds ran on the box as a quota
+workaround, #636, and it compiled on every PR push).
 
-| Env | Container | Port | URL |
-|-----|-----------|------|-----|
-| Production | `internship-crm` | 3200 | https://crm.ersah.in |
-| Preview (PRs) | `internship-crm-preview` | 3201 | https://crm-preview.ersah.in |
+| Env | Container | Port | URL | Image tag | Trigger |
+|-----|-----------|------|-----|-----------|---------|
+| Production | `internship-crm` | 3200 | https://crm.ersah.in | `prod-<sha>` | push to `main` (+6h drift check, manual) |
+| Preview | `internship-crm-preview` | 3201 | https://crm-preview.ersah.in | `preview-<sha>` | push to `main` (+6h drift check, manual) |
+| Topic (per PR) | `internship-crm-pr<N>` | 33xx | `https://crm-pr<N>.ersah.in` | `topic-pr<N>` | every push to the PR |
 
-⚠️ **All open PRs share one preview container** (tracked in issue #39).
-⚠️ The preview DB is **shared** — `prisma db push` there affects everyone's preview.
+- `deploy-prod.yml` / `deploy-preview.yml` — **both follow `main` automatically**. Every merge
+  lands on preview and prod. Three jobs: **gate** (self-hosted; resolves the target sha and
+  reads the live container's `/api/health` `sha`) → **build** (`ubuntu-latest`) → **deploy**
+  (self-hosted). The *drift gate* skips the build when the live sha already matches
+  `origin/main`, so the 6-hourly scheduled run is a no-op unless a push was missed (the
+  runner can be offline — see `runner-watchdog.yml`). A manual `workflow_dispatch` always
+  deploys, and takes any branch/tag/SHA. Prod additionally runs with `FORWARD_ONLY=1` so it
+  can never regress to an older commit (`FORCE=1` for a deliberate rollback).
+- Everything after the gate is pinned to the **one sha the gate resolved**, so the image,
+  its baked `GIT_SHA` and the deployed checkout can't disagree. Prod builds with
+  `NEXT_PUBLIC_APP_ENV=production`; preview and topic envs use `preview` (green accent +
+  "preview" badge, `src/lib/appEnv.ts`).
+- **Planned:** prod moves to a weekly release train while preview keeps tracking `main`.
+  The switch is documented in the header of `deploy-prod.yml` (drop `push:`, uncomment the
+  weekly `schedule:`).
+- `topic-preview.yml` — per-PR isolated environment, torn down when the PR closes (#583).
+  **Fork PRs get none** (their `GITHUB_TOKEN` can't push to ghcr, and unreviewed fork code
+  shouldn't run on the production host).
+- `deploy.yml` is the **legacy hosted** pipeline (ghcr.io + SSH), **superseded** — don't extend it.
+- `infra/autodeploy.sh` is a break-glass poller that **builds on the server** — don't put it
+  on a cron (see `infra/README.md`).
+- ⚠️ The preview DB is **shared** by the shared preview *and* every topic env —
+  `prisma db push` there affects everyone.
 
 ## Conventions & gotchas for agents
 
@@ -144,6 +173,11 @@ SMTP_* for email. Seeder: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADM
   with the concrete, reusable lessons you learned (environment quirks, tooling limits, process
   gotchas). Read it at the start of a session too — it captures fast-changing tactical tips that
   complement these durable rules.
+- **Security work** starts from [`docs/security-audit-playbook.md`](docs/security-audit-playbook.md):
+  how to stand up a local DB in this container (no Docker daemon — apt MariaDB), the Playwright
+  `executablePath` workaround, the role × endpoint matrix method, **which areas already tested
+  clean** (don't re-litigate them; breaking one is a regression), and what was never examined.
+  Root tracking issue for the 2026-07 audit: **#951**.
 - **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
   (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
   assert exact landing strings (e.g. "Connect Talent with", "Everything you need",

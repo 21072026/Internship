@@ -1,10 +1,34 @@
-name: Deploy prod (self-hosted, manual)
+name: Deploy prod (hosted build → server swap, auto on main)
 
-# CI-independent production deploy that RUNS ON THE SERVER via a self-hosted
-# runner (#636). Because self-hosted minutes don't count against the
-# GitHub-hosted quota, this works even while that quota is exhausted — and it
-# can be triggered remotely (e.g. by an agent over the GitHub API) so a deploy
-# no longer needs a human at an SSH prompt.
+# Production deploy. The IMAGE IS BUILT ON A GITHUB-HOSTED RUNNER (build-image.yml)
+# and pushed to ghcr; the Plesk server only pulls it and swaps the container.
+#
+# HISTORY (why it looks like this):
+#   #636  the whole deploy moved onto a self-hosted runner ON THE SERVER because
+#         the private repo's hosted Actions quota was exhausted. That made the
+#         production box run `npm ci` + `next build` for every merge.
+#   #800  it became automatic instead of dispatch-only (44 manual dispatches in a
+#         row is not a pipeline).
+#   now   the repo is PUBLIC, so hosted runners are free and unmetered again. The
+#         build goes back to GitHub; the self-hosted runner keeps only the work
+#         that genuinely has to happen on the server — reading the live health
+#         endpoint, `docker pull`, `prisma db push`, the container swap. Nothing
+#         on the box compiles anymore.
+#
+# HOW IT TRIGGERS:
+#   push to main   → deploy (the normal path; PRs already passed the smoke gate
+#                    in e2e.yml before they could merge)
+#   every 6 hours  → deploy ONLY if prod drifted from origin/main; the
+#                    self-hosted runner can be offline when a push arrives (see
+#                    runner-watchdog.yml) and that deploy would otherwise be lost
+#                    silently. A no-op when prod is already current.
+#   manual         → deploy any branch/tag/SHA, unconditionally.
+#
+# ── FUTURE: weekly release train ────────────────────────────────────────────
+# The plan is for main to flow continuously to preview and reach production on a
+# weekly cadence instead. To switch, delete the `push:` block below and uncomment
+# the weekly `schedule` entry — nothing else changes, and deploy-preview.yml keeps
+# tracking main so preview stays the always-current staging environment.
 #
 # PREREQUISITES (one-time, on the Plesk server):
 #   1. Register a self-hosted runner for this repo (Settings → Actions →
@@ -14,9 +38,19 @@ name: Deploy prod (self-hosted, manual)
 #   2. Create /etc/internship-crm/prod.env (chmod 600) with the production
 #      secrets — see infra/README.md. The runner's user must be able to read it
 #      and run docker.
-#
-# After that, dispatch this workflow (UI "Run workflow", or the API) any time.
 on:
+  # No paths-ignore: the drift gate below already skips redundant builds, and
+  # filtering docs-only merges out here would only delay them until the next
+  # scheduled tick (the gate compares commit shas, so it would rebuild anyway).
+  # Deploying every merge keeps the invariant simple: prod == origin/main.
+  push:
+    branches: [main]
+  schedule:
+    # Drift safety net; offset from deploy-preview.yml's so the two don't
+    # contend for the single self-hosted runner.
+    - cron: '53 */6 * * *'
+    # Weekly release train — see "FUTURE" above. Mondays 06:00 UTC.
+    # - cron: '0 6 * * 1'
   workflow_dispatch:
     inputs:
       ref:
@@ -24,27 +58,120 @@ on:
         required: false
         default: 'main'
 
+# Never cancel a deploy mid-container-swap — queue instead. Queued runs are cheap:
+# the drift gate below turns a run whose commit is already live into a no-op.
 concurrency:
   group: deploy-prod-self-hosted
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy ${{ inputs.ref }} to production
+  # ── 1. Gate (on the server: one curl + one ls-remote) ───────────────────────
+  # Stays on the self-hosted runner because the ground truth it reads is local:
+  # http://127.0.0.1:3200/api/health needs no public reachability, no firewall
+  # exception and no auth. The cost is a curl.
+  gate:
+    name: Check for drift
     runs-on: self-hosted
+    outputs:
+      deploy: ${{ steps.gate.outputs.deploy }}
+      sha: ${{ steps.gate.outputs.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Decide whether a deploy is needed
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ inputs.ref || 'main' }}
+          HEALTH_URL: http://127.0.0.1:3200/api/health
+        run: |
+          # Resolve the exact commit to deploy. Everything downstream (the image
+          # tag, the GIT_SHA baked into it, the forward-only guard) is pinned to
+          # this one sha so the build and the deploy can never disagree.
+          #
+          # Automatic runs target the TIP of origin/main rather than github.sha:
+          # a run that queued behind a newer one must not land an older commit on
+          # top of it (the regression #794 fixed for prod). Asking the remote also
+          # beats trusting a local ref — this workspace is shared and shallow.
+          if [ "$EVENT" = workflow_dispatch ]; then
+            SHA="$(git ls-remote origin "refs/heads/$REF" | cut -f1)"
+            [ -n "$SHA" ] || SHA="$(git ls-remote origin "refs/tags/$REF" | cut -f1)"
+            [ -n "$SHA" ] || SHA="$REF"   # not a branch or tag — assume a raw sha
+          else
+            SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
+          fi
+          [ -n "$SHA" ] || { echo "could not resolve '$REF'" >&2; exit 1; }
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          TARGET="${SHA:0:7}"
+
+          # A manual dispatch is the explicit override: always deploy, even the
+          # commit that is already live (that's how you force a rebuild).
+          if [ "$EVENT" = workflow_dispatch ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "### Production: deploying \`$REF\` (\`$TARGET\`, manual dispatch)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Ground truth for what is actually live: the container reports the
+          # GIT_SHA baked into its image at /api/health. An unreachable endpoint
+          # (container down or wedged) counts as drift, so the deploy repairs it.
+          LIVE="$(curl -fsS --max-time 10 "$HEALTH_URL" \
+                  | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+          if [ "$LIVE" = "$TARGET" ]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "### Production already current at \`$TARGET\` — nothing to deploy" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "### Production drifted: live \`${LIVE:-unreachable}\` → deploying \`$TARGET\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ── 2. Build (GitHub-hosted — the expensive part) ───────────────────────────
+  build:
+    name: Build image
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      ref: ${{ needs.gate.outputs.sha }}
+      tag: prod-${{ needs.gate.outputs.sha }}
+      app_env: production
+
+  # ── 3. Swap (on the server: pull + db push + restart) ───────────────────────
+  deploy:
+    name: Swap production container
+    needs: [gate, build]
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout ${{ needs.gate.outputs.sha }}
+        uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.gate.outputs.sha }}
+          # Full history: the forward-only guard in deploy-prod.sh asks
+          # `git merge-base --is-ancestor` whether this commit predates the live
+          # one, which a shallow clone can't answer.
+          fetch-depth: 0
 
       - name: Deploy
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          DEPLOY_SHA: ${{ needs.gate.outputs.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x infra/deploy-prod.sh
-          # deploy-prod.sh syncs to origin/<ref> (hard reset — NOT --no-pull, so
-          # the build reflects origin/main at deploy time rather than whatever the
-          # shared self-hosted workspace happened to be left at), builds from
-          # source, migrates, seeds, swaps the container and health-checks.
-          # FORWARD_ONLY=1 makes prod refuse to regress to an older commit.
+          # --pull-image: the image was built on the hosted runner, so this box
+          #   only fetches it — no npm ci, no next build, no buildkit.
+          # --no-pull: the checkout above already pinned the exact commit the
+          #   image was built from; don't let the script re-sync to a moving tip.
+          # FORWARD_ONLY=1 makes prod refuse to regress to an older commit
+          #   (FORCE=1 for a deliberate rollback).
           # Secrets come from the server-side env file, never from the repo/workflow.
-          BRANCH="${{ inputs.ref }}" FORWARD_ONLY=1 ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" ./infra/deploy-prod.sh
+          FORWARD_ONLY=1 \
+          ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" \
+          ./infra/deploy-prod.sh --no-pull --pull-image

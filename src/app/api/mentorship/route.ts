@@ -8,7 +8,7 @@ import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
-import { sendEmail } from '@/services/emailService';
+import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -174,32 +174,34 @@ export async function POST(request: Request) {
 
     await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null });
 
-    // In-app + (opt-in) email notifications for the direct admin assignment.
-    // Fired only after the relation is durably created above.
+    // A direct admin assignment used to be completely silent — neither side heard
+    // about it until they happened to log in (#668). In-app is unconditional,
+    // email honors the `mentorship` opt-out and never fails the assignment.
     await notify(mentee.id, 'mentorship_request', `You have been assigned a mentor: ${mentor.fullName}.`, '/portal');
     await notify(mentor.id, 'mentorship_request', `A new mentee was assigned to you: ${mentee.fullName}.`, '/mentor');
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    if (emailAllowed(mentee, 'mentorshipRequests')) {
+    if (mentee.email && emailAllowed(mentee, 'mentorship')) {
       try {
-        await sendEmail({
+        await sendMentorAssignedEmail({
           to: mentee.email,
-          subject: 'You have been assigned a mentor',
-          html: `<p>Hi ${mentee.fullName},</p><p>You have been assigned a mentor: <strong>${mentor.fullName}</strong>.</p><p><a href="${appUrl}/portal">Open your portal</a></p>`,
+          menteeName: mentee.fullName,
+          mentorName: mentor.fullName,
+          orgId: mentee.orgId,
         });
       } catch (e) {
-        console.error('Mentorship assignment email failed:', { recipientRole: 'MENTEE', userId: mentee.id, error: e });
+        console.error('Mentor assignment email failed:', e);
       }
     }
-    if (emailAllowed(mentor, 'mentorshipRequests')) {
+    if (mentor.email && emailAllowed(mentor, 'mentorship')) {
       try {
-        await sendEmail({
+        await sendMenteeAssignedEmail({
           to: mentor.email,
-          subject: `New mentee assigned: ${mentee.fullName}`,
-          html: `<p>Hi ${mentor.fullName},</p><p>A new mentee was assigned to you: <strong>${mentee.fullName}</strong>.</p><p><a href="${appUrl}/mentor">Open your dashboard</a></p>`,
+          mentorName: mentor.fullName,
+          menteeName: mentee.fullName,
+          orgId: mentor.orgId,
         });
       } catch (e) {
-        console.error('Mentorship assignment email failed:', { recipientRole: 'MENTOR', userId: mentor.id, error: e });
+        console.error('Mentee assignment email failed:', e);
       }
     }
 

@@ -13,17 +13,92 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.27.1-beta',
+    date: '2026-07-29',
+    highlights: {
+      en: [
+        'When an admin assigns you a mentor directly, you now hear about it: both the mentee and the mentor get a notification in the app and an email. Previously this only happened when a mentee had requested a mentor themselves — a direct assignment was silent, so you had to notice it on your own next time you logged in.',
+        'Emails your mentor sends to you from their dashboard now follow your notification settings — if you have switched off message emails, they no longer arrive. Your mentor still sees the message in your interaction history either way.',
+        'Scheduled emails are more reliable: one address that fails no longer stops the rest of that batch from going out.',
+      ],
+      tr: [
+        'Bir yönetici size doğrudan mentor atadığında artık haberdar oluyorsunuz: hem menti hem de mentor uygulama içinde bildirim ve e-posta alıyor. Daha önce bu yalnızca menti kendisi mentor talebinde bulunduğunda oluyordu — doğrudan atama sessizdi, bir sonraki girişinizde kendiniz fark etmeniz gerekiyordu.',
+        'Mentorunuzun panelinden size gönderdiği e-postalar artık bildirim tercihlerinize uyuyor — mesaj e-postalarını kapattıysanız artık gelmiyor. Mentorunuz mesajı her durumda etkileşim geçmişinizde görmeye devam ediyor.',
+        'Zamanlanmış e-postalar daha güvenilir: başarısız olan tek bir adres artık o gruptaki diğer e-postaların gönderilmesini engellemiyor.',
+      ],
+      de: [
+        'Wenn ein Admin dir direkt einen Mentor zuweist, erfährst du das jetzt: Mentee und Mentor erhalten eine Benachrichtigung in der App und eine E-Mail. Bisher passierte das nur, wenn ein Mentee selbst einen Mentor angefragt hatte — eine direkte Zuweisung blieb stumm und musste beim nächsten Login selbst entdeckt werden.',
+        'E-Mails, die dein Mentor dir aus seinem Dashboard schickt, richten sich jetzt nach deinen Benachrichtigungseinstellungen — hast du Nachrichten-E-Mails abgeschaltet, kommen sie nicht mehr an. Dein Mentor sieht die Nachricht in beiden Fällen weiterhin in deinem Interaktionsverlauf.',
+        'Geplante E-Mails sind zuverlässiger: Eine fehlerhafte Adresse verhindert nicht mehr, dass der Rest des Stapels versendet wird.',
+      ],
+    },
+  },
+  {
+    version: '0.27.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'You can now message anyone you share a project with — not just your mentor. Open Messages, pick "New chat", and choose a project team-mate to start a one-to-one conversation. It behaves exactly like your mentor chat: attachments, pasted images, reactions, editing and read receipts all work the same, and new conversations show up in the same inbox list.',
+        'If you stop sharing a project with someone, your conversation with them stays readable — you keep the whole history, you just cannot send new messages in it.',
+      ],
+      tr: [
+        'Artık yalnızca mentorunla değil, aynı projede olduğun herkesle mesajlaşabilirsin. Mesajlar\'ı açıp "Yeni sohbet"e dokun ve bir proje arkadaşını seçerek birebir sohbet başlat. Mentor sohbetinle tamamen aynı şekilde çalışıyor: dosya ekleri, yapıştırılan görseller, tepkiler, düzenleme ve okundu bilgisi aynı; yeni sohbetler de aynı gelen kutusu listesinde görünüyor.',
+        'Biriyle aynı projede olmayı bıraktığınızda o sohbet okunabilir kalıyor — tüm geçmişi görmeye devam ediyorsun, yalnızca yeni mesaj gönderemiyorsun.',
+      ],
+      de: [
+        'Du kannst jetzt allen schreiben, mit denen du ein Projekt teilst — nicht mehr nur deinem Mentor. Öffne Nachrichten, tippe auf "Neuer Chat" und wähle eine Person aus deinem Projektteam für eine Einzelunterhaltung. Sie verhält sich genau wie der Mentor-Chat: Anhänge, eingefügte Bilder, Reaktionen, Bearbeiten und Lesebestätigungen funktionieren identisch, und neue Unterhaltungen erscheinen in derselben Übersicht.',
+        'Teilst du mit jemandem kein Projekt mehr, bleibt die Unterhaltung lesbar — der gesamte Verlauf bleibt erhalten, du kannst nur keine neuen Nachrichten mehr senden.',
+      ],
+    },
+  },
+  {
+    version: '0.26.1-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'Meeting reminders now arrive about an hour before the meeting instead of a day ahead — and they go to everyone involved, mentor and mentee alike, not just the mentee. You always get the reminder in the app; the email version follows your notification settings, so you can switch it off and still see the reminder on your bell. Each meeting is only ever reminded once.',
+      ],
+      tr: [
+        'Toplantı hatırlatmaları artık bir gün önce değil, toplantıdan yaklaşık bir saat önce geliyor — ve yalnızca mentiye değil, mentor ve menti dahil tüm katılımcılara gidiyor. Hatırlatmayı uygulama içinde her zaman alıyorsunuz; e-posta olarak gönderilmesi bildirim tercihlerinize bağlı, yani e-postayı kapatsanız bile hatırlatma bildirim zilinizde görünmeye devam ediyor. Her toplantı için hatırlatma yalnızca bir kez gönderiliyor.',
+      ],
+      de: [
+        'Terminerinnerungen kommen jetzt etwa eine Stunde vor dem Termin statt einen Tag vorher — und sie gehen an alle Beteiligten, Mentor und Mentee, nicht nur an den Mentee. In der App erhältst du die Erinnerung immer; ob sie zusätzlich per E-Mail kommt, richtet sich nach deinen Benachrichtigungseinstellungen — schaltest du die E-Mail ab, erscheint die Erinnerung weiterhin in deiner Glocke. Pro Termin wird nur ein einziges Mal erinnert.',
+      ],
+    },
+  },
+  {
+    version: '0.26.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'Important events now reach you by email, not just in the app: a mentorship request being approved or rejected, a new request landing in the admin queue, an enquiry from your public profile (you can reply straight to the sender), and meeting requests being sent, accepted or declined. Everything respects your notification settings, and there is a new "Mentorship updates" switch to turn just those off.',
+        'Goals can be sorted newest-first or oldest-first, and completed goals move out of your active list into a new Archive tab — where they keep their completion date and can be reopened at any time.',
+        'Support: admins can now attach files and images to their replies — a message on its own, files on their own, or both together. Images can be previewed and any file removed before sending, using the same file types and size limits as the rest of the support conversation.',
+      ],
+      tr: [
+        'Önemli olaylar artık yalnızca uygulama içinde değil, e-posta ile de size ulaşıyor: mentorluk talebinizin onaylanması veya reddedilmesi, yönetici kuyruğuna yeni bir talep düşmesi, herkese açık profilinizden gelen bir başvuru (doğrudan gönderene yanıt verebilirsiniz) ve toplantı taleplerinin gönderilmesi, kabul edilmesi veya reddedilmesi. Tümü bildirim tercihlerinize saygı gösteriyor; sadece bunları kapatmak için yeni bir "Mentorluk güncellemeleri" anahtarı var.',
+        'Hedefler yeniden eskiye veya eskiden yeniye sıralanabiliyor ve tamamlanan hedefler aktif listenizden çıkıp yeni Arşiv sekmesine taşınıyor — tamamlanma tarihlerini koruyorlar ve istediğiniz zaman yeniden açılabiliyorlar.',
+        'Destek: yöneticiler artık yanıtlarına dosya ve görsel ekleyebiliyor — yalnızca mesaj, yalnızca dosya veya ikisi birlikte. Görseller gönderilmeden önce önizlenebiliyor ve eklenen dosyalar kaldırılabiliyor; destek konuşmasının geri kalanıyla aynı dosya türleri ve boyut limitleri geçerli.',
+      ],
+      de: [
+        'Wichtige Ereignisse erreichen dich jetzt auch per E-Mail und nicht nur in der App: die Annahme oder Ablehnung einer Mentoring-Anfrage, eine neue Anfrage in der Admin-Warteschlange, eine Anfrage über dein öffentliches Profil (du kannst direkt dem Absender antworten) sowie gesendete, angenommene oder abgelehnte Terminanfragen. Alles berücksichtigt deine Benachrichtigungseinstellungen, und mit dem neuen Schalter "Mentoring-Updates" schaltest du genau diese ab.',
+        'Ziele lassen sich nach neuesten oder ältesten sortieren, und abgeschlossene Ziele wandern aus der aktiven Liste in einen neuen Archiv-Tab — dort behalten sie ihr Abschlussdatum und können jederzeit wieder geöffnet werden.',
+        'Support: Admins können ihren Antworten jetzt Dateien und Bilder anhängen — nur eine Nachricht, nur Dateien oder beides. Bilder lassen sich vor dem Senden in der Vorschau ansehen und angehängte Dateien entfernen; es gelten dieselben Dateitypen und Größenlimits wie im restlichen Support-Verlauf.',
+      ],
+    },
+  },
+  {
     version: '0.25.15-beta',
     date: '2026-07-28',
     highlights: {
       en: [
-        'You now have finer control over email notifications: separate opt-out toggles for new applications and mentorship updates were added to Account settings, and more of the app\'s emails now respect these preferences. Reliability also improved — a single failed email no longer interrupts scheduled email jobs.',
+        'The projects list no longer flashes "(0)" while it is still loading — the project count now appears only once the data has arrived, so an empty list is never mistaken for a slow one.',
       ],
       tr: [
-        'E-posta bildirimleri üzerinde artık daha ayrıntılı kontrolünüz var: Hesap ayarlarına yeni başvurular ve mentorluk güncellemeleri için ayrı kapatma seçenekleri eklendi ve uygulamanın daha fazla e-postası bu tercihlere uyuyor. Güvenilirlik de arttı — tek bir başarısız e-posta artık zamanlanmış e-posta işlerini kesintiye uğratmıyor.',
+        'Projeler listesi yüklenirken artık "(0)" göstermiyor — proje sayısı yalnızca veriler geldikten sonra çıkıyor, böylece boş liste ile yavaş yüklenen liste karışmıyor.',
       ],
       de: [
-        'Du hast jetzt feinere Kontrolle über E-Mail-Benachrichtigungen: In den Kontoeinstellungen wurden separate Opt-out-Schalter für neue Bewerbungen und Mentoring-Aktualisierungen ergänzt, und mehr E-Mails der App berücksichtigen diese Einstellungen. Auch die Zuverlässigkeit wurde verbessert — eine einzelne fehlgeschlagene E-Mail unterbricht geplante E-Mail-Jobs nicht mehr.',
+        'Die Projektliste zeigt beim Laden nicht mehr "(0)" — die Projektanzahl erscheint erst, wenn die Daten geladen sind, sodass eine leere Liste nicht mit einer langsam ladenden verwechselt wird.',
       ],
     },
   },

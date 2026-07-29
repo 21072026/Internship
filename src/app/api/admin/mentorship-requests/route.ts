@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendMentorshipDecisionEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
 import { withTenantScope } from '@/lib/orgContext';
-import { emailAllowed } from '@/lib/notificationPrefs';
-import { sendEmail } from '@/services/emailService';
 
 // Admin queue for mentee mentorship requests (#590): list PENDING requests,
 // approve (pick a mentor → MentorshipRelation) or reject. The mentee is
@@ -58,7 +58,6 @@ export async function PUT(request: Request) {
   const parsed = decideSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { requestId, action, mentorId } = parsed.data;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   const req = await prisma.mentorshipRequest.findUnique({
     where: { id: requestId },
@@ -66,7 +65,10 @@ export async function PUT(request: Request) {
       id: true,
       status: true,
       menteeId: true,
-      mentee: { select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true } },
+      message: true,
+      mentee: {
+        select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
+      },
     },
   });
   if (!req) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -78,7 +80,16 @@ export async function PUT(request: Request) {
     if (!mentorId) return NextResponse.json({ error: 'mentorId is required to approve' }, { status: 400 });
     const mentor = await prisma.user.findUnique({
       where: { id: mentorId },
-      select: { id: true, role: true, isActive: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+        fullName: true,
+        email: true,
+        orgId: true,
+        emailNotifications: true,
+        notificationPrefs: true,
+      },
     });
     if (!mentor || !mentor.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Invalid mentor' }, { status: 400 });
@@ -104,30 +115,34 @@ export async function PUT(request: Request) {
     await notify(req.menteeId, 'mentorship_request', 'Your mentorship request was approved — say hi to your mentor!', '/portal');
     await notify(mentorId, 'mentorship_request', `A new mentee was assigned to you: ${req.mentee.fullName}.`, '/mentor');
 
-    // Opt-in email mirror — fired only after the transaction above committed.
-    if (emailAllowed(req.mentee, 'mentorshipRequests')) {
+    // Email both sides (#668) — the decision used to be in-app only, so a mentee
+    // who wasn't logged in never learned they had a mentor. Opt-out respected;
+    // failures are logged and never fail the approval.
+    if (req.mentee.email && emailAllowed(req.mentee, 'mentorship')) {
       try {
-        await sendEmail({
+        await sendMentorshipDecisionEmail({
           to: req.mentee.email,
-          subject: 'Your mentorship request was approved',
-          html: `<p>Hi ${req.mentee.fullName},</p><p>Your mentorship request was approved — say hi to your mentor!</p><p><a href="${appUrl}/portal">Open your portal</a></p>`,
+          fullName: req.mentee.fullName,
+          approved: true,
+          mentorName: mentor.fullName,
+          orgId: req.mentee.orgId,
         });
       } catch (e) {
-        console.error('Mentorship request approved email failed:', { recipientRole: 'MENTEE', userId: req.menteeId, error: e });
+        console.error('Mentorship approval email failed:', e);
       }
     }
-    if (emailAllowed(mentor, 'mentorshipRequests')) {
+    if (mentor.email && emailAllowed(mentor, 'mentorship')) {
       try {
-        await sendEmail({
+        await sendMenteeAssignedEmail({
           to: mentor.email,
-          subject: `New mentee assigned: ${req.mentee.fullName}`,
-          html: `<p>Hi ${mentor.fullName},</p><p>A new mentee was assigned to you: <strong>${req.mentee.fullName}</strong>.</p><p><a href="${appUrl}/mentor">Open your dashboard</a></p>`,
+          mentorName: mentor.fullName,
+          menteeName: req.mentee.fullName,
+          orgId: mentor.orgId,
         });
       } catch (e) {
-        console.error('Mentorship request approved email failed:', { recipientRole: 'MENTOR', userId: mentor.id, error: e });
+        console.error('Mentee assignment email failed:', e);
       }
     }
-
     return NextResponse.json({ ok: true, relationId: relation.id });
   }
 
@@ -136,17 +151,16 @@ export async function PUT(request: Request) {
     data: { status: 'REJECTED', decidedById: session.user.id, decidedAt: new Date() },
   });
   await notify(req.menteeId, 'mentorship_request', 'Your mentorship request was reviewed but could not be approved right now.', '/portal');
-
-  // Opt-in email mirror — fired only after the status update above committed.
-  if (emailAllowed(req.mentee, 'mentorshipRequests')) {
+  if (req.mentee.email && emailAllowed(req.mentee, 'mentorship')) {
     try {
-      await sendEmail({
+      await sendMentorshipDecisionEmail({
         to: req.mentee.email,
-        subject: 'Update on your mentorship request',
-        html: `<p>Hi ${req.mentee.fullName},</p><p>Your mentorship request was reviewed but could not be approved right now.</p><p><a href="${appUrl}/portal">Open your portal</a></p>`,
+        fullName: req.mentee.fullName,
+        approved: false,
+        orgId: req.mentee.orgId,
       });
     } catch (e) {
-      console.error('Mentorship request rejected email failed:', { recipientRole: 'MENTEE', userId: req.menteeId, error: e });
+      console.error('Mentorship rejection email failed:', e);
     }
   }
   return NextResponse.json({ ok: true });

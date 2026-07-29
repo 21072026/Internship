@@ -172,6 +172,7 @@ export default function AdminBoardPage() {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           type="search"
+          data-testid="board-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t.adminBoard.searchPlaceholder}

@@ -5,9 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
-import { emailAllowed } from '@/lib/notificationPrefs';
 
 // GET ?mentorId= — public: validate the link and return the mentor's name so
 // the application page can greet the applicant.
@@ -89,8 +89,10 @@ export async function POST(request: Request) {
   } catch (e) {
     console.error('Applicant set-password email failed:', e);
   }
-  // Notify the mentor.
-  if (emailAllowed(mentor, 'applications')) {
+  // Notify the mentor — honoring their email opt-out (#668: this send used to
+  // ignore notificationPrefs entirely, so a mentor with email notifications off
+  // still received it).
+  if (emailAllowed(mentor, 'mentorship')) {
     try {
       await sendEmail({
         to: mentor.email,
