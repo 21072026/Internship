@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logActivity } from '@/lib/activity';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
@@ -13,8 +14,8 @@ const schema = z.object({
   // Long-form announcements (release notes, articles) are allowed; the previous
   // 2 000-char cap rejected them with a bare 400. Kept bounded to protect the
   // per-user notification fan-out.
-  text: z.string().min(1).max(20000),
-  link: z.string().max(500).optional(),
+  text: z.string().min(1).max(TEXT_LIMITS.announcementText),
+  link: z.string().max(TEXT_LIMITS.announcementLink).optional(),
   email: z.boolean().optional(),
 });
 

@@ -94,15 +94,21 @@ reload nginx afterwards.
 
 ## How this is wired (#583)
 
-`.github/workflows/topic-preview.yml` runs on the **self-hosted runner** (no
-GitHub-hosted Actions minutes) and gives **every open PR** its own environment,
-keyed by PR number — no branch-naming convention needed:
+`.github/workflows/topic-preview.yml` gives **every open PR** its own environment,
+keyed by PR number — no branch-naming convention needed. The image is **built on a
+GitHub-hosted runner** and pushed to ghcr; only the container swap + routing runs
+on the server:
 
-- **PR opened / pushed to / reopened** → build the image locally on the server,
-  then `infra/server/topic-deploy.sh` starts `internship-crm-pr<N>` on its derived
-  port (3300–3399, `3300 + N%100`) and **routes it through a Plesk subdomain**
-  `crm-pr<N>.ersah.in` (see below). A bot comment on the PR carries the URL
-  (updated on every push).
+- **PR opened / pushed to / reopened** → `build-image.yml` builds and pushes
+  `ghcr.io/21072026/internship:topic-pr<N>` on `ubuntu-latest`, then (on the
+  self-hosted runner) `infra/server/topic-deploy.sh` pulls it, starts
+  `internship-crm-pr<N>` on its derived port (3300–3399, `3300 + N%100`) and
+  **routes it through a Plesk subdomain** `crm-pr<N>.ersah.in` (see below). A bot
+  comment on the PR carries the URL (updated on every push).
+- **Fork PRs get no topic environment** — GitHub keeps their `GITHUB_TOKEN`
+  read-only (the image can't be pushed) and withholds repo secrets, and building
+  unreviewed fork code on the production host isn't worth working around. `ci.yml`
+  + `e2e.yml` still gate them.
 - **PR merged/closed** → `infra/server/topic-teardown.sh` removes the Plesk
   subdomain, stops/removes the container + image, and cleans any legacy route.
 
@@ -119,11 +125,12 @@ Plesk vhost bound to the server IP (`listen <IP>:443 ssl`); a raw all-addresses
 TLS is handled by Plesk (+ Cloudflare at the edge). Teardown does
 `plesk bin subdomain --remove`.
 
-Because the runner is on the server, there is **no SSH and no GHCR round-trip**:
-`topic-deploy.sh` is called with `SKIP_PULL=1` (image already built locally) and
+Because the runner is on the server, there is **no SSH hop**: `topic-deploy.sh` is
+called with `GHCR_USER`/`GHCR_TOKEN` (the run's `GITHUB_TOKEN`, for the pull) and
 `ENV_FILE=/etc/internship-crm/preview.env` (secrets sourced directly, same file
-`deploy-preview.yml` uses). The script still supports the old hosted flow (GHCR
-`IMAGE` + `ACTOR`/`B64_TOKEN` + `B64_*` secrets) for backward compatibility.
+`deploy-preview.yml` uses — they never leave the box). It also still accepts
+`SKIP_PULL=1` for a locally built image, and the old base64-over-SSH credential
+form (`ACTOR`/`B64_TOKEN` + `B64_*`), for a manual deploy from a shell.
 
 **Database: a single shared preview DB.** No per-topic DB, so no DB-admin secret
 is needed. ⚠️ Trade-off: all topics share schema/data — two concurrent PRs with
@@ -147,11 +154,32 @@ container.
 
 ---
 
-## CI-independent operations (when the Actions quota is exhausted, #636)
+## Where the work runs (2026-07-29)
+
+The repo is **public**, so GitHub-hosted standard runners are free and unmetered.
+Everything that can run there, does — the server only does what has to happen on
+the server:
+
+| Runs on GitHub-hosted | Runs on the server (self-hosted runner) |
+|---|---|
+| `docker build` + push to ghcr (`build-image.yml`) | read `127.0.0.1:<port>/api/health` for the drift gate |
+| lint / typecheck / build (`ci.yml`) | `docker pull` the prebuilt image |
+| Playwright smoke gate + 4×/day full suite | `prisma db push` + idempotent seeds/backfills |
+| weekly stress test, runner watchdog | stop/start the container, Plesk route, health check |
+
+Nothing on the box compiles anymore. Between 2026-06 and 2026-07-29 it did: with
+the private repo's Actions quota exhausted (#636) the builds were moved onto the
+self-hosted runner, so the production host ran `npm ci` + `next build` for every
+merge **and every push to every open PR**.
+
+---
+
+## CI-independent operations (deploying without Actions, #636)
 
 Everything CI does is just scripts, and the server is reachable over SSH — so
-production deploys and the topic-preview foundations can run **without any
-GitHub Actions minutes**.
+production deploys and the topic-preview foundations can also run **without
+GitHub Actions at all** (an Actions outage, or the runner being wedged).
+These paths build on the server, so use them deliberately, not on a timer.
 
 ### One-time: production secrets on the server
 Create an env file (same values as the GitHub secrets), readable only by root:
@@ -180,37 +208,56 @@ ssh <user>@<server> 'cd /path/to/Internship && sudo ENV_FILE=/etc/internship-crm
 the image (stamping `GIT_SHA`), `prisma db push --accept-data-loss`, seed +
 backfill, swap the `internship-crm` container (host net, :3200), health-check.
 
-### Push-to-deploy without a webhook (optional)
-Add a cron entry on the server — every 5 min it deploys only if `main` moved:
+### Push-to-deploy without a webhook (⚠️ not recommended anymore)
+`infra/autodeploy.sh` polls `main` and runs `deploy-prod.sh` when it moves, so a
+cron entry gives push-to-deploy with no inbound port and no listener:
 ```cron
 */5 * * * * cd /path/to/Internship && ENV_FILE=/etc/internship-crm/prod.env ./infra/autodeploy.sh >> /var/log/internship-autodeploy.log 2>&1
 ```
-No inbound port, no listener — just `git fetch` + the deploy script, lock-guarded.
 
-> Redundant now that `deploy-prod.yml` follows `main` on the self-hosted runner (see
-> below) — keep it only as a belt-and-braces poller. It is safe to run alongside the
-> workflow: `deploy-prod.sh`'s `FORWARD_ONLY=1` guard stops the two from deploying
-> out of order.
+> **Don't leave this on a cron.** It is redundant — `deploy-prod.yml` already
+> follows `main` — and unlike the workflow it **builds the image on the server**,
+> which is exactly the load that was moved to GitHub-hosted runners. If the entry
+> exists, remove it:
+> ```bash
+> crontab -l | grep -v autodeploy.sh | crontab -
+> ```
+> It is at least *safe* to run alongside the workflow: `deploy-prod.sh`'s
+> `FORWARD_ONLY=1` guard stops the two from deploying out of order.
 
-### Automatic deploys on the self-hosted runner
-Once the runner is registered (see *Permanent fix* below), `main` reaches both
-long-lived environments by itself — no dispatch, no SSH:
+### Automatic deploys: hosted build → server swap
+`main` reaches both long-lived environments by itself — no dispatch, no SSH:
 
-| Workflow | Env | Container | Port | Triggers |
-|----------|-----|-----------|------|----------|
-| `deploy-preview.yml` | https://crm-preview.ersah.in | `internship-crm-preview` | 3201 | push to `main`, every 6h (`:23`), manual |
-| `deploy-prod.yml` | https://crm.ersah.in | `internship-crm` | 3200 | push to `main`, every 6h (`:53`), manual |
+| Workflow | Env | Container | Port | Image | Triggers |
+|----------|-----|-----------|------|-------|----------|
+| `deploy-preview.yml` | https://crm-preview.ersah.in | `internship-crm-preview` | 3201 | `…:preview-<sha>` | push to `main`, every 6h (`:23`), manual |
+| `deploy-prod.yml` | https://crm.ersah.in | `internship-crm` | 3200 | `…:prod-<sha>` | push to `main`, every 6h (`:53`), manual |
 
-Both wrap this same `deploy-prod.sh`; preview just overrides
-`CONTAINER`/`PORT`/`IMAGE`/`ENV_FILE` and sets `NETWORK=bridge` (its DB user is
-granted from the docker gateway, not localhost).
+Each runs three jobs — **gate** (self-hosted, one curl + one `ls-remote`) → **build**
+(`ubuntu-latest`, via `build-image.yml`) → **deploy** (self-hosted,
+`deploy-prod.sh --no-pull --pull-image`). Both wrap the same `deploy-prod.sh`;
+preview just overrides `CONTAINER`/`PORT`/`ENV_FILE` and sets `NETWORK=bridge` (its
+DB user is granted from the docker gateway, not localhost). Prod builds with
+`NEXT_PUBLIC_APP_ENV=production`, preview and topics with `preview` (green accent +
+"preview" badge, `src/lib/appEnv.ts`).
 
-**Drift gate.** Automatic runs first read the live container's `/api/health` `sha` and
-compare it to `origin/main`. Equal → the run exits without building, so the 6-hourly
+Everything downstream of the gate is pinned to the **one sha the gate resolved**, so
+the image, its baked `GIT_SHA`, the deployed checkout and the forward-only state file
+can't disagree. Automatic runs target the *tip* of `origin/main` rather than the
+triggering commit, so a run that queued behind a newer one can't land an older commit
+on top of it (#794).
+
+**Drift gate.** Automatic runs read the live container's `/api/health` `sha` and
+compare it to `origin/main`. Equal → the run stops before the build, so the 6-hourly
 schedule is free unless something was actually missed (a push that arrived while the
 runner was offline — see `runner-watchdog.yml`) or the container is unreachable, which
 counts as drift so the deploy also repairs it. A manual `workflow_dispatch` skips the
 gate entirely: it always rebuilds, and accepts any branch/tag/SHA.
+
+**Registry.** Images live in `ghcr.io/21072026/internship`, pushed with the run's
+`GITHUB_TOKEN` (`packages: write`) and pulled on the server with the same token
+(`packages: read`) — no PAT, no extra secret. Application secrets are still read from
+`/etc/internship-crm/*.env` on the server and never enter a workflow.
 
 **Preview secrets** live in `/etc/internship-crm/preview.env`, same shape as `prod.env`
 but with `NEXTAUTH_URL=https://crm-preview.ersah.in`. There is no need to write it by
@@ -232,10 +279,15 @@ export CF_Token="<scoped Cloudflare token>"
 ./infra/acme-issue-wildcard.sh
 ```
 
-### Permanent fix: self-hosted runner
-The always-on Plesk server can register as a **self-hosted GitHub Actions
-runner** (Settings → Actions → Runners → New self-hosted runner). Self-hosted
-minutes do **not** count against the 2000-min quota, so the existing workflows
-(deploy, e2e, infra-setup) all run again for free — flip `runs-on: ubuntu-latest`
-to `runs-on: self-hosted` on the workflows you want off the hosted quota. This
-is the structural cure; the scripts above are the immediate, dependency-free path.
+### The self-hosted runner
+The always-on Plesk server is registered as a **self-hosted GitHub Actions runner**
+(Settings → Actions → Runners → New self-hosted runner), kept alive by
+`runner-watchdog.yml`. It exists so a deploy can touch the box's docker daemon,
+its `preview.env`/`prod.env` and its Plesk config **without an SSH key in GitHub
+secrets** — not to dodge a billing quota.
+
+Keep it to that. `runs-on: self-hosted` belongs only on steps that need something
+that exists only on this machine; anything that merely needs a Linux box with node
+and docker (builds, tests, linting) goes to `ubuntu-latest`, which is free for this
+public repo. Moving builds onto the runner in 2026-06 was a quota workaround
+(#636), and it made the production host compile on every PR push.

@@ -1,10 +1,12 @@
 name: Deploy to Plesk Server
 
 on:
-  # PAUSED (GitHub Actions quota exhausted) — this hosted preview/prod deploy is
-  # disabled so failing runs stop emailing the team. Production now deploys via
-  # deploy-prod.yml (self-hosted runner, no hosted-quota cost). Re-enable the
-  # pull_request / workflow_run blocks below once the quota is restored.
+  # SUPERSEDED — do not extend or re-enable. deploy-prod.yml / deploy-preview.yml /
+  # topic-preview.yml now do what this workflow did (build on a GitHub-hosted
+  # runner, push to ghcr, swap the container) but hand the swap to the self-hosted
+  # runner instead of SSH-ing in, so no SSH key or application secret has to live
+  # in GitHub secrets. Kept dispatch-only as a break-glass path for when the
+  # self-hosted runner is unavailable.
   workflow_dispatch:
   # pull_request:
   #   branches: [main]

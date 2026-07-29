@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
@@ -85,16 +87,18 @@ export default function AdminAnnouncementsPage() {
           <form onSubmit={send} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.announcements.message}</label>
-              <textarea
+              <Textarea
+                data-testid="announcement-text"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={4}
                 required
-                className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                maxLength={TEXT_LIMITS.announcementText}
+                showCounter
                 placeholder={t.announcements.messagePlaceholder}
               />
             </div>
-            <Input label={t.announcements.link} type="url" placeholder="https://..." value={link} onChange={(e) => setLink(e.target.value)} />
+            <Input label={t.announcements.link} type="url" placeholder="https://..." maxLength={TEXT_LIMITS.announcementLink} value={link} onChange={(e) => setLink(e.target.value)} />
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />
               {t.announcements.alsoEmail}

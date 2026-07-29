@@ -23,6 +23,7 @@ optional body schema alone is insufficient: trim the body, then reject only when
 the trimmed body and parsed file list are both empty. For attachment-only ticket
 creation, derive the ticket subject from the first filename while leaving
 attachment validation and transactional storage untouched.
+
 ## 2026-07-23 — Meeting series auto-generation API (#774, 0.25.10-beta)
 
 **Playwright in this sandbox needs two env prerequisites before tests even boot:**
@@ -564,6 +565,8 @@ PR'da iki farklı infra hatası gördüm: (1) Docker build'de OOM (exit 255), (2
 `prisma db push` sırasında `P1001: Can't reach host.docker.internal:3306`.
 İkisi de sunucu tarafı — kod değişikliği gerekmez, sadece infra durumunu açıkla.
 
+---
+
 ## 2026-07-28 — #800/#803 Preview & prod otomatik deploy
 
 **"X deploy edilmiyor" şikayetinde ilk iş `event` alanına bakmak.** Preview'in
@@ -620,6 +623,439 @@ atlamaz, sadece geciktirir ve "neden 4 saat sonra deploy oldu?" sorusu doğar.
 true` bile işe yaramadı. Tek koşu için `actions_get`, liste için kaydedilen JSON'u
 python ile parse et (`run_number/event/conclusion/head_sha`) — 3 satır yeter.
 
+---
+
+## 2026-07-28 — HR/PO gözüyle uygulama turu + backlog doldurma (#736 altına 8 epic)
+
+Bu oturumda kod yazılmadı: uygulama yerelde ayağa kaldırıldı, Playwright ile 5 rol
+bağlamında 69 sayfa gezildi, bulgular epic/story/task ağacına çevrildi. Aşağıdaki
+notlar ortam kurulumu, MCP araç maliyeti ve backlog konvansiyonu hakkında.
+
+### Ortamı ayağa kaldırma (Claude Code web container)
+
+**Docker daemon çalışmıyor, elle başlatman gerekiyor.** `docker compose -f
+docker-compose.dev.yml up -d` ilk denemede şunu verir: *"failed to connect to the
+docker API at unix:///var/run/docker.sock"*. `docker` ve `dockerd` binary'leri
+kurulu, sadece daemon ayakta değil. Çözüm: `sudo dockerd > /tmp/dockerd.log 2>&1 &`
+sonra `docker info` ile doğrula, sonra compose çalışır. `mysql:8` imajını çekmek
++ MySQL'in hazır olması toplam ~1-2 dk; `docker exec crm-dev-db mysqladmin ping
+-h 127.0.0.1 -proot` ile bekle, sabit `sleep` yazma.
+
+**Yerel kurulumun tam sırası (docs/local-dev.md Option A çalışıyor):** compose up →
+`.env.local` (DATABASE_URL/NEXTAUTH_URL/NEXTAUTH_SECRET) → `DATABASE_URL=... npx
+prisma db push` → `npx prisma db seed` (SEED_ADMIN_* env'leriyle) → `npm run
+seed:demo` → `npm run seed:templates` → `npm run dev`. Prisma CLI `.env.local`
+OKUMAZ, sadece `.env` okur — o yüzden prisma komutlarına `DATABASE_URL=` prefix'i
+şart. `npm install` da gerekli (deps preinstalled değil).
+
+**Demo hesapları:** `admin@local.test` / `admin12345`; `mentor.aylin@demo.example.com`,
+`mentee.gizem@demo.example.com`, `company.1@demo.example.com` — hepsi
+`DemoPass123!`. `seed-demo.mjs` SOURCE rolü için hesap üretmiyor; o rolü test
+etmek isteyen elle oluşturmalı.
+
+### Playwright: pinned build uyumsuzluğunda symlink YETMEZ
+
+CLAUDE.md "pinned browser build eksikse kurulu build'i beklenen sürüm dizinine
+symlink'le" diyor. **Bu oturumda symlink işe yaramadı** ve nedeni önemli: kurulu
+build `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, beklenen ise
+`/opt/pw-browsers/chromium_headless_shell-1228/chrome-headless-shell-linux64/
+chrome-headless-shell`. Yani sadece **sürüm numarası** değil **dizin yapısı ve
+binary adı** da farklı (`chrome-linux` vs `chrome-linux64`), dolayısıyla sürüm
+dizinini symlink'lemek yolu düzeltmiyor.
+
+Çalışan çözüm — launch'a doğrudan yol ver:
+`chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })`.
+(`playwright.config.ts` üzerinden koşuyorsan `use: { launchOptions: { executablePath } }`.)
+
+**`playwright` paketi yok, `@playwright/test` var.** Ad-hoc gezinti script'i
+yazarken `import { chromium } from '@playwright/test'` kullan ve script'i **repo
+kökünden** çalıştır, yoksa `ERR_MODULE_NOT_FOUND` alırsın (scratchpad'den
+çalıştırmak node_modules çözümünü bozuyor).
+
+**Tek script'le çok rollü tur çok verimli.** Rol → sayfa listesi haritası + her
+sayfada `screenshot({ fullPage: true })` + `pageerror`/`console` toplama ile 69
+sayfa tek koşuda geziliyor. İki tuzak: (1) giriş sonrası `page.url()` hâlâ
+`/auth/signin` gösterebilir ama oturum kurulmuştur — sonraki sayfaların 200
+dönmesine bak, login'i "başarısız" sayma; (2) rıza banner'ı tıklamayı ele al
+(`getByRole('button', { name: /kabul|accept|tümünü/i })`) yoksa modal tıklamaları
+yiyor.
+
+### MCP araç maliyeti — bu oturumun en büyük sürprizi
+
+**`sub_issue_write` yanıtı EBEVEYNİN TÜM GÖVDESİNİ döndürüyor.** Uzun epic
+gövdeleriyle her tek bağlama çağrısı ~10-15 KB context yiyor. 8 epic + 20 story +
+12 task'lık bir ağacı bağlamak 40 çağrı = yüz binlerce karakter demek ve context'i
+bitiriyor. Pratik sonuç: **gövdeleri uzun yaz ama ağacı bağlarken bunu bütçele**;
+kısa gövdeli item'ları önce bağla, uzun epic'leri sona bırak. `[_ROOT_]` (#736)
+gövdesi boş olduğu için ona bağlamak neredeyse bedava.
+
+**`list_issues` / `search_issues` token limitini aşıyor** (bu oturumda 56 KB ve
+263 KB). Yanıt dosyaya kaydediliyor; doğru okuma yolu `Read` değil (satırlar çok
+uzun) — `python3 -c "import json; d=json.load(open('...')); ..."` ile sadece
+number/title/labels çıkar. Mükerrer kontrolü için `collections.Counter(titles)`
+tek satırda iş görüyor.
+
+**Priority'yi create çağrısında ver.** `issue_write` (method `create`) `labels` ve
+`issue_fields`'i aynı çağrıda kabul ediyor → P-label + org "Priority" alanı tek
+turda set edilir, ayrı `update` çağrısına gerek yok. Çağrı sayısını yarıya indirir.
+
+### Backlog konvansiyonu: `[_ROOT_]` #736
+
+**Yeni epic açan herkes onu #736 `[_ROOT_]` altına bağlamalı.** Bu repo tüm
+hiyerarşiyi tek kökten indiriyor: `#736 → epic → story → task`. Ben ilk turda
+epic'leri parentless bıraktım (`.claude/skills/backlog` dokümanı "mega-parent
+yapma, kökler No Parent'ta kalsın" diyor) ve kullanıcı düzeltti. **Skill dokümanı
+bu noktada repo pratiğiyle çelişiyor** — güncellenmeli.
+
+### Paralel oturum çakışması gerçek bir risk
+
+Ben backlog doldururken **başka bir oturum aynı repoda ~50 issue açtı** (8 güvenlik
+epic'i + 5 UX epic'i ve alt işleri). Sinyal: oluşturduğun issue numaralarında
+boşluklar (796, 797, ..., 799, **801**, 802, **804**...). Sonuç olarak kapsam
+kesişmesi oluştu (ör. "✨ Arayüz güveni" ↔ benim a11y/boş-durum işlerim;
+"🔔 Bildirim kalitesi" ↔ olumsuz sonuç iletişimi). **Rapor etmeden önce başlık
+bazlı mükerrer kontrolü yap** ve kesişmeleri kullanıcıya triyaj için açıkça söyle;
+"ben şunları oluşturdum" demekle iş bitmiyor.
+
+### Ürün analizi yaparken: "yok" demeden önce grep'le
+
+Bu repo göründüğünden **çok** zengin; ilk izlenimle "eksik" sanılan şeylerin
+yarısı mevcut çıktı. Bu oturumda VAR olduğu için tekrar yazılmaması gerekenler:
+`SavedViews` (kaydedilmiş görünüm), `mentorAttention` (dikkat kuyruğu),
+`analytics/aging` (StatusChange audit izinden gerçek bekleme süresi + SLA overdue),
+`rsvp/[token]` + `replyToken` (girişsiz token'la yanıt), `orgBranding` (white-label),
+`entitlements` (özellik kapısı), `ProgramBenchmark` (anonim toplu raporlama),
+`documentAccess` + erişim log'u, `retention` (KVKK saklama), `MentorshipRequest` /
+`MeetingRequest` ("talep → admin onayı" deseni iki kez çözülmüş).
+
+Gerçekten sıfır olanlar (grep ile doğrulanmış): teklif/`Offer`,
+`StatusChange.reason*`, `tag` modeli, anket/NPS, mükerrer aday tespiti/merge,
+haftalık rapor/devam takibi, sertifika üretimi (enum değeri var, üretici yok),
+`@axe-core/playwright`.
+
+**Ayrım önemli:** "grep sıfır sonuç verdi" ile "ben görmedim" farklı iddialardır.
+Her "Mevcut durum" maddesini `dosya:satır` ile bağla; iddiayı doğrulanabilir yap.
+
+## 2026-07-28 — Güvenlik denetimi (Playwright + hacker gözü) → backlog #814–#903
+
+**Bu container'da Docker daemon YOK; lokal DB için `apt-get install mariadb-server`.**
+`docker compose -f docker-compose.dev.yml up -d` çalışmıyor (`/var/run/docker.sock`
+yok, `service docker start` ulimit hatası veriyor). Çalışan yol: `apt-get update`
+(bu şart — bayat apt listesi 404 veriyor) `&& apt-get install -y mariadb-server`,
+sonra `service mariadb start`. Prisma `mysql` provider'ı MariaDB 10.11 ile
+sorunsuz `db push` yaptı. Root socket-auth kullanıyor, o yüzden Prisma için
+parolalı kullanıcı gerekiyor:
+`CREATE USER 'crm'@'%' IDENTIFIED BY 'crm'; GRANT ALL PRIVILEGES ON *.* TO 'crm'@'%';`
+
+**Playwright: `chromium_headless_shell` symlink'i işe yaramaz, `executablePath` kullan.**
+CLAUDE.md "eksik sürümü symlink'le" diyor ama 1194 build'inin dizin yapısı farklı
+(`chrome-linux/headless_shell`), Playwright 1.61 ise
+`chrome-headless-shell-linux64/chrome-headless-shell` arıyor. Çalışan çözüm:
+`chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })`.
+Ayrıca scratchpad'den çalıştırırken `import ... from '@playwright/test'` çözülmüyor —
+mutlak yol ver: `/home/user/Internship/node_modules/@playwright/test/index.mjs`.
+
+**Login otomasyonunda hidrasyonu bekle — yoksa parola URL'e düşer.**
+`goto` + hemen `click('button[type=submit]')` React hydrate olmadan native GET
+submit tetikliyor ve URL `?email=...&password=...` oluyor. `waitUntil:'networkidle'`
++ ~4 sn bekleyince düzeldi. Bu bir test tuzağı değil, **gerçek bir bulgu** çıktı:
+formlarda `method="post"` yok (#873).
+
+**Yetki testinde status kodu tek başına yeterli DEĞİL.** En kritik bulgu (#847:
+COMPANY/SOURCE tüm görüşme kayıtlarını okuyor) `200` dönüyordu — sızıntı dönen
+satırların içeriğindeydi. Rol matrisi testi her satırın sahipliğini doğrulamalı.
+Ayrıca `405` yanıtları yanlış pozitif üretiyor (route o metodu desteklemiyor),
+bulgu sayarken filtrele.
+
+**`seed:demo` SOURCE kullanıcısı üretmiyor.** Rolü test etmek için elle oluşturmak
+gerekti (`prisma` + `bcrypt.hash`). Kapsamlama boşluğu tam bu rolde çıktı — seed'e
+eklenmesi #899'un kabul kriterlerinde.
+
+**`sub_issue_write` yanıtları ebeveynin TÜM gövdesini geri döndürüyor.** 37 bağlantı
+için bu çok büyük context tüketimi demek. Öğrenilen sıra: önce tüm issue'ları
+oluştur (yanıtlar küçük), ID eşlemesini bir scratchpad dosyasına yaz, bağlantıları
+en sona bırak. Ayrıca issue numaraları oluşturma sırasıyla ardışık gelmiyor
+(814, 816, 818… atlıyor) — gövdede "bkz #N" yazarken numarayı önceden tahmin etme,
+sonradan düzelt.
+
+## 2026-07-28 — CI'ı sunucudan GitHub Actions'a geri taşıma (#955 / PR #956)
+
+**Repo public olunca kota gerekçesiyle alınmış her karar yeniden değerlendirilmeli.**
+Haziran 2026'da hosted Actions kotası tükendiği için build'ler self-hosted runner'a,
+yani *production sunucusunun kendisine* taşınmıştı (#636); e2e-full ve stress cron'ları
+tamamen kapatılmıştı (#648). Repo Temmuz'da public oldu — standart hosted runner'lar
+ücretsiz ve sınırsız. Ama kodda hiçbir şey bunu haber vermiyor: workflow yorumları
+hâlâ "PAUSED (quota exhausted)" diyordu ve kimse geri açmadı. Kota kaynaklı geçici
+çözümlerin yorumuna **hangi koşul değişince geri alınacağını** yaz.
+
+**CLAUDE.md gerçeği yansıtmayabilir — dosyayı oku, dokümanı değil.** CLAUDE.md
+"full suite 4× a day, 4-way sharded" diyordu; `e2e-full.yml`'de schedule tamamen
+yorumdaydı ve tek job'a (sharding yok) indirilmişti. Ters yönde de: `deploy-preview`
+`NEXT_PUBLIC_APP_ENV` build-arg'ını hiç geçmiyordu, yani preview #636'dan beri
+production mavisi giyiyordu — kimse fark etmemiş. Doğrulanmamış her doküman iddiası
+`dosya:satır` ile teyit edilmeli.
+
+**Git geçmişi en iyi "eski hale döndür" kaynağı.** Sharded e2e-full'ü sıfırdan
+yazmak yerine `git log --oneline -- <dosya>` → `git show <sha>:<dosya>` ile #627'deki
+orijinali çıkardım; sonradan eklenen browser-cache adımını üstüne koydum. Uydurmaktan
+hızlı ve niyet kaybı olmuyor.
+
+**Runner'ı tamamen kaldırmak yerine "ne mecburen orada olmalı" diye sor.** SSH+secret
+modeline (legacy `deploy.yml`) dönmek cazipti ama sunucu sırlarını GitHub secrets'a
+taşımak gerekirdi. Bunun yerine deploy'u üçe böldüm: gate (self-hosted, bir curl) →
+build (`ubuntu-latest`) → deploy (self-hosted, sadece pull+swap). Drift gate bilerek
+sunucuda kaldı: okuduğu doğru kaynak `127.0.0.1:<port>/api/health`, dışa açıklık /
+firewall / auth gerektirmiyor. Kanıtı da çıktı: bu oturumda sunucu erişilemez
+durumdaydı ve **dışarıdan `curl https://crm.ersah.in` de timeout veriyordu** — gate
+hosted runner'a taşınmış olsaydı her koşuda "unreachable → drift" deyip boşuna
+deploy tetikleyecekti.
+
+**İki job build'i ve deploy'u ayırıyorsa sha'yı bir kez çöz, aşağıya taşı.** Eski tek
+job'lı akışta `deploy-prod.sh` kendisi `git reset --hard origin/main` yapıyordu; build
+ile deploy ayrıldığında bu, imajın build edildiği commit ile deploy edilen commit'in
+ayrışması demek. Çözüm: gate hedef sha'yı `outputs.sha`'ya yazıyor, image tag'i /
+`GIT_SHA` / checkout / `DEPLOY_SHA` hepsi ona pinlenmiş, script `--no-pull` ile
+çağrılıyor. `FORWARD_ONLY` guard'ı `git merge-base --is-ancestor` kullandığı için o
+job'da `fetch-depth: 0` şart — shallow clone soruyu cevaplayamaz.
+
+**Sunucuya dokunan değişikliği doğrulayamıyorsan hata yolunun güvenli olduğunu göster.**
+Runner offline olduğu için `--pull-image` yolunu canlıda deneyemedim. Bunun yerine
+sıralamayı doğruladım: script `set -euo pipefail` ile 2. adımda imajı alıyor,
+container'a 5. adımda dokunuyor — başarısız bir `docker pull` prod ayakta kalarak
+abort ediyor. "Doğrulanmadı" demek yeterli değil, **doğrulanmamışsa ne olacağını** söyle.
+
+**Kuyrukta bekleyen self-hosted job, hosted job'ın koşmasını engellemiyor.** Runner
+offline iken benim PR'ımın Topic Preview run'ı `in_progress` oldu (build ubuntu'da),
+diğer PR'ların eski tek-job run'ları ise `queued` kaldı. Değişikliğin kendisi
+ücretsiz bir kanıt üretti. Ayrıca `gh api repos/<owner>/<repo>/actions/runners`
+runner sağlığını görmenin en hızlı yolu — SSH'ı beklemeye gerek yok.
+
+**`gh repo view` ile `git remote -v` farklı isim gösterebilir.** origin
+`mersahin/Internship`, kanonik ad `21072026/Internship` (transfer sonrası redirect).
+Push doğru yere gidiyor ama `--repo` bayrağı gereken komutlarda kanonik adı kullan.
+Yerel `gh` token'ında `read:packages` scope'u yok, o yüzden ghcr paket sürümlerini
+API'den listeleyemedim; imajın gerçekten push edildiğini **build job'ının step
+sonuçlarından** doğruladım (`Build and push: success`).
+
+**Worktree'de `git checkout main` çalışmaz.** Ana worktree main'i tutuyor;
+`git checkout -b <yeni> origin/main` diyerek dallandım — ama merge sonrası `git fetch`
+etmediğim için branch bayat bir `origin/main`'e oturdu ve tüm dosyalar "değişmiş"
+göründü. Merge'den sonra dallanmadan önce `git fetch origin`.
+
+## 2026-07-28 — e2e-full'e her-koşuda Türkçe özet e-postası (+ hızlı-main dersleri)
+
+**Paralel oturum çarpışması (iki kez!):** Aynı gün başka oturumlar (a) smoke gate'i
+çoktan shiplemiş, (b) benim "self-hosted'a taşı" PR'ımın tam tersi yönde #956'yı merge
+etmişti (repo public olunca hosted runner bedava → her şey hosted'a geri). Ders: PR'ı
+yeniden inşa etmeden önce SON main'i tekrar incele ve "bu iş hâlâ gerekli mi, hangi
+parçası kaldı?" sorusunu sor. Ben kapsamı iki kez daralttım: sonunda kalan tek eksik,
+kullanıcının istediği her-koşuda "X/Y test geçti" heartbeat maili idi — onu restore
+edilmiş hosted e2e-full'e ekledim (shard başına JSON raporu + always() report job'ı).
+
+**Conflict'li PR = 0 workflow:** Base'i geride kalmış PR'da `pull_request` check'leri
+HİÇ tetiklenmez (0 check run + `mergeable_state: dirty/unknown`); "CI koşmuyor" diye
+debug etmeden önce buna bak. `merge-tree` ile conflict'i push'lamadan görebilirsin.
+
+**Sharded koşuda özet:** her shard'a `PLAYWRIGHT_JSON_OUTPUT_NAME` + `--reporter=list,html,json`,
+JSON'ları artifact olarak topla, `E2E_EXPECTED_REPORTS` ile "shard çöktü ama rapor yok →
+sahte yeşil" tuzağını kapat. Süre = shard'ların max'ı, toplamı değil.
+
+**Ultracode limiti:** 8 agent'lık workflow hesap limitine takılıp 0 agent'la döndü; ana
+oturum çalışmaya devam edebildi — işi inline bitir, `resumeFromRunId` cebinde dursun.
+
+**Write tool + ESC baytı:** regex'e `\x1b` yazarken dosyaya ham ESC gömülebilir; `cat -A`
+ile kontrol et; ANSI'li fixture'ları heredoc yerine python/json ile üret.
+
+## 2026-07-28 — Bekleyen backlog işleri (batch), proje tabanlı mesajlaşma zinciri
+
+### Alt-ajanlar bir anda tamamen kullanılamaz hale gelebilir — planı buna göre kur
+
+Bir workflow'un iki ajanı da **hiçbir dosya değiştirmeden** BLOCKED döndü. Sebep
+harness'ın permission katmanıydı: her araç çağrısı şu hatayla reddedildi —
+
+```
+The permission handler returned updatedInput for <Tool> that failed schema validation:
+The required parameter `<param>` is missing
+```
+
+Kaybolan parametreler: `Read`→`file_path`, `Bash`→`command`, `Glob`/`Grep`→`pattern`,
+`Write`→`file_path`+`content` (ikisi birden), `ToolSearch`→`query`. Yani `updatedInput`
+boş obje olarak dönüyor; girdinin bir kısmı değil **tamamı** düşüyor. Deterministik,
+retry çözmüyor. `ToolSearch`'ün de reddedilmesi kritik: deferred araçları yükleyip
+GitHub üzerinden dosya okuma kaçış yolu da kapanıyor.
+
+Dersler: (1) **Ajan raporlarını `git status` ile doğrula** — bu ikisi dürüsttü ama
+"yaptım" diyen bir ajan da olabilirdi. (2) Ajanlar tahmine dayalı kod yazmayı
+reddettiği için doğru davrandı; repoyu okumadan yazılan kod geri uyumu sessizce
+bozardı. (3) Blokaj altyapısalsa aynı görevi tekrar spawn etmek aynı sonucu verir —
+işi kendin yaz. Bu oturumda #769 ve #770'in tamamı elle yazıldı.
+
+### `prisma validate` şema-DB farkını görmez; `db push` tuzakları yalnızca deploy'da patlar
+
+İki kez düştüm, ikisi de yerelde **tamamen sessiz**:
+
+1. **FK kolonuna `@@index` eklemek.** `ConversationParticipant`'a `@@index([userId])`
+   ekledim. MySQL FK için o indeksi zaten tutuyor; Prisma onu `..._userId_idx` adına
+   çevirmek isteyip DROP+CREATE denedi, MySQL de FK'nin dayandığı indeksi düşürmeyi
+   reddetti: `Can't DROP INDEX 'ConversationParticipant_userId_fkey'`. **İnce tarafı:
+   bu tuzak yalnızca tablo zaten deploy edilmişse kurulur** — Prisma tabloyu sıfırdan
+   yaratırken indeksi kendi kurar, FK onu yeniden kullanır, sorun görünmez. FK kolonuna
+   ayrı indeks zaten gereksiz.
+2. **Varsayılansız `NOT NULL` kolon.** `Conversation.updatedAt`'i `@default` olmadan
+   ekledim; tabloda satır olsa `db push` orada duracaktı. `@default(now())` çözdü.
+
+`prisma format`/`validate`/`generate` üçü de geçti — şema geçerliydi, sorun şemanın
+**canlı tabloyla farkı**. Paylaşımlı DB'ye `db push` yasak olduğu için bu sınıfı ancak
+topic deploy gösterir; doğru yerde yakalandı ama hata mesajı **ilk başarısız adımda
+kesiliyor**, o yüzden bir tuzağı düzeltirken sıradakini de arayın.
+
+### Projects v2 kolonu bu ortamdan yazılamıyor — otomasyon tek çıkış
+
+`CLAUDE.md` "kartı ilgili kolona taşı" diyor ama: Projects v2 **yalnızca GraphQL** ile
+yazılır (REST karşılığı yok), GraphQL bu oturumda kapalı ("only the pinned set of
+PR-review operations"), doğrudan REST 403, MCP'de Projects v2 aracı yok. `Status` alanı
+`list_issue_fields`'de de **görünmez** — o yalnızca org seviyesi issue alanlarını
+(`Priority`, `Start date`, `Target date`, `Effort`) döndürür; `Status` board'un kendi
+alanı. Yapılabilen: issue atama + `Start date`. Kalıcı çözüm `.github/workflows/
+project-status.yml` (bu oturumda eklendi) — `PROJECTS_TOKEN` secret'ı gerekiyor,
+çünkü varsayılan `GITHUB_TOKEN` Projects v2'ye yazamaz.
+
+### Küçük ama zaman yakan şeyler
+
+- **`npm run build | head` yapma.** SIGPIPE build'i yarıda kesip `.next`'i bozuk
+  bırakıyor, sonraki koşu yanıltıcı `ENOENT: routes-manifest.json` veriyor. Çıktıyı
+  dosyaya yaz, sonra `grep`le.
+- **e2e'yi koşturmak için DB'yi apt'den kur.** Ben "docker yok, o yüzden imkânsız"
+  diye bıraktım ve spec'i çalıştırmadan gönderdim; aynı gün başka bir oturum doğru yolu
+  bulmuş (yukarıdaki güvenlik denetimi girdisi): docker daemon gerçekten yok ama
+  `apt-get update && apt-get install -y mariadb-server` çalışıyor. **Ders: "docker yok"
+  ile "yerel DB imkânsız" aynı şey değil** — paket yöneticisini denemeden vazgeçme.
+  Yine de çalıştıramadıysan PR'da açıkça yaz, "test ettim" deme; `@smoke`'a eklemezsen
+  ilk gerçek koşu gecelik tam takımda olur.
+- **e2e locator'ını dil metnine bağlama.** `getByRole('button', {name:/send|gönder/i})`
+  yerine `data-testid`. `MessageComposer` zaten `sendTestId`/`textareaTestId` kabul
+  ediyor.
+- **Merge sonrası dal:** squash merge'den sonra uzak dal squash öncesi commit'i tutuyor
+  ve normal push reddediliyor. `git diff --stat origin/main origin/<dal>` boşsa içerik
+  main'de demektir, `--force-with-lease` güvenli.
+- **Kuyrukta iş var ama hiçbiri çalışmıyorsa runner ölmüştür — "meşgul" değil.** Bunu
+  ilk seferinde yanlış okudum: `topic` 30 dk "queued" kaldı, ben "runner meşgul" sandım.
+  Doğru sinyal: `list_workflow_runs status=in_progress` → **0** iken `status=queued` → 10.
+  Meşgul bir runner'da en az biri `in_progress` olur. Ayrıca kuyruktaki işin
+  `runner_id: 0` / `runner_name: ""` olması "hiçbir runner almadı" demektir.
+  Kök sebep runner servisi değil sunucunun kendisiydi: `runner-watchdog` (hosted runner'dan
+  SSH deniyor) `Connection timed out` ile patladı — yani watchdog da kurtaramaz, çünkü
+  kurtarmak için SSH gerekiyor. Bu kesinti prod deploy'unu da bloke etti.
+  **Bu tek-runner kırılganlığı #955 ile çözüldü** (imajlar yine GitHub-hosted runner'larda
+  derleniyor), o yüzden "topic ~15 dk sürer" gözlemim artık geçersiz.
+
+### Mevcut nullable kolonun alt uçlarını kontrol et
+
+#768 `Message.relationId`'yi nullable yaptı. Alt uçlar (`PATCH`/`DELETE
+/api/messages/[id]`, `[id]/reactions`, `attachments/[id]`) hepsi
+`getThreadIfAllowed(message.relationId)` ile yetkilendiriyordu ve `null`'da fail-closed
+dönüyordu: konuşma mesajı **gönderilebilir ama düzenlenemez, silinemez, tepki alamaz,
+eki indirilemez**. Ortak bir `canAccessMessage()` gerekti. Bir kolonu nullable yaparken
+onu okuyan **tüm** yetki yollarını greple.
+
+Ayrıca: yetkiyi *katılımcılık* ile *canlı izin* olarak ayırmak gerekti. Okuma kalıcı
+(geçmiş kaybolmasın), yazma yeniden kontrol ediliyor (`canPostToConversation`) — yoksa
+projeden çıkarılan üye süresiz yazmaya devam ederdi.
+
+
+## 2026-07-28 (2. tur) — #782 takibi: limitler DB ile uyumsuzdu + deploy güveni
+
+**"Özellik canlıda yok" şikâyetini önce shallow clone ile doğrula.** Konteynerdeki
+klon `--depth 50` ile geliyor ve `origin/main` ref'i bayat olabiliyor: `git
+merge-base --is-ancestor 5486563 origin/main` "değil" dedi, `git fetch origin main`
+sonrası aynı commit main'in içinde çıktı. Yani #782 hem merge'lenmişti hem canlıydı.
+Herhangi bir "bu commit main'de mi?" iddiasından önce `git fetch` veya
+`git ls-remote origin refs/heads/main` — yerel ref'e asla güvenme. Aynı tuzağın
+`infra/deploy-prod.sh`'deki FORWARD_ONLY guard'ını da sessizce **fail-open** yaptığını
+bu sayede fark ettim (hiçbir workflow `fetch-depth` set etmiyordu).
+
+**Kullanıcı "canlıda yok" derken çoğu zaman "benim baktığım yerde yok" demek
+istiyor.** Sayaç 12 komponente bağlanmıştı ama sweep sadece `src/components/**`
+altında gezmiş; 9 raw `<textarea>` kalmıştı ve maintainer'ın ekran görüntüsü tam
+olarak onlardan birindeydi (Duyurular). CHANGELOG "her raw textarea değiştirildi"
+diyordu, releaseNotes "tüm metin alanları" diyordu — ikisi de yanlıştı. **Sweep
+yaparken `git grep -l "<textarea"` ile bitir, iddiayı ondan sonra yaz.**
+
+**Client `maxLength` + server `zod` + Prisma kolon genişliği: üçü tek kaynaktan
+gelmeli.** Üçü ayrı ayrı yazıldığı için sayaç, write'ın kaldıramayacağı limitleri
+reklam ediyordu — özelliğin amacının tam tersi. En sinsi hâli: `String` (yani
+VARCHAR(191)) bir kolona 5 000 karakter vaat etmek. 192 karakterlik normal bir not
+Prisma P2000 → 500 veriyordu ve sayaç o noktada hâlâ gri "191/5000" gösteriyordu.
+`src/lib/textLimits.ts` açtım; hem zod hem `maxLength` oradan import ediyor.
+**`@db.Text` 65 535 BYTE'tır, karakter değil** — utf8mb4'te Türkçe/Almanca metin
+karakter başına 2-3 byte, yani güvenli üst sınır ~20 000 karakter.
+
+**Controlled/uncontrolled: `value = ''` default'u react-hook-form'u kırar.**
+`Textarea` `value={value}` bağlıyordu, `register()` ise `value` döndürmüyor →
+CompanyForm'un açıklama kutusu kalıcı olarak boş bir controlled input olmuştu, yani
+**hiç yazı yazılamıyordu**. Ortak bir input komponentine `value` default'u koyma;
+`value !== undefined` ise controlled, değilse state'e mirror'la.
+
+**Ortak komponente sarmalayıcı `div` eklerken çağıran tarafın layout class'ını
+taşı.** `<textarea className="flex-1">` → `<Textarea className="flex-1">` sessiz bir
+layout regresyonu: artık flex child sarmalayıcı div, `flex-1` içteki textarea'ya
+gidiyor ve hiçbir şey yapmıyor. `wrapperClassName` prop'u ekledim.
+
+**Test yokluğu "scheduling" ile açıklanmaz.** Sayaç için 215 spec'lik suite'te tek
+assertion yoktu; `announcements.spec.ts` ~25 karakterlik string post ediyordu, tüm
+interaction spec'leri 'Weekly sync' gibi notlar kullanıyordu. Smoke gate suçlu
+değildi — 4x/gün koşan full suite'te de yoktu. **Bir limiti test edecekseniz limitin
+yakınında bir değer kullanın**; happy-path uzunlukları hiçbir sınırı egzersiz etmez.
+
+**Deploy güvensizliği haklıydı ama sebep tahmin edilenden farklıydı.** Regresyon ya
+da force-push yoktu; ikisi de `workflow_dispatch`-only idi. 46 deploy-prod koşusunun
+#803'ten öncekilerin hepsi manueldi, deploy-preview'un toplam 5 koşusu vardı ve
+preview 07-21'den beri 72 commit geride duruyordu. **"Merge = deploy" invaryantını
+iddia eden her repoda gerçek koşu geçmişini `actions_list` ile doğrula** — header
+yorumu değil, `event` alanı söyler. `git log`'da görünmeyen tek şey neyin deploy
+edildiğidir.
+
+**Yeşil bir job "her şey yolunda" demek değildir.** İki sessiz durum buldum: (1)
+FORWARD_ONLY refuse yolu `exit 0` ile SUCCESS raporluyordu, yani prod main'in
+dışında sonsuza kadar sabitlenebiliyordu; (2) health check kök sayfayı curl ediyordu
+— bozuk `DATABASE_URL`'li konteyner de 200 döner ve hangi build'in koştuğunu
+söylemez, üstelik drift gate kararını aynı endpoint'in `sha`'sından veriyor. Deploy
+sonrası **ne deploy ettiğini doğrula**: `/api/health?db=1` + served `sha == ${GIT_SHA:0:7}`.
+Reddedilen/atlanan deploy `::warning::` + step summary yazsın.
+
+**Sunucuda build eden bir pipeline, kendi düzeltmesini de rehin alabilir.** 22:00
+civarı `deploy-prod` #51 imajı hâlâ sunucuda build ediyordu (#956 öncesi yol);
+`next build` **exit 255** (bu repoda belgelenen OOM imzası) ile öldü ve hemen
+ardından "The runner has received a shutdown signal" geldi. Sonuç zinciri: box
+SSH'e kapandı (watchdog #19 → `connect ... Connection timed out`, oysa #17/#18
+başarılıydı), üç ortam da 503 döndü (prod + preview + `crm-pr946` topic), ve
+self-hosted runner düştüğü için kuyruktaki deploy'lar (#53, #55) başlayamadı —
+**o kuyrukta duran şey tam olarak sunucuda build etmeyi bitiren #956'ydı.**
+Ders: kök nedeni ortadan kaldıran değişiklik, kök nedenin bozduğu altyapıya
+bağımlıysa kurtarma yolu yoktur. Böyle bir geçişte hosted bir kaçış yolu bırak.
+
+**"Ortam ayakta mı?" sorusunu kendi ağ yolunu doğrulamadan cevaplama.** HTTPS
+`Connection reset by peer` verirken `http://` **503** döndü — yani nginx ayakta,
+container yok. `example.com` ve `api.github.com` 200 dönüyordu, dolayısıyla sorun
+sandbox'ta değildi. Bir kesinti bildirmeden önce: (1) başka bir dış host'a curl,
+(2) 80 ve 443'ü ayrı dene, (3) `$HTTPS_PROXY/__agentproxy/status`. Aksi hâlde
+proxy arızasını prod kesintisi diye rapor etme riski var.
+
+**Container swap'ın geri dönüş hedefi yok — bu artık teorik değil.** PR #946'da
+"kapsam dışı" diye not ettiğim şey aynı gece canlı kesintiye dönüştü:
+`docker stop`/`rm`, `docker run`'dan önce çalışıyor ve `docker image prune -af`
+önceki imajı siliyor. Doğrusu: yeni container'ı geçici adla başlat, health-check
+et, ancak sonra eskiyi kaldır.
+
+**Hızlı akan bir main'de PR'ı elde merge etmeye çalışmak yarış kaybettirir.**
+Bu oturumda main inceleme sırasında ~10 commit ilerledi; üç kez elle merge
+denedim, her seferinde tazE bir çakışma. Doğru hamle: çakışmayı çöz, push et ve
+**auto-merge (squash) aç** — gate yeşile döndüğü anda kendisi girer. Ayrıca
+`topic` check'i self-hosted; runner düşükken sonsuza kadar `queued` kalır, bu
+yüzden onu beklemeyin (zorunlu check değil).
+
+---
+
 ## 2026-07-28 — Uygulamayı gerçek kullanıcı gözüyle gezip backlog doldurma (SO/PSO turu)
 
 **Docker olmayan Claude Code web container'ında yerel DB: MariaDB'yi apt ile kur.**
@@ -672,3 +1108,18 @@ güvenlik epic'i #814–#829 hâlâ root'a bağlı değil.)
 **Skill dosyası ile repo gerçeği çeliştiğinde repoyu kaynak alın ve skill'i
 düzeltin.** Yanlış talimat sessizce yanlış çıktı üretiyor ve bir sonraki oturum
 aynı hatayı tekrarlıyor; düzeltme maliyeti iki satır.
+
+**Aynı gün paralel oturumlar aynı dosyanın sonuna yazıyor: `agent-experience.md`
+çatışması normaldir, çözümü "ikisini de tut".** Bu PR'da `origin/main` iki kez
+ilerledi ve iki kez aynı yerde çatıştı (bir oturum deploy kaydı, biri HR/PO turu
+kaydı ekledi). Doğru çözüm birini seçmek değil: main'in bölümü önce, kendi
+bölümün sonra, aralarına `---`. Merge'den önce `git fetch origin main` +
+`git merge origin/main` yapıp çatışmayı **kendiniz** çözün; PR'ı merge etmeye
+çalışıp 405 `Pull Request has merge conflicts` almak zaman kaybı.
+
+**"Şu kalem hâlâ eksik" gibi durum notlarını yazmadan önce API'den doğrulayın —
+paralel oturum düzeltmiş olabilir.** Skill'e "#814–#829 root'a bağlı değil" diye
+yazdım; merge öncesi kontrolde başka bir oturumun **#951 `Initiative` şemsiyesi**
+açıp 8 epic'i ona bağladığı çıktı (ama #951'in kendisi parentsız → board'da iki
+kök). Not yanlış yayınlanacaktı. Kural: hiyerarşi/durum iddiasını `issue_read`
+(`get`/`get_parent`/`get_sub_issues`) ile teyit et, sonra yaz.

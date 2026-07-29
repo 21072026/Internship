@@ -139,10 +139,16 @@ they encoded is already carried natively. Reverted. Don't reintroduce them.)
   an epic, link it to #736 with `sub_issue_write` exactly as you link a story to
   its epic. (Earlier guidance here said "never a mega-parent / No Parent holds the
   top-level epics" — that was wrong for this repo and caused epics #850/#853/#857/
-  #861/#863 to be created orphaned and fixed only after the maintainer asked.
-  Note the 8 security epics #814–#829 are still unlinked — link them when you next
-  touch them.) `[_ROOT_]` itself is a bookkeeping node: no labels, no priority, no
-  body; never close it and never put a Task directly under it.
+  #861/#863 to be created orphaned and fixed only after the maintainer asked.)
+  `[_ROOT_]` itself is a bookkeeping node: no labels, no priority, no body; never
+  close it and never put a Task directly under it.
+- **An `Initiative` umbrella is allowed for a large batch — but link it to #736
+  too.** The 2026-07 security audit put its 8 epics (#814–#829) under
+  **#951 `🛡️ Initiative · Güvenlik denetimi 2026-07`** instead of #736 directly,
+  which is a reasonable grouping. But #951 itself is **parentless** (checked
+  2026-07-28), so the board currently shows **two** roots. If you create an
+  Initiative-level node, nest it under #736 so the "one tree" invariant holds —
+  and if you touch #951, link it to #736 while you're there.
 - **Priority** — set the `P0`–`P3` **label** (for filtering/at-a-glance) AND the
   board's **official org "Priority" field** (options **Urgent/High/Medium/Low**).
   The Priority field is an **org-level issue field** (`list_issue_fields` shows it),

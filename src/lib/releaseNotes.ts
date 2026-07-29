@@ -13,6 +13,45 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.28.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'The Announcements box now has the live character counter too, and stops you at the 20 000-character limit as you type — instead of accepting a long message and then failing with an untranslated "Validation failed" after you pressed Broadcast.',
+        'Long text now saves everywhere it said it would. Meeting notes, company descriptions and shortlist notes were being cut off by a database limit far smaller than the counter promised, so a normal paragraph could fail to save — in the case of a bulk mentor email, only after the email had already gone out. Every one of those fields now genuinely holds what the counter shows.',
+        'Fixed a company description box that could not be typed into at all, and a counter that sat on top of the resize handle so a textarea could not be dragged bigger.',
+      ],
+      tr: [
+        'Duyurular kutusunda da artık canlı karakter sayacı var ve yazarken 20 000 karakter sınırında sizi durduruyor — uzun bir mesajı kabul edip, siz Yayınla\'ya bastıktan sonra çevrilmemiş bir "Validation failed" hatasıyla başarısız olmak yerine.',
+        'Uzun metinler artık söz verilen her yerde kaydediliyor. Görüşme notları, şirket açıklamaları ve kısa liste notları, sayacın belirttiğinden çok daha küçük bir veritabanı sınırına takılıyordu; yani normal uzunlukta bir paragraf kaydedilemiyordu — toplu mentor e-postasında ise ancak e-posta gönderildikten sonra. Bu alanların hepsi artık sayacın gösterdiği kadarını gerçekten tutuyor.',
+        'Hiç yazı yazılamayan şirket açıklaması kutusu düzeltildi; ayrıca yeniden boyutlandırma tutamacının üstüne binen ve metin alanının büyütülmesini engelleyen sayaç sorunu giderildi.',
+      ],
+      de: [
+        'Auch das Ankündigungsfeld hat jetzt den Live-Zeichenzähler und stoppt dich beim Tippen an der Grenze von 20 000 Zeichen — statt eine lange Nachricht anzunehmen und nach dem Senden mit einem unübersetzten „Validation failed" zu scheitern.',
+        'Lange Texte werden jetzt überall dort gespeichert, wo es versprochen war. Gesprächsnotizen, Firmenbeschreibungen und Shortlist-Notizen liefen gegen ein Datenbanklimit, das weit kleiner war als der Zähler anzeigte — ein normaler Absatz konnte also nicht gespeichert werden, bei einer Mentor-Sammelmail sogar erst nachdem die E-Mail schon raus war. Alle diese Felder halten jetzt wirklich so viel, wie der Zähler anzeigt.',
+        'Ein Firmenbeschreibungsfeld, in das man überhaupt nicht schreiben konnte, ist behoben — ebenso ein Zähler, der auf dem Anfasser zum Vergrößern lag, sodass sich das Textfeld nicht ziehen ließ.',
+      ],
+    },
+  },
+  {
+    version: '0.27.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'You can now message anyone you share a project with — not just your mentor. Open Messages, pick "New chat", and choose a project team-mate to start a one-to-one conversation. It behaves exactly like your mentor chat: attachments, pasted images, reactions, editing and read receipts all work the same, and new conversations show up in the same inbox list.',
+        'If you stop sharing a project with someone, your conversation with them stays readable — you keep the whole history, you just cannot send new messages in it.',
+      ],
+      tr: [
+        'Artık yalnızca mentorunla değil, aynı projede olduğun herkesle mesajlaşabilirsin. Mesajlar\'ı açıp "Yeni sohbet"e dokun ve bir proje arkadaşını seçerek birebir sohbet başlat. Mentor sohbetinle tamamen aynı şekilde çalışıyor: dosya ekleri, yapıştırılan görseller, tepkiler, düzenleme ve okundu bilgisi aynı; yeni sohbetler de aynı gelen kutusu listesinde görünüyor.',
+        'Biriyle aynı projede olmayı bıraktığınızda o sohbet okunabilir kalıyor — tüm geçmişi görmeye devam ediyorsun, yalnızca yeni mesaj gönderemiyorsun.',
+      ],
+      de: [
+        'Du kannst jetzt allen schreiben, mit denen du ein Projekt teilst — nicht mehr nur deinem Mentor. Öffne Nachrichten, tippe auf "Neuer Chat" und wähle eine Person aus deinem Projektteam für eine Einzelunterhaltung. Sie verhält sich genau wie der Mentor-Chat: Anhänge, eingefügte Bilder, Reaktionen, Bearbeiten und Lesebestätigungen funktionieren identisch, und neue Unterhaltungen erscheinen in derselben Übersicht.',
+        'Teilst du mit jemandem kein Projekt mehr, bleibt die Unterhaltung lesbar — der gesamte Verlauf bleibt erhalten, du kannst nur keine neuen Nachrichten mehr senden.',
+      ],
+    },
+  },
+  {
     version: '0.26.1-beta',
     date: '2026-07-28',
     highlights: {
