@@ -175,3 +175,37 @@ jobs:
           FORWARD_ONLY=1 \
           ENV_FILE="${ENV_FILE:-/etc/internship-crm/prod.env}" \
           ./infra/deploy-prod.sh --no-pull --pull-image
+
+  # ── 4. Alert ────────────────────────────────────────────────────────────────
+  # A failed deploy leaves the container swapped out (docker stop precedes
+  # docker run), so silence here is the worst case: the env can be down, or
+  # stuck on an older build, with nothing but a red tick in the Actions tab to
+  # say so. Separate GitHub-hosted job on purpose — the server no longer runs
+  # npm at all (#956), and an alert that needs `npm ci` on a box whose deploy
+  # just failed is an alert that may never send.
+  notify:
+    name: Email alert on failure
+    needs: [gate, build, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: Send alert email
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          ALERT_SUBJECT: '⚠️ Internship CRM — production deploy FAILED'
+          ALERT_BODY: |
+            The production deploy of ${{ needs.gate.outputs.sha || 'main' }} failed (event: ${{ github.event_name }}).
+            The production container may be down or serving an older build — check before assuming a merge is live.
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/send-alert-email.mjs
