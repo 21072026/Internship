@@ -1123,3 +1123,21 @@ yazdım; merge öncesi kontrolde başka bir oturumun **#951 `Initiative` şemsiy
 açıp 8 epic'i ona bağladığı çıktı (ama #951'in kendisi parentsız → board'da iki
 kök). Not yanlış yayınlanacaktı. Kural: hiyerarşi/durum iddiasını `issue_read`
 (`get`/`get_parent`/`get_sub_issues`) ile teyit et, sonra yaz.
+
+## 2026-07-29 — #958 kök neden: lazy PrismaPromise × AsyncLocalStorage
+
+Zamanlanmış tam suite'i 11 Temmuz'dan beri kırmızı tutan deterministik hata
+(`e2e/tenant-isolation.spec.ts:85`) gerçek bir ürün açığıydı: **Prisma sorgu
+promise'leri lazy** — sorgu (ve `$use` middleware'i) ilk `.then()`'de ateşlenir.
+`runWithOrg(org, () => prisma.x.findMany())` deseninde `await` dışarıda olunca
+abonelik ALS bağlamının dışında gerçekleşiyor, middleware `currentOrgId() =
+undefined` görüp org filtresini sessizce atlıyordu. Çözüm: `runWithOrg` thenable
+dönen fn'lerde aboneliği bağlamın içinde başlatır (`new Promise((res, rej) =>
+result.then(res, rej))`). Ders: ALS + lazy-client kombinasyonunda bağlam,
+promise'in YARATILDIĞI yerde değil `.then()`'in çağrıldığı yerde okunur —
+context-bağımlı her sarmalayıcı thenable'ları içeride abone etmeli.
+
+Repro tekniği: hipotezi tek dosyalık geçici bir spec ile izole et (aynı sorgu,
+await içeride vs dışarıda) — `node --experimental-strip-types` repo'nun uzantısız
+relative import'larında çalışmıyor, Playwright runner'ı kullan. Lokal DB: apt
+MariaDB (playbook'taki yol) sorunsuz.
