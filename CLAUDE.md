@@ -45,8 +45,10 @@ deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
 The **full suite** also runs on a schedule, 4× a day at 03/09/15/21 UTC
-(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted); a red scheduled run
-emails the team (`ALERT_EMAIL_TO`, stress.yml pattern).
+(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted); after **every** scheduled
+run a Turkish summary email goes out (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`):
+"✅ 238/238 test geçti" heartbeat or the failing tests with error snippets. Set the repo
+variable `E2E_REPORT_MODE=failures` for red-only alerts.
 
 ## Architecture
 

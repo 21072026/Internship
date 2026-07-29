@@ -842,6 +842,30 @@ sonuçlarından** doğruladım (`Build and push: success`).
 etmediğim için branch bayat bir `origin/main`'e oturdu ve tüm dosyalar "değişmiş"
 göründü. Merge'den sonra dallanmadan önce `git fetch origin`.
 
+## 2026-07-28 — e2e-full'e her-koşuda Türkçe özet e-postası (+ hızlı-main dersleri)
+
+**Paralel oturum çarpışması (iki kez!):** Aynı gün başka oturumlar (a) smoke gate'i
+çoktan shiplemiş, (b) benim "self-hosted'a taşı" PR'ımın tam tersi yönde #956'yı merge
+etmişti (repo public olunca hosted runner bedava → her şey hosted'a geri). Ders: PR'ı
+yeniden inşa etmeden önce SON main'i tekrar incele ve "bu iş hâlâ gerekli mi, hangi
+parçası kaldı?" sorusunu sor. Ben kapsamı iki kez daralttım: sonunda kalan tek eksik,
+kullanıcının istediği her-koşuda "X/Y test geçti" heartbeat maili idi — onu restore
+edilmiş hosted e2e-full'e ekledim (shard başına JSON raporu + always() report job'ı).
+
+**Conflict'li PR = 0 workflow:** Base'i geride kalmış PR'da `pull_request` check'leri
+HİÇ tetiklenmez (0 check run + `mergeable_state: dirty/unknown`); "CI koşmuyor" diye
+debug etmeden önce buna bak. `merge-tree` ile conflict'i push'lamadan görebilirsin.
+
+**Sharded koşuda özet:** her shard'a `PLAYWRIGHT_JSON_OUTPUT_NAME` + `--reporter=list,html,json`,
+JSON'ları artifact olarak topla, `E2E_EXPECTED_REPORTS` ile "shard çöktü ama rapor yok →
+sahte yeşil" tuzağını kapat. Süre = shard'ların max'ı, toplamı değil.
+
+**Ultracode limiti:** 8 agent'lık workflow hesap limitine takılıp 0 agent'la döndü; ana
+oturum çalışmaya devam edebildi — işi inline bitir, `resumeFromRunId` cebinde dursun.
+
+**Write tool + ESC baytı:** regex'e `\x1b` yazarken dosyaya ham ESC gömülebilir; `cat -A`
+ile kontrol et; ANSI'li fixture'ları heredoc yerine python/json ile üret.
+
 ## 2026-07-28 — Bekleyen backlog işleri (batch), proje tabanlı mesajlaşma zinciri
 
 ### Alt-ajanlar bir anda tamamen kullanılamaz hale gelebilir — planı buna göre kur
