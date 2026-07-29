@@ -10,6 +10,19 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.28.1-beta] - 2026-07-29
+
+### Fixed
+- **Tenant auto-scoping now also covers lazily-awaited Prisma queries** (#958) — Prisma's
+  query promises only execute on their first `.then()`, so
+  `runWithOrg(org, () => prisma.x.findMany())` awaited *outside* the call ran the query
+  after the AsyncLocalStorage context was gone and the central middleware silently skipped
+  the org filter. `runWithOrg` now subscribes to thenable results inside the bound context,
+  so the query always fires with the tenant attached. This was also the deterministic red
+  (`e2e/tenant-isolation.spec.ts:85`) that had kept the scheduled full e2e suite failing
+  since 2026-07-11. No behavior change when `MT_ENFORCE_ISOLATION` is off.
+
+
 ## [0.28.0] - 2026-07-28
 
 ### Fixed

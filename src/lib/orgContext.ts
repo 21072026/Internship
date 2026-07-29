@@ -128,7 +128,21 @@ function ensureTenantMiddleware(): void {
 export function runWithOrg<T>(orgId: string | null, fn: () => T): T {
   if (!isIsolationEnforced()) return fn();
   ensureTenantMiddleware();
-  return storage.run({ orgId }, fn);
+  return storage.run({ orgId }, () => {
+    const result = fn();
+    // Prisma's query promises are LAZY: the request — and therefore the
+    // middleware above — only fires on the first .then() subscription. When a
+    // caller writes `runWithOrg(org, () => prisma.x.findMany())` and awaits
+    // OUTSIDE, that subscription would happen outside this context and the
+    // middleware would silently skip scoping (#958). Subscribing here forces
+    // any lazy thenable to start inside the bound context.
+    if (result && typeof (result as { then?: unknown }).then === 'function') {
+      return new Promise((resolve, reject) => {
+        (result as unknown as PromiseLike<unknown>).then(resolve, reject);
+      }) as T;
+    }
+    return result;
+  });
 }
 
 // Convenience wrapper for API route handlers: resolve the request's org from the

@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.28.1-beta',
+    date: '2026-07-29',
+    highlights: {
+      en: [
+        'Reliability fix in the data-isolation layer for multi-organization setups: a rare code path could run a database query without the organization filter attached. It is now guaranteed to be applied in every case. Single-organization installations are unaffected.',
+      ],
+      tr: [
+        'Çoklu-kuruluş kurulumları için veri izolasyonu katmanında güvenilirlik düzeltmesi: nadir bir kod yolu, veritabanı sorgusunu kuruluş filtresi eklenmeden çalıştırabiliyordu. Artık filtrenin her durumda uygulanması garanti altında. Tek kuruluşlu kurulumlar bu durumdan etkilenmiyordu.',
+      ],
+      de: [
+        'Zuverlässigkeitskorrektur in der Datenisolationsschicht für Installationen mit mehreren Organisationen: Ein seltener Codepfad konnte eine Datenbankabfrage ohne den Organisationsfilter ausführen. Der Filter wird jetzt garantiert in jedem Fall angewendet. Installationen mit nur einer Organisation waren nicht betroffen.',
+      ],
+    },
+  },
+  {
     version: '0.28.0-beta',
     date: '2026-07-28',
     highlights: {
