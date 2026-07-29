@@ -10,6 +10,46 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+### Fixed
+- **The scheduled full e2e suite is green again — 9 failing specs** (#954). The suite's
+  daily schedule had been left commented out since before the Actions quota was
+  restored, so failures accumulated unseen while the `@smoke` PR gate stayed green.
+  None of the nine was a product bug; all were test/locator defects, and three of them
+  masked a second defect behind the first. Verified locally against an apt-installed
+  MariaDB (see `docs/security-audit-playbook.md`).
+  - **`getByText` substring collisions** (`candidates-archive`, `dashboard-links`,
+    `i18n`): `getByText('Inactive')` also matched the seeded address
+    `arch-inactive-…@e2e.local`; `'660 · Hired'` matched both the filter chip and an
+    `<option>` in the stage `<select>`; the TR label `'Davet Gönder'` matched both the
+    sidebar link and the dashboard quick-action card (in EN they differ, so only the
+    Turkish half broke). Fixed with `exact: true`, a new
+    `data-testid="candidates-status-filter-chip"`, and scoping nav assertions to the
+    navigation landmark.
+  - **Post-login navigation race** (`admin-organizations`, `company-shortlist`,
+    `message-attachments`): `waitForURL()` returns as soon as the URL matches, which can
+    be before the sign-in page's push to the role landing page has committed — so a
+    deep-link `goto()` was aborted with *"interrupted by another navigation"*. New
+    `e2e/helpers/auth.ts` exposes `signInAndSettle()` and a `gotoSettled()` that retries
+    only that specific error.
+  - **`admin-organizations`** additionally used `getByLabel('Name', { exact: true })`,
+    but `Input` renders the required marker inside the `<label>`, so the label's text is
+    literally `"Name*"` and an exact match can never succeed. Now an anchored regex —
+    plain `'Name'` would also match `"Brand name"`.
+  - **`message-attachments`** asserted `getByText('screenshot.png')`, but image
+    attachments render as an `<img alt=…>` thumbnail with no text node; only non-image
+    files show the filename. Now scoped to a new `data-testid="pending-attachments"`.
+  - **`project-owners-ui`** was not a removal bug: the member-picker `<select>` lists
+    exactly the users *not* in the project, so a removed member reappears there and a
+    panel-wide text match still found them. Assertions now scope to a new
+    `data-testid="owners-members"`, and the row's remove button gained
+    `data-testid="member-remove-<userId>"` instead of being reached via
+    `locator('div', { hasText }).last()`.
+  - **`project-dm` / `support-chat`** read the database immediately after a UI
+    assertion, assuming the write had committed. Both now use `expect.poll`, which still
+    fails if the row genuinely never appears.
+
+No version bump: test and `data-testid` changes only, no user-visible behaviour change.
+
 ## [0.28.1-beta] - 2026-07-29
 
 ### Fixed

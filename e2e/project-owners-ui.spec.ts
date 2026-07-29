@@ -35,20 +35,27 @@ test('owners panel: add an owner from the picker; last-owner removal shows the e
     await expect(card).toBeVisible({ timeout: 10_000 });
     await card.getByTestId('manage-owners').click();
     const panel = card.getByTestId('owners-panel');
+    // Scope to the member list: the panel also contains the member-picker
+    // <select>, whose options are the users NOT in the project — so a removed
+    // member reappears there and a panel-wide text match still finds them.
+    const members = panel.getByTestId('owners-members');
     await expect(panel).toBeVisible();
-    await expect(panel.getByText('Owners Admin')).toBeVisible();
+    await expect(members.getByText('Owners Admin')).toBeVisible();
 
     // Add the mentor as a second OWNER from the picker.
     await panel.getByTestId('member-picker').selectOption(mentor.id);
     await panel.locator('select').nth(1).selectOption('OWNER');
     await panel.getByTestId('member-add').click();
-    await expect(panel.getByText('Owners Mentor')).toBeVisible({ timeout: 10_000 });
+    await expect(members.getByText('Owners Mentor')).toBeVisible({ timeout: 10_000 });
     expect(await prisma.projectMember.count({ where: { projectId: project.id, role: 'OWNER' } })).toBe(2);
 
     // Remove the mentor again, then try to remove the last owner → inline error.
-    await panel.locator('div', { hasText: 'Owners Mentor' }).last().getByRole('button').click();
-    await expect(panel.getByText('Owners Mentor')).toHaveCount(0, { timeout: 10_000 });
-    await panel.locator('div', { hasText: 'Owners Admin' }).last().getByRole('button').click();
+    // Target the row's own remove button by id: `locator('div', { hasText })`
+    // matches every ancestor div containing the name, and .last() is not
+    // reliably the member row, so the click could land on another button.
+    await panel.getByTestId(`member-remove-${mentor.id}`).click();
+    await expect(members.getByText('Owners Mentor')).toHaveCount(0, { timeout: 10_000 });
+    await panel.getByTestId(`member-remove-${admin.id}`).click();
     await expect(panel.getByText('at least one owner', { exact: false })).toBeVisible({ timeout: 10_000 });
   } finally {
     await ctx.close();
