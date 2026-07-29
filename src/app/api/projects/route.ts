@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import { resolveOwner } from '@/lib/projectAccess';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { createOrGetProjectConversation } from '@/lib/conversations';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
@@ -110,6 +111,7 @@ export async function POST(request: Request) {
     },
     include,
   });
+  await createOrGetProjectConversation(project.id);
   await logActivity({ action: 'project.create', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'project', targetId: project.id });
   return NextResponse.json({ project }, { status: 201 });
   });

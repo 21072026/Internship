@@ -2,10 +2,13 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
-import { findOrCreateDirectConversation } from '@/lib/conversations';
+import { createOrGetProjectConversation, findOrCreateDirectConversation, isActiveProjectMember } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
 
-const schema = z.object({ userId: z.string().min(1) });
+const schema = z.union([
+  z.object({ userId: z.string().min(1), projectId: z.never().optional() }),
+  z.object({ projectId: z.string().min(1), userId: z.never().optional() }),
+]);
 
 // POST — create-or-get the 1:1 (DIRECT) conversation with another user (#769).
 // Idempotent: calling it repeatedly for the same pair returns the same
@@ -19,7 +22,24 @@ export async function POST(request: Request) {
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
+    if ('projectId' in parsed.data && parsed.data.projectId) {
+      if (!(await isActiveProjectMember(session.user.id, parsed.data.projectId))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const conversation = await createOrGetProjectConversation(parsed.data.projectId);
+      if (!conversation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json({
+        conversation: {
+          id: conversation.id,
+          type: conversation.type,
+          projectId: conversation.projectId,
+          participants: conversation.participants.map((p) => ({ id: p.user.id, fullName: p.user.fullName })),
+        },
+      });
+    }
+
     const targetId = parsed.data.userId;
+    if (!targetId) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
     if (targetId === session.user.id) {
       return NextResponse.json({ error: 'Cannot message yourself' }, { status: 400 });
     }

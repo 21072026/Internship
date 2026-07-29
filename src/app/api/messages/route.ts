@@ -206,7 +206,7 @@ export async function POST(request: Request) {
     // thread, or every other participant of a conversation. An admin posting
     // into someone else's thread isn't a recipient of their own message.
     const recipients = (
-      rel ? [otherParticipant(rel, session.user.id)] : otherConversationParticipants(conversation!, session.user.id)
+      rel ? [otherParticipant(rel, session.user.id)] : await otherConversationParticipants(conversation!, session.user.id)
     ).filter((id) => id && id !== session.user.id);
     const link = rel ? `/messages/${rel.id}` : `/messages/c/${conversation!.id}`;
 

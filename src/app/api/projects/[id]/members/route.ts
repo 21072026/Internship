@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { createOrGetProjectConversation, removeProjectConversationParticipant } from '@/lib/conversations';
 
 // Person-level project membership management (#617): add/remove OWNERs and
 // MENTORs. Only an admin or a current OWNER may change the list, and the
@@ -87,6 +88,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       create: { projectId: id, userId, role, functionalRole },
       select: { role: true, functionalRole: true, user: { select: { id: true, fullName: true } } },
     });
+    await createOrGetProjectConversation(id);
     if (userId !== session.user.id) {
       await notify(userId, 'project', `You were added to project "${project.name}".`, '/projects/' + id);
     }
@@ -118,6 +120,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     }
 
     await prisma.projectMember.delete({ where: { projectId_userId: { projectId: id, userId } } });
+    await removeProjectConversationParticipant(id, userId);
 
     // Keep the legacy single-owner pointer valid: if the removed user was the
     // legacy owner, repoint it at a remaining OWNER member.

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { canViewProject, resolveOwner, isProjectOwner, isProjectMember } from '@/lib/projectAccess';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { createOrGetProjectConversation } from '@/lib/conversations';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
@@ -114,6 +115,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         update: { role: 'OWNER' },
         create: { projectId: id, userId: data.ownerUserId, role: 'OWNER' },
       });
+      await createOrGetProjectConversation(id);
     }
     if (transferred) {
       await logActivity({ action: 'project.transfer', level: 'warning', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'project', targetId: id, detail: transferred });

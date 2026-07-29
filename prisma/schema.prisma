@@ -336,7 +336,9 @@ model Conversation {
   participants ConversationParticipant[]
   messages     Message[]
 
-  @@index([projectId])
+  // MySQL permits multiple NULL values, so DIRECT conversations remain
+  // unaffected while each project can have only one GROUP conversation.
+  @@unique([type, projectId])
 }
 
 enum ConversationType {
