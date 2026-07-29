@@ -79,6 +79,18 @@ failure.
 The same alert script can be reused by any other CI job that wants to email on failure
 (e.g. adding an `if: failure()` step to `e2e.yml`).
 
+## Scheduled full E2E summary email
+
+The scheduled full suite (`e2e-full.yml`, 4×/day, 4-way sharded) sends a **Turkish
+summary email after every run** via
+[`scripts/e2e-report-email.mjs`](../scripts/e2e-report-email.mjs): on green a
+`✅ … 238/238 test geçti` heartbeat with the run stats (toplam/geçen/başarısız/flaky/
+atlanan, süre); on red the failing tests with file, title, and error snippet. The
+script aggregates the per-shard Playwright JSON reports and flags a shard that crashed
+before writing its report (`E2E_EXPECTED_REPORTS`). Recipients come from
+`ALERT_EMAIL_TO`; set the repository **variable** `E2E_REPORT_MODE=failures` to switch
+back to red-only alerts.
+
 ## Ideas for further test types
 
 - **Contract / API tests** for `/api/v1/*` against the published OpenAPI spec.
