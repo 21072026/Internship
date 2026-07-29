@@ -52,6 +52,7 @@ export default function CompanyOverviewPage() {
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <input
             type="search"
+            data-testid="company-search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.company.searchPlaceholder}

@@ -13,16 +13,91 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.25.12-beta',
-    date: '2026-07-27',
+    version: '0.27.0-beta',
+    date: '2026-07-28',
     highlights: {
-      en: ['Fixed the Projects page briefly showing "(0)" next to "All projects" while the list was still loading.'],
-      tr: ['Projeler sayfasında liste henüz yüklenirken "Tüm projeler" yazısının yanında kısaca "(0)" görünmesi giderildi.'],
-      de: ['Behoben: Auf der Projekte-Seite zeigte "Alle Projekte" beim Laden kurzzeitig "(0)" an.'],
+      en: [
+        'You can now message anyone you share a project with — not just your mentor. Open Messages, pick "New chat", and choose a project team-mate to start a one-to-one conversation. It behaves exactly like your mentor chat: attachments, pasted images, reactions, editing and read receipts all work the same, and new conversations show up in the same inbox list.',
+        'If you stop sharing a project with someone, your conversation with them stays readable — you keep the whole history, you just cannot send new messages in it.',
+      ],
+      tr: [
+        'Artık yalnızca mentorunla değil, aynı projede olduğun herkesle mesajlaşabilirsin. Mesajlar\'ı açıp "Yeni sohbet"e dokun ve bir proje arkadaşını seçerek birebir sohbet başlat. Mentor sohbetinle tamamen aynı şekilde çalışıyor: dosya ekleri, yapıştırılan görseller, tepkiler, düzenleme ve okundu bilgisi aynı; yeni sohbetler de aynı gelen kutusu listesinde görünüyor.',
+        'Biriyle aynı projede olmayı bıraktığınızda o sohbet okunabilir kalıyor — tüm geçmişi görmeye devam ediyorsun, yalnızca yeni mesaj gönderemiyorsun.',
+      ],
+      de: [
+        'Du kannst jetzt allen schreiben, mit denen du ein Projekt teilst — nicht mehr nur deinem Mentor. Öffne Nachrichten, tippe auf "Neuer Chat" und wähle eine Person aus deinem Projektteam für eine Einzelunterhaltung. Sie verhält sich genau wie der Mentor-Chat: Anhänge, eingefügte Bilder, Reaktionen, Bearbeiten und Lesebestätigungen funktionieren identisch, und neue Unterhaltungen erscheinen in derselben Übersicht.',
+        'Teilst du mit jemandem kein Projekt mehr, bleibt die Unterhaltung lesbar — der gesamte Verlauf bleibt erhalten, du kannst nur keine neuen Nachrichten mehr senden.',
+      ],
     },
   },
   {
-    version: '0.25.11-beta',
+    version: '0.26.1-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'Meeting reminders now arrive about an hour before the meeting instead of a day ahead — and they go to everyone involved, mentor and mentee alike, not just the mentee. You always get the reminder in the app; the email version follows your notification settings, so you can switch it off and still see the reminder on your bell. Each meeting is only ever reminded once.',
+      ],
+      tr: [
+        'Toplantı hatırlatmaları artık bir gün önce değil, toplantıdan yaklaşık bir saat önce geliyor — ve yalnızca mentiye değil, mentor ve menti dahil tüm katılımcılara gidiyor. Hatırlatmayı uygulama içinde her zaman alıyorsunuz; e-posta olarak gönderilmesi bildirim tercihlerinize bağlı, yani e-postayı kapatsanız bile hatırlatma bildirim zilinizde görünmeye devam ediyor. Her toplantı için hatırlatma yalnızca bir kez gönderiliyor.',
+      ],
+      de: [
+        'Terminerinnerungen kommen jetzt etwa eine Stunde vor dem Termin statt einen Tag vorher — und sie gehen an alle Beteiligten, Mentor und Mentee, nicht nur an den Mentee. In der App erhältst du die Erinnerung immer; ob sie zusätzlich per E-Mail kommt, richtet sich nach deinen Benachrichtigungseinstellungen — schaltest du die E-Mail ab, erscheint die Erinnerung weiterhin in deiner Glocke. Pro Termin wird nur ein einziges Mal erinnert.',
+      ],
+    },
+  },
+  {
+    version: '0.26.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'Important events now reach you by email, not just in the app: a mentorship request being approved or rejected, a new request landing in the admin queue, an enquiry from your public profile (you can reply straight to the sender), and meeting requests being sent, accepted or declined. Everything respects your notification settings, and there is a new "Mentorship updates" switch to turn just those off.',
+        'Goals can be sorted newest-first or oldest-first, and completed goals move out of your active list into a new Archive tab — where they keep their completion date and can be reopened at any time.',
+        'Support: admins can now attach files and images to their replies — a message on its own, files on their own, or both together. Images can be previewed and any file removed before sending, using the same file types and size limits as the rest of the support conversation.',
+      ],
+      tr: [
+        'Önemli olaylar artık yalnızca uygulama içinde değil, e-posta ile de size ulaşıyor: mentorluk talebinizin onaylanması veya reddedilmesi, yönetici kuyruğuna yeni bir talep düşmesi, herkese açık profilinizden gelen bir başvuru (doğrudan gönderene yanıt verebilirsiniz) ve toplantı taleplerinin gönderilmesi, kabul edilmesi veya reddedilmesi. Tümü bildirim tercihlerinize saygı gösteriyor; sadece bunları kapatmak için yeni bir "Mentorluk güncellemeleri" anahtarı var.',
+        'Hedefler yeniden eskiye veya eskiden yeniye sıralanabiliyor ve tamamlanan hedefler aktif listenizden çıkıp yeni Arşiv sekmesine taşınıyor — tamamlanma tarihlerini koruyorlar ve istediğiniz zaman yeniden açılabiliyorlar.',
+        'Destek: yöneticiler artık yanıtlarına dosya ve görsel ekleyebiliyor — yalnızca mesaj, yalnızca dosya veya ikisi birlikte. Görseller gönderilmeden önce önizlenebiliyor ve eklenen dosyalar kaldırılabiliyor; destek konuşmasının geri kalanıyla aynı dosya türleri ve boyut limitleri geçerli.',
+      ],
+      de: [
+        'Wichtige Ereignisse erreichen dich jetzt auch per E-Mail und nicht nur in der App: die Annahme oder Ablehnung einer Mentoring-Anfrage, eine neue Anfrage in der Admin-Warteschlange, eine Anfrage über dein öffentliches Profil (du kannst direkt dem Absender antworten) sowie gesendete, angenommene oder abgelehnte Terminanfragen. Alles berücksichtigt deine Benachrichtigungseinstellungen, und mit dem neuen Schalter "Mentoring-Updates" schaltest du genau diese ab.',
+        'Ziele lassen sich nach neuesten oder ältesten sortieren, und abgeschlossene Ziele wandern aus der aktiven Liste in einen neuen Archiv-Tab — dort behalten sie ihr Abschlussdatum und können jederzeit wieder geöffnet werden.',
+        'Support: Admins können ihren Antworten jetzt Dateien und Bilder anhängen — nur eine Nachricht, nur Dateien oder beides. Bilder lassen sich vor dem Senden in der Vorschau ansehen und angehängte Dateien entfernen; es gelten dieselben Dateitypen und Größenlimits wie im restlichen Support-Verlauf.',
+      ],
+    },
+  },
+  {
+    version: '0.25.15-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'The projects list no longer flashes "(0)" while it is still loading — the project count now appears only once the data has arrived, so an empty list is never mistaken for a slow one.',
+      ],
+      tr: [
+        'Projeler listesi yüklenirken artık "(0)" göstermiyor — proje sayısı yalnızca veriler geldikten sonra çıkıyor, böylece boş liste ile yavaş yüklenen liste karışmıyor.',
+      ],
+      de: [
+        'Die Projektliste zeigt beim Laden nicht mehr "(0)" — die Projektanzahl erscheint erst, wenn die Daten geladen sind, sodass eine leere Liste nicht mit einer langsam ladenden verwechselt wird.',
+      ],
+    },
+  },
+  {
+    version: '0.25.14-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: [
+        'The Candidates list now hides deactivated candidates by default and keeps them in a separate Archive view — switch between Active and Archived with one click. Exports follow whichever view you\'re in, and you can bulk-reactivate archived candidates to move them back.',
+      ],
+      tr: [
+        'Adaylar listesi artık devre dışı bırakılmış adayları varsayılan olarak gizliyor ve onları ayrı bir Arşiv görünümünde tutuyor — Aktif ve Arşiv arasında tek tıkla geçin. Dışa aktarma bulunduğunuz görünümü izler ve arşivdeki adayları toplu olarak yeniden etkinleştirip geri taşıyabilirsiniz.',
+      ],
+      de: [
+        'Die Kandidatenliste blendet deaktivierte Kandidaten jetzt standardmäßig aus und hält sie in einer separaten Archiv-Ansicht — mit einem Klick zwischen Aktiv und Archiviert wechseln. Exporte folgen der aktuellen Ansicht, und du kannst archivierte Kandidaten per Sammelaktion wieder aktivieren.',
+      ],
+    },
+  },
+  {
+    version: '0.25.13-beta',
     date: '2026-07-27',
     highlights: {
       en: [
@@ -33,6 +108,30 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Admins können jetzt beim Antworten auf ein Support-Ticket Bilder oder PDF-Dateien anhängen — mit derselben Vorschau und Entfernung vor dem Senden wie auf der Anfragerseite. Antworten können Text, einen Anhang oder beides enthalten.',
+      ],
+    },
+  },
+  {
+    version: '0.25.12-beta',
+    date: '2026-07-27',
+    highlights: {
+      en: ['Fixed the Projects page briefly showing "(0)" next to "All projects" while the list was still loading.'],
+      tr: ['Projeler sayfasında liste henüz yüklenirken "Tüm projeler" yazısının yanında kısaca "(0)" görünmesi giderildi.'],
+      de: ['Behoben: Auf der Projekte-Seite zeigte "Alle Projekte" beim Laden kurzzeitig "(0)" an.'],
+    },
+  },
+  {
+    version: '0.25.11-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: [
+        'All text areas now show a live character counter — you can see how many characters you\'ve used and how many remain (e.g. "42 / 2 000"). The counter turns amber when you approach the limit and red when you\'re at it, so you never hit an unexpected cutoff.',
+      ],
+      tr: [
+        'Tüm metin alanları artık canlı karakter sayacı gösteriyor — kaç karakter kullandığınızı ve kaç karakter kaldığını görebilirsiniz (ör. "42 / 2 000"). Sayaç limite yaklaştığınızda kehribar rengine, limite ulaştığınızda kırmızıya döner; böylece beklenmedik bir kesilmeyle karşılaşmazsınız.',
+      ],
+      de: [
+        'Alle Textfelder zeigen jetzt einen Live-Zeichenzähler — du siehst, wie viele Zeichen du verwendet hast und wie viele noch übrig sind (z. B. „42 / 2 000"). Der Zähler wechselt zu Amber, wenn du dich dem Limit näherst, und zu Rot, wenn du es erreichst — damit du nie an einem unerwarteten Abschnitt scheiterst.',
       ],
     },
   },

@@ -9,8 +9,10 @@
 #
 # WHAT IT DOES
 #   1. sync the working copy to origin/main (unless --no-pull)
-#   2. build the image FROM SOURCE (CI normally builds + pushes to ghcr; here we
-#      build locally so no registry pull is needed), stamping GIT_SHA
+#   2. obtain the image: either PULL a prebuilt one from ghcr (--pull-image, how
+#      the deploy workflows do it since 2026-07-29 — the build runs on a
+#      GitHub-hosted runner so this server never compiles) or build it locally
+#      from source, stamping GIT_SHA
 #   3. prisma db push --accept-data-loss  (schema sync, same as CI)
 #   4. seed-templates + backfill-project-members  (idempotent)
 #   5. swap the internship-crm container (host networking, port 3200, restart
@@ -31,7 +33,14 @@
 #
 # FLAGS
 #   --no-pull     deploy the current checkout as-is (skip git sync)
-#   --skip-build  reuse the existing internship-crm:local image (fast restart)
+#   --skip-build  reuse the existing $IMAGE image, as-is (fast restart)
+#   --pull-image  `docker pull $IMAGE` instead of building (implies --skip-build).
+#                 For a private registry set GHCR_USER + GHCR_TOKEN and this
+#                 logs in first; a public package needs neither.
+#
+# ENV
+#   DEPLOY_SHA    the commit the image was built from. Only needed when the
+#                 checkout can't be trusted to be that commit; defaults to HEAD.
 #
 set -euo pipefail
 
@@ -44,10 +53,13 @@ BRANCH="${BRANCH:-main}"
 
 NO_PULL=0
 SKIP_BUILD=0
+PULL_IMAGE=0
 for arg in "$@"; do
   case "$arg" in
     --no-pull) NO_PULL=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
+    # The image already exists in the registry — fetching it replaces the build.
+    --pull-image) PULL_IMAGE=1; SKIP_BUILD=1 ;;
     *) echo "Unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -93,11 +105,45 @@ if [ "$NO_PULL" -eq 0 ]; then
   git checkout "$BRANCH"
   git reset --hard "origin/$BRANCH"
 fi
-GIT_SHA="$(git rev-parse HEAD)"
-log "Deploying $(git rev-parse --short HEAD) — $(node -p "require('./package.json').version" 2>/dev/null || echo '?')"
+# DEPLOY_SHA lets the caller name the commit the image was built from, which is
+# what the forward-only guard and the state file below must reason about. With a
+# local build that is always HEAD; with --pull-image the workflow passes the sha
+# it built so a shared/shallow runner workspace can't disagree with the image.
+GIT_SHA="${DEPLOY_SHA:-$(git rev-parse HEAD)}"
+log "Deploying ${GIT_SHA:0:7} — $(node -p "require('./package.json').version" 2>/dev/null || echo '?')"
 
-# ── 2. Build image from source ───────────────────────────────────────────────
-if [ "$SKIP_BUILD" -eq 0 ]; then
+# ── 1b. Forward-only guard (prod) ────────────────────────────────────────────
+# Production must only ever move FORWARD. Two uncoordinated deployers write the
+# prod container (the cron autodeploy poller + the deploy-prod workflow), and a
+# stale/out-of-order build could otherwise overwrite a newer release with an
+# older commit (the "one step forward, one step back" regressions). When
+# FORWARD_ONLY=1, refuse to deploy a commit that is an ancestor of (i.e. older
+# than) the last one this container successfully deployed. Preview/topic deploys
+# leave FORWARD_ONLY unset so they can still deploy arbitrary/older PR refs.
+# Set FORCE=1 for a deliberate rollback.
+STATE_FILE="${DEPLOY_STATE_FILE:-$(dirname "$ENV_FILE")/.${CONTAINER}.deployed-sha}"
+if [ "${FORWARD_ONLY:-0}" = "1" ] && [ "${FORCE:-0}" != "1" ] && [ -f "$STATE_FILE" ]; then
+  LAST_SHA="$(cat "$STATE_FILE" 2>/dev/null || true)"
+  if [ -n "$LAST_SHA" ] && [ "$LAST_SHA" != "$GIT_SHA" ] \
+     && git cat-file -e "${LAST_SHA}^{commit}" 2>/dev/null \
+     && git merge-base --is-ancestor "$GIT_SHA" "$LAST_SHA" 2>/dev/null; then
+    log "SKIP: $(git rev-parse --short "$GIT_SHA") is older than the live commit ${LAST_SHA:0:7} — refusing to regress $CONTAINER (set FORCE=1 to roll back deliberately)."
+    exit 0
+  fi
+fi
+
+# ── 2. Obtain the image: pull a prebuilt one, or build from source ───────────
+# Pulling is the normal path now — the deploy workflows build on a GitHub-hosted
+# runner and push to ghcr, so this box does no compiling. Building locally
+# remains supported for a manual/offline deploy from a shell on the server.
+if [ "$PULL_IMAGE" -eq 1 ]; then
+  log "Pulling $IMAGE"
+  if [ -n "${GHCR_TOKEN:-}" ]; then
+    printf '%s' "$GHCR_TOKEN" \
+      | docker login ghcr.io -u "${GHCR_USER:-github-actions}" --password-stdin
+  fi
+  docker pull "$IMAGE"
+elif [ "$SKIP_BUILD" -eq 0 ]; then
   log "Building $IMAGE (GIT_SHA=$GIT_SHA)"
   docker build --build-arg GIT_SHA="$GIT_SHA" -t "$IMAGE" .
 fi
@@ -165,6 +211,11 @@ if [ "$ok" -ne 1 ]; then
   exit 1
 fi
 
+# Record the commit now live in this container so the next deploy can enforce
+# forward-only progress (see the guard above).
+mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
+printf '%s\n' "$GIT_SHA" > "$STATE_FILE" 2>/dev/null || true
+
 docker image prune -af >/dev/null 2>&1 || true
 docker builder prune -af --filter until=72h >/dev/null 2>&1 || true
-log "Done — $CONTAINER is up at :$PORT ($(git rev-parse --short HEAD))"
+log "Done — $CONTAINER is up at :$PORT (${GIT_SHA:0:7})"

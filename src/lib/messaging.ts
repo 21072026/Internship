@@ -7,7 +7,12 @@ interface SessionUser {
 
 // A mentorship thread is accessible to its mentor, its mentee, or any admin.
 // Returns the relation (with participant ids/names) when allowed, else null.
-export async function getThreadIfAllowed(user: SessionUser, relationId: string) {
+// `relationId` is nullable since #768 made Message.relationId nullable: a
+// conversation-only message has no mentorship thread, so it is never reachable
+// through this (legacy) path — fail closed. Conversation-layer authorization
+// lives in src/lib/conversations.ts.
+export async function getThreadIfAllowed(user: SessionUser, relationId: string | null | undefined) {
+  if (!relationId) return null;
   const rel = await prisma.mentorshipRelation.findUnique({
     where: { id: relationId },
     include: {

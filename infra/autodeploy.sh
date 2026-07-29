@@ -4,6 +4,13 @@
 # (#636). Polls origin/main; when it moves, runs infra/deploy-prod.sh. No open
 # port, no listener process, no security surface — just git + the deploy script.
 #
+# ⚠️ DO NOT LEAVE THIS ON A CRON. deploy-prod.yml already follows main, and this
+# path BUILDS THE IMAGE ON THE SERVER — the exact load that was moved back to
+# GitHub-hosted runners on 2026-07-29 (the workflow pulls a prebuilt image
+# instead). Keep it for a break-glass deploy when Actions or the runner is
+# unavailable. To drop an existing entry:
+#   crontab -l | grep -v autodeploy.sh | crontab -
+#
 # ONE-SHOT (for cron/systemd-timer — the recommended way):
 #   */5 * * * *  cd /path/to/Internship && ENV_FILE=/etc/internship-crm/prod.env ./infra/autodeploy.sh
 #
@@ -33,7 +40,8 @@ deploy_if_changed() {
   fi
   echo "$(date -u +%FT%TZ) main moved ${local_sha:0:7} → ${remote_sha:0:7}; deploying"
   # deploy-prod.sh does its own git reset --hard to origin/main.
-  ./infra/deploy-prod.sh
+  # FORWARD_ONLY=1: never regress prod to an older commit (see deploy-prod.sh).
+  FORWARD_ONLY=1 ./infra/deploy-prod.sh
 }
 
 # Prevent overlapping runs (cron every 5 min while a build takes longer).

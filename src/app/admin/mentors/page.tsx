@@ -110,6 +110,7 @@ export default function MentorsPage() {
 
       <input
         type="search"
+        data-testid="mentors-search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder={t.mentors.searchPlaceholder}

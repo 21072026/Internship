@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 import { relativeTime } from '@/lib/relativeTime';
+import { StartConversationPicker } from '@/components/StartConversationPicker';
 
 // Unified message inbox for every role: lists the viewer's conversation
 // threads (mentor side or mentee side) with the other participant, a preview
@@ -20,6 +21,35 @@ export default async function MessagesInboxPage() {
   const supportUnread = await prisma.supportMessage.count({
     where: { ticket: { requesterId: me }, senderId: { not: me }, readAt: null },
   });
+
+  // DIRECT conversations (#769/#770) the viewer takes part in. Listed alongside
+  // mentorship threads so a project DM shows up in the same inbox.
+  const conversations = await prisma.conversation.findMany({
+    where: { type: 'DIRECT', participants: { some: { userId: me } } },
+    select: {
+      id: true,
+      participants: { select: { userId: true, user: { select: { fullName: true } } } },
+      messages: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { body: true, createdAt: true, senderId: true },
+      },
+      _count: { select: { messages: { where: { readAt: null, senderId: { not: me } } } } },
+    },
+  });
+
+  // Project co-members the viewer may start a DM with. Membership is the
+  // permission (see canMessage in src/lib/conversations.ts), so this list is
+  // derived on the server — the client never decides who is messageable.
+  const myProjectIds = (
+    await prisma.projectMember.findMany({ where: { userId: me }, select: { projectId: true } })
+  ).map((m) => m.projectId);
+  const coMemberRows = myProjectIds.length
+    ? await prisma.projectMember.findMany({
+        where: { projectId: { in: myProjectIds }, userId: { not: me } },
+        select: { userId: true, user: { select: { fullName: true } }, project: { select: { name: true } } },
+      })
+    : [];
 
   const relations = await prisma.mentorshipRelation.findMany({
     where: { OR: [{ mentorId: me }, { menteeId: me }] },
@@ -37,18 +67,42 @@ export default async function MessagesInboxPage() {
     },
   });
 
-  // Sort by latest activity (most recent message first; then start order).
-  const threads = relations
-    .map((r) => {
-      const last = r.messages[0] ?? null;
-      const otherName = (r.mentorId === me ? r.mentee?.fullName : r.mentor?.fullName) ?? '—';
-      return { id: r.id, otherName, last, unread: r._count.messages };
-    })
-    .sort((a, b) => {
-      const at = a.last?.createdAt?.getTime() ?? 0;
-      const bt = b.last?.createdAt?.getTime() ?? 0;
-      return bt - at;
-    });
+  // Mentorship threads and conversations share one shape, so they sort and
+  // render as a single list; `href` is what distinguishes the two routes.
+  const threads = [
+    ...relations.map((r) => ({
+      key: `rel-${r.id}`,
+      href: `/messages/${r.id}`,
+      otherName: (r.mentorId === me ? r.mentee?.fullName : r.mentor?.fullName) ?? '—',
+      last: r.messages[0] ?? null,
+      unread: r._count.messages,
+    })),
+    ...conversations.map((c) => ({
+      key: `conv-${c.id}`,
+      href: `/messages/c/${c.id}`,
+      otherName: c.participants.find((p) => p.userId !== me)?.user.fullName ?? '—',
+      last: c.messages[0] ?? null,
+      unread: c._count.messages,
+    })),
+  ].sort((a, b) => {
+    const at = a.last?.createdAt?.getTime() ?? 0;
+    const bt = b.last?.createdAt?.getTime() ?? 0;
+    return bt - at;
+  });
+
+  // Offer only people we don't already have a conversation with — the existing
+  // ones are in the list above. Deduped, since two shared projects would
+  // otherwise surface the same person twice.
+  const existingDmPartnerIds = new Set(
+    conversations.flatMap((c) => c.participants.map((p) => p.userId)).filter((id) => id !== me),
+  );
+  const candidates = [
+    ...new Map(
+      coMemberRows
+        .filter((row) => !existingDmPartnerIds.has(row.userId))
+        .map((row) => [row.userId, { id: row.userId, fullName: row.user.fullName, projectName: row.project.name }]),
+    ).values(),
+  ].sort((a, b) => a.fullName.localeCompare(b.fullName));
 
   return (
     <div>
@@ -87,8 +141,8 @@ export default async function MessagesInboxPage() {
                 : t.messages.empty;
               return (
                 <Link
-                  key={th.id}
-                  href={`/messages/${th.id}`}
+                  key={th.key}
+                  href={th.href}
                   className="flex items-center gap-3 py-3 hover:bg-gray-50 rounded-lg px-2"
                 >
                   <div className="w-9 h-9 shrink-0 rounded-full bg-blue-100 flex items-center justify-center">
@@ -115,6 +169,7 @@ export default async function MessagesInboxPage() {
             })}
           </div>
         )}
+        <StartConversationPicker candidates={candidates} />
       </Card>
     </div>
   );
