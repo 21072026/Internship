@@ -56,6 +56,9 @@ export default async function HomePage() {
               <BetaBadge className="flex-shrink-0" />
             </div>
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+              <Link href="/demo" className="hidden sm:inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-semibold transition-colors whitespace-nowrap text-sm sm:text-base bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200/60">
+                <span>🎮 Canlı Demo</span>
+              </Link>
               <Link href="/features" className="hidden sm:inline text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
                 {t.featureCatalog.allFeatures}
               </Link>
@@ -84,6 +87,9 @@ export default async function HomePage() {
           </h1>
           <p className="text-lg sm:text-xl text-gray-600 mb-10 max-w-2xl mx-auto">{L.heroSubtitle}</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/demo" className="inline-flex items-center justify-center gap-2 bg-slate-900 text-white px-8 py-4 rounded-xl font-semibold hover:bg-slate-800 transition-all text-lg shadow-lg">
+              <span>🎮 Canlı Demoyu Dene</span>
+            </Link>
             <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-blue-700 transition-colors text-lg">
               {L.getStarted} <ArrowRight className="h-5 w-5" />
             </Link>

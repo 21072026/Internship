@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { GraduationCap } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
@@ -7,6 +8,36 @@ import { ProfileViewPing } from '@/components/ProfileViewPing';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PublicContactForm } from '@/components/PublicContactForm';
+import { SocialShareButtons } from '@/components/SocialShareButtons';
+
+export async function generateMetadata({ params }: { params: Promise<{ userId: string }> }): Promise<Metadata> {
+  const { userId } = await params;
+  const user = await prisma.user.findFirst({
+    where: { id: userId, publicProfile: true },
+    select: { fullName: true, displayName: true, targetPosition: true, bio: true },
+  });
+
+  if (!user) return { title: 'Profile Not Found - InternshipCRM' };
+
+  const name = user.displayName || user.fullName;
+  const title = `${name} ${user.targetPosition ? `(${user.targetPosition})` : ''} - Talent Profile | InternshipCRM`;
+  const description = user.bio ? user.bio.slice(0, 150) : `Check out ${name}'s candidate profile on InternshipCRM.`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'profile',
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description,
+    },
+  };
+}
 
 // Public, PII-free profile. Only fields safe to share are selected — never
 // email, phone, whatsapp, or birth date.
@@ -127,6 +158,8 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
               ))}
             </div>
           )}
+
+          <SocialShareButtons headline={headline} targetPosition={user.targetPosition} />
 
           <PublicContactForm userId={userId} />
 
