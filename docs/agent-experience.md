@@ -1053,3 +1053,73 @@ denedim, her seferinde tazE bir çakışma. Doğru hamle: çakışmayı çöz, p
 **auto-merge (squash) aç** — gate yeşile döndüğü anda kendisi girer. Ayrıca
 `topic` check'i self-hosted; runner düşükken sonsuza kadar `queued` kalır, bu
 yüzden onu beklemeyin (zorunlu check değil).
+
+---
+
+## 2026-07-28 — Uygulamayı gerçek kullanıcı gözüyle gezip backlog doldurma (SO/PSO turu)
+
+**Docker olmayan Claude Code web container'ında yerel DB: MariaDB'yi apt ile kur.**
+`docker-compose.dev.yml` bu ortamda çalışmıyor (docker daemon yok). Çalışan yol:
+`apt-get update && apt-get install -y mariadb-server` → `mkdir -p /var/run/mysqld &&
+chmod 777 /var/run/mysqld` (aksi hâlde "Bind on unix socket: No such file or
+directory") → `nohup mariadbd --user=root --datadir=/var/lib/mysql --port=3306 &`.
+MariaDB'de `root` unix_socket ile doğrulanır, Prisma TCP ile bağlandığı için
+"Access denied for user 'root'@'localhost'" alırsınız — ayrı bir kullanıcı açın:
+`CREATE USER 'crm'@'127.0.0.1' IDENTIFIED BY 'crm'; GRANT ALL …`. Sonrası standart:
+`.env` → `prisma db push` → `prisma db seed` → `npm run seed:demo`.
+`apt-get install` ilk denemede 404 verirse önce `apt-get update` çalıştırın.
+
+**Playwright ile tur atarken hidrasyonu bekleyin.** `page.goto` + hemen
+`fill/click` yaparsanız form React hidrasyonundan önce **native GET submit**
+ediyor: `GET /auth/signin?email=…&password=…` → giriş sessizce başarısız, tüm tur
+anonim olarak dönüyor (ve fark etmek zor, çünkü sayfalar 200 dönüyor). `waitUntil:
+'load'` + ~3 sn bekleme + `getByRole('button')` ile tıklama sorunu çözdü. Turun
+gerçekten giriş yaptığını her rol için loglayın (`--- mentor logged in -> /mentor`).
+
+**Ekran turunda "2 saniye" ile "9 saniye" farklı ürünler gösteriyor.** Client
+bileşenleri boş dizi ile başlayıp `useEffect`'te veri çektiği için ilk saniyelerde
+**yanlış boş durum** görünüyor ("Henüz atanmış mentee yok" — oysa 3 mentee var).
+Screenshot'ı 2,5 sn'de alırsanız bunu bug sanır, 9 sn'de alırsanız hiç görmezsiniz.
+Her iki anı da yakalayın: bu, gerçek bir UX bulgusu (#891) ve tek başına en çok
+"bu uygulama veri mi kaybetti?" hissi yaratan sınıf.
+
+**Chromium yolu:** `/opt/pw-browsers/chromium/chrome-linux/chrome` yok;
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome` var. `executablePath` ile
+doğrudan verin, `playwright install` çalıştırmayın.
+
+**MCP `sub_issue_write` yanıtı ebeveyn issue'nun tüm gövdesini döndürüyor.**
+Uzun gövdeli epic/story'lerde her bağlama çağrısı binlerce token; 38 task'ı
+bağlamak bağlam bütçesinin ciddi kısmını yiyor. Önce **tüm** issue'ları oluşturup
+(create yanıtı kısa: id + url), child id → parent number eşlemesini bir dosyaya
+yazın, bağlamayı en sona bırakın — böylece bağlam özetlenirse eşleme kaybolmaz.
+
+**Hiyerarşiyi bitirdikten sonra kökü de doğrulayın: epic'ler #736 `[_ROOT_]`
+altına bağlanır.** Task→Story ve Story→Epic bağlarını kurup "ağaç tamam" dedim;
+kullanıcı "epic'ler de root'a bağlandı mı?" diye sorunca 5 epic'in de parentsız
+kaldığını gördüm. Bu repoda tek bir kök issue var (#736) ve ürün epic'leri
+(#417, #478, #517, #714, #717, #796–#805) ona bağlı — board'un *Group by →
+Parent issue* görünümü tek ağaç göstersin diye. `backlog` skill'i bunun tersini
+söylüyordu ("never a mega-parent; No Parent holds the top-level epics"); skill'i
+gerçeğe göre düzelttim. Ders: **oluşturma bittiğinde `issue_read`
+(`get_sub_issues`) ile #736'yı ve her epic'i okuyup her kalemin tam olarak bir
+ebeveyni olduğunu doğrulayın**, raporu ondan sonra yazın. (Not: geçen seansın 8
+güvenlik epic'i #814–#829 hâlâ root'a bağlı değil.)
+
+**Skill dosyası ile repo gerçeği çeliştiğinde repoyu kaynak alın ve skill'i
+düzeltin.** Yanlış talimat sessizce yanlış çıktı üretiyor ve bir sonraki oturum
+aynı hatayı tekrarlıyor; düzeltme maliyeti iki satır.
+
+**Aynı gün paralel oturumlar aynı dosyanın sonuna yazıyor: `agent-experience.md`
+çatışması normaldir, çözümü "ikisini de tut".** Bu PR'da `origin/main` iki kez
+ilerledi ve iki kez aynı yerde çatıştı (bir oturum deploy kaydı, biri HR/PO turu
+kaydı ekledi). Doğru çözüm birini seçmek değil: main'in bölümü önce, kendi
+bölümün sonra, aralarına `---`. Merge'den önce `git fetch origin main` +
+`git merge origin/main` yapıp çatışmayı **kendiniz** çözün; PR'ı merge etmeye
+çalışıp 405 `Pull Request has merge conflicts` almak zaman kaybı.
+
+**"Şu kalem hâlâ eksik" gibi durum notlarını yazmadan önce API'den doğrulayın —
+paralel oturum düzeltmiş olabilir.** Skill'e "#814–#829 root'a bağlı değil" diye
+yazdım; merge öncesi kontrolde başka bir oturumun **#951 `Initiative` şemsiyesi**
+açıp 8 epic'i ona bağladığı çıktı (ama #951'in kendisi parentsız → board'da iki
+kök). Not yanlış yayınlanacaktı. Kural: hiyerarşi/durum iddiasını `issue_read`
+(`get`/`get_parent`/`get_sub_issues`) ile teyit et, sonra yaz.
