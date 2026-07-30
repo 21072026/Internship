@@ -36,7 +36,9 @@ test('candidates can be filtered by pipeline stage via ?status=', async ({ page 
     // Filtered candidate list (as the dashboard pipeline bar links)
     await page.goto('/admin/candidates?status=HIRED_660');
     await page.waitForTimeout(1200);
-    await expect(page.getByText('660 · Hired')).toBeVisible(); // filter chip
+    // Target the chip by testid: its label also renders as an <option> in the
+    // "All stages" select, so matching on text is a strict-mode violation.
+    await expect(page.getByTestId('candidates-status-filter-chip')).toContainText('660 · Hired');
     await expect(page.getByText('ZZ InStage Mentee')).toBeVisible();
     await expect(page.getByText('ZZ OutStage Mentee')).toHaveCount(0);
 

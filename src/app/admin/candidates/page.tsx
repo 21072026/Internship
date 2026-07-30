@@ -217,7 +217,7 @@ export default function CandidatesPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.candidates.title}</h1>
         <p className="text-gray-500 mt-1">{t.candidates.subtitle}</p>
         {statusFilter && (
-          <div className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm text-blue-700">
+          <div data-testid="candidates-status-filter-chip" className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm text-blue-700">
             {label(statusFilter)}
             <button
               type="button"

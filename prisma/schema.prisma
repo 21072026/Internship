@@ -462,7 +462,9 @@ model Notification {
   // Long-form text (e.g. a broadcast announcement fanned out to every user) —
   // TEXT, not the default VARCHAR(191), so long messages aren't truncated/rejected.
   text      String   @db.Text
-  link      String?
+  // VarChar(500) to match the 500-char cap the announcement API validates; the
+  // VARCHAR(191) default rejected long tracking URLs with an unhandled 500.
+  link      String?  @db.VarChar(500)
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -479,7 +481,8 @@ model Announcement {
   // Broadcast body — TEXT, not the default VARCHAR(191), so admins can publish
   // long-form announcements (release notes, articles) without hitting a limit.
   text           String   @db.Text
-  link           String?
+  // VarChar(500) to match the API's 500-char cap — see Notification.link.
+  link           String?  @db.VarChar(500)
   sentById       String
   recipientCount Int
   emailedCount   Int      @default(0)
@@ -549,7 +552,8 @@ model Company {
   org          Organization? @relation(fields: [orgId], references: [id])
   id           String        @id @default(cuid())
   name         String
-  description  String?
+  // TEXT: the company form offers 2 000 characters, far past VARCHAR(191).
+  description  String?       @db.Text
   contactEmail String?
   industry     String?
   logoUrl      String?
@@ -713,7 +717,8 @@ model CompanyInterest {
   companyId String
   menteeId  String
   status    InterestStatus
-  note      String?
+  // TEXT: the shortlist API accepts 1 000 characters, past VARCHAR(191).
+  note      String?        @db.Text
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
@@ -1056,7 +1061,10 @@ model InteractionLog {
   // Optional short topic/subject line — the free-form `notes` field carries
   // the detail; this is what a filtered list scans/displays at a glance.
   subject    String?
-  notes      String
+  // TEXT, not the default VARCHAR(191): a meeting note is prose and overflowed
+  // the 191-char default after ~three sentences, which surfaced as an opaque
+  // 500 (Prisma P2000) *after* the mentor's email had already been sent.
+  notes      String          @db.Text
   type       InteractionType
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)

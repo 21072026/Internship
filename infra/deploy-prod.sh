@@ -122,13 +122,57 @@ log "Deploying ${GIT_SHA:0:7} — $(node -p "require('./package.json').version" 
 # leave FORWARD_ONLY unset so they can still deploy arbitrary/older PR refs.
 # Set FORCE=1 for a deliberate rollback.
 STATE_FILE="${DEPLOY_STATE_FILE:-$(dirname "$ENV_FILE")/.${CONTAINER}.deployed-sha}"
-if [ "${FORWARD_ONLY:-0}" = "1" ] && [ "${FORCE:-0}" != "1" ] && [ -f "$STATE_FILE" ]; then
-  LAST_SHA="$(cat "$STATE_FILE" 2>/dev/null || true)"
-  if [ -n "$LAST_SHA" ] && [ "$LAST_SHA" != "$GIT_SHA" ] \
-     && git cat-file -e "${LAST_SHA}^{commit}" 2>/dev/null \
-     && git merge-base --is-ancestor "$GIT_SHA" "$LAST_SHA" 2>/dev/null; then
-    log "SKIP: $(git rev-parse --short "$GIT_SHA") is older than the live commit ${LAST_SHA:0:7} — refusing to regress $CONTAINER (set FORCE=1 to roll back deliberately)."
-    exit 0
+
+# Emit a warning that is actually visible in the Actions UI, not just buried in a
+# green job log. A refused or skipped prod deploy used to be indistinguishable
+# from a successful one.
+warn() {
+  log "WARNING: $*"
+  # GitHub Actions workflow command (no-op outside CI).
+  printf '::warning::%s\n' "$*"
+  [ -n "${GITHUB_STEP_SUMMARY:-}" ] && printf '### ⚠️ %s\n' "$*" >> "$GITHUB_STEP_SUMMARY"
+  return 0
+}
+
+# The forward-only baseline: prefer what the container actually reports at
+# /api/health over the state file. The file is only written by THIS script, so a
+# deploy from any other path (the legacy deploy.yml over SSH, a manual
+# `docker run`) leaves it stale and the guard then reasons about a commit that
+# has not been live for weeks.
+LIVE_SHA="$(curl -fsS --max-time 10 "http://127.0.0.1:$PORT/api/health" 2>/dev/null \
+            | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+if [ "${FORWARD_ONLY:-0}" = "1" ] && [ "${FORCE:-0}" != "1" ]; then
+  LAST_SHA="$LIVE_SHA"
+  if [ -z "$LAST_SHA" ] && [ -f "$STATE_FILE" ]; then
+    LAST_SHA="$(cat "$STATE_FILE" 2>/dev/null || true)"
+  fi
+  if [ -n "$LAST_SHA" ] && [ "${LAST_SHA:0:7}" != "${GIT_SHA:0:7}" ] && [ "$LAST_SHA" != dev ]; then
+    # The ancestry questions below need real history. actions/checkout defaults
+    # to fetch-depth 1, and on a shallow clone `cat-file`/`merge-base` fail —
+    # which used to make the whole guard fail OPEN, silently allowing exactly
+    # the regression it exists to prevent. Deepen before asking.
+    if ! git cat-file -e "${LAST_SHA}^{commit}" 2>/dev/null; then
+      git fetch --quiet --unshallow origin 2>/dev/null \
+        || git fetch --quiet --deepen=500 origin 2>/dev/null || true
+    fi
+    if ! git cat-file -e "${LAST_SHA}^{commit}" 2>/dev/null; then
+      # Fail CLOSED: we cannot prove this is a forward move, so refuse loudly
+      # rather than deploy and hope. FORCE=1 is the deliberate override.
+      warn "$CONTAINER: cannot resolve the live commit ${LAST_SHA:0:7} in this clone, so a forward-only check is impossible. Refusing to deploy ${GIT_SHA:0:7} (set FORCE=1 to override)."
+      exit 1
+    fi
+    if git merge-base --is-ancestor "$GIT_SHA" "$LAST_SHA" 2>/dev/null; then
+      warn "$CONTAINER: refusing to regress — ${GIT_SHA:0:7} is OLDER than the live commit ${LAST_SHA:0:7} (set FORCE=1 to roll back deliberately)."
+      exit 0
+    fi
+    if ! git merge-base --is-ancestor "$LAST_SHA" "$GIT_SHA" 2>/dev/null; then
+      # Neither an ancestor nor a descendant: the live container is on a commit
+      # that is not on this branch at all (e.g. a dispatch of a feature branch).
+      # Left alone this deadlocks — the drift gate wants to deploy, this guard
+      # refuses, and every 6-hourly run reports SUCCESS while prod stays off
+      # main forever. Deploying forward is correct here; just make it visible.
+      warn "$CONTAINER: live commit ${LAST_SHA:0:7} is not an ancestor of ${GIT_SHA:0:7} — prod was off-branch. Deploying forward onto ${GIT_SHA:0:7}."
+    fi
   fi
 fi
 
@@ -199,10 +243,18 @@ docker run -d \
   "$IMAGE"
 
 # ── 6. Health check + prune ──────────────────────────────────────────────────
-log "Health check http://127.0.0.1:$PORT"
+# Probe /api/health?db=1 rather than the root page: the root answers 200 from a
+# container with a broken DATABASE_URL, and it says nothing about WHICH build is
+# running. Both matter, because deploy-prod.yml's drift gate keys its
+# "already current — nothing to deploy" decision off this same endpoint's `sha`.
+# A container serving a stale image that happens to report the right sha would
+# make the gate skip every future build.
+log "Health check http://127.0.0.1:$PORT/api/health?db=1"
 ok=0
+health=''
 for i in $(seq 1 30); do
-  if curl -fsS -o /dev/null "http://127.0.0.1:$PORT"; then ok=1; break; fi
+  health="$(curl -fsS --max-time 10 "http://127.0.0.1:$PORT/api/health?db=1" 2>/dev/null || true)"
+  if [ -n "$health" ]; then ok=1; break; fi
   sleep 2
 done
 if [ "$ok" -ne 1 ]; then
@@ -210,6 +262,31 @@ if [ "$ok" -ne 1 ]; then
   docker logs --tail 40 "$CONTAINER" >&2 || true
   exit 1
 fi
+
+health_field() { printf '%s' "$health" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"; }
+SERVED_STATUS="$(health_field status)"
+SERVED_SHA="$(health_field sha)"
+SERVED_DB="$(health_field db)"
+
+if [ "$SERVED_DB" = error ]; then
+  echo "ERROR: $CONTAINER is up but cannot reach the database (health: $health)." >&2
+  docker logs --tail 40 "$CONTAINER" >&2 || true
+  exit 1
+fi
+if [ "$SERVED_STATUS" != ok ]; then
+  echo "ERROR: $CONTAINER reported status '$SERVED_STATUS' (health: $health)." >&2
+  exit 1
+fi
+# GIT_SHA is baked into the image at build time and truncated to 7 in
+# src/lib/version.ts. 'dev' means the --build-arg was lost, which would also make
+# the drift gate rebuild on every tick forever — treat it as a failure, not drift.
+if [ "$SERVED_SHA" != "${GIT_SHA:0:7}" ]; then
+  echo "ERROR: $CONTAINER is serving sha '$SERVED_SHA' but ${GIT_SHA:0:7} was just built and deployed." >&2
+  echo "       A stale image is live and the drift gate would treat it as current. Not recording this deploy." >&2
+  docker logs --tail 40 "$CONTAINER" >&2 || true
+  exit 1
+fi
+log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
 
 # Record the commit now live in this container so the next deploy can enforce
 # forward-only progress (see the guard above).

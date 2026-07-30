@@ -3,10 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const updateInteractionSchema = z.object({
   date: z.string().optional(),
-  notes: z.string().min(1).optional(),
+  notes: z.string().min(1).max(TEXT_LIMITS.interactionNotes).optional(),
   type: z.enum(['Meeting', 'Feedback', 'Email']).optional(),
 });
 
