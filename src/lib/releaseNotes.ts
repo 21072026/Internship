@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.28.0-beta',
+    version: '0.28.2-beta',
     date: '2026-07-30',
     highlights: {
       en: [
@@ -27,6 +27,42 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Eine neue Benachrichtigungen-Seite zeigt deinen kompletten Benachrichtigungsverlauf, nicht nur die letzten 20 in der Glocke — filtere nach gelesen/ungelesen oder nach Typ, blättere durch ältere Einträge und sieh genau, wie viele du hast. Öffne sie über den neuen Link "Alle anzeigen" am unteren Rand des Glocken-Menüs.',
         'Dein Mentee-/Mentor-Dashboard hat jetzt eine Ankündigungen-Karte mit den neuesten Updates der Admins sowie eine Seite für den vollständigen Verlauf — getrennt von deinen persönlichen Benachrichtigungen.',
+      ],
+    },
+  },
+  {
+    version: '0.28.1-beta',
+    date: '2026-07-29',
+    highlights: {
+      en: [
+        'Reliability fix in the data-isolation layer for multi-organization setups: a rare code path could run a database query without the organization filter attached. It is now guaranteed to be applied in every case. Single-organization installations are unaffected.',
+      ],
+      tr: [
+        'Çoklu-kuruluş kurulumları için veri izolasyonu katmanında güvenilirlik düzeltmesi: nadir bir kod yolu, veritabanı sorgusunu kuruluş filtresi eklenmeden çalıştırabiliyordu. Artık filtrenin her durumda uygulanması garanti altında. Tek kuruluşlu kurulumlar bu durumdan etkilenmiyordu.',
+      ],
+      de: [
+        'Zuverlässigkeitskorrektur in der Datenisolationsschicht für Installationen mit mehreren Organisationen: Ein seltener Codepfad konnte eine Datenbankabfrage ohne den Organisationsfilter ausführen. Der Filter wird jetzt garantiert in jedem Fall angewendet. Installationen mit nur einer Organisation waren nicht betroffen.',
+      ],
+    },
+  },
+  {
+    version: '0.28.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'The Announcements box now has the live character counter too, and stops you at the 20 000-character limit as you type — instead of accepting a long message and then failing with an untranslated "Validation failed" after you pressed Broadcast.',
+        'Long text now saves everywhere it said it would. Meeting notes, company descriptions and shortlist notes were being cut off by a database limit far smaller than the counter promised, so a normal paragraph could fail to save — in the case of a bulk mentor email, only after the email had already gone out. Every one of those fields now genuinely holds what the counter shows.',
+        'Fixed a company description box that could not be typed into at all, and a counter that sat on top of the resize handle so a textarea could not be dragged bigger.',
+      ],
+      tr: [
+        'Duyurular kutusunda da artık canlı karakter sayacı var ve yazarken 20 000 karakter sınırında sizi durduruyor — uzun bir mesajı kabul edip, siz Yayınla\'ya bastıktan sonra çevrilmemiş bir "Validation failed" hatasıyla başarısız olmak yerine.',
+        'Uzun metinler artık söz verilen her yerde kaydediliyor. Görüşme notları, şirket açıklamaları ve kısa liste notları, sayacın belirttiğinden çok daha küçük bir veritabanı sınırına takılıyordu; yani normal uzunlukta bir paragraf kaydedilemiyordu — toplu mentor e-postasında ise ancak e-posta gönderildikten sonra. Bu alanların hepsi artık sayacın gösterdiği kadarını gerçekten tutuyor.',
+        'Hiç yazı yazılamayan şirket açıklaması kutusu düzeltildi; ayrıca yeniden boyutlandırma tutamacının üstüne binen ve metin alanının büyütülmesini engelleyen sayaç sorunu giderildi.',
+      ],
+      de: [
+        'Auch das Ankündigungsfeld hat jetzt den Live-Zeichenzähler und stoppt dich beim Tippen an der Grenze von 20 000 Zeichen — statt eine lange Nachricht anzunehmen und nach dem Senden mit einem unübersetzten „Validation failed" zu scheitern.',
+        'Lange Texte werden jetzt überall dort gespeichert, wo es versprochen war. Gesprächsnotizen, Firmenbeschreibungen und Shortlist-Notizen liefen gegen ein Datenbanklimit, das weit kleiner war als der Zähler anzeigte — ein normaler Absatz konnte also nicht gespeichert werden, bei einer Mentor-Sammelmail sogar erst nachdem die E-Mail schon raus war. Alle diese Felder halten jetzt wirklich so viel, wie der Zähler anzeigt.',
+        'Ein Firmenbeschreibungsfeld, in das man überhaupt nicht schreiben konnte, ist behoben — ebenso ein Zähler, der auf dem Anfasser zum Vergrößern lag, sodass sich das Textfeld nicht ziehen ließ.',
       ],
     },
   },
@@ -111,6 +147,21 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Die Kandidatenliste blendet deaktivierte Kandidaten jetzt standardmäßig aus und hält sie in einer separaten Archiv-Ansicht — mit einem Klick zwischen Aktiv und Archiviert wechseln. Exporte folgen der aktuellen Ansicht, und du kannst archivierte Kandidaten per Sammelaktion wieder aktivieren.',
+      ],
+    },
+  },
+  {
+    version: '0.25.12-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: [
+        'Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
+      ],
+      tr: [
+        'Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
+      ],
+      de: [
+        'Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
       ],
     },
   },

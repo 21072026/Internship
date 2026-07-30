@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, gotoSettled } from './helpers/auth';
 
 // Multi-tenancy (#544): super-admin Organizations screen — create a tenant and
 // see it listed with per-tenant counts. Phase 1 is additive (orgId nullable,
@@ -23,18 +24,19 @@ test('admin creates an organization and it appears in the list', async ({ page }
   createdSlugs.push(orgSlug);
 
   try {
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', adminEmail);
-    await page.fill('input[type="password"]', 'AdminPass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
 
-    await page.goto('/admin/organizations');
-    await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
+    await gotoSettled(page, '/admin/organizations');
+    // exact: the list card's title renders "Organizations (N)" and would also match.
+    await expect(page.getByRole('heading', { name: 'Organizations', exact: true })).toBeVisible();
 
     // Create via the form.
-    await page.getByLabel('Name', { exact: true }).fill(orgName);
-    await page.getByLabel('Slug', { exact: true }).fill(orgSlug);
+    // `Input` renders the required marker inside the <label>, so this label's
+    // text is literally "Name*" — getByLabel matches label text content, so an
+    // exact 'Name' never matches. A plain non-exact 'Name' would also hit
+    // "Brand name", hence the anchored regex.
+    await page.getByLabel(/^Name\*?$/).fill(orgName);
+    await page.getByLabel(/^Slug\*?$/).fill(orgSlug);
     await page.getByRole('button', { name: 'Create' }).click();
 
     // New org row shows up with its slug.

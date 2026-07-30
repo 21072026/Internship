@@ -4,10 +4,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const updateCompanySchema = z.object({
   name: z.string().min(1).optional(),
-  description: z.string().optional(),
+  description: z.string().max(TEXT_LIMITS.companyDescription).optional(),
   contactEmail: z.string().email().optional().or(z.literal('')),
   industry: z.string().optional(),
   logoUrl: z.string().url().or(z.literal('')).optional(),
