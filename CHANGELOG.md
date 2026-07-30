@@ -387,6 +387,13 @@ No version bump: test and `data-testid` changes only, no user-visible behaviour 
   match the visible view). Bulk activate from the archive restores candidates to
   the active list.
 
+## [0.25.12] - 2026-07-24
+
+### Added
+- **Improved goal management (#785).** Goals can now be sorted newest or oldest
+  first and edited inline. Completed goals are kept separate in a collapsible
+  archive, where they can still be reopened or deleted.
+
 ## [0.25.11] - 2026-07-24
 
 ### Added

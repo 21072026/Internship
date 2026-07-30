@@ -133,6 +133,21 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
+    version: '0.25.12-beta',
+    date: '2026-07-24',
+    highlights: {
+      en: [
+        'Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
+      ],
+      tr: [
+        'Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
+      ],
+      de: [
+        'Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
+      ],
+    },
+  },
+  {
     version: '0.25.11-beta',
     date: '2026-07-24',
     highlights: {
