@@ -9,6 +9,7 @@ import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
+import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -318,6 +319,10 @@ export default async function PortalDashboard() {
             </div>
           )}
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <AnnouncementsCard />
       </div>
 
       {activeRelation && (

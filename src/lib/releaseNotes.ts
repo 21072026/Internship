@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.28.0-beta',
+    date: '2026-07-30',
+    highlights: {
+      en: [
+        'A new Notifications page shows your full notification history, not just the last 20 in the bell — filter by read/unread or by type, page through older ones, and see exactly how many you have. Open it from the new "View all" link at the bottom of the bell dropdown.',
+        'Your mentee/mentor dashboard now has an Announcements card with the latest updates from admins, and a page to browse the full history — separate from your personal notifications.',
+      ],
+      tr: [
+        'Yeni Bildirimler sayfası, zil menüsündeki son 20 bildirimle sınırlı kalmadan tüm bildirim geçmişinizi gösterir — okundu/okunmadı veya türe göre filtreleyin, eski bildirimlerde sayfalar arasında gezin ve toplam kaç bildiriminiz olduğunu görün. Zil menüsünün altındaki yeni "Tümünü gör" bağlantısından açabilirsiniz.',
+        'Menti/mentor panonuzda artık yöneticilerden gelen son güncellemeleri gösteren bir Duyurular kartı var, ayrıca tüm duyuru geçmişini görebileceğiniz — kişisel bildirimlerinizden ayrı — bir sayfa da eklendi.',
+      ],
+      de: [
+        'Eine neue Benachrichtigungen-Seite zeigt deinen kompletten Benachrichtigungsverlauf, nicht nur die letzten 20 in der Glocke — filtere nach gelesen/ungelesen oder nach Typ, blättere durch ältere Einträge und sieh genau, wie viele du hast. Öffne sie über den neuen Link "Alle anzeigen" am unteren Rand des Glocken-Menüs.',
+        'Dein Mentee-/Mentor-Dashboard hat jetzt eine Ankündigungen-Karte mit den neuesten Updates der Admins sowie eine Seite für den vollständigen Verlauf — getrennt von deinen persönlichen Benachrichtigungen.',
+      ],
+    },
+  },
+  {
     version: '0.27.0-beta',
     date: '2026-07-28',
     highlights: {

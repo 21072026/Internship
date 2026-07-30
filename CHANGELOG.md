@@ -10,6 +10,26 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.28.0-beta] - 2026-07-30
+
+### Added
+- **Notification history page** (#919) at `/notifications`, reachable from a new "View all"
+  link in the bell dropdown. Every request is scoped to the signed-in user's own
+  `Notification` rows server-side; supports a read/unread status filter, a type filter
+  (populated from the viewer's own notification types), and pagination — all backed by
+  optional `page`/`pageSize`/`read`/`type` query params added to `GET /api/notifications`.
+  The bell's existing no-param call (and its mark-as-read behavior) is unchanged.
+  Notifications render as spaced cards with a per-type icon, a clearly highlighted unread
+  state (tinted background, bold text, dot) versus a faded read state, a total count badge,
+  a "1–20 / 48" range readout next to the pager, and a "Clear filters" action. Every
+  clickable row/button meets the WCAG 2.2 44×44px minimum target size.
+- **Announcements card** (#920) on the mentee and mentor dashboards, showing the most
+  recent admin broadcasts. Reads directly from the `Announcement` table via a new
+  `GET /api/announcements` (any authenticated user — every broadcast already targets all
+  active users, so there is no per-role/org filtering to apply) rather than the
+  notification bell, with its own "View all" link to a new shared `/announcements` history
+  page. The admin composer at `/admin/announcements` is unchanged.
+
 ## [0.27.0-beta] - 2026-07-28
 
 ### Added
