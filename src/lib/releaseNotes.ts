@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.27.1-beta',
+    date: '2026-07-30',
+    highlights: {
+      en: [
+        'Every project now has a shared group chat for its owners, mentors and mentees. Open Messages from the chat icon in the header, then choose the row marked "Project group" next to your project name. The group supports the same attachments, reactions and notification preferences as your other conversations, and membership updates automatically when people join or leave the project.',
+      ],
+      tr: [
+        'Artık her projenin owner, mentor ve mentee üyeleri için ortak bir grup sohbeti var. Üst menüdeki sohbet simgesinden Mesajlar’ı açıp proje adının yanında "Proje grubu" yazan satırı seç. Grup; diğer sohbetlerinle aynı dosya eki, tepki ve bildirim tercihlerini destekliyor, katılımcılar da projeye giren veya projeden ayrılan üyelere göre otomatik güncelleniyor.',
+      ],
+      de: [
+        'Jedes Projekt hat jetzt einen gemeinsamen Gruppenchat für Owner, Mentoren und Mentees. Öffne Nachrichten über das Chat-Symbol in der Kopfzeile und wähle die mit „Projektgruppe“ gekennzeichnete Zeile neben deinem Projektnamen. Die Gruppe unterstützt dieselben Anhänge, Reaktionen und Benachrichtigungseinstellungen wie deine anderen Unterhaltungen; die Teilnehmer werden automatisch aktualisiert, wenn jemand dem Projekt beitritt oder es verlässt.',
+      ],
+    },
+  },
+  {
     version: '0.27.0-beta',
     date: '2026-07-28',
     highlights: {

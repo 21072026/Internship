@@ -10,6 +10,21 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [Unreleased]
 
+## [0.27.1-beta] - 2026-07-30
+
+### Added
+- **Automatic project group chat** (#771) — every project now has one shared GROUP
+  conversation whose participants stay synchronized with `ProjectMember`. Owners, mentors
+  and mentees can use the existing message flow, including attachments and reactions;
+  removed members keep no access, while message history remains intact. Message emails
+  continue to respect the recipient's Messages preference.
+- Project group chats are discoverable from the **Messages** inbox: open the chat icon in
+  the header and select the row labeled with the project name and **Project group**.
+
+### Schema
+- `Conversation` now has a compound unique constraint on `[type, projectId]`, preventing
+  concurrent requests from creating more than one GROUP conversation per project.
+
 ## [0.27.0-beta] - 2026-07-28
 
 ### Added

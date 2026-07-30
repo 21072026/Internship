@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 import { relativeTime } from '@/lib/relativeTime';
 import { StartConversationPicker } from '@/components/StartConversationPicker';
+import { createOrGetProjectConversation } from '@/lib/conversations';
 
 // Unified message inbox for every role: lists the viewer's conversation
 // threads (mentor side or mentee side) with the other participant, a preview
@@ -22,12 +23,25 @@ export default async function MessagesInboxPage() {
     where: { ticket: { requesterId: me }, senderId: { not: me }, readAt: null },
   });
 
-  // DIRECT conversations (#769/#770) the viewer takes part in. Listed alongside
-  // mentorship threads so a project DM shows up in the same inbox.
+  const myProjectIds = (
+    await prisma.projectMember.findMany({ where: { userId: me }, select: { projectId: true } })
+  ).map((m) => m.projectId);
+
+  // Lazy-create chats for projects that predate #771, then list GROUP and DIRECT
+  // conversations together so the project chat is reachable from the inbox.
+  const projectGroupIds = (await Promise.all(myProjectIds.map(createOrGetProjectConversation)))
+    .flatMap((conversation) => conversation ? [conversation.id] : []);
   const conversations = await prisma.conversation.findMany({
-    where: { type: 'DIRECT', participants: { some: { userId: me } } },
+    where: {
+      OR: [
+        { type: 'DIRECT', participants: { some: { userId: me } } },
+        ...(projectGroupIds.length ? [{ type: 'GROUP' as const, id: { in: projectGroupIds } }] : []),
+      ],
+    },
     select: {
       id: true,
+      type: true,
+      project: { select: { name: true } },
       participants: { select: { userId: true, user: { select: { fullName: true } } } },
       messages: {
         orderBy: { createdAt: 'desc' },
@@ -41,9 +55,6 @@ export default async function MessagesInboxPage() {
   // Project co-members the viewer may start a DM with. Membership is the
   // permission (see canMessage in src/lib/conversations.ts), so this list is
   // derived on the server — the client never decides who is messageable.
-  const myProjectIds = (
-    await prisma.projectMember.findMany({ where: { userId: me }, select: { projectId: true } })
-  ).map((m) => m.projectId);
   const coMemberRows = myProjectIds.length
     ? await prisma.projectMember.findMany({
         where: { projectId: { in: myProjectIds }, userId: { not: me } },
@@ -80,7 +91,9 @@ export default async function MessagesInboxPage() {
     ...conversations.map((c) => ({
       key: `conv-${c.id}`,
       href: `/messages/c/${c.id}`,
-      otherName: c.participants.find((p) => p.userId !== me)?.user.fullName ?? '—',
+      otherName: c.type === 'GROUP'
+        ? t.messages.projectGroup.replace('{name}', c.project?.name ?? '—')
+        : c.participants.find((p) => p.userId !== me)?.user.fullName ?? '—',
       last: c.messages[0] ?? null,
       unread: c._count.messages,
     })),
