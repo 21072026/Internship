@@ -1401,6 +1401,47 @@ merge olana kadar `gh pr view --json mergeable` ile izle, tekrar `DIRTY` olursa 
 mekanik kuralı uygula. Üçüncü turda `npx tsc --noEmit` + `check:i18n` tam `npm run build`
 yerine yeterli hızlı güvence (çakışan dosyalar sadece CHANGELOG/releaseNotes/sürüm ise).
 
+---
+
+## 2026-07-31 — #935 sabit alt bant × gövde boşluğu (mobil ilk izlenim)
+
+**`fixed bottom-0` bir bant, altındaki içeriği "yok" saymaz — yeri ayrılmadıkça
+CTA'yı gömer.** Çerez bandı iPhone 13'te (390×664) görünür alanın %40'ını kaplıyor
+ve `/auth/register`'daki "Create Account" butonunun üstüne biniyordu. Çözümü tek bir
+bileşene gömmek yerine paylaşılabilir bir mekanizma yaptım: `useFixedBottomInset(ref,
+active)` her sabit alt bandın ölçülen yüksekliğini (ResizeObserver ile — bant dil/
+yönlendirme değişince yeniden sarılıyor) `<html>` üzerinde `--fixed-bottom-inset`
+olarak yayınlıyor, `globals.css` bunu `body { padding-bottom }`'a çeviriyor. Bant
+kapanınca değişken `0px`'e dönüyor, artık boşluk kalmıyor. #917'nin mobil hızlı
+eylem çubuğu aynı hook'u kullanabilir — ikinci bir mekanizma icat etmeyin.
+
+**Geometrik e2e testi yazdıktan sonra NEGATİF KONTROL yapın.** `globals.css`'teki tek
+satırı yorum satırına alıp testi tekrar koştum: `Expected: <= 465, Received: 527` —
+tam olarak issue'daki ölçümler (buton alt kenarı 527, bant üst kenarı 464). Bu 30
+saniyelik adım olmadan "yeşil" testin hatayı gerçekten yakaladığını bilemezsiniz;
+ekran görüntüsü testi yerine `boundingBox()` karşılaştırması da hem hızlı hem stabil.
+
+**Playwright'ı yerelde koşarken `DATABASE_URL`'i EXPORT edin.** `.env` dosyası Next
+dev sunucusuna yükleniyor ama test runner'ın kendi process'ine geçmiyor; `e2e/helpers/db.ts`
+üzerinden Prisma kullanan specler `Environment variable not found: DATABASE_URL` ile
+patlıyor (test mantığında hata yok). `export DATABASE_URL=... && npx playwright test ...`.
+
+**Yerelde `npm run dev` üzerinde koşarken kapsamsız locator'lar Next.js Dev Tools
+butonuna çarpıyor.** `e2e/layout.spec.ts:6` yerelde `strict mode violation:
+button[aria-haspopup="menu"] resolved to 2 elements` veriyor; ikinci eleman
+`<button id="next-logo" aria-haspopup="menu" aria-label="Open Next.js Dev Tools">`,
+yani **sadece dev modunda var** (CI `npm run start` ile prod build koşuyor, orada yok).
+Değişikliklerimi stash'leyip aynı hatayı aldım → regresyon değil. Ders: yerelde çıkan
+bir strict-mode ihlalini ürün hatası sanmadan önce (a) stash'leyip tekrar koş, (b)
+eşleşen elemanların `outerHTML`'ini dök.
+
+**Bu container'da Playwright config'i override etmek gerekiyor.** Kurulu build
+`chromium-1194`, Playwright 1.61 `chromium_headless_shell-1228` arıyor. Commit
+edilmeyen bir `playwright.local.ts` (repo config'ini import edip `use.launchOptions.
+executablePath = /opt/pw-browsers/chromium-1194/chrome-linux/chrome` ekler) ile
+`npx playwright test --config playwright.local.ts` tüm suite'i çalıştırıyor —
+ad-hoc script yazmaya gerek yok. Dosyayı commit'e sızdırmayın.
+
 ## 2026-07-31 — Zamanlanmış tam koşudaki "timeout" her zaman flake değil
 
 `e2e-full` raporu `project-dm.spec.ts` için `locator.click: Timeout 15000ms exceeded —

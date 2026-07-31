@@ -13,6 +13,30 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.34.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'The pipeline board now works on a phone. Instead of scrolling 13 stage columns sideways, pick a stage and see its mentees as a list — and every card has a "Move to stage" menu, so you no longer need to drag a card (which never worked on touch) to change its stage. Dragging still works on a computer, and a stage change can be undone straight from the confirmation for a few seconds.',
+        'The board is also keyboard-friendly: cards can be opened with the keyboard and stages changed without a mouse.',
+        'On a phone, the cookie banner no longer covers the "Create Account" button at the bottom of the sign-up page — pages now scroll clear of any bar pinned to the bottom of the screen, so the button is always reachable without dismissing the banner first.',
+        'The cookie banner is also more compact on small screens: it used to take up about 40% of the display on a phone.',
+      ],
+      tr: [
+        'Pipeline board artık telefonda çalışıyor. 13 aşama kolonunu yana kaydırmak yerine bir aşama seçip o aşamadaki mentee\'leri liste hâlinde görüyorsunuz; ayrıca her kartta "Aşamaya taşı" menüsü var, yani aşamayı değiştirmek için kartı sürüklemeniz (ki dokunmatikte hiç çalışmıyordu) gerekmiyor. Bilgisayarda sürükleme aynen çalışmaya devam ediyor ve aşama değişikliğini onay bildiriminden birkaç saniye içinde geri alabiliyorsunuz.',
+        'Board klavyeyle de kullanılabiliyor: kartlar klavyeyle açılabiliyor, aşamalar fare olmadan değiştirilebiliyor.',
+        'Telefonda çerez bandı artık kayıt sayfasının altındaki "Hesap oluştur" butonunu kapatmıyor — sayfalar ekranın altına sabitlenen bantların üstüne kadar kaydırılabiliyor, yani butona ulaşmak için önce bandı kapatmanız gerekmiyor.',
+        'Çerez bandı küçük ekranlarda daha derli toplu: eskiden telefonda ekranın yaklaşık %40\'ını kaplıyordu.',
+      ],
+      de: [
+        'Das Pipeline-Board funktioniert jetzt auf dem Handy. Statt 13 Phasenspalten seitwärts zu scrollen, wählst du eine Phase und siehst ihre Mentees als Liste — außerdem hat jede Karte ein Menü „In Phase verschieben", du musst eine Karte also nicht mehr ziehen (was per Touch ohnehin nie funktionierte). Am Computer bleibt das Ziehen unverändert, und ein Phasenwechsel lässt sich für einige Sekunden direkt aus der Bestätigung zurücknehmen.',
+        'Das Board ist auch mit der Tastatur bedienbar: Karten lassen sich per Tastatur öffnen und Phasen ohne Maus ändern.',
+        'Auf dem Handy verdeckt das Cookie-Banner nicht mehr die Schaltfläche „Konto erstellen" am Ende der Registrierungsseite — Seiten lassen sich jetzt über jede am unteren Bildschirmrand fixierte Leiste hinaus scrollen, die Schaltfläche ist also immer erreichbar, ohne das Banner zuerst zu schließen.',
+        'Das Cookie-Banner ist auf kleinen Bildschirmen außerdem kompakter: bisher nahm es auf dem Handy rund 40% der Anzeige ein.',
+      ],
+    },
+  },
+  {
     version: '0.33.0-beta',
     date: '2026-07-31',
     highlights: {
