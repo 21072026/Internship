@@ -26,6 +26,40 @@ export async function signInAndSettle(page: Page, email: string, password: strin
 }
 
 /**
+ * Sign in as a *different* user than the one currently signed in.
+ *
+ * WHY THIS EXISTS: `clearCookies()` immediately before `goto('/auth/signin')`
+ * is not enough. The page we are leaving keeps talking to
+ * `/api/auth/session`, and NextAuth re-issues the session cookie on those
+ * responses — one landing just after the clear puts the old session straight
+ * back. `/auth/signin` then sees `status === 'authenticated'` and
+ * `router.replace()`s to the *previous* user's dashboard while the test is
+ * still typing into the form, so `page.click('button[type="submit"]')`
+ * re-resolves against that dashboard. In the scheduled run it settled on the
+ * mentee portal's disabled "Add goal" button and retried it until the action
+ * timeout (meeting-requests, #965 follow-up).
+ *
+ * Two guards: going to `about:blank` first tears the old page (and its
+ * requests) down *before* the session cookie is dropped, and the submit button
+ * is looked up inside the sign-in form itself, so a stray redirect fails
+ * loudly instead of clicking something unrelated on another page.
+ *
+ * Only the NextAuth session cookie is cleared — a blanket `clearCookies()`
+ * would also drop the cookie-consent state seeded via `storageState`, bringing
+ * the consent banner back over the form.
+ */
+export async function signInAsFreshUser(page: Page, email: string, password: string, landing: string) {
+  await page.goto('about:blank');
+  await page.context().clearCookies({ name: /next-auth\.session-token/ });
+  await page.goto('/auth/signin');
+  const form = page.locator('form', { has: page.locator('input[type="password"]') });
+  await form.locator('input[type="email"], input[name="email"]').fill(email);
+  await form.locator('input[type="password"]').fill(password);
+  await form.locator('button[type="submit"]').click();
+  await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
+}
+
+/**
  * `page.goto()` that tolerates losing a race with an in-flight client-side
  * navigation. `signInAndSettle` should make this unnecessary, but the redirect
  * is driven by React state we don't control, so retrying once is cheaper than a

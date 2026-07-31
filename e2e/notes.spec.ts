@@ -44,7 +44,13 @@ test('mentee can create, edit, and delete private personal notes (owner-only)', 
     // Saving through the UI persists and displays the revised note.
     await note.locator('textarea').fill('Prepare portfolio for interview');
     await note.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('Prepare portfolio for interview')).toBeVisible({ timeout: 10_000 });
+    // Wait for the editor to close rather than for the text to show up:
+    // Playwright's text matching includes <textarea> values, so getByText()
+    // matched what we had just typed — before the PATCH had even been sent —
+    // and the database read below then raced the write (flaky in the scheduled
+    // run). The panel only drops the textarea after the PATCH resolved.
+    await expect(note.locator('textarea')).toHaveCount(0, { timeout: 10_000 });
+    await expect(note.getByText('Prepare portfolio for interview')).toBeVisible();
     expect((await prisma.personalNote.findUnique({ where: { id: noteId } }))?.body).toBe('Prepare portfolio for interview');
 
     // Another user cannot edit/delete it (owner-only).

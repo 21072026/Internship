@@ -963,6 +963,107 @@ Ayrıca: yetkiyi *katılımcılık* ile *canlı izin* olarak ayırmak gerekti. O
 projeden çıkarılan üye süresiz yazmaya devam ederdi.
 
 
+## 2026-07-31 — #787'nin ikinci conflict turu: sürüm defter tutma + merge sonrası doğrulama
+
+Aynı PR bir kez daha çakıştı: 2026-07-29'daki çözüm `main`'i 98bf718'de yakalamıştı,
+merge edilene kadar `main` 85df9f7'ye ilerledi. Bu turda çakışan 5 dosyanın 4'ü saf
+**sürüm defter tutması**ydı, sadece biri kod.
+
+### Bayat bir PR'da sürüm çakışması her zaman "bump'ı main'in üstüne taşı" demek
+
+`package.json` / `package-lock.json` / `CHANGELOG.md` / `releaseNotes.ts` dördü birden
+çakışıyorsa düşünülecek bir şey yok, mekanik bir kural var: **yeni sürüm = main'in
+sürümü + patch** (burada 0.28.1-beta → 0.28.2-beta), sonra CHANGELOG bölüm başlığını
+*ve* `releaseNotes.ts` girdisini o sürüme + bugünün tarihine yeniden yazıp main'in
+girdilerinin üstüne koy. Dalın kendi eski sürüm numarasını (0.27.1-beta) korumak
+CHANGELOG'u geçmişe sıralar ve `/release-notes`'ta yanlış sırayla görünür.
+
+`package-lock.json`'da aynı çakışma **iki** yerdedir (kök `version` ve
+`packages[""].version`) — biri gözden kaçarsa dosya sessizce tutarsız kalır:
+
+```
+perl -0pi -e 's/<<<<<<< HEAD\n(\s*)"version": "X",\n=======\n\s*"version": "Y",\n>>>>>>> origin\/main\n/$1"version": "Z",\n/g' package-lock.json
+```
+
+### Yan yana import çakışması = iki tarafı da al, ama gövdeyi oku
+
+`src/app/api/mentor/email/route.ts`'te tek çakışma iki komşu `import` satırıydı
+(dalın `emailAllowed`'ı, main'in `TEXT_LIMITS`'i). Çözüm bariz — ikisini de tut — ama
+asıl iş dosyanın **geri kalanını** okumak: iki değişikliğin bağımsız olduğunu
+(zod şeması hâlâ `TEXT_LIMITS` ile sınırlıyor, gönderim hâlâ `messages` opt-out'una
+bağlı, `InteractionLog` her hâlükârda yazılıyor) doğrulamadan "sadece import'tu"
+denemez. Otomatik merge olmuş hunk'lar conflict marker'ı üretmez ama semantiği bozabilir.
+
+### `gh pr merge --auto` bu repoda "şimdi merge et" demek
+
+Bu depoda **required status check yok**. Yani `--auto`, PR mergeable olur olmaz
+squash'ı geçiriyor — smoke gate'in raporlamasını *beklemiyor*. #787 çakışma çözümü
+push edildikten ~saniyeler sonra, `Lint · Typecheck · Build` ve `Playwright smoke`
+daha başlamadan merge oldu. CI'ın gerçekten kapı görevi görmesini istiyorsan merge'den
+önce kendin `gh pr checks --watch` ile bekle; yerel `npx tsc --noEmit` +
+`npm run check:i18n` bu yüzden merge öncesi tek gerçek güvence oluyor.
+
+### `main`'deki push-run'ın "cancelled" olması hata değil
+
+`main`'e arka arkaya merge geldiğinde her yeni push, workflow'un concurrency grubu
+üzerinden bir öncekinin push-run'ını iptal ediyor. #787'nin (f639d8f) smoke run'ı
+böyle iptal oldu, ardından #789'unki (9b975fd) de. **Cancelled'ı regresyon sanma** —
+doğrulamayı commit'inin *herhangi bir ardılında* yeşil olan en yeni run üzerinden yap;
+sabit bir sha'yı izlemek yoğun bir günde hiç sonuçlanmıyor.
+
+## 2026-07-29 — Uzun süre açık kalmış PR'ın conflict'ini çözme (#787 / #668)
+
+### Eski bir PR'ı çözmeden önce iki tarafı da merge-base'e karşı diff'le
+
+#787 açık kaldığı sürede `main` **aynı işi bağımsız olarak yapıp** 0.26.0'da göndermişti
+(#668 denetimi). 10 dosya çakıştı. Reflex olarak "HEAD benim dalım, onu koru" demek
+burada yanlış olurdu — `main`'in uygulaması her çakışan dosyada daha iyiydi
+(markalı `emailBrand`/`brandHeader` şablonları vs. dalın satır-içi HTML'i;
+`NOTIFICATION_CATEGORIES.map()` vs. elle yazılmış liste; yeniden yazılmış idempotent
+`sendMeetingReminders`).
+
+**Yöntem:** `MB=$(git merge-base origin/<dal> origin/main)`, sonra **iki** diff'i
+yan yana oku:
+
+```
+git diff $MB origin/<dal> -- <dosya>
+git diff $MB origin/main  -- <dosya>
+```
+
+`git diff HEAD` veya sadece conflict marker'larına bakmak yetmiyor; aynı sorunun iki
+farklı çözümünü görmeden hangisinin daha iyi olduğuna karar veremiyorsun. Bu diff
+çiftinden sonra "çakışan her şeyde `--theirs`, dalın **geri kalanı** korunur" net bir
+karar oldu — ve PR'ın gerçekten katkısı olan 3 şey ortaya çıktı:
+`POST /api/mentorship`'in tamamen sessiz olması (main sadece *talep onayı* yolunu
+kapatmış, doğrudan atamayı atlamış), `POST /api/mentor/email`'in `messages` opt-out'unu
+yok sayması, ve cron e-posta hata yönetimi.
+
+### `git checkout --theirs` tüm dosyayı alır — kısmi çözüm için `checkout -m`
+
+`emailService.ts`'te iki hunk çakışıyordu ama dosyanın **başka** yerlerinde dalın
+otomatik merge olmuş faydalı değişiklikleri (try/catch + hata loglama) vardı.
+`git checkout --theirs <dosya>` stage 3'ün tamamını yazıyor, yani o otomatik merge olmuş
+kısımları da siliyor. Fark etmezsem PR'ın gerçek katkısının bir bölümü sessizce kaybolurdu.
+Kurtarma: `git checkout -m <dosya>` conflict'i geri getiriyor, sonra sadece marker'lı
+hunk'ları elle çöz.
+
+**Ders: `--theirs`/`--ours` yalnızca dosyanın *tamamı* karşı tarafa gidecekse doğru.**
+Karma dosyada `checkout -m` + elle hunk çözümü gerekiyor. Çözümden sonra
+`git diff origin/main -- <dosya>` ile "dalın main üstüne gerçekten ne kattığı"nı doğrula —
+beklediğin katkı orada görünmüyorsa bir şeyi ezmişsin.
+
+### Kategori adı değişirse e2e assert'lerini de taşı
+
+Dal `applications` + `mentorshipRequests` kategorilerini eklemişti, main tek bir
+`mentorship` ile aynı kapsamı çözdü. `notif-prefs.spec.ts` "New applications" toggle'ını
+assert ediyordu — artık var olmayan bir UI. `tsc` bunu yakalamıyor (Playwright locator'ı
+string), `check:i18n` de yakalamıyor (anahtar zaten silinmiş). Çözüm tarafında sözlük
+anahtarı/kategori adı değiştiyse **spec'leri greple**: `grep -rn "<eski-kategori>" e2e/`.
+
+### Başka birinin PR'ında scope
+
+PR sahibi başka bir katkıcı olduğunda retrospektifi o dala **commit'lemeyin** — diff'i
+kirletiyor. Ayrı `docs/` dalı + ayrı PR (bu giriş öyle geldi).
 ## 2026-07-28 (2. tur) — #782 takibi: limitler DB ile uyumsuzdu + deploy güveni
 
 **"Özellik canlıda yok" şikâyetini önce shallow clone ile doğrula.** Konteynerdeki
@@ -1141,3 +1242,47 @@ Repro tekniği: hipotezi tek dosyalık geçici bir spec ile izole et (aynı sorg
 await içeride vs dışarıda) — `node --experimental-strip-types` repo'nun uzantısız
 relative import'larında çalışmıyor, Playwright runner'ı kullan. Lokal DB: apt
 MariaDB (playbook'taki yol) sorunsuz.
+
+## 2026-07-31 — Zamanlanmış koşunun 2 kırmızısı: merge'den kalan "hayalet" assertion + oturum değiştirme yarışı
+
+**Bir merge, bileşeni main'den + spec'i branch'ten alabilir.** #786
+(goals sıralama/arşiv) merge edilirken `GoalsPanel` main'in sürümüyle (#918,
+sayaçlar) çözülmüş ama spec branch'in sürümüyle (ilerleme çubuğu, `0/2
+completed`) kalmış → spec artık hiç render edilmeyen markup'ı doğruluyordu. PR
+gate sadece `@smoke` koştuğu için bu drift ancak gece koşusunda görüldü. Ders:
+aynı özelliğin UI'ı ve spec'i birlikte çakıştıysa **ikisini birden oku**;
+`git log -S'<assertion metni>' -- <spec>` ve `git show <branch-tip>:<component>`
+hangi tarafın kazandığını 10 saniyede söylüyor. Yan kontrol: aynı özelliğin
+*diğer* spec'i (`goals-archive-sort`) doğru sayaçları kullanıyordu — iki spec
+aynı UI için farklı şey iddia ediyorsa biri bayattır.
+
+**`clearCookies()` NextAuth oturumunu bitirmeye yetmiyor.** Ayrılmakta olduğun
+sayfa `/api/auth/session`'ı çağırmayı sürdürüyor ve NextAuth bu yanıtlarda
+session cookie'sini yeniden yazıyor; temizlikten hemen sonra düşen bir yanıt
+oturumu geri getiriyor. `/auth/signin` `status === 'authenticated'` görüp bir
+önceki kullanıcının paneline yönleniyor — test hâlâ forma yazarken. Doğrusu:
+önce `page.goto('about:blank')` (eski sayfa ve istekleri ölsün), sonra temizlik,
+üstelik **sadece** `next-auth.session-token` — komple `clearCookies()`
+`storageState`'ten gelen consent cookie'sini de siliyor ve banner formun üstüne
+geri geliyor. `e2e/helpers/auth.ts` → `signInAsFreshUser()`.
+
+**Kapsamlanmamış locator, yönlendirmede başka sayfada bir butona bağlanıyor.**
+`page.click('button[type="submit"]')` yönlendirmeden sonra mentee portalındaki
+*disabled* "Add goal" butonuna denk geldi ve 15 sn action timeout'u boyunca
+sessizce onu denedi. Submit'i formun içine kapsamla
+(`page.locator('form', { has: page.locator('input[type="password"]') })`) —
+yönlendirme olursa test hızlı ve okunur şekilde düşer.
+
+**Playwright'ın `getByText`'i `<textarea>`/`<input>` value'larını da eşliyor.**
+`notes.spec` düzenlemeden hemen sonra `getByText('<yeni metin>')` bekliyordu; bu
+daha PATCH gönderilmeden, açık editöre yazdığımız metinle eşleşti ve peşindeki
+Prisma okuması yazmayla yarıştı (flaky). Doğrusu: editörün kapanmasını bekle
+(`expect(note.locator('textarea')).toHaveCount(0)`), sonra metni/DB'yi doğrula.
+
+**Teşhis yolu:** `gh run view --log-failed` bu repoda sadece cleanup loglarını
+döküyor (asıl hata "Run full E2E suite" adımının içinde). İşe yarayan:
+`gh run view --log --job <id>` (worktree'de cwd repo kökü değilse `-R owner/repo`
+şart) + `gh api repos/<o>/<r>/actions/artifacts/<id>/zip` ile
+`playwright-report-full-shard-N`'i indirip `data/*.md` (error-context) ve
+failure screenshot'ına bakmak — ekran görüntüsü "mentee portalındayız" diyerek
+hipotezi tek karede doğruladı.
