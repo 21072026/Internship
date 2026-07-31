@@ -4,7 +4,15 @@ on:
   # Re-enabled 2026-07-21 after the repo transfer reset the Actions quota. This
   # is the @smoke-only PR gate (~3.5 min) — cheap enough to run per PR. The full
   # suite (e2e-full) stays workflow_dispatch-only to protect the monthly budget.
+  # A manual run takes an optional Playwright --grep filter, so a single
+  # non-smoke spec can be re-verified on a branch without dispatching the whole
+  # 4-shard e2e-full suite (which also emails a summary on every run).
   workflow_dispatch:
+    inputs:
+      grep:
+        description: 'Playwright --grep filter (e.g. @smoke, or a test title)'
+        required: false
+        default: '@smoke'
   push:
     branches: [main]
   pull_request:
@@ -78,8 +86,12 @@ jobs:
 
       # PR gate runs the @smoke subset only (#623); the FULL suite runs 4x a
       # day via e2e-full.yml (sharded, email on failure) and on demand.
-      - name: Run E2E smoke tests
-        run: npm run test:e2e:smoke
+      # The filter is passed through an env var, not interpolated into the
+      # shell — a dispatch input is untrusted text.
+      - name: Run E2E tests
+        env:
+          E2E_GREP: ${{ inputs.grep || '@smoke' }}
+        run: npx playwright test --grep "$E2E_GREP"
 
       - name: Upload Playwright report
         if: always()

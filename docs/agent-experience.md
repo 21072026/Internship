@@ -1400,3 +1400,44 @@ beklerken tekrar açılıyor. Pratik sonuç: çözümü push ettikten sonra dal�
 merge olana kadar `gh pr view --json mergeable` ile izle, tekrar `DIRTY` olursa aynı
 mekanik kuralı uygula. Üçüncü turda `npx tsc --noEmit` + `check:i18n` tam `npm run build`
 yerine yeterli hızlı güvence (çakışan dosyalar sadece CHANGELOG/releaseNotes/sürüm ise).
+
+## 2026-07-31 — Zamanlanmış tam koşudaki "timeout" her zaman flake değil
+
+`e2e-full` raporu `project-dm.spec.ts` için `locator.click: Timeout 15000ms exceeded —
+waiting for getByTestId('new-chat-toggle')` dedi. Timeout + tek test = refleks olarak
+"flake, rerun" demek cazip; ama burada element **yavaş değildi, hiç render edilmiyordu**.
+Ayırt eden sinyal: aynı koşudaki 5 gerçek flake'in hepsi `failed,passed` (retry'da geçti),
+bu test `failed,failed`. **Retry deseni, hata tipinden daha iyi bir flake göstergesi.**
+
+Deseni çıkarmanın hızlı yolu (log kazmaya gerek yok) — shard JSON'larını indirip
+`status !== "expected"` olanları dök:
+
+```
+gh run download <run-id> -D <dir> -p 'e2e-json-shard-*'
+# sonra suites'i özyinelemeli gezip t.status + t.results.map(r=>r.status)
+```
+
+Kalan 5 flake'in hepsi aynı kökten: signin sonrası yönlendirme, hemen ardından gelen
+`page.goto`'yu kesiyor (`Navigation to /mentor/mentees/X is interrupted by another
+navigation to /mentor`) ya da signin formu 15 sn içinde gelmiyor. Kod değişikliğiyle
+ilgisi yok.
+
+**Kök neden dersi:** `/messages`, "zaten DM'i olanlar" kümesini *yüklediği tüm*
+conversation'lardan kuruyordu. 988d791 sorguya proje GROUP sohbetlerini ekleyince, her
+proje arkadaşı grup sohbetinin de katılımcısı olduğu için tüm adaylar elendi;
+`StartConversationPicker` boş listede `null` döndürüyor, dolayısıyla toggle DOM'a hiç
+girmedi. Bir sorgunun kapsamı genişletildiğinde, **o sorgunun sonucunu kullanan her
+türetilmiş kümeyi** gözden geçir — tip alanı (`DIRECT`/`GROUP`) select'e eklenmişti ama
+filtreye eklenmemişti.
+
+**Doğrulama, MySQL'siz makinede:** bu Mac'te docker daemon kapalı ve MySQL yok, yani
+spec yerelde koşmuyor. `e2e.yml`'ye manuel dispatch için opsiyonel `grep` input'u
+eklemek (varsayılan `@smoke`) tek bir non-smoke spec'i dalda doğrulamayı sağlıyor —
+`e2e-full`'ü dispatch etmek 4 shard koşturur *ve* her koşuda özet e-postası gönderir,
+sırf bir testi görmek için istenmeyecek bir yan etki. Input'u shell'e interpolate etme,
+env değişkeniyle geçir.
+
+**Worktree'de `npm run lint` çalışmıyor:** worktree ana repo checkout'unun içinde durduğu
+için ESLint iki `.eslintrc.json` görüyor ve `Plugin "@next/next" was conflicted` ile
+düşüyor. Ortam kaynaklı, değişiklikle ilgisi yok; `npx tsc --noEmit` + `npm run check:i18n`
+yerel güvence olarak yeterli, lint'i CI'ya bırak.
