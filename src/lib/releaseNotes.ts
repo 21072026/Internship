@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.32.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'The talent pool now tells you whether it is still loading, your search has no matches, or no candidates have joined the pool yet. Empty searches also suggest changing or clearing the filters.',
+      ],
+      tr: [
+        'Yetenek havuzu artık hâlâ yükleniyor mu, aramanızla eşleşen aday mı yok, yoksa havuza henüz hiç aday mı katılmamış açıkça gösteriyor. Sonuçsuz aramalarda filtreleri değiştirme veya temizleme önerisi de sunuluyor.',
+      ],
+      de: [
+        'Der Talentpool zeigt jetzt klar, ob er noch lädt, die Suche keine Treffer hat oder noch keine Kandidaten im Pool sind. Bei einer erfolglosen Suche wird außerdem empfohlen, die Filter zu ändern oder zu löschen.',
+      ],
+    },
+  },
+  {
     version: '0.32.2-beta',
     date: '2026-07-31',
     highlights: {

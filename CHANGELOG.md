@@ -8,6 +8,15 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.32.3-beta] - 2026-07-31
+
+### Fixed
+- **Talent-pool empty states now distinguish loading, no search results and an empty pool.**
+  The company talent pool keeps its existing skeleton while loading, shows filter guidance
+  when a search has no matches, and explains when no candidates have made their profiles
+  public yet. Both empty states reuse the shared, dark-mode-safe `EmptyState` pattern and
+  expose `data-testid="talent-pool-empty-state"` for stable UI checks.
+
 ## [0.32.2-beta] - 2026-07-31
 
 ### Security
