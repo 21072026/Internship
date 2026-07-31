@@ -8,6 +8,23 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.31.4-beta] - 2026-07-31
+
+### Added
+- **Rate-limit breaches are now recorded** (#864). `enforceRateLimit` returned 429
+  silently, so being under attack looked exactly like being idle. Breaches log
+  `ratelimit.exceeded` at warning level and show up on `/admin/activity`. Written
+  fire-and-forget so `enforceRateLimit` stays synchronous and its six callers are
+  untouched, and **coalesced to one row per bucket+IP per minute** — a flood is
+  precisely when this fires, and one DB insert per blocked request would make the
+  rate limiter an amplifier for the attack it exists to absorb.
+
+### Fixed
+- **The rate-limit bucket map grew for the life of the process** (#864).
+  `sweepRateLimitBuckets()` was written but never called anywhere. It now runs every
+  100 `rateLimit()` calls, plus immediately whenever the map passes 50 000 entries —
+  proportional to traffic, with no scheduler to own.
+
 ## [0.31.3-beta] - 2026-07-31
 
 ### Security
