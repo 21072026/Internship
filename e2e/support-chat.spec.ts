@@ -63,7 +63,13 @@ test('support chat: first message opens a ticket, next one appends, admin is not
     await page.getByTestId('support-input').fill('Sent from the chat box.');
     await page.getByTestId('support-send').click();
     await expect(page.getByText('Sent from the chat box.', { exact: false })).toBeVisible({ timeout: 10_000 });
-    expect(await prisma.supportMessage.count({ where: { ticketId: firstJson.ticketId } })).toBe(3);
+    // Poll rather than reading once: the rendered message does not prove the
+    // insert has committed, which made this intermittently fail at 2 of 3.
+    await expect
+      .poll(async () => prisma.supportMessage.count({ where: { ticketId: firstJson.ticketId } }), {
+        timeout: 10_000,
+      })
+      .toBe(3);
 
     // Text is optional when at least one valid attachment is present.
     const attachmentOnly = await page.request.post('/api/support', {
