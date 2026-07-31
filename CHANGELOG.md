@@ -10,6 +10,37 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [0.33.2-beta] - 2026-07-31
 
+### Security
+- **Open dependency advisories cut from 10 (1 critical, 7 high) to 5 (2 high, 3
+  moderate)** (#882). Closed: `js-yaml` (quadratic-CPU DoS via merge keys),
+  `brace-expansion` (exponential expansion), `next` 15.5.14 → 15.5.22 (middleware/
+  proxy bypass, cache poisoning, image-optimisation DoS — the middleware advisories
+  matter here because `src/middleware.ts` *is* a security control), `postcss`
+  (arbitrary file read via `sourceMappingURL`) and `sharp` (four libvips CVEs).
+  `next-auth`'s critical cleared with them.
+  **`npm audit` was misleading on three of these.** It reported `fixAvailable: true`
+  for next/postcss/sharp, but the "fix" it had in mind was downgrading to `next@9.3.3`
+  — Next pins `postcss@8.4.31` and `sharp@0.34.5` exactly, and **Next 16.2.12 pins the
+  same two** (verified by building against it). A major jump would not have closed
+  them; `overrides` was the only real fix. `postcss` is also a direct devDependency,
+  and npm refuses an override that conflicts with one, so its direct range moved to
+  `^8.5.18` first. The remaining five need major upgrades or have no published patch,
+  and each is written up with its exploitability in `docs/security-exceptions.md`.
+
+### Added
+- **`.github/workflows/security-audit.yml`** (#885) — `npm audit` on every PR, on
+  `main`, and weekly, with a severity table in the job summary. It fails only on
+  `critical`: the remaining `high` findings have no non-major fix today, and a gate
+  that is always red is one everyone learns to scroll past. Tightening it to `high`
+  is a one-word change once those land.
+- **`.github/dependabot.yml`** (#885) — weekly npm updates grouped into a single
+  minor/patch PR (twenty near-identical bumps is how a review queue starts getting
+  ignored) and monthly GitHub Actions updates. Majors are ignored on purpose: they
+  land as deliberate, tested work, not as an automated PR.
+- **`docs/security-exceptions.md`** — the accepted findings, each with why it can't
+  be fixed, whether it is reachable *in this application* (naming the code path, not
+  just the advisory), and what the permanent fix is.
+
 ### Fixed
 - **Talent-pool empty states now distinguish loading, no search results and an empty pool.**
   The company talent pool keeps its existing skeleton while loading, shows filter guidance
