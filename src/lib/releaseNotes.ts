@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.31.5-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'There is now a Code of Conduct, linked in the footer and available in English, Turkish and German. It sets out what respectful participation looks like for mentees, mentors, admins and company contacts — and what is not acceptable, including misuse of the access a role gives you to someone else’s profile, CV or contact details.',
+        'It also explains how to report a problem: confidentially, to an administrator, on your own behalf or someone else’s — and reporting in good faith never counts against you.',
+      ],
+      tr: [
+        'Artık bir Davranış Kuralları metni var; alt bilgiden erişilebiliyor ve İngilizce, Türkçe ve Almanca olarak sunuluyor. Mentee’ler, mentorlar, yöneticiler ve şirket yetkilileri için saygılı katılımın ne demek olduğunu — ve neyin kabul edilemez olduğunu, rolünüzün başkasının profiline, CV’sine veya iletişim bilgilerine verdiği erişimin kötüye kullanımı dâhil — açıkça yazıyor.',
+        'Metin ayrıca bir sorunu nasıl bildireceğinizi anlatıyor: gizlilikle, bir yöneticiye, kendi adınıza ya da bir başkası adına. İyi niyetle yapılan bildirim asla aleyhinize kullanılmaz.',
+      ],
+      de: [
+        'Es gibt jetzt einen Verhaltenskodex, verlinkt in der Fußzeile und verfügbar auf Englisch, Türkisch und Deutsch. Er beschreibt, wie respektvolle Teilnahme für Mentees, Mentoren, Admins und Unternehmenskontakte aussieht — und was nicht akzeptabel ist, einschließlich des Missbrauchs des Zugriffs, den eine Rolle auf Profile, Lebensläufe oder Kontaktdaten anderer gibt.',
+        'Er erklärt außerdem, wie man ein Problem meldet: vertraulich, an eine Administratorin oder einen Administrator, für sich selbst oder stellvertretend für andere — eine Meldung in gutem Glauben wird Ihnen nie zum Nachteil ausgelegt.',
+      ],
+    },
+  },
+  {
     version: '0.31.3-beta',
     date: '2026-07-31',
     highlights: {

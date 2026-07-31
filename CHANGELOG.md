@@ -8,6 +8,27 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.31.5-beta] - 2026-07-31
+
+### Added
+- **Code of Conduct, in three languages.** The repository had a README, licence,
+  contributing guide and security policy but no code of conduct — the one GitHub
+  community-standards item still missing. `CODE_OF_CONDUCT.md` (English) plus
+  [`docs/code-of-conduct.tr.md`](docs/code-of-conduct.tr.md) and
+  [`docs/code-of-conduct.de.md`](docs/code-of-conduct.de.md) cover contributors
+  *and* platform participants: the pledge, expected/unacceptable behaviour, scope,
+  a confidential reporting route (`ersahin@bcsit-gmbh.de`) and a four-step
+  enforcement ladder. Written for this project rather than dropped in verbatim —
+  it names the two things a generic template misses here, the power asymmetry in
+  the mentor ↔ mentee relationship and the misuse of role-granted access to
+  mentee PII. Linked from `README.md` and `CONTRIBUTING.md`.
+- **`/code-of-conduct` page** — the participant-facing summary of the same rules,
+  fully translated via the `codeOfConduct` dictionary block (EN/TR/DE) and linked
+  from the landing-page footer next to Privacy and Terms. Reporting is worded
+  against "an administrator of this instance" rather than a hard-coded address,
+  since every deployment has its own operator; the page links out to the full
+  repository version for contributors.
+
 ## [0.31.4-beta] - 2026-07-31
 
 ### Added
