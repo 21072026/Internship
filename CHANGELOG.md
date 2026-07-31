@@ -8,6 +8,31 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.29.2-beta] - 2026-07-31
+
+### Fixed
+- **Mentor/admin targeted-email recipient counter only showed the selected count**
+  (#680). `TargetedEmailComposer` (shared by `/mentor/email` and `/admin/email`) rendered
+  `Recipients (3)` instead of `Recipients (3/10)`, so there was no way to tell how many
+  mentees were selected out of the total without scrolling the checkbox list. Now shows
+  `chosen.length` over `relations.length`.
+
+## [0.29.1-beta] - 2026-07-31
+
+### Fixed
+- **Quote trimming missed most clients' attribution line.** `stripQuoted` only
+  knew the `On … wrote:` form, so a reply that actually arrived through the new
+  bridge — `"cevap veriyorum\n\nJuly 2, 2026 at 3:50 PM, noreply@crm.ersah.in
+  wrote:\n> …"` — kept that attribution line in the threaded message. It now
+  cuts at any line ending in the local "wrote:" verb (`wrote` / `yazdı` /
+  `schrieb` — the app's three locales), at an Outlook `____` divider, or at the
+  first `>` line, whichever comes first. Covered in `e2e/inbound-email.spec.ts`
+  with the exact body that exposed it.
+- The bridge no longer fails a message silently: a UID that the search returned
+  but whose source can't be fetched (a stale dovecot index entry, or mail
+  expunged under it) is now logged instead of just incrementing a counter. Found
+  because a hand-deleted probe left exactly that state behind.
+
 ## [0.29.0-beta] - 2026-07-31
 
 ### Added
@@ -17,8 +42,10 @@ version is shown in the sidebar footer of every page (links to the
   `POST /api/inbound-email` has been able to thread such a reply since it
   shipped — but nothing ever *read the mailbox*, so every reply sat there
   unprocessed. `docs/EMAIL_DELIVERABILITY.md` recorded this honestly ("what's
-  still required in infrastructure is a mail bridge"); 21 real replies had
-  accumulated in the catch-all mailbox since 2026-07-01.
+  still required in infrastructure is a mail bridge"). Unprocessed replies had
+  been accumulating in the catch-all mailbox since 2026-07-01 — 9 mails, which
+  are 5 distinct replies (the catch-all delivered most of them twice, which is
+  exactly what `inboundMessageId` now guards against).
   - `src/services/inboundMailBridge.ts` — IMAP poller (`imapflow` +
     `mailparser`). Every `INBOUND_IMAP_POLL_SECONDS` (default 60) it drains
     unseen mail from the reply mailbox, pulls the token out of whichever
@@ -134,12 +161,17 @@ No version bump: test and `data-testid` changes only, no user-visible behaviour 
 
 ## [0.28.4-beta] - 2026-07-31
 
-### Fixed
-- **Mentor/admin targeted-email recipient counter only showed the selected count**
-  (#680). `TargetedEmailComposer` (shared by `/mentor/email` and `/admin/email`) rendered
-  `Recipients (3)` instead of `Recipients (3/10)`, so there was no way to tell how many
-  mentees were selected out of the total without scrolling the checkbox list. Now shows
-  `chosen.length` over `relations.length`.
+### Added
+- **Program satisfaction survey copy** (#879) — EN/TR/DE strings only, no API/model/UI yet.
+  New `programSurvey` namespace in `src/i18n/dictionaries.ts`: a single NPS question (with
+  0/10 scale-endpoint labels) shared by both roles, plus up to two role-specific follow-ups
+  — mentee: communication availability and whether the program matched expectations;
+  mentor: adequacy of program support and mentoring-workload sustainability (phrased about
+  the workload/pace, not the mentee, to stay neutral) — capping every respondent at NPS + 2
+  questions. Also adds the invite-email and thank-you copy. Every question is worded about
+  the program experience, not a rating of a specific person. TR copy kept short and in the
+  app's existing informal `sen` voice, matching `src/lib/templates.ts` /
+  `src/lib/pipeline.ts`.
 
 ## [0.28.3-beta] - 2026-07-31
 

@@ -83,7 +83,12 @@ export async function pollInboundMailbox(): Promise<PollSummary> {
         try {
           const msg = await client.fetchOne(String(uid), { source: true }, { uid: true });
           if (!msg || !msg.source) {
+            // Usually a stale index entry: the UID was in the search result but
+            // the mail is already gone (expunged, or removed under dovecot's
+            // feet). Nothing to deliver, and left unflagged so a genuinely
+            // transient fetch failure still gets another chance.
             summary.failed++;
+            logger.warning('Inbound mail had no fetchable source', { uid });
             continue;
           }
           const mail = await simpleParser(msg.source);
