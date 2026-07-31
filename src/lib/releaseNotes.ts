@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.31.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Two-factor authentication is meaningfully stronger: wrong authenticator codes are now limited to five attempts per 15 minutes, and each code works only once. Previously, someone who already had your password could try codes as fast as they liked. Codes from an authenticator app with a slightly off clock still work as before.',
+      ],
+      tr: [
+        'İki adımlı doğrulama belirgin şekilde güçlendi: yanlış doğrulama kodları artık 15 dakikada beş denemeyle sınırlı ve her kod yalnızca bir kez çalışıyor. Önceden, parolanızı ele geçirmiş biri kodları istediği hızda deneyebiliyordu. Saati biraz şaşmış bir uygulamadan gelen kodlar eskisi gibi kabul edilmeye devam ediyor.',
+      ],
+      de: [
+        'Die Zwei-Faktor-Anmeldung ist deutlich stärker: Falsche Codes sind jetzt auf fünf Versuche pro 15 Minuten begrenzt, und jeder Code funktioniert nur einmal. Bisher konnte jemand mit Ihrem Passwort Codes beliebig schnell durchprobieren. Codes aus einer App mit leicht abweichender Uhr werden weiterhin akzeptiert.',
+      ],
+    },
+  },
+  {
     version: '0.31.2-beta',
     date: '2026-07-31',
     highlights: {

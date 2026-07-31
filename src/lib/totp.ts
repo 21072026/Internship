@@ -47,16 +47,27 @@ export function totp(secretB32: string, atMs = Date.now()): string {
   return hotp(base32Decode(secretB32), Math.floor(atMs / 1000 / 30));
 }
 
-// Verify a user-supplied 6-digit code, allowing ±1 time step for clock skew.
-export function verifyTotp(secretB32: string, code: string, atMs = Date.now()): boolean {
+/**
+ * Verify a user-supplied 6-digit code, allowing ±1 time step for clock skew.
+ *
+ * Returns the matching step so the caller can reject replays: three codes are
+ * valid at any moment (~90s), and without recording which step was consumed a
+ * code shoulder-surfed or captured from a phishing page could be used again
+ * inside that window (#865). `null` means no match.
+ */
+export function verifyTotpStep(secretB32: string, code: string, atMs = Date.now()): number | null {
   const clean = (code || '').replace(/\s/g, '');
-  if (!/^\d{6}$/.test(clean)) return false;
+  if (!/^\d{6}$/.test(clean)) return null;
   const secret = base32Decode(secretB32);
   const step = Math.floor(atMs / 1000 / 30);
   for (let w = -1; w <= 1; w++) {
-    if (hotp(secret, step + w) === clean) return true;
+    if (hotp(secret, step + w) === clean) return step + w;
   }
-  return false;
+  return null;
+}
+
+export function verifyTotp(secretB32: string, code: string, atMs = Date.now()): boolean {
+  return verifyTotpStep(secretB32, code, atMs) !== null;
 }
 
 // otpauth:// URI for authenticator apps (manual entry shows the secret too).
