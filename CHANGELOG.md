@@ -11,6 +11,32 @@ version is shown in the sidebar footer of every page (links to the
 ## [Unreleased]
 
 ### Fixed
+- **Scheduled full e2e suite: the 2 reds and 1 flake left by run
+  [30608852159](https://github.com/21072026/Internship/actions/runs/30608852159)**
+  (#963). Again no product bug — all three are test defects.
+  - **`evaluation-goals`** still asserted the goals panel's old `"0/2 completed"`
+    progress bar and its `0%` label. #785 (PR #786) replaced that bar with the
+    `goals-active-count` / `goals-completed-count` counters, but the merge kept
+    main's `GoalsPanel` (from #918) *and* the branch's spec, so the spec asserted
+    markup that no longer exists. It now asserts the counters, like the
+    `goals-archive-sort` spec that shipped with the same feature.
+  - **`meeting-requests`** switches user mid-test, and `clearCookies()` alone does
+    not end the old session: the page being left keeps hitting
+    `/api/auth/session`, and NextAuth re-issues the session cookie on those
+    responses — one landing just after the clear restores it. `/auth/signin` then
+    saw `status === 'authenticated'` and redirected to the *previous* user's
+    dashboard mid-typing, so `page.click('button[type="submit"]')` re-resolved
+    against the mentee portal and spent the whole action timeout retrying its
+    disabled "Add goal" button. New `signInAsFreshUser()` in `e2e/helpers/auth.ts`
+    tears the old page down (`about:blank`) before dropping the session cookie,
+    keeps the consent cookie seeded by `storageState`, and clicks the submit
+    button *inside the sign-in form*, so a stray redirect fails fast instead of
+    clicking something unrelated. `evaluation-goals` uses it too.
+  - **`notes`** (the run's flake) read the database straight after
+    `expect(page.getByText('Prepare portfolio for interview')).toBeVisible()` —
+    but Playwright's text matching includes `<textarea>` values, so that matched
+    the text just typed into the still-open editor and the read raced the PATCH.
+    It now waits for the editor to close first.
 - **The scheduled full e2e suite is green again — 9 failing specs** (#954). The suite's
   daily schedule had been left commented out since before the Actions quota was
   restored, so failures accumulated unseen while the `@smoke` PR gate stayed green.

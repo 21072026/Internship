@@ -1,18 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
-
-async function signIn(page: import('@playwright/test').Page, email: string, password: string, home: string) {
-  await page.context().clearCookies();
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => u.pathname.startsWith(home), { timeout: 20_000 });
-}
 
 test('two-way evaluations with interim/final type, and goal tracking', async ({ page }) => {
   const mentorEmail = uniqueEmail('eg-mentor');
@@ -23,7 +15,7 @@ test('two-way evaluations with interim/final type, and goal tracking', async ({ 
 
   try {
     // Mentor records a FINAL evaluation of the mentee and a goal.
-    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const evalRes = await page.request.post('/api/evaluations', {
       data: { relationId: rel.id, type: 'FINAL', scores: { technical: 5, communication: 4 }, comment: 'Great work' },
     });
@@ -42,7 +34,7 @@ test('two-way evaluations with interim/final type, and goal tracking', async ({ 
     });
 
     // Mentee evaluates their mentor (two-way) using the mentor rubric.
-    await signIn(page, menteeEmail, 'MenteePass123', '/portal');
+    await signInAsFreshUser(page, menteeEmail, 'MenteePass123', '/portal');
     const menteeEval = await page.request.post('/api/evaluations', {
       data: { relationId: rel.id, type: 'INTERIM', scores: { guidance: 5, support: 5 } },
     });
@@ -64,13 +56,15 @@ test('two-way evaluations with interim/final type, and goal tracking', async ({ 
     await page.goto('/portal');
     const activeGoals = page.getByTestId('active-goals').locator('[data-testid^="goal-"]');
     await expect(activeGoals).toHaveCount(2);
-    await expect(page.getByText('0/2 completed')).toBeVisible();
-    await expect(page.getByText('0/2 completed').locator('..').getByText('0%', { exact: true })).toBeVisible();
+    // Two counters, not a progress bar: the panel dropped the "x/y completed"
+    // percentage when the archive landed (#785), so assert the counters.
+    await expect(page.getByTestId('goals-active-count')).toContainText('2');
+    await expect(page.getByTestId('goals-completed-count')).toContainText('1');
     await expect(activeGoals.nth(0)).toContainText('Newer active goal');
     await expect(page.getByTestId('active-goals').getByText('Ship the project')).toHaveCount(0);
     await expect(page.getByTestId('goals-archive')).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Archive' }).click();
+    await page.getByRole('button', { name: 'Archive', exact: true }).click();
     await expect(page.getByTestId('goals-archive').getByText('Ship the project')).toBeVisible();
 
     await page.getByLabel('Sort by').selectOption('oldest');
@@ -78,7 +72,7 @@ test('two-way evaluations with interim/final type, and goal tracking', async ({ 
 
     const olderGoal = activeGoals.nth(0);
     await olderGoal.getByRole('button', { name: 'Edit' }).click();
-    await olderGoal.getByLabel('Goal').fill('Updated active goal');
+    await olderGoal.getByLabel('Goal', { exact: true }).fill('Updated active goal');
     await olderGoal.getByRole('button', { name: 'Save' }).click();
     await expect(olderGoal).toContainText('Updated active goal');
   } finally {
