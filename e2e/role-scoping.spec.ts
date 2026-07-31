@@ -21,6 +21,7 @@ let relationId = '';
 let otherCompanyId = '';
 let ownCompanyId = '';
 let sourceRecordId = '';
+let privateProjectId = '';
 
 test.beforeAll(async () => {
   const [mentor, mentee] = await Promise.all([
@@ -54,9 +55,16 @@ test.beforeAll(async () => {
   await prisma.interactionLog.create({
     data: { relationId: relation.id, date: new Date(), notes: 'scope-probe-note', type: 'Meeting' },
   });
+
+  // A private project nobody in this test owns — SOURCE used to read it (#849).
+  const project = await prisma.project.create({
+    data: { name: `Scope Private ${Date.now()}`, ownerType: 'MENTOR', ownerUserId: mentor.id, isPublic: false },
+  });
+  privateProjectId = project.id;
 });
 
 test.afterAll(async () => {
+  await prisma.project.deleteMany({ where: { id: privateProjectId } });
   await prisma.interactionLog.deleteMany({ where: { relationId } });
   await prisma.mentorshipRelation.deleteMany({ where: { id: relationId } });
   for (const email of [mentorEmail, menteeEmail, companyEmail, sourceEmail]) {
@@ -89,6 +97,10 @@ test('SOURCE with no referrals reads no relations and no interaction logs', { ta
 
   const relations = await (await page.request.get('/api/mentorship')).json();
   expect(relations.relations.map((r: { id: string }) => r.id)).not.toContain(relationId);
+
+  // #849: SOURCE fell through the project role chain and read private projects.
+  const projects = await (await page.request.get('/api/projects')).json();
+  expect(projects.projects.map((p: { id: string }) => p.id)).not.toContain(privateProjectId);
 });
 
 test('MENTOR and MENTEE still see their own relation and its logs', async ({ page }) => {

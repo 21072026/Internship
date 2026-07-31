@@ -8,6 +8,29 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.30.3-beta] - 2026-07-31
+
+### Security
+- **`/api/projects` let SOURCE read every project, private ones included** (#849).
+  Same allowlist-by-omission shape as #847/#848: the role chain covered
+  MENTOR/COMPANY/MENTEE and SOURCE fell through to an unfiltered query. SOURCE now
+  gets the public showcase only (and the same PII stripping mentees get — member and
+  relation names removed, count kept).
+
+### Changed
+- **Role scoping is now centralised in `scopeForRole(user, resource)`**
+  (`src/lib/authzScope.ts`), used by `/api/interactions`, `/api/mentorship` and
+  `/api/projects`. Scopes are declared as a per-resource, per-role builder table
+  instead of an `if/else if` chain in each route, so a role missing from the table
+  gets `403` + an `authz.scope_denied` warning rather than an unfiltered query.
+  Adding a role to the `Role` enum can no longer silently grant it access.
+
+### Documentation
+- **`docs/role-access-matrix.md`** (#851) — the role × resource read matrix, why
+  fail-closed, which areas deliberately sit outside it (CV/document/messaging access
+  and the role-gated routes, all already fail-closed and not to be regressed), and
+  the three steps to follow when adding a role or a scoped resource.
+
 ## [0.30.2-beta] - 2026-07-31
 
 ### Security

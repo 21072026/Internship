@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { withTenantScope } from '@/lib/orgContext';
-import { relationScopeForRole, logScopeDenial } from '@/lib/authzScope';
+import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     // Fail-closed scoping (#848): SOURCE was missing from this chain and read
     // every relation in the tenant. Roles without a defined scope are denied.
     // COMPANY stays read-only and limited to its own company's relations.
-    const scope = await relationScopeForRole(session.user);
+    const scope = await scopeForRole(session.user, 'relation');
     if (!scope) {
       await logScopeDenial(session.user, 'GET /api/mentorship');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
