@@ -1194,3 +1194,47 @@ Repro tekniği: hipotezi tek dosyalık geçici bir spec ile izole et (aynı sorg
 await içeride vs dışarıda) — `node --experimental-strip-types` repo'nun uzantısız
 relative import'larında çalışmıyor, Playwright runner'ı kullan. Lokal DB: apt
 MariaDB (playbook'taki yol) sorunsuz.
+
+## 2026-07-31 — Zamanlanmış koşunun 2 kırmızısı: merge'den kalan "hayalet" assertion + oturum değiştirme yarışı
+
+**Bir merge, bileşeni main'den + spec'i branch'ten alabilir.** #786
+(goals sıralama/arşiv) merge edilirken `GoalsPanel` main'in sürümüyle (#918,
+sayaçlar) çözülmüş ama spec branch'in sürümüyle (ilerleme çubuğu, `0/2
+completed`) kalmış → spec artık hiç render edilmeyen markup'ı doğruluyordu. PR
+gate sadece `@smoke` koştuğu için bu drift ancak gece koşusunda görüldü. Ders:
+aynı özelliğin UI'ı ve spec'i birlikte çakıştıysa **ikisini birden oku**;
+`git log -S'<assertion metni>' -- <spec>` ve `git show <branch-tip>:<component>`
+hangi tarafın kazandığını 10 saniyede söylüyor. Yan kontrol: aynı özelliğin
+*diğer* spec'i (`goals-archive-sort`) doğru sayaçları kullanıyordu — iki spec
+aynı UI için farklı şey iddia ediyorsa biri bayattır.
+
+**`clearCookies()` NextAuth oturumunu bitirmeye yetmiyor.** Ayrılmakta olduğun
+sayfa `/api/auth/session`'ı çağırmayı sürdürüyor ve NextAuth bu yanıtlarda
+session cookie'sini yeniden yazıyor; temizlikten hemen sonra düşen bir yanıt
+oturumu geri getiriyor. `/auth/signin` `status === 'authenticated'` görüp bir
+önceki kullanıcının paneline yönleniyor — test hâlâ forma yazarken. Doğrusu:
+önce `page.goto('about:blank')` (eski sayfa ve istekleri ölsün), sonra temizlik,
+üstelik **sadece** `next-auth.session-token` — komple `clearCookies()`
+`storageState`'ten gelen consent cookie'sini de siliyor ve banner formun üstüne
+geri geliyor. `e2e/helpers/auth.ts` → `signInAsFreshUser()`.
+
+**Kapsamlanmamış locator, yönlendirmede başka sayfada bir butona bağlanıyor.**
+`page.click('button[type="submit"]')` yönlendirmeden sonra mentee portalındaki
+*disabled* "Add goal" butonuna denk geldi ve 15 sn action timeout'u boyunca
+sessizce onu denedi. Submit'i formun içine kapsamla
+(`page.locator('form', { has: page.locator('input[type="password"]') })`) —
+yönlendirme olursa test hızlı ve okunur şekilde düşer.
+
+**Playwright'ın `getByText`'i `<textarea>`/`<input>` value'larını da eşliyor.**
+`notes.spec` düzenlemeden hemen sonra `getByText('<yeni metin>')` bekliyordu; bu
+daha PATCH gönderilmeden, açık editöre yazdığımız metinle eşleşti ve peşindeki
+Prisma okuması yazmayla yarıştı (flaky). Doğrusu: editörün kapanmasını bekle
+(`expect(note.locator('textarea')).toHaveCount(0)`), sonra metni/DB'yi doğrula.
+
+**Teşhis yolu:** `gh run view --log-failed` bu repoda sadece cleanup loglarını
+döküyor (asıl hata "Run full E2E suite" adımının içinde). İşe yarayan:
+`gh run view --log --job <id>` (worktree'de cwd repo kökü değilse `-R owner/repo`
+şart) + `gh api repos/<o>/<r>/actions/artifacts/<id>/zip` ile
+`playwright-report-full-shard-N`'i indirip `data/*.md` (error-context) ve
+failure screenshot'ına bakmak — ekran görüntüsü "mentee portalındayız" diyerek
+hipotezi tek karede doğruladı.

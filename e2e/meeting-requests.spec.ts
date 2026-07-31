@@ -1,18 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
-
-async function signIn(page: import('@playwright/test').Page, email: string, password: string, home: string) {
-  await page.context().clearCookies();
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => u.pathname.startsWith(home), { timeout: 20_000 });
-}
 
 test('mentee requests a meeting and the mentor accepting creates a meeting', async ({ page }) => {
   const mentorEmail = uniqueEmail('mr-mentor');
@@ -24,7 +16,7 @@ test('mentee requests a meeting and the mentor accepting creates a meeting', asy
 
   try {
     // Mentee requests a meeting.
-    await signIn(page, menteeEmail, 'MenteePass123', '/portal');
+    await signInAsFreshUser(page, menteeEmail, 'MenteePass123', '/portal');
     const created = await page.request.post('/api/meeting-requests', {
       data: { relationId: rel.id, topic: 'Career advice', proposedAt: new Date(Date.now() + 86400000).toISOString() },
     });
@@ -32,7 +24,7 @@ test('mentee requests a meeting and the mentor accepting creates a meeting', asy
     reqId = (await created.json()).request.id;
 
     // Mentor accepts → a Meeting is created and the request is ACCEPTED.
-    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const accept = await page.request.patch(`/api/meeting-requests/${reqId}`, { data: { action: 'accept' } });
     expect(accept.ok()).toBeTruthy();
     expect((await accept.json()).status).toBe('ACCEPTED');
