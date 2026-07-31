@@ -1367,3 +1367,36 @@ döküyor (asıl hata "Run full E2E suite" adımının içinde). İşe yarayan:
 `playwright-report-full-shard-N`'i indirip `data/*.md` (error-context) ve
 failure screenshot'ına bakmak — ekran görüntüsü "mentee portalındayız" diyerek
 hipotezi tek karede doğruladı.
+
+## 2026-07-31 — #973'ün conflict'i: iki PR aynı sürüm numarasını kaptığında
+
+#787'nin kuralı ("bump'ı main'in üstüne taşı", yukarıda) burada bir varyantla karşılaştı:
+dal **kendi sürümünü main'de zaten kullanılmış** bir numaraya bump etmişti. #973 ve
+#972 (#879 anket kopyası) bağımsız olarak `0.28.4-beta` iddia etmişti, dolayısıyla
+`CHANGELOG.md` ve `releaseNotes.ts` çakışmaları *aynı sürüm başlığının altında* iki
+farklı içerik olarak göründü — "hangi taraf?" değil, "iki taraf da ama farklı sürümde"
+sorusu. Çözüm: main'in `0.28.4-beta` bölümünü **olduğu gibi bırak** (o zaten merge oldu,
+tarih sırası doğru), dalın girdilerini main'in tepesinin bir üstüne (`0.29.1-beta` →
+`0.29.2-beta`) yeni bir bölüm/`RELEASE_NOTES` girdisi olarak taşı. Çakışma bloğunun
+içinde kendi metnini korumaya çalışmak CHANGELOG'da tek sürüm başlığı altında iki ayrı
+release yaratır.
+
+**`main`'in `package-lock.json`'ı `package.json`'la senkron olmayabilir.** Burada main'in
+lock'u hâlâ `0.28.4-beta` derken `package.json` `0.29.1-beta`'daydı — yani lock
+çakışmasında "main tarafını al" yanlış cevap. Her iki yerdeki (`version` +
+`packages[""].version`) değeri de yeni sürüme elle yaz, tarafları seçme.
+
+**Worktree'de `node_modules` yok, ama bu her şeyi durdurmuyor.** `npx prisma generate` ve
+`npm run check:i18n` (tsx'i npx indirdi) `npm install` olmadan çalıştı; `npm run build`
+için install şart. Install sonrası `package-lock.json`'a darwin'e özgü tek bir
+gürültü hunk'ı düşüyor (`fsevents` girdilerine `"dev": true`) — bunu commit'e karıştırma,
+`git checkout package-lock.json` ile at, sonra build'i çalıştır.
+
+**Ek tur (aynı gün):** conflict çözülüp CI yeşile döndükten sonra, auto-merge kuyruktaki
+image build'i beklerken `main`'e #977 girdi ve *aynı üç dosya* yine çakıştı (`0.29.2` →
+main `0.30.0`, bizim entry `0.30.1`'e taşındı). Bu depoda `main` saatte birkaç kez
+ilerliyor, yani sürüm defter tutması çakışması **çözülünce kapanmıyor** — merge kuyruğunda
+beklerken tekrar açılıyor. Pratik sonuç: çözümü push ettikten sonra dalı bırakıp gitme;
+merge olana kadar `gh pr view --json mergeable` ile izle, tekrar `DIRTY` olursa aynı
+mekanik kuralı uygula. Üçüncü turda `npx tsc --noEmit` + `check:i18n` tam `npm run build`
+yerine yeterli hızlı güvence (çakışan dosyalar sadece CHANGELOG/releaseNotes/sürüm ise).

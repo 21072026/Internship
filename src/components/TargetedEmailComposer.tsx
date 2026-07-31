@@ -75,7 +75,7 @@ export function TargetedEmailComposer() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>{t.mentorEmail.recipients} ({chosen.length})</CardTitle>
+            <CardTitle>{t.mentorEmail.recipients} ({chosen.length}/{relations.length})</CardTitle>
           </CardHeader>
           {relations.length === 0 ? (
             <p className="text-sm text-gray-400">{t.mentor.noMenteesAssigned}</p>

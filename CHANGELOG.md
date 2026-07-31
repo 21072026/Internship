@@ -8,6 +8,15 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.30.1-beta] - 2026-07-31
+
+### Fixed
+- **Mentor/admin targeted-email recipient counter only showed the selected count**
+  (#680). `TargetedEmailComposer` (shared by `/mentor/email` and `/admin/email`) rendered
+  `Recipients (3)` instead of `Recipients (3/10)`, so there was no way to tell how many
+  mentees were selected out of the total without scrolling the checkbox list. Now shows
+  `chosen.length` over `relations.length`.
+
 ## [0.30.0-beta] - 2026-07-31
 
 ### Added
