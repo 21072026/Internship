@@ -963,6 +963,59 @@ Ayrıca: yetkiyi *katılımcılık* ile *canlı izin* olarak ayırmak gerekti. O
 projeden çıkarılan üye süresiz yazmaya devam ederdi.
 
 
+## 2026-07-29 — Uzun süre açık kalmış PR'ın conflict'ini çözme (#787 / #668)
+
+### Eski bir PR'ı çözmeden önce iki tarafı da merge-base'e karşı diff'le
+
+#787 açık kaldığı sürede `main` **aynı işi bağımsız olarak yapıp** 0.26.0'da göndermişti
+(#668 denetimi). 10 dosya çakıştı. Reflex olarak "HEAD benim dalım, onu koru" demek
+burada yanlış olurdu — `main`'in uygulaması her çakışan dosyada daha iyiydi
+(markalı `emailBrand`/`brandHeader` şablonları vs. dalın satır-içi HTML'i;
+`NOTIFICATION_CATEGORIES.map()` vs. elle yazılmış liste; yeniden yazılmış idempotent
+`sendMeetingReminders`).
+
+**Yöntem:** `MB=$(git merge-base origin/<dal> origin/main)`, sonra **iki** diff'i
+yan yana oku:
+
+```
+git diff $MB origin/<dal> -- <dosya>
+git diff $MB origin/main  -- <dosya>
+```
+
+`git diff HEAD` veya sadece conflict marker'larına bakmak yetmiyor; aynı sorunun iki
+farklı çözümünü görmeden hangisinin daha iyi olduğuna karar veremiyorsun. Bu diff
+çiftinden sonra "çakışan her şeyde `--theirs`, dalın **geri kalanı** korunur" net bir
+karar oldu — ve PR'ın gerçekten katkısı olan 3 şey ortaya çıktı:
+`POST /api/mentorship`'in tamamen sessiz olması (main sadece *talep onayı* yolunu
+kapatmış, doğrudan atamayı atlamış), `POST /api/mentor/email`'in `messages` opt-out'unu
+yok sayması, ve cron e-posta hata yönetimi.
+
+### `git checkout --theirs` tüm dosyayı alır — kısmi çözüm için `checkout -m`
+
+`emailService.ts`'te iki hunk çakışıyordu ama dosyanın **başka** yerlerinde dalın
+otomatik merge olmuş faydalı değişiklikleri (try/catch + hata loglama) vardı.
+`git checkout --theirs <dosya>` stage 3'ün tamamını yazıyor, yani o otomatik merge olmuş
+kısımları da siliyor. Fark etmezsem PR'ın gerçek katkısının bir bölümü sessizce kaybolurdu.
+Kurtarma: `git checkout -m <dosya>` conflict'i geri getiriyor, sonra sadece marker'lı
+hunk'ları elle çöz.
+
+**Ders: `--theirs`/`--ours` yalnızca dosyanın *tamamı* karşı tarafa gidecekse doğru.**
+Karma dosyada `checkout -m` + elle hunk çözümü gerekiyor. Çözümden sonra
+`git diff origin/main -- <dosya>` ile "dalın main üstüne gerçekten ne kattığı"nı doğrula —
+beklediğin katkı orada görünmüyorsa bir şeyi ezmişsin.
+
+### Kategori adı değişirse e2e assert'lerini de taşı
+
+Dal `applications` + `mentorshipRequests` kategorilerini eklemişti, main tek bir
+`mentorship` ile aynı kapsamı çözdü. `notif-prefs.spec.ts` "New applications" toggle'ını
+assert ediyordu — artık var olmayan bir UI. `tsc` bunu yakalamıyor (Playwright locator'ı
+string), `check:i18n` de yakalamıyor (anahtar zaten silinmiş). Çözüm tarafında sözlük
+anahtarı/kategori adı değiştiyse **spec'leri greple**: `grep -rn "<eski-kategori>" e2e/`.
+
+### Başka birinin PR'ında scope
+
+PR sahibi başka bir katkıcı olduğunda retrospektifi o dala **commit'lemeyin** — diff'i
+kirletiyor. Ayrı `docs/` dalı + ayrı PR (bu giriş öyle geldi).
 ## 2026-07-28 (2. tur) — #782 takibi: limitler DB ile uyumsuzdu + deploy güveni
 
 **"Özellik canlıda yok" şikâyetini önce shallow clone ile doğrula.** Konteynerdeki
