@@ -186,5 +186,9 @@ Work is planned on a GitHub Project board as Epics (#5–#11) and Stories (#12+)
 issue (`feat/<issue>-slug`), open a PR, reference `Closes #N`. For AI-agent guidance see
 [CLAUDE.md](CLAUDE.md).
 
+Everyone taking part — contributors, mentors, mentees, admins — is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md)
+([Türkçe](docs/code-of-conduct.tr.md), [Deutsch](docs/code-of-conduct.de.md)).
+
 By contributing you agree that your contributions are licensed under AGPL-3.0-or-later, and
 that the maintainer may also offer them under a commercial license (dual licensing).

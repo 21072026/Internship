@@ -11,6 +11,7 @@ import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
+import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { withTenantScope } from '@/lib/orgContext';
 
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
@@ -186,6 +187,11 @@ export async function POST(request: Request) {
     const fileBufs = await Promise.all(
       files.map(async (f) => ({ filename: f.name, contentType: f.type, size: f.size, data: Buffer.from(await f.arrayBuffer()) })),
     );
+    // The MIME check above trusts a client-written header; now that the bytes
+    // are in hand, check they agree (#888).
+    if (fileBufs.some((f) => !contentMatchesType(f.data, f.contentType))) {
+      return NextResponse.json({ error: CONTENT_MISMATCH_ERROR }, { status: 400 });
+    }
 
     const message = await prisma.message.create({
       data: {
@@ -230,7 +236,7 @@ export async function POST(request: Request) {
           // Email replies are routed by a relation-scoped token, so only the
           // mentorship path can offer reply-by-email today; conversation
           // recipients get the same notification without a Reply-To.
-          ...(rel ? { replyTo: replyAddress(rel.id) } : {}),
+          ...(rel ? { replyTo: replyAddress(rel.id, recipient) } : {}),
           // Mirror the attachments (incl. pasted images) into the email too.
           attachments: fileBufs.map((fb) => ({ filename: fb.filename, content: fb.data, contentType: fb.contentType })),
         }).catch((e) => logger.error('Failed to mirror message email', { error: String(e) }));

@@ -232,6 +232,7 @@ export default async function HomePage() {
             <Link href="/features" className="hover:text-gray-700">{t.featureCatalog.allFeatures}</Link>
             <Link href="/privacy" className="hover:text-gray-700">{t.privacy.title}</Link>
             <Link href="/terms" className="hover:text-gray-700">{t.terms.title}</Link>
+            <Link href="/code-of-conduct" className="hover:text-gray-700">{t.codeOfConduct.title}</Link>
             <VersionFooter version={APP_VERSION} />
           </div>
         </div>

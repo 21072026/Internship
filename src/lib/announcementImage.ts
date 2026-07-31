@@ -6,6 +6,8 @@
  * turns into an unexplained 400 *after* the admin picked the file.
  */
 
+import { contentMatchesType, CONTENT_MISMATCH_ERROR } from './fileType';
+
 export const ANNOUNCEMENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 /**
@@ -24,21 +26,22 @@ export const ANNOUNCEMENT_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/
 
 export type AnnouncementImageError = 'unsupported' | 'tooLarge' | 'unreadable';
 
+export { CONTENT_MISMATCH_ERROR };
+
 /** Where an announcement's attached image is served from. */
 export function announcementImageUrl(announcementId: string) {
   return `/api/announcements/${announcementId}/image`;
 }
 
-function startsWith(bytes: Uint8Array, signature: number[]) {
-  return signature.every((value, index) => bytes[index] === value);
-}
-
 /**
  * Validates a picked file. `null` means accepted.
  *
- * The declared MIME type is attacker-controlled, so the leading bytes are
- * checked too: the route echoes `contentType` back on the GET, and a file that
- * merely *claims* to be a PNG must not get served under an image type.
+ * The declared MIME type is attacker-controlled, so the content signature is
+ * checked too — via the shared `contentMatchesType()` (#888) that every other
+ * upload route uses, rather than a second copy of the magic-byte table here.
+ * It matters on this route as well: the GET echoes the stored `contentType`
+ * back, so a file that merely *claims* to be a PNG must never be served under
+ * an image type.
  */
 export async function validateAnnouncementImage(file: File): Promise<AnnouncementImageError | null> {
   if (!ANNOUNCEMENT_IMAGE_MIME.has(file.type)) return 'unsupported';
@@ -46,14 +49,9 @@ export async function validateAnnouncementImage(file: File): Promise<Announcemen
   if (file.size > ANNOUNCEMENT_IMAGE_MAX_BYTES) return 'tooLarge';
 
   try {
+    // 12 bytes covers every signature in the table (WebP's "WEBP" ends at 12).
     const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-    if (file.type === 'image/png' && !startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'unreadable';
-    if (file.type === 'image/jpeg' && !startsWith(bytes, [0xff, 0xd8, 0xff])) return 'unreadable';
-    if (file.type === 'image/gif' && !startsWith(bytes, [0x47, 0x49, 0x46, 0x38])) return 'unreadable';
-    // WebP is "RIFF" + 4 size bytes + "WEBP".
-    if (file.type === 'image/webp' && !(startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) && startsWith(bytes.slice(8), [0x57, 0x45, 0x42, 0x50]))) {
-      return 'unreadable';
-    }
+    if (!contentMatchesType(bytes, file.type)) return 'unreadable';
   } catch {
     return 'unreadable';
   }

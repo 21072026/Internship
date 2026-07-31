@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.33.0-beta',
-    date: '2026-07-31',
+    version: '0.35.0-beta',
+    date: '2026-08-01',
     highlights: {
       en: [
         'Announcements can now include an image. When you write an announcement you can attach a picture (PNG, JPEG, WebP or GIF, up to 5 MB) and see it before publishing; everyone sees it with the announcement, and it is included in the email version too.',
@@ -24,6 +24,96 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Ankündigungen können jetzt ein Bild enthalten. Beim Schreiben einer Ankündigung lässt sich ein Bild anhängen (PNG, JPEG, WebP oder GIF, bis zu 5 MB) und vor dem Veröffentlichen ansehen; alle sehen es zusammen mit der Ankündigung, und in der E-Mail-Version ist es ebenfalls enthalten.',
+      ],
+    },
+  },
+  {
+    version: '0.34.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'The pipeline board now works on a phone. Instead of scrolling 13 stage columns sideways, pick a stage and see its mentees as a list — and every card has a "Move to stage" menu, so you no longer need to drag a card (which never worked on touch) to change its stage. Dragging still works on a computer, and a stage change can be undone straight from the confirmation for a few seconds.',
+        'The board is also keyboard-friendly: cards can be opened with the keyboard and stages changed without a mouse.',
+        'On a phone, the cookie banner no longer covers the "Create Account" button at the bottom of the sign-up page — pages now scroll clear of any bar pinned to the bottom of the screen, so the button is always reachable without dismissing the banner first.',
+        'The cookie banner is also more compact on small screens: it used to take up about 40% of the display on a phone.',
+      ],
+      tr: [
+        'Pipeline board artık telefonda çalışıyor. 13 aşama kolonunu yana kaydırmak yerine bir aşama seçip o aşamadaki mentee\'leri liste hâlinde görüyorsunuz; ayrıca her kartta "Aşamaya taşı" menüsü var, yani aşamayı değiştirmek için kartı sürüklemeniz (ki dokunmatikte hiç çalışmıyordu) gerekmiyor. Bilgisayarda sürükleme aynen çalışmaya devam ediyor ve aşama değişikliğini onay bildiriminden birkaç saniye içinde geri alabiliyorsunuz.',
+        'Board klavyeyle de kullanılabiliyor: kartlar klavyeyle açılabiliyor, aşamalar fare olmadan değiştirilebiliyor.',
+        'Telefonda çerez bandı artık kayıt sayfasının altındaki "Hesap oluştur" butonunu kapatmıyor — sayfalar ekranın altına sabitlenen bantların üstüne kadar kaydırılabiliyor, yani butona ulaşmak için önce bandı kapatmanız gerekmiyor.',
+        'Çerez bandı küçük ekranlarda daha derli toplu: eskiden telefonda ekranın yaklaşık %40\'ını kaplıyordu.',
+      ],
+      de: [
+        'Das Pipeline-Board funktioniert jetzt auf dem Handy. Statt 13 Phasenspalten seitwärts zu scrollen, wählst du eine Phase und siehst ihre Mentees als Liste — außerdem hat jede Karte ein Menü „In Phase verschieben", du musst eine Karte also nicht mehr ziehen (was per Touch ohnehin nie funktionierte). Am Computer bleibt das Ziehen unverändert, und ein Phasenwechsel lässt sich für einige Sekunden direkt aus der Bestätigung zurücknehmen.',
+        'Das Board ist auch mit der Tastatur bedienbar: Karten lassen sich per Tastatur öffnen und Phasen ohne Maus ändern.',
+        'Auf dem Handy verdeckt das Cookie-Banner nicht mehr die Schaltfläche „Konto erstellen" am Ende der Registrierungsseite — Seiten lassen sich jetzt über jede am unteren Bildschirmrand fixierte Leiste hinaus scrollen, die Schaltfläche ist also immer erreichbar, ohne das Banner zuerst zu schließen.',
+        'Das Cookie-Banner ist auf kleinen Bildschirmen außerdem kompakter: bisher nahm es auf dem Handy rund 40% der Anzeige ein.',
+      ],
+    },
+  },
+  {
+    version: '0.33.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Replying by email now works even when you answer from a different address than the one on your account. If your work mail forwards to a personal inbox and you reply from there, your answer used to be dropped without a trace — it now lands in the thread as before, credited to you.',
+      ],
+      tr: [
+        'E-postayla cevaplama artık hesabınızdaki adresten farklı bir adresten yanıtlasanız da çalışıyor. İş mailiniz kişisel bir kutuya yönleniyorsa ve oradan cevap veriyorsanız, cevabınız eskiden iz bırakmadan kayboluyordu — artık eskisi gibi thread\'e düşüyor ve size ait olarak görünüyor.',
+      ],
+      de: [
+        'Antworten per E-Mail funktioniert jetzt auch, wenn du von einer anderen Adresse als der in deinem Konto antwortest. Wenn deine Arbeitsmail an ein privates Postfach weitergeleitet wird und du von dort antwortest, ging deine Antwort früher spurlos verloren — sie landet jetzt wie gewohnt im Thread und wird dir zugeordnet.',
+      ],
+    },
+  },
+  {
+    version: '0.32.4-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'There is now a Code of Conduct, linked in the footer and available in English, Turkish and German. It sets out what respectful participation looks like for mentees, mentors, admins and company contacts — and what is not acceptable, including misuse of the access a role gives you to someone else’s profile, CV or contact details.',
+        'It also explains how to report a problem: confidentially, to an administrator, on your own behalf or someone else’s — and reporting in good faith never counts against you.',
+      ],
+      tr: [
+        'Artık bir Davranış Kuralları metni var; alt bilgiden erişilebiliyor ve İngilizce, Türkçe ve Almanca olarak sunuluyor. Mentee’ler, mentorlar, yöneticiler ve şirket yetkilileri için saygılı katılımın ne demek olduğunu — ve neyin kabul edilemez olduğunu, rolünüzün başkasının profiline, CV’sine veya iletişim bilgilerine verdiği erişimin kötüye kullanımı dâhil — açıkça yazıyor.',
+        'Metin ayrıca bir sorunu nasıl bildireceğinizi anlatıyor: gizlilikle, bir yöneticiye, kendi adınıza ya da bir başkası adına. İyi niyetle yapılan bildirim asla aleyhinize kullanılmaz.',
+      ],
+      de: [
+        'Es gibt jetzt einen Verhaltenskodex, verlinkt in der Fußzeile und verfügbar auf Englisch, Türkisch und Deutsch. Er beschreibt, wie respektvolle Teilnahme für Mentees, Mentoren, Admins und Unternehmenskontakte aussieht — und was nicht akzeptabel ist, einschließlich des Missbrauchs des Zugriffs, den eine Rolle auf Profile, Lebensläufe oder Kontaktdaten anderer gibt.',
+        'Er erklärt außerdem, wie man ein Problem meldet: vertraulich, an eine Administratorin oder einen Administrator, für sich selbst oder stellvertretend für andere — eine Meldung in gutem Glauben wird Ihnen nie zum Nachteil ausgelegt.',
+      ],
+    },
+  },
+  {
+    version: '0.32.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Messages: the "New chat" button is back. Since project group chats appeared in the inbox, everyone who was in a project saw no "New chat" option at all — so there was no way to start a private message with someone you share a project with. The people you can write to are listed again.',
+      ],
+      tr: [
+        'Mesajlar: "Yeni sohbet" düğmesi geri geldi. Proje grup sohbetleri gelen kutusuna eklendiğinden beri bir projede yer alan herkes için "Yeni sohbet" seçeneği hiç görünmüyordu — yani aynı projede olduğunuz biriyle özel mesaj başlatmanın yolu yoktu. Yazabileceğiniz kişiler yeniden listeleniyor.',
+      ],
+      de: [
+        'Nachrichten: Die Schaltfläche „Neuer Chat“ ist zurück. Seit die Projekt-Gruppenchats im Posteingang erscheinen, wurde sie allen, die in einem Projekt sind, gar nicht mehr angezeigt — eine private Nachricht an jemanden aus dem eigenen Projekt ließ sich also nicht mehr beginnen. Die möglichen Empfänger werden wieder aufgelistet.',
+      ],
+    },
+  },
+  {
+    version: '0.32.2-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Uploads are now checked by their actual contents, not just the file type the browser claims. A file renamed to look like a PDF or an image is rejected.',
+        'CVs, documents and file attachments now download instead of opening in the browser, and filenames with accented characters come through correctly.',
+      ],
+      tr: [
+        'Yüklenen dosyalar artık yalnızca tarayıcının bildirdiği türe göre değil, gerçek içeriğine göre denetleniyor. PDF ya da resim gibi görünsün diye adı değiştirilmiş bir dosya reddediliyor.',
+        'CV\'ler, belgeler ve dosya ekleri artık tarayıcıda açılmak yerine indiriliyor; Türkçe karakterli dosya adları da doğru geliyor.',
+      ],
+      de: [
+        'Hochgeladene Dateien werden jetzt anhand ihres tatsächlichen Inhalts geprüft, nicht nur anhand des vom Browser gemeldeten Typs. Eine Datei, die nur so umbenannt wurde, dass sie wie ein PDF oder Bild aussieht, wird abgelehnt.',
+        'Lebensläufe, Dokumente und Dateianhänge werden jetzt heruntergeladen statt im Browser geöffnet, und Dateinamen mit Umlauten kommen korrekt an.',
       ],
     },
   },

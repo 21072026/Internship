@@ -9,7 +9,12 @@ import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { withTenantScope } from '@/lib/orgContext';
-import { validateAnnouncementImage, announcementImageUrl, ANNOUNCEMENT_IMAGE_MAX_BYTES } from '@/lib/announcementImage';
+import {
+  validateAnnouncementImage,
+  announcementImageUrl,
+  ANNOUNCEMENT_IMAGE_MAX_BYTES,
+  CONTENT_MISMATCH_ERROR,
+} from '@/lib/announcementImage';
 
 const schema = z.object({
   // Long-form announcements (release notes, articles) are allowed; the previous
@@ -33,7 +38,8 @@ function emailImageFilename(contentType: string) {
 const IMAGE_ERROR: Record<string, string> = {
   unsupported: 'Only PNG, JPEG, WebP or GIF images are allowed',
   tooLarge: `Image too large (max ${ANNOUNCEMENT_IMAGE_MAX_BYTES / (1024 * 1024)} MB)`,
-  unreadable: 'That file could not be read as an image',
+  // Same wording as every other upload route (#888).
+  unreadable: CONTENT_MISMATCH_ERROR,
 };
 
 /**

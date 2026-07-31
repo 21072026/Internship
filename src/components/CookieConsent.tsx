@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useT } from '@/i18n/client';
+import { useFixedBottomInset } from '@/hooks/useFixedBottomInset';
 import {
   COOKIE_CONSENT_KEY,
   COOKIE_CONSENT_VERSION,
@@ -20,6 +21,11 @@ export function CookieConsent() {
   const [customizing, setCustomizing] = useState(false);
   const [analytics, setAnalytics] = useState(false);
   const [marketing, setMarketing] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
+
+  // While the banner is up, reserve its height at the bottom of the document so
+  // it can never sit on top of a page's primary button (#935).
+  useFixedBottomInset(bannerRef, show);
 
   useEffect(() => {
     // Show when there's no consent for the current version yet.
@@ -62,34 +68,47 @@ export function CookieConsent() {
   );
 
   return (
-    <div role="dialog" aria-label={t.cookies.title} className="fixed bottom-0 inset-x-0 z-[200] p-4">
-      <div className="max-w-3xl mx-auto bg-white border border-gray-200 shadow-lg rounded-2xl p-5">
+    <div
+      ref={bannerRef}
+      role="dialog"
+      aria-label={t.cookies.title}
+      data-testid="cookie-banner"
+      className="fixed bottom-0 inset-x-0 z-[200] p-3 sm:p-4"
+      // Notched phones: keep the banner off the home bar. env() resolves to 0
+      // where there is no inset, so this is a no-op on every other device.
+      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+    >
+      <div className="max-w-3xl mx-auto bg-white border border-gray-200 shadow-lg rounded-2xl p-4 sm:p-5">
         <div className="sm:flex sm:items-start sm:gap-4">
           <div className="flex-1 mb-3 sm:mb-0">
             <p className="text-sm font-semibold text-gray-900">{t.cookies.title}</p>
-            <p className="text-xs text-gray-500 mt-1">{t.cookies.body}</p>
+            {/* Two lines is enough on a phone — the banner used to fill 40% of the
+                viewport there; the full sentence shows from sm: up. */}
+            <p className="text-xs text-gray-500 mt-1 line-clamp-2 sm:line-clamp-none">{t.cookies.body}</p>
             <p className="text-xs text-gray-500 mt-2 flex gap-3">
               <Link href="/privacy" className="text-blue-600 hover:underline">{t.cookies.privacyLink}</Link>
               <Link href="/terms" className="text-blue-600 hover:underline">{t.cookies.termsLink}</Link>
             </p>
           </div>
           {!customizing && (
-            <div className="flex flex-wrap gap-2 flex-shrink-0">
+            /* One compact row on a phone (wrapping made the banner two buttons tall),
+               the original inline group from sm: up. */
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:flex-shrink-0">
               <button
                 onClick={() => setCustomizing(true)}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50"
+                className="px-2 py-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50"
               >
                 {t.cookies.customize}
               </button>
               <button
                 onClick={() => save(false, false)}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50"
+                className="px-2 py-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50"
               >
                 {t.cookies.necessaryOnly}
               </button>
               <button
                 onClick={() => save(true, true)}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                className="px-2 py-2 sm:px-3 rounded-lg text-xs sm:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
               >
                 {t.cookies.acceptAll}
               </button>

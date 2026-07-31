@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.33.0-beta] - 2026-07-31
+## [0.35.0-beta] - 2026-08-01
 
 ### Added
 - **Announcements can carry an image.** The admin composer at `/admin/announcements`
@@ -29,9 +29,262 @@ version is shown in the sidebar footer of every page (links to the
 - Uploads are validated against a single source of truth (`src/lib/announcementImage.ts`)
   on both the client and the server, so a rejected file is reported at the picker
   rather than as a bare 400 after Broadcast. SVG is deliberately excluded (it can
-  carry `<script>`, and the blob is served from our own origin) and the leading
-  bytes are checked, so a file that merely *claims* to be a PNG is refused before
-  any notification fan-out happens.
+  carry `<script>`, and the blob is served from our own origin), and the content
+  signature is checked with the shared `contentMatchesType()` from `src/lib/fileType.ts`
+  (#888) — so a file that merely *claims* to be a PNG is refused, in the same words as
+  every other upload route, before any notification fan-out happens.
+
+## [0.34.0-beta] - 2026-07-31
+
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
+### Fixed
+- **No horizontal overflow at 320px** (#936). The app-shell mobile top bar was 2px
+  wider than the screen: the hamburger's `-mr-2` pushed it past the bar's `px-4`, and
+  the wordmark + beta badge + three icon buttons could not shrink. The wordmark
+  truncates now and the icon group is `flex-shrink-0`. Affects every role's mobile
+  header, not just the board.
+- **`e2e/board-a11y.spec.ts`** scoped its stage select to its own card. The admin board
+  lists every relation in the database, so the unscoped `getByLabel('Move to stage')`
+  broke (strict-mode, 2 elements) as soon as any other relation shared the stage —
+  latent flake, hit locally on the first run.
+- **Fixed bottom bars no longer cover page content on phones** (#935) — the cookie
+  banner is `fixed bottom-0`, and nothing reserved space for it, so on an iPhone 13
+  (390×664) it filled 40% of the viewport and painted over the *"Create Account"*
+  button on `/auth/register`: the first action in the product could not be completed
+  without dismissing the banner first.
+  - New `useFixedBottomInset(ref, active)` hook (`src/hooks/`): each fixed bottom bar
+    publishes its measured height (ResizeObserver, so a re-wrapped banner re-measures)
+    and the tallest one lands on `<html>` as `--fixed-bottom-inset`. `globals.css`
+    turns that into `body { padding-bottom }`, so the document grows and the content
+    scrolls above the bar; the inset returns to `0px` when the bar unmounts, leaving
+    no leftover gap. Deliberately shared so the mobile quick-action bar (#917) can
+    reuse it instead of inventing a second mechanism.
+  - The banner itself is more compact on small screens: tighter padding, body text
+    clamped to two lines below `sm:` (full sentence from `sm:` up — no new strings, so
+    EN/TR/DE stay in parity), and the three buttons in one `grid-cols-3` row instead
+    of wrapping to a second line. Desktop markup is unchanged.
+  - Safe-area support: the banner's bottom padding is
+    `max(0.75rem, env(safe-area-inset-bottom))`. Note the app does not set
+    `viewport-fit=cover`, so `env()` currently resolves to `0` — this is future-proofing
+    for when it does, not a live change.
+  - New `e2e/mobile-fixed-bars.spec.ts` — geometric (`boundingBox`) assertions rather
+    than screenshots: on `/auth/register`, `/auth/signin` and `/portal`, scrolling to
+    the bottom of the document leaves the primary action (and the whole `main` content
+    area) above the banner; the register CTA also survives a real `click()`, which
+    Playwright rejects when another element is on top of it; and dismissing the banner
+    drops the body inset back to `0px`.
+
+## [0.33.2-beta] - 2026-07-31
+
+### Security
+- **Open dependency advisories cut from 10 (1 critical, 7 high) to 5 (2 high, 3
+  moderate)** (#882). Closed: `js-yaml` (quadratic-CPU DoS via merge keys),
+  `brace-expansion` (exponential expansion), `next` 15.5.14 → 15.5.22 (middleware/
+  proxy bypass, cache poisoning, image-optimisation DoS — the middleware advisories
+  matter here because `src/middleware.ts` *is* a security control), `postcss`
+  (arbitrary file read via `sourceMappingURL`) and `sharp` (four libvips CVEs).
+  `next-auth`'s critical cleared with them.
+  **`npm audit` was misleading on three of these.** It reported `fixAvailable: true`
+  for next/postcss/sharp, but the "fix" it had in mind was downgrading to `next@9.3.3`
+  — Next pins `postcss@8.4.31` and `sharp@0.34.5` exactly, and **Next 16.2.12 pins the
+  same two** (verified by building against it). A major jump would not have closed
+  them; `overrides` was the only real fix. `postcss` is also a direct devDependency,
+  and npm refuses an override that conflicts with one, so its direct range moved to
+  `^8.5.18` first. The remaining five need major upgrades or have no published patch,
+  and each is written up with its exploitability in `docs/security-exceptions.md`.
+
+### Added
+- **`.github/workflows/security-audit.yml`** (#885) — `npm audit` on every PR, on
+  `main`, and weekly, with a severity table in the job summary. It fails only on
+  `critical`: the remaining `high` findings have no non-major fix today, and a gate
+  that is always red is one everyone learns to scroll past. Tightening it to `high`
+  is a one-word change once those land.
+- **`.github/dependabot.yml`** (#885) — weekly npm updates grouped into a single
+  minor/patch PR (twenty near-identical bumps is how a review queue starts getting
+  ignored) and monthly GitHub Actions updates. Majors are ignored on purpose: they
+  land as deliberate, tested work, not as an automated PR.
+- **`docs/security-exceptions.md`** — the accepted findings, each with why it can't
+  be fixed, whether it is reachable *in this application* (naming the code path, not
+  just the advisory), and what the permanent fix is.
+
+## [0.33.1-beta] - 2026-07-31
+
+### Added
+
+- **The role × endpoint read matrix is now executable** (#899).
+  `e2e/fixtures/authz-matrix.ts` declares, per role and per endpoint, whether the
+  answer should be `all`, `own` or `deny`; `e2e/authz-matrix.spec.ts` (`@smoke`)
+  enforces it. Crucially an `own` cell asserts **ownership of every row returned**,
+  not the status code — the original leak answered `200` throughout, so a
+  status-only test would have passed against it. The audit's worst finding survived
+  a *closed* RBAC epic (#278) precisely because nothing executable said "this role
+  must not see that".
+- **`.github/workflows/codeql.yml`** (#903) — static analysis on PRs, pushes to
+  `main`, and weekly, with the `security-extended` query set. Not a required check:
+  the first run on an existing codebase always surfaces a backlog, and blocking every
+  PR on triage that hasn't happened teaches people to ignore the gate. CodeQL cannot
+  see role-scoping bugs — that is what the matrix spec above is for; the two are
+  complements.
+
+### Documentation
+- **`SECURITY.md` now leads with a disclosure policy** (#901) — the file previously
+  described the security *model* and offered two lines on reporting ("email the
+  maintainer"). It now opens with GitHub private vulnerability reporting, response
+  targets, scope, and explicit limits for researchers (no load testing against live,
+  no touching real user data — the same line `docs/DATA_ACCESS_POLICY.md` draws for
+  contributors). The security overview follows underneath, unchanged.
+
+## [0.33.0-beta] - 2026-07-31
+
+### Fixed
+- **A reply sent from any address other than the one on your profile was silently
+  dropped.** Found on live traffic hours after the mail bridge shipped: a reply to
+  a notification never appeared in its thread. The bridge had done everything
+  right — mail fetched, token verified — and then refused it, because
+  `routeInboundEmail` identified the writer *only* by matching `From` against a
+  participant's account email. The notification had gone to the mentor's
+  `@bcsit-gmbh.de` address, which forwards to Gmail; replying from there put a
+  `@gmail.com` address in `From`, so the reply was rejected with
+  `403 Sender is not a participant`. Reproduced against production with the real
+  token. Anyone whose mail forwards — which is most people — hit this.
+  - The reply token now names the **recipient** as well as the thread:
+    `reply+<relationId>~<recipientUserId>.<hmac>`. When `From` matches a
+    participant that still wins; otherwise the reply is attributed to the user the
+    token was minted for, provided they are a participant. Logged when the weaker
+    signal is used.
+  - Not a weakening of the gate: the token is delivered only to that user's own
+    registered address, and whoever holds that mail can already take the account
+    over via a password reset, so this grants no new access. The residual exposure
+    is a *forwarded* notification — the recipient of the forward can post as the
+    original addressee. The fallback stays bounded to the token's own recipient: a
+    signed token naming a non-participant is still refused.
+  - Tokens already sitting in delivered mail carry a bare `relationId`; they keep
+    verifying and fall back to `From` matching only.
+  - `src/app/api/mentor/email/route.ts` now selects `mentee.id` so it can scope the
+    token it mints.
+- `e2e/inbound-email.spec.ts` covers all four paths: legacy token + participant,
+  legacy token + stranger (403), scoped token from an unknown address (threaded,
+  attributed to the token's user), and a scoped token naming an outsider (403).
+## [0.32.4-beta] - 2026-07-31
+
+### Added
+- **Code of Conduct, in three languages.** The repository had a README, licence,
+  contributing guide and security policy but no code of conduct — the one GitHub
+  community-standards item still missing. `CODE_OF_CONDUCT.md` (English) plus
+  [`docs/code-of-conduct.tr.md`](docs/code-of-conduct.tr.md) and
+  [`docs/code-of-conduct.de.md`](docs/code-of-conduct.de.md) cover contributors
+  *and* platform participants: the pledge, expected/unacceptable behaviour, scope,
+  a confidential reporting route (`ersahin@bcsit-gmbh.de`) and a four-step
+  enforcement ladder. Written for this project rather than dropped in verbatim —
+  it names the two things a generic template misses here, the power asymmetry in
+  the mentor ↔ mentee relationship and the misuse of role-granted access to
+  mentee PII. Linked from `README.md` and `CONTRIBUTING.md`.
+- **`/code-of-conduct` page** — the participant-facing summary of the same rules,
+  fully translated via the `codeOfConduct` dictionary block (EN/TR/DE) and linked
+  from the landing-page footer next to Privacy and Terms. Reporting is worded
+  against "an administrator of this instance" rather than a hard-coded address,
+  since every deployment has its own operator; the page links out to the full
+  repository version for contributors.
+
+## [0.32.3-beta] - 2026-07-31
+
+### Fixed
+- **"New chat" picker was empty for anyone in a project** — a regression from the
+  project group chats landing in the inbox. `/messages` builds the set of people the
+  viewer already has a DM with in order to exclude them from the picker, and that set
+  was taken from *all* the viewer's conversations. Since every project co-member is
+  also a participant of the shared project's GROUP chat, every candidate matched the
+  exclusion, `candidates` came out empty and `StartConversationPicker` rendered
+  `null` — so the "new chat" toggle disappeared entirely and no project DM could be
+  started from the UI. The exclusion set is now built from `DIRECT` conversations
+  only. Caught by `e2e/project-dm.spec.ts` in the scheduled full run.
+
+### Changed
+- The `E2E Tests` workflow takes an optional `grep` input on manual dispatch
+  (default `@smoke`), so a single non-smoke spec can be re-verified on a branch
+  without dispatching the 4-shard `e2e-full` suite and its summary email.
+
+## [0.32.2-beta] - 2026-07-31
+
+### Security
+- **Upload validation trusted the client's word about the file type** (#888). Every
+  route checked `file.type`, which is a multipart header the client writes; the bytes
+  were never looked at. That matters more here than usual because the declared type
+  is *stored* and returned on download — a mislabelled file arrives on an employer's
+  machine wearing the word "CV". `src/lib/fileType.ts` now checks the content
+  signature (dependency-free — a sniffing library would be one more parser inside the
+  trust boundary) on CV, avatar, document and message-attachment uploads. DOCX and
+  XLSX are both ZIP containers and cannot be told apart by signature, so the check is
+  "the bytes are a ZIP", not more: rejecting legitimate Office files would be the
+  worse failure. Support attachments already did this and are untouched.
+- **Stored uploads were served `inline` with a barely-sanitised filename** (#890).
+  CVs, documents and non-image message attachments now download as `attachment`
+  instead of rendering on our own origin; `src/lib/download.ts` strips control
+  characters (a `\r\n` in a name could have split the header), quotes, backslashes
+  and semicolons, bounds the length, and adds `filename*=UTF-8''…` so a Turkish CV
+  name survives the trip. Every file route now carries its own
+  `X-Content-Type-Options: nosniff` — the global one in `next.config.js` still
+  applies, this is the layer that survives a change to it. Avatars and images in a
+  message thread stay `inline`: the UI renders them.
 
 ## [0.32.1-beta] - 2026-07-31
 

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { canAccessCv } from '@/lib/cvAccess';
+import { downloadHeaders } from '@/lib/download';
 
 // GET — download a user's CV (access-controlled).
 export async function GET(_request: Request, { params }: { params: Promise<{ userId: string }> }) {
@@ -19,12 +20,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
   const cv = await prisma.cvFile.findUnique({ where: { userId } });
   if (!cv) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  // Downloaded, not rendered in place: a stored document must not run as a
+  // page on our own origin (#890).
   return new NextResponse(Buffer.from(cv.data), {
-    headers: {
-      'Content-Type': cv.contentType,
-      'Content-Disposition': `inline; filename="${cv.filename.replace(/"/g, '')}"`,
-      'Content-Length': String(cv.size),
-    },
+    headers: downloadHeaders({ filename: cv.filename, contentType: cv.contentType, size: cv.size }),
   });
   });
 }

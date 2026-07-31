@@ -1437,3 +1437,226 @@ bakıp iki gövdeyi tek şekle normalize et. İki tuzak: FormData'da `undefined`
 opsiyonel alan `null` okunuyor ve zod'un `.optional()`'ı bunu reddediyor (boş olanları
 anahtar olarak hiç ekleme); ve `formData()`/`json()` bozuk gövdede exception atıyor —
 try/catch olmadan 400 yerine 500 dönüyor.
+
+---
+
+## 2026-07-31 — #935 sabit alt bant × gövde boşluğu (mobil ilk izlenim)
+
+**`fixed bottom-0` bir bant, altındaki içeriği "yok" saymaz — yeri ayrılmadıkça
+CTA'yı gömer.** Çerez bandı iPhone 13'te (390×664) görünür alanın %40'ını kaplıyor
+ve `/auth/register`'daki "Create Account" butonunun üstüne biniyordu. Çözümü tek bir
+bileşene gömmek yerine paylaşılabilir bir mekanizma yaptım: `useFixedBottomInset(ref,
+active)` her sabit alt bandın ölçülen yüksekliğini (ResizeObserver ile — bant dil/
+yönlendirme değişince yeniden sarılıyor) `<html>` üzerinde `--fixed-bottom-inset`
+olarak yayınlıyor, `globals.css` bunu `body { padding-bottom }`'a çeviriyor. Bant
+kapanınca değişken `0px`'e dönüyor, artık boşluk kalmıyor. #917'nin mobil hızlı
+eylem çubuğu aynı hook'u kullanabilir — ikinci bir mekanizma icat etmeyin.
+
+**Geometrik e2e testi yazdıktan sonra NEGATİF KONTROL yapın.** `globals.css`'teki tek
+satırı yorum satırına alıp testi tekrar koştum: `Expected: <= 465, Received: 527` —
+tam olarak issue'daki ölçümler (buton alt kenarı 527, bant üst kenarı 464). Bu 30
+saniyelik adım olmadan "yeşil" testin hatayı gerçekten yakaladığını bilemezsiniz;
+ekran görüntüsü testi yerine `boundingBox()` karşılaştırması da hem hızlı hem stabil.
+
+**Playwright'ı yerelde koşarken `DATABASE_URL`'i EXPORT edin.** `.env` dosyası Next
+dev sunucusuna yükleniyor ama test runner'ın kendi process'ine geçmiyor; `e2e/helpers/db.ts`
+üzerinden Prisma kullanan specler `Environment variable not found: DATABASE_URL` ile
+patlıyor (test mantığında hata yok). `export DATABASE_URL=... && npx playwright test ...`.
+
+**Yerelde `npm run dev` üzerinde koşarken kapsamsız locator'lar Next.js Dev Tools
+butonuna çarpıyor.** `e2e/layout.spec.ts:6` yerelde `strict mode violation:
+button[aria-haspopup="menu"] resolved to 2 elements` veriyor; ikinci eleman
+`<button id="next-logo" aria-haspopup="menu" aria-label="Open Next.js Dev Tools">`,
+yani **sadece dev modunda var** (CI `npm run start` ile prod build koşuyor, orada yok).
+Değişikliklerimi stash'leyip aynı hatayı aldım → regresyon değil. Ders: yerelde çıkan
+bir strict-mode ihlalini ürün hatası sanmadan önce (a) stash'leyip tekrar koş, (b)
+eşleşen elemanların `outerHTML`'ini dök.
+
+**Bu container'da Playwright config'i override etmek gerekiyor.** Kurulu build
+`chromium-1194`, Playwright 1.61 `chromium_headless_shell-1228` arıyor. Commit
+edilmeyen bir `playwright.local.ts` (repo config'ini import edip `use.launchOptions.
+executablePath = /opt/pw-browsers/chromium-1194/chrome-linux/chrome` ekler) ile
+`npx playwright test --config playwright.local.ts` tüm suite'i çalıştırıyor —
+ad-hoc script yazmaya gerek yok. Dosyayı commit'e sızdırmayın.
+
+## 2026-07-31 — Zamanlanmış tam koşudaki "timeout" her zaman flake değil
+
+`e2e-full` raporu `project-dm.spec.ts` için `locator.click: Timeout 15000ms exceeded —
+waiting for getByTestId('new-chat-toggle')` dedi. Timeout + tek test = refleks olarak
+"flake, rerun" demek cazip; ama burada element **yavaş değildi, hiç render edilmiyordu**.
+Ayırt eden sinyal: aynı koşudaki 5 gerçek flake'in hepsi `failed,passed` (retry'da geçti),
+bu test `failed,failed`. **Retry deseni, hata tipinden daha iyi bir flake göstergesi.**
+
+Deseni çıkarmanın hızlı yolu (log kazmaya gerek yok) — shard JSON'larını indirip
+`status !== "expected"` olanları dök:
+
+```
+gh run download <run-id> -D <dir> -p 'e2e-json-shard-*'
+# sonra suites'i özyinelemeli gezip t.status + t.results.map(r=>r.status)
+```
+
+Kalan 5 flake'in hepsi aynı kökten: signin sonrası yönlendirme, hemen ardından gelen
+`page.goto`'yu kesiyor (`Navigation to /mentor/mentees/X is interrupted by another
+navigation to /mentor`) ya da signin formu 15 sn içinde gelmiyor. Kod değişikliğiyle
+ilgisi yok.
+
+**Kök neden dersi:** `/messages`, "zaten DM'i olanlar" kümesini *yüklediği tüm*
+conversation'lardan kuruyordu. 988d791 sorguya proje GROUP sohbetlerini ekleyince, her
+proje arkadaşı grup sohbetinin de katılımcısı olduğu için tüm adaylar elendi;
+`StartConversationPicker` boş listede `null` döndürüyor, dolayısıyla toggle DOM'a hiç
+girmedi. Bir sorgunun kapsamı genişletildiğinde, **o sorgunun sonucunu kullanan her
+türetilmiş kümeyi** gözden geçir — tip alanı (`DIRECT`/`GROUP`) select'e eklenmişti ama
+filtreye eklenmemişti.
+
+**Doğrulama, MySQL'siz makinede:** bu Mac'te docker daemon kapalı ve MySQL yok, yani
+spec yerelde koşmuyor. `e2e.yml`'ye manuel dispatch için opsiyonel `grep` input'u
+eklemek (varsayılan `@smoke`) tek bir non-smoke spec'i dalda doğrulamayı sağlıyor —
+`e2e-full`'ü dispatch etmek 4 shard koşturur *ve* her koşuda özet e-postası gönderir,
+sırf bir testi görmek için istenmeyecek bir yan etki. Input'u shell'e interpolate etme,
+env değişkeniyle geçir.
+
+**Worktree'de `npm run lint` çalışmıyor:** worktree ana repo checkout'unun içinde durduğu
+için ESLint iki `.eslintrc.json` görüyor ve `Plugin "@next/next" was conflicted` ile
+düşüyor. Ortam kaynaklı, değişiklikle ilgisi yok; `npx tsc --noEmit` + `npm run check:i18n`
+yerel güvence olarak yeterli, lint'i CI'ya bırak.
+
+## 2026-07-31 — Davranış Kuralları (Code of Conduct), 3 dilde
+
+**"Code of conduct ekle" isteği iki yere birden bakar.** Bu depoda README, LICENSE,
+CONTRIBUTING ve SECURITY vardı; GitHub community-standards listesinde eksik olan tek
+kalem `CODE_OF_CONDUCT.md`'ydi — ama uygulamanın kendisinde de `/privacy` ve `/terms`
+gibi i18n'li kamuya açık sayfalar var. İkisi de yapıldı: depo dosyası katkıcılar için
+(kök `CODE_OF_CONDUCT.md` + `docs/code-of-conduct.tr.md` / `.de.md`), uygulama sayfası
+(`/code-of-conduct`) program katılımcıları için. Metni Contributor Covenant'ı birebir
+kopyalamak yerine projeye göre yazmak daha isabetli oldu: jenerik şablonun kaçırdığı iki
+şey burada asıl mesele — mentor ↔ mentee arasındaki güç asimetrisi ve rolün verdiği
+erişimle mentee PII'sine ulaşmanın kötüye kullanımı.
+
+**Uygulama içi metinlerde iletişim adresini sabitleme.** Depo dosyasında bakımcının
+e-postası doğru; uygulama sayfasında değil — her kurulumun kendi operatörü var.
+`privacy` bloğunun kullandığı dil ("bu kurulumun operatörü/yöneticisi") burada da doğru
+kalıp.
+
+**Nested worktree'de `npm run lint` yanlış alarm veriyor.** Worktree depo kökünün altında
+(`.claude/worktrees/…`) durduğu için ESLint yukarı yürüyüp üst dizindeki `.eslintrc.json`
++ `node_modules`'u da buluyor ve `Plugin "@next/next" was conflicted…` diyerek **exit 1**
+dönüyor — değişiklikle ilgisi yok, temiz checkout'ta koşan CI'da çıkmıyor. Gerçek güvence
+için `npx tsc --noEmit` + `npm run build` yeterli oldu.
+
+**Sözlükte dizi (array) değerler sorunsuz.** `check-i18n.ts` dizileri `String(v)` ile tek
+değer sayıyor, yani madde listelerini `expected: [...]` olarak yazmak parite kontrolünü
+bozmuyor (`weekdays`/`topics` zaten öyle). Madde başına `bullet1..n` anahtarı uydurmaya
+gerek yok — ama dizi uzunluğu diller arasında tutarlı olmalı, onu kontrol eden yok.
+
+**`npm install` lock'taki sürümü de düzeltiyor.** Kurulum öncesi `package-lock.json`
+`0.30.1-beta`de kalmıştı (`package.json` 0.31.4'teyken); install sonrası ikisi de yeni
+sürüme geldi — bu hunk gürültü değil, commit'e dahil edilmeli.
+
+## 2026-07-31 — Güvenlik denetimi #951: 8 epic'i tek oturumda kapatmak
+
+**Rapordaki "fixAvailable: true"ya güvenme, kendin doğrula.** #882 `next`/`postcss`/
+`sharp`'ı "majör gerekmiyor" grubuna koymuştu, `npm audit` de öyle diyordu. Gerçekte
+audit'in önerdiği "düzeltme" **`next@9.3.3`'e düşmekti**; `next@15.5.22` `postcss@8.4.31`
+ve `sharp@0.34.5`'i tam sürüm sabitliyor ve **Next 16.2.12 de aynı ikisini sabitliyor**
+(kurup build alarak doğruladım — temiz derledi, ama audit tablosu değişmedi). Tek çözüm
+`overrides` oldu. Bir denetim raporu ne kadar iyi yazılmış olursa olsun, paket
+gerçekliği aylar içinde kayıyor.
+
+**`overrides` + doğrudan bağımlılık = `EOVERRIDE`.** `postcss` hem devDependency hem
+next'in geçişli bağımlılığı. npm, doğrudan aralıkla çelişen bir override'ı reddediyor.
+Sıra önemli: önce doğrudan aralığı yükselt (`^8` → `^8.5.18`), sonra aynı aralıkla
+override ekle.
+
+**Fail-closed varsayılan bazen yanlış karar.** `/api/health` detayını (#897) doğrudan
+kapatmak doğru refleks gibi görünüyor — ama prod **ve** preview deploy drift gate'leri
+`sha`'yı tam o uçtan okuyor. Kapatmak merge anında ikisini birden kör ederdi ve secret'ı
+ekleyecek olan ben değilim. Doğru hamle: kapıyı yaz, boru hattını uçtan uca bağla
+(`deploy-prod.sh` container'a geçiriyor, iki gate de env dosyasından okuyup header
+gönderiyor), varsayılanı eski davranışta bırak ve **PR'da operatör aksiyonu olarak
+işaretle**. Sessizce fail-open bırakmakla, gürültüyle fail-closed yapmak arasında üçüncü
+bir yol var.
+
+**İçe aktarma döngüsü, iki iyi fikrin kesişiminde çıkar.** Rate limiter aşımları
+`logActivity` ile yazmaya başladı (#864); aynı gün `logActivity` IP kaydetmeye başladı
+(#881) ve IP `rateLimit.ts`'teydi. `clientIp()`'i `src/lib/clientIp.ts`'e taşıyıp eski
+yerinden re-export etmek hem döngüyü kırdı hem tek bir çağıranı değiştirmedi.
+
+**NextAuth `authorize(credentials, req)` WHATWG `Request` vermiyor** — düz bir header
+nesnesi veriyor, `events.signIn/signOut` ise hiçbir şey vermiyor. Küçük bir
+`HeaderSource` arayüzü + `headerSource()` adaptörü ikisini de çözüyor. Başarılı giriş
+kaydını `events.signIn`'den `authorize()`'a taşımak gerekti (IP orada var); event
+tarafında `account?.provider === 'credentials'` kontrolüyle çift kayıt engellendi.
+
+**Aynı bucket'ı paylaşan e2e testleri aynı dosyada kalmalı.** Rate limit spoof testi
+(#859) mevcut flood testiyle aynı süreç içi sayacı kullanıyor. Ayrı dosyaya koymak,
+Playwright'ın dosya sırasına bağlı sessiz bir kırılganlık yaratırdı. Ayrıca `@smoke`
+alt kümesinde **tek başına** koştuğunda da anlamlı kalmalı: "hepsi 429" yerine "en az
+bir 429" assertion'ı iki senaryoda da doğru.
+
+**Yeni bir güvenlik başlığını test ederken ortamı da ona göre kur.** `TRUSTED_PROXY_COUNT=0`
+ve `HEALTH_TOKEN` `playwright.config.ts`'in webServer `env`'ine eklendi — ikisi de
+Playwright'ın gerçekten içinde olduğu topolojinin **doğru** ayarı (araya nginx girmiyor),
+ve o ayar olmadan yazdığın assertion'lar boşa düşüyor.
+
+**`git add -A` + rebase conflict = bozuk commit.** Bir `--continue` sırasında
+`package.json` hâlâ conflict marker'ı taşırken commit'lendi; `npm pkg set` `EJSONPARSE`
+ile patladı ama rebase yine de "başarılı" dedi. Conflict çözerken `git add -A` yerine
+dosya dosya eklemek ya da eklemeden önce `grep -c '<<<<<<<'` çalıştırmak gerekiyor.
+
+**Uzun oturumda `main` altından kayar.** 12 PR boyunca başka oturumlardan 4 PR daha
+main'e indi; her biri `CHANGELOG.md` + `package.json` sürümünde conflict üretti. Stack'i
+küçük tutmak (her PR merge olur olmaz bir sonrakini rebase etmek) ve conflict'i mekanik
+çözmek işe yaradı — ama en temizi, geride kalmış bir dalı **yeniden kurmak**: `git
+checkout -b yeni origin/main` + ilgili dosyaları `git checkout <eski-dal> -- <dosyalar>`.
+Squash-merge sonrası eski commit'i yeniden oynatmaya çalışmaktan çok daha az acı verdi.
+
+## 2026-07-31 — #936 board mobil: iki layout, bayat closure ve sürüm defteri yarışı
+
+**Mobil ve masaüstü iki farklı layout ise İKİSİNİ AYNI ANDA RENDER ETME.**
+İlk içgüdü `lg:hidden` / `hidden lg:block` ile ikisini birden basmak; bu her kartı
+DOM'a iki kez koyar → Playwright strict mode ihlali (bir mentee adı iki eşleşme) ve
+ekran okuyucu için çift içerik. Çözüm `useIsNarrow()` (matchMedia, `useState(false)`
+ile başlar ki ilk client render sunucuyla aynı olsun) ve **tek** dalı render etmek.
+
+**`toast(...)` içine koyduğun geri-al callback'i, o render'ın state'ini hatırlar.**
+`moveTo` optimistic güncelleme için `relations`'ı okuyordu; toast'taki "Geri al"
+kullanıcı tıkladığında çalıştığı için closure bayat listeyi görüyor, `from === hedef`
+çıkıyor ve **sessizce hiçbir şey yapmıyordu** (test yakaladı: DB hâlâ yeni aşamada).
+Kural: gecikmeli çalışan callback'ler state'i `useRef` üzerinden okumalı.
+
+**Türetilmiş varsayılan (derived default) sinsi bir davranış üretir.** Mobil aşama
+filtresini her render'da "ilk dolu aşama" diye hesaplayınca, kartı taşıdığında görünüm
+kartın peşinden yeni aşamaya atlıyor — kullanıcı kartın gittiğini hiç görmüyor.
+Veri gelince filtreyi bir kez state'e **sabitle** (effect), sonra türetme.
+
+**Locator tuzakları (CLAUDE.md listesine iki yeni madde):**
+- `div.w-64` **app shell'in sidebar'ına** da uyuyor (`ResponsiveShell` drawer'ı
+  `w-64`). Board kolonlarını sayacaksan `data-testid="board-columns"` kullan.
+- Admin board **veritabanındaki tüm ilişkileri** listeler, dolayısıyla
+  `getByLabel('Move to stage')` gibi kapsamsız bir locator, başka bir spec'in (veya
+  yarım kalmış bir koşunun) ilişkisi aynı aşamada olduğu an strict-mode ile patlar.
+  Kartlara `data-testid="board-card"` eklendi; seçiciyi
+  `getByTestId('board-card').filter({ hasText: '<ad>' })` ile kapsa.
+
+**320 px taşması genelde board'da değil app shell'inde.** `-mr-2` taşıyan hamburger
+butonu + kısalamayan wordmark, mobil üst bar'ı 2 px fazla yapıyordu (her rolde).
+`document.documentElement.scrollWidth - clientWidth` ölçüp `getBoundingClientRect()`
+ile suçluyu bulmak 1 dakika sürüyor — tahmin etmeyin, ölçün.
+
+**Yerel ortam iki kez ısırdı:** (1) MariaDB koşular arasında **düşüyor** — bütün
+specler ~16 s'de aynı anda kırmızıya dönerse önce `service mariadb start`. (2) Önceki
+`npm run dev` 3000'i tutuyorsa Playwright 3001'e kaçıyor ve `webServer` 120 s'de
+timeout veriyor; koşudan önce `pkill -f "next dev"` + portu doğrula.
+
+**Sürüm defteri yarışı (bu repoda gerçek bir maliyet):** paralel oturumlar `main`'e
+~3 dakikada bir merge ediyor ve **her PR** `package.json` + `CHANGELOG.md` +
+`releaseNotes.ts` dosyalarının aynı satırlarına dokunuyor. PR'ım 5 kez `dirty` oldu ve
+**conflict'li PR'da hiç check koşmuyor** → auto-merge de takılıyor. İşe yarayanlar:
+- Conflict çözümünü script'le (main'in sürümü + 1, benim bölüm en üste) ve **sonucu
+  assert et**: iki taraf aynı başlık metnini taşıdığında git onu ortak bağlam sayıyor,
+  "benim" hunk'ı **başlıksız** geliyor ve sessizce başlıksız bir bölüm oluşuyor.
+  Regex'in dosyadaki **ilk** conflict'i değil, iki conflict'i birden yutmasına da
+  dikkat (releaseNotes'ta tam bunu yaptı, dosyayı bozdum ve push'ladım).
+- Çakışan sürüm numarasını **rebase'den önce** kendi commit'inde değiştir; iki taraf
+  farklı numara taşıyınca conflict önemsiz bir ekleme hâline geliyor.
+- Aynı temaya ait iki iş varsa (burada #935 + #936) **tek PR** yap: iki yarış yerine bir.

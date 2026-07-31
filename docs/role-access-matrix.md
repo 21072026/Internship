@@ -112,8 +112,16 @@ ellenmedi; en kritikleri:
 
 ## Regresyon testi / Regression test
 
-[`e2e/role-scoping.spec.ts`](../e2e/role-scoping.spec.ts) (`@smoke`) matrisin
-sızıntı üreten hücrelerini kilitliyor. Test **satır sahipliğini** doğruluyor,
+İki spec bu matrisi kilitliyor:
+
+- [`e2e/authz-matrix.spec.ts`](../e2e/authz-matrix.spec.ts) (`@smoke`) — matrisin
+  **çalıştırılabilir** hâli. Tablo [`e2e/fixtures/authz-matrix.ts`](../e2e/fixtures/authz-matrix.ts)
+  içinde; her rol × uç hücresi `all` / `own` / `deny`. Yeni bir kaynak veya rol
+  eklerken **önce oraya satır ekleyin**.
+- [`e2e/role-scoping.spec.ts`](../e2e/role-scoping.spec.ts) (`@smoke`) — özgün
+  sızıntının somut senaryosu.
+
+Her ikisi de Test **satır sahipliğini** doğruluyor,
 HTTP status'unu değil — sızıntı boyunca her istek `200` dönüyordu, dolayısıyla
 yalnız status kontrol eden bir test bunu yakalayamazdı.
 
@@ -121,4 +129,5 @@ Yeni bir rol veya yeni bir kapsanan kaynak eklerken:
 
 1. `authzScope.ts` içindeki `BUILDERS`'a rolü ekleyin (eklemezseniz rol 403 alır — güvenli varsayılan).
 2. Bu dokümandaki tabloyu güncelleyin.
-3. `role-scoping.spec.ts`'e negatif bir vaka ekleyin (kapsam dışı bir kaydın **görünmediğini** doğrulayın).
+3. [`e2e/fixtures/authz-matrix.ts`](../e2e/fixtures/authz-matrix.ts) tablosuna rolü/ucu ekleyin — `own` hücresi
+   için `ownership` yüklemini de yazın.
