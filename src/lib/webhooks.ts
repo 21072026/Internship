@@ -1,6 +1,11 @@
 import { createHmac } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { assertPublicHttpsUrl } from '@/lib/ssrfGuard';
+
+// A receiver that cannot answer in five seconds is not worth blocking a request
+// handler on; delivery is fire-and-forget anyway.
+const WEBHOOK_TIMEOUT_MS = 5_000;
 
 // Known webhook event types.
 export const WEBHOOK_EVENTS = [
@@ -30,11 +35,19 @@ export async function dispatchWebhook(event: WebhookEvent, data: Record<string, 
       .filter((h) => Array.isArray(h.events) && (h.events as string[]).includes(event))
       .map(async (h) => {
         try {
+          // Re-checked at delivery, not just at registration (#893): DNS moves,
+          // and rows created before the guard existed have never been checked
+          // at all.
+          await assertPublicHttpsUrl(h.url);
           const signature = createHmac('sha256', h.secret).update(body).digest('hex');
           await fetch(h.url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Signature': signature, 'X-Event': event },
             body,
+            // Without this a single unresponsive endpoint held the request
+            // handler open indefinitely — and these run under Promise.all, so
+            // the slowest target stalled the whole batch (#895).
+            signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
           });
         } catch (e) {
           logger.warning('Webhook delivery failed', { url: h.url, event, error: String(e) });

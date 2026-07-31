@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor } from '@/lib/branding';
@@ -105,6 +106,15 @@ export async function POST(request: Request) {
   const organization = await prisma.organization.create({
     data: { name, slug, plan: parsed.data.plan ?? 'FREE' },
   });
+  await logActivity({
+    action: 'org.created',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'organization',
+    targetId: organization.id,
+    detail: organization.name,
+    request,
+  });
   return NextResponse.json({ organization }, { status: 201 });
 }
 
@@ -184,5 +194,17 @@ export async function PATCH(request: Request) {
   if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
 
   const organization = await prisma.organization.update({ where: { id }, data });
+  await logActivity({
+    // SSO config lives behind this endpoint, so a change to it can redirect
+    // authentication itself — warning rather than info when that is touched.
+    action: 'org.updated',
+    level: 'ssoEnabled' in data || 'ssoIssuer' in data || 'ssoEntryPoint' in data ? 'warning' : 'info',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'organization',
+    targetId: organization.id,
+    detail: Object.keys(data).join(', '),
+    request,
+  });
   return NextResponse.json({ organization });
 }

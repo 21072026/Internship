@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.31.5-beta] - 2026-07-31
+## [0.32.2-beta] - 2026-07-31
 
 ### Added
 - **Code of Conduct, in three languages.** The repository had a README, licence,
@@ -28,6 +28,74 @@ version is shown in the sidebar footer of every page (links to the
   against "an administrator of this instance" rather than a hard-coded address,
   since every deployment has its own operator; the page links out to the full
   repository version for contributors.
+
+## [0.32.1-beta] - 2026-07-31
+
+### Security
+- **Webhook URLs were called from the server with no restriction (SSRF)** (#893).
+  Validation was `z.string().url()`, which happily accepts `http://127.0.0.1:3306`
+  and `http://169.254.169.254/latest/meta-data/` — the database and the cloud
+  metadata service, both reachable from the server's network position but not from
+  the admin's browser. `src/lib/ssrfGuard.ts` now requires https, no embedded
+  credentials, and a hostname that **resolves** to a public address (every answer
+  checked, not just the first — one private record is enough for a resolver to hand
+  `fetch` the internal one). Checked at registration *and* again at delivery: DNS
+  moves, and rows created before the guard existed were never checked at all. The
+  HMAC signature was never the problem and is untouched.
+- **`/api/health` told anonymous callers the version and git sha** (#897) — a
+  ready-made answer to "which CVEs apply to this deployment?". Setting `HEALTH_TOKEN`
+  narrows the anonymous response to `{ status, timestamp }` (all an uptime monitor
+  acts on) and releases the detail only to an admin session or a caller sending
+  `X-Health-Token`. **With the token unset the response is unchanged** — a
+  fail-closed default would blind the production and preview deploy drift gates,
+  which read `sha` from this endpoint, the moment it merged. `infra/deploy-prod.sh`
+  and both gates now send the header when the server env has it, so turning it on is
+  a one-variable change.
+
+### Fixed
+- **Outgoing HTTP had no timeouts** (#895). Webhook delivery ran under `Promise.all`
+  with no deadline, so one unresponsive receiver stalled the whole batch and held the
+  request handler open indefinitely — now 5s. The Anthropic SDK's default is 10
+  minutes, long enough for a user to give up first; the five AI clients now pass 60s,
+  which fits how long generation actually takes. `dispatchWebhook` still never throws:
+  an abort lands in the existing catch and is logged like any other delivery failure.
+
+## [0.32.0-beta] - 2026-07-31
+
+### Security
+- **Admin password reset handed out a live reset link and left no trace** (#875).
+  `POST /api/admin/users/[id]/reset-password` returned `resetUrl` in the response body
+  — so an account could be taken over with no access to the target's mailbox at all,
+  and the credential landed in reverse-proxy logs, browser devtools and any
+  screen-share. It also had **no target restriction**, so one admin could reset
+  another admin's password: horizontal admin takeover, which the impersonation
+  endpoint has always blocked outright. And it wrote **no audit record**. Now: the
+  response carries only `{ ok, emailSent }`, resetting another admin's password is
+  refused (an admin who has genuinely lost access uses forgot-password with their own
+  mailbox), and the action writes both an `AuditLog` row and an `admin.reset_password`
+  activity entry at warning level. The account owner is notified, mirroring
+  impersonation.
+
+### Added
+- **Audit records for privileged actions that had none** (#878): API key create/revoke,
+  webhook create/delete, invitation created, user activated/deactivated, organization
+  created/updated (warning level when the change touches SSO config — that can redirect
+  authentication itself), source created/deleted, company- and source-user accounts
+  created, and mentorship-request decisions.
+- **`ActivityLog` records where an action came from** (#881) — new optional `ip` and
+  `userAgent` columns, populated when the call site has a request. "Who did what"
+  could never answer "was this really the user?". Sign-in, failed sign-in, failed 2FA,
+  impersonation and every action above now carry an origin; the IP shows in
+  `/admin/activity` with the user-agent as its tooltip. Successful sign-in moved from
+  NextAuth's `events.signIn` into `authorize()` because the event callback has no
+  request — sign-out stays there and carries no origin, which is a deliberate
+  omission, not an oversight.
+
+### Changed
+- `clientIp()` moved from `src/lib/rateLimit.ts` to `src/lib/clientIp.ts` (re-exported
+  from its old home, so no call site changes). The rate limiter now logs breaches via
+  `logActivity`, and the audit logger needs the IP — leaving both in one module made
+  an import cycle.
 
 ## [0.31.4-beta] - 2026-07-31
 

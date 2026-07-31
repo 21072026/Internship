@@ -12,6 +12,8 @@ import { defineConfig, devices } from '@playwright/test';
 const externalBase = process.env.BASE_URL;
 const PORT = 3000;
 const localURL = `http://localhost:${PORT}`;
+// Shared with e2e/health.spec.ts, which asserts both sides of the token gate.
+export const E2E_HEALTH_TOKEN = 'e2e-health-token';
 
 export default defineConfig({
   testDir: './e2e',
@@ -44,6 +46,12 @@ export default defineConfig({
         // Playwright talks to Next directly — there is no nginx appending to
         // X-Forwarded-For here, so 0 is the honest setting and it is what makes
         // the spoofing assertions in rate-limit-spoof.spec.ts meaningful (#858).
-        env: { TRUSTED_PROXY_COUNT: '0' },
+        env: {
+          TRUSTED_PROXY_COUNT: '0',
+          // Exercises the gated shape of /api/health (#897). Unset, the endpoint
+          // keeps its legacy fully-public response and health.spec.ts's
+          // assertions about what an anonymous caller may see would be vacuous.
+          HEALTH_TOKEN: E2E_HEALTH_TOKEN,
+        },
       },
 });
