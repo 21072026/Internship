@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMentorshipDecisionEmail, sendMenteeAssignedEmail } from '@/services/emailService';
@@ -143,12 +144,30 @@ export async function PUT(request: Request) {
         console.error('Mentee assignment email failed:', e);
       }
     }
+    await logActivity({
+      action: 'mentorship_request.decided',
+      actorId: session.user.id,
+      actorEmail: session.user.email ?? null,
+      targetType: 'mentorship_request',
+      targetId: req.id,
+      detail: `approved · mentor ${mentorId}`,
+      request,
+    });
     return NextResponse.json({ ok: true, relationId: relation.id });
   }
 
   await prisma.mentorshipRequest.update({
     where: { id: req.id },
     data: { status: 'REJECTED', decidedById: session.user.id, decidedAt: new Date() },
+  });
+  await logActivity({
+    action: 'mentorship_request.decided',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'mentorship_request',
+    targetId: req.id,
+    detail: 'rejected',
+    request,
   });
   await notify(req.menteeId, 'mentorship_request', 'Your mentorship request was reviewed but could not be approved right now.', '/portal');
   if (req.mentee.email && emailAllowed(req.mentee, 'mentorship')) {

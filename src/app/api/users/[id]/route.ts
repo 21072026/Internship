@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -134,6 +135,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         data,
         select: { id: true, isActive: true, sourceId: true, skills: true, mentorCapacity: true },
       });
+
+      // Activation state is the security-relevant part of this endpoint — it is
+      // what lets someone in or keeps them out — so it gets its own audit row
+      // at warning level (#878). Skills/capacity/source edits are routine.
+      if (typeof data.isActive === 'boolean') {
+        await logActivity({
+          action: data.isActive ? 'user.activated' : 'user.deactivated',
+          level: 'warning',
+          actorId: session.user.id,
+          actorEmail: session.user.email ?? null,
+          targetType: 'user',
+          targetId: id,
+          request,
+        });
+      }
 
       return NextResponse.json({ user });
     });
