@@ -61,11 +61,33 @@ dig +short -x 212.132.111.125          # PTR
 
 The full round trip is in place:
 
-- Outgoing message emails set `Reply-To: reply+<relationId>.<sig>@<INBOUND_EMAIL_DOMAIN>`
-  (`src/lib/replyToken.ts`). The token is an HMAC, so it can't be forged.
-- `src/lib/inboundEmail.ts` (`routeInboundEmail`) verifies the token and that the
-  sender is a participant, then stores a `Message` (`channel: EMAIL`) and notifies
-  the other party — so it appears under **/messages/<relationId>**.
+- Outgoing message emails set
+  `Reply-To: reply+<relationId>~<recipientUserId>.<sig>@<INBOUND_EMAIL_DOMAIN>`
+  (`src/lib/replyToken.ts`). The token is an HMAC, so it can't be forged, and it
+  names both the thread and the person the notification was sent to.
+- `src/lib/inboundEmail.ts` (`routeInboundEmail`) verifies the token, works out
+  who wrote the mail, then stores a `Message` (`channel: EMAIL`) and notifies the
+  other party — so it appears under **/messages/<relationId>**.
+
+### How the writer is identified
+
+Two signals, in order:
+
+1. **`From` matches a participant's account email** — the strong signal.
+2. **Otherwise, the recipient named in the signed token**, provided that user is a
+   participant of the thread. This is the common case in practice: people forward
+   work mail to a personal account and reply with *that* identity, so `From` is
+   not the address on their profile, and matching only on `From` silently dropped
+   those replies.
+
+Honouring the token is not a weakening: it is delivered only to that user's own
+registered address, and anyone holding the mail could already take the account
+over via a password reset. The residual exposure is a *forwarded* notification —
+whoever receives the forward can post as the original recipient. Attribution via
+the token (rather than `From`) is logged.
+
+Tokens minted before this carried a bare `relationId`; they still verify and fall
+back to signal 1 only.
 - Two entry points feed that one routing function:
   - **`POST /api/inbound-email`** accepts `{ to, from, text, messageId? }` (+ an
     `x-inbound-secret` header when `INBOUND_SECRET` is set) — for a provider
