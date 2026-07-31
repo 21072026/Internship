@@ -419,9 +419,23 @@ No version bump: test and `data-testid` changes only, no user-visible behaviour 
   match the visible view). Bulk activate from the archive restores candidates to
   the active list.
 
-## [0.25.12] - 2026-07-24
+## [0.25.13] - 2026-07-27
 
 ### Added
+- **Attachments in admin support replies.** Admins can now attach up to 10 PNG,
+  JPEG, or PDF files/images when replying to a support ticket, reusing the same
+  composer, image preview, pre-send removal, and client/server validation as the
+  requester's side. A reply may contain text only, attachment(s) only, or both.
+  Sent attachments render in the thread and remain downloadable by the requester
+  and support admins via the existing protected attachment route.
+
+## [0.25.12] - 2026-07-27
+
+### Fixed
+- **Projects list heading flashed a stale count while loading.** The "All
+  projects" heading in `ProjectsManager` now only shows the `(N)` count after
+  the initial fetch finishes, instead of showing `(0)` during the loading
+  state.
 - **Improved goal management (#785).** Goals can now be sorted newest or oldest
   first and edited inline. Completed goals are kept separate in a collapsible
   archive, where they can still be reopened or deleted.

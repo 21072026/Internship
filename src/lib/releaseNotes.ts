@@ -154,17 +154,32 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
-    version: '0.25.12-beta',
-    date: '2026-07-24',
+    version: '0.25.13-beta',
+    date: '2026-07-27',
     highlights: {
       en: [
-        'Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
+        'Admins can now attach images or PDF files when replying to a support ticket — with the same preview and pre-send removal as the requester side. Replies can include text, an attachment, or both.',
       ],
       tr: [
-        'Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
+        'Adminler artık bir destek talebine yanıt verirken görsel veya PDF dosyası ekleyebiliyor — talep sahibi tarafındaki gibi aynı önizleme ve gönderim öncesi kaldırma özellikleriyle. Yanıtlar metin, ek veya ikisini birden içerebilir.',
       ],
       de: [
-        'Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
+        'Admins können jetzt beim Antworten auf ein Support-Ticket Bilder oder PDF-Dateien anhängen — mit derselben Vorschau und Entfernung vor dem Senden wie auf der Anfragerseite. Antworten können Text, einen Anhang oder beides enthalten.',
+      ],
+    },
+  },
+  {
+    version: '0.25.12-beta',
+    date: '2026-07-27',
+    highlights: {
+      en: [
+        'Fixed the Projects page briefly showing "(0)" next to "All projects" while the list was still loading. Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
+      ],
+      tr: [
+        'Projeler sayfasında liste henüz yüklenirken "Tüm projeler" yazısının yanında kısaca "(0)" görünmesi giderildi. Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
+      ],
+      de: [
+        'Behoben: Auf der Projekte-Seite zeigte "Alle Projekte" beim Laden kurzzeitig "(0)" an. Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
       ],
     },
   },
