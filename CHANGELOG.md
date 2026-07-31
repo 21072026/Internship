@@ -8,6 +8,63 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.30.0-beta] - 2026-07-31
+
+### Added
+- **The scheduled jobs now actually run.** `initCronJobs()` had no caller
+  anywhere in the repo, and nothing on the server drove `GET /api/cron` either
+  (no crontab entry, no systemd timer) — so mentor-interaction reminders, stage
+  deadline reminders, meeting reminders, the weekly mentor digest, the daily
+  activity digest, the analytics report and the hourly unread-message digest had
+  never fired on a schedule in production. Noted as a follow-up in 0.29.0; this
+  closes it.
+  - `POST /api/cron/start` (node runtime, `CRON_SECRET` required) registers the
+    schedules in the server process; `src/instrumentation.ts` calls it shortly
+    after boot. Same edge-runtime workaround as the mail bridge — instrumentation
+    can't import `emailService` directly, because `middleware.ts` makes Next
+    compile instrumentation for the edge runtime too, where Prisma and nodemailer
+    don't resolve.
+  - The call is **deferred onto a timer, not awaited** in `register()`: that hook
+    resolves before the server accepts connections, so awaiting a request to
+    ourselves would deadlock.
+  - Gated on `CRON_SECRET`, which belongs in production only — the preview DB is
+    shared with every topic env and holds the same addresses, so a scheduler
+    running there would email real users. `CRON_ENABLED=0` is the kill switch.
+  - `GET /api/cron` (admin, runs everything once) is unchanged.
+
+### Fixed
+- **Mentor interaction reminders: one mail per mentee per day, with no way to
+  opt out.** `checkMentorInteractionReminders` sent a separate email for every
+  stale relation on every run, and — alone among the scheduled jobs — never
+  consulted `emailAllowed`. On the production data that meant one mentor would
+  have received 7 emails a day, indefinitely, with no opt-out. Now grouped into a
+  single summary per mentor listing each mentee and how long it has been, and it
+  honours the `deadlines` preference (the same category as the stage-deadline
+  nudge). Returns `emailed` alongside `checked`/`reminded`.
+
+### Infrastructure
+- `prisma/backfill-cron-baseline.mjs`, wired into `deploy-prod.sh` — a **one-shot**
+  baseline so the first tick doesn't mail out history. The unread-message digest
+  selects every message with `digestedAt: null` and no lower bound on age, and
+  `digestedAt` had never been set, so switching the scheduler on would have sent
+  3 people a digest of messages up to 3 weeks old. It marks the pre-existing
+  backlog handled and records `Setting['cronBaselineAt']`, skipping every
+  subsequent run — deliberately one-shot rather than merely idempotent, since
+  re-running it would mark *newly* stale work as handled on every deploy and
+  permanently suppress the very reminders it protects.
+  Not baselined on purpose: `retentionReminderSentAt` (consent renewal is a
+  compliance path — and nothing is due, retention is 12 months and the oldest
+  `consentAt` is 2026-06-30), `Meeting.reminderSentAt` (only looks 60 minutes
+  ahead, so it has no backlog), and `stalenessReminderSentAt` (it gates only the
+  in-app bell, not the email — the daily-mail problem was the ungrouped send,
+  fixed above).
+- `CRON_SECRET` / `CRON_ENABLED` forwarded by `infra/deploy-prod.sh` (explicit
+  `-e` allowlist, plus the env-derivation fallback).
+
+### Tests
+- `e2e/cron-start.spec.ts` (`@smoke`) — neither `/api/cron/start` nor
+  `/api/inbound-email/poll` may return 200 to an unauthenticated caller.
+
 ## [0.29.1-beta] - 2026-07-31
 
 ### Fixed
