@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { relationScopeForRole, logScopeDenial } from '@/lib/authzScope';
+import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     // Fail-closed scoping (#847): COMPANY and SOURCE used to fall past this
     // chain with an empty `where` and read every mentee's interaction log.
     // A role with no defined scope is now denied outright.
-    const relationScope = await relationScopeForRole(session.user);
+    const relationScope = await scopeForRole(session.user, 'relation');
     if (!relationScope) {
       await logScopeDenial(session.user, 'GET /api/interactions');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

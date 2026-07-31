@@ -3,8 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
 import { resolveOwner } from '@/lib/projectAccess';
+import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { createOrGetProjectConversation } from '@/lib/conversations';
@@ -32,18 +32,19 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   return withTenantScope(session, async () => {
-  let where: Prisma.ProjectWhereInput = {};
-  // Mentors see projects they own OR are members of (#617/#619).
-  if (session.user.role === 'MENTOR') {
-    where = { OR: [{ ownerUserId: session.user.id }, { members: { some: { userId: session.user.id } } }] };
+  // Fail-closed scoping (#849): SOURCE used to fall past the role chain here
+  // and read every project, private ones included. Per-role scopes now live in
+  // authzScope.ts and an unlisted role is denied instead of unfiltered.
+  const where = await scopeForRole(session.user, 'project');
+  if (!where) {
+    await logScopeDenial(session.user, 'GET /api/projects');
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  else if (session.user.role === 'COMPANY') where = { ownerCompanyId: session.user.companyId ?? '__none__' };
-  else if (session.user.role === 'MENTEE') where = { isPublic: true };
 
   const projects = await prisma.project.findMany({ where, include, orderBy: { updatedAt: 'desc' } });
-  // Mentees only browse the public showcase set — keep it PII-free
-  // (member/relation names stripped, count only).
-  if (session.user.role === 'MENTEE') {
+  // Showcase-only roles (mentee, source) browse the public set — keep it
+  // PII-free (member/relation names stripped, count only).
+  if (session.user.role === 'MENTEE' || session.user.role === 'SOURCE') {
     return NextResponse.json({
       projects: projects.map(({ relations: _relations, members: _members, ...rest }) => rest),
     });

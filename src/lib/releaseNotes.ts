@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.30.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Security fix: referral-source accounts could see every project, including private ones. They now see the public showcase only, without member names.',
+      ],
+      tr: [
+        'Güvenlik düzeltmesi: yönlendiren kurum hesapları özel olanlar dâhil tüm projeleri görebiliyordu. Artık yalnızca açık vitrini, üye isimleri olmadan görüyorlar.',
+      ],
+      de: [
+        'Sicherheitskorrektur: Vermittlerkonten konnten alle Projekte sehen, auch private. Sie sehen jetzt nur noch die öffentliche Übersicht, ohne Mitgliedsnamen.',
+      ],
+    },
+  },
+  {
     version: '0.30.2-beta',
     date: '2026-07-31',
     highlights: {
