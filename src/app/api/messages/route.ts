@@ -236,7 +236,7 @@ export async function POST(request: Request) {
           // Email replies are routed by a relation-scoped token, so only the
           // mentorship path can offer reply-by-email today; conversation
           // recipients get the same notification without a Reply-To.
-          ...(rel ? { replyTo: replyAddress(rel.id) } : {}),
+          ...(rel ? { replyTo: replyAddress(rel.id, recipient) } : {}),
           // Mirror the attachments (incl. pasted images) into the email too.
           attachments: fileBufs.map((fb) => ({ filename: fb.filename, content: fb.data, contentType: fb.contentType })),
         }).catch((e) => logger.error('Failed to mirror message email', { error: String(e) }));

@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.33.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Replying by email now works even when you answer from a different address than the one on your account. If your work mail forwards to a personal inbox and you reply from there, your answer used to be dropped without a trace — it now lands in the thread as before, credited to you.',
+      ],
+      tr: [
+        'E-postayla cevaplama artık hesabınızdaki adresten farklı bir adresten yanıtlasanız da çalışıyor. İş mailiniz kişisel bir kutuya yönleniyorsa ve oradan cevap veriyorsanız, cevabınız eskiden iz bırakmadan kayboluyordu — artık eskisi gibi thread\'e düşüyor ve size ait olarak görünüyor.',
+      ],
+      de: [
+        'Antworten per E-Mail funktioniert jetzt auch, wenn du von einer anderen Adresse als der in deinem Konto antwortest. Wenn deine Arbeitsmail an ein privates Postfach weitergeleitet wird und du von dort antwortest, ging deine Antwort früher spurlos verloren — sie landet jetzt wie gewohnt im Thread und wird dir zugeordnet.',
+      ],
+    },
+  },
+  {
     version: '0.32.4-beta',
     date: '2026-07-31',
     highlights: {
