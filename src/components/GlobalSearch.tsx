@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
-interface UserHit { id: string; fullName: string; email: string; role: string }
+interface UserHit { id: string; fullName: string; email: string; role: string; relationId?: string | null }
 interface CompanyHit { id: string; name: string }
 
 export function GlobalSearch() {
@@ -50,13 +50,15 @@ export function GlobalSearch() {
     router.push(href);
   };
 
-  const userHref = (u: UserHit) => (u.role === 'MENTEE' ? `/admin/candidates/${u.id}` : `/admin/users`);
+  const userHref = (u: UserHit) =>
+    u.relationId ? `/mentor/mentees/${u.relationId}` : u.role === 'MENTEE' ? `/admin/candidates/${u.id}` : `/admin/users`;
 
   return (
     <div className="relative w-56" ref={ref}>
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white">
         <Search className="h-4 w-4 text-gray-400" />
         <input
+          data-testid="global-search-input"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => q.trim().length >= 2 && setOpen(true)}

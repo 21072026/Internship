@@ -10,6 +10,7 @@ import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppButton } from '@/components/InstallAppButton';
+import { GlobalSearch } from '@/components/GlobalSearch';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
@@ -39,6 +40,7 @@ export default async function MentorLayout({ children }: { children: React.React
   return (
     <ResponsiveShell
       brand={<BrandWordmark />}
+      headerExtra={<GlobalSearch />}
       sidebar={
         <aside className="w-64 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
         <div className="p-6 border-b border-gray-200">

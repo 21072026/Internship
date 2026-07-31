@@ -8,6 +8,16 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.29.2-beta] - 2026-07-31
+
+### Added
+- **Mentors get global search too.** `GlobalSearch` (previously admin-only) is now also
+  in the `/mentor` header. `GET /api/search` already scoped mentor results to their own
+  mentees (`menteeRelations: { some: { mentorId } }`); it now also returns each hit's
+  `relationId`, so a mentor's search result opens `/mentor/mentees/<relationId>` instead
+  of the admin candidate route. Admin search behaviour and response shape are unchanged.
+  Input gained `data-testid="global-search-input"`.
+
 ## [0.29.1-beta] - 2026-07-31
 
 ### Fixed
