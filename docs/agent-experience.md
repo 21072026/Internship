@@ -1401,6 +1401,47 @@ merge olana kadar `gh pr view --json mergeable` ile izle, tekrar `DIRTY` olursa 
 mekanik kuralı uygula. Üçüncü turda `npx tsc --noEmit` + `check:i18n` tam `npm run build`
 yerine yeterli hızlı güvence (çakışan dosyalar sadece CHANGELOG/releaseNotes/sürüm ise).
 
+---
+
+## 2026-07-31 — #935 sabit alt bant × gövde boşluğu (mobil ilk izlenim)
+
+**`fixed bottom-0` bir bant, altındaki içeriği "yok" saymaz — yeri ayrılmadıkça
+CTA'yı gömer.** Çerez bandı iPhone 13'te (390×664) görünür alanın %40'ını kaplıyor
+ve `/auth/register`'daki "Create Account" butonunun üstüne biniyordu. Çözümü tek bir
+bileşene gömmek yerine paylaşılabilir bir mekanizma yaptım: `useFixedBottomInset(ref,
+active)` her sabit alt bandın ölçülen yüksekliğini (ResizeObserver ile — bant dil/
+yönlendirme değişince yeniden sarılıyor) `<html>` üzerinde `--fixed-bottom-inset`
+olarak yayınlıyor, `globals.css` bunu `body { padding-bottom }`'a çeviriyor. Bant
+kapanınca değişken `0px`'e dönüyor, artık boşluk kalmıyor. #917'nin mobil hızlı
+eylem çubuğu aynı hook'u kullanabilir — ikinci bir mekanizma icat etmeyin.
+
+**Geometrik e2e testi yazdıktan sonra NEGATİF KONTROL yapın.** `globals.css`'teki tek
+satırı yorum satırına alıp testi tekrar koştum: `Expected: <= 465, Received: 527` —
+tam olarak issue'daki ölçümler (buton alt kenarı 527, bant üst kenarı 464). Bu 30
+saniyelik adım olmadan "yeşil" testin hatayı gerçekten yakaladığını bilemezsiniz;
+ekran görüntüsü testi yerine `boundingBox()` karşılaştırması da hem hızlı hem stabil.
+
+**Playwright'ı yerelde koşarken `DATABASE_URL`'i EXPORT edin.** `.env` dosyası Next
+dev sunucusuna yükleniyor ama test runner'ın kendi process'ine geçmiyor; `e2e/helpers/db.ts`
+üzerinden Prisma kullanan specler `Environment variable not found: DATABASE_URL` ile
+patlıyor (test mantığında hata yok). `export DATABASE_URL=... && npx playwright test ...`.
+
+**Yerelde `npm run dev` üzerinde koşarken kapsamsız locator'lar Next.js Dev Tools
+butonuna çarpıyor.** `e2e/layout.spec.ts:6` yerelde `strict mode violation:
+button[aria-haspopup="menu"] resolved to 2 elements` veriyor; ikinci eleman
+`<button id="next-logo" aria-haspopup="menu" aria-label="Open Next.js Dev Tools">`,
+yani **sadece dev modunda var** (CI `npm run start` ile prod build koşuyor, orada yok).
+Değişikliklerimi stash'leyip aynı hatayı aldım → regresyon değil. Ders: yerelde çıkan
+bir strict-mode ihlalini ürün hatası sanmadan önce (a) stash'leyip tekrar koş, (b)
+eşleşen elemanların `outerHTML`'ini dök.
+
+**Bu container'da Playwright config'i override etmek gerekiyor.** Kurulu build
+`chromium-1194`, Playwright 1.61 `chromium_headless_shell-1228` arıyor. Commit
+edilmeyen bir `playwright.local.ts` (repo config'ini import edip `use.launchOptions.
+executablePath = /opt/pw-browsers/chromium-1194/chrome-linux/chrome` ekler) ile
+`npx playwright test --config playwright.local.ts` tüm suite'i çalıştırıyor —
+ad-hoc script yazmaya gerek yok. Dosyayı commit'e sızdırmayın.
+
 ## 2026-07-31 — Zamanlanmış tam koşudaki "timeout" her zaman flake değil
 
 `e2e-full` raporu `project-dm.spec.ts` için `locator.click: Timeout 15000ms exceeded —
@@ -1531,3 +1572,54 @@ küçük tutmak (her PR merge olur olmaz bir sonrakini rebase etmek) ve conflict
 çözmek işe yaradı — ama en temizi, geride kalmış bir dalı **yeniden kurmak**: `git
 checkout -b yeni origin/main` + ilgili dosyaları `git checkout <eski-dal> -- <dosyalar>`.
 Squash-merge sonrası eski commit'i yeniden oynatmaya çalışmaktan çok daha az acı verdi.
+
+## 2026-07-31 — #936 board mobil: iki layout, bayat closure ve sürüm defteri yarışı
+
+**Mobil ve masaüstü iki farklı layout ise İKİSİNİ AYNI ANDA RENDER ETME.**
+İlk içgüdü `lg:hidden` / `hidden lg:block` ile ikisini birden basmak; bu her kartı
+DOM'a iki kez koyar → Playwright strict mode ihlali (bir mentee adı iki eşleşme) ve
+ekran okuyucu için çift içerik. Çözüm `useIsNarrow()` (matchMedia, `useState(false)`
+ile başlar ki ilk client render sunucuyla aynı olsun) ve **tek** dalı render etmek.
+
+**`toast(...)` içine koyduğun geri-al callback'i, o render'ın state'ini hatırlar.**
+`moveTo` optimistic güncelleme için `relations`'ı okuyordu; toast'taki "Geri al"
+kullanıcı tıkladığında çalıştığı için closure bayat listeyi görüyor, `from === hedef`
+çıkıyor ve **sessizce hiçbir şey yapmıyordu** (test yakaladı: DB hâlâ yeni aşamada).
+Kural: gecikmeli çalışan callback'ler state'i `useRef` üzerinden okumalı.
+
+**Türetilmiş varsayılan (derived default) sinsi bir davranış üretir.** Mobil aşama
+filtresini her render'da "ilk dolu aşama" diye hesaplayınca, kartı taşıdığında görünüm
+kartın peşinden yeni aşamaya atlıyor — kullanıcı kartın gittiğini hiç görmüyor.
+Veri gelince filtreyi bir kez state'e **sabitle** (effect), sonra türetme.
+
+**Locator tuzakları (CLAUDE.md listesine iki yeni madde):**
+- `div.w-64` **app shell'in sidebar'ına** da uyuyor (`ResponsiveShell` drawer'ı
+  `w-64`). Board kolonlarını sayacaksan `data-testid="board-columns"` kullan.
+- Admin board **veritabanındaki tüm ilişkileri** listeler, dolayısıyla
+  `getByLabel('Move to stage')` gibi kapsamsız bir locator, başka bir spec'in (veya
+  yarım kalmış bir koşunun) ilişkisi aynı aşamada olduğu an strict-mode ile patlar.
+  Kartlara `data-testid="board-card"` eklendi; seçiciyi
+  `getByTestId('board-card').filter({ hasText: '<ad>' })` ile kapsa.
+
+**320 px taşması genelde board'da değil app shell'inde.** `-mr-2` taşıyan hamburger
+butonu + kısalamayan wordmark, mobil üst bar'ı 2 px fazla yapıyordu (her rolde).
+`document.documentElement.scrollWidth - clientWidth` ölçüp `getBoundingClientRect()`
+ile suçluyu bulmak 1 dakika sürüyor — tahmin etmeyin, ölçün.
+
+**Yerel ortam iki kez ısırdı:** (1) MariaDB koşular arasında **düşüyor** — bütün
+specler ~16 s'de aynı anda kırmızıya dönerse önce `service mariadb start`. (2) Önceki
+`npm run dev` 3000'i tutuyorsa Playwright 3001'e kaçıyor ve `webServer` 120 s'de
+timeout veriyor; koşudan önce `pkill -f "next dev"` + portu doğrula.
+
+**Sürüm defteri yarışı (bu repoda gerçek bir maliyet):** paralel oturumlar `main`'e
+~3 dakikada bir merge ediyor ve **her PR** `package.json` + `CHANGELOG.md` +
+`releaseNotes.ts` dosyalarının aynı satırlarına dokunuyor. PR'ım 5 kez `dirty` oldu ve
+**conflict'li PR'da hiç check koşmuyor** → auto-merge de takılıyor. İşe yarayanlar:
+- Conflict çözümünü script'le (main'in sürümü + 1, benim bölüm en üste) ve **sonucu
+  assert et**: iki taraf aynı başlık metnini taşıdığında git onu ortak bağlam sayıyor,
+  "benim" hunk'ı **başlıksız** geliyor ve sessizce başlıksız bir bölüm oluşuyor.
+  Regex'in dosyadaki **ilk** conflict'i değil, iki conflict'i birden yutmasına da
+  dikkat (releaseNotes'ta tam bunu yaptı, dosyayı bozdum ve push'ladım).
+- Çakışan sürüm numarasını **rebase'den önce** kendi commit'inde değiştir; iki taraf
+  farklı numara taşıyınca conflict önemsiz bir ekleme hâline geliyor.
+- Aynı temaya ait iki iş varsa (burada #935 + #936) **tek PR** yap: iki yarış yerine bir.

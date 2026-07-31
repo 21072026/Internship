@@ -29,12 +29,18 @@ export function ResponsiveShell({
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 lg:flex">
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-4">
-        {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100">InternshipCRM</span>}
-        <BetaBadge className="ml-2" />
-        <div className="flex items-center gap-1">
+        {/* The wordmark truncates instead of pushing the bar wider than the screen:
+            brand + badge + three icon buttons did not fit a 320px phone (#936). */}
+        <div className="flex items-center min-w-0 truncate">
+          {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100">InternshipCRM</span>}
+          <BetaBadge className="ml-2" />
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
           <MessagesButton />
           <NotificationBell />
-          <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-2 -mr-2 text-gray-600 hover:text-gray-900">
+          {/* No negative margin: `-mr-2` pushed the icon 8px past the bar's px-4 and
+              made the page 2px wider than a 320px phone (#936). */}
+          <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-2 text-gray-600 hover:text-gray-900">
             <Menu className="h-6 w-6" />
           </button>
         </div>

@@ -8,6 +8,105 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.34.0-beta] - 2026-07-31
+
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
+### Fixed
+- **No horizontal overflow at 320px** (#936). The app-shell mobile top bar was 2px
+  wider than the screen: the hamburger's `-mr-2` pushed it past the bar's `px-4`, and
+  the wordmark + beta badge + three icon buttons could not shrink. The wordmark
+  truncates now and the icon group is `flex-shrink-0`. Affects every role's mobile
+  header, not just the board.
+- **`e2e/board-a11y.spec.ts`** scoped its stage select to its own card. The admin board
+  lists every relation in the database, so the unscoped `getByLabel('Move to stage')`
+  broke (strict-mode, 2 elements) as soon as any other relation shared the stage —
+  latent flake, hit locally on the first run.
+- **Fixed bottom bars no longer cover page content on phones** (#935) — the cookie
+  banner is `fixed bottom-0`, and nothing reserved space for it, so on an iPhone 13
+  (390×664) it filled 40% of the viewport and painted over the *"Create Account"*
+  button on `/auth/register`: the first action in the product could not be completed
+  without dismissing the banner first.
+  - New `useFixedBottomInset(ref, active)` hook (`src/hooks/`): each fixed bottom bar
+    publishes its measured height (ResizeObserver, so a re-wrapped banner re-measures)
+    and the tallest one lands on `<html>` as `--fixed-bottom-inset`. `globals.css`
+    turns that into `body { padding-bottom }`, so the document grows and the content
+    scrolls above the bar; the inset returns to `0px` when the bar unmounts, leaving
+    no leftover gap. Deliberately shared so the mobile quick-action bar (#917) can
+    reuse it instead of inventing a second mechanism.
+  - The banner itself is more compact on small screens: tighter padding, body text
+    clamped to two lines below `sm:` (full sentence from `sm:` up — no new strings, so
+    EN/TR/DE stay in parity), and the three buttons in one `grid-cols-3` row instead
+    of wrapping to a second line. Desktop markup is unchanged.
+  - Safe-area support: the banner's bottom padding is
+    `max(0.75rem, env(safe-area-inset-bottom))`. Note the app does not set
+    `viewport-fit=cover`, so `env()` currently resolves to `0` — this is future-proofing
+    for when it does, not a live change.
+  - New `e2e/mobile-fixed-bars.spec.ts` — geometric (`boundingBox`) assertions rather
+    than screenshots: on `/auth/register`, `/auth/signin` and `/portal`, scrolling to
+    the bottom of the document leaves the primary action (and the whole `main` content
+    area) above the banner; the register CTA also survives a real `click()`, which
+    Playwright rejects when another element is on top of it; and dismissing the banner
+    drops the body inset back to `0px`.
+
 ## [0.33.2-beta] - 2026-07-31
 
 ### Security
