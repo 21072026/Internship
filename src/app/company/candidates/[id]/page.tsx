@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
+import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 type InterestStatus = 'INTERESTED' | 'SHORTLISTED' | 'PASS';
 interface Interest { status: InterestStatus; note?: string | null }
@@ -349,12 +351,14 @@ export default function CompanyCandidateDetailPage() {
           </Button>
         </div>
 
-        <textarea
+        <Textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder={t.company.notePlaceholder}
           rows={3}
-          className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-2"
+          maxLength={TEXT_LIMITS.companyInterestNote}
+          showCounter
+          className="mb-2"
         />
         {saved ? (
           <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { useT } from '@/i18n/client';
 
 const TYPES = ['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] as const;
@@ -91,7 +92,7 @@ export function AddInteractionForm({ relationId, onAdded }: { relationId: string
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={2}
-        maxLength={5000}
+        maxLength={TEXT_LIMITS.interactionNotes}
         placeholder={t.logInteraction.notes}
         showCounter
       />

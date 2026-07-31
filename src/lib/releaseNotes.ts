@@ -13,6 +13,63 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.28.2-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'When an admin assigns you a mentor directly, you now hear about it: both the mentee and the mentor get a notification in the app and an email. Previously this only happened when a mentee had requested a mentor themselves — a direct assignment was silent, so you had to notice it on your own next time you logged in.',
+        'Emails your mentor sends to you from their dashboard now follow your notification settings — if you have switched off message emails, they no longer arrive. Your mentor still sees the message in your interaction history either way.',
+        'Scheduled emails are more reliable: one address that fails no longer stops the rest of that batch from going out.',
+      ],
+      tr: [
+        'Bir yönetici size doğrudan mentor atadığında artık haberdar oluyorsunuz: hem menti hem de mentor uygulama içinde bildirim ve e-posta alıyor. Daha önce bu yalnızca menti kendisi mentor talebinde bulunduğunda oluyordu — doğrudan atama sessizdi, bir sonraki girişinizde kendiniz fark etmeniz gerekiyordu.',
+        'Mentorunuzun panelinden size gönderdiği e-postalar artık bildirim tercihlerinize uyuyor — mesaj e-postalarını kapattıysanız artık gelmiyor. Mentorunuz mesajı her durumda etkileşim geçmişinizde görmeye devam ediyor.',
+        'Zamanlanmış e-postalar daha güvenilir: başarısız olan tek bir adres artık o gruptaki diğer e-postaların gönderilmesini engellemiyor.',
+      ],
+      de: [
+        'Wenn ein Admin dir direkt einen Mentor zuweist, erfährst du das jetzt: Mentee und Mentor erhalten eine Benachrichtigung in der App und eine E-Mail. Bisher passierte das nur, wenn ein Mentee selbst einen Mentor angefragt hatte — eine direkte Zuweisung blieb stumm und musste beim nächsten Login selbst entdeckt werden.',
+        'E-Mails, die dein Mentor dir aus seinem Dashboard schickt, richten sich jetzt nach deinen Benachrichtigungseinstellungen — hast du Nachrichten-E-Mails abgeschaltet, kommen sie nicht mehr an. Dein Mentor sieht die Nachricht in beiden Fällen weiterhin in deinem Interaktionsverlauf.',
+        'Geplante E-Mails sind zuverlässiger: Eine fehlerhafte Adresse verhindert nicht mehr, dass der Rest des Stapels versendet wird.',
+      ],
+    },
+  },
+  {
+    version: '0.28.1-beta',
+    date: '2026-07-29',
+    highlights: {
+      en: [
+        'Reliability fix in the data-isolation layer for multi-organization setups: a rare code path could run a database query without the organization filter attached. It is now guaranteed to be applied in every case. Single-organization installations are unaffected.',
+      ],
+      tr: [
+        'Çoklu-kuruluş kurulumları için veri izolasyonu katmanında güvenilirlik düzeltmesi: nadir bir kod yolu, veritabanı sorgusunu kuruluş filtresi eklenmeden çalıştırabiliyordu. Artık filtrenin her durumda uygulanması garanti altında. Tek kuruluşlu kurulumlar bu durumdan etkilenmiyordu.',
+      ],
+      de: [
+        'Zuverlässigkeitskorrektur in der Datenisolationsschicht für Installationen mit mehreren Organisationen: Ein seltener Codepfad konnte eine Datenbankabfrage ohne den Organisationsfilter ausführen. Der Filter wird jetzt garantiert in jedem Fall angewendet. Installationen mit nur einer Organisation waren nicht betroffen.',
+      ],
+    },
+  },
+  {
+    version: '0.28.0-beta',
+    date: '2026-07-28',
+    highlights: {
+      en: [
+        'The Announcements box now has the live character counter too, and stops you at the 20 000-character limit as you type — instead of accepting a long message and then failing with an untranslated "Validation failed" after you pressed Broadcast.',
+        'Long text now saves everywhere it said it would. Meeting notes, company descriptions and shortlist notes were being cut off by a database limit far smaller than the counter promised, so a normal paragraph could fail to save — in the case of a bulk mentor email, only after the email had already gone out. Every one of those fields now genuinely holds what the counter shows.',
+        'Fixed a company description box that could not be typed into at all, and a counter that sat on top of the resize handle so a textarea could not be dragged bigger.',
+      ],
+      tr: [
+        'Duyurular kutusunda da artık canlı karakter sayacı var ve yazarken 20 000 karakter sınırında sizi durduruyor — uzun bir mesajı kabul edip, siz Yayınla\'ya bastıktan sonra çevrilmemiş bir "Validation failed" hatasıyla başarısız olmak yerine.',
+        'Uzun metinler artık söz verilen her yerde kaydediliyor. Görüşme notları, şirket açıklamaları ve kısa liste notları, sayacın belirttiğinden çok daha küçük bir veritabanı sınırına takılıyordu; yani normal uzunlukta bir paragraf kaydedilemiyordu — toplu mentor e-postasında ise ancak e-posta gönderildikten sonra. Bu alanların hepsi artık sayacın gösterdiği kadarını gerçekten tutuyor.',
+        'Hiç yazı yazılamayan şirket açıklaması kutusu düzeltildi; ayrıca yeniden boyutlandırma tutamacının üstüne binen ve metin alanının büyütülmesini engelleyen sayaç sorunu giderildi.',
+      ],
+      de: [
+        'Auch das Ankündigungsfeld hat jetzt den Live-Zeichenzähler und stoppt dich beim Tippen an der Grenze von 20 000 Zeichen — statt eine lange Nachricht anzunehmen und nach dem Senden mit einem unübersetzten „Validation failed" zu scheitern.',
+        'Lange Texte werden jetzt überall dort gespeichert, wo es versprochen war. Gesprächsnotizen, Firmenbeschreibungen und Shortlist-Notizen liefen gegen ein Datenbanklimit, das weit kleiner war als der Zähler anzeigte — ein normaler Absatz konnte also nicht gespeichert werden, bei einer Mentor-Sammelmail sogar erst nachdem die E-Mail schon raus war. Alle diese Felder halten jetzt wirklich so viel, wie der Zähler anzeigt.',
+        'Ein Firmenbeschreibungsfeld, in das man überhaupt nicht schreiben konnte, ist behoben — ebenso ein Zähler, der auf dem Anfasser zum Vergrößern lag, sodass sich das Textfeld nicht ziehen ließ.',
+      ],
+    },
+  },
+  {
     version: '0.27.0-beta',
     date: '2026-07-28',
     highlights: {
@@ -93,6 +150,36 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Die Kandidatenliste blendet deaktivierte Kandidaten jetzt standardmäßig aus und hält sie in einer separaten Archiv-Ansicht — mit einem Klick zwischen Aktiv und Archiviert wechseln. Exporte folgen der aktuellen Ansicht, und du kannst archivierte Kandidaten per Sammelaktion wieder aktivieren.',
+      ],
+    },
+  },
+  {
+    version: '0.25.13-beta',
+    date: '2026-07-27',
+    highlights: {
+      en: [
+        'Admins can now attach images or PDF files when replying to a support ticket — with the same preview and pre-send removal as the requester side. Replies can include text, an attachment, or both.',
+      ],
+      tr: [
+        'Adminler artık bir destek talebine yanıt verirken görsel veya PDF dosyası ekleyebiliyor — talep sahibi tarafındaki gibi aynı önizleme ve gönderim öncesi kaldırma özellikleriyle. Yanıtlar metin, ek veya ikisini birden içerebilir.',
+      ],
+      de: [
+        'Admins können jetzt beim Antworten auf ein Support-Ticket Bilder oder PDF-Dateien anhängen — mit derselben Vorschau und Entfernung vor dem Senden wie auf der Anfragerseite. Antworten können Text, einen Anhang oder beides enthalten.',
+      ],
+    },
+  },
+  {
+    version: '0.25.12-beta',
+    date: '2026-07-27',
+    highlights: {
+      en: [
+        'Fixed the Projects page briefly showing "(0)" next to "All projects" while the list was still loading. Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
+      ],
+      tr: [
+        'Projeler sayfasında liste henüz yüklenirken "Tüm projeler" yazısının yanında kısaca "(0)" görünmesi giderildi. Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
+      ],
+      de: [
+        'Behoben: Auf der Projekte-Seite zeigte "Alle Projekte" beim Laden kurzzeitig "(0)" an. Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
       ],
     },
   },

@@ -61,6 +61,11 @@ test('project co-members can start a DM, and lose the composer when the project 
     await expect(page.getByText('Hello from the same project!')).toBeVisible({ timeout: 10_000 });
 
     // Stored against the conversation, not a mentorship relation.
+    // Poll: the message being on screen does not guarantee the row is already
+    // committed, and asserting immediately made this flaky in the scheduled run.
+    await expect
+      .poll(async () => prisma.message.count({ where: { conversationId } }), { timeout: 10_000 })
+      .toBeGreaterThan(0);
     const stored = await prisma.message.findFirst({ where: { conversationId }, select: { relationId: true } });
     expect(stored).not.toBeNull();
     expect(stored!.relationId).toBeNull();

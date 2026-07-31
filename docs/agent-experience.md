@@ -1016,3 +1016,181 @@ anahtarı/kategori adı değiştiyse **spec'leri greple**: `grep -rn "<eski-kate
 
 PR sahibi başka bir katkıcı olduğunda retrospektifi o dala **commit'lemeyin** — diff'i
 kirletiyor. Ayrı `docs/` dalı + ayrı PR (bu giriş öyle geldi).
+## 2026-07-28 (2. tur) — #782 takibi: limitler DB ile uyumsuzdu + deploy güveni
+
+**"Özellik canlıda yok" şikâyetini önce shallow clone ile doğrula.** Konteynerdeki
+klon `--depth 50` ile geliyor ve `origin/main` ref'i bayat olabiliyor: `git
+merge-base --is-ancestor 5486563 origin/main` "değil" dedi, `git fetch origin main`
+sonrası aynı commit main'in içinde çıktı. Yani #782 hem merge'lenmişti hem canlıydı.
+Herhangi bir "bu commit main'de mi?" iddiasından önce `git fetch` veya
+`git ls-remote origin refs/heads/main` — yerel ref'e asla güvenme. Aynı tuzağın
+`infra/deploy-prod.sh`'deki FORWARD_ONLY guard'ını da sessizce **fail-open** yaptığını
+bu sayede fark ettim (hiçbir workflow `fetch-depth` set etmiyordu).
+
+**Kullanıcı "canlıda yok" derken çoğu zaman "benim baktığım yerde yok" demek
+istiyor.** Sayaç 12 komponente bağlanmıştı ama sweep sadece `src/components/**`
+altında gezmiş; 9 raw `<textarea>` kalmıştı ve maintainer'ın ekran görüntüsü tam
+olarak onlardan birindeydi (Duyurular). CHANGELOG "her raw textarea değiştirildi"
+diyordu, releaseNotes "tüm metin alanları" diyordu — ikisi de yanlıştı. **Sweep
+yaparken `git grep -l "<textarea"` ile bitir, iddiayı ondan sonra yaz.**
+
+**Client `maxLength` + server `zod` + Prisma kolon genişliği: üçü tek kaynaktan
+gelmeli.** Üçü ayrı ayrı yazıldığı için sayaç, write'ın kaldıramayacağı limitleri
+reklam ediyordu — özelliğin amacının tam tersi. En sinsi hâli: `String` (yani
+VARCHAR(191)) bir kolona 5 000 karakter vaat etmek. 192 karakterlik normal bir not
+Prisma P2000 → 500 veriyordu ve sayaç o noktada hâlâ gri "191/5000" gösteriyordu.
+`src/lib/textLimits.ts` açtım; hem zod hem `maxLength` oradan import ediyor.
+**`@db.Text` 65 535 BYTE'tır, karakter değil** — utf8mb4'te Türkçe/Almanca metin
+karakter başına 2-3 byte, yani güvenli üst sınır ~20 000 karakter.
+
+**Controlled/uncontrolled: `value = ''` default'u react-hook-form'u kırar.**
+`Textarea` `value={value}` bağlıyordu, `register()` ise `value` döndürmüyor →
+CompanyForm'un açıklama kutusu kalıcı olarak boş bir controlled input olmuştu, yani
+**hiç yazı yazılamıyordu**. Ortak bir input komponentine `value` default'u koyma;
+`value !== undefined` ise controlled, değilse state'e mirror'la.
+
+**Ortak komponente sarmalayıcı `div` eklerken çağıran tarafın layout class'ını
+taşı.** `<textarea className="flex-1">` → `<Textarea className="flex-1">` sessiz bir
+layout regresyonu: artık flex child sarmalayıcı div, `flex-1` içteki textarea'ya
+gidiyor ve hiçbir şey yapmıyor. `wrapperClassName` prop'u ekledim.
+
+**Test yokluğu "scheduling" ile açıklanmaz.** Sayaç için 215 spec'lik suite'te tek
+assertion yoktu; `announcements.spec.ts` ~25 karakterlik string post ediyordu, tüm
+interaction spec'leri 'Weekly sync' gibi notlar kullanıyordu. Smoke gate suçlu
+değildi — 4x/gün koşan full suite'te de yoktu. **Bir limiti test edecekseniz limitin
+yakınında bir değer kullanın**; happy-path uzunlukları hiçbir sınırı egzersiz etmez.
+
+**Deploy güvensizliği haklıydı ama sebep tahmin edilenden farklıydı.** Regresyon ya
+da force-push yoktu; ikisi de `workflow_dispatch`-only idi. 46 deploy-prod koşusunun
+#803'ten öncekilerin hepsi manueldi, deploy-preview'un toplam 5 koşusu vardı ve
+preview 07-21'den beri 72 commit geride duruyordu. **"Merge = deploy" invaryantını
+iddia eden her repoda gerçek koşu geçmişini `actions_list` ile doğrula** — header
+yorumu değil, `event` alanı söyler. `git log`'da görünmeyen tek şey neyin deploy
+edildiğidir.
+
+**Yeşil bir job "her şey yolunda" demek değildir.** İki sessiz durum buldum: (1)
+FORWARD_ONLY refuse yolu `exit 0` ile SUCCESS raporluyordu, yani prod main'in
+dışında sonsuza kadar sabitlenebiliyordu; (2) health check kök sayfayı curl ediyordu
+— bozuk `DATABASE_URL`'li konteyner de 200 döner ve hangi build'in koştuğunu
+söylemez, üstelik drift gate kararını aynı endpoint'in `sha`'sından veriyor. Deploy
+sonrası **ne deploy ettiğini doğrula**: `/api/health?db=1` + served `sha == ${GIT_SHA:0:7}`.
+Reddedilen/atlanan deploy `::warning::` + step summary yazsın.
+
+**Sunucuda build eden bir pipeline, kendi düzeltmesini de rehin alabilir.** 22:00
+civarı `deploy-prod` #51 imajı hâlâ sunucuda build ediyordu (#956 öncesi yol);
+`next build` **exit 255** (bu repoda belgelenen OOM imzası) ile öldü ve hemen
+ardından "The runner has received a shutdown signal" geldi. Sonuç zinciri: box
+SSH'e kapandı (watchdog #19 → `connect ... Connection timed out`, oysa #17/#18
+başarılıydı), üç ortam da 503 döndü (prod + preview + `crm-pr946` topic), ve
+self-hosted runner düştüğü için kuyruktaki deploy'lar (#53, #55) başlayamadı —
+**o kuyrukta duran şey tam olarak sunucuda build etmeyi bitiren #956'ydı.**
+Ders: kök nedeni ortadan kaldıran değişiklik, kök nedenin bozduğu altyapıya
+bağımlıysa kurtarma yolu yoktur. Böyle bir geçişte hosted bir kaçış yolu bırak.
+
+**"Ortam ayakta mı?" sorusunu kendi ağ yolunu doğrulamadan cevaplama.** HTTPS
+`Connection reset by peer` verirken `http://` **503** döndü — yani nginx ayakta,
+container yok. `example.com` ve `api.github.com` 200 dönüyordu, dolayısıyla sorun
+sandbox'ta değildi. Bir kesinti bildirmeden önce: (1) başka bir dış host'a curl,
+(2) 80 ve 443'ü ayrı dene, (3) `$HTTPS_PROXY/__agentproxy/status`. Aksi hâlde
+proxy arızasını prod kesintisi diye rapor etme riski var.
+
+**Container swap'ın geri dönüş hedefi yok — bu artık teorik değil.** PR #946'da
+"kapsam dışı" diye not ettiğim şey aynı gece canlı kesintiye dönüştü:
+`docker stop`/`rm`, `docker run`'dan önce çalışıyor ve `docker image prune -af`
+önceki imajı siliyor. Doğrusu: yeni container'ı geçici adla başlat, health-check
+et, ancak sonra eskiyi kaldır.
+
+**Hızlı akan bir main'de PR'ı elde merge etmeye çalışmak yarış kaybettirir.**
+Bu oturumda main inceleme sırasında ~10 commit ilerledi; üç kez elle merge
+denedim, her seferinde tazE bir çakışma. Doğru hamle: çakışmayı çöz, push et ve
+**auto-merge (squash) aç** — gate yeşile döndüğü anda kendisi girer. Ayrıca
+`topic` check'i self-hosted; runner düşükken sonsuza kadar `queued` kalır, bu
+yüzden onu beklemeyin (zorunlu check değil).
+
+---
+
+## 2026-07-28 — Uygulamayı gerçek kullanıcı gözüyle gezip backlog doldurma (SO/PSO turu)
+
+**Docker olmayan Claude Code web container'ında yerel DB: MariaDB'yi apt ile kur.**
+`docker-compose.dev.yml` bu ortamda çalışmıyor (docker daemon yok). Çalışan yol:
+`apt-get update && apt-get install -y mariadb-server` → `mkdir -p /var/run/mysqld &&
+chmod 777 /var/run/mysqld` (aksi hâlde "Bind on unix socket: No such file or
+directory") → `nohup mariadbd --user=root --datadir=/var/lib/mysql --port=3306 &`.
+MariaDB'de `root` unix_socket ile doğrulanır, Prisma TCP ile bağlandığı için
+"Access denied for user 'root'@'localhost'" alırsınız — ayrı bir kullanıcı açın:
+`CREATE USER 'crm'@'127.0.0.1' IDENTIFIED BY 'crm'; GRANT ALL …`. Sonrası standart:
+`.env` → `prisma db push` → `prisma db seed` → `npm run seed:demo`.
+`apt-get install` ilk denemede 404 verirse önce `apt-get update` çalıştırın.
+
+**Playwright ile tur atarken hidrasyonu bekleyin.** `page.goto` + hemen
+`fill/click` yaparsanız form React hidrasyonundan önce **native GET submit**
+ediyor: `GET /auth/signin?email=…&password=…` → giriş sessizce başarısız, tüm tur
+anonim olarak dönüyor (ve fark etmek zor, çünkü sayfalar 200 dönüyor). `waitUntil:
+'load'` + ~3 sn bekleme + `getByRole('button')` ile tıklama sorunu çözdü. Turun
+gerçekten giriş yaptığını her rol için loglayın (`--- mentor logged in -> /mentor`).
+
+**Ekran turunda "2 saniye" ile "9 saniye" farklı ürünler gösteriyor.** Client
+bileşenleri boş dizi ile başlayıp `useEffect`'te veri çektiği için ilk saniyelerde
+**yanlış boş durum** görünüyor ("Henüz atanmış mentee yok" — oysa 3 mentee var).
+Screenshot'ı 2,5 sn'de alırsanız bunu bug sanır, 9 sn'de alırsanız hiç görmezsiniz.
+Her iki anı da yakalayın: bu, gerçek bir UX bulgusu (#891) ve tek başına en çok
+"bu uygulama veri mi kaybetti?" hissi yaratan sınıf.
+
+**Chromium yolu:** `/opt/pw-browsers/chromium/chrome-linux/chrome` yok;
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome` var. `executablePath` ile
+doğrudan verin, `playwright install` çalıştırmayın.
+
+**MCP `sub_issue_write` yanıtı ebeveyn issue'nun tüm gövdesini döndürüyor.**
+Uzun gövdeli epic/story'lerde her bağlama çağrısı binlerce token; 38 task'ı
+bağlamak bağlam bütçesinin ciddi kısmını yiyor. Önce **tüm** issue'ları oluşturup
+(create yanıtı kısa: id + url), child id → parent number eşlemesini bir dosyaya
+yazın, bağlamayı en sona bırakın — böylece bağlam özetlenirse eşleme kaybolmaz.
+
+**Hiyerarşiyi bitirdikten sonra kökü de doğrulayın: epic'ler #736 `[_ROOT_]`
+altına bağlanır.** Task→Story ve Story→Epic bağlarını kurup "ağaç tamam" dedim;
+kullanıcı "epic'ler de root'a bağlandı mı?" diye sorunca 5 epic'in de parentsız
+kaldığını gördüm. Bu repoda tek bir kök issue var (#736) ve ürün epic'leri
+(#417, #478, #517, #714, #717, #796–#805) ona bağlı — board'un *Group by →
+Parent issue* görünümü tek ağaç göstersin diye. `backlog` skill'i bunun tersini
+söylüyordu ("never a mega-parent; No Parent holds the top-level epics"); skill'i
+gerçeğe göre düzelttim. Ders: **oluşturma bittiğinde `issue_read`
+(`get_sub_issues`) ile #736'yı ve her epic'i okuyup her kalemin tam olarak bir
+ebeveyni olduğunu doğrulayın**, raporu ondan sonra yazın. (Not: geçen seansın 8
+güvenlik epic'i #814–#829 hâlâ root'a bağlı değil.)
+
+**Skill dosyası ile repo gerçeği çeliştiğinde repoyu kaynak alın ve skill'i
+düzeltin.** Yanlış talimat sessizce yanlış çıktı üretiyor ve bir sonraki oturum
+aynı hatayı tekrarlıyor; düzeltme maliyeti iki satır.
+
+**Aynı gün paralel oturumlar aynı dosyanın sonuna yazıyor: `agent-experience.md`
+çatışması normaldir, çözümü "ikisini de tut".** Bu PR'da `origin/main` iki kez
+ilerledi ve iki kez aynı yerde çatıştı (bir oturum deploy kaydı, biri HR/PO turu
+kaydı ekledi). Doğru çözüm birini seçmek değil: main'in bölümü önce, kendi
+bölümün sonra, aralarına `---`. Merge'den önce `git fetch origin main` +
+`git merge origin/main` yapıp çatışmayı **kendiniz** çözün; PR'ı merge etmeye
+çalışıp 405 `Pull Request has merge conflicts` almak zaman kaybı.
+
+**"Şu kalem hâlâ eksik" gibi durum notlarını yazmadan önce API'den doğrulayın —
+paralel oturum düzeltmiş olabilir.** Skill'e "#814–#829 root'a bağlı değil" diye
+yazdım; merge öncesi kontrolde başka bir oturumun **#951 `Initiative` şemsiyesi**
+açıp 8 epic'i ona bağladığı çıktı (ama #951'in kendisi parentsız → board'da iki
+kök). Not yanlış yayınlanacaktı. Kural: hiyerarşi/durum iddiasını `issue_read`
+(`get`/`get_parent`/`get_sub_issues`) ile teyit et, sonra yaz.
+
+## 2026-07-29 — #958 kök neden: lazy PrismaPromise × AsyncLocalStorage
+
+Zamanlanmış tam suite'i 11 Temmuz'dan beri kırmızı tutan deterministik hata
+(`e2e/tenant-isolation.spec.ts:85`) gerçek bir ürün açığıydı: **Prisma sorgu
+promise'leri lazy** — sorgu (ve `$use` middleware'i) ilk `.then()`'de ateşlenir.
+`runWithOrg(org, () => prisma.x.findMany())` deseninde `await` dışarıda olunca
+abonelik ALS bağlamının dışında gerçekleşiyor, middleware `currentOrgId() =
+undefined` görüp org filtresini sessizce atlıyordu. Çözüm: `runWithOrg` thenable
+dönen fn'lerde aboneliği bağlamın içinde başlatır (`new Promise((res, rej) =>
+result.then(res, rej))`). Ders: ALS + lazy-client kombinasyonunda bağlam,
+promise'in YARATILDIĞI yerde değil `.then()`'in çağrıldığı yerde okunur —
+context-bağımlı her sarmalayıcı thenable'ları içeride abone etmeli.
+
+Repro tekniği: hipotezi tek dosyalık geçici bir spec ile izole et (aynı sorgu,
+await içeride vs dışarıda) — `node --experimental-strip-types` repo'nun uzantısız
+relative import'larında çalışmıyor, Playwright runner'ı kullan. Lokal DB: apt
+MariaDB (playbook'taki yol) sorunsuz.

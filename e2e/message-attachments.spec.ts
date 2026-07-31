@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -21,19 +22,18 @@ test('sending a message with an image attachment shows it inline and enforces ac
   const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
 
   try {
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', mentorEmail);
-    await page.fill('input[type="password"]', 'MentorPass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+    await signInAndSettle(page, mentorEmail, 'MentorPass123', '/mentor');
 
-    await page.goto(`/messages/${rel.id}`);
+    await gotoSettled(page, `/messages/${rel.id}`);
     await page.getByTestId('message-attachment-input').setInputFiles({
       name: 'screenshot.png',
       mimeType: 'image/png',
       buffer: PNG_BYTES,
     });
-    await expect(page.getByText('screenshot.png')).toBeVisible();
+    // Images render as a thumbnail in the pending list (alt=filename), not as text.
+    await expect(
+      page.getByTestId('pending-attachments').locator('img[alt="screenshot.png"]')
+    ).toBeVisible();
 
     const done = page.waitForResponse((r) => r.url().includes('/api/messages') && r.request().method() === 'POST');
     await page.getByRole('button', { name: 'Send' }).click();
