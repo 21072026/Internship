@@ -22,15 +22,17 @@ export function relativeTime(date: Date | string, locale: string): string {
 
 // Locale-aware absolute date/date-time formatting, so displayed dates follow
 // the app's selected language (TR/DE) instead of the browser's default.
-export function formatDate(date: Date | string, locale: string): string {
+// `options` overrides the defaults below (e.g. a caller needing a long
+// weekday/month form) while still resolving against the app's locale.
+export function formatDate(date: Date | string, locale: string, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  return new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit', ...options }).format(d);
 }
 
-export function formatDateTime(date: Date | string, locale: string): string {
+export function formatDateTime(date: Date | string, locale: string, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat(locale, {
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', ...options,
   }).format(d);
 }
 

@@ -3,7 +3,8 @@
 import { use, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { GraduationCap, CheckCircle2, XCircle } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 
 interface Meeting {
   title: string;
@@ -15,6 +16,7 @@ interface Meeting {
 export default function RsvpPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const t = useT();
+  const locale = useLocale();
   const autoResp = useSearchParams().get('r'); // 'yes' | 'no' from the email links
   const [meeting, setMeeting] = useState<Meeting | null | undefined>(undefined);
   const [done, setDone] = useState<'ACCEPTED' | 'DECLINED' | null>(null);
@@ -57,7 +59,7 @@ export default function RsvpPage({ params }: { params: Promise<{ token: string }
           ) : (
             <>
               <h1 className="text-xl font-bold text-gray-900">{meeting.title}</h1>
-              <p className="text-gray-500 mt-1">{new Date(meeting.scheduledAt).toLocaleString()}</p>
+              <p className="text-gray-500 mt-1">{formatDateTime(new Date(meeting.scheduledAt), locale)}</p>
               {meeting.meetLink && (
                 <a href={meeting.meetLink} className="text-blue-600 hover:underline text-sm block mt-2">
                   {meeting.meetLink}

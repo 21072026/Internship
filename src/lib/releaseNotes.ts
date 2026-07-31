@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.28.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'A few dates that were quietly following your browser\'s language instead of the app\'s — the full analytics report\'s "generated on" date, the meeting date/time on the RSVP page, and the date on each interaction log entry in your portal — now display in your selected app language.',
+      ],
+      tr: [
+        'Uygulamanın diline değil sessizce tarayıcınızın diline uyan birkaç tarih — tam analiz raporundaki "oluşturulma tarihi", RSVP sayfasındaki toplantı tarihi/saati ve portalınızdaki her etkileşim kaydının tarihi — artık seçtiğiniz uygulama dilinde gösteriliyor.',
+      ],
+      de: [
+        'Ein paar Daten, die still der Sprache deines Browsers statt der App-Sprache folgten — das „erstellt am“-Datum im vollständigen Analysebericht, Termin-Datum/-Uhrzeit auf der RSVP-Seite und das Datum jedes Interaktionseintrags in deinem Portal — werden jetzt in deiner gewählten App-Sprache angezeigt.',
+      ],
+    },
+  },
+  {
     version: '0.28.2-beta',
     date: '2026-07-30',
     highlights: {

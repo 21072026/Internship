@@ -6,6 +6,7 @@ import { ArrowLeft, Lock, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -96,7 +97,7 @@ export default function AnalyticsReportPage() {
 
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">{c.fullReportTitle}</h1>
       <p className="text-sm text-gray-500 mb-8">
-        {data.range ? `${data.range.from} → ${data.range.to} · ` : ''}{new Date().toLocaleDateString(locale)}
+        {data.range ? `${data.range.from} → ${data.range.to} · ` : ''}{formatDate(new Date(), locale)}
       </p>
 
       <Section title={c.funnel}>
