@@ -39,8 +39,9 @@ export function stripQuoted(text: string): string {
 
 export async function routeInboundEmail(input: InboundEmail): Promise<InboundResult> {
   const token = extractReplyToken(input.to);
-  const relationId = token && verifyReplyToken(token);
-  if (!relationId) return { ok: false, status: 400, reason: 'No valid reply token' };
+  const payload = token ? verifyReplyToken(token) : null;
+  if (!payload) return { ok: false, status: 400, reason: 'No valid reply token' };
+  const { relationId, recipientUserId } = payload;
 
   const rel = await prisma.mentorshipRelation.findUnique({
     where: { id: relationId },
@@ -48,11 +49,23 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   });
   if (!rel) return { ok: false, status: 404, reason: 'Thread not found' };
 
-  // The sender must be a participant of this thread.
+  // Who wrote this? Preferred: the From address is one of the two participants.
   const from = emailOf(input.from);
-  const senderId = from === rel.mentor.email.toLowerCase() ? rel.mentor.id
+  let senderId = from === rel.mentor.email.toLowerCase() ? rel.mentor.id
     : from === rel.mentee.email.toLowerCase() ? rel.mentee.id
     : null;
+
+  // Otherwise fall back to the recipient named in the signed token. People read
+  // mail forwarded to a personal account and reply with *that* identity, so the
+  // From address often isn't the one on their profile — which used to drop the
+  // reply. The token was only ever delivered to this user's registered address,
+  // so honouring it grants nothing a mailbox holder couldn't already get from a
+  // password reset. Logged, because it is the weaker of the two signals.
+  if (!senderId && recipientUserId && (recipientUserId === rel.mentor.id || recipientUserId === rel.mentee.id)) {
+    senderId = recipientUserId;
+    logger.info('Inbound reply attributed via reply token, not From', { relationId, from, senderId });
+  }
+
   if (!senderId) {
     logger.warning('Inbound email from non-participant rejected', { relationId, from });
     return { ok: false, status: 403, reason: 'Sender is not a participant' };

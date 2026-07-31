@@ -8,6 +8,37 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.33.0-beta] - 2026-07-31
+
+### Fixed
+- **A reply sent from any address other than the one on your profile was silently
+  dropped.** Found on live traffic hours after the mail bridge shipped: a reply to
+  a notification never appeared in its thread. The bridge had done everything
+  right — mail fetched, token verified — and then refused it, because
+  `routeInboundEmail` identified the writer *only* by matching `From` against a
+  participant's account email. The notification had gone to the mentor's
+  `@bcsit-gmbh.de` address, which forwards to Gmail; replying from there put a
+  `@gmail.com` address in `From`, so the reply was rejected with
+  `403 Sender is not a participant`. Reproduced against production with the real
+  token. Anyone whose mail forwards — which is most people — hit this.
+  - The reply token now names the **recipient** as well as the thread:
+    `reply+<relationId>~<recipientUserId>.<hmac>`. When `From` matches a
+    participant that still wins; otherwise the reply is attributed to the user the
+    token was minted for, provided they are a participant. Logged when the weaker
+    signal is used.
+  - Not a weakening of the gate: the token is delivered only to that user's own
+    registered address, and whoever holds that mail can already take the account
+    over via a password reset, so this grants no new access. The residual exposure
+    is a *forwarded* notification — the recipient of the forward can post as the
+    original addressee. The fallback stays bounded to the token's own recipient: a
+    signed token naming a non-participant is still refused.
+  - Tokens already sitting in delivered mail carry a bare `relationId`; they keep
+    verifying and fall back to `From` matching only.
+  - `src/app/api/mentor/email/route.ts` now selects `mentee.id` so it can scope the
+    token it mints.
+- `e2e/inbound-email.spec.ts` covers all four paths: legacy token + participant,
+  legacy token + stranger (403), scoped token from an unknown address (threaded,
+  attributed to the token's user), and a scoped token naming an outsider (403).
 ## [0.32.4-beta] - 2026-07-31
 
 ### Added
