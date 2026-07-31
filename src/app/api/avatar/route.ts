@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const ALLOWED = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -31,6 +32,9 @@ export async function POST(request: Request) {
   }
 
   const data = Buffer.from(await file.arrayBuffer());
+  if (!contentMatchesType(data, file.type)) {
+    return NextResponse.json({ error: CONTENT_MISMATCH_ERROR }, { status: 400 });
+  }
   await prisma.avatarFile.upsert({
     where: { userId: targetUserId },
     create: { userId: targetUserId, contentType: file.type, size: file.size, data },

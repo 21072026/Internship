@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canAccessUserDocs } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activity';
+import { downloadHeaders } from '@/lib/download';
 
 // GET — download a document (templates: any signed-in user; owned: access-controlled).
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -31,11 +32,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
 
   return new NextResponse(Buffer.from(doc.data), {
-    headers: {
-      'Content-Type': doc.contentType,
-      'Content-Disposition': `inline; filename="${doc.filename.replace(/"/g, '')}"`,
-      'Content-Length': String(doc.size),
-    },
+    headers: downloadHeaders({ filename: doc.filename, contentType: doc.contentType, size: doc.size }),
   });
 }
 

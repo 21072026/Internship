@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canAccessMessage } from '@/lib/conversations';
+import { downloadHeaders } from '@/lib/download';
 
 // GET — serve a message attachment's bytes. Only the participants of the
 // message's thread or conversation (or an admin) may download it, same rule as
@@ -23,10 +24,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   return new NextResponse(Buffer.from(attachment.data), {
-    headers: {
-      'Content-Type': attachment.contentType,
-      'Content-Disposition': `inline; filename="${attachment.filename.replace(/"/g, '')}"`,
-      'Content-Length': String(attachment.size),
-    },
+    // Images stay inline — MessageThreadView renders them in the thread with an
+    // <img>. Everything else downloads (#890), matching the support-attachment
+    // route, which already did this.
+    headers: downloadHeaders({
+      filename: attachment.filename,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      inline: attachment.contentType.startsWith('image/'),
+    }),
   });
 }

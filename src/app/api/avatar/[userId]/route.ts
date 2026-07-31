@@ -19,11 +19,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
   const avatar = await prisma.avatarFile.findUnique({ where: { userId } });
   if (!avatar) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  // Inline is right here — the avatar is displayed in an <img>. The only thing
+  // missing was a route-level nosniff (#890).
   return new NextResponse(Buffer.from(avatar.data), {
     headers: {
       'Content-Type': avatar.contentType,
       'Content-Length': String(avatar.size),
       'Cache-Control': 'private, max-age=300',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
   });
