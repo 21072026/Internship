@@ -8,6 +8,36 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.35.1-beta] - 2026-08-01
+
+### Changed
+- **Chat screens are a real app shell on a phone** (#1006). A thread was a plain
+  document: the page title, the bubble list (its own `max-h-[55vh]` scroller) and the
+  composer all scrolled *together*, so on an iPhone 13 the document overflowed by
+  ~1200px and writing a reply meant scrolling the page down while the bubbles scrolled
+  up — two nested scrolls for one conversation.
+  - New `MessagesShell` (used by `/messages/layout.tsx`) is, below `lg:`, a fixed-height
+    flex column — `calc(100dvh - var(--fixed-bottom-inset))`, so it also shrinks around
+    the cookie banner from #935 — with the content area as `min-h-0 flex-1`. The thread,
+    the support chat and the inbox fill that area; the bubble list is the only scroller
+    (`overscroll-contain`), the composer never moves, and the document does not scroll
+    at all. Desktop keeps the previous document flow and the `55vh` bubble box.
+  - The shell also renders the **mobile header** the message screens never had: a back
+    arrow (to the inbox, or to the role home when already there), the thread's title —
+    the person you are talking to — and a home shortcut. There is no sidebar below
+    `lg:`, so the browser's back button used to be the only way out.
+  - The pages drop their own heading on mobile (the header is the `<h1>` there), which
+    is what buys the list its space back. Rendered via `useIsNarrow()` rather than
+    `lg:hidden` so only one variant is ever in the DOM (strict-mode locators).
+  - `viewport.interactiveWidget = 'resizes-content'`: the on-screen keyboard now shrinks
+    the layout viewport instead of overlaying it, so a full-height screen keeps its
+    composer above the keyboard.
+  - New `e2e/mobile-chat-layout.spec.ts` asserts it geometrically at 390×664 (document
+    overflow ≤ 1px, composer on screen and clickable, the list is the scroller and stays
+    pinned to the newest message) plus header navigation, and that desktop still shows
+    the page heading. Verified by negative control: with the old document flow the same
+    spec reports 1208px of overflow.
+
 ## [0.35.0-beta] - 2026-08-01
 
 ### Added

@@ -1660,3 +1660,44 @@ timeout veriyor; koşudan önce `pkill -f "next dev"` + portu doğrula.
 - Çakışan sürüm numarasını **rebase'den önce** kendi commit'inde değiştir; iki taraf
   farklı numara taşıyınca conflict önemsiz bir ekleme hâline geliyor.
 - Aynı temaya ait iki iş varsa (burada #935 + #936) **tek PR** yap: iki yarış yerine bir.
+
+---
+
+## 2026-07-31 — Mobil sohbet kabuğu (#1006)
+
+**"Gereksiz scroll" şikâyeti neredeyse her zaman iki iç içe scroll'dur.** Mesaj
+thread'i normal bir dokümandı: başlık + `max-h-[55vh]` baloncuk kutusu + composer
+birlikte kayıyordu, yani cevap yazmak için sayfayı aşağı, baloncukları yukarı
+kaydırmak gerekiyordu. Doğru düzeltme "biraz padding kısmak" değil, **ekranı çerçeve
+yapmak**: `h-[calc(100dvh_-_var(--fixed-bottom-inset))] + overflow-hidden` bir flex
+kolon, içinde tek `min-h-0 flex-1 overflow-y-auto` liste. Ölçüsü de nesnel:
+`documentElement.scrollHeight - innerHeight` → düzeltmeden önce **1208 px**, sonra 0.
+
+**Tailwind arbitrary value içinde `calc()` boşluk ister:** `h-[calc(100dvh-var(--x))]`
+geçersiz CSS üretir (sessizce çalışmaz), `h-[calc(100dvh_-_var(--x))]` doğrusu —
+alt çizgi Tailwind'in boşluğu. Bir önceki oturumun `--fixed-bottom-inset` değişkeni
+(#935) burada bedavaya geldi: çerez bandı açıkken çerçeve kendiliğinden kısalıyor.
+
+**`bg-white/95` globals.css'in retint ettiği `bg-white` DEĞİLDİR.** Opaklık ekli
+utility ayrı bir sınıf adı, dolayısıyla dark mode'da bembeyaz kalır — sticky/blur
+başlıklarda `dark:bg-gray-900/95`'i elle yazın (computed style ile doğrulayın).
+
+**Mobil-özel başlık eklerken sayfanın kendi `<h1>`'ini kaldırın.** İkisi birden
+kalırsa hem telefonda ekranın üçte biri boşa gider hem de `getByText(ad)` iki eşleşme
+bulup strict-mode'u patlatır. `useIsNarrow()` ile **tek varyant** render edin
+(`lg:hidden` DOM'da ikisini de bırakır) — kabuktaki başlık mobilde `<h1>` olsun,
+sayfa başlığı sadece `lg:`'de.
+
+**Animasyonlu scroll'u tek ölçümle assert etmeyin.** `scrollIntoView({behavior:
+'smooth'})` sonrası `scrollTop` daha yolda: ilk denemede liste dibe 67 px uzaktı.
+`expect.poll(...)` ile ölçün.
+
+**Bu container'da bilinen iki kırmızı, benimle ilgisiz:** `pipeline.spec.ts`
+("Navigation ... is interrupted by another navigation") ve `smoke.spec.ts` admin
+sayfaları (`[next-auth][error][CLIENT_FETCH_ERROR]`) — `git stash` ile baseline'da da
+kırmızı. Ayrıca elle başlatılan `npm run dev`'i Playwright yeniden kullandığı için
+`webServer.env` (HEALTH_TOKEN, TRUSTED_PROXY_COUNT) uygulanmıyor: `health.spec` ve
+`rate-limit.spec` bu yüzden düşer. Playwright tarayıcısı için playbook'taki
+`executablePath` numarasını geçici bir `playwright.local.config.ts` ile verdim
+(`{...base, use: {...base.use, launchOptions: {executablePath: '/opt/pw-browsers/chromium'}}}`)
+— commit etmeyin.
