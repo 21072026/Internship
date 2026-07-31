@@ -76,6 +76,23 @@ version is shown in the sidebar footer of every page (links to the
 
 No version bump: test and `data-testid` changes only, no user-visible behaviour change.
 
+## [0.28.3-beta] - 2026-07-31
+
+### Changed
+- **Shared date formatters instead of ad-hoc `toLocaleDateString`/`toLocaleString` calls**
+  (#703). `formatDate`/`formatDateTime` (`src/lib/relativeTime.ts`) now take an optional
+  third `Intl.DateTimeFormatOptions` argument that's spread over their existing defaults —
+  backwards-compatible, since every prior call site passed only `(date, locale)`. This let
+  `src/app/portal/interactions/page.tsx`'s long weekday/month format move over too, on top
+  of `src/app/admin/analytics/report/page.tsx`'s report-generated-on date and
+  `src/app/rsvp/[token]/page.tsx`'s meeting date/time — all three now follow the app's
+  selected locale instead of the browser's default, visually unchanged. Left untouched: the
+  four `toLocaleString` calls in `src/services/emailService.ts`, which use the
+  `dateStyle`/`timeStyle` shorthand — that can't be mixed with the helpers' explicit
+  year/month/day fields (`Intl.DateTimeFormat` throws if both are present) — for a
+  deliberately fixed `en-GB` email-template format that's independent of the recipient's
+  app locale, not ad-hoc duplication of the same concern.
+
 ## [0.28.2-beta] - 2026-07-30
 
 ### Added

@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { BookOpen } from 'lucide-react';
 import { useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 interface Interaction {
   id: string;
@@ -59,7 +60,7 @@ export default function PortalInteractionsPage() {
                 <div className="flex-1">
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-2">
-                    {new Date(interaction.date).toLocaleDateString(locale, {
+                    {formatDate(interaction.date, locale, {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',
