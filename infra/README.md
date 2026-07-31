@@ -77,6 +77,25 @@ self-contained nginx server block for `crm-<topic>.ersah.in` into `$NGINX_CONF_D
 from step 2 and `proxy_pass`es to the topic's port; teardown removes it. Both
 reload nginx afterwards.
 
+### Proxy hops and `TRUSTED_PROXY_COUNT` (#858)
+
+Every vhost sets `X-Forwarded-For $proxy_add_x_forwarded_for`, which **appends**
+the peer address to whatever the client sent. The header therefore reads
+`<whatever the client made up>, <what nginx actually saw>` and only the
+right-hand entries can be trusted. The rate limiter counts back from the right
+by `TRUSTED_PROXY_COUNT` hops (`src/lib/rateLimit.ts`).
+
+**One hop today**, so the default of `1` is correct for all three environments.
+The wildcard DNS record in step 1 is orange-clouded, but the explicit `crm`
+record is not — `curl -sI https://crm.ersah.in` returns no `cf-ray`, i.e. the
+request reaches nginx directly. **If a hostname is ever moved behind
+Cloudflare's proxy, bump `TRUSTED_PROXY_COUNT` to `2` for it in the same
+change**, or every visitor will be bucketed as the Cloudflare edge and one
+person's rate limit will throttle everyone.
+
+`0` disables the header entirely — right for a container reached directly, and
+what `playwright.config.ts` sets for the e2e webServer.
+
 ### One-time server setup this requires
 - The stock `include /etc/nginx/conf.d/*.conf;` must be active (default on Plesk).
   These hostnames are **not** Plesk-managed domains (only `crm`/`crm-preview` are),

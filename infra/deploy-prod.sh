@@ -261,6 +261,7 @@ docker run -d \
   -e INBOUND_IMAP_ENABLED="${INBOUND_IMAP_ENABLED:-}" \
   -e CRON_SECRET="${CRON_SECRET:-}" \
   -e CRON_ENABLED="${CRON_ENABLED:-}" \
+  -e TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}" \
   "$IMAGE"
 
 # ── 6. Health check + prune ──────────────────────────────────────────────────
