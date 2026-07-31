@@ -8,6 +8,80 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.29.1-beta] - 2026-07-31
+
+### Fixed
+- **Quote trimming missed most clients' attribution line.** `stripQuoted` only
+  knew the `On … wrote:` form, so a reply that actually arrived through the new
+  bridge — `"cevap veriyorum\n\nJuly 2, 2026 at 3:50 PM, noreply@crm.ersah.in
+  wrote:\n> …"` — kept that attribution line in the threaded message. It now
+  cuts at any line ending in the local "wrote:" verb (`wrote` / `yazdı` /
+  `schrieb` — the app's three locales), at an Outlook `____` divider, or at the
+  first `>` line, whichever comes first. Covered in `e2e/inbound-email.spec.ts`
+  with the exact body that exposed it.
+- The bridge no longer fails a message silently: a UID that the search returned
+  but whose source can't be fetched (a stale dovecot index entry, or mail
+  expunged under it) is now logged instead of just incrementing a counter. Found
+  because a hand-deleted probe left exactly that state behind.
+
+## [0.29.0-beta] - 2026-07-31
+
+### Added
+- **Reply-by-email actually works now: the mail bridge that was never built.**
+  Outgoing message notifications have carried
+  `Reply-To: reply+<relationId>.<hmac>@crm.ersah.in` for a while, and
+  `POST /api/inbound-email` has been able to thread such a reply since it
+  shipped — but nothing ever *read the mailbox*, so every reply sat there
+  unprocessed. `docs/EMAIL_DELIVERABILITY.md` recorded this honestly ("what's
+  still required in infrastructure is a mail bridge"). Unprocessed replies had
+  been accumulating in the catch-all mailbox since 2026-07-01 — 9 mails, which
+  are 5 distinct replies (the catch-all delivered most of them twice, which is
+  exactly what `inboundMessageId` now guards against).
+  - `src/services/inboundMailBridge.ts` — IMAP poller (`imapflow` +
+    `mailparser`). Every `INBOUND_IMAP_POLL_SECONDS` (default 60) it drains
+    unseen mail from the reply mailbox, pulls the token out of whichever
+    recipient header carries it (`Delivered-To` / `X-Original-To` / `To` / `Cc` /
+    `X-Envelope-To` — the MTA-added ones are what survive a catch-all or alias),
+    and threads it. Started at server boot from `src/instrumentation.ts`.
+  - `src/lib/inboundEmail.ts` — the token + participant checks and the message
+    write, extracted out of the route handler so the HTTP endpoint and the bridge
+    share one code path instead of the bridge re-implementing the rules.
+  - `Message.inboundMessageId` (`@unique`) makes delivery idempotent. IMAP is
+    at-least-once — a crash between writing the reply and setting `\Seen` replays
+    the mail — and a catch-all can deliver two copies of one email. A replay is
+    now a no-op instead of a duplicate message in the thread.
+  - Mail is flagged `\Seen` once routed *or* permanently rejected (bad token,
+    unknown thread, stranger); a transient failure leaves it unseen so the next
+    tick retries it rather than dropping the reply.
+  - The bridge starts only where `INBOUND_IMAP_HOST`/`USER`/`PASS` are all set,
+    which is production alone — two containers polling one mailbox would race
+    over the `\Seen` flag. `INBOUND_IMAP_ENABLED=0` stops it without removing the
+    credentials.
+
+### Infrastructure
+- `infra/deploy-prod.sh` forwards the `INBOUND_*` vars into the container.
+  `docker run` there passes an explicit `-e` allowlist, so env-file keys that
+  aren't listed are silently dropped — the bridge would have started nowhere no
+  matter what `prod.env` said. The env-derivation fallback (used when the env
+  file is missing) carries them too, so a re-derived file doesn't quietly
+  disable the bridge on the next deploy.
+- Dedicated `reply@crm.ersah.in` mailbox on `s.ersah.in`. Postfix runs with
+  `recipient_delimiter = +`, so `reply+<token>@crm.ersah.in` now lands there
+  instead of in the `m@ersah.in` catch-all — reply traffic stays out of a
+  personal inbox. `INBOUND_IMAP_*` and `INBOUND_SECRET` added to
+  `/etc/internship-crm/prod.env` (`INBOUND_SECRET` had never been set in prod, so
+  the endpoint was relying on the HMAC token alone).
+
+### Notes
+- `initCronJobs()` in `src/services/emailService.ts` **has no caller anywhere in
+  the repo**, and nothing on the server drives `GET /api/cron` either (no
+  crontab entry, no systemd timer) — so the mentor-reminder, meeting-reminder and
+  digest jobs are not running on a schedule in production. Found while looking
+  for a place to hook the bridge in; deliberately **not** fixed here, because
+  switching those on would start sending reminder and digest email as a side
+  effect of an inbound-mail change. `src/instrumentation.ts` therefore starts the
+  bridge and nothing else. Needs its own issue.
+
 ## [Unreleased]
 
 ### Fixed
@@ -110,6 +184,22 @@ No version bump: test and `data-testid` changes only, no user-visible behaviour 
 ## [0.28.2-beta] - 2026-07-30
 
 ### Added
+- **Notification history page** (#919) at `/notifications`, reachable from a new "View all"
+  link in the bell dropdown. Every request is scoped to the signed-in user's own
+  `Notification` rows server-side; supports a read/unread status filter, a type filter
+  (populated from the viewer's own notification types), and pagination — all backed by
+  optional `page`/`pageSize`/`read`/`type` query params added to `GET /api/notifications`.
+  The bell's existing no-param call (and its mark-as-read behavior) is unchanged.
+  Notifications render as spaced cards with a per-type icon, a clearly highlighted unread
+  state (tinted background, bold text, dot) versus a faded read state, a total count badge,
+  a "1–20 / 48" range readout next to the pager, and a "Clear filters" action. Every
+  clickable row/button meets the WCAG 2.2 44×44px minimum target size.
+- **Announcements card** (#920) on the mentee and mentor dashboards, showing the most
+  recent admin broadcasts. Reads directly from the `Announcement` table via a new
+  `GET /api/announcements` (any authenticated user — every broadcast already targets all
+  active users, so there is no per-role/org filtering to apply) rather than the
+  notification bell, with its own "View all" link to a new shared `/announcements` history
+  page. The admin composer at `/admin/announcements` is unchanged.
 - **Automatic project group chat** (#771) — every project now has one shared GROUP
   conversation whose participants stay synchronized with `ProjectMember`. Owners, mentors
   and mentees can use the existing message flow, including attachments and reactions;
