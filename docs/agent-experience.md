@@ -1572,3 +1572,54 @@ küçük tutmak (her PR merge olur olmaz bir sonrakini rebase etmek) ve conflict
 çözmek işe yaradı — ama en temizi, geride kalmış bir dalı **yeniden kurmak**: `git
 checkout -b yeni origin/main` + ilgili dosyaları `git checkout <eski-dal> -- <dosyalar>`.
 Squash-merge sonrası eski commit'i yeniden oynatmaya çalışmaktan çok daha az acı verdi.
+
+## 2026-07-31 — #936 board mobil: iki layout, bayat closure ve sürüm defteri yarışı
+
+**Mobil ve masaüstü iki farklı layout ise İKİSİNİ AYNI ANDA RENDER ETME.**
+İlk içgüdü `lg:hidden` / `hidden lg:block` ile ikisini birden basmak; bu her kartı
+DOM'a iki kez koyar → Playwright strict mode ihlali (bir mentee adı iki eşleşme) ve
+ekran okuyucu için çift içerik. Çözüm `useIsNarrow()` (matchMedia, `useState(false)`
+ile başlar ki ilk client render sunucuyla aynı olsun) ve **tek** dalı render etmek.
+
+**`toast(...)` içine koyduğun geri-al callback'i, o render'ın state'ini hatırlar.**
+`moveTo` optimistic güncelleme için `relations`'ı okuyordu; toast'taki "Geri al"
+kullanıcı tıkladığında çalıştığı için closure bayat listeyi görüyor, `from === hedef`
+çıkıyor ve **sessizce hiçbir şey yapmıyordu** (test yakaladı: DB hâlâ yeni aşamada).
+Kural: gecikmeli çalışan callback'ler state'i `useRef` üzerinden okumalı.
+
+**Türetilmiş varsayılan (derived default) sinsi bir davranış üretir.** Mobil aşama
+filtresini her render'da "ilk dolu aşama" diye hesaplayınca, kartı taşıdığında görünüm
+kartın peşinden yeni aşamaya atlıyor — kullanıcı kartın gittiğini hiç görmüyor.
+Veri gelince filtreyi bir kez state'e **sabitle** (effect), sonra türetme.
+
+**Locator tuzakları (CLAUDE.md listesine iki yeni madde):**
+- `div.w-64` **app shell'in sidebar'ına** da uyuyor (`ResponsiveShell` drawer'ı
+  `w-64`). Board kolonlarını sayacaksan `data-testid="board-columns"` kullan.
+- Admin board **veritabanındaki tüm ilişkileri** listeler, dolayısıyla
+  `getByLabel('Move to stage')` gibi kapsamsız bir locator, başka bir spec'in (veya
+  yarım kalmış bir koşunun) ilişkisi aynı aşamada olduğu an strict-mode ile patlar.
+  Kartlara `data-testid="board-card"` eklendi; seçiciyi
+  `getByTestId('board-card').filter({ hasText: '<ad>' })` ile kapsa.
+
+**320 px taşması genelde board'da değil app shell'inde.** `-mr-2` taşıyan hamburger
+butonu + kısalamayan wordmark, mobil üst bar'ı 2 px fazla yapıyordu (her rolde).
+`document.documentElement.scrollWidth - clientWidth` ölçüp `getBoundingClientRect()`
+ile suçluyu bulmak 1 dakika sürüyor — tahmin etmeyin, ölçün.
+
+**Yerel ortam iki kez ısırdı:** (1) MariaDB koşular arasında **düşüyor** — bütün
+specler ~16 s'de aynı anda kırmızıya dönerse önce `service mariadb start`. (2) Önceki
+`npm run dev` 3000'i tutuyorsa Playwright 3001'e kaçıyor ve `webServer` 120 s'de
+timeout veriyor; koşudan önce `pkill -f "next dev"` + portu doğrula.
+
+**Sürüm defteri yarışı (bu repoda gerçek bir maliyet):** paralel oturumlar `main`'e
+~3 dakikada bir merge ediyor ve **her PR** `package.json` + `CHANGELOG.md` +
+`releaseNotes.ts` dosyalarının aynı satırlarına dokunuyor. PR'ım 5 kez `dirty` oldu ve
+**conflict'li PR'da hiç check koşmuyor** → auto-merge de takılıyor. İşe yarayanlar:
+- Conflict çözümünü script'le (main'in sürümü + 1, benim bölüm en üste) ve **sonucu
+  assert et**: iki taraf aynı başlık metnini taşıdığında git onu ortak bağlam sayıyor,
+  "benim" hunk'ı **başlıksız** geliyor ve sessizce başlıksız bir bölüm oluşuyor.
+  Regex'in dosyadaki **ilk** conflict'i değil, iki conflict'i birden yutmasına da
+  dikkat (releaseNotes'ta tam bunu yaptı, dosyayı bozdum ve push'ladım).
+- Çakışan sürüm numarasını **rebase'den önce** kendi commit'inde değiştir; iki taraf
+  farklı numara taşıyınca conflict önemsiz bir ekleme hâline geliyor.
+- Aynı temaya ait iki iş varsa (burada #935 + #936) **tek PR** yap: iki yarış yerine bir.

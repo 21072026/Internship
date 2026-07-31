@@ -40,6 +40,36 @@ mentee and a mentor actually hit on a phone.
   - Both board pages tag their desktop layout `data-testid="board-columns"` and their
     cards `data-testid="board-card"`.
 
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
 ### Fixed
 - **No horizontal overflow at 320px** (#936). The app-shell mobile top bar was 2px
   wider than the screen: the hamburger's `-mr-2` pushed it past the bar's `px-4`, and
