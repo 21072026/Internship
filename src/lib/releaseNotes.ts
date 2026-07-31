@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.32.1-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Security fix: a webhook could be pointed at the server\'s own internal network. Webhook addresses must now be public https endpoints, checked both when saved and each time one is sent.',
+        'A slow or unresponsive webhook receiver or AI service can no longer hold the app up — outgoing requests now time out and are logged instead.',
+      ],
+      tr: [
+        'Güvenlik düzeltmesi: bir webhook, sunucunun kendi iç ağına yönlendirilebiliyordu. Webhook adresleri artık genel erişime açık https uçları olmak zorunda ve hem kaydedilirken hem her gönderimde denetleniyor.',
+        'Yavaş veya yanıt vermeyen bir webhook alıcısı ya da yapay zekâ servisi artık uygulamayı bekletemiyor — giden istekler zaman aşımına uğrayıp kayda geçiyor.',
+      ],
+      de: [
+        'Sicherheitskorrektur: Ein Webhook konnte auf das interne Netz des Servers gerichtet werden. Webhook-Adressen müssen jetzt öffentliche https-Endpunkte sein und werden beim Speichern sowie bei jedem Versand geprüft.',
+        'Ein langsamer oder nicht antwortender Webhook-Empfänger bzw. KI-Dienst kann die Anwendung nicht mehr aufhalten — ausgehende Anfragen laufen jetzt in ein Timeout und werden protokolliert.',
+      ],
+    },
+  },
+  {
     version: '0.32.0-beta',
     date: '2026-07-31',
     highlights: {

@@ -5,6 +5,9 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
+// A generation that has not answered in a minute is not going to.
+const AI_TIMEOUT_MS = 60_000;
+
 const MODEL = process.env.ANTHROPIC_SUMMARY_MODEL || process.env.ANTHROPIC_CV_MODEL || 'claude-opus-4-8';
 const MAX_INPUT_CHARS = 24_000;
 
@@ -18,7 +21,10 @@ export interface SummaryInteraction {
 const SYSTEM = `You summarize a mentor's interaction log with one mentee. Write for the mentor. Use the same language the log entries are written in. Return 4-8 short bullet lines covering: overall progress, recurring themes, open risks or blockers, and 1-2 concrete suggested next steps. Be specific to the log content; do not invent facts.`;
 
 export async function aiSummarizeInteractions(menteeName: string, interactions: SummaryInteraction[]): Promise<string> {
-  const client = new Anthropic(); // reads ANTHROPIC_API_KEY
+  // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
+  // enough to hold a request handler open until the user gives up (#895).
+  // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
+  const client = new Anthropic({ timeout: AI_TIMEOUT_MS });
   const log = interactions
     .map((i) => `${i.date.toISOString().slice(0, 10)} · ${i.type}${i.subject ? ` · ${i.subject}` : ''}\n${i.notes}`)
     .join('\n---\n')

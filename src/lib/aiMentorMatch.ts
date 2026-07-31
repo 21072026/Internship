@@ -7,6 +7,9 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
+// A generation that has not answered in a minute is not going to.
+const AI_TIMEOUT_MS = 60_000;
+
 const MODEL = process.env.ANTHROPIC_CV_MODEL || 'claude-opus-4-8';
 
 export interface MatchCandidate {
@@ -49,7 +52,10 @@ export async function aiRankMentors(
   mentee: MatchMentee,
   candidates: MatchCandidate[]
 ): Promise<{ label: string; reason: string }[]> {
-  const client = new Anthropic(); // reads ANTHROPIC_API_KEY
+  // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
+  // enough to hold a request handler open until the user gives up (#895).
+  // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
+  const client = new Anthropic({ timeout: AI_TIMEOUT_MS });
   const payload = {
     mentee: { skills: mentee.skills, targetPosition: mentee.targetPosition ?? '', interests: mentee.interests ?? '' },
     mentors: candidates.map((c) => ({
