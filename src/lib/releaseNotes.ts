@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.31.1-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Security fix: the limits that cap how often password-reset, registration and application forms can be submitted could be sidestepped by faking a network header. They now count real visitors again.',
+      ],
+      tr: [
+        'Güvenlik düzeltmesi: parola sıfırlama, kayıt ve başvuru formlarının ne sıklıkta gönderilebileceğini sınırlayan kurallar, sahte bir ağ başlığıyla aşılabiliyordu. Artık gerçek ziyaretçileri sayıyorlar.',
+      ],
+      de: [
+        'Sicherheitskorrektur: Die Limits dafür, wie oft Passwort-Zurücksetzung, Registrierung und Bewerbungsformulare abgeschickt werden können, ließen sich mit einem gefälschten Netzwerk-Header umgehen. Sie zählen jetzt wieder echte Besucher.',
+      ],
+    },
+  },
+  {
     version: '0.31.0-beta',
     date: '2026-07-31',
     highlights: {

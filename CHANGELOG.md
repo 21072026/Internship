@@ -8,6 +8,31 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.31.1-beta] - 2026-07-31
+
+### Security
+- **Every IP-based rate limit could be bypassed with a rotating
+  `X-Forwarded-For`** (#858). `clientIp()` returned `xff.split(',')[0]` — the
+  *leftmost* entry, which is whatever the client wrote. Our nginx uses
+  `$proxy_add_x_forwarded_for`, which **appends** the real peer address, so the
+  trustworthy value is on the right and the code was reading the one part of the
+  header an attacker fully controls. Measured on `/api/auth/forgot` (5 per 15 min):
+  12 spoofed requests all returned 200 where the honest control got 7× 429. Each
+  fabricated value also opened a new key in the in-memory bucket map, so the spoof
+  doubled as unbounded memory growth.
+  `clientIp()` now counts back from the right by `TRUSTED_PROXY_COUNT` hops
+  (default `1` = our single nginx; `0` ignores the header entirely), falls back to
+  the rightmost entry when the list is shorter than the configured chain, and
+  validates the result as an IPv4/IPv6 literal before it becomes a bucket key.
+  `enforceRateLimit`'s signature is unchanged, so all six calling endpoints are
+  untouched. The login limit is keyed on email, not IP, and was never affected.
+
+### Documentation
+- `.env.example` and `infra/README.md` cover `TRUSTED_PROXY_COUNT`: what the value
+  means per environment, and that it must be raised to `2` if a hostname is ever
+  moved behind Cloudflare's proxy (verified today that `crm.ersah.in` is not —
+  no `cf-ray`, so one hop).
+
 ## [0.31.0-beta] - 2026-07-31
 
 ### Security

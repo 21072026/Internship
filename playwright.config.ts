@@ -41,5 +41,9 @@ export default defineConfig({
         url: localURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
+        // Playwright talks to Next directly — there is no nginx appending to
+        // X-Forwarded-For here, so 0 is the honest setting and it is what makes
+        // the spoofing assertions in rate-limit-spoof.spec.ts meaningful (#858).
+        env: { TRUSTED_PROXY_COUNT: '0' },
       },
 });
