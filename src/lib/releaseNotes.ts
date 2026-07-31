@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.29.2-beta',
+    version: '0.30.1-beta',
     date: '2026-07-31',
     highlights: {
       en: [
@@ -24,6 +24,27 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Der Empfängerzähler auf der gezielten E-Mail-Seite (Mentor und Admin) zeigt jetzt, wie viele Mentees von der Gesamtzahl ausgewählt sind, z. B. „Empfänger (3/10)“, statt nur die ausgewählte Anzahl.',
+      ],
+    },
+  },
+  {
+    version: '0.30.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Automatic reminders and digests are now actually being sent on schedule. Interaction reminders, stage-deadline reminders, meeting reminders (about an hour before), the weekly mentor digest, the daily activity digest and the hourly unread-message digest were all built but were never running by themselves — they only went out if an admin triggered them by hand.',
+        'Your interaction reminder is now a single daily summary listing every mentee waiting for a log entry, instead of one separate email per mentee — and it respects your notification settings, so you can switch it off like any other email.',
+        'Turning this on does not send you a backlog: messages and deadlines from before the change are treated as already handled, so you only hear about what happens from now on.',
+      ],
+      tr: [
+        'Otomatik hatırlatmalar ve özetler artık gerçekten zamanında gönderiliyor. Etkileşim hatırlatmaları, aşama son tarih hatırlatmaları, toplantı hatırlatmaları (yaklaşık bir saat önce), haftalık mentor özeti, günlük aktivite özeti ve saatlik okunmamış mesaj özeti — hepsi yazılmıştı ama kendi başına hiç çalışmıyordu; yalnızca bir yönetici elle tetiklerse gidiyordu.',
+        'Etkileşim hatırlatmanız artık her menti için ayrı e-posta yerine, kayıt bekleyen tüm mentileri listeleyen tek bir günlük özet — ve bildirim tercihlerinize uyuyor, yani diğer e-postalar gibi kapatabilirsiniz.',
+        'Bunun açılması size birikmiş yığını göndermiyor: değişiklikten önceki mesaj ve son tarihler işlenmiş kabul ediliyor, yalnızca bundan sonra olanları duyuyorsunuz.',
+      ],
+      de: [
+        'Automatische Erinnerungen und Zusammenfassungen werden jetzt wirklich planmäßig verschickt. Interaktions-Erinnerungen, Fristerinnerungen, Termin-Erinnerungen (etwa eine Stunde vorher), die wöchentliche Mentor-Zusammenfassung, die tägliche Aktivitätsübersicht und die stündliche Übersicht ungelesener Nachrichten waren alle gebaut, liefen aber nie von selbst — sie gingen nur raus, wenn ein Admin sie manuell auslöste.',
+        'Deine Interaktions-Erinnerung ist jetzt eine einzige tägliche Zusammenfassung mit allen Mentees, die auf einen Eintrag warten, statt einer separaten E-Mail pro Mentee — und sie richtet sich nach deinen Benachrichtigungseinstellungen, du kannst sie also wie jede andere E-Mail abschalten.',
+        'Das Einschalten schickt dir keinen Rückstand: Nachrichten und Fristen von vor der Änderung gelten als bereits erledigt, du hörst nur von allem, was ab jetzt passiert.',
       ],
     },
   },
