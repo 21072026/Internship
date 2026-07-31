@@ -8,6 +8,33 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.33.1-beta] - 2026-07-31
+
+### Added
+
+- **The role × endpoint read matrix is now executable** (#899).
+  `e2e/fixtures/authz-matrix.ts` declares, per role and per endpoint, whether the
+  answer should be `all`, `own` or `deny`; `e2e/authz-matrix.spec.ts` (`@smoke`)
+  enforces it. Crucially an `own` cell asserts **ownership of every row returned**,
+  not the status code — the original leak answered `200` throughout, so a
+  status-only test would have passed against it. The audit's worst finding survived
+  a *closed* RBAC epic (#278) precisely because nothing executable said "this role
+  must not see that".
+- **`.github/workflows/codeql.yml`** (#903) — static analysis on PRs, pushes to
+  `main`, and weekly, with the `security-extended` query set. Not a required check:
+  the first run on an existing codebase always surfaces a backlog, and blocking every
+  PR on triage that hasn't happened teaches people to ignore the gate. CodeQL cannot
+  see role-scoping bugs — that is what the matrix spec above is for; the two are
+  complements.
+
+### Documentation
+- **`SECURITY.md` now leads with a disclosure policy** (#901) — the file previously
+  described the security *model* and offered two lines on reporting ("email the
+  maintainer"). It now opens with GitHub private vulnerability reporting, response
+  targets, scope, and explicit limits for researchers (no load testing against live,
+  no touching real user data — the same line `docs/DATA_ACCESS_POLICY.md` draws for
+  contributors). The security overview follows underneath, unchanged.
+
 ## [0.33.0-beta] - 2026-07-31
 
 ### Fixed
