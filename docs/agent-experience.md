@@ -963,6 +963,54 @@ Ayrıca: yetkiyi *katılımcılık* ile *canlı izin* olarak ayırmak gerekti. O
 projeden çıkarılan üye süresiz yazmaya devam ederdi.
 
 
+## 2026-07-31 — #787'nin ikinci conflict turu: sürüm defter tutma + merge sonrası doğrulama
+
+Aynı PR bir kez daha çakıştı: 2026-07-29'daki çözüm `main`'i 98bf718'de yakalamıştı,
+merge edilene kadar `main` 85df9f7'ye ilerledi. Bu turda çakışan 5 dosyanın 4'ü saf
+**sürüm defter tutması**ydı, sadece biri kod.
+
+### Bayat bir PR'da sürüm çakışması her zaman "bump'ı main'in üstüne taşı" demek
+
+`package.json` / `package-lock.json` / `CHANGELOG.md` / `releaseNotes.ts` dördü birden
+çakışıyorsa düşünülecek bir şey yok, mekanik bir kural var: **yeni sürüm = main'in
+sürümü + patch** (burada 0.28.1-beta → 0.28.2-beta), sonra CHANGELOG bölüm başlığını
+*ve* `releaseNotes.ts` girdisini o sürüme + bugünün tarihine yeniden yazıp main'in
+girdilerinin üstüne koy. Dalın kendi eski sürüm numarasını (0.27.1-beta) korumak
+CHANGELOG'u geçmişe sıralar ve `/release-notes`'ta yanlış sırayla görünür.
+
+`package-lock.json`'da aynı çakışma **iki** yerdedir (kök `version` ve
+`packages[""].version`) — biri gözden kaçarsa dosya sessizce tutarsız kalır:
+
+```
+perl -0pi -e 's/<<<<<<< HEAD\n(\s*)"version": "X",\n=======\n\s*"version": "Y",\n>>>>>>> origin\/main\n/$1"version": "Z",\n/g' package-lock.json
+```
+
+### Yan yana import çakışması = iki tarafı da al, ama gövdeyi oku
+
+`src/app/api/mentor/email/route.ts`'te tek çakışma iki komşu `import` satırıydı
+(dalın `emailAllowed`'ı, main'in `TEXT_LIMITS`'i). Çözüm bariz — ikisini de tut — ama
+asıl iş dosyanın **geri kalanını** okumak: iki değişikliğin bağımsız olduğunu
+(zod şeması hâlâ `TEXT_LIMITS` ile sınırlıyor, gönderim hâlâ `messages` opt-out'una
+bağlı, `InteractionLog` her hâlükârda yazılıyor) doğrulamadan "sadece import'tu"
+denemez. Otomatik merge olmuş hunk'lar conflict marker'ı üretmez ama semantiği bozabilir.
+
+### `gh pr merge --auto` bu repoda "şimdi merge et" demek
+
+Bu depoda **required status check yok**. Yani `--auto`, PR mergeable olur olmaz
+squash'ı geçiriyor — smoke gate'in raporlamasını *beklemiyor*. #787 çakışma çözümü
+push edildikten ~saniyeler sonra, `Lint · Typecheck · Build` ve `Playwright smoke`
+daha başlamadan merge oldu. CI'ın gerçekten kapı görevi görmesini istiyorsan merge'den
+önce kendin `gh pr checks --watch` ile bekle; yerel `npx tsc --noEmit` +
+`npm run check:i18n` bu yüzden merge öncesi tek gerçek güvence oluyor.
+
+### `main`'deki push-run'ın "cancelled" olması hata değil
+
+`main`'e arka arkaya merge geldiğinde her yeni push, workflow'un concurrency grubu
+üzerinden bir öncekinin push-run'ını iptal ediyor. #787'nin (f639d8f) smoke run'ı
+böyle iptal oldu, ardından #789'unki (9b975fd) de. **Cancelled'ı regresyon sanma** —
+doğrulamayı commit'inin *herhangi bir ardılında* yeşil olan en yeni run üzerinden yap;
+sabit bir sha'yı izlemek yoğun bir günde hiç sonuçlanmıyor.
+
 ## 2026-07-29 — Uzun süre açık kalmış PR'ın conflict'ini çözme (#787 / #668)
 
 ### Eski bir PR'ı çözmeden önce iki tarafı da merge-base'e karşı diff'le
