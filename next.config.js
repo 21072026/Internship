@@ -28,7 +28,9 @@ const nextConfig = {
   reactStrictMode: true,
   // pdf-parse/mammoth pull in Node-only deps (pdfjs) — keep them out of the
   // webpack server bundle so they load as plain CJS at runtime.
-  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth'],
+  // imapflow/mailparser are Node-only too (net/tls, iconv) and are used by the
+  // inbound mail bridge started from instrumentation.ts.
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth', 'imapflow', 'mailparser'],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

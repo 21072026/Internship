@@ -1112,7 +1112,7 @@ const en = {
     backHome: 'Back to home',
     categories: { tracking: 'Pipeline & intake', collaboration: 'Mentoring & collaboration', companies: 'For companies', insights: 'Insights & AI', trust: 'Privacy & security', platform: 'Platform' },
     items: {
-      messaging: { t: 'Built-in messaging', d: 'A unified inbox with per-mentorship threads, attachments and email mirroring — reachable from anywhere in the app.' },
+      messaging: { t: 'Built-in messaging', d: 'A unified inbox with per-mentorship threads, attachments and email mirroring you can reply to — answer the notification from your mail app and it lands back in the thread.' },
       activityReport: { t: 'Daily activity reports', d: 'Consent-based mentee activity digests for mentors and admins: logins, time on site, pages visited and completed to-dos.' },
       talentPool: { t: 'Talent pool & alerts (Premium)', d: 'Companies search a consent-based talent pool, see verified candidate cards, and get alerts when a candidate matches an open position.' },
       aiPackage: { t: 'AI assistants (Premium)', d: 'CV feedback and interview prep for mentees, interaction-log summaries for mentors, AI-assisted matching — all consent- and quota-gated.' },
@@ -2660,7 +2660,7 @@ const tr: Dict = {
     backHome: 'Ana sayfaya dön',
     categories: { tracking: 'Süreç & başvuru', collaboration: 'Mentorluk & iş birliği', companies: 'Şirketler için', insights: 'İçgörü & AI', trust: 'Gizlilik & güvenlik', platform: 'Platform' },
     items: {
-      messaging: { t: 'Yerleşik mesajlaşma', d: 'Mentorluk başına thread’ler, ekler ve e-posta yansıtmalı tek gelen kutusu — uygulamanın her yerinden erişilebilir.' },
+      messaging: { t: 'Yerleşik mesajlaşma', d: 'Mentorluk başına thread’ler, ekler ve cevaplanabilir e-posta yansıtması olan tek gelen kutusu — bildirimi kendi e-posta uygulamanızdan yanıtlayın, cevabınız thread’e düşer.' },
       activityReport: { t: 'Günlük aktivite raporları', d: 'Mentör ve adminler için rıza temelli mentee aktivite özetleri: girişler, sitede geçen süre, gezilen sayfalar ve tamamlanan görevler.' },
       talentPool: { t: 'Yetenek havuzu & bildirimler (Premium)', d: 'Şirketler rıza temelli yetenek havuzunda arama yapar, doğrulanmış aday kartlarını görür ve açık pozisyona uyan aday çıkınca bildirim alır.' },
       aiPackage: { t: 'AI asistanları (Premium)', d: 'Mentee’lere CV geri bildirimi ve mülakat hazırlığı, mentörlere etkileşim özeti, AI destekli eşleştirme — hepsi rıza ve kota kapılı.' },
@@ -4206,7 +4206,7 @@ const de: Dict = {
     backHome: 'Zurück zur Startseite',
     categories: { tracking: 'Pipeline & Aufnahme', collaboration: 'Mentoring & Zusammenarbeit', companies: 'Für Unternehmen', insights: 'Einblicke & KI', trust: 'Datenschutz & Sicherheit', platform: 'Plattform' },
     items: {
-      messaging: { t: 'Integrierte Nachrichten', d: 'Ein zentraler Posteingang mit Threads pro Mentoring, Anhängen und E-Mail-Spiegelung — überall in der App erreichbar.' },
+      messaging: { t: 'Integrierte Nachrichten', d: 'Ein zentraler Posteingang mit Threads pro Mentoring, Anhängen und beantwortbarer E-Mail-Spiegelung — antworte aus deinem Mailprogramm, und die Antwort landet im Thread.' },
       activityReport: { t: 'Tägliche Aktivitätsberichte', d: 'Einwilligungsbasierte Mentee-Aktivitätsübersichten für Mentoren und Admins: Logins, Verweildauer, besuchte Seiten und erledigte To-dos.' },
       talentPool: { t: 'Talent-Pool & Benachrichtigungen (Premium)', d: 'Unternehmen durchsuchen einen einwilligungsbasierten Talent-Pool, sehen verifizierte Kandidatenkarten und werden bei passenden Kandidaten benachrichtigt.' },
       aiPackage: { t: 'KI-Assistenten (Premium)', d: 'Lebenslauf-Feedback und Interviewvorbereitung für Mentees, Interaktionszusammenfassungen für Mentoren, KI-gestütztes Matching — alles einwilligungs- und kontingentgesteuert.' },
