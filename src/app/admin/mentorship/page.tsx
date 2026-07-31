@@ -13,10 +13,11 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen, Plus } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
 
+// The assign dropdowns only ever show a name, so this asks the API for the
+// `picker` field set — no email/phone/university in the response (#855).
 interface User {
   id: string;
   fullName: string;
-  email: string;
 }
 
 interface Company {
@@ -75,7 +76,7 @@ export default function MentorshipPage() {
   const fetchPickers = async () => {
     try {
       const [usersRes, companiesRes] = await Promise.all([
-        fetch('/api/users'),
+        fetch('/api/users?view=picker'),
         fetch('/api/companies'),
       ]);
       const [usersData, companiesData] = await Promise.all([usersRes.json(), companiesRes.json()]);

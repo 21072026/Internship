@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.31.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'A mentor\'s access to a former mentee\'s CV and documents now ends six months after the mentorship is marked complete, instead of lasting indefinitely. Six months rather than immediately, so you can still write a reference or answer a follow-up. You always have access to your own CV, and admins are unaffected.',
+        'The admin user list now loads one page at a time, with search and role filters handled by the server. Faster on large lists, and a single request no longer returns everyone\'s contact details.',
+      ],
+      tr: [
+        'Bir mentorun eski mentisinin CV ve belgelerine erişimi artık süresiz değil: mentorluk tamamlandı olarak işaretlendikten altı ay sonra sona eriyor. Hemen değil altı ay, çünkü referans yazmak veya sonraki bir soruyu yanıtlamak hâlâ mümkün olmalı. Kendi CV\'nize erişiminiz her zaman açık; yöneticiler etkilenmiyor.',
+        'Yönetici kullanıcı listesi artık sayfa sayfa yükleniyor; arama ve rol filtresi sunucuda çalışıyor. Uzun listelerde daha hızlı ve tek bir istek artık herkesin iletişim bilgisini döndürmüyor.',
+      ],
+      de: [
+        'Der Zugriff eines Mentors auf Lebenslauf und Dokumente eines ehemaligen Mentees endet jetzt sechs Monate nach Abschluss des Mentorings statt unbegrenzt zu gelten. Sechs Monate statt sofort, damit ein Zeugnis oder eine Rückfrage weiterhin möglich bleibt. Auf den eigenen Lebenslauf haben Sie immer Zugriff, Admins sind nicht betroffen.',
+        'Die Admin-Benutzerliste lädt jetzt seitenweise, Suche und Rollenfilter laufen auf dem Server. Schneller bei langen Listen — und eine einzelne Anfrage liefert nicht mehr die Kontaktdaten aller Nutzer.',
+      ],
+    },
+  },
+  {
     version: '0.30.3-beta',
     date: '2026-07-31',
     highlights: {

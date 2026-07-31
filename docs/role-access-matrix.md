@@ -91,6 +91,9 @@ yazılmışlar; denetimde temiz çıktılar ve **bozulmamalı**:
 | Rol-kapılı route'lar | Girişte rol allowlist'i → 401 (`/api/users`, `/api/search`, `/api/meetings`, `/api/availability`, `/api/company/*`, `/api/mentor/*`, `/api/admin/*`) | ilgili `route.ts` |
 | Kayıt bazlı yetki | `allowed = ADMIN \|\| katılımcı` (varsayılan `false`) | `/api/evaluations`, `/api/questions/[id]`, `/api/mentorship/[id]`, `/api/users/[id]/activity` |
 
+Erişimin *süresi* ve *kapsamı* (mentorluk sonrası pencere, alan minimizasyonu)
+da ayrı bir katman: [`pii-access-lifecycle.md`](pii-access-lifecycle.md).
+
 Tenant (organizasyon) izolasyonu **ayrı bir katman**: `withTenantScope()` /
 `MT_ENFORCE_ISOLATION` — bkz. [`tenant-isolation.md`](tenant-isolation.md). Bu
 matris tenant *içi* rol kapsamlamasını tanımlar.

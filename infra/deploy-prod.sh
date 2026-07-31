@@ -227,6 +227,10 @@ run_tool node prisma/backfill-organization.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
 # email out history. Self-skips once applied (Setting 'cronBaselineAt').
 run_tool node prisma/backfill-cron-baseline.mjs || true
+# Stamp completedAt on relations that were COMPLETED before the column existed,
+# so the post-mentorship CV access window (#854) has an anchor instead of
+# revoking access outright. Only ever fills NULLs — idempotent.
+run_tool node prisma/backfill-relation-completed-at.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 log "Restarting $CONTAINER on :$PORT"

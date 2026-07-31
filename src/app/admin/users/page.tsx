@@ -33,7 +33,10 @@ export default function AdminUsersPage() {
   // stays uncluttered; the "Archived" tab reveals them for reactivation (#570).
   const [statusView, setStatusView] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [archivedCount, setArchivedCount] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [impersonateError, setImpersonateError] = useState<{ userId: string; message: string } | null>(null);
   const PAGE_SIZE = 20;
@@ -64,16 +67,40 @@ export default function AdminUsersPage() {
     setBusyId(null);
   };
 
+  // Server-side pagination (#855): this screen used to pull every user in the
+  // tenant — email, phone, university, the lot — and slice it in the browser.
+  // It now asks for one page of the `directory` field set, so a single request
+  // can no longer walk off with the whole PII table.
   const load = useCallback(async () => {
-    const res = await fetch('/api/users');
-    const { users } = await res.json();
-    setUsers(users ?? []);
+    const params = new URLSearchParams({
+      view: 'directory',
+      page: String(page),
+      perPage: String(PAGE_SIZE),
+      status: statusView === 'ACTIVE' ? 'active' : 'archived',
+    });
+    if (filter !== 'ALL') params.set('role', filter);
+    if (debouncedSearch) params.set('search', debouncedSearch);
+
+    const res = await fetch(`/api/users?${params}`);
+    const data = await res.json();
+    setUsers(data.users ?? []);
+    setTotal(data.total ?? 0);
+    setArchivedCount(data.archivedCount ?? 0);
     setLoading(false);
-  }, []);
+  }, [page, statusView, filter, debouncedSearch]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Debounce the search box so typing doesn't fire a query per keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(id);
+  }, [search]);
 
   const toggleActive = async (u: AdminUser) => {
     setBusyId(u.id);
@@ -83,25 +110,17 @@ export default function AdminUsersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !u.isActive }),
       });
-      if (res.ok) {
-        setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, isActive: !x.isActive } : x)));
-      }
+      // Reload rather than patching in place: the active/archived split is a
+      // server-side filter now, so the row belongs on the other tab.
+      if (res.ok) await load();
     } finally {
       setBusyId(null);
     }
   };
 
-  const q = search.trim().toLowerCase();
-  const archivedCount = users.filter((u) => !u.isActive).length;
-  const filtered = users.filter(
-    (u) =>
-      (statusView === 'ACTIVE' ? u.isActive : !u.isActive) &&
-      (filter === 'ALL' || u.role === filter) &&
-      (!q || u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
-  );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const shown = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const shown = users;
 
   return (
     <div>
@@ -149,7 +168,7 @@ export default function AdminUsersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t.usersAdmin.title} ({filtered.length})</CardTitle>
+          <CardTitle>{t.usersAdmin.title} ({total})</CardTitle>
         </CardHeader>
         {loading ? (
           <SkeletonRows rows={6} />
