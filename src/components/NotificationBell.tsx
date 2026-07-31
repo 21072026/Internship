@@ -7,9 +7,11 @@ import { Bell } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { showBrowserNotification } from '@/lib/browserNotifications';
+import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
 
 interface Note {
   id: string;
+  type: string;
   text: string;
   link?: string | null;
   read: boolean;
@@ -81,10 +83,14 @@ export function NotificationBell() {
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={toggle} aria-label="Notifications" className="relative p-2 text-gray-600 hover:text-gray-900">
+      <button
+        onClick={toggle}
+        aria-label="Notifications"
+        className="relative min-h-11 min-w-11 flex items-center justify-center text-gray-600 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 rounded-full"
+      >
         <Bell className="h-5 w-5" />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+          <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
@@ -97,13 +103,26 @@ export function NotificationBell() {
           ) : (
             items.map((n) => {
               const inner = (
-                <div className={`px-4 py-3 border-b border-gray-50 text-sm ${n.read ? 'text-gray-500' : 'text-gray-900 bg-blue-50/40'}`}>
-                  <p>{n.text}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(n.createdAt, locale)}</p>
+                <div
+                  className={`min-h-11 flex items-start gap-2.5 px-4 py-3 border-b border-gray-50 text-sm transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400 ${
+                    n.read ? 'text-gray-500' : 'text-gray-900 bg-blue-50/40'
+                  }`}
+                >
+                  <div
+                    className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
+                      n.read ? 'bg-gray-100 text-gray-400' : 'bg-blue-100 text-blue-600'
+                    }`}
+                  >
+                    <NotificationTypeIcon type={n.type} className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={n.read ? '' : 'font-medium'}>{n.text}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(n.createdAt, locale)}</p>
+                  </div>
                 </div>
               );
               return n.link ? (
-                <Link key={n.id} href={n.link} onClick={() => setOpen(false)} className="block hover:bg-gray-50">
+                <Link key={n.id} href={n.link} onClick={() => setOpen(false)} className="block">
                   {inner}
                 </Link>
               ) : (
@@ -111,6 +130,13 @@ export function NotificationBell() {
               );
             })
           )}
+          <Link
+            href="/notifications"
+            onClick={() => setOpen(false)}
+            className="min-h-11 flex items-center justify-center text-sm text-blue-600 hover:bg-gray-50 border-t border-gray-100"
+          >
+            {t.notifications.viewAll}
+          </Link>
         </div>
       )}
     </div>

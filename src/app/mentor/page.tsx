@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
+import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -119,6 +120,10 @@ export default async function MentorDashboard() {
             </div>
           </div>
         </Card>
+      </div>
+
+      <div className="mb-6">
+        <AnnouncementsCard />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
