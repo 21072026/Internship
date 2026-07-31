@@ -8,6 +8,24 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.30.2-beta] - 2026-07-31
+
+### Security
+- **COMPANY and SOURCE accounts could read every mentee's interaction logs and
+  mentorship relations** (#847, #848). `GET /api/interactions` scoped its `where`
+  clause with an `if (MENTOR) … else if (MENTEE) …` chain and no final `else`, and
+  `GET /api/mentorship` covered MENTOR/MENTEE/COMPANY but not SOURCE. Any role the
+  chain didn't name fell through with an empty filter and got ADMIN visibility —
+  confirmed live: a SOURCE account with zero referred mentees read all 12 interaction
+  logs across 8 mentees. Scoping is now **fail-closed** via
+  `relationScopeForRole()` in `src/lib/authzScope.ts`: COMPANY is limited to its own
+  company's relations, SOURCE to the mentees it referred (a source with no `sourceId`
+  matches nothing), and a role with no defined scope gets `403` plus an
+  `authz.scope_denied` activity log at warning level. ADMIN/MENTOR/MENTEE result sets
+  are unchanged. Passing `?relationId=` for an out-of-scope relation no longer
+  bypasses the filter. Locked down by `e2e/role-scoping.spec.ts` (`@smoke`), which
+  asserts row ownership rather than status codes — the leak returned `200` throughout.
+
 ## [0.30.1-beta] - 2026-07-31
 
 ### Fixed
