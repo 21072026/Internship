@@ -1441,3 +1441,35 @@ env değişkeniyle geçir.
 için ESLint iki `.eslintrc.json` görüyor ve `Plugin "@next/next" was conflicted` ile
 düşüyor. Ortam kaynaklı, değişiklikle ilgisi yok; `npx tsc --noEmit` + `npm run check:i18n`
 yerel güvence olarak yeterli, lint'i CI'ya bırak.
+
+## 2026-07-31 — Davranış Kuralları (Code of Conduct), 3 dilde
+
+**"Code of conduct ekle" isteği iki yere birden bakar.** Bu depoda README, LICENSE,
+CONTRIBUTING ve SECURITY vardı; GitHub community-standards listesinde eksik olan tek
+kalem `CODE_OF_CONDUCT.md`'ydi — ama uygulamanın kendisinde de `/privacy` ve `/terms`
+gibi i18n'li kamuya açık sayfalar var. İkisi de yapıldı: depo dosyası katkıcılar için
+(kök `CODE_OF_CONDUCT.md` + `docs/code-of-conduct.tr.md` / `.de.md`), uygulama sayfası
+(`/code-of-conduct`) program katılımcıları için. Metni Contributor Covenant'ı birebir
+kopyalamak yerine projeye göre yazmak daha isabetli oldu: jenerik şablonun kaçırdığı iki
+şey burada asıl mesele — mentor ↔ mentee arasındaki güç asimetrisi ve rolün verdiği
+erişimle mentee PII'sine ulaşmanın kötüye kullanımı.
+
+**Uygulama içi metinlerde iletişim adresini sabitleme.** Depo dosyasında bakımcının
+e-postası doğru; uygulama sayfasında değil — her kurulumun kendi operatörü var.
+`privacy` bloğunun kullandığı dil ("bu kurulumun operatörü/yöneticisi") burada da doğru
+kalıp.
+
+**Nested worktree'de `npm run lint` yanlış alarm veriyor.** Worktree depo kökünün altında
+(`.claude/worktrees/…`) durduğu için ESLint yukarı yürüyüp üst dizindeki `.eslintrc.json`
++ `node_modules`'u da buluyor ve `Plugin "@next/next" was conflicted…` diyerek **exit 1**
+dönüyor — değişiklikle ilgisi yok, temiz checkout'ta koşan CI'da çıkmıyor. Gerçek güvence
+için `npx tsc --noEmit` + `npm run build` yeterli oldu.
+
+**Sözlükte dizi (array) değerler sorunsuz.** `check-i18n.ts` dizileri `String(v)` ile tek
+değer sayıyor, yani madde listelerini `expected: [...]` olarak yazmak parite kontrolünü
+bozmuyor (`weekdays`/`topics` zaten öyle). Madde başına `bullet1..n` anahtarı uydurmaya
+gerek yok — ama dizi uzunluğu diller arasında tutarlı olmalı, onu kontrol eden yok.
+
+**`npm install` lock'taki sürümü de düzeltiyor.** Kurulum öncesi `package-lock.json`
+`0.30.1-beta`de kalmıştı (`package.json` 0.31.4'teyken); install sonrası ikisi de yeni
+sürüme geldi — bu hunk gürültü değil, commit'e dahil edilmeli.
