@@ -10,6 +10,61 @@ Newest entries on top.
 
 ---
 
+## 2026-07-31 — Inbound mail bridge (#974, 0.29.0/0.29.1-beta)
+
+**"The email can't go out" was actually "the email arrives and nothing reads
+it."** Before touching code, check the whole path on the server. Here MX,
+catch-all, `Reply-To` generation and `/api/inbound-email` were all fine; the
+missing piece was the mailbox reader, which `docs/EMAIL_DELIVERABILITY.md` had
+been honestly flagging as "still required in infrastructure" all along. Read the
+feature's own doc before assuming a bug.
+
+**`docker run` in `infra/deploy-prod.sh` passes an explicit `-e` allowlist.**
+Adding a key to `/etc/internship-crm/prod.env` is *not* enough — unlisted keys
+never reach the container, silently. Any new runtime env var needs a line in that
+`docker run` **and** in the env-derivation `for k in …` fallback above it (that
+fallback rebuilds the env file from the running container, so a var missing there
+gets dropped on some later deploy). Verify with
+`docker exec internship-crm printenv | grep YOUR_VAR` after deploying.
+
+**`instrumentation.ts` is compiled for the edge runtime too, because this repo
+has `src/middleware.ts`.** A `process.env.NEXT_RUNTIME === 'nodejs'` guard does
+not help: webpack still traces the import graph, so importing anything with
+node-only deps (here `imapflow` → `net`/`tls`/`stream`) fails the build, and
+`serverExternalPackages` does not apply to the edge bundle. Workaround used: keep
+instrumentation dependency-free (`fetch` only) and have it call a node-runtime
+route handler that does the socket work.
+
+**Probing SMTP from `127.0.0.1` on the mail server proves nothing.** localhost is
+in `mynetworks`, so `permit_mynetworks` accepts any recipient and you get a
+misleading `250`. To learn whether an address is really deliverable, inspect the
+maps instead — `postmap -q "@domain" hash:/var/spool/postfix/plesk/virtual`
+reveals a catch-all, and `postconf recipient_delimiter` tells you whether
+`user+ext@` collapses to `user@`.
+
+**Plesk plus-addressing beats a catch-all, in that order.** With
+`recipient_delimiter = +`, creating mailbox `reply@` captures every
+`reply+<token>@` before the domain catch-all sees it — a clean way to divert
+machine mail out of a personal inbox without touching the catch-all.
+
+**Don't `rm` mail out of a Maildir behind dovecot's back.** It leaves a stale
+index entry, so IMAP `search` returns a UID whose source won't fetch. It
+self-heals on the next rescan, but it looks exactly like a bridge bug for a
+minute. Delete via IMAP, or expect the noise.
+
+**`npm run lint` fails in a `.claude/worktrees/…` worktree** with `Plugin
+"@next/next" was conflicted between ".eslintrc.json" and "../../../.eslintrc.json"`
+— the worktree sits inside the parent repo, so ESLint finds both configs. It is
+not your change: confirm by linting an untouched file, and trust CI (which
+checks out flat). Same cause as the "multiple lockfiles" Next warning.
+
+**Count before you claim a number.** Grepping the maildir for `reply+` matched 21
+files, but that pattern also hits *outbound* copies whose `Reply-To` carries the
+token. Anchoring on recipient headers (`To|Cc|Delivered-To|X-Original-To`) gave
+the real figure: 9 files, 5 distinct replies, of which only 1 was still
+recoverable (the other threads had been deleted). Anchor the grep, and check the
+relation still exists before promising a backfill.
+
 ## 2026-07-24 — Shared messaging UI and attachment-only support messages
 
 **Extract UI primitives before aligning parallel chat pages.** The mentorship

@@ -23,8 +23,17 @@ export type InboundResult =
 export const emailOf = (s: string) => (s.match(/[^<>\s]+@[^<>\s]+/)?.[0] || s).trim().toLowerCase();
 
 // Strip a quoted reply history (best-effort) so only the new text is kept.
+//
+// The attribution line clients put above the quote varies more than the old
+// `On … wrote:` pattern allowed — a real reply arrived as
+// "July 2, 2026 at 3:50 PM, noreply@crm.ersah.in wrote:", which matched nothing
+// and leaked into the thread. So: cut at any line that *ends* in the local
+// "wrote:" verb (EN/TR/DE, the app's locales), at an Outlook divider, or at the
+// first quoted `>` line — whichever comes first.
+const QUOTE_START = /^\s*(.*\b(wrote|yazdı|schrieb):\s*$|-{2,} ?Original Message|_{10,}|>)/m;
+
 export function stripQuoted(text: string): string {
-  const cut = text.search(/^\s*(On .+ wrote:|-{2,} ?Original Message|>)/m);
+  const cut = text.search(QUOTE_START);
   return (cut > 0 ? text.slice(0, cut) : text).trim();
 }
 

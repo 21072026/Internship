@@ -58,6 +58,20 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     }
     expect(await prisma.message.count({ where: { relationId: rel.id, inboundMessageId: messageId } })).toBe(1);
     expect(await prisma.message.count({ where: { relationId: rel.id } })).toBe(2);
+
+    // Quote attribution lines other than "On … wrote:" are trimmed too — this
+    // exact shape arrived from a real client and used to leak into the thread.
+    const quoted = await request.post('/api/inbound-email', {
+      data: {
+        to: `reply+${token}@crm.ersah.in`,
+        from: menteeEmail,
+        text: 'cevap veriyorum\n\nJuly 2, 2026 at 3:50 PM, noreply@crm.ersah.in wrote:\n> earlier message',
+        messageId: `<attribution-${rel.id}@mail.example>`,
+      },
+    });
+    expect(quoted.status()).toBe(200);
+    const quotedMsg = await prisma.message.findFirst({ where: { inboundMessageId: `<attribution-${rel.id}@mail.example>` } });
+    expect(quotedMsg?.body).toBe('cevap veriyorum');
   } finally {
     await prisma.message.deleteMany({ where: { relationId: rel.id } });
     await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
