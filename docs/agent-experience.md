@@ -58,6 +58,32 @@ minute. Delete via IMAP, or expect the noise.
 not your change: confirm by linting an untouched file, and trust CI (which
 checks out flat). Same cause as the "multiple lockfiles" Next warning.
 
+**`register()` in `instrumentation.ts` resolves *before* the server accepts
+connections.** So `await fetch('http://127.0.0.1:PORT/…')` inside it can never
+succeed — it deadlocks or burns every retry against a closed port. Defer
+self-calls onto a `setTimeout`. (Caught before shipping, but only by asking why
+the mail bridge's `setInterval` worked while the cron start-call wouldn't.)
+
+**Before enabling anything that sends email, measure the first tick.** Several
+scheduled jobs here are "everything not yet marked" queries and the marker had
+never been set, so the first run would have mailed the whole backlog: 3 people a
+digest of 3-week-old messages. Count it against the prod DB first, then write a
+one-shot baseline. Make it **one-shot** (a `Setting` key), not just idempotent —
+an every-deploy backfill would keep marking *newly* stale work as handled and
+permanently suppress the feature it protects.
+
+**Check `emailAllowed` when touching any job that mails users.** Every scheduled
+job in `emailService.ts` consults it except `checkMentorInteractionReminders`,
+which also sent one mail per relation rather than per mentor — 7 unstoppable
+emails a day for one mentor. Worth grepping for the odd one out before assuming
+the batch is uniform.
+
+**A guard field may not guard what its name suggests.**
+`stalenessReminderSentAt` gates only the in-app bell; the email loop reads every
+stale relation on every run. Read where a field is *consumed* before designing a
+backfill around it — baselining it would have hidden notifications without
+preventing a single email.
+
 **Count before you claim a number.** Grepping the maildir for `reply+` matched 21
 files, but that pattern also hits *outbound* copies whose `Reply-To` carries the
 token. Anchoring on recipient headers (`To|Cc|Delivered-To|X-Original-To`) gave
@@ -1341,3 +1367,36 @@ döküyor (asıl hata "Run full E2E suite" adımının içinde). İşe yarayan:
 `playwright-report-full-shard-N`'i indirip `data/*.md` (error-context) ve
 failure screenshot'ına bakmak — ekran görüntüsü "mentee portalındayız" diyerek
 hipotezi tek karede doğruladı.
+
+## 2026-07-31 — #973'ün conflict'i: iki PR aynı sürüm numarasını kaptığında
+
+#787'nin kuralı ("bump'ı main'in üstüne taşı", yukarıda) burada bir varyantla karşılaştı:
+dal **kendi sürümünü main'de zaten kullanılmış** bir numaraya bump etmişti. #973 ve
+#972 (#879 anket kopyası) bağımsız olarak `0.28.4-beta` iddia etmişti, dolayısıyla
+`CHANGELOG.md` ve `releaseNotes.ts` çakışmaları *aynı sürüm başlığının altında* iki
+farklı içerik olarak göründü — "hangi taraf?" değil, "iki taraf da ama farklı sürümde"
+sorusu. Çözüm: main'in `0.28.4-beta` bölümünü **olduğu gibi bırak** (o zaten merge oldu,
+tarih sırası doğru), dalın girdilerini main'in tepesinin bir üstüne (`0.29.1-beta` →
+`0.29.2-beta`) yeni bir bölüm/`RELEASE_NOTES` girdisi olarak taşı. Çakışma bloğunun
+içinde kendi metnini korumaya çalışmak CHANGELOG'da tek sürüm başlığı altında iki ayrı
+release yaratır.
+
+**`main`'in `package-lock.json`'ı `package.json`'la senkron olmayabilir.** Burada main'in
+lock'u hâlâ `0.28.4-beta` derken `package.json` `0.29.1-beta`'daydı — yani lock
+çakışmasında "main tarafını al" yanlış cevap. Her iki yerdeki (`version` +
+`packages[""].version`) değeri de yeni sürüme elle yaz, tarafları seçme.
+
+**Worktree'de `node_modules` yok, ama bu her şeyi durdurmuyor.** `npx prisma generate` ve
+`npm run check:i18n` (tsx'i npx indirdi) `npm install` olmadan çalıştı; `npm run build`
+için install şart. Install sonrası `package-lock.json`'a darwin'e özgü tek bir
+gürültü hunk'ı düşüyor (`fsevents` girdilerine `"dev": true`) — bunu commit'e karıştırma,
+`git checkout package-lock.json` ile at, sonra build'i çalıştır.
+
+**Ek tur (aynı gün):** conflict çözülüp CI yeşile döndükten sonra, auto-merge kuyruktaki
+image build'i beklerken `main`'e #977 girdi ve *aynı üç dosya* yine çakıştı (`0.29.2` →
+main `0.30.0`, bizim entry `0.30.1`'e taşındı). Bu depoda `main` saatte birkaç kez
+ilerliyor, yani sürüm defter tutması çakışması **çözülünce kapanmıyor** — merge kuyruğunda
+beklerken tekrar açılıyor. Pratik sonuç: çözümü push ettikten sonra dalı bırakıp gitme;
+merge olana kadar `gh pr view --json mergeable` ile izle, tekrar `DIRTY` olursa aynı
+mekanik kuralı uygula. Üçüncü turda `npx tsc --noEmit` + `check:i18n` tam `npm run build`
+yerine yeterli hızlı güvence (çakışan dosyalar sadece CHANGELOG/releaseNotes/sürüm ise).

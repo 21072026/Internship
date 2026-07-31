@@ -612,28 +612,49 @@ export async function checkMentorInteractionReminders() {
     }
   }
 
+  // One email per MENTOR, not per relation. This job runs daily, so a mentor
+  // with 7 stale mentees used to get 7 separate mails every single day — and
+  // unlike every other scheduled job it never consulted the recipient's
+  // preferences, so there was no way to turn them off. Grouped + opt-out aware
+  // ('deadlines', the same category as the stage-deadline nudge): one summary
+  // listing each mentee and how long it has been.
+  const byMentor = new Map<string, typeof remindersToSend>();
   for (const relation of remindersToSend) {
-    const lastDate = relation.interactions[0]?.date;
-    const daysSince = lastDate
-      ? Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
-      : null;
+    const list = byMentor.get(relation.mentorId) ?? [];
+    list.push(relation);
+    byMentor.set(relation.mentorId, list);
+  }
+
+  let emailed = 0;
+  for (const relations of byMentor.values()) {
+    const mentor = relations[0].mentor;
+    if (!mentor.email || !emailAllowed(mentor, 'deadlines')) continue;
+
+    const rows = relations
+      .map((relation) => {
+        const lastDate = relation.interactions[0]?.date;
+        const daysSince = lastDate
+          ? Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+        const since = daysSince !== null
+          ? `${daysSince} day${daysSince === 1 ? '' : 's'} since the last interaction`
+          : 'no interactions logged yet';
+        return `<li style="margin-bottom:6px;"><strong>${relation.mentee.fullName}</strong> — ${since}</li>`;
+      })
+      .join('');
 
     try {
       await sendEmail({
-        to: relation.mentor.email,
-        subject: `Reminder: Log interaction with ${relation.mentee.fullName}`,
+        to: mentor.email,
+        subject: relations.length === 1
+          ? `Reminder: Log interaction with ${relations[0].mentee.fullName}`
+          : `Reminder: ${relations.length} mentees need an interaction log`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #2563eb;">Interaction Reminder</h2>
-            <p>Hi ${relation.mentor.fullName},</p>
-            <p>
-              ${
-                daysSince
-                  ? `It has been <strong>${daysSince} days</strong> since you last logged an interaction`
-                  : 'You have not yet logged any interactions'
-              }
-              with your mentee <strong>${relation.mentee.fullName}</strong>.
-            </p>
+            <p>Hi ${mentor.fullName},</p>
+            <p>These mentees have had no logged interaction for a while:</p>
+            <ul style="padding-left:18px;">${rows}</ul>
             <p>Please log your recent interactions to keep the mentorship record up to date.</p>
             <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/mentor" style="
               display: inline-block;
@@ -649,14 +670,16 @@ export async function checkMentorInteractionReminders() {
           </div>
         `,
       });
+      emailed++;
     } catch (e) {
-      console.error('checkMentorInteractionReminders email failed:', { relationId: relation.id, mentorId: relation.mentorId, error: e });
+      console.error('checkMentorInteractionReminders email failed:', { mentorId: relations[0].mentorId, error: e });
     }
   }
 
   return {
     checked: activeRelations.length,
     reminded: remindersToSend.length,
+    emailed,
   };
 }
 
