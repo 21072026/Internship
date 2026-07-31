@@ -5,9 +5,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import {
-  buildSupportAttachments,
-  readSupportMessageRequest,
-} from '@/lib/supportMessageRequest';
+  SUPPORT_ATTACHMENT_MAX_COUNT,
+  validateSupportFile,
+} from '@/lib/supportAttachments';
 
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
@@ -15,7 +15,6 @@ const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: t
 // Admins see every ticket, reply into the thread, move tickets through
 // OPEN → IN_PROGRESS → CLOSED (and back), and take assignment.
 
-// A reply needs text, at least one attachment, or both (#788).
 const replySchema = z.object({
   ticketId: z.string().min(1),
   body: z.string().max(5000).optional().default(''),
@@ -71,26 +70,64 @@ export async function GET(request: Request) {
   return NextResponse.json({ tickets, me: session.user.id });
 }
 
-// POST — reply into a ticket, optionally with attachments. Replying moves an
-// OPEN ticket to IN_PROGRESS, takes assignment if the ticket has none, marks
-// the requester's messages read, and notifies the requester.
+// POST — reply into a ticket. Replying moves an OPEN ticket to IN_PROGRESS,
+// takes assignment if the ticket has none, marks the requester's messages
+// read, and notifies the requester.
 export async function POST(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // multipart (text + files) or the original JSON text-only shape.
-  const read = await readSupportMessageRequest(request);
-  if (!read.ok) return NextResponse.json({ error: read.error }, { status: read.status });
+  let payload: unknown;
+  let files: File[] = [];
 
-  const parsed = replySchema.safeParse(read.payload);
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  const body = parsed.data.body.trim();
-  if (!body && read.files.length === 0) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  if (request.headers.get('content-type')?.includes('multipart/form-data')) {
+    const form = await request.formData().catch(() => null);
+    if (!form) return NextResponse.json({ error: 'Invalid multipart request' }, { status: 400 });
+    payload = { ticketId: form.get('ticketId'), body: form.get('body') ?? '' };
+    files = form.getAll('files').filter((value): value is File => typeof value !== 'string');
+  } else {
+    payload = await request.json().catch(() => null);
   }
 
-  const built = await buildSupportAttachments(read.files);
-  if (!built.ok) return NextResponse.json({ error: built.error }, { status: built.status });
+  const parsed = replySchema.safeParse(payload);
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  const body = parsed.data.body.trim();
+  if (!body && files.length === 0) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+
+  if (files.length > SUPPORT_ATTACHMENT_MAX_COUNT) {
+    return NextResponse.json(
+      { error: `Too many attachments (max ${SUPPORT_ATTACHMENT_MAX_COUNT})` },
+      { status: 400 },
+    );
+  }
+
+  const fileKeys = new Set<string>();
+  for (const file of files) {
+    const key = [file.name, file.size, file.type, file.lastModified].join('\0');
+    if (fileKeys.has(key)) {
+      return NextResponse.json({ error: `Duplicate attachment: ${file.name}` }, { status: 400 });
+    }
+    fileKeys.add(key);
+
+    const validationError = await validateSupportFile(file);
+    if (validationError) {
+      const errors = {
+        unsupported: `Unsupported file type: ${file.name}`,
+        tooLarge: `File too large: ${file.name}`,
+        unreadable: `File is empty, corrupted, or unreadable: ${file.name}`,
+      };
+      return NextResponse.json({ error: errors[validationError] }, { status: 400 });
+    }
+  }
+
+  const attachments = await Promise.all(
+    files.map(async (file) => ({
+      filename: file.name,
+      contentType: file.type,
+      size: file.size,
+      data: Buffer.from(await file.arrayBuffer()),
+    })),
+  );
 
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: parsed.data.ticketId },
@@ -103,7 +140,7 @@ export async function POST(request: Request) {
       ticketId: ticket.id,
       senderId: session.user.id,
       body,
-      attachments: built.attachments.length ? { create: built.attachments } : undefined,
+      attachments: attachments.length ? { create: attachments } : undefined,
     },
     select: { id: true },
   });

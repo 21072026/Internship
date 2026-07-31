@@ -19,14 +19,26 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       en: [
         'A new Notifications page shows your full notification history, not just the last 20 in the bell — filter by read/unread or by type, page through older ones, and see exactly how many you have. Open it from the new "View all" link at the bottom of the bell dropdown.',
         'Your mentee/mentor dashboard now has an Announcements card with the latest updates from admins, and a page to browse the full history — separate from your personal notifications.',
+        'Every project now has a shared group chat for its owners, mentors and mentees. Open Messages from the chat icon in the header, then choose the row marked "Project group" next to your project name. The group supports the same attachments, reactions and notification preferences as your other conversations, and membership updates automatically when people join or leave the project.',
+        'When an admin assigns you a mentor directly, you now hear about it: both the mentee and the mentor get a notification in the app and an email. Previously this only happened when a mentee had requested a mentor themselves — a direct assignment was silent, so you had to notice it on your own next time you logged in.',
+        'Emails your mentor sends to you from their dashboard now follow your notification settings — if you have switched off message emails, they no longer arrive. Your mentor still sees the message in your interaction history either way.',
+        'Scheduled emails are more reliable: one address that fails no longer stops the rest of that batch from going out.',
       ],
       tr: [
         'Yeni Bildirimler sayfası, zil menüsündeki son 20 bildirimle sınırlı kalmadan tüm bildirim geçmişinizi gösterir — okundu/okunmadı veya türe göre filtreleyin, eski bildirimlerde sayfalar arasında gezin ve toplam kaç bildiriminiz olduğunu görün. Zil menüsünün altındaki yeni "Tümünü gör" bağlantısından açabilirsiniz.',
         'Menti/mentor panonuzda artık yöneticilerden gelen son güncellemeleri gösteren bir Duyurular kartı var, ayrıca tüm duyuru geçmişini görebileceğiniz — kişisel bildirimlerinizden ayrı — bir sayfa da eklendi.',
+        'Artık her projenin owner, mentor ve mentee üyeleri için ortak bir grup sohbeti var. Üst menüdeki sohbet simgesinden Mesajlar’ı açıp proje adının yanında "Proje grubu" yazan satırı seç. Grup; diğer sohbetlerinle aynı dosya eki, tepki ve bildirim tercihlerini destekliyor, katılımcılar da projeye giren veya projeden ayrılan üyelere göre otomatik güncelleniyor.',
+        'Bir yönetici size doğrudan mentor atadığında artık haberdar oluyorsunuz: hem menti hem de mentor uygulama içinde bildirim ve e-posta alıyor. Daha önce bu yalnızca menti kendisi mentor talebinde bulunduğunda oluyordu — doğrudan atama sessizdi, bir sonraki girişinizde kendiniz fark etmeniz gerekiyordu.',
+        'Mentorunuzun panelinden size gönderdiği e-postalar artık bildirim tercihlerinize uyuyor — mesaj e-postalarını kapattıysanız artık gelmiyor. Mentorunuz mesajı her durumda etkileşim geçmişinizde görmeye devam ediyor.',
+        'Zamanlanmış e-postalar daha güvenilir: başarısız olan tek bir adres artık o gruptaki diğer e-postaların gönderilmesini engellemiyor.',
       ],
       de: [
-        'Eine neue Benachrichtigungen-Seite zeigt deinen kompletten Benachrichtigungsverlauf, nicht nur die letzten 20 in der Glocke — filtere nach gelesen/ungelesen oder nach Typ, blättere durch ältere Einträge und sieh genau, wie viele du hast. Öffne sie über den neuen Link "Alle anzeigen" am unteren Rand des Glocken-Menüs.',
         'Dein Mentee-/Mentor-Dashboard hat jetzt eine Ankündigungen-Karte mit den neuesten Updates der Admins sowie eine Seite für den vollständigen Verlauf — getrennt von deinen persönlichen Benachrichtigungen.',
+        'Eine neue Benachrichtigungen-Seite zeigt deinen kompletten Benachrichtigungsverlauf, nicht nur die letzten 20 in der Glocke — filtere nach gelesen/ungelesen oder nach Typ, blättere durch ältere Einträge und sieh genau, wie viele du hast. Öffne sie über den neuen Link "Alle anzeigen" am unteren Rand des Glocken-Menüs.',
+        'Jedes Projekt hat jetzt einen gemeinsamen Gruppenchat für Owner, Mentoren und Mentees. Öffne Nachrichten über das Chat-Symbol in der Kopfzeile und wähle die mit „Projektgruppe“ gekennzeichnete Zeile neben deinem Projektnamen. Die Gruppe unterstützt dieselben Anhänge, Reaktionen und Benachrichtigungseinstellungen wie deine anderen Unterhaltungen; die Teilnehmer werden automatisch aktualisiert, wenn jemand dem Projekt beitritt oder es verlässt.',
+        'Wenn ein Admin dir direkt einen Mentor zuweist, erfährst du das jetzt: Mentee und Mentor erhalten eine Benachrichtigung in der App und eine E-Mail. Bisher passierte das nur, wenn ein Mentee selbst einen Mentor angefragt hatte — eine direkte Zuweisung blieb stumm und musste beim nächsten Login selbst entdeckt werden.',
+        'E-Mails, die dein Mentor dir aus seinem Dashboard schickt, richten sich jetzt nach deinen Benachrichtigungseinstellungen — hast du Nachrichten-E-Mails abgeschaltet, kommen sie nicht mehr an. Dein Mentor sieht die Nachricht in beiden Fällen weiterhin in deinem Interaktionsverlauf.',
+        'Geplante E-Mails sind zuverlässiger: Eine fehlerhafte Adresse verhindert nicht mehr, dass der Rest des Stapels versendet wird.',
       ],
     },
   },
@@ -151,17 +163,32 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
-    version: '0.25.12-beta',
-    date: '2026-07-24',
+    version: '0.25.13-beta',
+    date: '2026-07-27',
     highlights: {
       en: [
-        'Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
+        'Admins can now attach images or PDF files when replying to a support ticket — with the same preview and pre-send removal as the requester side. Replies can include text, an attachment, or both.',
       ],
       tr: [
-        'Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
+        'Adminler artık bir destek talebine yanıt verirken görsel veya PDF dosyası ekleyebiliyor — talep sahibi tarafındaki gibi aynı önizleme ve gönderim öncesi kaldırma özellikleriyle. Yanıtlar metin, ek veya ikisini birden içerebilir.',
       ],
       de: [
-        'Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
+        'Admins können jetzt beim Antworten auf ein Support-Ticket Bilder oder PDF-Dateien anhängen — mit derselben Vorschau und Entfernung vor dem Senden wie auf der Anfragerseite. Antworten können Text, einen Anhang oder beides enthalten.',
+      ],
+    },
+  },
+  {
+    version: '0.25.12-beta',
+    date: '2026-07-27',
+    highlights: {
+      en: [
+        'Fixed the Projects page briefly showing "(0)" next to "All projects" while the list was still loading. Goals are easier to manage: sort them newest or oldest first, edit active goals inline, and open the collapsible archive whenever you need to view, reopen or delete completed goals.',
+      ],
+      tr: [
+        'Projeler sayfasında liste henüz yüklenirken "Tüm projeler" yazısının yanında kısaca "(0)" görünmesi giderildi. Hedefleri yönetmek artık daha kolay: hedefleri yeniden eskiye veya eskiden yeniye sıralayın, aktif hedefleri yerinde düzenleyin ve tamamlanan hedefleri görüntülemek, yeniden açmak ya da silmek için daraltılabilir arşivi açın.',
+      ],
+      de: [
+        'Behoben: Auf der Projekte-Seite zeigte "Alle Projekte" beim Laden kurzzeitig "(0)" an. Ziele lassen sich jetzt einfacher verwalten: Sortiere sie nach den neuesten oder ältesten zuerst, bearbeite aktive Ziele direkt und öffne das einklappbare Archiv, um abgeschlossene Ziele anzusehen, wieder zu öffnen oder zu löschen.',
       ],
     },
   },

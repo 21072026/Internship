@@ -11,6 +11,32 @@ version is shown in the sidebar footer of every page (links to the
 ## [Unreleased]
 
 ### Fixed
+- **Scheduled full e2e suite: the 2 reds and 1 flake left by run
+  [30608852159](https://github.com/21072026/Internship/actions/runs/30608852159)**
+  (#963). Again no product bug — all three are test defects.
+  - **`evaluation-goals`** still asserted the goals panel's old `"0/2 completed"`
+    progress bar and its `0%` label. #785 (PR #786) replaced that bar with the
+    `goals-active-count` / `goals-completed-count` counters, but the merge kept
+    main's `GoalsPanel` (from #918) *and* the branch's spec, so the spec asserted
+    markup that no longer exists. It now asserts the counters, like the
+    `goals-archive-sort` spec that shipped with the same feature.
+  - **`meeting-requests`** switches user mid-test, and `clearCookies()` alone does
+    not end the old session: the page being left keeps hitting
+    `/api/auth/session`, and NextAuth re-issues the session cookie on those
+    responses — one landing just after the clear restores it. `/auth/signin` then
+    saw `status === 'authenticated'` and redirected to the *previous* user's
+    dashboard mid-typing, so `page.click('button[type="submit"]')` re-resolved
+    against the mentee portal and spent the whole action timeout retrying its
+    disabled "Add goal" button. New `signInAsFreshUser()` in `e2e/helpers/auth.ts`
+    tears the old page down (`about:blank`) before dropping the session cookie,
+    keeps the consent cookie seeded by `storageState`, and clicks the submit
+    button *inside the sign-in form*, so a stray redirect fails fast instead of
+    clicking something unrelated. `evaluation-goals` uses it too.
+  - **`notes`** (the run's flake) read the database straight after
+    `expect(page.getByText('Prepare portfolio for interview')).toBeVisible()` —
+    but Playwright's text matching includes `<textarea>` values, so that matched
+    the text just typed into the still-open editor and the read raced the PATCH.
+    It now waits for the editor to close first.
 - **The scheduled full e2e suite is green again — 9 failing specs** (#954). The suite's
   daily schedule had been left commented out since before the Actions quota was
   restored, so failures accumulated unseen while the `@smoke` PR gate stayed green.
@@ -69,6 +95,46 @@ No version bump: test and `data-testid` changes only, no user-visible behaviour 
   active users, so there is no per-role/org filtering to apply) rather than the
   notification bell, with its own "View all" link to a new shared `/announcements` history
   page. The admin composer at `/admin/announcements` is unchanged.
+- **Automatic project group chat** (#771) — every project now has one shared GROUP
+  conversation whose participants stay synchronized with `ProjectMember`. Owners, mentors
+  and mentees can use the existing message flow, including attachments and reactions;
+  removed members keep no access, while message history remains intact. Message emails
+  continue to respect the recipient's Messages preference.
+- Project group chats are discoverable from the **Messages** inbox: open the chat icon in
+  the header and select the row labeled with the project name and **Project group**.
+
+### Schema
+- `Conversation` now has a compound unique constraint on `[type, projectId]`, preventing
+  concurrent requests from creating more than one GROUP conversation per project.
+
+### Fixed
+- **The last three gaps from the email-delivery audit** (#668, follow-up to the sweep
+  shipped in 0.26.0).
+  - **A direct admin assignment was completely silent** (`POST /api/mentorship`). Unlike
+    the request-approval path, an admin wiring a mentor to a mentee sent neither an in-app
+    notification nor an email, so neither side learned about it until they happened to log
+    in. Both now get a `mentorship_request` notification, plus an email gated on the
+    `mentorship` opt-out: a new `sendMentorAssignedEmail` for the mentee (the
+    request-approval copy does not fit — the mentee never asked) and the existing
+    `sendMenteeAssignedEmail` for the mentor. Both are branded via `emailBrand` and their
+    failures are logged without failing the assignment.
+  - **`POST /api/mentor/email` ignored the recipient's preferences.** The mentor's bulk
+    mentee mail went out even to mentees who had switched email notifications off; it is
+    now gated on `messages`, matching `/api/messages`. The `InteractionLog` entry is still
+    written either way, so the mentor's outreach record is unchanged.
+  - **Cron email failures were swallowed or aborted the job.** `checkMentorInteractionReminders`
+    and `checkRetentionReminders` awaited `sendEmail` unguarded, so one bad address aborted
+    the whole run mid-way and left the remaining recipients unprocessed; `checkStageDeadlineReminders`,
+    `checkCompanyNeedMatches` and `sendWeeklyAnalyticsReport` used `.catch(() => {})`, discarding
+    the error entirely. The first two are now wrapped in `try/catch` and all five log the
+    failure with the relation/user id for context.
+
+### Added
+- E2E coverage for the notification paths above: `e2e/mentorship-direct-assign.spec.ts`
+  (direct assignment notifies both sides), three new cases in `e2e/mentorship-request.spec.ts`
+  (admin-queue notification, approve notifies both sides, reject notifies the mentee with no
+  relation created), and an `e2e/notif-prefs.spec.ts` case asserting the `mentorship` and
+  `meetingReminders` toggles render and persist through the account-settings UI.
 
 ## [0.28.1-beta] - 2026-07-29
 
@@ -408,9 +474,23 @@ No version bump: test and `data-testid` changes only, no user-visible behaviour 
   match the visible view). Bulk activate from the archive restores candidates to
   the active list.
 
-## [0.25.12] - 2026-07-24
+## [0.25.13] - 2026-07-27
 
 ### Added
+- **Attachments in admin support replies.** Admins can now attach up to 10 PNG,
+  JPEG, or PDF files/images when replying to a support ticket, reusing the same
+  composer, image preview, pre-send removal, and client/server validation as the
+  requester's side. A reply may contain text only, attachment(s) only, or both.
+  Sent attachments render in the thread and remain downloadable by the requester
+  and support admins via the existing protected attachment route.
+
+## [0.25.12] - 2026-07-27
+
+### Fixed
+- **Projects list heading flashed a stale count while loading.** The "All
+  projects" heading in `ProjectsManager` now only shows the `(N)` count after
+  the initial fetch finishes, instead of showing `(0)` during the loading
+  state.
 - **Improved goal management (#785).** Goals can now be sorted newest or oldest
   first and edited inline. Completed goals are kept separate in a collapsible
   archive, where they can still be reopened or deleted.
