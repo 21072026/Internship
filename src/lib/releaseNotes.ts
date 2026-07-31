@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.33.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Announcements can now include an image. When you write an announcement you can attach a picture (PNG, JPEG, WebP or GIF, up to 5 MB) and see it before publishing; everyone sees it with the announcement, and it is included in the email version too.',
+      ],
+      tr: [
+        'Duyurulara artık görsel eklenebiliyor. Duyuru yazarken bir görsel ekleyip (PNG, JPEG, WebP veya GIF, en fazla 5 MB) yayınlamadan önce önizleyebilirsiniz; görsel duyuruyla birlikte herkese gösterilir ve e-posta ile gönderilen sürümde de yer alır.',
+      ],
+      de: [
+        'Ankündigungen können jetzt ein Bild enthalten. Beim Schreiben einer Ankündigung lässt sich ein Bild anhängen (PNG, JPEG, WebP oder GIF, bis zu 5 MB) und vor dem Veröffentlichen ansehen; alle sehen es zusammen mit der Ankündigung, und in der E-Mail-Version ist es ebenfalls enthalten.',
+      ],
+    },
+  },
+  {
     version: '0.32.1-beta',
     date: '2026-07-31',
     highlights: {

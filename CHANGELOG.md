@@ -8,6 +8,31 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.33.0-beta] - 2026-07-31
+
+### Added
+- **Announcements can carry an image.** The admin composer at `/admin/announcements`
+  gets an optional picker (PNG/JPEG/WebP/GIF, up to 5 MB) with a local preview, and
+  the image is rendered on `/announcements`, in the dashboard `AnnouncementsCard`
+  (as a thumbnail) and in the admin history list. Stored in the DB as a new
+  `AnnouncementImage` row — the same approach as `AvatarFile`/`CvFile`, so it
+  survives container redeploys — and served from `/api/announcements/<id>/image`
+  behind an authenticated session, with `nosniff`. No `imageUrl` column: the URL is
+  a pure function of the announcement id, so mirroring it would only add a second
+  write that can disagree with reality.
+- `POST /api/admin/announcements` now accepts `multipart/form-data` in addition to
+  JSON (the JSON contract is unchanged, so existing API clients and specs keep
+  working). When "also send by email" is checked, the image travels as an **inline
+  `cid:` attachment** — the serving route needs a session, so a URL would have
+  rendered as a broken image in every mail client. `sendEmail`'s `attachments`
+  therefore accept an optional `cid`.
+- Uploads are validated against a single source of truth (`src/lib/announcementImage.ts`)
+  on both the client and the server, so a rejected file is reported at the picker
+  rather than as a bare 400 after Broadcast. SVG is deliberately excluded (it can
+  carry `<script>`, and the blob is served from our own origin) and the leading
+  bytes are checked, so a file that merely *claims* to be a PNG is refused before
+  any notification fan-out happens.
+
 ## [0.32.1-beta] - 2026-07-31
 
 ### Security
