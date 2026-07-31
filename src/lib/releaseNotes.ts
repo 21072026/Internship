@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.30.2-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Security fix: company and referral-source accounts could see mentorship relations and interaction notes that did not belong to them. Company accounts are now limited to their own company, and referral sources to the candidates they referred. Admin, mentor and mentee views are unchanged.',
+      ],
+      tr: [
+        'Güvenlik düzeltmesi: şirket ve yönlendiren kurum hesapları kendilerine ait olmayan mentorluk ilişkilerini ve görüşme notlarını görebiliyordu. Şirket hesapları artık yalnızca kendi şirketiyle, yönlendiren kurumlar da yalnızca kendi yönlendirdikleri adaylarla sınırlı. Yönetici, mentor ve menti görünümleri değişmedi.',
+      ],
+      de: [
+        'Sicherheitskorrektur: Unternehmens- und Vermittlerkonten konnten Mentoring-Beziehungen und Gesprächsnotizen sehen, die ihnen nicht gehörten. Unternehmenskonten sind jetzt auf das eigene Unternehmen beschränkt, Vermittler auf die von ihnen vermittelten Kandidaten. Ansichten für Admin, Mentor und Mentee bleiben unverändert.',
+      ],
+    },
+  },
+  {
     version: '0.30.1-beta',
     date: '2026-07-31',
     highlights: {
