@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { WEBHOOK_EVENTS } from '@/lib/webhooks';
+import { assertPublicHttpsUrl, SsrfBlockedError } from '@/lib/ssrfGuard';
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -31,6 +32,17 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  // The URL is called from the server's network position, so a schema check is
+  // not enough — 127.0.0.1 and the cloud metadata address both pass `.url()`.
+  try {
+    await assertPublicHttpsUrl(parsed.data.url);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof SsrfBlockedError ? e.message : 'Invalid webhook URL' },
+      { status: 400 }
+    );
+  }
+
   const secret = randomBytes(24).toString('hex');
   const webhook = await prisma.webhook.create({ data: { url: parsed.data.url, events: parsed.data.events, secret } });
   await logActivity({

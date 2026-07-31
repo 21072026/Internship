@@ -8,6 +8,37 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.32.1-beta] - 2026-07-31
+
+### Security
+- **Webhook URLs were called from the server with no restriction (SSRF)** (#893).
+  Validation was `z.string().url()`, which happily accepts `http://127.0.0.1:3306`
+  and `http://169.254.169.254/latest/meta-data/` — the database and the cloud
+  metadata service, both reachable from the server's network position but not from
+  the admin's browser. `src/lib/ssrfGuard.ts` now requires https, no embedded
+  credentials, and a hostname that **resolves** to a public address (every answer
+  checked, not just the first — one private record is enough for a resolver to hand
+  `fetch` the internal one). Checked at registration *and* again at delivery: DNS
+  moves, and rows created before the guard existed were never checked at all. The
+  HMAC signature was never the problem and is untouched.
+- **`/api/health` told anonymous callers the version and git sha** (#897) — a
+  ready-made answer to "which CVEs apply to this deployment?". Setting `HEALTH_TOKEN`
+  narrows the anonymous response to `{ status, timestamp }` (all an uptime monitor
+  acts on) and releases the detail only to an admin session or a caller sending
+  `X-Health-Token`. **With the token unset the response is unchanged** — a
+  fail-closed default would blind the production and preview deploy drift gates,
+  which read `sha` from this endpoint, the moment it merged. `infra/deploy-prod.sh`
+  and both gates now send the header when the server env has it, so turning it on is
+  a one-variable change.
+
+### Fixed
+- **Outgoing HTTP had no timeouts** (#895). Webhook delivery ran under `Promise.all`
+  with no deadline, so one unresponsive receiver stalled the whole batch and held the
+  request handler open indefinitely — now 5s. The Anthropic SDK's default is 10
+  minutes, long enough for a user to give up first; the five AI clients now pass 60s,
+  which fits how long generation actually takes. `dispatchWebhook` still never throws:
+  an abort lands in the existing catch and is logged like any other delivery failure.
+
 ## [0.32.0-beta] - 2026-07-31
 
 ### Security
