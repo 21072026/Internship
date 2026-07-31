@@ -8,6 +8,25 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.31.3-beta] - 2026-07-31
+
+### Security
+- **The 2FA code could be guessed without limit** (#865). `clearRateLimit(failKey)`
+  ran the moment the *password* verified — before the TOTP check — so the 6-digit
+  code that followed had no limiter behind it at all: the whole 10⁶ space, as fast
+  as the server would answer. Since `twoFactorPolicy.ts` makes 2FA mandatory by role,
+  this hit the admin and mentor accounts hardest. The counter is now cleared only
+  after the credential check is completely through, and failed codes get their own
+  bucket (`totp-fail:<email>`, 5 per 15 min) so a user fumbling their code doesn't
+  spend the password allowance and an attacker past the password doesn't get a fresh
+  one. Failures are logged as `auth.totp_failed` at warning level.
+- **A used 2FA code was accepted again inside its window** (#865). Three codes are
+  valid at any moment (±1 step for clock skew, ~90s). `User.lastTotpStep` now records
+  the consumed step and a code must beat it, so one captured over a shoulder or
+  through a phishing page is spent. The skew tolerance is unchanged — nobody gets
+  locked out by a slow clock. Enabling 2FA does not burn the enrolment code: that
+  window is not the exposed one, and burning it would break enrol-then-sign-in.
+
 ## [0.31.2-beta] - 2026-07-31
 
 ### Security

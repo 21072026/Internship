@@ -185,6 +185,11 @@ model User {
   // Optional TOTP two-factor auth. The secret is only meaningful once enabled.
   twoFactorEnabled        Boolean       @default(false)
   twoFactorSecret         String?
+  // Highest TOTP time step already accepted for this account. Three codes are
+  // valid at any moment (±1 step for clock skew, ~90s), so without this a code
+  // captured by a phishing page or over someone's shoulder could be replayed
+  // inside that window (#865). A code must beat this value to be accepted.
+  lastTotpStep            Int?
   // "Sign out of all devices": any JWT issued before this instant is rejected at
   // the session callback. Null = never revoked. Set to now() to invalidate every
   // existing session (including the current one) on demand.
