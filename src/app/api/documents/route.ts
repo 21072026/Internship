@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canAccessUserDocs, DOCUMENT_TYPES, ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
+import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { logActivity } from '@/lib/activity';
 import type { DocumentType } from '@prisma/client';
 
@@ -95,6 +96,10 @@ export async function POST(request: Request) {
     : null;
 
   const data = Buffer.from(await file.arrayBuffer());
+  // The declared MIME comes from the client; verify the bytes agree (#888).
+  if (!contentMatchesType(data, file.type)) {
+    return NextResponse.json({ error: CONTENT_MISMATCH_ERROR }, { status: 400 });
+  }
   const doc = await prisma.document.create({
     data: {
       ownerId,

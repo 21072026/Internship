@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { canAccessCv } from '@/lib/cvAccess';
+import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED = new Set([
@@ -36,6 +37,10 @@ export async function POST(request: Request) {
   }
 
   const data = Buffer.from(await file.arrayBuffer());
+  // `file.type` is a client-written multipart header; check the bytes too (#888).
+  if (!contentMatchesType(data, file.type)) {
+    return NextResponse.json({ error: CONTENT_MISMATCH_ERROR }, { status: 400 });
+  }
   await prisma.cvFile.upsert({
     where: { userId: targetUserId },
     create: { userId: targetUserId, filename: file.name, contentType: file.type, size: file.size, data },
