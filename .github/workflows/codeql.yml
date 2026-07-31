@@ -1,0 +1,59 @@
+# Static application security testing (#903).
+#
+# The 2026-07 audit found its issues by reading code. CodeQL catches a slice of
+# that class automatically — SSRF, header injection, ReDoS-prone regexes,
+# sensitive data reaching logs. It will NOT catch role-scoping bugs, which were
+# the most serious findings; that is what e2e/authz-matrix.spec.ts is for. The
+# two are complements, not alternatives.
+#
+# Deliberately NOT a required check. The first run on an existing codebase
+# always surfaces a backlog, and blocking every PR on triage that hasn't
+# happened yet just teaches people to ignore the gate — the same call taken for
+# the npm audit gate (#885). Findings land in the Security tab; make it required
+# once the backlog is at zero.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so a newly published query still finds old code.
+    - cron: '27 4 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    # GitHub-hosted: CodeQL is CPU-hungry and the self-hosted runner is the
+    # production box. Free for public repositories.
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # security-extended adds lower-confidence queries. Worth the noise on
+          # a codebase handling PII; drop back to the default set if triage
+          # becomes busywork.
+          queries: security-extended
+
+      # No build step: the JS/TS extractor reads source directly, and a Next.js
+      # production build would only add minutes without improving the analysis.
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript
