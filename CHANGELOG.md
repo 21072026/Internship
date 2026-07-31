@@ -150,6 +150,20 @@ version is shown in the sidebar footer of every page (links to the
 
 No version bump: test and `data-testid` changes only, no user-visible behaviour change.
 
+## [0.28.4-beta] - 2026-07-31
+
+### Added
+- **Program satisfaction survey copy** (#879) — EN/TR/DE strings only, no API/model/UI yet.
+  New `programSurvey` namespace in `src/i18n/dictionaries.ts`: a single NPS question (with
+  0/10 scale-endpoint labels) shared by both roles, plus up to two role-specific follow-ups
+  — mentee: communication availability and whether the program matched expectations;
+  mentor: adequacy of program support and mentoring-workload sustainability (phrased about
+  the workload/pace, not the mentee, to stay neutral) — capping every respondent at NPS + 2
+  questions. Also adds the invite-email and thank-you copy. Every question is worded about
+  the program experience, not a rating of a specific person. TR copy kept short and in the
+  app's existing informal `sen` voice, matching `src/lib/templates.ts` /
+  `src/lib/pipeline.ts`.
+
 ## [0.28.3-beta] - 2026-07-31
 
 ### Changed
