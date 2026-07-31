@@ -103,11 +103,16 @@ export default async function MessagesInboxPage() {
     return bt - at;
   });
 
-  // Offer only people we don't already have a conversation with — the existing
-  // ones are in the list above. Deduped, since two shared projects would
-  // otherwise surface the same person twice.
+  // Offer only people we don't already have a DM with — those threads are in
+  // the list above. DIRECT only: every co-member is also a participant of the
+  // shared project's GROUP chat, so counting group participants here would
+  // empty the picker for everyone who is in a project. Deduped, since two
+  // shared projects would otherwise surface the same person twice.
   const existingDmPartnerIds = new Set(
-    conversations.flatMap((c) => c.participants.map((p) => p.userId)).filter((id) => id !== me),
+    conversations
+      .filter((c) => c.type === 'DIRECT')
+      .flatMap((c) => c.participants.map((p) => p.userId))
+      .filter((id) => id !== me),
   );
   const candidates = [
     ...new Map(

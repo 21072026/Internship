@@ -8,6 +8,24 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.32.2-beta] - 2026-07-31
+
+### Fixed
+- **"New chat" picker was empty for anyone in a project** — a regression from the
+  project group chats landing in the inbox. `/messages` builds the set of people the
+  viewer already has a DM with in order to exclude them from the picker, and that set
+  was taken from *all* the viewer's conversations. Since every project co-member is
+  also a participant of the shared project's GROUP chat, every candidate matched the
+  exclusion, `candidates` came out empty and `StartConversationPicker` rendered
+  `null` — so the "new chat" toggle disappeared entirely and no project DM could be
+  started from the UI. The exclusion set is now built from `DIRECT` conversations
+  only. Caught by `e2e/project-dm.spec.ts` in the scheduled full run.
+
+### Changed
+- The `E2E Tests` workflow takes an optional `grep` input on manual dispatch
+  (default `@smoke`), so a single non-smoke spec can be re-verified on a branch
+  without dispatching the 4-shard `e2e-full` suite and its summary email.
+
 ## [0.32.1-beta] - 2026-07-31
 
 ### Security
