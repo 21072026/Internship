@@ -8,6 +8,62 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.29.0-beta] - 2026-07-31
+
+### Added
+- **Reply-by-email actually works now: the mail bridge that was never built.**
+  Outgoing message notifications have carried
+  `Reply-To: reply+<relationId>.<hmac>@crm.ersah.in` for a while, and
+  `POST /api/inbound-email` has been able to thread such a reply since it
+  shipped — but nothing ever *read the mailbox*, so every reply sat there
+  unprocessed. `docs/EMAIL_DELIVERABILITY.md` recorded this honestly ("what's
+  still required in infrastructure is a mail bridge"); 21 real replies had
+  accumulated in the catch-all mailbox since 2026-07-01.
+  - `src/services/inboundMailBridge.ts` — IMAP poller (`imapflow` +
+    `mailparser`). Every `INBOUND_IMAP_POLL_SECONDS` (default 60) it drains
+    unseen mail from the reply mailbox, pulls the token out of whichever
+    recipient header carries it (`Delivered-To` / `X-Original-To` / `To` / `Cc` /
+    `X-Envelope-To` — the MTA-added ones are what survive a catch-all or alias),
+    and threads it. Started at server boot from `src/instrumentation.ts`.
+  - `src/lib/inboundEmail.ts` — the token + participant checks and the message
+    write, extracted out of the route handler so the HTTP endpoint and the bridge
+    share one code path instead of the bridge re-implementing the rules.
+  - `Message.inboundMessageId` (`@unique`) makes delivery idempotent. IMAP is
+    at-least-once — a crash between writing the reply and setting `\Seen` replays
+    the mail — and a catch-all can deliver two copies of one email. A replay is
+    now a no-op instead of a duplicate message in the thread.
+  - Mail is flagged `\Seen` once routed *or* permanently rejected (bad token,
+    unknown thread, stranger); a transient failure leaves it unseen so the next
+    tick retries it rather than dropping the reply.
+  - The bridge starts only where `INBOUND_IMAP_HOST`/`USER`/`PASS` are all set,
+    which is production alone — two containers polling one mailbox would race
+    over the `\Seen` flag. `INBOUND_IMAP_ENABLED=0` stops it without removing the
+    credentials.
+
+### Infrastructure
+- `infra/deploy-prod.sh` forwards the `INBOUND_*` vars into the container.
+  `docker run` there passes an explicit `-e` allowlist, so env-file keys that
+  aren't listed are silently dropped — the bridge would have started nowhere no
+  matter what `prod.env` said. The env-derivation fallback (used when the env
+  file is missing) carries them too, so a re-derived file doesn't quietly
+  disable the bridge on the next deploy.
+- Dedicated `reply@crm.ersah.in` mailbox on `s.ersah.in`. Postfix runs with
+  `recipient_delimiter = +`, so `reply+<token>@crm.ersah.in` now lands there
+  instead of in the `m@ersah.in` catch-all — reply traffic stays out of a
+  personal inbox. `INBOUND_IMAP_*` and `INBOUND_SECRET` added to
+  `/etc/internship-crm/prod.env` (`INBOUND_SECRET` had never been set in prod, so
+  the endpoint was relying on the HMAC token alone).
+
+### Notes
+- `initCronJobs()` in `src/services/emailService.ts` **has no caller anywhere in
+  the repo**, and nothing on the server drives `GET /api/cron` either (no
+  crontab entry, no systemd timer) — so the mentor-reminder, meeting-reminder and
+  digest jobs are not running on a schedule in production. Found while looking
+  for a place to hook the bridge in; deliberately **not** fixed here, because
+  switching those on would start sending reminder and digest email as a side
+  effect of an inbound-mail change. `src/instrumentation.ts` therefore starts the
+  bridge and nothing else. Needs its own issue.
+
 ## [Unreleased]
 
 ### Fixed

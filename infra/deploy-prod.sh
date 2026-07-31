@@ -78,7 +78,9 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
   log "env file missing — capturing it from the running $CONTAINER container"
   mkdir -p "$(dirname "$ENV_FILE")"
   : > "$ENV_FILE"; chmod 600 "$ENV_FILE"
-  for k in DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+  for k in DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM \
+           INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
+           INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -240,6 +242,15 @@ docker run -d \
   -e SMTP_USER="${SMTP_USER:-}" \
   -e SMTP_PASS="${SMTP_PASS:-}" \
   -e SMTP_FROM="${SMTP_FROM:-}" \
+  -e INBOUND_EMAIL_DOMAIN="${INBOUND_EMAIL_DOMAIN:-}" \
+  -e INBOUND_SECRET="${INBOUND_SECRET:-}" \
+  -e INBOUND_IMAP_HOST="${INBOUND_IMAP_HOST:-}" \
+  -e INBOUND_IMAP_PORT="${INBOUND_IMAP_PORT:-}" \
+  -e INBOUND_IMAP_USER="${INBOUND_IMAP_USER:-}" \
+  -e INBOUND_IMAP_PASS="${INBOUND_IMAP_PASS:-}" \
+  -e INBOUND_IMAP_MAILBOX="${INBOUND_IMAP_MAILBOX:-}" \
+  -e INBOUND_IMAP_POLL_SECONDS="${INBOUND_IMAP_POLL_SECONDS:-}" \
+  -e INBOUND_IMAP_ENABLED="${INBOUND_IMAP_ENABLED:-}" \
   "$IMAGE"
 
 # ── 6. Health check + prune ──────────────────────────────────────────────────

@@ -395,6 +395,10 @@ model Message {
   // Set when the sender (or an admin) deletes the message for everyone; the body
   // is masked server-side and a "message deleted" placeholder is shown to all.
   deletedForEveryoneAt DateTime?
+  // RFC Message-ID of the email this message came from, for messages created by
+  // the inbound mail bridge. Unique so an IMAP replay (at-least-once delivery)
+  // can never post the same reply twice. Null for messages written in-app.
+  inboundMessageId     String?        @unique
 
   relation     MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
   conversation Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
