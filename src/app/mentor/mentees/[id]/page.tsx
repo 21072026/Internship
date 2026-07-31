@@ -23,6 +23,8 @@ import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
+import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 interface InteractionLog {
   id: string;
@@ -362,13 +364,14 @@ export default function MenteeDetailPage() {
               />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.mentor.notes}</label>
-                <textarea
+                <Textarea
                   rows={3}
                   data-testid="interaction-log-notes"
                   value={formData.notes}
                   onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
                   placeholder="What was discussed..."
-                  className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                  maxLength={TEXT_LIMITS.interactionNotes}
+                  showCounter
                 />
               </div>
               <div className="flex gap-2">

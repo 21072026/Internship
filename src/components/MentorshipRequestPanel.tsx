@@ -6,6 +6,7 @@ import { Send, Clock, CheckCircle2, XCircle, ListChecks } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { useT } from '@/i18n/client';
 
 interface Gate { profile: boolean; cv: boolean; complete: boolean; missing: ('profile' | 'cv')[] }
@@ -92,7 +93,7 @@ export function MentorshipRequestPanel() {
             onChange={(e) => setMessage(e.target.value)}
             placeholder={q.messagePlaceholder}
             rows={3}
-            maxLength={2000}
+            maxLength={TEXT_LIMITS.mentorshipRequestMessage}
             showCounter
             className="mb-2"
           />

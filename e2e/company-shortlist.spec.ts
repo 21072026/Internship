@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -33,13 +34,9 @@ test('a company can shortlist a linked candidate; the mentor is notified and see
 
   try {
     // Company sets a shortlist with a note.
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', companyEmail);
-    await page.fill('input[type="password"]', pw);
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/company'), { timeout: 20_000 });
+    await signInAndSettle(page, companyEmail, pw, '/company');
 
-    await page.goto(`/company/candidates/${mentee.id}`);
+    await gotoSettled(page, `/company/candidates/${mentee.id}`);
     await page.fill('textarea', 'Great fit for backend team.');
     await page.getByRole('button', { name: /Shortlisted/i }).click();
     await expect(page.getByText(/mentor has been notified/i)).toBeVisible({ timeout: 10_000 });

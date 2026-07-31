@@ -32,7 +32,9 @@ test('deactivated candidates are archived and hidden from the default list', asy
     // Archive view: the deactivated candidate shows (with its Inactive badge), the active one does not.
     await page.getByTestId('candidates-tab-archived').click();
     await expect(page.getByTestId(`candidate-card-${archivedMentee.id}`)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId(`candidate-card-${archivedMentee.id}`).getByText('Inactive')).toBeVisible();
+    await expect(
+      page.getByTestId(`candidate-card-${archivedMentee.id}`).getByText('Inactive', { exact: true })
+    ).toBeVisible();
     await expect(page.getByTestId(`candidate-card-${activeMentee.id}`)).toHaveCount(0);
 
     // Back to Active.

@@ -17,6 +17,8 @@ import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
 import { useToast } from '@/components/ui/Toast';
+import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -290,10 +292,11 @@ export default function ProfilePage() {
               <Input label={t.profileForm.displayName} placeholder={t.profileForm.displayNameHint} {...register('displayName')} error={errors.displayName?.message} />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.profileForm.bio}</label>
-                <textarea
+                <Textarea
                   {...register('bio')}
                   rows={3}
-                  className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                  maxLength={TEXT_LIMITS.bio}
+                  showCounter
                   placeholder={t.profileForm.bioHint}
                 />
               </div>

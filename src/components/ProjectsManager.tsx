@@ -419,7 +419,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                   <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800" data-testid="owners-panel">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">{t.projects.manageOwners}</p>
                     {memberErr && <p className="text-xs text-red-600 mb-2">{memberErr}</p>}
-                    <div className="space-y-1 mb-3">
+                    <div className="space-y-1 mb-3" data-testid="owners-members">
                       {(p.members ?? []).map((m) => (
                         <div key={m.user.id} className="flex items-center gap-2 text-sm">
                           <Badge variant={m.role === 'OWNER' ? 'info' : m.role === 'MENTEE' ? 'purple' : 'default'} className="text-xs">
@@ -438,7 +438,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                               return <span className="ml-1.5 text-xs text-gray-400">· {t.membership.inProjectFor.replace('{d}', `${count} ${noun}`)}</span>;
                             })()}
                           </span>
-                          <button onClick={() => memberCall(p.id, 'DELETE', { userId: m.user.id })} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                          <button onClick={() => memberCall(p.id, 'DELETE', { userId: m.user.id })} aria-label={t.common.delete} data-testid={`member-remove-${m.user.id}`} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
                       ))}
                     </div>

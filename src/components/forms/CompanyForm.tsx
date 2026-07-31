@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { Button } from '@/components/ui/Button';
 import { Plus, Trash2 } from 'lucide-react';
 import { useT } from '@/i18n/client';
@@ -138,7 +139,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
         <Textarea
           {...register('description')}
           rows={3}
-          maxLength={2000}
+          maxLength={TEXT_LIMITS.companyDescription}
           placeholder={t.companyForm.descriptionPlaceholder}
           showCounter
         />

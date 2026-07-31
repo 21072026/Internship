@@ -8,11 +8,12 @@ import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { withTenantScope } from '@/lib/orgContext';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
-  subject: z.string().min(1),
-  body: z.string().min(1),
+  subject: z.string().min(1).max(TEXT_LIMITS.mentorEmailSubject),
+  body: z.string().min(1).max(TEXT_LIMITS.mentorEmailBody),
 });
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

@@ -7,6 +7,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import {
   MessageComposer,
   PendingAttachmentList,
@@ -261,11 +263,12 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
                       <p className={`italic ${mine ? 'text-blue-100' : 'text-gray-400'}`}>{t.messages.deletedPlaceholder}</p>
                     ) : editId === m.id ? (
                       <div className="space-y-1.5">
-                        <textarea
+                        <Textarea
                           value={editBody}
                           onChange={(e) => setEditBody(e.target.value)}
                           rows={2}
-                          className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                          maxLength={TEXT_LIMITS.messageBody}
+                          showCounter
                         />
                         <div className="flex gap-1.5">
                           <Button size="sm" onClick={() => saveEdit(m.id)} loading={rowBusy} disabled={!editBody.trim()}>{t.messages.save}</Button>
