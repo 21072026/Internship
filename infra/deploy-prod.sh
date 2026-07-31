@@ -80,7 +80,8 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
   : > "$ENV_FILE"; chmod 600 "$ENV_FILE"
   for k in DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM \
            INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
-           INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED; do
+           INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
+           CRON_SECRET CRON_ENABLED; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -223,6 +224,9 @@ log "seed-templates + project-member backfill (idempotent)"
 run_tool node prisma/seed-templates.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-organization.mjs || true
+# One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
+# email out history. Self-skips once applied (Setting 'cronBaselineAt').
+run_tool node prisma/backfill-cron-baseline.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 log "Restarting $CONTAINER on :$PORT"
@@ -251,6 +255,8 @@ docker run -d \
   -e INBOUND_IMAP_MAILBOX="${INBOUND_IMAP_MAILBOX:-}" \
   -e INBOUND_IMAP_POLL_SECONDS="${INBOUND_IMAP_POLL_SECONDS:-}" \
   -e INBOUND_IMAP_ENABLED="${INBOUND_IMAP_ENABLED:-}" \
+  -e CRON_SECRET="${CRON_SECRET:-}" \
+  -e CRON_ENABLED="${CRON_ENABLED:-}" \
   "$IMAGE"
 
 # ── 6. Health check + prune ──────────────────────────────────────────────────

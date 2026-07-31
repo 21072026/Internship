@@ -108,6 +108,33 @@ curl -X POST https://crm.ersah.in/api/inbound-email \
 A `{ ok: true, created: true }` response means the message was threaded; open
 `/messages/<relationId>` to see it.
 
+## 4. Scheduled jobs (reminders & digests)
+
+`initCronJobs()` in `src/services/emailService.ts` registers the node-cron
+schedules: mentor-interaction + stage-deadline + retention reminders and
+company-need alerts (daily 09:00), meeting reminders (every 15 min, firing
+45–60 min ahead), the daily activity digest (07:30), the hourly unread-message
+digest (:20), and the weekly mentor digest + analytics report (Mondays 08:00 /
+08:15).
+
+It is started at boot by `src/instrumentation.ts`, which POSTs
+`/api/cron/start` — the same edge-runtime workaround as the mail bridge, and
+deferred onto a timer because `register()` resolves before the server accepts
+connections. `GET /api/cron` still runs every job once for an authenticated
+ADMIN.
+
+> ⚠️ **`CRON_SECRET` belongs in production only.** These jobs email real people,
+> and the preview DB is shared with every topic env holding the same addresses —
+> a scheduler there would mail real users. `CRON_ENABLED=0` stops it without
+> removing the secret.
+
+`prisma/backfill-cron-baseline.mjs` (run by `deploy-prod.sh`) is a **one-shot**
+baseline: several jobs are "everything not yet marked" queries — the unread
+digest has no lower bound on message age — so without it the first tick mails out
+the whole backlog. It records `Setting['cronBaselineAt']` and self-skips
+afterwards; do not make it run every deploy, or it will mark newly stale work as
+handled and suppress the reminders permanently.
+
 ## Relevant env
 
 | Var | Purpose |
@@ -118,3 +145,5 @@ A `{ ok: true, created: true }` response means the message was threaded; open
 | `INBOUND_IMAP_HOST` / `INBOUND_IMAP_PORT` / `INBOUND_IMAP_USER` / `INBOUND_IMAP_PASS` | Reply mailbox the bridge drains (production only) |
 | `INBOUND_IMAP_MAILBOX` / `INBOUND_IMAP_POLL_SECONDS` | Folder (default `INBOX`) and poll interval (default 60s, min 30) |
 | `INBOUND_IMAP_ENABLED` | Set to `0` to stop the bridge while keeping the credentials |
+| `CRON_SECRET` | Registers the scheduled jobs at boot (production only) |
+| `CRON_ENABLED` | Set to `0` to stop the schedules while keeping the secret |

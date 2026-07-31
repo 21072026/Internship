@@ -58,6 +58,32 @@ minute. Delete via IMAP, or expect the noise.
 not your change: confirm by linting an untouched file, and trust CI (which
 checks out flat). Same cause as the "multiple lockfiles" Next warning.
 
+**`register()` in `instrumentation.ts` resolves *before* the server accepts
+connections.** So `await fetch('http://127.0.0.1:PORT/…')` inside it can never
+succeed — it deadlocks or burns every retry against a closed port. Defer
+self-calls onto a `setTimeout`. (Caught before shipping, but only by asking why
+the mail bridge's `setInterval` worked while the cron start-call wouldn't.)
+
+**Before enabling anything that sends email, measure the first tick.** Several
+scheduled jobs here are "everything not yet marked" queries and the marker had
+never been set, so the first run would have mailed the whole backlog: 3 people a
+digest of 3-week-old messages. Count it against the prod DB first, then write a
+one-shot baseline. Make it **one-shot** (a `Setting` key), not just idempotent —
+an every-deploy backfill would keep marking *newly* stale work as handled and
+permanently suppress the feature it protects.
+
+**Check `emailAllowed` when touching any job that mails users.** Every scheduled
+job in `emailService.ts` consults it except `checkMentorInteractionReminders`,
+which also sent one mail per relation rather than per mentor — 7 unstoppable
+emails a day for one mentor. Worth grepping for the odd one out before assuming
+the batch is uniform.
+
+**A guard field may not guard what its name suggests.**
+`stalenessReminderSentAt` gates only the in-app bell; the email loop reads every
+stale relation on every run. Read where a field is *consumed* before designing a
+backfill around it — baselining it would have hidden notifications without
+preventing a single email.
+
 **Count before you claim a number.** Grepping the maildir for `reply+` matched 21
 files, but that pattern also hits *outbound* copies whose `Reply-To` carries the
 token. Anchoring on recipient headers (`To|Cc|Delivered-To|X-Original-To`) gave
