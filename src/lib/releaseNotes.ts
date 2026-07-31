@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.29.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Replying to a message notification by email now works. Those emails have always invited you to "reply to this email", but nothing was picking the replies up on our side, so they never reached the conversation. Your reply now shows up in the thread within about a minute, marked as sent by email, and the other person is notified as usual. Quoted history from the email is trimmed off automatically.',
+        'Replies you sent earlier that never arrived have been recovered and added to their conversations.',
+        'Reply-by-email works for mentor ↔ mentee conversations. Project group chats do not support it — replying to one of those notifications still will not post to the group, so use the app for those.',
+      ],
+      tr: [
+        'Mesaj bildirimine e-postayla cevap vermek artık çalışıyor. Bu e-postalar hep "bu e-postayı yanıtlayın" diyordu ama bizim tarafta cevapları alan bir şey yoktu, dolayısıyla sohbete hiç ulaşmıyorlardı. Cevabınız artık bir dakika içinde thread\'de görünüyor, e-postayla gönderildiği belirtiliyor ve karşı tarafa her zamanki gibi bildirim gidiyor. E-postadaki alıntılanmış geçmiş otomatik olarak kırpılıyor.',
+        'Daha önce gönderdiğiniz ama ulaşmayan cevaplar kurtarılıp ilgili sohbetlere eklendi.',
+        'E-postayla cevaplama mentor ↔ menti sohbetleri için geçerli. Proje grup sohbetleri bunu desteklemiyor — o bildirimlere verilen cevaplar gruba düşmüyor, onlar için uygulamayı kullanın.',
+      ],
+      de: [
+        'Auf eine Nachrichten-Benachrichtigung per E-Mail zu antworten funktioniert jetzt. Diese E-Mails haben immer dazu eingeladen, „auf diese E-Mail zu antworten“, aber auf unserer Seite hat niemand die Antworten abgeholt — sie kamen also nie im Gespräch an. Deine Antwort erscheint jetzt innerhalb einer Minute im Thread, als per E-Mail gesendet markiert, und die andere Person wird wie gewohnt benachrichtigt. Zitierter Verlauf aus der E-Mail wird automatisch entfernt.',
+        'Früher gesendete Antworten, die nie angekommen sind, wurden wiederhergestellt und ihren Gesprächen hinzugefügt.',
+        'Antworten per E-Mail gilt für Mentor-↔-Mentee-Gespräche. Projekt-Gruppenchats unterstützen es nicht — eine Antwort auf eine solche Benachrichtigung landet weiterhin nicht in der Gruppe, nutze dafür die App.',
+      ],
+    },
+  },
+  {
     version: '0.28.3-beta',
     date: '2026-07-31',
     highlights: {

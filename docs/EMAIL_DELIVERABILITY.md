@@ -59,26 +59,42 @@ dig +short -x 212.132.111.125          # PTR
 
 ## 3. Inbound replies → Messages
 
-The application side is already built:
+The full round trip is in place:
 
 - Outgoing message emails set `Reply-To: reply+<relationId>.<sig>@<INBOUND_EMAIL_DOMAIN>`
   (`src/lib/replyToken.ts`). The token is an HMAC, so it can't be forged.
-- `POST /api/inbound-email` accepts `{ to, from, text }` (+ an `x-inbound-secret`
-  header when `INBOUND_SECRET` is set), verifies the token and that the sender is
-  a participant, then stores a `Message` (`channel: EMAIL`) and notifies the
-  other party — so it appears under **/messages/<relationId>**.
+- `src/lib/inboundEmail.ts` (`routeInboundEmail`) verifies the token and that the
+  sender is a participant, then stores a `Message` (`channel: EMAIL`) and notifies
+  the other party — so it appears under **/messages/<relationId>**.
+- Two entry points feed that one routing function:
+  - **`POST /api/inbound-email`** accepts `{ to, from, text, messageId? }` (+ an
+    `x-inbound-secret` header when `INBOUND_SECRET` is set) — for a provider
+    inbound-parse webhook (SendGrid, Mailgun, Postmark) or a manual replay.
+  - **The IMAP mail bridge** (`src/services/inboundMailBridge.ts`), started at
+    server boot from `src/instrumentation.ts`. It polls the reply mailbox every
+    `INBOUND_IMAP_POLL_SECONDS` (default 60), parses each unseen mail with
+    `mailparser`, and routes it. This is what runs in production today.
 
-What's still required in **infrastructure** is a **mail bridge** that receives
-mail addressed to `reply+*@crm.ersah.in` and POSTs it to `/api/inbound-email`.
-Options:
+Only the message's `Message-ID` makes delivery idempotent: IMAP is
+at-least-once (a crash between storing the reply and setting `\Seen` replays the
+mail), so `Message.inboundMessageId` is `@unique` and a replay is a no-op.
 
-- **Provider inbound parse webhook** (SendGrid Inbound Parse, Mailgun Routes,
-  Postmark inbound). Point the MX/subdomain at the provider and set the webhook
-  URL to `https://crm.ersah.in/api/inbound-email` with the `x-inbound-secret`
-  header. Simplest and most reliable.
-- **IMAP poller** — a small scheduled job that reads the `reply+`/catch-all
-  mailbox over IMAP and POSTs each new message to the endpoint. Fits the existing
-  `node-cron` jobs in `src/services/emailService.ts`; needs IMAP credentials.
+### How the production mailbox is wired (Plesk, `s.ersah.in`)
+
+Postfix runs with `recipient_delimiter = +`, so mail to
+`reply+<token>@crm.ersah.in` is delivered to the **`reply@crm.ersah.in`**
+mailbox, which the bridge drains over IMAPS (`s.ersah.in:993`). `crm.ersah.in`
+also has a catch-all to `m@ersah.in`; the dedicated `reply@` mailbox takes
+precedence over it, which keeps reply traffic out of a personal inbox.
+
+> ⚠️ The bridge starts **only when `INBOUND_IMAP_HOST`/`USER`/`PASS` are all
+> set**, and those live solely in `/etc/internship-crm/prod.env`. Do not add them
+> to the preview or topic env: two pollers on one mailbox race over the `\Seen`
+> flag. `INBOUND_IMAP_ENABLED=0` disables it without removing the credentials.
+
+Replies only work on **mentorship threads** — conversation/group chats
+deliberately ship without a `Reply-To`, since the token is relation-scoped
+(`src/app/api/messages/route.ts`).
 
 To test the endpoint directly once a relation exists (token from `replyAddress()`):
 
@@ -99,3 +115,6 @@ A `{ ok: true, created: true }` response means the message was threaded; open
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Outbound SMTP |
 | `INBOUND_EMAIL_DOMAIN` | Domain in the generated `reply+…@` address |
 | `INBOUND_SECRET` | Shared secret the inbound webhook checks (`x-inbound-secret`) |
+| `INBOUND_IMAP_HOST` / `INBOUND_IMAP_PORT` / `INBOUND_IMAP_USER` / `INBOUND_IMAP_PASS` | Reply mailbox the bridge drains (production only) |
+| `INBOUND_IMAP_MAILBOX` / `INBOUND_IMAP_POLL_SECONDS` | Folder (default `INBOX`) and poll interval (default 60s, min 30) |
+| `INBOUND_IMAP_ENABLED` | Set to `0` to stop the bridge while keeping the credentials |

@@ -44,6 +44,20 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
 
     // Still only one message from the mentee.
     expect(await prisma.message.count({ where: { relationId: rel.id } })).toBe(1);
+
+    // Same email delivered twice (IMAP is at-least-once, and a catch-all can
+    // hand over two copies) → threaded once, thanks to the Message-ID guard.
+    const messageId = `<replay-${rel.id}@mail.example>`;
+    for (const attempt of [1, 2]) {
+      const res = await request.post('/api/inbound-email', {
+        data: { to: `reply+${token}@crm.ersah.in`, from: menteeEmail, text: 'Sent twice by the mail server', messageId },
+      });
+      expect(res.status()).toBe(200);
+      // The first delivery creates it; the replay reports created:false.
+      expect((await res.json()).created).toBe(attempt === 1);
+    }
+    expect(await prisma.message.count({ where: { relationId: rel.id, inboundMessageId: messageId } })).toBe(1);
+    expect(await prisma.message.count({ where: { relationId: rel.id } })).toBe(2);
   } finally {
     await prisma.message.deleteMany({ where: { relationId: rel.id } });
     await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
