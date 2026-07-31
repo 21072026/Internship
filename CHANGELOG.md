@@ -76,6 +76,15 @@ version is shown in the sidebar footer of every page (links to the
 
 No version bump: test and `data-testid` changes only, no user-visible behaviour change.
 
+## [0.28.4-beta] - 2026-07-31
+
+### Fixed
+- **Mentor/admin targeted-email recipient counter only showed the selected count**
+  (#680). `TargetedEmailComposer` (shared by `/mentor/email` and `/admin/email`) rendered
+  `Recipients (3)` instead of `Recipients (3/10)`, so there was no way to tell how many
+  mentees were selected out of the total without scrolling the checkbox list. Now shows
+  `chosen.length` over `relations.length`.
+
 ## [0.28.3-beta] - 2026-07-31
 
 ### Changed

@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.28.4-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'The recipient counter on the targeted-email page (mentor and admin) now shows how many mentees are selected out of the total, e.g. "Recipients (3/10)", instead of just the selected count.',
+      ],
+      tr: [
+        'Hedefli e-posta sayfasındaki (mentor ve admin) alıcı sayacı artık yalnızca seçilen sayıyı değil, toplam içinden kaçının seçildiğini gösteriyor, ör. "Alıcılar (3/10)".',
+      ],
+      de: [
+        'Der Empfängerzähler auf der gezielten E-Mail-Seite (Mentor und Admin) zeigt jetzt, wie viele Mentees von der Gesamtzahl ausgewählt sind, z. B. „Empfänger (3/10)“, statt nur die ausgewählte Anzahl.',
+      ],
+    },
+  },
+  {
     version: '0.28.3-beta',
     date: '2026-07-31',
     highlights: {
