@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.28.4-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Laid the groundwork for an upcoming short program-feedback survey — translation work only for now, nothing visible in the app yet.',
+      ],
+      tr: [
+        'Yakında gelecek kısa bir program geri bildirim anketi için altyapı hazırlandı — şimdilik yalnızca çeviri çalışması, uygulamada henüz görünür bir şey yok.',
+      ],
+      de: [
+        'Grundlage für eine bald kommende kurze Programm-Feedback-Umfrage gelegt — vorerst nur Übersetzungsarbeit, in der App noch nicht sichtbar.',
+      ],
+    },
+  },
+  {
     version: '0.28.3-beta',
     date: '2026-07-31',
     highlights: {

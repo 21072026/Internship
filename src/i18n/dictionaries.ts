@@ -684,6 +684,27 @@ const en = {
     yes: "Yes, I'll attend",
     no: "Can't attend",
   },
+  programSurvey: {
+    npsQuestion: 'How likely are you to recommend this program to a friend or colleague?',
+    scaleLow: '0 · Not at all likely',
+    scaleHigh: '10 · Extremely likely',
+    mentee: {
+      communication: 'Was communication with your mentor there when you needed it?',
+      expectations: 'How well did the program match what you expected going in?',
+    },
+    mentor: {
+      support: 'Was the support you received from the program enough for your mentoring?',
+      workloadSustainability: 'Was your mentoring workload at a sustainable pace?',
+    },
+    invite: {
+      subject: 'Got a minute to share your experience?',
+      body: "Hi {name},\n\nWe'd love to hear how the program has been for you — it's a quick 1-minute survey and helps us make it better.\n\nThanks",
+    },
+    thankYou: {
+      title: 'Thank you!',
+      message: 'Your feedback means a lot — it helps us keep improving the program.',
+    },
+  },
   cv: {
     title: 'CV / Resume',
     upload: 'Upload CV',
@@ -2232,6 +2253,27 @@ const tr: Dict = {
     yes: 'Evet, katılacağım',
     no: 'Katılamam',
   },
+  programSurvey: {
+    npsQuestion: 'Bu programı bir arkadaşına veya iş arkadaşına önerme olasılığın nedir?',
+    scaleLow: '0 · Hiç olası değil',
+    scaleHigh: '10 · Kesinlikle öneririm',
+    mentee: {
+      communication: 'Mentörünle iletişim, ihtiyaç duyduğunda yeterli miydi?',
+      expectations: 'Program, katılmadan önceki beklentilerini ne kadar karşıladı?',
+    },
+    mentor: {
+      support: 'Programdan aldığın destek, mentörlük sürecin için yeterli miydi?',
+      workloadSustainability: 'Mentörlük yükün sürdürülebilir bir tempoda mıydı?',
+    },
+    invite: {
+      subject: 'Deneyimini bizimle paylaşır mısın?',
+      body: 'Merhaba {name},\n\nProgramdaki deneyimini kısa bir anketle bizimle paylaşır mısın? Sadece 1 dakika sürüyor ve programı geliştirmemize yardımcı oluyor.\n\nTeşekkürler',
+    },
+    thankYou: {
+      title: 'Teşekkürler!',
+      message: 'Geri bildirimin bizim için değerli — programı geliştirmemize yardımcı oluyor.',
+    },
+  },
   cv: {
     title: 'CV / Özgeçmiş',
     upload: 'CV yükle',
@@ -3777,6 +3819,27 @@ const de: Dict = {
     declined: 'Danke für die Info, dass du nicht teilnehmen kannst.',
     yes: 'Ja, ich nehme teil',
     no: 'Kann nicht teilnehmen',
+  },
+  programSurvey: {
+    npsQuestion: 'Wie wahrscheinlich ist es, dass du dieses Programm einem Freund oder Kollegen empfiehlst?',
+    scaleLow: '0 · Überhaupt nicht wahrscheinlich',
+    scaleHigh: '10 · Äußerst wahrscheinlich',
+    mentee: {
+      communication: 'War die Kommunikation mit deinem Mentor da, wenn du sie gebraucht hast?',
+      expectations: 'Wie gut hat das Programm deine Erwartungen beim Einstieg erfüllt?',
+    },
+    mentor: {
+      support: 'War die Unterstützung durch das Programm für dein Mentoring ausreichend?',
+      workloadSustainability: 'War dein Mentoring-Aufwand in einem nachhaltigen Tempo?',
+    },
+    invite: {
+      subject: 'Hast du eine Minute für dein Feedback?',
+      body: 'Hallo {name},\n\nWir würden gern hören, wie das Programm für dich war — die Umfrage dauert nur 1 Minute und hilft uns, es zu verbessern.\n\nDanke',
+    },
+    thankYou: {
+      title: 'Danke!',
+      message: 'Dein Feedback ist uns wichtig — es hilft uns, das Programm weiter zu verbessern.',
+    },
   },
   cv: {
     title: 'Lebenslauf',
