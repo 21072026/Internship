@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.32.2-beta',
+    version: '0.32.4-beta',
     date: '2026-07-31',
     highlights: {
       en: [
@@ -27,6 +27,39 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Es gibt jetzt einen Verhaltenskodex, verlinkt in der Fußzeile und verfügbar auf Englisch, Türkisch und Deutsch. Er beschreibt, wie respektvolle Teilnahme für Mentees, Mentoren, Admins und Unternehmenskontakte aussieht — und was nicht akzeptabel ist, einschließlich des Missbrauchs des Zugriffs, den eine Rolle auf Profile, Lebensläufe oder Kontaktdaten anderer gibt.',
         'Er erklärt außerdem, wie man ein Problem meldet: vertraulich, an eine Administratorin oder einen Administrator, für sich selbst oder stellvertretend für andere — eine Meldung in gutem Glauben wird Ihnen nie zum Nachteil ausgelegt.',
+      ],
+    },
+  },
+  {
+    version: '0.32.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Messages: the "New chat" button is back. Since project group chats appeared in the inbox, everyone who was in a project saw no "New chat" option at all — so there was no way to start a private message with someone you share a project with. The people you can write to are listed again.',
+      ],
+      tr: [
+        'Mesajlar: "Yeni sohbet" düğmesi geri geldi. Proje grup sohbetleri gelen kutusuna eklendiğinden beri bir projede yer alan herkes için "Yeni sohbet" seçeneği hiç görünmüyordu — yani aynı projede olduğunuz biriyle özel mesaj başlatmanın yolu yoktu. Yazabileceğiniz kişiler yeniden listeleniyor.',
+      ],
+      de: [
+        'Nachrichten: Die Schaltfläche „Neuer Chat“ ist zurück. Seit die Projekt-Gruppenchats im Posteingang erscheinen, wurde sie allen, die in einem Projekt sind, gar nicht mehr angezeigt — eine private Nachricht an jemanden aus dem eigenen Projekt ließ sich also nicht mehr beginnen. Die möglichen Empfänger werden wieder aufgelistet.',
+      ],
+    },
+  },
+  {
+    version: '0.32.2-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Uploads are now checked by their actual contents, not just the file type the browser claims. A file renamed to look like a PDF or an image is rejected.',
+        'CVs, documents and file attachments now download instead of opening in the browser, and filenames with accented characters come through correctly.',
+      ],
+      tr: [
+        'Yüklenen dosyalar artık yalnızca tarayıcının bildirdiği türe göre değil, gerçek içeriğine göre denetleniyor. PDF ya da resim gibi görünsün diye adı değiştirilmiş bir dosya reddediliyor.',
+        'CV\'ler, belgeler ve dosya ekleri artık tarayıcıda açılmak yerine indiriliyor; Türkçe karakterli dosya adları da doğru geliyor.',
+      ],
+      de: [
+        'Hochgeladene Dateien werden jetzt anhand ihres tatsächlichen Inhalts geprüft, nicht nur anhand des vom Browser gemeldeten Typs. Eine Datei, die nur so umbenannt wurde, dass sie wie ein PDF oder Bild aussieht, wird abgelehnt.',
+        'Lebensläufe, Dokumente und Dateianhänge werden jetzt heruntergeladen statt im Browser geöffnet, und Dateinamen mit Umlauten kommen korrekt an.',
       ],
     },
   },
