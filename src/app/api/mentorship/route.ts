@@ -6,6 +6,9 @@ import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { withTenantScope } from '@/lib/orgContext';
+import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -170,6 +173,38 @@ export async function POST(request: Request) {
     });
 
     await dispatchWebhook('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null });
+
+    // A direct admin assignment used to be completely silent — neither side heard
+    // about it until they happened to log in (#668). In-app is unconditional,
+    // email honors the `mentorship` opt-out and never fails the assignment.
+    await notify(mentee.id, 'mentorship_request', `You have been assigned a mentor: ${mentor.fullName}.`, '/portal');
+    await notify(mentor.id, 'mentorship_request', `A new mentee was assigned to you: ${mentee.fullName}.`, '/mentor');
+
+    if (mentee.email && emailAllowed(mentee, 'mentorship')) {
+      try {
+        await sendMentorAssignedEmail({
+          to: mentee.email,
+          menteeName: mentee.fullName,
+          mentorName: mentor.fullName,
+          orgId: mentee.orgId,
+        });
+      } catch (e) {
+        console.error('Mentor assignment email failed:', e);
+      }
+    }
+    if (mentor.email && emailAllowed(mentor, 'mentorship')) {
+      try {
+        await sendMenteeAssignedEmail({
+          to: mentor.email,
+          mentorName: mentor.fullName,
+          menteeName: mentee.fullName,
+          orgId: mentor.orgId,
+        });
+      } catch (e) {
+        console.error('Mentee assignment email failed:', e);
+      }
+    }
+
     return NextResponse.json({ relation }, { status: 201 });
     });
   } catch (error) {

@@ -50,6 +50,37 @@ version is shown in the sidebar footer of every page (links to the
 
 No version bump: test and `data-testid` changes only, no user-visible behaviour change.
 
+## [0.28.2-beta] - 2026-07-31
+
+### Fixed
+- **The last three gaps from the email-delivery audit** (#668, follow-up to the sweep
+  shipped in 0.26.0).
+  - **A direct admin assignment was completely silent** (`POST /api/mentorship`). Unlike
+    the request-approval path, an admin wiring a mentor to a mentee sent neither an in-app
+    notification nor an email, so neither side learned about it until they happened to log
+    in. Both now get a `mentorship_request` notification, plus an email gated on the
+    `mentorship` opt-out: a new `sendMentorAssignedEmail` for the mentee (the
+    request-approval copy does not fit — the mentee never asked) and the existing
+    `sendMenteeAssignedEmail` for the mentor. Both are branded via `emailBrand` and their
+    failures are logged without failing the assignment.
+  - **`POST /api/mentor/email` ignored the recipient's preferences.** The mentor's bulk
+    mentee mail went out even to mentees who had switched email notifications off; it is
+    now gated on `messages`, matching `/api/messages`. The `InteractionLog` entry is still
+    written either way, so the mentor's outreach record is unchanged.
+  - **Cron email failures were swallowed or aborted the job.** `checkMentorInteractionReminders`
+    and `checkRetentionReminders` awaited `sendEmail` unguarded, so one bad address aborted
+    the whole run mid-way and left the remaining recipients unprocessed; `checkStageDeadlineReminders`,
+    `checkCompanyNeedMatches` and `sendWeeklyAnalyticsReport` used `.catch(() => {})`, discarding
+    the error entirely. The first two are now wrapped in `try/catch` and all five log the
+    failure with the relation/user id for context.
+
+### Added
+- E2E coverage for the notification paths above: `e2e/mentorship-direct-assign.spec.ts`
+  (direct assignment notifies both sides), three new cases in `e2e/mentorship-request.spec.ts`
+  (admin-queue notification, approve notifies both sides, reject notifies the mentee with no
+  relation created), and an `e2e/notif-prefs.spec.ts` case asserting the `mentorship` and
+  `meetingReminders` toggles render and persist through the account-settings UI.
+
 ## [0.28.1-beta] - 2026-07-29
 
 ### Fixed
@@ -131,6 +162,7 @@ No version bump: test and `data-testid` changes only, no user-visible behaviour 
   pattern). A failed swap leaves no container running — `docker stop` precedes
   `docker run` — and was previously just a red tick in the Actions tab. Refusals and
   skips now emit `::warning::` and a step-summary line instead of hiding in a green log.
+
 ## [0.27.0-beta] - 2026-07-28
 
 ### Added
