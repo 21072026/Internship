@@ -126,6 +126,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       const { stageDeadline, ...rest } = parsed.data;
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = { ...rest };
+      // Stamp/clear the end of the relation — it anchors the post-mentorship
+      // CV/document access window (#854).
+      if (parsed.data.status && parsed.data.status !== relation.status) {
+        data.completedAt = parsed.data.status === 'COMPLETED' ? new Date() : null;
+      }
       if (stageDeadline !== undefined) {
         data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;
         // A fresh deadline (or cleared) re-arms the overdue reminder.

@@ -29,6 +29,40 @@ function monthsAgo(months: number): Date {
   return d;
 }
 
+/**
+ * How long after a mentorship ends the mentor (and the linked company) keep
+ * read access to the mentee's CV and documents (#854).
+ *
+ * Product decision: a limited window rather than an immediate cut-off. Writing
+ * a reference or answering a follow-up question after the internship ends is a
+ * real part of the job, and revoking access the moment a mentor marks a
+ * relation COMPLETED would push them to keep private copies instead. Indefinite
+ * access is the thing that is not defensible — KVKK m.4 / GDPR Art. 5(1)(b)
+ * purpose limitation. Rationale and the alternative considered:
+ * docs/DATA_ACCESS_POLICY.md.
+ */
+export const POST_MENTORSHIP_ACCESS_MONTHS = 6;
+
+/**
+ * `where` fragment matching relations that still confer access: active ones,
+ * plus those completed inside the window above.
+ *
+ * A COMPLETED relation with no `completedAt` matches nothing — the comparison
+ * excludes nulls. `prisma/backfill-relation-completed-at.mjs` stamps legacy
+ * rows at first deploy so they get a window rather than an abrupt cut-off.
+ */
+export function accessGrantingRelation() {
+  return {
+    OR: [
+      { status: 'ACTIVE' as const },
+      {
+        status: 'COMPLETED' as const,
+        completedAt: { gte: monthsAgo(POST_MENTORSHIP_ACCESS_MONTHS) },
+      },
+    ],
+  };
+}
+
 export async function getRetentionMonths(): Promise<number> {
   return parseInt(await getSetting('retentionMonths'), 10) || 12;
 }

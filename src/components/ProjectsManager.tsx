@@ -73,7 +73,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     // Mentors get a minimal directory too — needed for the member picker (#618).
-    fetch('/api/users').then((r) => (r.ok ? r.json() : { users: [] }))
+    fetch('/api/users?view=picker').then((r) => (r.ok ? r.json() : { users: [] }))
       .then((d) => {
         const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
         setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));

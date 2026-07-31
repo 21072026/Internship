@@ -8,6 +8,43 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.31.0-beta] - 2026-07-31
+
+### Security
+- **A mentor kept CV and document access to a former mentee forever** (#854).
+  `canAccessCv` / `canAccessUserDocs` asked only whether a `MentorshipRelation`
+  existed, never what its `status` was, so marking a mentorship COMPLETED changed
+  nothing. Access now expires `POST_MENTORSHIP_ACCESS_MONTHS` (6) after completion.
+  **Product decision — a window, not an immediate cut-off:** writing a reference
+  after the internship is real work, and revoking on the spot pushes mentors to keep
+  private copies, which moves the data outside the app's audit trail entirely. What
+  was indefensible was the *indefinite* part. Rationale, the alternative considered
+  and the legal basis: `docs/pii-access-lifecycle.md`. Owner and ADMIN access are
+  unaffected.
+- **`/api/users` dumped every user's full PII in one request** (#855). The admin
+  branch had no `take`/`skip` and returned email, phone, university, department and
+  more for the entire tenant — one compromised admin session walked off with the lot.
+  Added a `?view=` field set (`picker` = id/name/role, `directory` =
+  id/name/email/role/active/verified) and opt-in pagination
+  (`?page=`, `perPage` default 25, max 100, response carries `total`/`archivedCount`).
+  `/admin/users` now paginates, filters and searches server-side instead of pulling
+  the whole table and slicing it in the browser; `/admin/mentorship` and
+  `ProjectsManager` switched to `view=picker`, so their requests no longer carry any
+  PII at all. The MENTOR branch is untouched.
+
+### Added
+- `MentorshipRelation.completedAt`, stamped when a relation is marked COMPLETED and
+  cleared if it is reopened — the anchor for the access window above.
+  `prisma/backfill-relation-completed-at.mjs` (idempotent, wired into
+  `infra/deploy-prod.sh`) stamps relations that were already COMPLETED before the
+  column existed, so they get a window instead of losing access the moment this
+  deploys.
+
+### Documentation
+- **`docs/pii-access-lifecycle.md`** — how long access lasts and how much data each
+  caller gets, plus what is deliberately left for later (`/admin/candidates` and
+  `/admin/mentors` still fetch full lists; PII access logging is #821).
+
 ## [0.30.3-beta] - 2026-07-31
 
 ### Security
