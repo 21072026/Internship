@@ -8,6 +8,38 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.31.2-beta] - 2026-07-31
+
+### Security
+- **Changing or resetting a password did not end existing sessions** (#868). The
+  revocation machinery already worked — `auth.ts` compares `token.authTime` against
+  `User.sessionsValidFrom` on every request — but `sessionsValidFrom` was written in
+  exactly one place: the "sign out of all devices" button. So the standard response
+  to a stolen session (change the password) left the thief's JWT valid for the rest
+  of its 12 hours, and nothing in the UI suggested pressing the other button. Both
+  `PUT /api/account` and `POST /api/auth/reset` now stamp it. **This ends the
+  caller's own session too, on purpose** — issuing a replacement token would mean
+  "revoke everything except the request I just received", and that request is
+  exactly what an attacker holding the current password would send. The account page
+  says what happened and returns to sign-in. Any unused reset tokens for the account
+  are consumed at the same time, so a link already sitting in a mailbox can't undo
+  the change.
+- **Two HMAC signing helpers fell back to a hard-coded `'dev-secret'`** (#870). The
+  repository is public, so an environment missing `NEXTAUTH_SECRET` would verify
+  tokens anyone could mint: reply tokens route an inbound email into a message
+  thread, consent-renewal tokens record data-processing consent for another person.
+  `requireServerSecret()` (`src/lib/serverSecret.ts`) now throws instead. Nothing
+  legitimate breaks — NextAuth cannot authenticate anyone without that secret either.
+  Related fail-open: `/api/inbound-email` treated a missing `INBOUND_SECRET` as
+  "allowed, the HMAC gate will catch it" while that gate was itself defaulted; in
+  production it now returns 401, and dev/CI keep the lenient path.
+- **Auth forms had no `method`, so a pre-hydration submit put the password in the
+  URL** (#873). A native GET was observed live:
+  `…/auth/signin?email=…&password=ChangeMe123%21` — which then lands in browser
+  history, the `Referer` header and nginx access logs. `method="post"` added to
+  sign-in, register, forgot, reset and both credential forms on the account page.
+  With JS working the behaviour is unchanged.
+
 ## [0.31.1-beta] - 2026-07-31
 
 ### Security

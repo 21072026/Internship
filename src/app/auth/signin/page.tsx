@@ -154,7 +154,7 @@ export default function SignInPage() {
             </div>
           )}
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form method="post" onSubmit={onSubmit} className="space-y-4">
             <Input
               label={t.auth.email}
               type="email"
