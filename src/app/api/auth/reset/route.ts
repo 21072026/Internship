@@ -49,10 +49,19 @@ export async function POST(request: Request) {
         where: { id: record.userId },
         data: {
           password: hashed,
+          // Revoke every existing session (#868). A reset is what someone does
+          // when they think an account is compromised; leaving the attacker's
+          // 12-hour JWT alive defeated the exercise.
+          sessionsValidFrom: new Date(),
           ...(record.purpose === 'SET_INITIAL' ? { emailVerified: true } : {}),
         },
       }),
-      prisma.passwordResetToken.update({ where: { id: record.id }, data: { used: true } }),
+      // Consume this token and every other one outstanding for the account, so
+      // a second link sitting in a mailbox can't undo the reset.
+      prisma.passwordResetToken.updateMany({
+        where: { userId: record.userId, used: false },
+        data: { used: true },
+      }),
     ]);
 
     return NextResponse.json({ ok: true });

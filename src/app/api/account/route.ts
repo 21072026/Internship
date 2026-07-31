@@ -37,7 +37,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const data: { email?: string; password?: string } = {};
+    const data: { email?: string; password?: string; sessionsValidFrom?: Date } = {};
     const changingEmail = !!email && email !== user.email;
 
     // Changing the email or the password both require re-authentication with
@@ -58,6 +58,17 @@ export async function PUT(request: Request) {
 
     if (newPassword) {
       data.password = await bcrypt.hash(newPassword, 12);
+      // Changing the password revokes every existing session (#868). The whole
+      // point of changing it after a session is stolen is to lock the thief
+      // out; before this, the old JWT stayed valid for another 12 hours and
+      // only the separate "sign out of all devices" button helped — which
+      // nothing in the UI told anyone to press.
+      //
+      // This drops the caller's own session too. That is the deliberate
+      // choice: minting a replacement token here would mean "revoke all
+      // sessions except the one making the request", and the request is
+      // exactly what an attacker who knows the current password would send.
+      data.sessionsValidFrom = new Date();
     }
 
     if (Object.keys(data).length === 0) {
@@ -69,9 +80,20 @@ export async function PUT(request: Request) {
       await logActivity({ action: 'account.email_change', level: 'warning', actorId: user.id, actorEmail: data.email, detail: `from ${user.email}` });
     }
     if (data.password) {
+      // Any reset link already in flight for this account is now stale — a
+      // stolen one must not survive the password change that was meant to
+      // shut the attacker out.
+      await prisma.passwordResetToken.updateMany({
+        where: { userId: user.id, used: false },
+        data: { used: true },
+      });
       await logActivity({ action: 'account.password_change', level: 'warning', actorId: user.id, actorEmail: user.email });
     }
-    return NextResponse.json({ message: 'Account updated', emailChanged: !!data.email });
+    return NextResponse.json({
+      message: 'Account updated',
+      emailChanged: !!data.email,
+      sessionsRevoked: !!data.password,
+    });
     });
   } catch (error) {
     console.error('Account update error:', error);

@@ -12,7 +12,11 @@ const schema = z.object({
 
 function secretOk(request: Request): boolean {
   const expected = process.env.INBOUND_SECRET;
-  if (!expected) return true; // not configured (dev/CI) — rely on the HMAC token gate
+  // Unconfigured used to mean "let it through and rely on the HMAC token gate"
+  // — two fail-opens stacked, because that gate itself fell back to a public
+  // 'dev-secret' (#870). The HMAC no longer has a fallback, and in production
+  // this shared secret is required outright; dev and CI keep the lenient path.
+  if (!expected) return process.env.NODE_ENV !== 'production';
   const got = request.headers.get('x-inbound-secret') || '';
   try {
     return got.length === expected.length && timingSafeEqual(Buffer.from(got), Buffer.from(expected));

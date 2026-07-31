@@ -1,13 +1,13 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { requireServerSecret } from '@/lib/serverSecret';
 
 // Per-thread reply token used in email Reply-To addresses
 // (reply+<relationId>.<sig>@domain). The signature is an HMAC of the relation
 // id with the server secret, so tokens are unguessable and tamper-evident —
 // an inbound email can only be routed to a thread if its token verifies.
-const secret = () => process.env.NEXTAUTH_SECRET || 'dev-secret';
-
+// No fallback secret: a public default would make every token forgeable (#870).
 function sign(relationId: string): string {
-  return createHmac('sha256', secret()).update(relationId).digest('hex').slice(0, 32);
+  return createHmac('sha256', requireServerSecret()).update(relationId).digest('hex').slice(0, 32);
 }
 
 export function makeReplyToken(relationId: string): string {

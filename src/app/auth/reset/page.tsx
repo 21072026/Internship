@@ -76,7 +76,7 @@ function ResetForm() {
           ) : valid === null ? (
             <p className="text-gray-500 text-sm">…</p>
           ) : (
-            <form onSubmit={onSubmit} className="space-y-4">
+            <form method="post" onSubmit={onSubmit} className="space-y-4">
               {error && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                   {error}

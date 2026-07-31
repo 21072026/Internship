@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.31.2-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Changing or resetting your password now signs you out everywhere, including the device you changed it on. If someone else was signed in as you, they are out as soon as you change it — previously their session stayed alive for up to 12 hours. You will be asked to sign in again straight after.',
+        'Any password-reset link still sitting in your inbox stops working once you change your password.',
+        'Sign-in and other password forms no longer risk putting your password into the page address if you submit before the page has finished loading.',
+      ],
+      tr: [
+        'Parolanızı değiştirmek veya sıfırlamak artık sizi her yerden çıkış yaptırıyor — değişikliği yaptığınız cihaz dâhil. Başka biri sizin adınıza giriş yapmışsa, siz parolayı değiştirir değiştirmez düşüyor; önceden oturumu 12 saate kadar açık kalıyordu. Hemen ardından tekrar giriş yapmanız istenecek.',
+        'Posta kutunuzda duran parola sıfırlama bağlantıları, parolanızı değiştirdiğiniz anda geçersiz oluyor.',
+        'Giriş ve diğer parola formları, sayfa tam yüklenmeden gönderildiğinde parolanızı sayfa adresine yazma riskini artık taşımıyor.',
+      ],
+      de: [
+        'Das Ändern oder Zurücksetzen des Passworts meldet Sie jetzt überall ab — auch auf dem Gerät, auf dem Sie es geändert haben. War jemand anderes als Sie angemeldet, ist diese Sitzung sofort beendet; bisher blieb sie bis zu 12 Stunden gültig. Direkt danach werden Sie zur erneuten Anmeldung gebeten.',
+        'Noch im Postfach liegende Links zum Zurücksetzen des Passworts funktionieren nicht mehr, sobald Sie Ihr Passwort ändern.',
+        'Anmelde- und andere Passwortformulare können Ihr Passwort nicht mehr in die Seitenadresse schreiben, wenn Sie absenden, bevor die Seite fertig geladen ist.',
+      ],
+    },
+  },
+  {
     version: '0.31.1-beta',
     date: '2026-07-31',
     highlights: {
