@@ -326,7 +326,7 @@ jobs:
 
       - name: Post preview URL comment
         if: github.event_name == 'pull_request' && steps.fork.outputs.is_fork != 'true' && !contains(github.head_ref, 'topic')
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const previewUrl = '${{ secrets.PREVIEW_URL }}';
@@ -372,7 +372,7 @@ jobs:
       - name: Post fork-PR notice comment
         if: github.event_name == 'pull_request' && steps.fork.outputs.is_fork == 'true'
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const body = `### 🔍 Preview deployment skipped\n\n` +
