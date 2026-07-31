@@ -30,6 +30,14 @@ export async function projectMemberIds(projectId: string): Promise<string[]> {
   return [...new Set(rows.map((r) => r.userId))];
 }
 
+export async function isActiveProjectMember(userId: string, projectId: string): Promise<boolean> {
+  if (!userId || !projectId) return false;
+  return (await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+    select: { id: true },
+  })) !== null;
+}
+
 // Do these two users share at least one project? Resolved in a single query via
 // a relation filter (a member row for A on a project that also has a member row
 // for B).
@@ -110,17 +118,27 @@ export async function getConversationIfAllowed(user: SessionUser, conversationId
   });
   if (!conversation) return null;
   const isParticipant = conversation.participants.some((p) => p.userId === user.id);
+  if (conversation.type === 'GROUP') {
+    if (!conversation.projectId || !isParticipant) return null;
+    return (await isActiveProjectMember(user.id, conversation.projectId)) ? conversation : null;
+  }
   if (!isParticipant && user.role !== 'ADMIN') return null;
   return conversation;
 }
 
 // The participants to notify when someone posts to a conversation (everyone but
 // the sender). The conversation-layer counterpart of otherParticipant().
-export function otherConversationParticipants(
-  conversation: { participants: { userId: string }[] },
+export async function otherConversationParticipants(
+  conversation: { type?: string; projectId?: string | null; participants: { userId: string }[] },
   senderId: string,
-): string[] {
-  return [...new Set(conversation.participants.map((p) => p.userId))].filter((id) => id !== senderId);
+): Promise<string[]> {
+  const participantIds = [...new Set(conversation.participants.map((p) => p.userId))].filter((id) => id !== senderId);
+  if (conversation.type !== 'GROUP' || !conversation.projectId || participantIds.length === 0) return participantIds;
+  const activeMembers = await prisma.projectMember.findMany({
+    where: { projectId: conversation.projectId, userId: { in: participantIds } },
+    select: { userId: true },
+  });
+  return activeMembers.map((member) => member.userId);
 }
 
 // The unique identity of a DIRECT conversation between two users: their ids
@@ -173,6 +191,47 @@ export async function findOrCreateDirectConversation(userAId: string, userBId: s
   }
 }
 
+// Creates the project's single GROUP conversation on first use and reconciles
+// all current ProjectMember rows into its participant list. The compound unique
+// key keeps concurrent callers idempotent at database level.
+export async function createOrGetProjectConversation(projectId: string) {
+  if (!projectId) return null;
+  const memberIds = await projectMemberIds(projectId);
+  try {
+    return await prisma.conversation.upsert({
+      where: { type_projectId: { type: 'GROUP', projectId } },
+      update: memberIds.length
+        ? { participants: { createMany: { data: memberIds.map((userId) => ({ userId })), skipDuplicates: true } } }
+        : {},
+      create: {
+        type: 'GROUP',
+        projectId,
+        ...(memberIds.length ? { participants: { create: memberIds.map((userId) => ({ userId })) } } : {}),
+      },
+      include: CONVERSATION_INCLUDE,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return prisma.conversation.findUnique({
+        where: { type_projectId: { type: 'GROUP', projectId } },
+        include: CONVERSATION_INCLUDE,
+      });
+    }
+    throw error;
+  }
+}
+
+export async function removeProjectConversationParticipant(projectId: string, userId: string) {
+  const conversation = await prisma.conversation.findUnique({
+    where: { type_projectId: { type: 'GROUP', projectId } },
+    select: { id: true },
+  });
+  if (!conversation) return;
+  await prisma.conversationParticipant.deleteMany({
+    where: { conversationId: conversation.id, userId },
+  });
+}
+
 // May this user still POST into this conversation? (#770)
 //
 // Reading is participant-based and permanent — conversation history stays
@@ -183,13 +242,16 @@ export async function findOrCreateDirectConversation(userAId: string, userBId: s
 // is the rule there.
 export async function canPostToConversation(
   user: SessionUser,
-  conversation: { id: string; type: string; participants: { userId: string }[] },
+  conversation: { id: string; type: string; projectId?: string | null; participants: { userId: string }[] },
 ): Promise<boolean> {
-  const others = otherConversationParticipants(conversation, user.id);
   // An admin viewing someone else's conversation isn't a participant and has
   // nothing to post; participants are what matter here.
   if (!conversation.participants.some((p) => p.userId === user.id)) return false;
-  if (conversation.type !== 'DIRECT') return true;
+  if (conversation.type === 'GROUP') {
+    return Boolean(conversation.projectId && (await isActiveProjectMember(user.id, conversation.projectId)));
+  }
+  if (conversation.type !== 'DIRECT') return false;
+  const others = await otherConversationParticipants(conversation, user.id);
   const other = others[0];
   if (!other) return false;
   return canMessage(user.id, other);
