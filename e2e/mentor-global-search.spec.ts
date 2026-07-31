@@ -34,7 +34,14 @@ test('mentor global search finds own mentee and navigates to their profile, not 
     expect(ids).not.toContain(otherMentee.id);
 
     // UI: search own mentee, click result, land on their relation page.
+    // Wait for the debounced search request to actually resolve before looking for
+    // the result button — on a cold dev server the first hit to /mentor and
+    // /api/search triggers an on-demand compile that can stall the response past
+    // the button's own actionability window, so the two waits must not be collapsed
+    // into one implicit timeout.
+    const searchResponse = page.waitForResponse((r) => r.url().includes('/api/search') && r.url().includes('Quixara'));
     await page.locator('[data-testid="global-search-input"]').fill('Quixara Voltmoss');
+    await searchResponse;
     await page.getByRole('button', { name: mentee.fullName }).click();
     await page.waitForURL((u) => u.pathname === `/mentor/mentees/${relation.id}`, { timeout: 10_000 });
   } finally {
