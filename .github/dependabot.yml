@@ -1,0 +1,42 @@
+# Automated dependency updates (#885).
+#
+# Ten CVEs piled up because nobody was checking on a schedule. This is the half
+# that stops it recurring; `security-audit.yml` is the half that makes the
+# current state visible.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Istanbul
+    # Enough to be useful, few enough to actually review. Security updates are
+    # not counted against this limit by Dependabot.
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # One PR for the routine patch/minor churn — reviewing twenty
+      # near-identical bumps individually is how a queue starts getting ignored.
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Majors land as deliberate, tested work, not as an automated PR. next 16
+      # in particular changes App Router behaviour and needs the full e2e suite.
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+      include: scope
