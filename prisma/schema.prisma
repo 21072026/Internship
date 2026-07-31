@@ -497,7 +497,27 @@ model Announcement {
   emailedCount   Int      @default(0)
   createdAt      DateTime @default(now())
 
+  // Optional attached image. Deliberately NOT mirrored into an `imageUrl`
+  // column: the URL is a pure function of the announcement id
+  // (/api/announcements/<id>/image), so storing it would only add a second write
+  // and a field that can disagree with reality.
+  image AnnouncementImage?
+
   @@index([createdAt])
+}
+
+// An image attached to a broadcast announcement, stored in the database (same
+// approach as AvatarFile/CvFile — no object storage, so it survives container
+// redeploys). Served via /api/announcements/[id]/image.
+model AnnouncementImage {
+  id             String   @id @default(cuid())
+  announcementId String   @unique
+  contentType    String
+  size           Int
+  data           Bytes
+  uploadedAt     DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
 }
 
 // A user's profile picture, stored in the database (same approach as CvFile).

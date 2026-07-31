@@ -81,7 +81,10 @@ export async function sendEmail({
   subject: string;
   html: string;
   replyTo?: string;
-  attachments?: { filename: string; content: Buffer; contentType?: string }[];
+  // `cid` makes an attachment *inline*: the HTML can then reference it as
+  // <img src="cid:…">, which is how images inside a message body reach mail
+  // clients (a URL into this app would need a session and render as broken).
+  attachments?: { filename: string; content: Buffer; contentType?: string; cid?: string }[];
   // Overrides the From display name (e.g. a tenant's brand name, #546). Falls
   // back to MAIL_FROM_NAME / "Internship CRM" when omitted.
   fromName?: string | null;

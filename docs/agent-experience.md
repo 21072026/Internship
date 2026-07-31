@@ -1401,6 +1401,43 @@ merge olana kadar `gh pr view --json mergeable` ile izle, tekrar `DIRTY` olursa 
 mekanik kuralı uygula. Üçüncü turda `npx tsc --noEmit` + `check:i18n` tam `npm run build`
 yerine yeterli hızlı güvence (çakışan dosyalar sadece CHANGELOG/releaseNotes/sürüm ise).
 
+## 2026-07-31 — Bakımcının macOS'unda çalışırken: lokal DB yok, tek `.env` preview'a bakıyor
+
+**Bu depo iki farklı ortamda geliştiriliyor ve doğrulama imkânları aynı değil.** Playbook'un
+"lokal DB: apt MariaDB" yolu Claude Code web container'ı için geçerli; bakımcının
+Mac'indeki worktree'de ise `mysql`/`mysqld`/`mariadb` PATH'te yok, brew ile kurulu değil ve
+`docker ps` "Cannot connect to the Docker daemon" diyor. Üstelik depodaki tek `.env`
+(`~/Desktop/github/Internship/.env`) `DATABASE_URL`'i **paylaşılan preview DB'sine**
+(`crm-preview.ersah.in`) yönlendiriyor — yani DATA_ACCESS_POLICY ve "paylaşılan DB'ye
+`db push` yok" kuralı gereği DB'ye dokunan bir UI'ı tarayıcıda kendin doğrulayamıyorsun
+(oturum açmak bile DB istiyor). Pratik sonuç: bu makinede `tsc --noEmit` + `lint` +
+`build` + `check:i18n` derleme güvencesi, **fonksiyonel** kanıt ise CI'daki e2e (kendi MySQL
+service'i var). Bunu PR'da açıkça yaz — "yerelde denedim" izlenimi bırakma. Yeni özelliğin
+e2e spec'ini yazmak burada isteğe bağlı değil; tek gerçek doğrulama o.
+
+**`prisma validate`/`generate` dummy de olsa `DATABASE_URL` istiyor.** Worktree'de `.env`
+yok, o yüzden ikisi de P1012 "Environment variable not found: DATABASE_URL" ile düşüyor.
+`DATABASE_URL="mysql://u:p@localhost:3306/db" npx prisma validate` şeklinde satır içi dummy
+ver; `npm run build` için ek olarak `NEXTAUTH_SECRET` + `NEXTAUTH_URL` gerekiyor.
+
+**Sürüm bump'ını dalı `origin/main`'e taşıdıktan SONRA yap.** Worktree'nin base'i açıldığı
+andaki `main` — bu turda 4 commit geride kalmıştı (`package.json` worktree'de `0.31.4-beta`,
+`origin/main`'de `0.32.1-beta`). Hiç commit atmadan önce fark edilirse en temiz hamle
+`git stash -u` → `git reset --hard origin/main` → `git stash pop`: burada
+`prisma/schema.prisma` ve `dictionaries.ts` sorunsuz auto-merge oldu ve CHANGELOG çakışması
+hiç doğmadı. Yukarıdaki #973 dersinin ucuz versiyonu: çakışmayı çözmek yerine oluşmasını
+engelle. (`package-lock.json`'daki sürüm yine `package.json`'la senkron değildi — lock
+`0.30.1-beta` derken package.json `0.32.1-beta`'daydı; her iki yeri de elle yaz.)
+
+**JSON gövdesi bekleyen bir route'a multipart eklerken JSON'u koru.** `POST
+/api/admin/announcements`'a dosya yükleme eklerken `request.json()`'ı `formData()` ile
+değiştirmek üç spec'i (`announcements-feed`, `comms`, `text-limits`) sessizce kırardı —
+hepsi `page.request.post(..., { data: {...} })` ile JSON gönderiyor. `content-type`'a
+bakıp iki gövdeyi tek şekle normalize et. İki tuzak: FormData'da `undefined` yok, atlanan
+opsiyonel alan `null` okunuyor ve zod'un `.optional()`'ı bunu reddediyor (boş olanları
+anahtar olarak hiç ekleme); ve `formData()`/`json()` bozuk gövdede exception atıyor —
+try/catch olmadan 400 yerine 500 dönüyor.
+
 ---
 
 ## 2026-07-31 — #935 sabit alt bant × gövde boşluğu (mobil ilk izlenim)
