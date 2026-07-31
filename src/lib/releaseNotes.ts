@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.35.1-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Messages now fill the screen on a phone. A conversation used to be a long page you had to scroll down before you could even reach the reply box — now the message list is the only thing that scrolls, and the reply box stays where it is at the bottom of the screen.',
+        'Every message screen also has a header on a phone: it shows who you are talking to, with a back arrow to your conversations and a home button — no more relying on the browser\'s back button to get out.',
+        'When the on-screen keyboard opens, the reply box stays visible above it instead of disappearing behind it.',
+      ],
+      tr: [
+        'Mesajlar telefonda artık ekranı tam kullanıyor. Bir sohbet, cevap kutusuna ulaşmak için önce aşağı kaydırmanız gereken uzun bir sayfaydı — artık yalnızca mesaj listesi kayıyor, cevap kutusu ekranın altında sabit duruyor.',
+        'Her mesaj ekranında telefonda bir başlık çubuğu var: kiminle konuştuğunuzu gösteriyor, geri okuyla sohbetlerinize, ev butonuyla ana ekranınıza dönüyorsunuz — çıkmak için tarayıcının geri tuşuna ihtiyaç kalmadı.',
+        'Ekran klavyesi açıldığında cevap kutusu klavyenin arkasında kaybolmuyor, üstünde görünür kalıyor.',
+      ],
+      de: [
+        'Nachrichten nutzen auf dem Handy jetzt den ganzen Bildschirm. Eine Unterhaltung war eine lange Seite, die man erst nach unten scrollen musste, um überhaupt das Antwortfeld zu erreichen — jetzt scrollt nur noch die Nachrichtenliste, und das Antwortfeld bleibt unten am Bildschirm stehen.',
+        'Jeder Nachrichten-Bildschirm hat auf dem Handy außerdem eine Kopfzeile: Sie zeigt, mit wem du schreibst, mit einem Zurück-Pfeil zu deinen Unterhaltungen und einer Start-Schaltfläche — der Zurück-Button des Browsers ist nicht mehr der einzige Ausweg.',
+        'Wenn die Bildschirmtastatur aufgeht, bleibt das Antwortfeld darüber sichtbar statt dahinter zu verschwinden.',
+      ],
+    },
+  },
+  {
     version: '0.35.0-beta',
     date: '2026-08-01',
     highlights: {

@@ -124,7 +124,9 @@ export default async function MessagesInboxPage() {
 
   return (
     <div>
-      <div className="mb-6">
+      {/* Mobile gets its title from the shell header (see MessagesShell), so this
+          block only shows where there is room for it. */}
+      <div className="hidden lg:block mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.messages.title}</h1>
         <p className="text-gray-500 mt-1">{t.messages.inboxSubtitle}</p>
       </div>

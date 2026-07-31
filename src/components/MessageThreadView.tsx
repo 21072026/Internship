@@ -14,6 +14,8 @@ import {
   PendingAttachmentList,
   type PendingMessageAttachment,
 } from '@/components/MessageThread';
+import { useMessagesHeaderTitle } from '@/components/MessagesShell';
+import { useIsNarrow } from '@/hooks/useIsNarrow';
 
 interface Attachment {
   id: string;
@@ -51,6 +53,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
 
   const t = useT();
   const locale = useLocale();
+  const narrow = useIsNarrow();
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -131,7 +134,9 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   }, [target.kind, target.id]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  // `block: 'end'` keeps this inside the bubble scroller instead of nudging the
+  // page: on mobile the list is the only scrollable box (see MessagesShell).
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages]);
 
   const addFiles = (list: FileList | File[]) => {
     const picked = Array.from(list).filter(Boolean);
@@ -236,23 +241,33 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     finally { setRowBusy(false); }
   };
 
-  if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
-  if (forbidden) return <p className="text-center py-12 text-gray-400">{t.common.notFound}</p>;
-
   const nameFor = (id: string) => parties.find((p) => p.id === id)?.fullName ?? '—';
   // Header shows the other side (the only other party in a 1:1 thread).
   const other = parties.find((p) => p.id !== myId) ?? null;
+  // On mobile the shell's header is the only title, so it carries the name.
+  useMessagesHeaderTitle(other?.fullName);
+
+  if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
+  if (forbidden) return <p className="text-center py-12 text-gray-400">{t.common.notFound}</p>;
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">{t.messages.title}</h1>
-      <p className="text-gray-500 mb-6">{other?.fullName}</p>
+    // Below lg this fills the shell's content area exactly: only the bubble list
+    // scrolls, and the composer stays visible without any document scroll.
+    <div className="flex h-full min-h-0 flex-col lg:h-auto lg:block">
+      {/* On mobile the shell header is the heading (and names the thread), so this
+          block would be a duplicate title eating a third of a phone screen. */}
+      {!narrow && (
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{t.messages.title}</h1>
+          <p className="text-gray-500">{other?.fullName}</p>
+        </div>
+      )}
 
-      <Card className="mb-4">
+      <Card className="mb-3 flex min-h-0 flex-1 flex-col overflow-hidden p-3 lg:mb-4 lg:block lg:p-6">
         {messages.length === 0 ? (
           <p className="text-center py-10 text-gray-400 text-sm">{t.messages.empty}</p>
         ) : (
-          <div className="space-y-3 max-h-[55vh] overflow-y-auto">
+          <div data-testid="thread-messages" className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain lg:max-h-[55vh] lg:flex-none">
             {messages.map((m) => {
               const mine = m.senderId === myId;
               return (
@@ -408,6 +423,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         )}
       </Card>
 
+      <div className="shrink-0" data-testid="thread-composer">
       {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
       {!canPost && (
         <p className="text-center py-3 text-sm text-gray-400" data-testid="thread-readonly">
@@ -436,7 +452,8 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         sendTestId="message-send"
       />
       <div className="mt-1.5 flex items-center justify-between gap-3">
-        <span className="text-xs text-gray-400 truncate">{t.messages.pasteHint}</span>
+        {/* Keyboard-only hint — no room for it on a phone. */}
+        <span className="hidden lg:inline text-xs text-gray-400 truncate">{t.messages.pasteHint}</span>
         <button
           type="button"
           role="switch"
@@ -453,6 +470,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       </div>
       </>
       )}
+      </div>
     </div>
   );
 }

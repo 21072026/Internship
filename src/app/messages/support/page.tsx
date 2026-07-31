@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, LifeBuoy } from 'lucide-react';
+import { LifeBuoy } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
 import { SupportAttachmentList } from '@/components/SupportAttachmentList';
+import { useMessagesHeaderTitle } from '@/components/MessagesShell';
+import { useIsNarrow } from '@/hooks/useIsNarrow';
 import {
   MessageBubble,
   MessageComposer,
@@ -36,6 +37,7 @@ export default function SupportChatPage() {
   const t = useT();
   const s = t.support;
   const locale = useLocale();
+  const narrow = useIsNarrow();
   const [tickets, setTickets] = useState<Ticket[] | null>(null);
   const [me, setMe] = useState('');
   const [body, setBody] = useState('');
@@ -44,6 +46,7 @@ export default function SupportChatPage() {
   const [attachments, setAttachments] = useState<PendingSupportAttachment[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  useMessagesHeaderTitle(s.title);
 
   const load = () =>
     fetch('/api/support')
@@ -98,25 +101,28 @@ export default function SupportChatPage() {
   };
 
   return (
-    <div className="max-w-3xl">
-      <Link href="/messages" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline mb-4">
-        <ArrowLeft className="h-4 w-4" /> {t.messages.title}
-      </Link>
+    // Same full-height mobile frame as a normal thread: only the ticket history
+    // scrolls, the composer stays put (see MessagesShell).
+    <div className="flex h-full min-h-0 max-w-3xl flex-col lg:h-auto lg:block">
+      {/* The shell header is the heading on mobile (see MessagesShell). */}
+      {!narrow && (
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <LifeBuoy className="h-6 w-6 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.title}</h1>
+          </div>
+          <p className="text-gray-500">{s.subtitle}</p>
+        </div>
+      )}
 
-      <div className="flex items-center gap-2 mb-1">
-        <LifeBuoy className="h-6 w-6 text-blue-600" />
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.title}</h1>
-      </div>
-      <p className="text-gray-500 mb-6">{s.subtitle}</p>
-
-      <div data-testid="support-chat">
-        <Card className="mb-4">
+      <div data-testid="support-chat" className="flex min-h-0 flex-1 flex-col lg:block">
+        <Card className="mb-3 flex min-h-0 flex-1 flex-col overflow-hidden p-3 lg:mb-4 lg:block lg:p-6">
           {tickets === null ? (
           <p className="text-center py-10 text-gray-400">{t.common.loading}</p>
         ) : tickets.length === 0 ? (
           <p className="text-center py-10 text-gray-400">{s.empty}</p>
         ) : (
-          <div className="space-y-6 max-h-[50vh] overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain pr-1 lg:max-h-[50vh] lg:flex-none">
             {[...tickets].reverse().map((ticket) => (
               <div key={ticket.id} data-testid={`ticket-${ticket.id}`}>
                 <div className="flex items-center gap-2 mb-2">
@@ -138,6 +144,7 @@ export default function SupportChatPage() {
           )}
         </Card>
 
+        <div className="shrink-0">
         {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
         <PendingAttachmentList
           attachments={attachments}
@@ -166,6 +173,7 @@ export default function SupportChatPage() {
           attachTestId="support-attach"
           sendTestId="support-send"
         />
+        </div>
       </div>
     </div>
   );
