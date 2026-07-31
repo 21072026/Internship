@@ -1232,6 +1232,12 @@ model ActivityLog {
   targetType String?
   targetId   String?
   detail     String?
+  // Where the action came from (#881). Both optional: existing rows predate the
+  // columns, and plenty of call sites (cron jobs, NextAuth event callbacks) have
+  // no Request to read them from. An incident review can't answer "was this
+  // really the user?" from actor + action alone.
+  ip         String?  @db.VarChar(64)
+  userAgent  String?  @db.Text
   createdAt  DateTime @default(now())
 
   @@index([actorId])

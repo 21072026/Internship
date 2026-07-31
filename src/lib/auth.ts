@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
 import { verifyTotpStep } from '@/lib/totp';
+import { headerSource } from '@/lib/clientIp';
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -26,7 +27,10 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
         totp: { label: 'Authenticator code', type: 'text' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
+        // NextAuth hands us a plain header bag, not a WHATWG Request; headerSource
+        // adapts it so the audit rows carry the origin IP/user-agent (#881).
+        const origin = headerSource(req?.headers as Record<string, string> | undefined);
         if (!credentials?.email || !credentials?.password) {
           throw new Error('Email and password are required');
         }
@@ -54,6 +58,7 @@ export const authOptions: NextAuthOptions = {
             level: 'warning',
             actorEmail: credentials.email,
             actorId: user?.id ?? null,
+            request: origin,
           });
           throw new Error(within.ok ? 'Invalid email or password' : 'Too many attempts. Please try again later.');
         }
@@ -99,6 +104,7 @@ export const authOptions: NextAuthOptions = {
               actorEmail: user.email,
               actorId: user.id,
               detail: replayed ? 'code already used' : 'invalid code',
+              request: origin,
             });
             // Same message either way — which of the two it was is the
             // attacker's business to guess, not ours to confirm.
@@ -115,6 +121,15 @@ export const authOptions: NextAuthOptions = {
 
         // Fully authenticated — now the failure counter can be reset.
         clearRateLimit(failKey);
+
+        // Logged here rather than in events.signIn so the row carries the
+        // origin IP; the event callback has no request (#881).
+        await logActivity({
+          action: 'auth.login',
+          actorId: user.id,
+          actorEmail: user.email,
+          request: origin,
+        });
 
         return {
           id: user.id,
@@ -298,9 +313,17 @@ export const authOptions: NextAuthOptions = {
     },
   },
   events: {
-    async signIn({ user }) {
+    async signIn({ user, account }) {
+      // The credentials provider logs its own `auth.login` from authorize(),
+      // where the request headers are available and the row can carry an origin
+      // IP (#881). Events get no request, so logging here too would only add a
+      // duplicate with a blank origin.
+      if (account?.provider === 'credentials') return;
       await logActivity({ action: 'auth.login', actorId: user.id, actorEmail: user.email ?? null });
     },
+    // No Request is available in this callback, so sign-out rows carry no
+    // origin. Left as-is deliberately: a sign-out is not the event an incident
+    // review hinges on.
     async signOut({ token }) {
       await logActivity({
         action: 'auth.logout',

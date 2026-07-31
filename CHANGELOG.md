@@ -8,6 +8,43 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.32.0-beta] - 2026-07-31
+
+### Security
+- **Admin password reset handed out a live reset link and left no trace** (#875).
+  `POST /api/admin/users/[id]/reset-password` returned `resetUrl` in the response body
+  — so an account could be taken over with no access to the target's mailbox at all,
+  and the credential landed in reverse-proxy logs, browser devtools and any
+  screen-share. It also had **no target restriction**, so one admin could reset
+  another admin's password: horizontal admin takeover, which the impersonation
+  endpoint has always blocked outright. And it wrote **no audit record**. Now: the
+  response carries only `{ ok, emailSent }`, resetting another admin's password is
+  refused (an admin who has genuinely lost access uses forgot-password with their own
+  mailbox), and the action writes both an `AuditLog` row and an `admin.reset_password`
+  activity entry at warning level. The account owner is notified, mirroring
+  impersonation.
+
+### Added
+- **Audit records for privileged actions that had none** (#878): API key create/revoke,
+  webhook create/delete, invitation created, user activated/deactivated, organization
+  created/updated (warning level when the change touches SSO config — that can redirect
+  authentication itself), source created/deleted, company- and source-user accounts
+  created, and mentorship-request decisions.
+- **`ActivityLog` records where an action came from** (#881) — new optional `ip` and
+  `userAgent` columns, populated when the call site has a request. "Who did what"
+  could never answer "was this really the user?". Sign-in, failed sign-in, failed 2FA,
+  impersonation and every action above now carry an origin; the IP shows in
+  `/admin/activity` with the user-agent as its tooltip. Successful sign-in moved from
+  NextAuth's `events.signIn` into `authorize()` because the event callback has no
+  request — sign-out stays there and carries no origin, which is a deliberate
+  omission, not an oversight.
+
+### Changed
+- `clientIp()` moved from `src/lib/rateLimit.ts` to `src/lib/clientIp.ts` (re-exported
+  from its old home, so no call site changes). The rate limiter now logs breaches via
+  `logActivity`, and the audit logger needs the IP — leaving both in one module made
+  an import cycle.
+
 ## [0.31.4-beta] - 2026-07-31
 
 ### Added

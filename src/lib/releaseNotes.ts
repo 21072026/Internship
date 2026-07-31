@@ -13,6 +13,33 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.32.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'When an administrator starts a password reset for your account, you are now notified, and the reset link is only ever sent to your own email address — it is no longer shown on the administrator\'s screen. Administrators also can no longer reset another administrator\'s password.',
+        'The admin activity log now records where an action came from (IP address, with the browser shown on hover) and covers far more privileged actions: API keys, webhooks, invitations, activating or deactivating a user, organisation and source changes, and mentorship decisions.',
+      ],
+      tr: [
+        'Bir yönetici hesabınız için parola sıfırlama başlattığında artık bilgilendiriliyorsunuz ve sıfırlama bağlantısı yalnızca kendi e-posta adresinize gidiyor — yöneticinin ekranında hiç görünmüyor. Yöneticiler ayrıca başka bir yöneticinin parolasını sıfırlayamıyor.',
+        'Yönetici aktivite kaydı artık bir işlemin nereden yapıldığını da tutuyor (IP adresi, tarayıcı bilgisi üzerine gelince görünüyor) ve çok daha fazla ayrıcalıklı işlemi kapsıyor: API anahtarları, webhook\'lar, davetler, kullanıcı aktifleştirme/pasifleştirme, kurum ve kaynak değişiklikleri, mentorluk kararları.',
+      ],
+      de: [
+        'Wenn eine Administratorin oder ein Administrator ein Zurücksetzen Ihres Passworts anstößt, werden Sie jetzt benachrichtigt, und der Link geht ausschließlich an Ihre eigene E-Mail-Adresse — er erscheint nicht mehr auf dem Bildschirm der Administration. Außerdem kann das Passwort anderer Administratoren nicht mehr zurückgesetzt werden.',
+        'Das Admin-Aktivitätsprotokoll hält jetzt fest, woher eine Aktion kam (IP-Adresse, Browser beim Überfahren mit der Maus), und deckt deutlich mehr privilegierte Aktionen ab: API-Schlüssel, Webhooks, Einladungen, Aktivieren und Deaktivieren von Nutzern, Organisations- und Quellenänderungen sowie Mentoring-Entscheidungen.',
+      ],
+    },
+  },
+  {
+    version: '0.31.4-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: ['Internal: rate-limit breaches are now recorded in the admin activity log.'],
+      tr: ['Dahili: hız sınırı aşımları artık yönetici aktivite kaydına yazılıyor.'],
+      de: ['Intern: Überschreitungen der Ratenbegrenzung werden jetzt im Admin-Aktivitätsprotokoll erfasst.'],
+    },
+  },
+  {
     version: '0.31.3-beta',
     date: '2026-07-31',
     highlights: {
