@@ -211,7 +211,10 @@ export default function AdminAnnouncementsPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={a.imageUrl}
-                      alt={t.announcements.image}
+                      // Decorative here: the announcement text right above it is
+                      // the content. A label like "Image (optional)" would just be
+                      // noise for a screen reader.
+                      alt=""
                       className="mt-2 max-h-40 rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
                     />
                   )}
