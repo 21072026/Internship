@@ -116,7 +116,14 @@ export async function pollInboundMailbox(): Promise<PollSummary> {
           logger.error('Inbound mail processing failed', { uid, error: String(e) });
         }
         if (handled) {
-          await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+          // A failure to flag must not abort the rest of the batch. The reply is
+          // already stored, and the next tick re-reads this mail and no-ops on
+          // the Message-ID guard rather than duplicating it.
+          try {
+            await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
+          } catch (e) {
+            logger.error('Could not flag inbound mail as seen', { uid, error: String(e) });
+          }
         }
       }
     } finally {
