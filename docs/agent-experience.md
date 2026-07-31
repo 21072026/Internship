@@ -1473,3 +1473,61 @@ gerek yok — ama dizi uzunluğu diller arasında tutarlı olmalı, onu kontrol 
 **`npm install` lock'taki sürümü de düzeltiyor.** Kurulum öncesi `package-lock.json`
 `0.30.1-beta`de kalmıştı (`package.json` 0.31.4'teyken); install sonrası ikisi de yeni
 sürüme geldi — bu hunk gürültü değil, commit'e dahil edilmeli.
+
+## 2026-07-31 — Güvenlik denetimi #951: 8 epic'i tek oturumda kapatmak
+
+**Rapordaki "fixAvailable: true"ya güvenme, kendin doğrula.** #882 `next`/`postcss`/
+`sharp`'ı "majör gerekmiyor" grubuna koymuştu, `npm audit` de öyle diyordu. Gerçekte
+audit'in önerdiği "düzeltme" **`next@9.3.3`'e düşmekti**; `next@15.5.22` `postcss@8.4.31`
+ve `sharp@0.34.5`'i tam sürüm sabitliyor ve **Next 16.2.12 de aynı ikisini sabitliyor**
+(kurup build alarak doğruladım — temiz derledi, ama audit tablosu değişmedi). Tek çözüm
+`overrides` oldu. Bir denetim raporu ne kadar iyi yazılmış olursa olsun, paket
+gerçekliği aylar içinde kayıyor.
+
+**`overrides` + doğrudan bağımlılık = `EOVERRIDE`.** `postcss` hem devDependency hem
+next'in geçişli bağımlılığı. npm, doğrudan aralıkla çelişen bir override'ı reddediyor.
+Sıra önemli: önce doğrudan aralığı yükselt (`^8` → `^8.5.18`), sonra aynı aralıkla
+override ekle.
+
+**Fail-closed varsayılan bazen yanlış karar.** `/api/health` detayını (#897) doğrudan
+kapatmak doğru refleks gibi görünüyor — ama prod **ve** preview deploy drift gate'leri
+`sha`'yı tam o uçtan okuyor. Kapatmak merge anında ikisini birden kör ederdi ve secret'ı
+ekleyecek olan ben değilim. Doğru hamle: kapıyı yaz, boru hattını uçtan uca bağla
+(`deploy-prod.sh` container'a geçiriyor, iki gate de env dosyasından okuyup header
+gönderiyor), varsayılanı eski davranışta bırak ve **PR'da operatör aksiyonu olarak
+işaretle**. Sessizce fail-open bırakmakla, gürültüyle fail-closed yapmak arasında üçüncü
+bir yol var.
+
+**İçe aktarma döngüsü, iki iyi fikrin kesişiminde çıkar.** Rate limiter aşımları
+`logActivity` ile yazmaya başladı (#864); aynı gün `logActivity` IP kaydetmeye başladı
+(#881) ve IP `rateLimit.ts`'teydi. `clientIp()`'i `src/lib/clientIp.ts`'e taşıyıp eski
+yerinden re-export etmek hem döngüyü kırdı hem tek bir çağıranı değiştirmedi.
+
+**NextAuth `authorize(credentials, req)` WHATWG `Request` vermiyor** — düz bir header
+nesnesi veriyor, `events.signIn/signOut` ise hiçbir şey vermiyor. Küçük bir
+`HeaderSource` arayüzü + `headerSource()` adaptörü ikisini de çözüyor. Başarılı giriş
+kaydını `events.signIn`'den `authorize()`'a taşımak gerekti (IP orada var); event
+tarafında `account?.provider === 'credentials'` kontrolüyle çift kayıt engellendi.
+
+**Aynı bucket'ı paylaşan e2e testleri aynı dosyada kalmalı.** Rate limit spoof testi
+(#859) mevcut flood testiyle aynı süreç içi sayacı kullanıyor. Ayrı dosyaya koymak,
+Playwright'ın dosya sırasına bağlı sessiz bir kırılganlık yaratırdı. Ayrıca `@smoke`
+alt kümesinde **tek başına** koştuğunda da anlamlı kalmalı: "hepsi 429" yerine "en az
+bir 429" assertion'ı iki senaryoda da doğru.
+
+**Yeni bir güvenlik başlığını test ederken ortamı da ona göre kur.** `TRUSTED_PROXY_COUNT=0`
+ve `HEALTH_TOKEN` `playwright.config.ts`'in webServer `env`'ine eklendi — ikisi de
+Playwright'ın gerçekten içinde olduğu topolojinin **doğru** ayarı (araya nginx girmiyor),
+ve o ayar olmadan yazdığın assertion'lar boşa düşüyor.
+
+**`git add -A` + rebase conflict = bozuk commit.** Bir `--continue` sırasında
+`package.json` hâlâ conflict marker'ı taşırken commit'lendi; `npm pkg set` `EJSONPARSE`
+ile patladı ama rebase yine de "başarılı" dedi. Conflict çözerken `git add -A` yerine
+dosya dosya eklemek ya da eklemeden önce `grep -c '<<<<<<<'` çalıştırmak gerekiyor.
+
+**Uzun oturumda `main` altından kayar.** 12 PR boyunca başka oturumlardan 4 PR daha
+main'e indi; her biri `CHANGELOG.md` + `package.json` sürümünde conflict üretti. Stack'i
+küçük tutmak (her PR merge olur olmaz bir sonrakini rebase etmek) ve conflict'i mekanik
+çözmek işe yaradı — ama en temizi, geride kalmış bir dalı **yeniden kurmak**: `git
+checkout -b yeni origin/main` + ilgili dosyaları `git checkout <eski-dal> -- <dosyalar>`.
+Squash-merge sonrası eski commit'i yeniden oynatmaya çalışmaktan çok daha az acı verdi.
