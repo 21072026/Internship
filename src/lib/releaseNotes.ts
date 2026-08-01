@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.35.3-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'You can now paste an image straight into an announcement, just like in messages — take a screenshot, press paste in the message box, and it is attached. Choosing a file from disk still works as before.',
+      ],
+      tr: [
+        'Artık duyuruya doğrudan görsel yapıştırabilirsiniz, tıpkı mesajlardaki gibi — ekran görüntüsünü alıp mesaj kutusunda yapıştırın, görsel eklenir. Dosya seçerek eklemek de eskisi gibi çalışıyor.',
+      ],
+      de: [
+        'Sie können ein Bild jetzt direkt in eine Ankündigung einfügen, genau wie in Nachrichten — Screenshot machen, im Nachrichtenfeld einfügen, fertig. Eine Datei auszuwählen funktioniert weiterhin wie bisher.',
+      ],
+    },
+  },
+  {
     version: '0.35.2-beta',
     date: '2026-08-01',
     highlights: {

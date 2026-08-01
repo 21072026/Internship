@@ -97,6 +97,78 @@ test('the image endpoint is not readable without a session', async ({ page, brow
   }
 });
 
+test('an image pasted into the message box is attached to the broadcast', async ({ page }) => {
+  const adminEmail = uniqueEmail('annimg-paste');
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Ann Image Paste Admin');
+  const uniqueText = `Pasted image announcement ${Date.now().toString(36)}`;
+
+  try {
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
+    await page.goto('/admin/announcements');
+
+    const box = page.getByTestId('announcement-text');
+    await box.fill(uniqueText);
+
+    // Playwright cannot write an image to the OS clipboard, so the paste is
+    // driven by dispatching the event the composer actually listens to, with a
+    // real DataTransfer carrying a File — the same shape a screenshot paste has.
+    await box.evaluate((el, b64) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const dt = new DataTransfer();
+      dt.items.add(new File([bytes], 'image.png', { type: 'image/png' }));
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    }, PNG_1X1.toString('base64'));
+
+    await expect(page.getByTestId('announcement-image-preview')).toBeVisible();
+    // The paste must not also dump binary text into the message box.
+    expect(await box.inputValue()).toBe(uniqueText);
+
+    const postDone = page.waitForResponse(
+      (r) => r.url().includes('/api/admin/announcements') && r.request().method() === 'POST'
+    );
+    await page.getByRole('button', { name: /^Broadcast$/i }).click();
+    expect((await postDone).status()).toBe(201);
+
+    const record = await prisma.announcement.findFirst({
+      where: { text: uniqueText },
+      include: { image: { select: { contentType: true, size: true } } },
+    });
+    expect(record?.image?.contentType).toBe('image/png');
+    expect(record?.image?.size).toBe(PNG_1X1.length);
+  } finally {
+    await prisma.announcement.deleteMany({ where: { text: uniqueText } });
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('pasting plain text still types into the message box', async ({ page }) => {
+  const adminEmail = uniqueEmail('annimg-pastetext');
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Ann Paste Text Admin');
+
+  try {
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
+    await page.goto('/admin/announcements');
+
+    const box = page.getByTestId('announcement-text');
+
+    // A synthetic ClipboardEvent never performs the browser's default insert, so
+    // this asserts the handler's actual contract instead: a text paste is left
+    // alone (not preventDefault-ed), which is what lets the textarea handle it.
+    const swallowed = await box.evaluate((el) => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', 'pasted plain text');
+      const event = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+
+    expect(swallowed).toBe(false);
+    await expect(page.getByTestId('announcement-image-preview')).toHaveCount(0);
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+});
+
 test('a non-image file is refused before the broadcast is sent', async ({ page }) => {
   const adminEmail = uniqueEmail('annimg-reject');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Ann Image Reject Admin');
