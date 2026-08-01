@@ -6,6 +6,34 @@ By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md)
 ([Türkçe](docs/code-of-conduct.tr.md), [Deutsch](docs/code-of-conduct.de.md)).
 Report unacceptable behaviour to **ersahin@bcsit-gmbh.de**.
 
+## Contributor terms (IP)
+
+Read this before your first pull request. Opening a PR means you accept these terms —
+the PR template asks you to confirm it.
+
+- **Sole rights holder.** All rights in Internship CRM are held by **Mehmet Erşahin**
+  (a natural person, not a company). Only the rights holder may license the software.
+- **Your contribution.** You license your contribution under **AGPL-3.0-or-later** and
+  grant the rights holder an **exclusive, perpetual, worldwide, sub-licensable right to
+  use it** (assignment of economic rights where the law permits; under German copyright
+  law the copyright itself cannot be transferred, § 29 UrhG, so the mechanism is an
+  exclusive exploitation right, § 31 (3) UrhG).
+- **Dual licensing.** You agree the rights holder may also offer your contribution under
+  a separate **commercial license**, without AGPL obligations.
+- **No claims.** Contributions are made within the mentorship, without additional
+  remuneration, and give rise to **no copyright, license, fee, partnership, or equity
+  claim** over the application.
+- **Portfolio grant-back.** You keep the right to present your own contributions in a
+  personal portfolio or for educational purposes (non-commercial).
+- **Originality.** You confirm your contribution is your own work and does not infringe
+  third-party rights. Don't paste in code you don't have the right to contribute.
+- **Beyond the mentorship.** Paid, external, or corporate contributors sign a short
+  written agreement instead of relying on the PR confirmation — see
+  [docs/legal/cla-contributor-agreement.md](docs/legal/cla-contributor-agreement.md).
+
+Trademarks are **not** covered by the AGPL: the "Internship CRM" name, logo, and the
+`crm.ersah.in` domain stay with the rights holder (see [README](README.md#trademarks)).
+
 ## Workflow
 
 1. **Branch** off `main`: `feat/<issue>-slug`, `fix/<issue>-slug`, `docs/...`, `test/...`.
