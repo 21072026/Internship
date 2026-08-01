@@ -1913,3 +1913,19 @@ dışa aç, `signInAsFreshUser` onu çağırsın — guard'lar tek yerde kalır.
 **Süreç notu:** iki iş (kırmızı onarımı + flaky onarımı) ayrı PR'lara ayrıldı. Aynı dala
 yığmak, kırmızı düzeltmesinin merge'ünü flaky işinin CI'sine bağlardı; `git stash` + yeni
 dal (`git checkout -B <yeni> origin/main` + `stash pop`) bunu 10 saniyede ayırıyor.
+
+**Ek ders (aynı oturum, ilk denemem kırdı):** flaky'leri helper'a taşırken
+`submitSignInForm`'u "about:blank → sadece session cookie'sini sil → /auth/signin" olarak
+yazmak `two-factor.spec.ts`'i **deterministik olarak** bozdu (failed,failed) — parola alanı
+hiç gelmedi. Sebep: `/auth/signin` girişi tamamlarken `/api/auth/session`'ı yoklayıp
+`window.location.assign(roleHome)` yapıyor. `waitForURL()` dönüyor ama **terk edilen sayfa
+hâlâ session okuyor**; `clearCookies()`'ten sonra düşen bir yanıt cookie'yi geri yazıyor,
+sıradaki `/auth/signin` `authenticated` görüp dashboard'a `router.replace()` ediyor.
+Ekranda bunu söyleyen hiçbir şey yok — belirti sadece "parola alanı 15 sn'de gelmedi".
+Çözüm: cookie'yi düşürmeden **önce** çıkan sayfanın susmasını bekle (`networkidle`), form
+yine yoksa cookie'yi bir kez daha düşürüp yeniden yükle.
+
+İki genel kural: (1) blanket `clearCookies()`'i seçmeli silmeyle değiştirirken, o blanket
+silmenin **yan etkisiyle** neyi maskelediğini varsayma — doğrula; (2) grep'li dispatch
+koşusu bittikten sonra logu **oku**, "yaklaşım doğru" diye peşinen yeşil ilan etme. Bu
+oturumda 8 testten 7'si geçmişti; kalan 1'i sadece log gösterdi.
