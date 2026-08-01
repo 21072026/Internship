@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.38.1-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Availability: the "Add" button now works for admins too. Adding a slot did save it, but the list underneath kept showing "Your slots (0)", so it looked like nothing happened. Any slots you added earlier were never lost — they are all visible again.',
+      ],
+      tr: [
+        'Müsaitlik: "Ekle" düğmesi artık yöneticiler için de çalışıyor. Saat aslında kaydediliyordu, ama alttaki liste "Saatlerin (0)" göstermeye devam ettiği için hiçbir şey olmamış gibi görünüyordu. Daha önce eklediğiniz saatler kaybolmadı — hepsi yeniden görünüyor.',
+      ],
+      de: [
+        'Verfügbarkeit: Die Schaltfläche „Hinzufügen“ funktioniert jetzt auch für Admins. Das Zeitfenster wurde zwar gespeichert, die Liste darunter zeigte aber weiterhin „Deine Zeitfenster (0)“ — es sah also aus, als passiere nichts. Früher angelegte Zeitfenster gingen nie verloren und sind wieder sichtbar.',
+      ],
+    },
+  },
+  {
     version: '0.38.0-beta',
     date: '2026-08-01',
     highlights: {
