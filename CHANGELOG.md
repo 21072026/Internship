@@ -8,6 +8,30 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.37.0-beta] - 2026-08-01
+
+### Added
+- **A view switch for admins who also mentor** (`ModeSwitcher`, pinned above the account
+  menu in both the admin and the mentor shell, `ADMIN`-only). An admin was already
+  *allowed* into `/mentor/*` — the mentor layout's role check has always accepted `ADMIN`
+  — but nothing in the UI led there, so the only way in was to follow a link that happened
+  to point at it (a reminder notification, say), and the entire shell would change with no
+  visible cause. Now it is a deliberate, reversible control, and the active segment
+  doubles as the "why does this look different" marker that was missing.
+- The switch **keeps your place**: sections that exist in both shells map 1:1
+  (`/admin/board` ⇄ `/mentor/board`, and the same for projects, meetings, calendar,
+  email, mentee-activity, analytics), `candidates`/`mentorship` map to `mentees` and back,
+  and anything without a counterpart falls back to the target dashboard rather than
+  guessing (`src/lib/appMode.ts`).
+
+### Notes
+- The mode is **derived from the URL**, never stored. A persisted flag is exactly what
+  would let the sidebar, the page and the address bar disagree after an inbound link drops
+  an admin into the other shell — the bug this feature grew out of. No schema change, no
+  session change, no new API surface: an admin in mentor view is just an admin on a
+  `/mentor` route, with the same per-mentor data scoping (`where: { mentorId }`) every
+  mentor page already applies.
+
 ## [0.36.0-beta] - 2026-08-01
 
 ### Added

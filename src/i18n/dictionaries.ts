@@ -614,6 +614,13 @@ const en = {
     return: 'Return to your account',
     stopFailed: 'Could not return to your account. Please try again.',
   },
+  modeSwitch: {
+    label: 'View as',
+    admin: 'Admin',
+    mentor: 'Mentor',
+    switchTo: 'Switch to the {mode} view',
+    mentorHint: 'Mentor view: only the mentees you mentor yourself.',
+  },
   board: {
     moveTo: 'Move to stage',
     stageFilter: 'Stage',
@@ -2272,6 +2279,13 @@ const tr: Dict = {
     return: 'Kendi hesabına dön',
     stopFailed: 'Kendi hesabına dönülemedi. Lütfen tekrar deneyin.',
   },
+  modeSwitch: {
+    label: 'Görünüm',
+    admin: 'Yönetici',
+    mentor: 'Mentor',
+    switchTo: '{mode} görünümüne geç',
+    mentorHint: 'Mentor görünümü: yalnızca kendi mentorluk yaptığın mentee’ler.',
+  },
   board: {
     moveTo: 'Aşamaya taşı',
     stageFilter: 'Aşama',
@@ -3927,6 +3941,13 @@ const de: Dict = {
     viewingAs: 'Du siehst die App als {name}.',
     return: 'Zu deinem Konto zurückkehren',
     stopFailed: 'Rückkehr zu deinem Konto fehlgeschlagen. Bitte versuche es erneut.',
+  },
+  modeSwitch: {
+    label: 'Ansicht',
+    admin: 'Admin',
+    mentor: 'Mentor',
+    switchTo: 'Zur {mode}-Ansicht wechseln',
+    mentorHint: 'Mentoren-Ansicht: nur die Mentees, die du selbst betreust.',
   },
   board: {
     moveTo: 'In Phase verschieben',

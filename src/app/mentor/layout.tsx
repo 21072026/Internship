@@ -15,6 +15,7 @@ import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
+import { ModeSwitcher } from '@/components/ModeSwitcher';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -131,6 +132,10 @@ export default async function MentorLayout({ children }: { children: React.React
           </Link>
           <InstallAppButton />
         </nav>
+
+        {/* Admins reach this shell to work their own mentees; the switch is both
+            their way back and the marker that says why the layout looks different. */}
+        {session.user.role === 'ADMIN' && <ModeSwitcher />}
 
         <AccountMenu
           name={session.user.name}
