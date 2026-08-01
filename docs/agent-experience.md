@@ -1775,3 +1775,59 @@ Görsel için sentetik `ClipboardEvent` + `DataTransfer` gönder (`el.dispatchEv
 `clipboardData`'yı okuduğu için bu gerçek yolu kapsıyor. Ama **sentetik olay tarayıcının
 varsayılan yapıştırmasını tetiklemiyor**, o yüzden "düz metin hâlâ kutuya yazılıyor" testi
 `toHaveValue` ile yazılamaz; onun yerine sözleşmeyi ölç: `event.defaultPrevented === false`.
+
+---
+
+## 2026-08-01 — Admin ↔ mentor görünüm anahtarı (#1014, 0.37.0-beta)
+
+**"Garip bir hata" bazen zaten var olan bir yetki + eksik bir arayüz.** Kullanıcı,
+bildirime tıklayınca admin panelinin birden mentör paneline dönüşmesini hata sandı.
+Kod tarafında hata yoktu: `src/app/mentor/layout.tsx`'in rol kontrolü **her zaman**
+`ADMIN`'i kabul ediyordu, yani `/mentor/*` çoktan erişilebilirdi. Eksik olan tek şey
+oraya götüren bir kontrol ve "şu an oradasın" işaretiydi. **Yeni bir özellik yazmadan
+önce mevcut rol guard'larını oku** — bazen iş, yeni yetki eklemek değil, var olanı
+görünür kılmak.
+
+**Modu URL'den türet, saklama.** Cookie/DB'de "mentör modundayım" bayrağı tutmak, tam
+da bu senaryoyu (dışarıdan gelen bir link seni öbür kabuğa düşürüyor) kenar çubuğu ile
+adres çubuğunun çelişmesine çeviriyordu. `modeOf(pathname)` + `counterpartPath()`
+(`src/lib/appMode.ts`) ile şema, session ve API yüzeyi hiç değişmeden çözülüyor.
+
+**Sürüm çakışması artık kural, istisna değil.** Dalı açtığımda main 0.35.3-beta idi;
+PR'ı açana kadar paralel bir oturum **0.36.0-beta**'yı (#976 mentör global arama)
+shiplemişti ve ben de 0.36.0-beta'ya bump etmiştim. Ders: **bump'ı rebase anında
+doğrula**, dal açılışında değil — `git show origin/main:package.json | grep version`.
+Aynı gün main 8 commit ilerledi (dependabot + iki feature); `git diff origin/main`
+sana *kendi* commit'ini değil, main'in de ilerlemesini gösterir — kendi diff'ini
+görmek için `git show --stat HEAD` ya da `git diff origin/main..HEAD` kullan.
+
+**Smoke olmayan yeni spec'leri ucuza koştur:** `e2e.yml`'nin `workflow_dispatch`
+`grep` girdisi 4-shard e2e-full'e gerek bırakmıyor —
+`gh workflow run e2e.yml --ref <dal> -f grep='<başlık regex>'` üç testi 11.5 sn'de
+koşturdu. **Ama logda `Running N tests` satırını doğrula**: yanlış yazılmış bir grep
+0 test koşup yeşil döner, yani sahte yeşil.
+
+**`gh pr merge` worktree'de "başarısız" görünüp aslında merge edebiliyor.** Başka bir
+worktree `main`'i tuttuğunda `fatal: 'main' is already used by worktree ...` hatası
+alıyorsun — ama bu hata **uzaktaki merge'den sonra**, yerel checkout adımında oluşuyor.
+Tekrar denemeden önce `gh pr view <n> --json state,mergedAt` ile bak (bende MERGED'di);
+sonra uzak dalı elle sil:
+`gh api --method DELETE repos/O/R/git/refs/heads/<dal>`.
+
+**DB'siz makinede görsel doğrulama.** Bu oturumdaki Mac'te ne MySQL ne Docker vardı,
+yani giriş gerektiren ekran açılamıyor. Salt CSS/yerleşim için işe yarayan yol:
+projenin **gerçek** Tailwind'ini statik bir mock'a derle —
+`npx tailwindcss -i src/app/globals.css -o out.css --content mock.html` — CSS'i inline
+et, `python3 -m http.server` ile servis et, açık+koyu tema ekran görüntüsü al. `globals.css`'teki
+dark-mode retint tuzağını DB olmadan yakalıyor. (Mock'a `<meta charset="utf-8">` koymayı
+unutma, yoksa Türkçe dizeler mojibake görünür ve olmayan bir hatayı kovalarsın.)
+
+**Worktree'de `npm run lint` yanıltıcı:** `.claude/worktrees/` repo'nun *içinde* olduğu
+için üst dizinin `.eslintrc.json`'ı da yükleniyor ve ESLint
+`Plugin "@next/next" was conflicted between ...` ile ölüyor. Bu senin değişikliğinle
+ilgili değil; `npm run build` ve CI'ya güven.
+
+**Bayat Prisma client'ın imzası:** dokunmadığın dosyalarda (`src/lib/auth.ts`,
+`announcements/route.ts`, `src/lib/activity.ts`) ~18 hayalet TS hatası. `npm install &&
+npx prisma generate` temizliyor. CLAUDE.md bunu söylüyor ama *belirti* şekli — "hiç
+açmadığım dosyalar kırmızı" — teşhisi tek bakışta veriyor.
