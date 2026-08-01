@@ -82,25 +82,22 @@ and receives a non-exclusive grant-back for non-commercial portfolio use.
 Contributions are made without additional remuneration within the mentorship.
 Governed by German law.
 
-## Opsiyonel: uygulama içi kabul takibi (ileride, gerekirse)
-Zorunlu değil (PR onayı + kağıt/e-imza yeterli). İstenirse basit bir model:
+## Uygulama içi kabul (planlandı)
 
-```prisma
-model ContributorAgreement {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  version   String   // sözleşme metni sürümü
-  signedAt  DateTime @default(now())
-  ipHash    String?  // imza anındaki IP (kanıt)
-}
-```
-Onboarding akışına "katkı şartlarını okudum ve kabul ediyorum" adımı eklenebilir
-(kod işi; ayrı issue).
+Maintainer kararı: geliştiriciler zaten platforma kaydolduğu için onay **uygulama içine**
+alınacak — kayıt/onboarding'de platform şartları, bir projeye eklenirken o projenin
+şartları. Elektronik onay hukuken geçerlidir; ancak tek bir "gelecekteki tüm katkılarım"
+onayı yerine kapsamı belirli, tekrarlanan bir onay zinciri kurulur (§ 40 UrhG).
+Tasarım, şema ve uygulama dilimleri: **[contributor-terms-in-app.md](contributor-terms-in-app.md)**.
+
+Kağıt/e-imza yalnızca **mentorluk dışı** katkıcılar (ücretli, harici, ajans, kurumsal) için
+gerekli kalır.
 
 ## Aksiyon listesi
 - [x] Hak sahibini tek isimde sabitle (Mehmet Erşahin) — `LICENSE`, `README.md`,
       `package.json` ve bu doküman.
 - [x] Gelecek katkılar için PR şablonuna katkı şartları onayı ekle.
-- [ ] Metni avukata onaylat (özellikle § 29 / § 31 UrhG ifadeleri ve madde 5).
+- [x] Uygulama içi kabul akışını tasarla — [contributor-terms-in-app.md](contributor-terms-in-app.md).
+- [ ] Metni avukata onaylat (özellikle § 29 / § 31 / § 40 UrhG ifadeleri ve madde 5).
 - [ ] Mentorluk dışı (ücretli/harici) bir katkıcı gelirse yazılı sözleşme imzalat.
-- [ ] İstenirse onboarding'e uygulama içi kabul adımı ekle (ayrı issue).
+- [ ] Uygulama içi kabul akışını kodla (3 dilim — tasarım dokümanındaki issue'lar).

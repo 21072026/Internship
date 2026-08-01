@@ -79,7 +79,7 @@ bulundurmak yeterlidir.
 - [x] Tek hak sahibini her yerde sabitle (`LICENSE`, `README.md`, `package.json`, CLA).
 - [x] Marka hakkı notunu ekle (`README.md`, `LICENSE` başlığı).
 - [x] Katkı şartlarını gelecek katkılar için yazılı hale getir (CONTRIBUTING + PR şablonu).
-- [ ] Bir sayfalık **ticari lisans şablonu** hazırlat (kapsam, süre, destek, sorumluluk
-      sınırı, fiyat) — ilk talep gelmeden önce hazır olsun.
+- [x] **Ticari lisans şablonu** taslağı hazır —
+      [commercial-license-template.md](commercial-license-template.md) (avukat turu bekliyor).
 - [ ] Premium/kapalı modül sınırını Faz 3'e girmeden yazılı olarak belirle.
 - [ ] Ürün içine "kaynak kodu" bağlantısı ekle (küçük UI işi; ayrı issue).
