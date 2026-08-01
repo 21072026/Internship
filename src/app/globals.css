@@ -6,10 +6,18 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
+    /*
+     * Height of the tallest visible fixed bottom bar (cookie banner, mobile
+     * quick-action bar). Published by useFixedBottomInset; 0px when none is
+     * showing, so no page carries a stray gap. Keeps the primary action at the
+     * end of a page scrollable above the bar instead of buried under it (#935).
+     */
+    --fixed-bottom-inset: 0px;
   }
 
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
+    padding-bottom: var(--fixed-bottom-inset);
   }
 }
 

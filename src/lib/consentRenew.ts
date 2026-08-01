@@ -1,14 +1,17 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { requireServerSecret } from '@/lib/serverSecret';
 
 // Signed token embedded in retention re-consent emails: renew+<userId>.<sig>.
 // The signature is an HMAC of the user id with the server secret, so the link
 // is unguessable and tamper-evident and needs no extra DB table (mirrors
 // lib/replyToken). Renewing is a deliberate POST from the landing page, so the
 // GET link itself never mutates state.
-const secret = () => process.env.NEXTAUTH_SECRET || 'dev-secret';
-
+// No fallback secret: a public default would make every token forgeable (#870).
 function sign(userId: string): string {
-  return createHmac('sha256', secret()).update(`consent-renew:${userId}`).digest('hex').slice(0, 32);
+  return createHmac('sha256', requireServerSecret())
+    .update(`consent-renew:${userId}`)
+    .digest('hex')
+    .slice(0, 32);
 }
 
 export function makeConsentRenewToken(userId: string): string {

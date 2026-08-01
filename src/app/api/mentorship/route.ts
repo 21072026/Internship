@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { withTenantScope } from '@/lib/orgContext';
+import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
@@ -39,16 +40,16 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(pageParam || '1', 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10) || 20));
 
-    const where: Record<string, unknown> = {};
-
-    if (session.user.role === 'MENTOR') {
-      where.mentorId = session.user.id;
-    } else if (session.user.role === 'MENTEE') {
-      where.menteeId = session.user.id;
-    } else if (session.user.role === 'COMPANY') {
-      // Read-only: only relations linked to this company.
-      where.companyId = session.user.companyId ?? '__none__';
+    // Fail-closed scoping (#848): SOURCE was missing from this chain and read
+    // every relation in the tenant. Roles without a defined scope are denied.
+    // COMPANY stays read-only and limited to its own company's relations.
+    const scope = await scopeForRole(session.user, 'relation');
+    if (!scope) {
+      await logScopeDenial(session.user, 'GET /api/mentorship');
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    const where: Record<string, unknown> = { ...scope };
 
     if (status) {
       where.status = status;

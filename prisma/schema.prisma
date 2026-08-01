@@ -185,6 +185,11 @@ model User {
   // Optional TOTP two-factor auth. The secret is only meaningful once enabled.
   twoFactorEnabled        Boolean       @default(false)
   twoFactorSecret         String?
+  // Highest TOTP time step already accepted for this account. Three codes are
+  // valid at any moment (±1 step for clock skew, ~90s), so without this a code
+  // captured by a phishing page or over someone's shoulder could be replayed
+  // inside that window (#865). A code must beat this value to be accepted.
+  lastTotpStep            Int?
   // "Sign out of all devices": any JWT issued before this instant is rejected at
   // the session callback. Null = never revoked. Set to now() to invalidate every
   // existing session (including the current one) on demand.
@@ -492,7 +497,27 @@ model Announcement {
   emailedCount   Int      @default(0)
   createdAt      DateTime @default(now())
 
+  // Optional attached image. Deliberately NOT mirrored into an `imageUrl`
+  // column: the URL is a pure function of the announcement id
+  // (/api/announcements/<id>/image), so storing it would only add a second write
+  // and a field that can disagree with reality.
+  image AnnouncementImage?
+
   @@index([createdAt])
+}
+
+// An image attached to a broadcast announcement, stored in the database (same
+// approach as AvatarFile/CvFile — no object storage, so it survives container
+// redeploys). Served via /api/announcements/[id]/image.
+model AnnouncementImage {
+  id             String   @id @default(cuid())
+  announcementId String   @unique
+  contentType    String
+  size           Int
+  data           Bytes
+  uploadedAt     DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
 }
 
 // A user's profile picture, stored in the database (same approach as CvFile).
@@ -908,6 +933,11 @@ model MentorshipRelation {
   cohortId                String?
   startDate               DateTime         @default(now())
   status                  MentorshipStatus @default(ACTIVE)
+  // When the relation was marked COMPLETED. Anchors the post-mentorship CV and
+  // document access window (#854) — without it, "access ended six months ago"
+  // is unanswerable and mentors keep reading a former mentee's CV forever.
+  // Cleared if the relation is reopened as ACTIVE.
+  completedAt             DateTime?
   // Stage key. Free String (was the PipelineStatus enum) so tenants can define
   // their own stages (#747). The enum below is kept as the canonical default
   // key registry; values are unchanged for existing rows (ENUM→VARCHAR keeps
@@ -1222,6 +1252,12 @@ model ActivityLog {
   targetType String?
   targetId   String?
   detail     String?
+  // Where the action came from (#881). Both optional: existing rows predate the
+  // columns, and plenty of call sites (cron jobs, NextAuth event callbacks) have
+  // no Request to read them from. An incident review can't answer "was this
+  // really the user?" from actor + action alone.
+  ip         String?  @db.VarChar(64)
+  userAgent  String?  @db.Text
   createdAt  DateTime @default(now())
 
   @@index([actorId])

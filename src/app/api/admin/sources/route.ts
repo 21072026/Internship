@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 
@@ -68,6 +69,15 @@ export async function POST(request: Request) {
   if (existing) return NextResponse.json({ error: 'A source with that name already exists' }, { status: 409 });
   const source = await prisma.source.create({
     data: { name, contactName: contactName || null, contactEmail: contactEmail || null },
+  });
+  await logActivity({
+    action: 'source.created',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'source',
+    targetId: source.id,
+    detail: source.name,
+    request,
   });
   return NextResponse.json({ source }, { status: 201 });
   });

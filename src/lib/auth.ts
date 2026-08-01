@@ -4,7 +4,8 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
-import { verifyTotp } from '@/lib/totp';
+import { verifyTotpStep } from '@/lib/totp';
+import { headerSource } from '@/lib/clientIp';
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -26,7 +27,10 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
         totp: { label: 'Authenticator code', type: 'text' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
+        // NextAuth hands us a plain header bag, not a WHATWG Request; headerSource
+        // adapts it so the audit rows carry the origin IP/user-agent (#881).
+        const origin = headerSource(req?.headers as Record<string, string> | undefined);
         if (!credentials?.email || !credentials?.password) {
           throw new Error('Email and password are required');
         }
@@ -54,12 +58,16 @@ export const authOptions: NextAuthOptions = {
             level: 'warning',
             actorEmail: credentials.email,
             actorId: user?.id ?? null,
+            request: origin,
           });
           throw new Error(within.ok ? 'Invalid email or password' : 'Too many attempts. Please try again later.');
         }
 
-        // Successful auth — reset the failure counter.
-        clearRateLimit(failKey);
+        // NOTE: the failure counter is NOT cleared here. It used to be, which
+        // meant that once the password verified the 6-digit TOTP code below
+        // could be guessed without limit — the whole 10^6 space, as fast as the
+        // server would answer (#865). It is cleared only after the credential
+        // check is *completely* through, at the bottom of this function.
 
         // Verified-but-inactive is NOT the same as never-activated. Only block
         // inactive accounts: an active-but-unverified user may still sign in
@@ -80,10 +88,48 @@ export const authOptions: NextAuthOptions = {
         if (user.twoFactorEnabled && user.twoFactorSecret) {
           const code = (credentials.totp || '').trim();
           if (!code) throw new Error('2FA_REQUIRED');
-          if (!verifyTotp(user.twoFactorSecret, code)) {
-            throw new Error('Invalid authenticator code');
+
+          // Its own bucket, separate from the password one: a legitimate user
+          // fumbling their code shouldn't consume the password allowance, and
+          // an attacker past the password shouldn't get a fresh one.
+          const totpKey = `totp-fail:${email}`;
+          const step = verifyTotpStep(user.twoFactorSecret, code);
+          const replayed = step !== null && user.lastTotpStep !== null && step <= user.lastTotpStep;
+
+          if (step === null || replayed) {
+            const within = rateLimit(totpKey, { limit: 5, windowMs: 15 * 60 * 1000 });
+            await logActivity({
+              action: 'auth.totp_failed',
+              level: 'warning',
+              actorEmail: user.email,
+              actorId: user.id,
+              detail: replayed ? 'code already used' : 'invalid code',
+              request: origin,
+            });
+            // Same message either way — which of the two it was is the
+            // attacker's business to guess, not ours to confirm.
+            throw new Error(
+              within.ok ? 'Invalid authenticator code' : 'Too many attempts. Please try again later.'
+            );
           }
+
+          // Burn the step so the same code can't be used again inside the
+          // ±1-step acceptance window.
+          await prisma.user.update({ where: { id: user.id }, data: { lastTotpStep: step } });
+          clearRateLimit(totpKey);
         }
+
+        // Fully authenticated — now the failure counter can be reset.
+        clearRateLimit(failKey);
+
+        // Logged here rather than in events.signIn so the row carries the
+        // origin IP; the event callback has no request (#881).
+        await logActivity({
+          action: 'auth.login',
+          actorId: user.id,
+          actorEmail: user.email,
+          request: origin,
+        });
 
         return {
           id: user.id,
@@ -267,9 +313,17 @@ export const authOptions: NextAuthOptions = {
     },
   },
   events: {
-    async signIn({ user }) {
+    async signIn({ user, account }) {
+      // The credentials provider logs its own `auth.login` from authorize(),
+      // where the request headers are available and the row can carry an origin
+      // IP (#881). Events get no request, so logging here too would only add a
+      // duplicate with a blank origin.
+      if (account?.provider === 'credentials') return;
       await logActivity({ action: 'auth.login', actorId: user.id, actorEmail: user.email ?? null });
     },
+    // No Request is available in this callback, so sign-out rows carry no
+    // origin. Left as-is deliberately: a sign-out is not the event an incident
+    // review hinges on.
     async signOut({ token }) {
       await logActivity({
         action: 'auth.logout',

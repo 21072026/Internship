@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.30.1-beta] - 2026-07-31
+## [0.36.0-beta] - 2026-08-01
 
 ### Added
 - **Mentors get global search too.** `GlobalSearch` (previously admin-only) is now also
@@ -17,6 +17,597 @@ version is shown in the sidebar footer of every page (links to the
   `relationId`, so a mentor's search result opens `/mentor/mentees/<relationId>` instead
   of the admin candidate route. Admin search behaviour and response shape are unchanged.
   Input gained `data-testid="global-search-input"`.
+
+## [0.35.3-beta] - 2026-08-01
+
+### Added
+- **An announcement image can be pasted** into the message box, not only picked from
+  disk (`/admin/announcements`). A screenshot is the most common thing attached to a
+  broadcast, and "save to disk, then browse for it" was pure friction. Same gesture and
+  same implementation shape as the message composer (`MessageThreadView`): the paste
+  handler takes the first `image/*` item off `clipboardData`, renames it (clipboard
+  images all arrive as `image.png`), and runs it through the *existing* `pickImage()`,
+  so a pasted file gets exactly the same type/size/signature validation as a picked
+  one. A paste carrying no image is left alone — it is not `preventDefault`-ed, so
+  ordinary text paste keeps working.
+
+## [0.35.2-beta] - 2026-08-01
+
+### Fixed
+- **The chat frame's bottom edge now lands on the *visible* bottom** (#1009). Follow-up
+  to #1006, reported from an installed PWA on Android: the end of the composer (and the
+  last row of the inbox) sat behind the system navigation bar and could not be scrolled
+  into view. `100dvh` is the *layout* viewport, and an edge-to-edge PWA draws behind the
+  navigation bar, so it is ~48px taller than what you can see — and since the frame
+  fits `100dvh` exactly, the document has no overflow either, which is why nothing
+  scrolled. Two independent corrections, neither of which does anything when there is
+  nothing hidden:
+  - The frame subtracts `env(safe-area-inset-bottom)`, and `/messages` opts into real
+    inset values with a **route-scoped** `viewport-fit=cover` (`viewport` export in
+    `src/app/messages/layout.tsx`, so no other route changes behaviour). The header
+    picks up `env(safe-area-inset-top)` and the frame the left/right insets for
+    landscape notches. `max(--fixed-bottom-inset, env(safe-area-inset-bottom))` rather
+    than a sum — the cookie banner already pads itself past the inset (#935), so
+    subtracting both would leave a gap above it.
+  - New `useVisibleViewportHeight` publishes `min(innerHeight, visualViewport.height)`
+    as `--visible-viewport-height`, which the frame applies as a **`max-height`
+    clamp**. Being a clamp and not a second subtraction is the point: if both signals
+    report the same hidden strip, the smaller one simply wins instead of the strip
+    being deducted twice. Pinch-zoom (`scale > 1.01`) is ignored, and the clamp also
+    tracks the on-screen keyboard.
+- `e2e/mobile-chat-layout.spec.ts` grew two assertions: the frame's height equals the
+  visible height (a malformed `calc()` shows up immediately), and — reproducing the
+  reported condition through the same signal the shell listens to — with 48px of the
+  viewport hidden the whole composer still fits inside what is left. Negative control:
+  without the clamp the send button sits 630px into a 616px visible area. A third test
+  pins the `viewport-fit=cover` scoping (present on `/messages`, absent on `/mentor`).
+
+## [0.35.1-beta] - 2026-08-01
+
+### Changed
+- **Chat screens are a real app shell on a phone** (#1006). A thread was a plain
+  document: the page title, the bubble list (its own `max-h-[55vh]` scroller) and the
+  composer all scrolled *together*, so on an iPhone 13 the document overflowed by
+  ~1200px and writing a reply meant scrolling the page down while the bubbles scrolled
+  up — two nested scrolls for one conversation.
+  - New `MessagesShell` (used by `/messages/layout.tsx`) is, below `lg:`, a fixed-height
+    flex column — `calc(100dvh - var(--fixed-bottom-inset))`, so it also shrinks around
+    the cookie banner from #935 — with the content area as `min-h-0 flex-1`. The thread,
+    the support chat and the inbox fill that area; the bubble list is the only scroller
+    (`overscroll-contain`), the composer never moves, and the document does not scroll
+    at all. Desktop keeps the previous document flow and the `55vh` bubble box.
+  - The shell also renders the **mobile header** the message screens never had: a back
+    arrow (to the inbox, or to the role home when already there), the thread's title —
+    the person you are talking to — and a home shortcut. There is no sidebar below
+    `lg:`, so the browser's back button used to be the only way out.
+  - The pages drop their own heading on mobile (the header is the `<h1>` there), which
+    is what buys the list its space back. Rendered via `useIsNarrow()` rather than
+    `lg:hidden` so only one variant is ever in the DOM (strict-mode locators).
+  - `viewport.interactiveWidget = 'resizes-content'`: the on-screen keyboard now shrinks
+    the layout viewport instead of overlaying it, so a full-height screen keeps its
+    composer above the keyboard.
+  - New `e2e/mobile-chat-layout.spec.ts` asserts it geometrically at 390×664 (document
+    overflow ≤ 1px, composer on screen and clickable, the list is the scroller and stays
+    pinned to the newest message) plus header navigation, and that desktop still shows
+    the page heading. Verified by negative control: with the old document flow the same
+    spec reports 1208px of overflow.
+
+## [0.35.0-beta] - 2026-08-01
+
+### Added
+- **Announcements can carry an image.** The admin composer at `/admin/announcements`
+  gets an optional picker (PNG/JPEG/WebP/GIF, up to 5 MB) with a local preview, and
+  the image is rendered on `/announcements`, in the dashboard `AnnouncementsCard`
+  (as a thumbnail) and in the admin history list. Stored in the DB as a new
+  `AnnouncementImage` row — the same approach as `AvatarFile`/`CvFile`, so it
+  survives container redeploys — and served from `/api/announcements/<id>/image`
+  behind an authenticated session, with `nosniff`. No `imageUrl` column: the URL is
+  a pure function of the announcement id, so mirroring it would only add a second
+  write that can disagree with reality.
+- `POST /api/admin/announcements` now accepts `multipart/form-data` in addition to
+  JSON (the JSON contract is unchanged, so existing API clients and specs keep
+  working). When "also send by email" is checked, the image travels as an **inline
+  `cid:` attachment** — the serving route needs a session, so a URL would have
+  rendered as a broken image in every mail client. `sendEmail`'s `attachments`
+  therefore accept an optional `cid`.
+- Uploads are validated against a single source of truth (`src/lib/announcementImage.ts`)
+  on both the client and the server, so a rejected file is reported at the picker
+  rather than as a bare 400 after Broadcast. SVG is deliberately excluded (it can
+  carry `<script>`, and the blob is served from our own origin), and the content
+  signature is checked with the shared `contentMatchesType()` from `src/lib/fileType.ts`
+  (#888) — so a file that merely *claims* to be a PNG is refused, in the same words as
+  every other upload route, before any notification fan-out happens.
+
+## [0.34.0-beta] - 2026-07-31
+
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
+### Fixed
+- **No horizontal overflow at 320px** (#936). The app-shell mobile top bar was 2px
+  wider than the screen: the hamburger's `-mr-2` pushed it past the bar's `px-4`, and
+  the wordmark + beta badge + three icon buttons could not shrink. The wordmark
+  truncates now and the icon group is `flex-shrink-0`. Affects every role's mobile
+  header, not just the board.
+- **`e2e/board-a11y.spec.ts`** scoped its stage select to its own card. The admin board
+  lists every relation in the database, so the unscoped `getByLabel('Move to stage')`
+  broke (strict-mode, 2 elements) as soon as any other relation shared the stage —
+  latent flake, hit locally on the first run.
+- **Fixed bottom bars no longer cover page content on phones** (#935) — the cookie
+  banner is `fixed bottom-0`, and nothing reserved space for it, so on an iPhone 13
+  (390×664) it filled 40% of the viewport and painted over the *"Create Account"*
+  button on `/auth/register`: the first action in the product could not be completed
+  without dismissing the banner first.
+  - New `useFixedBottomInset(ref, active)` hook (`src/hooks/`): each fixed bottom bar
+    publishes its measured height (ResizeObserver, so a re-wrapped banner re-measures)
+    and the tallest one lands on `<html>` as `--fixed-bottom-inset`. `globals.css`
+    turns that into `body { padding-bottom }`, so the document grows and the content
+    scrolls above the bar; the inset returns to `0px` when the bar unmounts, leaving
+    no leftover gap. Deliberately shared so the mobile quick-action bar (#917) can
+    reuse it instead of inventing a second mechanism.
+  - The banner itself is more compact on small screens: tighter padding, body text
+    clamped to two lines below `sm:` (full sentence from `sm:` up — no new strings, so
+    EN/TR/DE stay in parity), and the three buttons in one `grid-cols-3` row instead
+    of wrapping to a second line. Desktop markup is unchanged.
+  - Safe-area support: the banner's bottom padding is
+    `max(0.75rem, env(safe-area-inset-bottom))`. Note the app does not set
+    `viewport-fit=cover`, so `env()` currently resolves to `0` — this is future-proofing
+    for when it does, not a live change.
+  - New `e2e/mobile-fixed-bars.spec.ts` — geometric (`boundingBox`) assertions rather
+    than screenshots: on `/auth/register`, `/auth/signin` and `/portal`, scrolling to
+    the bottom of the document leaves the primary action (and the whole `main` content
+    area) above the banner; the register CTA also survives a real `click()`, which
+    Playwright rejects when another element is on top of it; and dismissing the banner
+    drops the body inset back to `0px`.
+
+## [0.33.2-beta] - 2026-07-31
+
+### Security
+- **Open dependency advisories cut from 10 (1 critical, 7 high) to 5 (2 high, 3
+  moderate)** (#882). Closed: `js-yaml` (quadratic-CPU DoS via merge keys),
+  `brace-expansion` (exponential expansion), `next` 15.5.14 → 15.5.22 (middleware/
+  proxy bypass, cache poisoning, image-optimisation DoS — the middleware advisories
+  matter here because `src/middleware.ts` *is* a security control), `postcss`
+  (arbitrary file read via `sourceMappingURL`) and `sharp` (four libvips CVEs).
+  `next-auth`'s critical cleared with them.
+  **`npm audit` was misleading on three of these.** It reported `fixAvailable: true`
+  for next/postcss/sharp, but the "fix" it had in mind was downgrading to `next@9.3.3`
+  — Next pins `postcss@8.4.31` and `sharp@0.34.5` exactly, and **Next 16.2.12 pins the
+  same two** (verified by building against it). A major jump would not have closed
+  them; `overrides` was the only real fix. `postcss` is also a direct devDependency,
+  and npm refuses an override that conflicts with one, so its direct range moved to
+  `^8.5.18` first. The remaining five need major upgrades or have no published patch,
+  and each is written up with its exploitability in `docs/security-exceptions.md`.
+
+### Added
+- **`.github/workflows/security-audit.yml`** (#885) — `npm audit` on every PR, on
+  `main`, and weekly, with a severity table in the job summary. It fails only on
+  `critical`: the remaining `high` findings have no non-major fix today, and a gate
+  that is always red is one everyone learns to scroll past. Tightening it to `high`
+  is a one-word change once those land.
+- **`.github/dependabot.yml`** (#885) — weekly npm updates grouped into a single
+  minor/patch PR (twenty near-identical bumps is how a review queue starts getting
+  ignored) and monthly GitHub Actions updates. Majors are ignored on purpose: they
+  land as deliberate, tested work, not as an automated PR.
+- **`docs/security-exceptions.md`** — the accepted findings, each with why it can't
+  be fixed, whether it is reachable *in this application* (naming the code path, not
+  just the advisory), and what the permanent fix is.
+
+## [0.33.1-beta] - 2026-07-31
+
+### Added
+
+- **The role × endpoint read matrix is now executable** (#899).
+  `e2e/fixtures/authz-matrix.ts` declares, per role and per endpoint, whether the
+  answer should be `all`, `own` or `deny`; `e2e/authz-matrix.spec.ts` (`@smoke`)
+  enforces it. Crucially an `own` cell asserts **ownership of every row returned**,
+  not the status code — the original leak answered `200` throughout, so a
+  status-only test would have passed against it. The audit's worst finding survived
+  a *closed* RBAC epic (#278) precisely because nothing executable said "this role
+  must not see that".
+- **`.github/workflows/codeql.yml`** (#903) — static analysis on PRs, pushes to
+  `main`, and weekly, with the `security-extended` query set. Not a required check:
+  the first run on an existing codebase always surfaces a backlog, and blocking every
+  PR on triage that hasn't happened teaches people to ignore the gate. CodeQL cannot
+  see role-scoping bugs — that is what the matrix spec above is for; the two are
+  complements.
+
+### Documentation
+- **`SECURITY.md` now leads with a disclosure policy** (#901) — the file previously
+  described the security *model* and offered two lines on reporting ("email the
+  maintainer"). It now opens with GitHub private vulnerability reporting, response
+  targets, scope, and explicit limits for researchers (no load testing against live,
+  no touching real user data — the same line `docs/DATA_ACCESS_POLICY.md` draws for
+  contributors). The security overview follows underneath, unchanged.
+
+## [0.33.0-beta] - 2026-07-31
+
+### Fixed
+- **A reply sent from any address other than the one on your profile was silently
+  dropped.** Found on live traffic hours after the mail bridge shipped: a reply to
+  a notification never appeared in its thread. The bridge had done everything
+  right — mail fetched, token verified — and then refused it, because
+  `routeInboundEmail` identified the writer *only* by matching `From` against a
+  participant's account email. The notification had gone to the mentor's
+  `@bcsit-gmbh.de` address, which forwards to Gmail; replying from there put a
+  `@gmail.com` address in `From`, so the reply was rejected with
+  `403 Sender is not a participant`. Reproduced against production with the real
+  token. Anyone whose mail forwards — which is most people — hit this.
+  - The reply token now names the **recipient** as well as the thread:
+    `reply+<relationId>~<recipientUserId>.<hmac>`. When `From` matches a
+    participant that still wins; otherwise the reply is attributed to the user the
+    token was minted for, provided they are a participant. Logged when the weaker
+    signal is used.
+  - Not a weakening of the gate: the token is delivered only to that user's own
+    registered address, and whoever holds that mail can already take the account
+    over via a password reset, so this grants no new access. The residual exposure
+    is a *forwarded* notification — the recipient of the forward can post as the
+    original addressee. The fallback stays bounded to the token's own recipient: a
+    signed token naming a non-participant is still refused.
+  - Tokens already sitting in delivered mail carry a bare `relationId`; they keep
+    verifying and fall back to `From` matching only.
+  - `src/app/api/mentor/email/route.ts` now selects `mentee.id` so it can scope the
+    token it mints.
+- `e2e/inbound-email.spec.ts` covers all four paths: legacy token + participant,
+  legacy token + stranger (403), scoped token from an unknown address (threaded,
+  attributed to the token's user), and a scoped token naming an outsider (403).
+## [0.32.4-beta] - 2026-07-31
+
+### Added
+- **Code of Conduct, in three languages.** The repository had a README, licence,
+  contributing guide and security policy but no code of conduct — the one GitHub
+  community-standards item still missing. `CODE_OF_CONDUCT.md` (English) plus
+  [`docs/code-of-conduct.tr.md`](docs/code-of-conduct.tr.md) and
+  [`docs/code-of-conduct.de.md`](docs/code-of-conduct.de.md) cover contributors
+  *and* platform participants: the pledge, expected/unacceptable behaviour, scope,
+  a confidential reporting route (`ersahin@bcsit-gmbh.de`) and a four-step
+  enforcement ladder. Written for this project rather than dropped in verbatim —
+  it names the two things a generic template misses here, the power asymmetry in
+  the mentor ↔ mentee relationship and the misuse of role-granted access to
+  mentee PII. Linked from `README.md` and `CONTRIBUTING.md`.
+- **`/code-of-conduct` page** — the participant-facing summary of the same rules,
+  fully translated via the `codeOfConduct` dictionary block (EN/TR/DE) and linked
+  from the landing-page footer next to Privacy and Terms. Reporting is worded
+  against "an administrator of this instance" rather than a hard-coded address,
+  since every deployment has its own operator; the page links out to the full
+  repository version for contributors.
+
+## [0.32.3-beta] - 2026-07-31
+
+### Fixed
+- **"New chat" picker was empty for anyone in a project** — a regression from the
+  project group chats landing in the inbox. `/messages` builds the set of people the
+  viewer already has a DM with in order to exclude them from the picker, and that set
+  was taken from *all* the viewer's conversations. Since every project co-member is
+  also a participant of the shared project's GROUP chat, every candidate matched the
+  exclusion, `candidates` came out empty and `StartConversationPicker` rendered
+  `null` — so the "new chat" toggle disappeared entirely and no project DM could be
+  started from the UI. The exclusion set is now built from `DIRECT` conversations
+  only. Caught by `e2e/project-dm.spec.ts` in the scheduled full run.
+
+### Changed
+- The `E2E Tests` workflow takes an optional `grep` input on manual dispatch
+  (default `@smoke`), so a single non-smoke spec can be re-verified on a branch
+  without dispatching the 4-shard `e2e-full` suite and its summary email.
+
+## [0.32.2-beta] - 2026-07-31
+
+### Security
+- **Upload validation trusted the client's word about the file type** (#888). Every
+  route checked `file.type`, which is a multipart header the client writes; the bytes
+  were never looked at. That matters more here than usual because the declared type
+  is *stored* and returned on download — a mislabelled file arrives on an employer's
+  machine wearing the word "CV". `src/lib/fileType.ts` now checks the content
+  signature (dependency-free — a sniffing library would be one more parser inside the
+  trust boundary) on CV, avatar, document and message-attachment uploads. DOCX and
+  XLSX are both ZIP containers and cannot be told apart by signature, so the check is
+  "the bytes are a ZIP", not more: rejecting legitimate Office files would be the
+  worse failure. Support attachments already did this and are untouched.
+- **Stored uploads were served `inline` with a barely-sanitised filename** (#890).
+  CVs, documents and non-image message attachments now download as `attachment`
+  instead of rendering on our own origin; `src/lib/download.ts` strips control
+  characters (a `\r\n` in a name could have split the header), quotes, backslashes
+  and semicolons, bounds the length, and adds `filename*=UTF-8''…` so a Turkish CV
+  name survives the trip. Every file route now carries its own
+  `X-Content-Type-Options: nosniff` — the global one in `next.config.js` still
+  applies, this is the layer that survives a change to it. Avatars and images in a
+  message thread stay `inline`: the UI renders them.
+
+## [0.32.1-beta] - 2026-07-31
+
+### Security
+- **Webhook URLs were called from the server with no restriction (SSRF)** (#893).
+  Validation was `z.string().url()`, which happily accepts `http://127.0.0.1:3306`
+  and `http://169.254.169.254/latest/meta-data/` — the database and the cloud
+  metadata service, both reachable from the server's network position but not from
+  the admin's browser. `src/lib/ssrfGuard.ts` now requires https, no embedded
+  credentials, and a hostname that **resolves** to a public address (every answer
+  checked, not just the first — one private record is enough for a resolver to hand
+  `fetch` the internal one). Checked at registration *and* again at delivery: DNS
+  moves, and rows created before the guard existed were never checked at all. The
+  HMAC signature was never the problem and is untouched.
+- **`/api/health` told anonymous callers the version and git sha** (#897) — a
+  ready-made answer to "which CVEs apply to this deployment?". Setting `HEALTH_TOKEN`
+  narrows the anonymous response to `{ status, timestamp }` (all an uptime monitor
+  acts on) and releases the detail only to an admin session or a caller sending
+  `X-Health-Token`. **With the token unset the response is unchanged** — a
+  fail-closed default would blind the production and preview deploy drift gates,
+  which read `sha` from this endpoint, the moment it merged. `infra/deploy-prod.sh`
+  and both gates now send the header when the server env has it, so turning it on is
+  a one-variable change.
+
+### Fixed
+- **Outgoing HTTP had no timeouts** (#895). Webhook delivery ran under `Promise.all`
+  with no deadline, so one unresponsive receiver stalled the whole batch and held the
+  request handler open indefinitely — now 5s. The Anthropic SDK's default is 10
+  minutes, long enough for a user to give up first; the five AI clients now pass 60s,
+  which fits how long generation actually takes. `dispatchWebhook` still never throws:
+  an abort lands in the existing catch and is logged like any other delivery failure.
+
+## [0.32.0-beta] - 2026-07-31
+
+### Security
+- **Admin password reset handed out a live reset link and left no trace** (#875).
+  `POST /api/admin/users/[id]/reset-password` returned `resetUrl` in the response body
+  — so an account could be taken over with no access to the target's mailbox at all,
+  and the credential landed in reverse-proxy logs, browser devtools and any
+  screen-share. It also had **no target restriction**, so one admin could reset
+  another admin's password: horizontal admin takeover, which the impersonation
+  endpoint has always blocked outright. And it wrote **no audit record**. Now: the
+  response carries only `{ ok, emailSent }`, resetting another admin's password is
+  refused (an admin who has genuinely lost access uses forgot-password with their own
+  mailbox), and the action writes both an `AuditLog` row and an `admin.reset_password`
+  activity entry at warning level. The account owner is notified, mirroring
+  impersonation.
+
+### Added
+- **Audit records for privileged actions that had none** (#878): API key create/revoke,
+  webhook create/delete, invitation created, user activated/deactivated, organization
+  created/updated (warning level when the change touches SSO config — that can redirect
+  authentication itself), source created/deleted, company- and source-user accounts
+  created, and mentorship-request decisions.
+- **`ActivityLog` records where an action came from** (#881) — new optional `ip` and
+  `userAgent` columns, populated when the call site has a request. "Who did what"
+  could never answer "was this really the user?". Sign-in, failed sign-in, failed 2FA,
+  impersonation and every action above now carry an origin; the IP shows in
+  `/admin/activity` with the user-agent as its tooltip. Successful sign-in moved from
+  NextAuth's `events.signIn` into `authorize()` because the event callback has no
+  request — sign-out stays there and carries no origin, which is a deliberate
+  omission, not an oversight.
+
+### Changed
+- `clientIp()` moved from `src/lib/rateLimit.ts` to `src/lib/clientIp.ts` (re-exported
+  from its old home, so no call site changes). The rate limiter now logs breaches via
+  `logActivity`, and the audit logger needs the IP — leaving both in one module made
+  an import cycle.
+
+## [0.31.4-beta] - 2026-07-31
+
+### Added
+- **Rate-limit breaches are now recorded** (#864). `enforceRateLimit` returned 429
+  silently, so being under attack looked exactly like being idle. Breaches log
+  `ratelimit.exceeded` at warning level and show up on `/admin/activity`. Written
+  fire-and-forget so `enforceRateLimit` stays synchronous and its six callers are
+  untouched, and **coalesced to one row per bucket+IP per minute** — a flood is
+  precisely when this fires, and one DB insert per blocked request would make the
+  rate limiter an amplifier for the attack it exists to absorb.
+
+### Fixed
+- **The rate-limit bucket map grew for the life of the process** (#864).
+  `sweepRateLimitBuckets()` was written but never called anywhere. It now runs every
+  100 `rateLimit()` calls, plus immediately whenever the map passes 50 000 entries —
+  proportional to traffic, with no scheduler to own.
+
+## [0.31.3-beta] - 2026-07-31
+
+### Security
+- **The 2FA code could be guessed without limit** (#865). `clearRateLimit(failKey)`
+  ran the moment the *password* verified — before the TOTP check — so the 6-digit
+  code that followed had no limiter behind it at all: the whole 10⁶ space, as fast
+  as the server would answer. Since `twoFactorPolicy.ts` makes 2FA mandatory by role,
+  this hit the admin and mentor accounts hardest. The counter is now cleared only
+  after the credential check is completely through, and failed codes get their own
+  bucket (`totp-fail:<email>`, 5 per 15 min) so a user fumbling their code doesn't
+  spend the password allowance and an attacker past the password doesn't get a fresh
+  one. Failures are logged as `auth.totp_failed` at warning level.
+- **A used 2FA code was accepted again inside its window** (#865). Three codes are
+  valid at any moment (±1 step for clock skew, ~90s). `User.lastTotpStep` now records
+  the consumed step and a code must beat it, so one captured over a shoulder or
+  through a phishing page is spent. The skew tolerance is unchanged — nobody gets
+  locked out by a slow clock. Enabling 2FA does not burn the enrolment code: that
+  window is not the exposed one, and burning it would break enrol-then-sign-in.
+
+## [0.31.2-beta] - 2026-07-31
+
+### Security
+- **Changing or resetting a password did not end existing sessions** (#868). The
+  revocation machinery already worked — `auth.ts` compares `token.authTime` against
+  `User.sessionsValidFrom` on every request — but `sessionsValidFrom` was written in
+  exactly one place: the "sign out of all devices" button. So the standard response
+  to a stolen session (change the password) left the thief's JWT valid for the rest
+  of its 12 hours, and nothing in the UI suggested pressing the other button. Both
+  `PUT /api/account` and `POST /api/auth/reset` now stamp it. **This ends the
+  caller's own session too, on purpose** — issuing a replacement token would mean
+  "revoke everything except the request I just received", and that request is
+  exactly what an attacker holding the current password would send. The account page
+  says what happened and returns to sign-in. Any unused reset tokens for the account
+  are consumed at the same time, so a link already sitting in a mailbox can't undo
+  the change.
+- **Two HMAC signing helpers fell back to a hard-coded `'dev-secret'`** (#870). The
+  repository is public, so an environment missing `NEXTAUTH_SECRET` would verify
+  tokens anyone could mint: reply tokens route an inbound email into a message
+  thread, consent-renewal tokens record data-processing consent for another person.
+  `requireServerSecret()` (`src/lib/serverSecret.ts`) now throws instead. Nothing
+  legitimate breaks — NextAuth cannot authenticate anyone without that secret either.
+  Related fail-open: `/api/inbound-email` treated a missing `INBOUND_SECRET` as
+  "allowed, the HMAC gate will catch it" while that gate was itself defaulted; in
+  production it now returns 401, and dev/CI keep the lenient path.
+- **Auth forms had no `method`, so a pre-hydration submit put the password in the
+  URL** (#873). A native GET was observed live:
+  `…/auth/signin?email=…&password=ChangeMe123%21` — which then lands in browser
+  history, the `Referer` header and nginx access logs. `method="post"` added to
+  sign-in, register, forgot, reset and both credential forms on the account page.
+  With JS working the behaviour is unchanged.
+
+## [0.31.1-beta] - 2026-07-31
+
+### Security
+- **Every IP-based rate limit could be bypassed with a rotating
+  `X-Forwarded-For`** (#858). `clientIp()` returned `xff.split(',')[0]` — the
+  *leftmost* entry, which is whatever the client wrote. Our nginx uses
+  `$proxy_add_x_forwarded_for`, which **appends** the real peer address, so the
+  trustworthy value is on the right and the code was reading the one part of the
+  header an attacker fully controls. Measured on `/api/auth/forgot` (5 per 15 min):
+  12 spoofed requests all returned 200 where the honest control got 7× 429. Each
+  fabricated value also opened a new key in the in-memory bucket map, so the spoof
+  doubled as unbounded memory growth.
+  `clientIp()` now counts back from the right by `TRUSTED_PROXY_COUNT` hops
+  (default `1` = our single nginx; `0` ignores the header entirely), falls back to
+  the rightmost entry when the list is shorter than the configured chain, and
+  validates the result as an IPv4/IPv6 literal before it becomes a bucket key.
+  `enforceRateLimit`'s signature is unchanged, so all six calling endpoints are
+  untouched. The login limit is keyed on email, not IP, and was never affected.
+
+### Documentation
+- `.env.example` and `infra/README.md` cover `TRUSTED_PROXY_COUNT`: what the value
+  means per environment, and that it must be raised to `2` if a hostname is ever
+  moved behind Cloudflare's proxy (verified today that `crm.ersah.in` is not —
+  no `cf-ray`, so one hop).
+
+## [0.31.0-beta] - 2026-07-31
+
+### Security
+- **A mentor kept CV and document access to a former mentee forever** (#854).
+  `canAccessCv` / `canAccessUserDocs` asked only whether a `MentorshipRelation`
+  existed, never what its `status` was, so marking a mentorship COMPLETED changed
+  nothing. Access now expires `POST_MENTORSHIP_ACCESS_MONTHS` (6) after completion.
+  **Product decision — a window, not an immediate cut-off:** writing a reference
+  after the internship is real work, and revoking on the spot pushes mentors to keep
+  private copies, which moves the data outside the app's audit trail entirely. What
+  was indefensible was the *indefinite* part. Rationale, the alternative considered
+  and the legal basis: `docs/pii-access-lifecycle.md`. Owner and ADMIN access are
+  unaffected.
+- **`/api/users` dumped every user's full PII in one request** (#855). The admin
+  branch had no `take`/`skip` and returned email, phone, university, department and
+  more for the entire tenant — one compromised admin session walked off with the lot.
+  Added a `?view=` field set (`picker` = id/name/role, `directory` =
+  id/name/email/role/active/verified) and opt-in pagination
+  (`?page=`, `perPage` default 25, max 100, response carries `total`/`archivedCount`).
+  `/admin/users` now paginates, filters and searches server-side instead of pulling
+  the whole table and slicing it in the browser; `/admin/mentorship` and
+  `ProjectsManager` switched to `view=picker`, so their requests no longer carry any
+  PII at all. The MENTOR branch is untouched.
+
+### Added
+- `MentorshipRelation.completedAt`, stamped when a relation is marked COMPLETED and
+  cleared if it is reopened — the anchor for the access window above.
+  `prisma/backfill-relation-completed-at.mjs` (idempotent, wired into
+  `infra/deploy-prod.sh`) stamps relations that were already COMPLETED before the
+  column existed, so they get a window instead of losing access the moment this
+  deploys.
+
+### Documentation
+- **`docs/pii-access-lifecycle.md`** — how long access lasts and how much data each
+  caller gets, plus what is deliberately left for later (`/admin/candidates` and
+  `/admin/mentors` still fetch full lists; PII access logging is #821).
+
+## [0.30.3-beta] - 2026-07-31
+
+### Security
+- **`/api/projects` let SOURCE read every project, private ones included** (#849).
+  Same allowlist-by-omission shape as #847/#848: the role chain covered
+  MENTOR/COMPANY/MENTEE and SOURCE fell through to an unfiltered query. SOURCE now
+  gets the public showcase only (and the same PII stripping mentees get — member and
+  relation names removed, count kept).
+
+### Changed
+- **Role scoping is now centralised in `scopeForRole(user, resource)`**
+  (`src/lib/authzScope.ts`), used by `/api/interactions`, `/api/mentorship` and
+  `/api/projects`. Scopes are declared as a per-resource, per-role builder table
+  instead of an `if/else if` chain in each route, so a role missing from the table
+  gets `403` + an `authz.scope_denied` warning rather than an unfiltered query.
+  Adding a role to the `Role` enum can no longer silently grant it access.
+
+### Documentation
+- **`docs/role-access-matrix.md`** (#851) — the role × resource read matrix, why
+  fail-closed, which areas deliberately sit outside it (CV/document/messaging access
+  and the role-gated routes, all already fail-closed and not to be regressed), and
+  the three steps to follow when adding a role or a scoped resource.
+
+## [0.30.2-beta] - 2026-07-31
+
+### Security
+- **COMPANY and SOURCE accounts could read every mentee's interaction logs and
+  mentorship relations** (#847, #848). `GET /api/interactions` scoped its `where`
+  clause with an `if (MENTOR) … else if (MENTEE) …` chain and no final `else`, and
+  `GET /api/mentorship` covered MENTOR/MENTEE/COMPANY but not SOURCE. Any role the
+  chain didn't name fell through with an empty filter and got ADMIN visibility —
+  confirmed live: a SOURCE account with zero referred mentees read all 12 interaction
+  logs across 8 mentees. Scoping is now **fail-closed** via
+  `relationScopeForRole()` in `src/lib/authzScope.ts`: COMPANY is limited to its own
+  company's relations, SOURCE to the mentees it referred (a source with no `sourceId`
+  matches nothing), and a role with no defined scope gets `403` plus an
+  `authz.scope_denied` activity log at warning level. ADMIN/MENTOR/MENTEE result sets
+  are unchanged. Passing `?relationId=` for an out-of-scope relation no longer
+  bypasses the filter. Locked down by `e2e/role-scoping.spec.ts` (`@smoke`), which
+  asserts row ownership rather than status codes — the leak returned `200` throughout.
 
 ## [0.30.1-beta] - 2026-07-31
 

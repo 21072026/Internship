@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { logActivity } from '@/lib/activity';
 import { sendInvitationEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
@@ -63,6 +64,16 @@ export async function POST(request: Request) {
           role,
           expiresAt,
         },
+      });
+
+      await logActivity({
+        action: 'invite.created',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        targetType: 'invitation',
+        targetId: invitation.id,
+        detail: `${email} · ${role}`,
+        request,
       });
 
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

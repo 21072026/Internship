@@ -142,7 +142,16 @@ warn() {
 # deploy from any other path (the legacy deploy.yml over SSH, a manual
 # `docker run`) leaves it stale and the guard then reasons about a commit that
 # has not been live for weeks.
-LIVE_SHA="$(curl -fsS --max-time 10 "http://127.0.0.1:$PORT/api/health" 2>/dev/null \
+# The detailed fields (incl. sha) are gated on HEALTH_TOKEN when it is set
+# (#897); sending it here keeps the drift gate working once it is configured.
+# Kept as a plain string, not an array: `set -u` plus an empty array is a
+# portability trap in bash < 4.4, and this runs on whatever the box ships.
+HEALTH_HDR=""
+[ -n "${HEALTH_TOKEN:-}" ] && HEALTH_HDR="X-Health-Token: ${HEALTH_TOKEN}"
+health_curl() { # health_curl <url>
+  if [ -n "$HEALTH_HDR" ]; then curl -fsS --max-time 10 -H "$HEALTH_HDR" "$1"; else curl -fsS --max-time 10 "$1"; fi
+}
+LIVE_SHA="$(health_curl "http://127.0.0.1:$PORT/api/health" 2>/dev/null \
             | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
 if [ "${FORWARD_ONLY:-0}" = "1" ] && [ "${FORCE:-0}" != "1" ]; then
   LAST_SHA="$LIVE_SHA"
@@ -227,6 +236,10 @@ run_tool node prisma/backfill-organization.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
 # email out history. Self-skips once applied (Setting 'cronBaselineAt').
 run_tool node prisma/backfill-cron-baseline.mjs || true
+# Stamp completedAt on relations that were COMPLETED before the column existed,
+# so the post-mentorship CV access window (#854) has an anchor instead of
+# revoking access outright. Only ever fills NULLs — idempotent.
+run_tool node prisma/backfill-relation-completed-at.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 log "Restarting $CONTAINER on :$PORT"
@@ -257,6 +270,8 @@ docker run -d \
   -e INBOUND_IMAP_ENABLED="${INBOUND_IMAP_ENABLED:-}" \
   -e CRON_SECRET="${CRON_SECRET:-}" \
   -e CRON_ENABLED="${CRON_ENABLED:-}" \
+  -e TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}" \
+  -e HEALTH_TOKEN="${HEALTH_TOKEN:-}" \
   "$IMAGE"
 
 # ── 6. Health check + prune ──────────────────────────────────────────────────
@@ -270,7 +285,7 @@ log "Health check http://127.0.0.1:$PORT/api/health?db=1"
 ok=0
 health=''
 for i in $(seq 1 30); do
-  health="$(curl -fsS --max-time 10 "http://127.0.0.1:$PORT/api/health?db=1" 2>/dev/null || true)"
+  health="$(health_curl "http://127.0.0.1:$PORT/api/health?db=1" 2>/dev/null || true)"
   if [ -n "$health" ]; then ok=1; break; fi
   sleep 2
 done

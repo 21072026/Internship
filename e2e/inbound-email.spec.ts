@@ -8,8 +8,13 @@ test.afterAll(async () => {
 
 // Mirror src/lib/replyToken.ts so the test can craft valid/invalid tokens.
 const secret = () => process.env.NEXTAUTH_SECRET || 'dev-secret';
-const makeToken = (relationId: string) =>
-  `${relationId}.${createHmac('sha256', secret()).update(relationId).digest('hex').slice(0, 32)}`;
+const sign = (payload: string) => createHmac('sha256', secret()).update(payload).digest('hex').slice(0, 32);
+// Legacy shape: relation only, no recipient. Still minted by nothing, but tokens
+// in already-delivered mail look like this, so it must keep working.
+const makeToken = (relationId: string) => `${relationId}.${sign(relationId)}`;
+// Current shape: names the thread AND the user the notification was sent to.
+const makeScopedToken = (relationId: string, userId: string) =>
+  `${relationId}~${userId}.${sign(`${relationId}~${userId}`)}`;
 
 test('inbound email reply is routed to the thread (token + sender verified)', async ({ request }) => {
   const mentorEmail = uniqueEmail('inb-mentor');
@@ -36,7 +41,8 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     });
     expect(bad.status()).toBe(400);
 
-    // Valid token but sender is not a participant → rejected.
+    // Legacy token (no recipient) + sender is not a participant → rejected,
+    // because nothing else identifies the writer.
     const stranger = await request.post('/api/inbound-email', {
       data: { to: `reply+${token}@crm.ersah.in`, from: 'stranger@evil.com', text: 'spoof' },
     });
@@ -72,6 +78,41 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     expect(quoted.status()).toBe(200);
     const quotedMsg = await prisma.message.findFirst({ where: { inboundMessageId: `<attribution-${rel.id}@mail.example>` } });
     expect(quotedMsg?.body).toBe('cevap veriyorum');
+
+    // A recipient-scoped token threads the reply even when it arrives from a
+    // completely different address — the real case: the notification is
+    // forwarded to a personal mailbox and answered with that identity, so From
+    // never matches the profile email. Attributed to the user named in the token.
+    const scoped = makeScopedToken(rel.id, mentee.id);
+    const forwardedId = `<forwarded-${rel.id}@mail.example>`;
+    const forwarded = await request.post('/api/inbound-email', {
+      data: {
+        to: `reply+${scoped}@crm.ersah.in`,
+        from: 'personal-address-not-on-file@gmail.com',
+        text: 'ok',
+        messageId: forwardedId,
+      },
+    });
+    expect(forwarded.status()).toBe(200);
+    const forwardedMsg = await prisma.message.findFirst({ where: { inboundMessageId: forwardedId } });
+    expect(forwardedMsg?.senderId).toBe(mentee.id);
+    expect(forwardedMsg?.body).toBe('ok');
+
+    // The fallback is bounded to the token's own recipient: a signed token naming
+    // somebody who is NOT in this thread still gets nothing.
+    const outsider = await seedUser(uniqueEmail('inb-outsider'), 'x', 'MENTEE', 'Inb Outsider');
+    try {
+      const spoof = await request.post('/api/inbound-email', {
+        data: {
+          to: `reply+${makeScopedToken(rel.id, outsider.id)}@crm.ersah.in`,
+          from: 'stranger@evil.com',
+          text: 'spoof',
+        },
+      });
+      expect(spoof.status()).toBe(403);
+    } finally {
+      await cleanupByEmail(outsider.email);
+    }
   } finally {
     await prisma.message.deleteMany({ where: { relationId: rel.id } });
     await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });

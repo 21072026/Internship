@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { accessGrantingRelation } from '@/lib/retention';
 
 interface SessionUser {
   id: string;
@@ -6,13 +7,14 @@ interface SessionUser {
 }
 
 // A user's documents are accessible to the owner, any admin, or a mentor who
-// mentors that user. (Same rule as CVs.)
+// mentors that user. (Same rule as CVs — including the post-mentorship access
+// window, #854: the relation must be ACTIVE or recently COMPLETED.)
 export async function canAccessUserDocs(user: SessionUser, ownerId: string) {
   if (user.id === ownerId) return true;
   if (user.role === 'ADMIN') return true;
   if (user.role === 'MENTOR') {
     const rel = await prisma.mentorshipRelation.findFirst({
-      where: { mentorId: user.id, menteeId: ownerId },
+      where: { mentorId: user.id, menteeId: ownerId, ...accessGrantingRelation() },
       select: { id: true },
     });
     return !!rel;

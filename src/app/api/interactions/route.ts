@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -32,10 +33,16 @@ export async function GET(request: Request) {
       where.relationId = relationId;
     }
 
-    if (session.user.role === 'MENTOR') {
-      where.relation = { mentorId: session.user.id };
-    } else if (session.user.role === 'MENTEE') {
-      where.relation = { menteeId: session.user.id };
+    // Fail-closed scoping (#847): COMPANY and SOURCE used to fall past this
+    // chain with an empty `where` and read every mentee's interaction log.
+    // A role with no defined scope is now denied outright.
+    const relationScope = await scopeForRole(session.user, 'relation');
+    if (!relationScope) {
+      await logScopeDenial(session.user, 'GET /api/interactions');
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (Object.keys(relationScope).length > 0) {
+      where.relation = relationScope;
     }
 
     const interactions = await prisma.interactionLog.findMany({

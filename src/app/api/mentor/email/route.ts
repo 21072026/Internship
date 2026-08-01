@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         : { id: { in: relationIds }, mentorId: session.user.id };
     const relations = await prisma.mentorshipRelation.findMany({
       where,
-      include: { mentee: { select: { email: true, fullName: true, emailNotifications: true, notificationPrefs: true } } },
+      include: { mentee: { select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true } } },
     });
 
     // Template placeholders (e.g. "{name}") are filled per recipient with the
@@ -60,7 +60,9 @@ export async function POST(request: Request) {
       if (emailAllowed(rel.mentee, 'messages')) {
         try {
           // Reply-To routes mentee replies back into this thread (inbound email).
-          await sendEmail({ to: rel.mentee.email, subject: personalSubject, html, replyTo: replyAddress(rel.id) });
+          // The recipient is baked into the token so a reply still threads when
+          // the mentee answers from a different address than their profile one.
+          await sendEmail({ to: rel.mentee.email, subject: personalSubject, html, replyTo: replyAddress(rel.id, rel.mentee.id) });
         } catch (e) {
           console.error('Mentor email failed for', rel.mentee.email, e);
         }

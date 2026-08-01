@@ -12,6 +12,7 @@ interface AnnouncementItem {
   id: string;
   text: string;
   link: string | null;
+  imageUrl: string | null;
   createdAt: string;
 }
 
@@ -59,9 +60,21 @@ export function AnnouncementsCard() {
         <div className="space-y-3" data-testid="announcements-list">
           {items.map((a) => {
             const inner = (
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{a.text}</p>
-                <p className="text-xs text-gray-400 mt-1">{formatDate(a.createdAt, locale)}</p>
+              // A thumbnail rather than the full image: this card is a digest,
+              // and the full-size version is one click away on /announcements.
+              <div className="flex items-start gap-3">
+                {a.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={a.imageUrl}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-md object-cover border border-gray-200 dark:border-gray-700"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{a.text}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatDate(a.createdAt, locale)}</p>
+                </div>
               </div>
             );
             return (

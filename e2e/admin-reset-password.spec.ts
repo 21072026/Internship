@@ -5,7 +5,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('admin can trigger a password reset for a user and gets a shareable link', async ({ page }) => {
+test('admin can trigger a password reset for a user; the link never reaches the browser', async ({ page }) => {
   const adminEmail = uniqueEmail('rstadmin');
   const menteeEmail = uniqueEmail('rstmentee');
   await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'Reset Admin');
@@ -23,15 +23,28 @@ test('admin can trigger a password reset for a user and gets a shareable link', 
       (r) => r.url().includes(`/api/admin/users/${mentee.id}/reset-password`) && r.request().method() === 'POST'
     );
     await page.getByRole('button', { name: /Reset password/ }).click();
-    await done;
+    const res = await done;
 
-    // The shareable reset link is shown and a token was persisted.
-    const link = await page.locator('input[readonly]').inputValue();
-    expect(link).toContain('/auth/reset?token=');
+    // A token was persisted, but the response carries no trace of it (#875) —
+    // it used to come back as `resetUrl`, which put a live credential into
+    // proxy logs, devtools and any screen-share.
+    const body = await res.text();
+    expect(body).not.toContain('/auth/reset?token=');
+    expect(body).not.toContain('resetUrl');
+
     const token = await prisma.passwordResetToken.findFirst({
       where: { userId: mentee.id, used: false },
     });
     expect(token).not.toBeNull();
+    expect(await page.content()).not.toContain(token!.token);
+
+    // The action is audited and the account owner is told.
+    await expect
+      .poll(async () =>
+        prisma.activityLog.count({ where: { action: 'admin.reset_password', targetId: mentee.id } })
+      )
+      .toBe(1);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'security' } })).toBe(1);
   } finally {
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(adminEmail);

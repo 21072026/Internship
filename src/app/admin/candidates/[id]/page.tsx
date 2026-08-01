@@ -78,7 +78,9 @@ export default function AdminMenteeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [resetUrl, setResetUrl] = useState<string | null>(null);
+  // Whether the last reset attempt got its email out. The link itself is never
+  // returned to the browser any more (#875).
+  const [resetSent, setResetSent] = useState<boolean | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
   const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
@@ -139,7 +141,7 @@ export default function AdminMenteeDetailPage() {
     try {
       const res = await fetch(`/api/admin/users/${id}/reset-password`, { method: 'POST' });
       const data = await res.json();
-      if (res.ok) setResetUrl(data.resetUrl);
+      if (res.ok) setResetSent(data.emailSent !== false);
     } finally {
       setResetting(false);
     }
@@ -266,15 +268,15 @@ export default function AdminMenteeDetailPage() {
         </div>
       </div>
 
-      {resetUrl && (
-        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800 mb-2">{t.candidateDetail.resetPwHint}</p>
-          <input
-            readOnly
-            value={resetUrl}
-            onFocus={(e) => e.target.select()}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-700"
-          />
+      {resetSent !== null && (
+        <div
+          className={`mb-6 rounded-lg border p-4 ${
+            resetSent ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'
+          }`}
+        >
+          <p className={`text-sm ${resetSent ? 'text-green-800' : 'text-amber-800'}`}>
+            {resetSent ? t.candidateDetail.resetPwHint : t.candidateDetail.resetPwFailed}
+          </p>
         </div>
       )}
 

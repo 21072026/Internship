@@ -278,7 +278,12 @@ export function AccountSettings() {
     try {
       await call({ currentPassword, newPassword });
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
-      flash(t.account.updated);
+      // The password change revoked every session including this one (#868),
+      // so say why and send the user back to sign-in rather than letting the
+      // next request fail as a mystery logout.
+      flash(t.account.passwordChangedSignOut);
+      setTimeout(() => { void signOut({ callbackUrl: '/auth/signin' }); }, 2500);
+      return;
     } catch (e2) {
       flash(e2 instanceof Error ? e2.message : 'Failed', true);
     } finally {
@@ -348,7 +353,7 @@ export function AccountSettings() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
         <Card>
           <CardHeader><CardTitle>{t.account.emailSection}</CardTitle></CardHeader>
-          <form onSubmit={submitEmail} className="space-y-4">
+          <form method="post" onSubmit={submitEmail} className="space-y-4">
             <Input label={t.account.email} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <Input id="email-current-password" label={t.account.currentPassword} type="password" autoComplete="current-password" hint={t.account.emailPwHint} value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} required />
             <Button type="submit" loading={savingEmail}>{t.account.updateEmail}</Button>
@@ -357,7 +362,7 @@ export function AccountSettings() {
 
         <Card>
           <CardHeader><CardTitle>{t.account.passwordSection}</CardTitle></CardHeader>
-          <form onSubmit={submitPassword} className="space-y-4">
+          <form method="post" onSubmit={submitPassword} className="space-y-4">
             <Input label={t.account.currentPassword} type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
             <Input label={t.account.newPassword} type="password" hint={t.account.passwordHint} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
             <Input label={t.account.confirmPassword} type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />

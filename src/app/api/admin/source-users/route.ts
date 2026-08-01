@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
@@ -45,6 +46,16 @@ export async function POST(request: Request) {
     console.error('Source-user set-password email failed:', e);
   }
 
+  await logActivity({
+    action: 'sourceuser.created',
+    level: 'warning',
+    actorId: session.user.id,
+    actorEmail: session.user.email ?? null,
+    targetType: 'user',
+    targetId: user.id,
+    detail: `source ${source.name}`,
+    request,
+  });
   return NextResponse.json({ ok: true, setPasswordUrl: `${appUrl}/auth/reset?token=${token}` });
   });
 }

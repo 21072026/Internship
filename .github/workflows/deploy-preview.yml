@@ -107,8 +107,19 @@ jobs:
           # Ground truth for what is actually live: the container reports the
           # GIT_SHA baked into its image at /api/health. An unreachable endpoint
           # (container down or wedged) counts as drift, so the deploy repairs it.
-          LIVE="$(curl -fsS --max-time 10 "$HEALTH_URL" \
-                  | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+          # `sha` is gated on HEALTH_TOKEN when that is configured (#897); the
+          # server env file is the same one deploy-prod.sh reads, so source it
+          # if present and pass the header through. Absent token = old behaviour.
+          HEALTH_ENV="${ENV_FILE:-/etc/internship-crm/preview.env}"
+          # Sourced in a subshell so quoting matches how deploy-prod.sh reads it.
+          [ -r "$HEALTH_ENV" ] && HEALTH_TOKEN="$( set -a; . "$HEALTH_ENV" >/dev/null 2>&1; printf '%s' "${HEALTH_TOKEN:-}" )"
+          if [ -n "${HEALTH_TOKEN:-}" ]; then
+            LIVE="$(curl -fsS --max-time 10 -H "X-Health-Token: $HEALTH_TOKEN" "$HEALTH_URL" \
+                    | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+          else
+            LIVE="$(curl -fsS --max-time 10 "$HEALTH_URL" \
+                    | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+          fi
           if [ "$LIVE" = "$TARGET" ]; then
             echo "deploy=false" >> "$GITHUB_OUTPUT"
             echo "### Preview already current at \`$TARGET\` — nothing to deploy" >> "$GITHUB_STEP_SUMMARY"

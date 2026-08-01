@@ -25,6 +25,10 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#1D4ED8',
+  // Shrink the layout viewport when the on-screen keyboard opens instead of
+  // letting it overlay the page, so a full-height screen (the chat shell, #1006)
+  // keeps its composer above the keyboard rather than behind it.
+  interactiveWidget: 'resizes-content',
 };
 
 // Runs before paint to set the dark class from the saved preference or the OS,

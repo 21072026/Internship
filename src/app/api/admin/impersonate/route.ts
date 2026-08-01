@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     targetType: 'user',
     targetId: target.id,
     detail: reason ? `Reason: ${reason}` : undefined,
+    request,
   });
   // The impersonated user is told their account was accessed (transparency).
   await notify(target.id, 'impersonation', `An administrator accessed your account${reason ? ` (${reason})` : ''}.`);

@@ -16,6 +16,10 @@ interface Entry {
   targetType?: string | null;
   targetId?: string | null;
   detail?: string | null;
+  // Origin of the action (#881). Null on rows written before the columns
+  // existed, and on entries with no request behind them (cron, sign-out).
+  ip?: string | null;
+  userAgent?: string | null;
   createdAt: string;
 }
 
@@ -86,6 +90,14 @@ export default function AdminActivityPage() {
                 <span className="text-gray-500 truncate flex-1">
                   {e.actorEmail || '—'}{e.detail ? ` · ${e.detail}` : ''}
                 </span>
+                {e.ip && (
+                  <span
+                    className="hidden sm:inline font-mono text-xs text-gray-400 flex-shrink-0"
+                    title={e.userAgent || undefined}
+                  >
+                    {e.ip}
+                  </span>
+                )}
                 <span className="text-xs text-gray-400 flex-shrink-0">{formatDateTime(e.createdAt, locale)}</span>
               </div>
             ))}

@@ -9,6 +9,9 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
+// A generation that has not answered in a minute is not going to.
+const AI_TIMEOUT_MS = 60_000;
+
 export interface AiCvSuggestions {
   fullName: string;
   city: string;
@@ -58,7 +61,10 @@ const SYSTEM = `You extract structured profile fields from a CV/résumé. Return
  * already verified consent and isAiConfigured(). Throws on API failure.
  */
 export async function aiExtractFromText(text: string): Promise<AiCvSuggestions> {
-  const client = new Anthropic(); // reads ANTHROPIC_API_KEY
+  // reads ANTHROPIC_API_KEY. The SDK's own default timeout is 10 minutes, long
+  // enough to hold a request handler open until the user gives up (#895).
+  // Generation genuinely takes tens of seconds, so 60s — not the 5s webhooks get.
+  const client = new Anthropic({ timeout: AI_TIMEOUT_MS });
   const trimmed = text.slice(0, MAX_INPUT_CHARS);
 
   const res = await client.messages.create({

@@ -13,19 +13,331 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.36.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Mentors now have the same global search as admins, right in the header — find one of your mentees by name or email and jump straight to their profile.',
+      ],
+      tr: [
+        'Mentorlar artık adminlerle aynı genel aramaya, üst menüden erişebiliyor — mentilerinden birini ad veya e-postayla bulup doğrudan profiline gidebilirsiniz.',
+      ],
+      de: [
+        'Mentoren haben jetzt dieselbe globale Suche wie Admins, direkt in der Kopfzeile — finde einen deiner Mentees per Name oder E-Mail und springe direkt zu seinem Profil.',
+      ],
+    },
+  },
+  {
+    version: '0.35.3-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'You can now paste an image straight into an announcement, just like in messages — take a screenshot, press paste in the message box, and it is attached. Choosing a file from disk still works as before.',
+      ],
+      tr: [
+        'Artık duyuruya doğrudan görsel yapıştırabilirsiniz, tıpkı mesajlardaki gibi — ekran görüntüsünü alıp mesaj kutusunda yapıştırın, görsel eklenir. Dosya seçerek eklemek de eskisi gibi çalışıyor.',
+      ],
+      de: [
+        'Sie können ein Bild jetzt direkt in eine Ankündigung einfügen, genau wie in Nachrichten — Screenshot machen, im Nachrichtenfeld einfügen, fertig. Eine Datei auszuwählen funktioniert weiterhin wie bisher.',
+      ],
+    },
+  },
+  {
+    version: '0.35.2-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Fixed the bottom edge of the message screens on a phone: the reply box (and the last row of your conversation list) could end up behind the system navigation bar, with no way to scroll it into view. The screen now ends exactly where the visible area ends.',
+      ],
+      tr: [
+        'Telefonda mesaj ekranlarının alt kenarı düzeltildi: cevap kutusu (ve sohbet listesinin son satırı) sistemin gezinme çubuğunun arkasında kalabiliyordu ve kaydırarak görünür hâle getirmek mümkün olmuyordu. Ekran artık tam olarak görünür alanın bittiği yerde bitiyor.',
+      ],
+      de: [
+        'Der untere Rand der Nachrichten-Bildschirme auf dem Handy ist korrigiert: Das Antwortfeld (und die letzte Zeile der Unterhaltungsliste) konnte hinter der System-Navigationsleiste liegen, ohne sich ins Bild scrollen zu lassen. Der Bildschirm endet jetzt genau dort, wo der sichtbare Bereich endet.',
+      ],
+    },
+  },
+  {
+    version: '0.35.1-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Messages now fill the screen on a phone. A conversation used to be a long page you had to scroll down before you could even reach the reply box — now the message list is the only thing that scrolls, and the reply box stays where it is at the bottom of the screen.',
+        'Every message screen also has a header on a phone: it shows who you are talking to, with a back arrow to your conversations and a home button — no more relying on the browser\'s back button to get out.',
+        'When the on-screen keyboard opens, the reply box stays visible above it instead of disappearing behind it.',
+      ],
+      tr: [
+        'Mesajlar telefonda artık ekranı tam kullanıyor. Bir sohbet, cevap kutusuna ulaşmak için önce aşağı kaydırmanız gereken uzun bir sayfaydı — artık yalnızca mesaj listesi kayıyor, cevap kutusu ekranın altında sabit duruyor.',
+        'Her mesaj ekranında telefonda bir başlık çubuğu var: kiminle konuştuğunuzu gösteriyor, geri okuyla sohbetlerinize, ev butonuyla ana ekranınıza dönüyorsunuz — çıkmak için tarayıcının geri tuşuna ihtiyaç kalmadı.',
+        'Ekran klavyesi açıldığında cevap kutusu klavyenin arkasında kaybolmuyor, üstünde görünür kalıyor.',
+      ],
+      de: [
+        'Nachrichten nutzen auf dem Handy jetzt den ganzen Bildschirm. Eine Unterhaltung war eine lange Seite, die man erst nach unten scrollen musste, um überhaupt das Antwortfeld zu erreichen — jetzt scrollt nur noch die Nachrichtenliste, und das Antwortfeld bleibt unten am Bildschirm stehen.',
+        'Jeder Nachrichten-Bildschirm hat auf dem Handy außerdem eine Kopfzeile: Sie zeigt, mit wem du schreibst, mit einem Zurück-Pfeil zu deinen Unterhaltungen und einer Start-Schaltfläche — der Zurück-Button des Browsers ist nicht mehr der einzige Ausweg.',
+        'Wenn die Bildschirmtastatur aufgeht, bleibt das Antwortfeld darüber sichtbar statt dahinter zu verschwinden.',
+      ],
+    },
+  },
+  {
+    version: '0.35.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Announcements can now include an image. When you write an announcement you can attach a picture (PNG, JPEG, WebP or GIF, up to 5 MB) and see it before publishing; everyone sees it with the announcement, and it is included in the email version too.',
+      ],
+      tr: [
+        'Duyurulara artık görsel eklenebiliyor. Duyuru yazarken bir görsel ekleyip (PNG, JPEG, WebP veya GIF, en fazla 5 MB) yayınlamadan önce önizleyebilirsiniz; görsel duyuruyla birlikte herkese gösterilir ve e-posta ile gönderilen sürümde de yer alır.',
+      ],
+      de: [
+        'Ankündigungen können jetzt ein Bild enthalten. Beim Schreiben einer Ankündigung lässt sich ein Bild anhängen (PNG, JPEG, WebP oder GIF, bis zu 5 MB) und vor dem Veröffentlichen ansehen; alle sehen es zusammen mit der Ankündigung, und in der E-Mail-Version ist es ebenfalls enthalten.',
+      ],
+    },
+  },
+  {
+    version: '0.34.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'The pipeline board now works on a phone. Instead of scrolling 13 stage columns sideways, pick a stage and see its mentees as a list — and every card has a "Move to stage" menu, so you no longer need to drag a card (which never worked on touch) to change its stage. Dragging still works on a computer, and a stage change can be undone straight from the confirmation for a few seconds.',
+        'The board is also keyboard-friendly: cards can be opened with the keyboard and stages changed without a mouse.',
+        'On a phone, the cookie banner no longer covers the "Create Account" button at the bottom of the sign-up page — pages now scroll clear of any bar pinned to the bottom of the screen, so the button is always reachable without dismissing the banner first.',
+        'The cookie banner is also more compact on small screens: it used to take up about 40% of the display on a phone.',
+      ],
+      tr: [
+        'Pipeline board artık telefonda çalışıyor. 13 aşama kolonunu yana kaydırmak yerine bir aşama seçip o aşamadaki mentee\'leri liste hâlinde görüyorsunuz; ayrıca her kartta "Aşamaya taşı" menüsü var, yani aşamayı değiştirmek için kartı sürüklemeniz (ki dokunmatikte hiç çalışmıyordu) gerekmiyor. Bilgisayarda sürükleme aynen çalışmaya devam ediyor ve aşama değişikliğini onay bildiriminden birkaç saniye içinde geri alabiliyorsunuz.',
+        'Board klavyeyle de kullanılabiliyor: kartlar klavyeyle açılabiliyor, aşamalar fare olmadan değiştirilebiliyor.',
+        'Telefonda çerez bandı artık kayıt sayfasının altındaki "Hesap oluştur" butonunu kapatmıyor — sayfalar ekranın altına sabitlenen bantların üstüne kadar kaydırılabiliyor, yani butona ulaşmak için önce bandı kapatmanız gerekmiyor.',
+        'Çerez bandı küçük ekranlarda daha derli toplu: eskiden telefonda ekranın yaklaşık %40\'ını kaplıyordu.',
+      ],
+      de: [
+        'Das Pipeline-Board funktioniert jetzt auf dem Handy. Statt 13 Phasenspalten seitwärts zu scrollen, wählst du eine Phase und siehst ihre Mentees als Liste — außerdem hat jede Karte ein Menü „In Phase verschieben", du musst eine Karte also nicht mehr ziehen (was per Touch ohnehin nie funktionierte). Am Computer bleibt das Ziehen unverändert, und ein Phasenwechsel lässt sich für einige Sekunden direkt aus der Bestätigung zurücknehmen.',
+        'Das Board ist auch mit der Tastatur bedienbar: Karten lassen sich per Tastatur öffnen und Phasen ohne Maus ändern.',
+        'Auf dem Handy verdeckt das Cookie-Banner nicht mehr die Schaltfläche „Konto erstellen" am Ende der Registrierungsseite — Seiten lassen sich jetzt über jede am unteren Bildschirmrand fixierte Leiste hinaus scrollen, die Schaltfläche ist also immer erreichbar, ohne das Banner zuerst zu schließen.',
+        'Das Cookie-Banner ist auf kleinen Bildschirmen außerdem kompakter: bisher nahm es auf dem Handy rund 40% der Anzeige ein.',
+      ],
+    },
+  },
+  {
+    version: '0.33.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Replying by email now works even when you answer from a different address than the one on your account. If your work mail forwards to a personal inbox and you reply from there, your answer used to be dropped without a trace — it now lands in the thread as before, credited to you.',
+      ],
+      tr: [
+        'E-postayla cevaplama artık hesabınızdaki adresten farklı bir adresten yanıtlasanız da çalışıyor. İş mailiniz kişisel bir kutuya yönleniyorsa ve oradan cevap veriyorsanız, cevabınız eskiden iz bırakmadan kayboluyordu — artık eskisi gibi thread\'e düşüyor ve size ait olarak görünüyor.',
+      ],
+      de: [
+        'Antworten per E-Mail funktioniert jetzt auch, wenn du von einer anderen Adresse als der in deinem Konto antwortest. Wenn deine Arbeitsmail an ein privates Postfach weitergeleitet wird und du von dort antwortest, ging deine Antwort früher spurlos verloren — sie landet jetzt wie gewohnt im Thread und wird dir zugeordnet.',
+      ],
+    },
+  },
+  {
+    version: '0.32.4-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'There is now a Code of Conduct, linked in the footer and available in English, Turkish and German. It sets out what respectful participation looks like for mentees, mentors, admins and company contacts — and what is not acceptable, including misuse of the access a role gives you to someone else’s profile, CV or contact details.',
+        'It also explains how to report a problem: confidentially, to an administrator, on your own behalf or someone else’s — and reporting in good faith never counts against you.',
+      ],
+      tr: [
+        'Artık bir Davranış Kuralları metni var; alt bilgiden erişilebiliyor ve İngilizce, Türkçe ve Almanca olarak sunuluyor. Mentee’ler, mentorlar, yöneticiler ve şirket yetkilileri için saygılı katılımın ne demek olduğunu — ve neyin kabul edilemez olduğunu, rolünüzün başkasının profiline, CV’sine veya iletişim bilgilerine verdiği erişimin kötüye kullanımı dâhil — açıkça yazıyor.',
+        'Metin ayrıca bir sorunu nasıl bildireceğinizi anlatıyor: gizlilikle, bir yöneticiye, kendi adınıza ya da bir başkası adına. İyi niyetle yapılan bildirim asla aleyhinize kullanılmaz.',
+      ],
+      de: [
+        'Es gibt jetzt einen Verhaltenskodex, verlinkt in der Fußzeile und verfügbar auf Englisch, Türkisch und Deutsch. Er beschreibt, wie respektvolle Teilnahme für Mentees, Mentoren, Admins und Unternehmenskontakte aussieht — und was nicht akzeptabel ist, einschließlich des Missbrauchs des Zugriffs, den eine Rolle auf Profile, Lebensläufe oder Kontaktdaten anderer gibt.',
+        'Er erklärt außerdem, wie man ein Problem meldet: vertraulich, an eine Administratorin oder einen Administrator, für sich selbst oder stellvertretend für andere — eine Meldung in gutem Glauben wird Ihnen nie zum Nachteil ausgelegt.',
+      ],
+    },
+  },
+  {
+    version: '0.32.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Messages: the "New chat" button is back. Since project group chats appeared in the inbox, everyone who was in a project saw no "New chat" option at all — so there was no way to start a private message with someone you share a project with. The people you can write to are listed again.',
+      ],
+      tr: [
+        'Mesajlar: "Yeni sohbet" düğmesi geri geldi. Proje grup sohbetleri gelen kutusuna eklendiğinden beri bir projede yer alan herkes için "Yeni sohbet" seçeneği hiç görünmüyordu — yani aynı projede olduğunuz biriyle özel mesaj başlatmanın yolu yoktu. Yazabileceğiniz kişiler yeniden listeleniyor.',
+      ],
+      de: [
+        'Nachrichten: Die Schaltfläche „Neuer Chat“ ist zurück. Seit die Projekt-Gruppenchats im Posteingang erscheinen, wurde sie allen, die in einem Projekt sind, gar nicht mehr angezeigt — eine private Nachricht an jemanden aus dem eigenen Projekt ließ sich also nicht mehr beginnen. Die möglichen Empfänger werden wieder aufgelistet.',
+      ],
+    },
+  },
+  {
+    version: '0.32.2-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Uploads are now checked by their actual contents, not just the file type the browser claims. A file renamed to look like a PDF or an image is rejected.',
+        'CVs, documents and file attachments now download instead of opening in the browser, and filenames with accented characters come through correctly.',
+      ],
+      tr: [
+        'Yüklenen dosyalar artık yalnızca tarayıcının bildirdiği türe göre değil, gerçek içeriğine göre denetleniyor. PDF ya da resim gibi görünsün diye adı değiştirilmiş bir dosya reddediliyor.',
+        'CV\'ler, belgeler ve dosya ekleri artık tarayıcıda açılmak yerine indiriliyor; Türkçe karakterli dosya adları da doğru geliyor.',
+      ],
+      de: [
+        'Hochgeladene Dateien werden jetzt anhand ihres tatsächlichen Inhalts geprüft, nicht nur anhand des vom Browser gemeldeten Typs. Eine Datei, die nur so umbenannt wurde, dass sie wie ein PDF oder Bild aussieht, wird abgelehnt.',
+        'Lebensläufe, Dokumente und Dateianhänge werden jetzt heruntergeladen statt im Browser geöffnet, und Dateinamen mit Umlauten kommen korrekt an.',
+      ],
+    },
+  },
+  {
+    version: '0.32.1-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Security fix: a webhook could be pointed at the server\'s own internal network. Webhook addresses must now be public https endpoints, checked both when saved and each time one is sent.',
+        'A slow or unresponsive webhook receiver or AI service can no longer hold the app up — outgoing requests now time out and are logged instead.',
+      ],
+      tr: [
+        'Güvenlik düzeltmesi: bir webhook, sunucunun kendi iç ağına yönlendirilebiliyordu. Webhook adresleri artık genel erişime açık https uçları olmak zorunda ve hem kaydedilirken hem her gönderimde denetleniyor.',
+        'Yavaş veya yanıt vermeyen bir webhook alıcısı ya da yapay zekâ servisi artık uygulamayı bekletemiyor — giden istekler zaman aşımına uğrayıp kayda geçiyor.',
+      ],
+      de: [
+        'Sicherheitskorrektur: Ein Webhook konnte auf das interne Netz des Servers gerichtet werden. Webhook-Adressen müssen jetzt öffentliche https-Endpunkte sein und werden beim Speichern sowie bei jedem Versand geprüft.',
+        'Ein langsamer oder nicht antwortender Webhook-Empfänger bzw. KI-Dienst kann die Anwendung nicht mehr aufhalten — ausgehende Anfragen laufen jetzt in ein Timeout und werden protokolliert.',
+      ],
+    },
+  },
+  {
+    version: '0.32.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'When an administrator starts a password reset for your account, you are now notified, and the reset link is only ever sent to your own email address — it is no longer shown on the administrator\'s screen. Administrators also can no longer reset another administrator\'s password.',
+        'The admin activity log now records where an action came from (IP address, with the browser shown on hover) and covers far more privileged actions: API keys, webhooks, invitations, activating or deactivating a user, organisation and source changes, and mentorship decisions.',
+      ],
+      tr: [
+        'Bir yönetici hesabınız için parola sıfırlama başlattığında artık bilgilendiriliyorsunuz ve sıfırlama bağlantısı yalnızca kendi e-posta adresinize gidiyor — yöneticinin ekranında hiç görünmüyor. Yöneticiler ayrıca başka bir yöneticinin parolasını sıfırlayamıyor.',
+        'Yönetici aktivite kaydı artık bir işlemin nereden yapıldığını da tutuyor (IP adresi, tarayıcı bilgisi üzerine gelince görünüyor) ve çok daha fazla ayrıcalıklı işlemi kapsıyor: API anahtarları, webhook\'lar, davetler, kullanıcı aktifleştirme/pasifleştirme, kurum ve kaynak değişiklikleri, mentorluk kararları.',
+      ],
+      de: [
+        'Wenn eine Administratorin oder ein Administrator ein Zurücksetzen Ihres Passworts anstößt, werden Sie jetzt benachrichtigt, und der Link geht ausschließlich an Ihre eigene E-Mail-Adresse — er erscheint nicht mehr auf dem Bildschirm der Administration. Außerdem kann das Passwort anderer Administratoren nicht mehr zurückgesetzt werden.',
+        'Das Admin-Aktivitätsprotokoll hält jetzt fest, woher eine Aktion kam (IP-Adresse, Browser beim Überfahren mit der Maus), und deckt deutlich mehr privilegierte Aktionen ab: API-Schlüssel, Webhooks, Einladungen, Aktivieren und Deaktivieren von Nutzern, Organisations- und Quellenänderungen sowie Mentoring-Entscheidungen.',
+      ],
+    },
+  },
+  {
+    version: '0.31.4-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: ['Internal: rate-limit breaches are now recorded in the admin activity log.'],
+      tr: ['Dahili: hız sınırı aşımları artık yönetici aktivite kaydına yazılıyor.'],
+      de: ['Intern: Überschreitungen der Ratenbegrenzung werden jetzt im Admin-Aktivitätsprotokoll erfasst.'],
+    },
+  },
+  {
+    version: '0.31.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Two-factor authentication is meaningfully stronger: wrong authenticator codes are now limited to five attempts per 15 minutes, and each code works only once. Previously, someone who already had your password could try codes as fast as they liked. Codes from an authenticator app with a slightly off clock still work as before.',
+      ],
+      tr: [
+        'İki adımlı doğrulama belirgin şekilde güçlendi: yanlış doğrulama kodları artık 15 dakikada beş denemeyle sınırlı ve her kod yalnızca bir kez çalışıyor. Önceden, parolanızı ele geçirmiş biri kodları istediği hızda deneyebiliyordu. Saati biraz şaşmış bir uygulamadan gelen kodlar eskisi gibi kabul edilmeye devam ediyor.',
+      ],
+      de: [
+        'Die Zwei-Faktor-Anmeldung ist deutlich stärker: Falsche Codes sind jetzt auf fünf Versuche pro 15 Minuten begrenzt, und jeder Code funktioniert nur einmal. Bisher konnte jemand mit Ihrem Passwort Codes beliebig schnell durchprobieren. Codes aus einer App mit leicht abweichender Uhr werden weiterhin akzeptiert.',
+      ],
+    },
+  },
+  {
+    version: '0.31.2-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Changing or resetting your password now signs you out everywhere, including the device you changed it on. If someone else was signed in as you, they are out as soon as you change it — previously their session stayed alive for up to 12 hours. You will be asked to sign in again straight after.',
+        'Any password-reset link still sitting in your inbox stops working once you change your password.',
+        'Sign-in and other password forms no longer risk putting your password into the page address if you submit before the page has finished loading.',
+      ],
+      tr: [
+        'Parolanızı değiştirmek veya sıfırlamak artık sizi her yerden çıkış yaptırıyor — değişikliği yaptığınız cihaz dâhil. Başka biri sizin adınıza giriş yapmışsa, siz parolayı değiştirir değiştirmez düşüyor; önceden oturumu 12 saate kadar açık kalıyordu. Hemen ardından tekrar giriş yapmanız istenecek.',
+        'Posta kutunuzda duran parola sıfırlama bağlantıları, parolanızı değiştirdiğiniz anda geçersiz oluyor.',
+        'Giriş ve diğer parola formları, sayfa tam yüklenmeden gönderildiğinde parolanızı sayfa adresine yazma riskini artık taşımıyor.',
+      ],
+      de: [
+        'Das Ändern oder Zurücksetzen des Passworts meldet Sie jetzt überall ab — auch auf dem Gerät, auf dem Sie es geändert haben. War jemand anderes als Sie angemeldet, ist diese Sitzung sofort beendet; bisher blieb sie bis zu 12 Stunden gültig. Direkt danach werden Sie zur erneuten Anmeldung gebeten.',
+        'Noch im Postfach liegende Links zum Zurücksetzen des Passworts funktionieren nicht mehr, sobald Sie Ihr Passwort ändern.',
+        'Anmelde- und andere Passwortformulare können Ihr Passwort nicht mehr in die Seitenadresse schreiben, wenn Sie absenden, bevor die Seite fertig geladen ist.',
+      ],
+    },
+  },
+  {
+    version: '0.31.1-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Security fix: the limits that cap how often password-reset, registration and application forms can be submitted could be sidestepped by faking a network header. They now count real visitors again.',
+      ],
+      tr: [
+        'Güvenlik düzeltmesi: parola sıfırlama, kayıt ve başvuru formlarının ne sıklıkta gönderilebileceğini sınırlayan kurallar, sahte bir ağ başlığıyla aşılabiliyordu. Artık gerçek ziyaretçileri sayıyorlar.',
+      ],
+      de: [
+        'Sicherheitskorrektur: Die Limits dafür, wie oft Passwort-Zurücksetzung, Registrierung und Bewerbungsformulare abgeschickt werden können, ließen sich mit einem gefälschten Netzwerk-Header umgehen. Sie zählen jetzt wieder echte Besucher.',
+      ],
+    },
+  },
+  {
+    version: '0.31.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'A mentor\'s access to a former mentee\'s CV and documents now ends six months after the mentorship is marked complete, instead of lasting indefinitely. Six months rather than immediately, so you can still write a reference or answer a follow-up. You always have access to your own CV, and admins are unaffected.',
+        'The admin user list now loads one page at a time, with search and role filters handled by the server. Faster on large lists, and a single request no longer returns everyone\'s contact details.',
+      ],
+      tr: [
+        'Bir mentorun eski mentisinin CV ve belgelerine erişimi artık süresiz değil: mentorluk tamamlandı olarak işaretlendikten altı ay sonra sona eriyor. Hemen değil altı ay, çünkü referans yazmak veya sonraki bir soruyu yanıtlamak hâlâ mümkün olmalı. Kendi CV\'nize erişiminiz her zaman açık; yöneticiler etkilenmiyor.',
+        'Yönetici kullanıcı listesi artık sayfa sayfa yükleniyor; arama ve rol filtresi sunucuda çalışıyor. Uzun listelerde daha hızlı ve tek bir istek artık herkesin iletişim bilgisini döndürmüyor.',
+      ],
+      de: [
+        'Der Zugriff eines Mentors auf Lebenslauf und Dokumente eines ehemaligen Mentees endet jetzt sechs Monate nach Abschluss des Mentorings statt unbegrenzt zu gelten. Sechs Monate statt sofort, damit ein Zeugnis oder eine Rückfrage weiterhin möglich bleibt. Auf den eigenen Lebenslauf haben Sie immer Zugriff, Admins sind nicht betroffen.',
+        'Die Admin-Benutzerliste lädt jetzt seitenweise, Suche und Rollenfilter laufen auf dem Server. Schneller bei langen Listen — und eine einzelne Anfrage liefert nicht mehr die Kontaktdaten aller Nutzer.',
+      ],
+    },
+  },
+  {
+    version: '0.30.3-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'Security fix: referral-source accounts could see every project, including private ones. They now see the public showcase only, without member names.',
+      ],
+      tr: [
+        'Güvenlik düzeltmesi: yönlendiren kurum hesapları özel olanlar dâhil tüm projeleri görebiliyordu. Artık yalnızca açık vitrini, üye isimleri olmadan görüyorlar.',
+      ],
+      de: [
+        'Sicherheitskorrektur: Vermittlerkonten konnten alle Projekte sehen, auch private. Sie sehen jetzt nur noch die öffentliche Übersicht, ohne Mitgliedsnamen.',
+      ],
+    },
+  },
+  {
     version: '0.30.2-beta',
     date: '2026-07-31',
     highlights: {
       en: [
-        'Mentors now have the same global search as admins, right in the header — find one of your mentees by name or email and jump straight to their profile.',
+        'Security fix: company and referral-source accounts could see mentorship relations and interaction notes that did not belong to them. Company accounts are now limited to their own company, and referral sources to the candidates they referred. Admin, mentor and mentee views are unchanged.',
+      ],
+      tr: [
+        'Güvenlik düzeltmesi: şirket ve yönlendiren kurum hesapları kendilerine ait olmayan mentorluk ilişkilerini ve görüşme notlarını görebiliyordu. Şirket hesapları artık yalnızca kendi şirketiyle, yönlendiren kurumlar da yalnızca kendi yönlendirdikleri adaylarla sınırlı. Yönetici, mentor ve menti görünümleri değişmedi.',
+      ],
+      de: [
+        'Sicherheitskorrektur: Unternehmens- und Vermittlerkonten konnten Mentoring-Beziehungen und Gesprächsnotizen sehen, die ihnen nicht gehörten. Unternehmenskonten sind jetzt auf das eigene Unternehmen beschränkt, Vermittler auf die von ihnen vermittelten Kandidaten. Ansichten für Admin, Mentor und Mentee bleiben unverändert.',
+      ],
+    },
+  },
+  {
+    version: '0.30.1-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
         'The recipient counter on the targeted-email page (mentor and admin) now shows how many mentees are selected out of the total, e.g. "Recipients (3/10)", instead of just the selected count.',
       ],
       tr: [
-        'Mentorlar artık adminlerle aynı genel aramaya, üst menüden erişebiliyor — mentilerinden birini ad veya e-postayla bulup doğrudan profiline gidebilirsiniz.',
         'Hedefli e-posta sayfasındaki (mentor ve admin) alıcı sayacı artık yalnızca seçilen sayıyı değil, toplam içinden kaçının seçildiğini gösteriyor, ör. "Alıcılar (3/10)".',
       ],
       de: [
-        'Mentoren haben jetzt dieselbe globale Suche wie Admins, direkt in der Kopfzeile — finde einen deiner Mentees per Name oder E-Mail und springe direkt zu seinem Profil.',
         'Der Empfängerzähler auf der gezielten E-Mail-Seite (Mentor und Admin) zeigt jetzt, wie viele Mentees von der Gesamtzahl ausgewählt sind, z. B. „Empfänger (3/10)“, statt nur die ausgewählte Anzahl.',
       ],
     },
