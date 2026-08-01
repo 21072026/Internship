@@ -1831,3 +1831,41 @@ ilgili değil; `npm run build` ve CI'ya güven.
 `announcements/route.ts`, `src/lib/activity.ts`) ~18 hayalet TS hatası. `npm install &&
 npx prisma generate` temizliyor. CLAUDE.md bunu söylüyor ama *belirti* şekli — "hiç
 açmadığım dosyalar kırmızı" — teşhisi tek bakışta veriyor.
+
+---
+
+## 2026-08-01 — Değerlendirme silme (#1013, 0.38.0-beta)
+
+**Kesilen `pull_request` olayı bu kez ilk push'ta oldu — ve rebase force-push'u
+tetikledi.** PR açıldı, `gh pr checks` "no checks reported" dedi,
+`gh api repos/O/R/commits/<sha>/check-runs` → `total_count: 0`. 20 dakika bekledim,
+hiçbir şey gelmedi. Sonra main'e rebase edip `git push --force-with-lease` yapınca beş
+workflow da 8 saniye içinde koştu. Yani #992'de işe yaramayan boş commit'in aksine
+**gerçek bir yeni head SHA** (rebase) olayı geri getiriyor. Önceki oturumun önerdiği
+`gh workflow run` yolunu denemeye gerek kalmadı. Pratik sıra: PR açtıktan ~1 dk sonra
+`check-runs` sayısına bak; 0 ise beklemeden dalı main'e rebase edip force-push et —
+sürüm çakışmasını da aynı anda çözüyorsun.
+
+**`releaseNotes.ts` çakışmasında "benimkini al" karşı tarafın notunu siler.** Sürüm
+çakışması bu oturumda üçüncü kez yaşandı (main 0.35.3 → 0.37.0 ilerlemişti) ama asıl
+tuzak çözümdeydi: `RELEASE_NOTES` dizisinde çakışma **en üstteki girdinin *içine*** düşüyor
+— `<<<<<<<` HEAD'in sürüm numarası + `=======` senin metnin şeklinde. Blok olarak
+"benimkini al" dersen karşı tarafın sürüm numarası kalır, **kullanıcıya görünen notu
+kaybolur**. Doğrusu: HEAD tarafını olduğu gibi bırak, kendi girdini dizinin başına *yeni*
+bir eleman olarak ekle. Aynı hata `CHANGELOG.md`'de daha görünür (başlık kaybolur), ama
+release notes'ta sessiz. Çözdükten sonra `grep -n "version: '0\." src/lib/releaseNotes.ts`
+ile sürümlerin azalan sırada ve tekrarsız olduğunu doğrula.
+
+**`@smoke` olmayan yeni bir spec'i doğrulamanın ucuz yolu `e2e-full` değil.**
+`e2e.yml` workflow_dispatch bir `grep` girdisi alıyor:
+`gh workflow run e2e.yml --ref <dal> -f grep="testin başlığından bir parça"`. Tek test,
+~1 dakika, 4-shard suite'i ve zorunlu özet e-postasını hiç uyandırmadan. Sonucu körlemesine
+"success" diye okuma — `gh run view <id> --log | grep -E "Running [0-9]+ test|passed"` ile
+testin **gerçekten koştuğunu** teyit et (`Running 1 test` + `1 passed`), yoksa hiçbir şeyle
+eşleşmeyen bir grep de yeşil görünebilir.
+
+**Yetki matrisi olan bir endpoint'te e2e, tarayıcı doğrulamasının yerine geçebiliyor.**
+Bu makinede yerel MySQL yok, yani paneli tıklayarak deneyemedim. Bunun yerine spec iki
+yönü de ölçtü: mentee'nin değerlendirmesine `403` + satır duruyor, mentorun kendi
+kaydına `200` + satır gitti. Görsel doğrulama yapılamayan ortamda **kuralı** test etmek,
+"derlendi" demekten çok daha fazlasını veriyor — PR'a da bu logu yapıştır.
