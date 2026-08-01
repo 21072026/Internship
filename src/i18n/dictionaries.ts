@@ -869,6 +869,8 @@ const en = {
     final: 'Final',
     onMentor: 'On mentor',
     averageScore: 'Average score (trend)',
+    delete: 'Delete evaluation',
+    confirmDelete: 'Delete this evaluation? This cannot be undone.',
   },
   goals: {
     title: 'Goals',
@@ -2534,6 +2536,8 @@ const tr: Dict = {
     final: 'Final',
     onMentor: 'Mentor için',
     averageScore: 'Ortalama skor (trend)',
+    delete: 'Değerlendirmeyi sil',
+    confirmDelete: 'Bu değerlendirme silinsin mi? Bu işlem geri alınamaz.',
   },
   goals: {
     title: 'Hedefler',
@@ -4197,6 +4201,8 @@ const de: Dict = {
     final: 'Abschlussbewertung',
     onMentor: 'Über Mentor',
     averageScore: 'Durchschnitt (Trend)',
+    delete: 'Bewertung löschen',
+    confirmDelete: 'Diese Bewertung löschen? Das lässt sich nicht rückgängig machen.',
   },
   goals: {
     title: 'Ziele',

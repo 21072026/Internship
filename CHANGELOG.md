@@ -8,6 +8,18 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.38.0-beta] - 2026-08-01
+
+### Added
+- **An evaluation can be deleted** (`DELETE /api/evaluations/[id]`, trash icon in
+  `EvaluationPanel`). Until now a mis-clicked rating was permanent: the panel only ever
+  appended, and there was no route to remove a row. Only the evaluation's **own author**
+  (or an ADMIN) may delete it — an evaluation is the author's judgement, so the other
+  side of the relation cannot erase one written about them. The list endpoint now returns
+  a `canDelete` flag per evaluation so the button only appears where the DELETE route
+  would actually allow it, and the deletion is recorded in the activity log
+  (`evaluation.deleted`).
+
 ## [0.37.0-beta] - 2026-08-01
 
 ### Added

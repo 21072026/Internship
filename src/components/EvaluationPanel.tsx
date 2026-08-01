@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -16,6 +17,7 @@ interface Evaluation {
   comment: string | null;
   direction: 'MENTOR_ON_MENTEE' | 'MENTEE_ON_MENTOR';
   createdAt: string;
+  canDelete?: boolean;
 }
 
 // Shows a relation's evaluation history. When not read-only, the current user
@@ -65,6 +67,16 @@ export function EvaluationPanel({
     } finally {
       setSaving(false);
     }
+  };
+
+  // Removing an evaluation recorded by mistake. The server re-checks that the
+  // caller is its author (or an admin); this only hides the button.
+  const remove = async (id: string) => {
+    if (!window.confirm(t.evaluation.confirmDelete)) return;
+    setError(null);
+    const res = await fetch(`/api/evaluations/${id}`, { method: 'DELETE' });
+    if (res.ok) await load();
+    else setError(t.common.error);
   };
 
   const label = (c: string) => (t.evaluation.criteria as Record<string, string>)[c] ?? c;
@@ -152,6 +164,18 @@ export function EvaluationPanel({
                 <div className="flex items-center gap-2 mb-1.5">
                   <Badge variant={ev.type === 'FINAL' ? 'success' : 'info'}>{typeLabel(ev.type)}</Badge>
                   {ev.direction === 'MENTEE_ON_MENTOR' && <Badge variant="purple">{t.evaluation.onMentor}</Badge>}
+                  {ev.canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => remove(ev.id)}
+                      aria-label={t.evaluation.delete}
+                      title={t.evaluation.delete}
+                      data-testid="evaluation-delete"
+                      className="ml-auto text-gray-300 hover:text-red-600 dark:text-gray-600 dark:hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                   {crit.filter((c) => ev.scores[c]).map((c) => (
