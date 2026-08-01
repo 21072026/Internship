@@ -1727,3 +1727,51 @@ tam sıfıra dayanmıyor, biraz fazladan aşağı gidiyor, scroll yapılamıyor.
   sinyali JS'ten kısarak taklit edin (`--visible-viewport-height = innerHeight - 48`) ve
   composer'ın kalan alanda kaldığını assert edin. Negatif kontrol clamp'i silmekle
   yapılıyor (630 > 616).
+
+## 2026-08-01 — CodeQL merge'ü check olarak değil, *konuşma* olarak bloke ediyor
+
+**Zorunlu check listesinde olmayan CodeQL yine de merge'ü durdurabiliyor.** #1004'te üç
+zorunlu check (`Lint · Typecheck · Build`, `Playwright smoke`, `Deploy topic environment`)
+yeşildi, `mergeable: MERGEABLE` idi ama `mergeStateStatus: BLOCKED` takılı kaldı ve
+auto-merge girmedi. Sebep dal korumasındaki `required_conversation_resolution: true`:
+`github-advanced-security` botu bulguyu diff üzerine bir **inceleme başlığı** olarak
+bırakıyor ve o başlık çözülmeden PR merge edilemiyor. Yani "CodeQL zorunlu check değil,
+bloke etmez" yanlış bir çıkarım. Teşhis yolu — `gh pr checks` bunu göstermiyor:
+```
+gh api graphql -f query='{repository(owner:"O",name:"R"){pullRequest(number:N){
+  reviewThreads(first:20){nodes{isResolved path line}}}}}'
+```
+Çözünce durum anında `UNSTABLE`'a (= zorunlular yeşil, zorunlu-olmayan kırmızı) düşüyor ve
+auto-merge çalışıyor. Not: başlığı çözmek **uyarıyı kapatmıyor**; alert Security
+sekmesinde açık kalıyor, o yüzden ikisi ayrı karar.
+
+**Object-URL önizlemeleri `js/xss-through-dom` (high) veriyor ve bu bir false positive.**
+`URL.createObjectURL(file)` → `<img src>` deseni her ek/görsel önizlemesinde var; main'de
+`MessageThread.tsx:42,44` zaten aynı şekilde işaretli. Değer tarayıcının ürettiği
+`blob:<origin>/<uuid>`, `javascript:`/`data:` olamaz ve `<img src>` SVG byte'ları için bile
+script çalıştırmaz. **Yeni bir composer eklerken bunu bekle**; toplu karar #1005'te.
+
+**`pull_request` olayları bir PR için sessizce kesilebiliyor.** #992'de ilk açılışta 4
+workflow koştu, sonraki iki push ve `close`+`reopen` hiçbir run yaratmadı — head commit'te
+sıfır check, dolayısıyla zorunlular hiç oluşmadı (aynı anda başka PR'lar sorunsuz
+koşuyordu, yani depo/kota sorunu değildi). Boş commit de tetiklemedi. İşe yarayan iki şey:
+`gh workflow run <wf>.yml --ref <branch>` (dispatch run'ları check-run'larını **head
+commit'e** iliştiriyor, yani zorunlu context'leri karşılıyorlar) ve nihayetinde aynı daldan
+**yeni bir PR** açmak. Teşhis: `gh api repos/O/R/commits/<sha>/check-runs` boş dönüyorsa
+olay hiç gelmemiş demektir.
+
+**PR gate `@smoke` koştuğu için yeni spec'in gate'te hiç çalışmıyor.** Etiketlemediysen
+(ki küçük tutmak için genelde etiketlememelisin) tek gerçek doğrulama
+`gh workflow run e2e-full.yml --ref <branch>`. Bunu PR'ı merge etmeden önce yap ve sonucu
+PR'a yaz; aksi halde "CI yeşil" yalnızca özelliğinin *derlendiğini* söylüyor.
+
+**Kırmızı tam suite'i regresyon sanmadan önce main'de kontrol koşusu al.** Bu turda dal 3
+testte kırmızıydı; aynı anda başlamış `main` zamanlanmış koşusu **6** testte kırmızıydı
+(üst küme). `gh run list --workflow e2e-full.yml --branch main` ile en yakın koşuyu bulup
+`✘` satırlarını karşılaştırmak, "benim mi, zaten bozuk mu" sorusunu tek adımda kapatıyor.
+
+**Paste'i e2e'de test etmek:** Playwright işletim sistemi panosuna görsel yazamıyor.
+Görsel için sentetik `ClipboardEvent` + `DataTransfer` gönder (`el.dispatchEvent`) — handler
+`clipboardData`'yı okuduğu için bu gerçek yolu kapsıyor. Ama **sentetik olay tarayıcının
+varsayılan yapıştırmasını tetiklemiyor**, o yüzden "düz metin hâlâ kutuya yazılıyor" testi
+`toHaveValue` ile yazılamaz; onun yerine sözleşmeyi ölç: `event.defaultPrevented === false`.
