@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.38.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'An evaluation you added by mistake can now be deleted: click the trash icon on the entry in the evaluation list. You can only remove evaluations you wrote yourself — admins can remove any — so nobody can erase an evaluation written about them.',
+      ],
+      tr: [
+        'Yanlışlıkla eklediğiniz bir değerlendirmeyi artık silebilirsiniz: değerlendirme listesindeki kaydın üzerindeki çöp kutusu simgesine tıklayın. Yalnızca kendi yazdığınız değerlendirmeleri silebilirsiniz (yöneticiler hepsini silebilir), böylece kimse hakkında yazılan bir değerlendirmeyi kaldıramaz.',
+      ],
+      de: [
+        'Eine versehentlich eingetragene Bewertung lässt sich jetzt löschen: einfach auf das Papierkorb-Symbol beim Eintrag in der Bewertungsliste klicken. Löschen können Sie nur Ihre eigenen Bewertungen — Admins alle —, damit niemand eine Bewertung über sich selbst entfernen kann.',
+      ],
+    },
+  },
+  {
     version: '0.37.0-beta',
     date: '2026-08-01',
     highlights: {
