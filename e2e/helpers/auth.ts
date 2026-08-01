@@ -63,15 +63,36 @@ export async function signInAsFreshUser(page: Page, email: string, password: str
  * blanket `clearCookies()` and an unscoped `button[type="submit"]`, a submit
  * issued before `/auth/signin` had rendered resolved against the *previous*
  * page and sat on its disabled "Add note" button until the action timeout.
+ *
+ * The session teardown is deliberately belt-and-braces. `/auth/signin` signs in
+ * by polling `/api/auth/session` and then doing a full-page
+ * `window.location.assign(roleHome)`, so `waitForURL()` returns while the old
+ * page is still reading the session — and a read landing after `clearCookies()`
+ * re-issues the cookie. `/auth/signin` then sees `authenticated` and
+ * `router.replace()`s to the dashboard, leaving no form to fill: the failure is
+ * a timeout on the password input, with no obvious culprit on screen. So: let
+ * the outgoing page go quiet first, and if the form still isn't there, drop the
+ * cookie again and reload once.
  */
 export async function submitSignInForm(page: Page, email: string, password: string) {
-  await page.goto('about:blank');
-  await page.context().clearCookies({ name: /next-auth\.session-token/ });
-  await page.goto('/auth/signin');
   const form = page.locator('form', { has: page.locator('input[type="password"]') });
+
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await dropSessionAndOpenSignIn(page);
+  if (!(await form.isVisible().catch(() => false))) {
+    await dropSessionAndOpenSignIn(page);
+  }
+
   await form.locator('input[type="email"], input[name="email"]').fill(email);
   await form.locator('input[type="password"]').fill(password);
   await form.locator('button[type="submit"]').click();
+}
+
+async function dropSessionAndOpenSignIn(page: Page) {
+  await page.goto('about:blank');
+  await page.context().clearCookies({ name: /next-auth\.session-token/ });
+  await page.goto('/auth/signin');
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
 /**
