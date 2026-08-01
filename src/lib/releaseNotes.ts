@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.37.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Admins who also mentor can now switch the whole app into the mentor view and back, from a new "View as" control at the bottom of the sidebar. Mentor view shows only the mentees you mentor yourself, without the org-wide admin pages — handy for actually working with your own mentees instead of reading the dense admin screens.',
+        'The switch keeps your place: from the admin board you land on the mentor board, from the candidate list on your own mentees, and so on. Pages that exist only for admins take you to the mentor dashboard instead.',
+      ],
+      tr: [
+        'Aynı zamanda mentorluk yapan yöneticiler artık uygulamayı tümüyle mentor görünümüne alıp geri dönebilir; kenar çubuğunun altındaki yeni "Görünüm" düğmesiyle. Mentor görünümü, kurum genelindeki yönetim sayfaları olmadan yalnızca kendi mentorluk yaptığınız mentee’leri gösterir — yoğun yönetim ekranlarıyla uğraşmak yerine kendi mentee’lerinizle çalışmak için pratik bir yol.',
+        'Düğme bulunduğunuz yeri korur: yönetici panosundan mentor panosuna, aday listesinden kendi mentee’lerinize geçersiniz. Yalnızca yöneticilere özel sayfalarda ise mentor paneline yönlendirilirsiniz.',
+      ],
+      de: [
+        'Admins, die selbst mentorieren, können die App jetzt komplett in die Mentoren-Ansicht umschalten und zurück — über das neue Feld „Ansicht“ unten in der Seitenleiste. Die Mentoren-Ansicht zeigt nur die Mentees, die Sie selbst betreuen, ohne die organisationsweiten Admin-Seiten.',
+        'Der Umschalter behält Ihren Kontext: vom Admin-Board landen Sie auf dem Mentoren-Board, von der Kandidatenliste bei Ihren eigenen Mentees. Seiten, die es nur für Admins gibt, führen stattdessen zum Mentoren-Dashboard.',
+      ],
+    },
+  },
+  {
     version: '0.36.0-beta',
     date: '2026-08-01',
     highlights: {

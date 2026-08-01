@@ -8,6 +8,7 @@ import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { AdminNav } from '@/components/AdminNav';
+import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
@@ -51,6 +52,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
 
         <AdminNav />
+
+        <ModeSwitcher />
 
         <AccountMenu
           name={session.user.name}
