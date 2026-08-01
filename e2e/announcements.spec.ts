@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -11,13 +12,9 @@ test('sending an announcement persists it and shows up in the history list', asy
   const uniqueText = `E2E announcement ${Date.now().toString(36)}`;
 
   try {
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', adminEmail);
-    await page.fill('input[type="password"]', 'AdminPass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
 
-    await page.goto('/admin/announcements');
+    await gotoSettled(page, '/admin/announcements');
     await page.fill('textarea', uniqueText);
 
     const postDone = page.waitForResponse(

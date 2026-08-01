@@ -1,18 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { totp } from '../src/lib/totp';
+import { submitSignInForm } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-async function fillLogin(page: import('@playwright/test').Page, email: string, password: string) {
-  await page.context().clearCookies();
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-}
+// Submits without waiting for a landing page: once 2FA is on, the expected
+// outcome is staying on /auth/signin with the authenticator field.
+const fillLogin = submitSignInForm;
 
 test('a user enables TOTP 2FA and must provide a code at sign-in', async ({ page }) => {
   const email = uniqueEmail('tfa-user');

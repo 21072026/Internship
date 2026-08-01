@@ -49,14 +49,50 @@ export async function signInAndSettle(page: Page, email: string, password: strin
  * the consent banner back over the form.
  */
 export async function signInAsFreshUser(page: Page, email: string, password: string, landing: string) {
-  await page.goto('about:blank');
-  await page.context().clearCookies({ name: /next-auth\.session-token/ });
-  await page.goto('/auth/signin');
+  await submitSignInForm(page, email, password);
+  await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
+}
+
+/**
+ * The guards of `signInAsFreshUser` without the landing wait, for accounts that
+ * are *supposed* to stay on `/auth/signin` after submitting — a 2FA-enabled user
+ * gets the authenticator field instead of a redirect.
+ *
+ * Everything in the doc comment above applies here; the landing wait is the only
+ * difference. Rolling this by hand is what made two-factor.spec.ts flaky: with a
+ * blanket `clearCookies()` and an unscoped `button[type="submit"]`, a submit
+ * issued before `/auth/signin` had rendered resolved against the *previous*
+ * page and sat on its disabled "Add note" button until the action timeout.
+ *
+ * The session teardown is deliberately belt-and-braces. `/auth/signin` signs in
+ * by polling `/api/auth/session` and then doing a full-page
+ * `window.location.assign(roleHome)`, so `waitForURL()` returns while the old
+ * page is still reading the session — and a read landing after `clearCookies()`
+ * re-issues the cookie. `/auth/signin` then sees `authenticated` and
+ * `router.replace()`s to the dashboard, leaving no form to fill: the failure is
+ * a timeout on the password input, with no obvious culprit on screen. So: let
+ * the outgoing page go quiet first, and if the form still isn't there, drop the
+ * cookie again and reload once.
+ */
+export async function submitSignInForm(page: Page, email: string, password: string) {
   const form = page.locator('form', { has: page.locator('input[type="password"]') });
+
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await dropSessionAndOpenSignIn(page);
+  if (!(await form.isVisible().catch(() => false))) {
+    await dropSessionAndOpenSignIn(page);
+  }
+
   await form.locator('input[type="email"], input[name="email"]').fill(email);
   await form.locator('input[type="password"]').fill(password);
   await form.locator('button[type="submit"]').click();
-  await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
+}
+
+async function dropSessionAndOpenSignIn(page: Page) {
+  await page.goto('about:blank');
+  await page.context().clearCookies({ name: /next-auth\.session-token/ });
+  await page.goto('/auth/signin');
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
 /**

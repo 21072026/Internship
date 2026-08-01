@@ -1869,3 +1869,63 @@ Bu makinede yerel MySQL yok, yani paneli tıklayarak deneyemedim. Bunun yerine s
 yönü de ölçtü: mentee'nin değerlendirmesine `403` + satır duruyor, mentorun kendi
 kaydına `200` + satır gitti. Görsel doğrulama yapılamayan ortamda **kuralı** test etmek,
 "derlendi" demekten çok daha fazlasını veriyor — PR'a da bu logu yapıştır.
+
+## 2026-08-01 — Zamanlanmış koşuda 2 kırmızı + 6 flaky: üçü de farklı sınıf
+
+Tek bir e2e raporundaki üç grup, üç ayrı iş çıkardı. Ayırt etme sırası şu:
+
+**1. `failed,failed` mi `failed,passed` mi?** Shard JSON'larını indirip retry desenine bak
+(yöntem bir önceki girdide). Bu koşuda 2 test retry'da da düştü → gerçek kırılma;
+6 test retry'da geçti → yarış koşulu. İkisine bakış açısı tamamen farklı: birincide
+"hangi commit bunu bozdu", ikincide "hangi bekleme eksik".
+
+**2. Kırmızıların ikisi de "test ortamı bir fail-open'a yaslanmış" sınıfındaydı.**
+`inbound-email` 401 veriyordu çünkü #870 webhook'un dev-dışı fail-open'ını kapattı ve CI
+production build (`next start`) servis ediyor — `NODE_ENV=production` + `INBOUND_SECRET`
+yok = 401. Endpoint doğru davranıyordu; **test ortamı, kapatılmış olan gevşek yola
+bağlıydı**. Doğru düzeltme testi gevşetmek değil, `playwright.config.ts`'in `webServer.env`
+bloğuna sırrı eklemek (`HEALTH_TOKEN` ile aynı desen) ve spec'ten göndermek — böylece test
+production'ın gerçek şeklini koşuyor. Bir güvenlik PR'ı bir fail-open'ı kapattığında,
+**o fail-open'a yaslanan e2e'ler o PR'da güncellenmeli**; yoksa fatura zamanlanmış koşuya
+kesiliyor.
+
+**3. Diğer kırmızı, CLAUDE.md'de zaten yazan locator tuzağının aynısı.** #881
+`/admin/activity` satırına bir IP çipi ekledi — o da `text-gray-400` ve DOM'da tarihten
+önce. `span.text-gray-400.first()` artık IP'yi yakalıyor ("unknown", çünkü e2e sunucusu
+bilerek `TRUSTED_PROXY_COUNT=0` ile koşuyor). Sınıf tabanlı locator, o sınıfı kullanan
+**yeni bir kardeş eklendiği gün** kırılır. `data-testid` ekle.
+
+**4. Altı flaky'nin hepsi, repoda zaten var olan yardımcıları kullanmıyordu.**
+`e2e/helpers/auth.ts` bu iki şekli önlemek için yazılmış ve doc comment'lerinde tam olarak
+bu hataları anlatıyor; spec'ler sadece geçmemişti. Yeni bir flake görünce **önce helper'ın
+var olup olmadığına bak** — muhtemelen problem çözülmüş, sadece uygulanmamış.
+İkinci şeklin sebebi blanket `clearCookies()`: `storageState`'ten gelen consent cookie'sini
+de siliyor *ve* terk edilen sayfanın uçuştaki `/api/auth/session` çağrısı session
+cookie'sini geri yazıyor, böylece `/auth/signin` test hâlâ yazarken eski dashboard'a
+`router.replace()` ediyor. `two-factor`'da submit, önceki sayfanın **disabled "Add note"**
+düğmesine çözünüp 15 sn boyunca onu denedi. Belirtisi hep aynı: hata mesajında
+"locator resolved to <...>" ile gelen element, o an bulunduğunu sandığın sayfaya ait değil.
+
+**Yardımcıyı bölerken:** 2FA açık hesap submit'ten sonra `/auth/signin`'de kalmalı, yani
+`signInAsFreshUser`'ın landing beklemesi orada yanlış. Gövdesini `submitSignInForm` olarak
+dışa aç, `signInAsFreshUser` onu çağırsın — guard'lar tek yerde kalır.
+
+**Süreç notu:** iki iş (kırmızı onarımı + flaky onarımı) ayrı PR'lara ayrıldı. Aynı dala
+yığmak, kırmızı düzeltmesinin merge'ünü flaky işinin CI'sine bağlardı; `git stash` + yeni
+dal (`git checkout -B <yeni> origin/main` + `stash pop`) bunu 10 saniyede ayırıyor.
+
+**Ek ders (aynı oturum, ilk denemem kırdı):** flaky'leri helper'a taşırken
+`submitSignInForm`'u "about:blank → sadece session cookie'sini sil → /auth/signin" olarak
+yazmak `two-factor.spec.ts`'i **deterministik olarak** bozdu (failed,failed) — parola alanı
+hiç gelmedi. Sebep: `/auth/signin` girişi tamamlarken `/api/auth/session`'ı yoklayıp
+`window.location.assign(roleHome)` yapıyor. `waitForURL()` dönüyor ama **terk edilen sayfa
+hâlâ session okuyor**; `clearCookies()`'ten sonra düşen bir yanıt cookie'yi geri yazıyor,
+sıradaki `/auth/signin` `authenticated` görüp dashboard'a `router.replace()` ediyor.
+Ekranda bunu söyleyen hiçbir şey yok — belirti sadece "parola alanı 15 sn'de gelmedi".
+Çözüm: cookie'yi düşürmeden **önce** çıkan sayfanın susmasını bekle (`networkidle`), form
+yine yoksa cookie'yi bir kez daha düşürüp yeniden yükle.
+
+İki genel kural: (1) blanket `clearCookies()`'i seçmeli silmeyle değiştirirken, o blanket
+silmenin **yan etkisiyle** neyi maskelediğini varsayma — doğrula; (2) grep'li dispatch
+koşusu bittikten sonra logu **oku**, "yaklaşım doğru" diye peşinen yeşil ilan etme. Bu
+oturumda 8 testten 7'si geçmişti; kalan 1'i sadece log gösterdi.
