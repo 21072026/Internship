@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, Sparkles, ExternalLink } from 'lucide-react';
+import { Search, Sparkles, ExternalLink, Users } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/EmptyState';
 import { useT } from '@/i18n/client';
 
 interface Candidate {
@@ -30,6 +31,7 @@ export default function TalentPoolPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
+  const hasFilters = Boolean(q.trim() || skill.trim());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,7 +101,18 @@ export default function TalentPoolPage() {
       {loading ? (
         <Card><SkeletonRows rows={4} /></Card>
       ) : candidates.length === 0 ? (
-        <Card className="text-center py-12 text-gray-400">{tp.none}</Card>
+        <Card
+          data-testid="talent-pool-empty-state"
+          data-empty-kind={hasFilters ? 'no-results' : 'empty-pool'}
+        >
+          <EmptyState
+            icon={hasFilters ? Search : Users}
+            title={hasFilters ? tp.noResultsTitle : tp.emptyTitle}
+            description={hasFilters ? tp.noResultsDescription : tp.emptyDescription}
+            actionLabel={hasFilters ? tp.clearFilters : undefined}
+            actionOnClick={hasFilters ? () => { setQ(''); setSkill(''); } : undefined}
+          />
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {candidates.map((c) => (

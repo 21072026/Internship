@@ -240,6 +240,13 @@ mentee and a mentor actually hit on a phone.
   be fixed, whether it is reachable *in this application* (naming the code path, not
   just the advisory), and what the permanent fix is.
 
+### Fixed
+- **Talent-pool empty states now distinguish loading, no search results and an empty pool.**
+  The company talent pool keeps its existing skeleton while loading, shows filter guidance
+  when a search has no matches, and explains when no candidates have made their profiles
+  public yet. Both empty states reuse the shared, dark-mode-safe `EmptyState` pattern and
+  expose `data-testid="talent-pool-empty-state"` for stable UI checks.
+
 ## [0.33.1-beta] - 2026-07-31
 
 ### Added
