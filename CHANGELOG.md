@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.38.1-beta] - 2026-08-01
+
+### Fixed
+- **Availability: the "Add" button did nothing for admins.** `POST /api/availability`
+  has always accepted ADMINs — they reach the mentor shell through the view switch
+  added in 0.37.0-beta — but `GET` only defaulted `mentorId` to the session user when
+  the role was `MENTOR`, and returned `{ slots: [] }` for everyone else. So an admin's
+  slot was created (201), the page reloaded the list, got nothing back, and stayed on
+  "Your slots (0)": a silent write with no visible effect. `GET` without `?mentorId=`
+  now means "my own slots" for any role, matching what `POST` writes. Regression test
+  drives the page through the UI (`e2e/calendar.spec.ts`) — the existing mentor test
+  hits the API only and passed the entire time this was broken.
+
 ## [0.38.0-beta] - 2026-08-01
 
 ### Added

@@ -6,13 +6,17 @@ import { z } from 'zod';
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// GET — availability slots. Mentors see their own; ?mentorId= returns a
-// mentor's slots (for booking).
+// GET — availability slots. Without a parameter you get your own; ?mentorId=
+// returns a mentor's slots (for booking).
+//
+// "Your own" deliberately includes ADMINs: POST lets an admin add slots (they
+// reach the mentor shell through the view switch to work their own mentees), so
+// a GET that only defaulted for MENTORs left the page permanently empty — every
+// added slot vanished and the Add button looked dead.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const mentorId = new URL(request.url).searchParams.get('mentorId') || (session.user.role === 'MENTOR' ? session.user.id : null);
-  if (!mentorId) return NextResponse.json({ slots: [] });
+  const mentorId = new URL(request.url).searchParams.get('mentorId') || session.user.id;
   const slots = await prisma.availabilitySlot.findMany({ where: { mentorId }, orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }] });
   return NextResponse.json({ slots });
 }
