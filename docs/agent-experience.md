@@ -1929,3 +1929,29 @@ yine yoksa cookie'yi bir kez daha düşürüp yeniden yükle.
 silmenin **yan etkisiyle** neyi maskelediğini varsayma — doğrula; (2) grep'li dispatch
 koşusu bittikten sonra logu **oku**, "yaklaşım doğru" diye peşinen yeşil ilan etme. Bu
 oturumda 8 testten 7'si geçmişti; kalan 1'i sadece log gösterdi.
+
+## 2026-08-02 — "Düğme hiçbir şey yapmıyor" aslında bir *okuma* hatasıydı (#1028, 0.38.1-beta)
+
+Bildirim: Müsaitlik sayfasında **Ekle**'ye basınca hiçbir şey olmuyor. İlk refleks — submit
+handler'ı, `Button`'ın `type`'ı, hidrasyon — hepsi temizdi. Hata yazma yolunda değil,
+**okuma** yolundaydı: `POST /api/availability` ADMIN'i kabul ediyor (admin mentor kabuğuna
+0.37.0-beta'daki görünüm anahtarıyla giriyor), ama `GET` `mentorId`'yi yalnızca
+`role === 'MENTOR'` iken oturumdaki kullanıcıya düşürüyor, diğer herkese `{ slots: [] }`
+dönüyordu. Yani: 201 dönüyor, sayfa listeyi yeniden yüklüyor, boş dizi alıyor ve
+"Saatlerin (0)"da kalıyor. Yazma sessizce başarılı, ekranda sıfır iz.
+
+**Genel kural:** bir kaynağın POST'u ile GET'i **farklı rol kümesine** varsayılan
+davranıyorsa, kullanıcıya görünen belirti "kayıt olmuyor" değil "düğme ölü" olur. Bir
+endpoint çiftine dokunurken yazma tarafının kabul ettiği rolleri okuma tarafının
+varsayılanıyla yan yana koy; ikisi ayrışıyorsa bu tek başına bir bug'dır.
+
+**Test dersi:** `e2e/calendar.spec.ts`'teki mevcut müsaitlik testi bu hata boyunca hep
+yeşildi — çünkü `page.request.post` ile **sadece API'yi** ve sadece MENTOR'ü deniyordu.
+Yazma+okuma döngüsünün kırıldığı yerde API-seviyesi test hiçbir şey kanıtlamaz; regresyon
+testi sayfayı sürmeli (giriş → `/mentor/availability` → formu gönder → satırı gör).
+
+**Ortam notu:** dal değiştirdikten sonra `tsc --noEmit` 20+ Prisma tipi hatası verdi
+(`lastTotpStep does not exist`, `announcementImage` yok…). Hepsi bayat client; tek
+`npx prisma generate` ile sıfırlandı. Bu Mac'te DB yok, o yüzden doğrulama grep'li
+`e2e.yml` dispatch'i ile yapıldı (`-f grep='<test başlığı>'`) — 1 test, ~8 sn, PR
+smoke gate'ini beklemeden fix'i kanıtlıyor.
