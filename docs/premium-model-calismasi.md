@@ -28,9 +28,12 @@ Bunun premium modele üç doğrudan etkisi var:
 
 **Dikkat edilmesi gereken iki nokta:**
 
-- **Fikri haklar**: sözlü anlaşma yeterli değil; her katkı verenle "katkılar işverene
-  aittir" maddesi içeren kısa yazılı bir katkı sözleşmesi (CLA benzeri) imzalanmalı.
-  Ticarileşme anında geriye dönük hak iddiasını en baştan kapatır.
+- **Fikri haklar** (karara bağlandı): tek hak sahibi **Mehmet Erşahin**; mentee
+  katkıları mentorluk kapsamında verilir ve uygulama üzerinde hak talebi doğurmaz.
+  Gelecek katkılar PR şablonundaki katkı şartları onayıyla yazılı hale gelir; mentorluk
+  dışı katkıcılar ayrıca sözleşme imzalar. Bkz.
+  [legal/cla-contributor-agreement.md](legal/cla-contributor-agreement.md) ve
+  [legal/licensing-strategy.md](legal/licensing-strategy.md).
 - **Veri erişimi**: katkı veren mentee'ler kod tabanında çalışırken **gerçek kullanıcı
   verisine** (paylaşılan preview DB dahil) erişmemeli. Ticarileşme öncesi, geliştirme
   ortamlarının seed/sahte veriyle çalışması kural haline getirilmeli — hem GDPR gereği
@@ -176,9 +179,12 @@ bölünebilir — ürün yol haritası ile mentorluk müfredatı bilinçli olara
 
 ## 6. Açık sorular
 
-- Ürünün hukuki/vergisel çerçevesi (şahıs mı, şirket mi; hangi ülke?) success-fee
-  ve abonelik faturalamasını etkiler. Ticarileşmeden önce netleşmeli.
-- Katkı sözleşmeleri: mevcut mentee'lerle yazılı IP devri var mı? Yoksa ilk iş bu.
+- Ürünün hukuki/vergisel çerçevesi: **hak sahipliği çözüldü** (Mehmet Erşahin, gerçek
+  kişi); **faturalayan taraf hâlâ açık** (şahıs mı, bcsit GmbH mi) — success-fee ve
+  abonelik faturalamasını etkiler, ilk satıştan önce netleşmeli. Bkz.
+  [legal/legal-tax-framework.md](legal/legal-tax-framework.md).
+- Katkı şartları: **çözüldü** — mentee katkıları hak talebi doğurmaz, gelecek katkılar
+  PR onayıyla yazılı. Bkz. [legal/cla-contributor-agreement.md](legal/cla-contributor-agreement.md).
 - Yetenek havuzu görünürlüğü **mentee'nin açık rızasına** bağlanmalı (mevcut
   `publicProfile` + `UserConsent` deseni genişletilerek) — hem GDPR gereği hem güven.
 - Katkı veren mentee'lerin gerçek kullanıcı verisine erişimi nasıl sınırlanacak?

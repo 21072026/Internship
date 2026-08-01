@@ -2,13 +2,30 @@
 
 > Hukuki/mali tavsiye değildir; mali müşavir (Steuerberater) ve avukat onayı gerekir.
 
-## Karar
-Ticarileşme **mevcut bcsit GmbH** (Almanya) üzerinden yürütülür. Yeni bir tüzel yapı
-kurulmaz — GmbH zaten var, sınırlı sorumluluk sağlıyor ve B2B SaaS faturalaması için
-uygun.
+## Önce netleştirilmesi gereken ayrım — IP ≠ faturalayan taraf
+
+**Yazılımın hak sahibi Mehmet Erşahin'dir (gerçek kişi)**; fikri mülkiyet hiçbir
+tüzel kişiye devredilmemiştir (bkz. `LICENSE`,
+[cla-contributor-agreement.md](cla-contributor-agreement.md)). Bu doküman yalnızca
+**gelirin hangi taraf üzerinden faturalandığını** ele alır — bu ayrı bir vergisel
+karardır ve hak sahipliğini değiştirmez.
+
+## Karar (teyit bekliyor)
+Ticarileşmenin **mevcut bcsit GmbH** (Almanya) üzerinden yürütülmesi öneriliyor. Yeni
+bir tüzel yapı kurulmaz — GmbH zaten var, sınırlı sorumluluk sağlıyor ve B2B SaaS
+faturalaması için uygun.
+
+> ⚠️ **Açık karar:** Faturalamanın GmbH üzerinden mi, hak sahibinin şahsı üzerinden mi
+> yapılacağı maintainer tarafından teyit edilmeli. GmbH seçilirse, hak sahibinden
+> GmbH'ye **yazılı bir kullanım/dağıtım lisansı** (ör. münhasır olmayan, alt-lisans
+> verilebilir ticari dağıtım hakkı) gerekir — aksi halde GmbH, hakkı kendisinde olmayan
+> bir yazılımı satmış olur. Şahıs üzerinden faturalanırsa bu iç lisansa gerek kalmaz,
+> ancak sınırlı sorumluluk avantajı da kaybedilir; Enterprise müşteriler genelde tüzel
+> kişiyle sözleşme yapmayı tercih eder.
 
 ### 1. Tüzel yapı
-- **Yürütücü:** bcsit GmbH (Almanya). Gelir, sözleşmeler ve faturalar GmbH üzerinden.
+- **Yürütücü (varsayım):** bcsit GmbH (Almanya). Gelir, sözleşmeler ve faturalar GmbH
+  üzerinden; yazılımın hakları hak sahibinde kalır, GmbH iç lisansla satar.
 - Gerekçe: hazır yapı, sınırlı sorumluluk, kurumsal müşterinin (Enterprise) sözleşme
   yapmak isteyeceği tüzel kişilik.
 
@@ -40,6 +57,8 @@ uygun.
 - **Kullanım Şartları + Gizlilik** (mevcut `/terms`, `/privacy` ile uyumlu).
 
 ## Aksiyon listesi
+- [ ] **Faturalayan tarafı teyit et** (bcsit GmbH mi, hak sahibinin şahsı mı).
+- [ ] GmbH seçilirse: hak sahibi → GmbH ticari dağıtım lisansını yazılı hale getir.
 - [ ] Steuerberater ile KDV/reverse-charge faturalama akışını netleştir.
 - [ ] Avukatla B2B SaaS sözleşme + DPA şablonları hazırlat.
 - [ ] Success-fee kullanılacaksa AÜG/SGB III değerlendirmesi (ayrı, ertelenebilir).

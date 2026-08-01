@@ -5,7 +5,8 @@ Erken karmaşıklık eklemeden gelir doğrulaması için:
 
 ### Faz 1 — Manuel faturalama (kod gerekmez) ✅ şimdi
 - Entitlement (`hasFeature` / premium Setting) **elle** açılır (admin).
-- Fatura bcsit GmbH tarafından elle kesilir (bkz. [legal-tax-framework.md](legal-tax-framework.md)).
+- Fatura, faturalayan taraf tarafından elle kesilir — hangi tüzel kişi/şahıs olduğu
+  [legal-tax-framework.md](legal-tax-framework.md) içinde (teyit bekliyor).
 - Uygun çünkü: ilk müşteri sayısı az; amaç ödeme akışını değil **değeri** doğrulamak.
 - Gereken: yok (mevcut entitlement katmanı yeterli).
 
