@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.36.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Mentors now have the same global search as admins, right in the header — find one of your mentees by name or email and jump straight to their profile.',
+      ],
+      tr: [
+        'Mentorlar artık adminlerle aynı genel aramaya, üst menüden erişebiliyor — mentilerinden birini ad veya e-postayla bulup doğrudan profiline gidebilirsiniz.',
+      ],
+      de: [
+        'Mentoren haben jetzt dieselbe globale Suche wie Admins, direkt in der Kopfzeile — finde einen deiner Mentees per Name oder E-Mail und springe direkt zu seinem Profil.',
+      ],
+    },
+  },
+  {
     version: '0.35.3-beta',
     date: '2026-08-01',
     highlights: {
