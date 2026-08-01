@@ -13,17 +13,95 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.33.2-beta',
-    date: '2026-07-31',
+    version: '0.35.3-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'You can now paste an image straight into an announcement, just like in messages — take a screenshot, press paste in the message box, and it is attached. Choosing a file from disk still works as before.',
+      ],
+      tr: [
+        'Artık duyuruya doğrudan görsel yapıştırabilirsiniz, tıpkı mesajlardaki gibi — ekran görüntüsünü alıp mesaj kutusunda yapıştırın, görsel eklenir. Dosya seçerek eklemek de eskisi gibi çalışıyor.',
+      ],
+      de: [
+        'Sie können ein Bild jetzt direkt in eine Ankündigung einfügen, genau wie in Nachrichten — Screenshot machen, im Nachrichtenfeld einfügen, fertig. Eine Datei auszuwählen funktioniert weiterhin wie bisher.',
+      ],
+    },
+  },
+  {
+    version: '0.35.2-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Fixed the bottom edge of the message screens on a phone: the reply box (and the last row of your conversation list) could end up behind the system navigation bar, with no way to scroll it into view. The screen now ends exactly where the visible area ends.',
+      ],
+      tr: [
+        'Telefonda mesaj ekranlarının alt kenarı düzeltildi: cevap kutusu (ve sohbet listesinin son satırı) sistemin gezinme çubuğunun arkasında kalabiliyordu ve kaydırarak görünür hâle getirmek mümkün olmuyordu. Ekran artık tam olarak görünür alanın bittiği yerde bitiyor.',
+      ],
+      de: [
+        'Der untere Rand der Nachrichten-Bildschirme auf dem Handy ist korrigiert: Das Antwortfeld (und die letzte Zeile der Unterhaltungsliste) konnte hinter der System-Navigationsleiste liegen, ohne sich ins Bild scrollen zu lassen. Der Bildschirm endet jetzt genau dort, wo der sichtbare Bereich endet.',
+      ],
+    },
+  },
+  {
+    version: '0.35.1-beta',
+    date: '2026-08-01',
     highlights: {
       en: [
         'The talent pool now tells you whether it is still loading, your search has no matches, or no candidates have joined the pool yet. Empty searches also suggest changing or clearing the filters.',
+        'Messages now fill the screen on a phone. A conversation used to be a long page you had to scroll down before you could even reach the reply box — now the message list is the only thing that scrolls, and the reply box stays where it is at the bottom of the screen.',
+        'Every message screen also has a header on a phone: it shows who you are talking to, with a back arrow to your conversations and a home button — no more relying on the browser\'s back button to get out.',
+        'When the on-screen keyboard opens, the reply box stays visible above it instead of disappearing behind it.',
       ],
       tr: [
         'Yetenek havuzu artık hâlâ yükleniyor mu, aramanızla eşleşen aday mı yok, yoksa havuza henüz hiç aday mı katılmamış açıkça gösteriyor. Sonuçsuz aramalarda filtreleri değiştirme veya temizleme önerisi de sunuluyor.',
+        'Mesajlar telefonda artık ekranı tam kullanıyor. Bir sohbet, cevap kutusuna ulaşmak için önce aşağı kaydırmanız gereken uzun bir sayfaydı — artık yalnızca mesaj listesi kayıyor, cevap kutusu ekranın altında sabit duruyor.',
+        'Her mesaj ekranında telefonda bir başlık çubuğu var: kiminle konuştuğunuzu gösteriyor, geri okuyla sohbetlerinize, ev butonuyla ana ekranınıza dönüyorsunuz — çıkmak için tarayıcının geri tuşuna ihtiyaç kalmadı.',
+        'Ekran klavyesi açıldığında cevap kutusu klavyenin arkasında kaybolmuyor, üstünde görünür kalıyor.',
       ],
       de: [
         'Der Talentpool zeigt jetzt klar, ob er noch lädt, die Suche keine Treffer hat oder noch keine Kandidaten im Pool sind. Bei einer erfolglosen Suche wird außerdem empfohlen, die Filter zu ändern oder zu löschen.',
+        'Nachrichten nutzen auf dem Handy jetzt den ganzen Bildschirm. Eine Unterhaltung war eine lange Seite, die man erst nach unten scrollen musste, um überhaupt das Antwortfeld zu erreichen — jetzt scrollt nur noch die Nachrichtenliste, und das Antwortfeld bleibt unten am Bildschirm stehen.',
+        'Jeder Nachrichten-Bildschirm hat auf dem Handy außerdem eine Kopfzeile: Sie zeigt, mit wem du schreibst, mit einem Zurück-Pfeil zu deinen Unterhaltungen und einer Start-Schaltfläche — der Zurück-Button des Browsers ist nicht mehr der einzige Ausweg.',
+        'Wenn die Bildschirmtastatur aufgeht, bleibt das Antwortfeld darüber sichtbar statt dahinter zu verschwinden.',
+      ],
+    },
+  },
+  {
+    version: '0.35.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Announcements can now include an image. When you write an announcement you can attach a picture (PNG, JPEG, WebP or GIF, up to 5 MB) and see it before publishing; everyone sees it with the announcement, and it is included in the email version too.',
+      ],
+      tr: [
+        'Duyurulara artık görsel eklenebiliyor. Duyuru yazarken bir görsel ekleyip (PNG, JPEG, WebP veya GIF, en fazla 5 MB) yayınlamadan önce önizleyebilirsiniz; görsel duyuruyla birlikte herkese gösterilir ve e-posta ile gönderilen sürümde de yer alır.',
+      ],
+      de: [
+        'Ankündigungen können jetzt ein Bild enthalten. Beim Schreiben einer Ankündigung lässt sich ein Bild anhängen (PNG, JPEG, WebP oder GIF, bis zu 5 MB) und vor dem Veröffentlichen ansehen; alle sehen es zusammen mit der Ankündigung, und in der E-Mail-Version ist es ebenfalls enthalten.',
+      ],
+    },
+  },
+  {
+    version: '0.34.0-beta',
+    date: '2026-07-31',
+    highlights: {
+      en: [
+        'The pipeline board now works on a phone. Instead of scrolling 13 stage columns sideways, pick a stage and see its mentees as a list — and every card has a "Move to stage" menu, so you no longer need to drag a card (which never worked on touch) to change its stage. Dragging still works on a computer, and a stage change can be undone straight from the confirmation for a few seconds.',
+        'The board is also keyboard-friendly: cards can be opened with the keyboard and stages changed without a mouse.',
+        'On a phone, the cookie banner no longer covers the "Create Account" button at the bottom of the sign-up page — pages now scroll clear of any bar pinned to the bottom of the screen, so the button is always reachable without dismissing the banner first.',
+        'The cookie banner is also more compact on small screens: it used to take up about 40% of the display on a phone.',
+      ],
+      tr: [
+        'Pipeline board artık telefonda çalışıyor. 13 aşama kolonunu yana kaydırmak yerine bir aşama seçip o aşamadaki mentee\'leri liste hâlinde görüyorsunuz; ayrıca her kartta "Aşamaya taşı" menüsü var, yani aşamayı değiştirmek için kartı sürüklemeniz (ki dokunmatikte hiç çalışmıyordu) gerekmiyor. Bilgisayarda sürükleme aynen çalışmaya devam ediyor ve aşama değişikliğini onay bildiriminden birkaç saniye içinde geri alabiliyorsunuz.',
+        'Board klavyeyle de kullanılabiliyor: kartlar klavyeyle açılabiliyor, aşamalar fare olmadan değiştirilebiliyor.',
+        'Telefonda çerez bandı artık kayıt sayfasının altındaki "Hesap oluştur" butonunu kapatmıyor — sayfalar ekranın altına sabitlenen bantların üstüne kadar kaydırılabiliyor, yani butona ulaşmak için önce bandı kapatmanız gerekmiyor.',
+        'Çerez bandı küçük ekranlarda daha derli toplu: eskiden telefonda ekranın yaklaşık %40\'ını kaplıyordu.',
+      ],
+      de: [
+        'Das Pipeline-Board funktioniert jetzt auf dem Handy. Statt 13 Phasenspalten seitwärts zu scrollen, wählst du eine Phase und siehst ihre Mentees als Liste — außerdem hat jede Karte ein Menü „In Phase verschieben", du musst eine Karte also nicht mehr ziehen (was per Touch ohnehin nie funktionierte). Am Computer bleibt das Ziehen unverändert, und ein Phasenwechsel lässt sich für einige Sekunden direkt aus der Bestätigung zurücknehmen.',
+        'Das Board ist auch mit der Tastatur bedienbar: Karten lassen sich per Tastatur öffnen und Phasen ohne Maus ändern.',
+        'Auf dem Handy verdeckt das Cookie-Banner nicht mehr die Schaltfläche „Konto erstellen" am Ende der Registrierungsseite — Seiten lassen sich jetzt über jede am unteren Bildschirmrand fixierte Leiste hinaus scrollen, die Schaltfläche ist also immer erreichbar, ohne das Banner zuerst zu schließen.',
+        'Das Cookie-Banner ist auf kleinen Bildschirmen außerdem kompakter: bisher nahm es auf dem Handy rund 40% der Anzeige ein.',
       ],
     },
   },

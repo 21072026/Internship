@@ -8,6 +8,205 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.35.3-beta] - 2026-08-01
+
+### Added
+- **An announcement image can be pasted** into the message box, not only picked from
+  disk (`/admin/announcements`). A screenshot is the most common thing attached to a
+  broadcast, and "save to disk, then browse for it" was pure friction. Same gesture and
+  same implementation shape as the message composer (`MessageThreadView`): the paste
+  handler takes the first `image/*` item off `clipboardData`, renames it (clipboard
+  images all arrive as `image.png`), and runs it through the *existing* `pickImage()`,
+  so a pasted file gets exactly the same type/size/signature validation as a picked
+  one. A paste carrying no image is left alone — it is not `preventDefault`-ed, so
+  ordinary text paste keeps working.
+
+## [0.35.2-beta] - 2026-08-01
+
+### Fixed
+- **The chat frame's bottom edge now lands on the *visible* bottom** (#1009). Follow-up
+  to #1006, reported from an installed PWA on Android: the end of the composer (and the
+  last row of the inbox) sat behind the system navigation bar and could not be scrolled
+  into view. `100dvh` is the *layout* viewport, and an edge-to-edge PWA draws behind the
+  navigation bar, so it is ~48px taller than what you can see — and since the frame
+  fits `100dvh` exactly, the document has no overflow either, which is why nothing
+  scrolled. Two independent corrections, neither of which does anything when there is
+  nothing hidden:
+  - The frame subtracts `env(safe-area-inset-bottom)`, and `/messages` opts into real
+    inset values with a **route-scoped** `viewport-fit=cover` (`viewport` export in
+    `src/app/messages/layout.tsx`, so no other route changes behaviour). The header
+    picks up `env(safe-area-inset-top)` and the frame the left/right insets for
+    landscape notches. `max(--fixed-bottom-inset, env(safe-area-inset-bottom))` rather
+    than a sum — the cookie banner already pads itself past the inset (#935), so
+    subtracting both would leave a gap above it.
+  - New `useVisibleViewportHeight` publishes `min(innerHeight, visualViewport.height)`
+    as `--visible-viewport-height`, which the frame applies as a **`max-height`
+    clamp**. Being a clamp and not a second subtraction is the point: if both signals
+    report the same hidden strip, the smaller one simply wins instead of the strip
+    being deducted twice. Pinch-zoom (`scale > 1.01`) is ignored, and the clamp also
+    tracks the on-screen keyboard.
+- `e2e/mobile-chat-layout.spec.ts` grew two assertions: the frame's height equals the
+  visible height (a malformed `calc()` shows up immediately), and — reproducing the
+  reported condition through the same signal the shell listens to — with 48px of the
+  viewport hidden the whole composer still fits inside what is left. Negative control:
+  without the clamp the send button sits 630px into a 616px visible area. A third test
+  pins the `viewport-fit=cover` scoping (present on `/messages`, absent on `/mentor`).
+
+## [0.35.1-beta] - 2026-08-01
+
+### Changed
+- **Chat screens are a real app shell on a phone** (#1006). A thread was a plain
+  document: the page title, the bubble list (its own `max-h-[55vh]` scroller) and the
+  composer all scrolled *together*, so on an iPhone 13 the document overflowed by
+  ~1200px and writing a reply meant scrolling the page down while the bubbles scrolled
+  up — two nested scrolls for one conversation.
+  - New `MessagesShell` (used by `/messages/layout.tsx`) is, below `lg:`, a fixed-height
+    flex column — `calc(100dvh - var(--fixed-bottom-inset))`, so it also shrinks around
+    the cookie banner from #935 — with the content area as `min-h-0 flex-1`. The thread,
+    the support chat and the inbox fill that area; the bubble list is the only scroller
+    (`overscroll-contain`), the composer never moves, and the document does not scroll
+    at all. Desktop keeps the previous document flow and the `55vh` bubble box.
+  - The shell also renders the **mobile header** the message screens never had: a back
+    arrow (to the inbox, or to the role home when already there), the thread's title —
+    the person you are talking to — and a home shortcut. There is no sidebar below
+    `lg:`, so the browser's back button used to be the only way out.
+  - The pages drop their own heading on mobile (the header is the `<h1>` there), which
+    is what buys the list its space back. Rendered via `useIsNarrow()` rather than
+    `lg:hidden` so only one variant is ever in the DOM (strict-mode locators).
+  - `viewport.interactiveWidget = 'resizes-content'`: the on-screen keyboard now shrinks
+    the layout viewport instead of overlaying it, so a full-height screen keeps its
+    composer above the keyboard.
+  - New `e2e/mobile-chat-layout.spec.ts` asserts it geometrically at 390×664 (document
+    overflow ≤ 1px, composer on screen and clickable, the list is the scroller and stays
+    pinned to the newest message) plus header navigation, and that desktop still shows
+    the page heading. Verified by negative control: with the old document flow the same
+    spec reports 1208px of overflow.
+
+## [0.35.0-beta] - 2026-08-01
+
+### Added
+- **Announcements can carry an image.** The admin composer at `/admin/announcements`
+  gets an optional picker (PNG/JPEG/WebP/GIF, up to 5 MB) with a local preview, and
+  the image is rendered on `/announcements`, in the dashboard `AnnouncementsCard`
+  (as a thumbnail) and in the admin history list. Stored in the DB as a new
+  `AnnouncementImage` row — the same approach as `AvatarFile`/`CvFile`, so it
+  survives container redeploys — and served from `/api/announcements/<id>/image`
+  behind an authenticated session, with `nosniff`. No `imageUrl` column: the URL is
+  a pure function of the announcement id, so mirroring it would only add a second
+  write that can disagree with reality.
+- `POST /api/admin/announcements` now accepts `multipart/form-data` in addition to
+  JSON (the JSON contract is unchanged, so existing API clients and specs keep
+  working). When "also send by email" is checked, the image travels as an **inline
+  `cid:` attachment** — the serving route needs a session, so a URL would have
+  rendered as a broken image in every mail client. `sendEmail`'s `attachments`
+  therefore accept an optional `cid`.
+- Uploads are validated against a single source of truth (`src/lib/announcementImage.ts`)
+  on both the client and the server, so a rejected file is reported at the picker
+  rather than as a bare 400 after Broadcast. SVG is deliberately excluded (it can
+  carry `<script>`, and the blob is served from our own origin), and the content
+  signature is checked with the shared `contentMatchesType()` from `src/lib/fileType.ts`
+  (#888) — so a file that merely *claims* to be a PNG is refused, in the same words as
+  every other upload route, before any notification fan-out happens.
+
+## [0.34.0-beta] - 2026-07-31
+
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
+Both halves of the "mobile first impression" story (#898): the two touchpoints a
+mentee and a mentor actually hit on a phone.
+
+### Added
+- **The pipeline board is usable on a phone** (#936). It is the mentor's main tool for
+  stage management, and on a phone it was unusable: 13 stage columns scrolled sideways
+  (only ~1.2 fit at 390px) and drag-and-drop — a gesture touch never fires — was the
+  only way to change a stage. The mentor board had no alternative at all; the admin
+  board already had a per-card select, so half of this is parity.
+  - Below `lg:` both boards render a **stage filter plus a single-column list** instead
+    of the kanban (`BoardStageFilter`, `data-testid="board-stage-filter"`). Stages come
+    from the same `useResolvedStages()` source, so custom org stages appear in the
+    filter and the picker. `useIsNarrow()` picks *one* of the two layouts rather than
+    rendering both behind `lg:hidden` — that would put every card in the DOM twice and
+    break strict-mode locators.
+  - Every card carries the shared `CardStageSelect` (`aria-label="Move to stage"`), so
+    a stage change works by touch **and** by keyboard on both boards. Desktop
+    drag-and-drop is untouched. The mentee name is now a real link, so a card is
+    reachable and openable with the keyboard instead of click-only.
+  - A stage change offers **Undo** in the toast for 7s — a mis-tap is easy on a phone
+    and was previously only fixable with another move. `Toast` gained an optional
+    action for this; `moveTo` reads the live relation list through a ref, because the
+    toast callback runs long after the render that created it (with the closed-over
+    state, undo silently no-op'd).
+  - The phone filter is **pinned** once data loads. Deriving it from "first stage with
+    items" on every render made the view follow a card into its new stage, so you never
+    saw it leave the stage you were looking at.
+  - Both board pages tag their desktop layout `data-testid="board-columns"` and their
+    cards `data-testid="board-card"`.
+
+### Fixed
+- **No horizontal overflow at 320px** (#936). The app-shell mobile top bar was 2px
+  wider than the screen: the hamburger's `-mr-2` pushed it past the bar's `px-4`, and
+  the wordmark + beta badge + three icon buttons could not shrink. The wordmark
+  truncates now and the icon group is `flex-shrink-0`. Affects every role's mobile
+  header, not just the board.
+- **`e2e/board-a11y.spec.ts`** scoped its stage select to its own card. The admin board
+  lists every relation in the database, so the unscoped `getByLabel('Move to stage')`
+  broke (strict-mode, 2 elements) as soon as any other relation shared the stage —
+  latent flake, hit locally on the first run.
+- **Fixed bottom bars no longer cover page content on phones** (#935) — the cookie
+  banner is `fixed bottom-0`, and nothing reserved space for it, so on an iPhone 13
+  (390×664) it filled 40% of the viewport and painted over the *"Create Account"*
+  button on `/auth/register`: the first action in the product could not be completed
+  without dismissing the banner first.
+  - New `useFixedBottomInset(ref, active)` hook (`src/hooks/`): each fixed bottom bar
+    publishes its measured height (ResizeObserver, so a re-wrapped banner re-measures)
+    and the tallest one lands on `<html>` as `--fixed-bottom-inset`. `globals.css`
+    turns that into `body { padding-bottom }`, so the document grows and the content
+    scrolls above the bar; the inset returns to `0px` when the bar unmounts, leaving
+    no leftover gap. Deliberately shared so the mobile quick-action bar (#917) can
+    reuse it instead of inventing a second mechanism.
+  - The banner itself is more compact on small screens: tighter padding, body text
+    clamped to two lines below `sm:` (full sentence from `sm:` up — no new strings, so
+    EN/TR/DE stay in parity), and the three buttons in one `grid-cols-3` row instead
+    of wrapping to a second line. Desktop markup is unchanged.
+  - Safe-area support: the banner's bottom padding is
+    `max(0.75rem, env(safe-area-inset-bottom))`. Note the app does not set
+    `viewport-fit=cover`, so `env()` currently resolves to `0` — this is future-proofing
+    for when it does, not a live change.
+  - New `e2e/mobile-fixed-bars.spec.ts` — geometric (`boundingBox`) assertions rather
+    than screenshots: on `/auth/register`, `/auth/signin` and `/portal`, scrolling to
+    the bottom of the document leaves the primary action (and the whole `main` content
+    area) above the banner; the register CTA also survives a real `click()`, which
+    Playwright rejects when another element is on top of it; and dismissing the banner
+    drops the body inset back to `0px`.
+
 ## [0.33.2-beta] - 2026-07-31
 
 ### Security

@@ -1,11 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { GraduationCap, User, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import { PIPELINE_GROUPS, type PipelineGroupKey } from '@/lib/pipeline';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
+import { useToast } from '@/components/ui/Toast';
+import { useIsNarrow } from '@/hooks/useIsNarrow';
+import { BoardStageFilter } from '@/components/board/BoardStageFilter';
+import { CardStageSelect } from '@/components/board/CardStageSelect';
 
 interface Relation {
   id: string;
@@ -27,11 +32,17 @@ export default function AdminBoardPage() {
   const stages = useResolvedStages();
   const label = useStageLabel();
   const router = useRouter();
+  const toast = useToast();
+  const narrow = useIsNarrow();
   const [relations, setRelations] = useState<Relation[]>([]);
+  // moveTo is also called much later from a toast's "Undo", where the closed-over
+  // `relations` would be stale — read the live list through a ref instead.
+  const relationsRef = useRef<Relation[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
+  const [mobileStage, setMobileStage] = useState('');
   const [collapsed, setCollapsed] = useState<Record<PipelineGroupKey, boolean>>({
     pre: false,
     internship: false,
@@ -46,11 +57,27 @@ export default function AdminBoardPage() {
   }, []);
 
   useEffect(() => {
+    relationsRef.current = relations;
+  }, [relations]);
+
+  useEffect(() => {
     fetchRelations();
   }, [fetchRelations]);
 
-  const moveTo = async (relationId: string, pipelineStatus: string) => {
-    const prev = relations;
+  // Pin the phone filter to a real stage once data is in: deriving it on every
+  // render made the view follow a card to its new stage, so you never saw it
+  // leave the stage you were looking at.
+  useEffect(() => {
+    if (mobileStage || loading || stages.length === 0) return;
+    const firstWithItems = stages.find((s) => relations.some((r) => r.pipelineStatus === s.key));
+    setMobileStage(firstWithItems?.key ?? stages[0].key);
+  }, [mobileStage, loading, stages, relations]);
+
+  // `silent` suppresses the undo offer, so undoing a move can't offer to undo itself.
+  const moveTo = async (relationId: string, pipelineStatus: string, opts?: { silent?: boolean }) => {
+    const prev = relationsRef.current;
+    const from = prev.find((r) => r.id === relationId)?.pipelineStatus;
+    if (from === pipelineStatus) return;
     setRelations((rs) => rs.map((r) => (r.id === relationId ? { ...r, pipelineStatus } : r)));
     try {
       const res = await fetch(`/api/mentorship/${relationId}`, {
@@ -59,8 +86,15 @@ export default function AdminBoardPage() {
         body: JSON.stringify({ pipelineStatus }),
       });
       if (!res.ok) throw new Error('Failed');
+      if (!opts?.silent && from) {
+        toast(t.board.stageChanged, 'success', {
+          label: t.board.undo,
+          onClick: () => moveTo(relationId, from, { silent: true }),
+        });
+      }
     } catch {
       setRelations(prev);
+      toast(t.board.stageChangeFailed, 'error');
     }
   };
 
@@ -76,6 +110,59 @@ export default function AdminBoardPage() {
 
   const toggleGroup = (key: PipelineGroupKey) =>
     setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+
+  // Phone view opens on the first stage that has anyone in it (see the effect above).
+  const activeStage = mobileStage || stages[0]?.key || '';
+
+  const renderCard = (r: Relation) => {
+    const overdue = !!r.stageDeadline && new Date(r.stageDeadline).getTime() < now;
+    return (
+      <div
+        key={r.id}
+        draggable
+        onDragStart={(e) => e.dataTransfer.setData('relationId', r.id)}
+        onClick={() => router.push(`/admin/candidates/${r.mentee.id}`)}
+        data-testid="board-card"
+        className="bg-white border border-gray-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-300 hover:shadow-sm transition"
+      >
+        <div className="flex items-start justify-between gap-2">
+          {/* The name is a real link so the card is reachable (and openable) by keyboard. */}
+          <Link
+            href={`/admin/candidates/${r.mentee.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-sm font-medium text-gray-900 truncate hover:underline"
+          >
+            {r.mentee.fullName}
+          </Link>
+          {overdue && (
+            <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-1.5 py-0.5">
+              <AlertTriangle className="h-3 w-3" />
+              {t.adminBoard.overdue}
+            </span>
+          )}
+        </div>
+        {r.mentee.university && (
+          <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
+        )}
+        <div className="flex items-center gap-3 text-xs text-gray-400 mt-2">
+          <span className="flex items-center gap-1 truncate">
+            <User className="h-3 w-3 flex-shrink-0" />
+            {r.mentor.fullName}
+          </span>
+          <span className="flex items-center gap-1 flex-shrink-0">
+            <GraduationCap className="h-3 w-3" />
+            {r._count.interactions}
+          </span>
+        </div>
+        {/* Keyboard/touch-accessible alternative to drag-and-drop. */}
+        <CardStageSelect
+          stages={stages}
+          value={r.pipelineStatus}
+          onChange={(next) => moveTo(r.id, next)}
+        />
+      </div>
+    );
+  };
 
   const renderColumn = (status: string) => {
     const items = itemsFor(status);
@@ -110,53 +197,7 @@ export default function AdminBoardPage() {
         </div>
 
         <div className="space-y-2 min-h-[40px]">
-          {items.map((r) => {
-            const overdue = !!r.stageDeadline && new Date(r.stageDeadline).getTime() < now;
-            return (
-              <div
-                key={r.id}
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData('relationId', r.id)}
-                onClick={() => router.push(`/admin/candidates/${r.mentee.id}`)}
-                className="bg-white border border-gray-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-300 hover:shadow-sm transition"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium text-gray-900 truncate">{r.mentee.fullName}</p>
-                  {overdue && (
-                    <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-medium text-red-600 bg-red-50 border border-red-200 rounded-full px-1.5 py-0.5">
-                      <AlertTriangle className="h-3 w-3" />
-                      {t.adminBoard.overdue}
-                    </span>
-                  )}
-                </div>
-                {r.mentee.university && (
-                  <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
-                )}
-                <div className="flex items-center gap-3 text-xs text-gray-400 mt-2">
-                  <span className="flex items-center gap-1 truncate">
-                    <User className="h-3 w-3 flex-shrink-0" />
-                    {r.mentor.fullName}
-                  </span>
-                  <span className="flex items-center gap-1 flex-shrink-0">
-                    <GraduationCap className="h-3 w-3" />
-                    {r._count.interactions}
-                  </span>
-                </div>
-                {/* Keyboard/touch-accessible alternative to drag-and-drop. */}
-                <select
-                  aria-label={t.adminBoard.moveTo}
-                  value={status}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => { e.stopPropagation(); moveTo(r.id, e.target.value); }}
-                  className="mt-2 w-full rounded border border-gray-200 px-1.5 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                >
-                  {stages.map((sv) => (
-                    <option key={sv.key} value={sv.key}>{sv.label}</option>
-                  ))}
-                </select>
-              </div>
-            );
-          })}
+          {items.map(renderCard)}
         </div>
       </div>
     );
@@ -184,7 +225,25 @@ export default function AdminBoardPage() {
         </label>
       </div>
 
-      <div className="space-y-5">
+      {narrow ? (
+        /* Phone: one stage at a time as a list — 13 columns don't fit at 390px.
+           Search above still applies, so the list is search ∩ stage. */
+        <div data-testid="board-mobile">
+          <BoardStageFilter
+            stages={stages}
+            countFor={(s) => itemsFor(s).length}
+            value={activeStage}
+            onChange={setMobileStage}
+          />
+          <div className="space-y-2">
+            {itemsFor(activeStage).map(renderCard)}
+            {itemsFor(activeStage).length === 0 && (
+              <p className="text-center py-8 text-sm text-gray-400">{t.board.emptyStage}</p>
+            )}
+          </div>
+        </div>
+      ) : (
+      <div data-testid="board-columns" className="space-y-5">
         {PIPELINE_GROUPS.map((group) => {
           const statuses = hideEmpty
             ? group.statuses.filter((s) => itemsFor(s).length > 0)
@@ -215,6 +274,7 @@ export default function AdminBoardPage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

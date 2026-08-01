@@ -11,6 +11,7 @@ interface AnnouncementItem {
   id: string;
   text: string;
   link: string | null;
+  imageUrl: string | null;
   createdAt: string;
 }
 
@@ -68,6 +69,15 @@ export default function AnnouncementsPage() {
             {items.map((a) => (
               <div key={a.id} className="px-4 py-4 border-b border-gray-50 dark:border-gray-800 last:border-0">
                 <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{a.text}</p>
+                {a.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={a.imageUrl}
+                    alt=""
+                    data-testid="announcement-image"
+                    className="mt-2 max-h-96 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
+                  />
+                )}
                 {a.link && (
                   <a href={a.link} target={a.link.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline block mt-1">
                     {a.link}
