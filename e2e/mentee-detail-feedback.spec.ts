@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -15,13 +16,9 @@ test('mentee detail: empty interaction log shows an example card, and logging on
   const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
 
   try {
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', mentorEmail);
-    await page.fill('input[type="password"]', 'MentorPass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+    await signInAndSettle(page, mentorEmail, 'MentorPass123', '/mentor');
 
-    await page.goto(`/mentor/mentees/${rel.id}`);
+    await gotoSettled(page, `/mentor/mentees/${rel.id}`);
     await expect(page.getByText('No interactions logged yet')).toBeVisible({ timeout: 10_000 });
     // The illustrative example card is shown alongside the empty message.
     await expect(page.getByText('Example')).toBeVisible();

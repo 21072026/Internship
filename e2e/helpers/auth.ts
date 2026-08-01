@@ -49,6 +49,22 @@ export async function signInAndSettle(page: Page, email: string, password: strin
  * the consent banner back over the form.
  */
 export async function signInAsFreshUser(page: Page, email: string, password: string, landing: string) {
+  await submitSignInForm(page, email, password);
+  await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
+}
+
+/**
+ * The guards of `signInAsFreshUser` without the landing wait, for accounts that
+ * are *supposed* to stay on `/auth/signin` after submitting — a 2FA-enabled user
+ * gets the authenticator field instead of a redirect.
+ *
+ * Everything in the doc comment above applies here; the landing wait is the only
+ * difference. Rolling this by hand is what made two-factor.spec.ts flaky: with a
+ * blanket `clearCookies()` and an unscoped `button[type="submit"]`, a submit
+ * issued before `/auth/signin` had rendered resolved against the *previous*
+ * page and sat on its disabled "Add note" button until the action timeout.
+ */
+export async function submitSignInForm(page: Page, email: string, password: string) {
   await page.goto('about:blank');
   await page.context().clearCookies({ name: /next-auth\.session-token/ });
   await page.goto('/auth/signin');
@@ -56,7 +72,6 @@ export async function signInAsFreshUser(page: Page, email: string, password: str
   await form.locator('input[type="email"], input[name="email"]').fill(email);
   await form.locator('input[type="password"]').fill(password);
   await form.locator('button[type="submit"]').click();
-  await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
 }
 
 /**
