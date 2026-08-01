@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.35.2-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Fixed the bottom edge of the message screens on a phone: the reply box (and the last row of your conversation list) could end up behind the system navigation bar, with no way to scroll it into view. The screen now ends exactly where the visible area ends.',
+      ],
+      tr: [
+        'Telefonda mesaj ekranlarının alt kenarı düzeltildi: cevap kutusu (ve sohbet listesinin son satırı) sistemin gezinme çubuğunun arkasında kalabiliyordu ve kaydırarak görünür hâle getirmek mümkün olmuyordu. Ekran artık tam olarak görünür alanın bittiği yerde bitiyor.',
+      ],
+      de: [
+        'Der untere Rand der Nachrichten-Bildschirme auf dem Handy ist korrigiert: Das Antwortfeld (und die letzte Zeile der Unterhaltungsliste) konnte hinter der System-Navigationsleiste liegen, ohne sich ins Bild scrollen zu lassen. Der Bildschirm endet jetzt genau dort, wo der sichtbare Bereich endet.',
+      ],
+    },
+  },
+  {
     version: '0.35.1-beta',
     date: '2026-08-01',
     highlights: {

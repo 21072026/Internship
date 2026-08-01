@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { ArrowLeft, Home } from 'lucide-react';
 import { useT } from '@/i18n/client';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
+import { useVisibleViewportHeight } from '@/hooks/useVisibleViewportHeight';
 
 /**
  * App shell for every /messages screen (#1006).
@@ -50,6 +51,8 @@ export function MessagesShell({
   const t = useT();
   const pathname = usePathname();
   const narrow = useIsNarrow();
+  // Second, independent measure of the usable height — see the frame below.
+  useVisibleViewportHeight(narrow);
   const [title, setTitle] = useState<string | null>(null);
   const publishTitle = useCallback((next: string | null) => setTitle(next), []);
 
@@ -60,11 +63,27 @@ export function MessagesShell({
 
   return (
     <SetTitleContext.Provider value={publishTitle}>
-      {/* Underscores are Tailwind's spaces: calc() needs them around the minus. */}
-      <div className="flex h-[calc(100dvh_-_var(--fixed-bottom-inset))] flex-col overflow-hidden bg-gray-50 lg:h-auto lg:min-h-screen lg:overflow-visible">
+      {/*
+        Underscores are Tailwind's spaces: calc() needs them around the minus.
+        The safe-area insets are what keep the frame's bottom edge *at* the visible
+        bottom (#1009): on an installed PWA the layout viewport extends behind the
+        system navigation bar, so `100dvh` is ~48px taller than what you can see —
+        and since the document then has no overflow either, the covered strip (the
+        end of the composer, the last inbox row) is unreachable by scrolling. The
+        route's `viewport-fit=cover` is what makes these report the real insets;
+        they resolve to 0px everywhere else, so desktop is unchanged.
+        `max()` rather than a sum: a fixed bottom bar pads itself past the inset
+        already (CookieConsent), so subtracting both would leave a gap above it.
+        `--visible-viewport-height` (useVisibleViewportHeight) clamps the same thing
+        from the other direction — as a max-height, so if both signals report the
+        same hidden strip the smaller one simply wins instead of it being subtracted
+        twice.
+      */}
+      <div className="flex h-[calc(100dvh_-_max(var(--fixed-bottom-inset),env(safe-area-inset-bottom,0px)))] max-h-[var(--visible-viewport-height,100dvh)] flex-col overflow-hidden bg-gray-50 pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] lg:h-auto lg:max-h-none lg:min-h-screen lg:overflow-visible lg:px-0" data-testid="messages-frame">
         {/* `bg-white/95` is not the `bg-white` globals.css retints, so dark mode
-            needs its own surface here. */}
-        <header className="shrink-0 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 lg:border-0 lg:bg-transparent lg:backdrop-blur-none dark:lg:bg-transparent">
+            needs its own surface here. `viewport-fit=cover` also puts the status
+            bar inside the viewport, hence the top inset on the header. */}
+        <header className="shrink-0 border-b border-gray-200 bg-white/95 pt-[env(safe-area-inset-top,0px)] backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 lg:border-0 lg:bg-transparent lg:pt-0 lg:backdrop-blur-none dark:lg:bg-transparent">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-1 px-2 py-1.5 lg:px-8 lg:pb-0 lg:pt-8">
             <Link
               href={backHref}

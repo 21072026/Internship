@@ -71,18 +71,45 @@ test('mobile: a thread fills the viewport, only the bubble list scrolls', async 
       })
       .toBeLessThan(8);
 
-    // 3. The composer is reachable where it stands — no scrolling, nothing on top
+    // 3. The frame ends exactly at the bottom of the visible viewport (#1009): its
+    //    height must track the *visible* height, not just `100dvh`. Nothing is
+    //    hidden here (no system-bar insets in a headless browser), so the two are
+    //    equal — a malformed calc()/max-height would show up as a mismatch.
+    const frame = await page.getByTestId('messages-frame').evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      return { bottom: Math.round(box.bottom), height: Math.round(box.height), visible: window.innerHeight };
+    });
+    expect(frame.height, 'frame fills the visible viewport').toBe(frame.visible);
+    expect(frame.bottom, 'and its bottom edge lands on it').toBeLessThanOrEqual(frame.visible);
+
+    // 4. The composer is reachable where it stands — no scrolling, nothing on top
     //    of it (Playwright fails the click if another element intercepts it).
     const box = await composer.boundingBox();
     expect(box, 'composer has a box').not.toBeNull();
     expect(box!.y + box!.height).toBeLessThanOrEqual(IPHONE_13.height);
     await composer.click();
 
-    // 4. Scrolling the history does not move the composer.
+    // 5. Scrolling the history does not move the composer.
     await list.evaluate((el) => { el.scrollTop = 0; });
     const afterScroll = await composer.boundingBox();
     expect(afterScroll!.y).toBeCloseTo(box!.y, 0);
     expect(await documentOverflow(page)).toBeLessThanOrEqual(1);
+
+    // 6. The reported bug (#1009): a strip of the viewport is not actually visible
+    //    — a system navigation bar drawn over the bottom 48px. Headless Chromium
+    //    has no system bars, so the condition is reproduced through the same signal
+    //    the shell listens to, and the whole composer must end up inside what is
+    //    left. Without the clamp the send button sat 48px below the visible bottom
+    //    with nothing to scroll, which is exactly what was reported.
+    const HIDDEN = 48;
+    await page.evaluate((hidden) => {
+      document.documentElement.style.setProperty('--visible-viewport-height', `${window.innerHeight - hidden}px`);
+    }, HIDDEN);
+    const send = await page.getByTestId('message-send').boundingBox();
+    expect(send, 'send button has a box').not.toBeNull();
+    expect(send!.y + send!.height, 'the composer stays inside the visible area').toBeLessThanOrEqual(
+      IPHONE_13.height - HIDDEN,
+    );
   } finally {
     await prisma.message.deleteMany({ where: { relationId: rel.id } });
     await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
@@ -126,6 +153,30 @@ test('mobile: the chat header names the thread and navigates out of it', async (
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);
+  }
+});
+
+test('the messages routes opt into safe-area insets, other routes do not', async ({ page }) => {
+  const email = uniqueEmail('vpfit-mentor');
+  await seedUser(email, 'MentorPass123', 'MENTOR', 'ViewportFit Mentor');
+
+  const viewportMeta = () =>
+    page.locator('meta[name="viewport"]').getAttribute('content');
+
+  try {
+    await page.setViewportSize(IPHONE_13);
+    await signInAndSettle(page, email, 'MentorPass123', '/mentor');
+
+    // `viewport-fit=cover` is what makes env(safe-area-inset-*) report the real
+    // system-bar insets the chat frame subtracts (#1009) — and it is deliberately
+    // scoped to /messages, since those are the only screens that reserve them.
+    expect(await viewportMeta()).not.toContain('viewport-fit=cover');
+
+    await page.goto('/messages');
+    await expect(page.getByTestId('messages-frame')).toBeVisible({ timeout: 15_000 });
+    expect(await viewportMeta()).toContain('viewport-fit=cover');
+  } finally {
+    await cleanupByEmail(email);
   }
 });
 
