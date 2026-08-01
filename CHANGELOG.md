@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.35.3-beta] - 2026-08-01
+
+### Added
+- **An announcement image can be pasted** into the message box, not only picked from
+  disk (`/admin/announcements`). A screenshot is the most common thing attached to a
+  broadcast, and "save to disk, then browse for it" was pure friction. Same gesture and
+  same implementation shape as the message composer (`MessageThreadView`): the paste
+  handler takes the first `image/*` item off `clipboardData`, renames it (clipboard
+  images all arrive as `image.png`), and runs it through the *existing* `pickImage()`,
+  so a pasted file gets exactly the same type/size/signature validation as a picked
+  one. A paste carrying no image is left alone — it is not `preventDefault`-ed, so
+  ordinary text paste keeps working.
+
 ## [0.35.2-beta] - 2026-08-01
 
 ### Fixed

@@ -83,6 +83,22 @@ export default function AdminAnnouncementsPage() {
     setImage({ file, url: URL.createObjectURL(file) });
   };
 
+  // Paste an image straight from the clipboard into the composer — the same
+  // gesture the message composer supports (MessageThreadView). A screenshot is
+  // the most common thing an admin attaches to an announcement, and going
+  // through "save to disk, then pick the file" for it is pure friction.
+  const onPaste = (e: React.ClipboardEvent) => {
+    const pasted = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .find((file): file is File => !!file);
+    if (!pasted) return; // plain text paste — leave it to the textarea
+    e.preventDefault();
+    // Clipboard images arrive as "image.png" or unnamed; the name is only shown
+    // next to the preview, but a timestamp keeps two pastes distinguishable.
+    pickImage(new File([pasted], `pasted-${Date.now()}.png`, { type: pasted.type }));
+  };
+
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim()) return;
@@ -131,6 +147,7 @@ export default function AdminAnnouncementsPage() {
                 data-testid="announcement-text"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onPaste={onPaste}
                 rows={4}
                 required
                 maxLength={TEXT_LIMITS.announcementText}
