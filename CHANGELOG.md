@@ -8,6 +8,37 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.35.2-beta] - 2026-08-01
+
+### Fixed
+- **The chat frame's bottom edge now lands on the *visible* bottom** (#1009). Follow-up
+  to #1006, reported from an installed PWA on Android: the end of the composer (and the
+  last row of the inbox) sat behind the system navigation bar and could not be scrolled
+  into view. `100dvh` is the *layout* viewport, and an edge-to-edge PWA draws behind the
+  navigation bar, so it is ~48px taller than what you can see — and since the frame
+  fits `100dvh` exactly, the document has no overflow either, which is why nothing
+  scrolled. Two independent corrections, neither of which does anything when there is
+  nothing hidden:
+  - The frame subtracts `env(safe-area-inset-bottom)`, and `/messages` opts into real
+    inset values with a **route-scoped** `viewport-fit=cover` (`viewport` export in
+    `src/app/messages/layout.tsx`, so no other route changes behaviour). The header
+    picks up `env(safe-area-inset-top)` and the frame the left/right insets for
+    landscape notches. `max(--fixed-bottom-inset, env(safe-area-inset-bottom))` rather
+    than a sum — the cookie banner already pads itself past the inset (#935), so
+    subtracting both would leave a gap above it.
+  - New `useVisibleViewportHeight` publishes `min(innerHeight, visualViewport.height)`
+    as `--visible-viewport-height`, which the frame applies as a **`max-height`
+    clamp**. Being a clamp and not a second subtraction is the point: if both signals
+    report the same hidden strip, the smaller one simply wins instead of the strip
+    being deducted twice. Pinch-zoom (`scale > 1.01`) is ignored, and the clamp also
+    tracks the on-screen keyboard.
+- `e2e/mobile-chat-layout.spec.ts` grew two assertions: the frame's height equals the
+  visible height (a malformed `calc()` shows up immediately), and — reproducing the
+  reported condition through the same signal the shell listens to — with 48px of the
+  viewport hidden the whole composer still fits inside what is left. Negative control:
+  without the clamp the send button sits 630px into a 616px visible area. A third test
+  pins the `viewport-fit=cover` scoping (present on `/messages`, absent on `/mentor`).
+
 ## [0.35.1-beta] - 2026-08-01
 
 ### Changed

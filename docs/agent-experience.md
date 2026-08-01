@@ -1701,3 +1701,29 @@ kırmızı. Ayrıca elle başlatılan `npm run dev`'i Playwright yeniden kulland
 `executablePath` numarasını geçici bir `playwright.local.config.ts` ile verdim
 (`{...base, use: {...base.use, launchOptions: {executablePath: '/opt/pw-browsers/chromium'}}}`)
 — commit etmeyin.
+
+### Ek: 2026-08-01 — "alt kısım tam sıfıra dayanmıyor" (#1009)
+
+**`100dvh` görünür yükseklik DEĞİL.** Android'de kurulu PWA (edge-to-edge) sistem
+gezinme çubuğunun *arkasına* çiziyor, yani `100dvh` gördüğünüzden ~48 px fazla. Tam
+`100dvh` yüksekliğinde bir çerçeve kurunca dokümanda taşma da olmuyor → gizli kalan
+şerit **kaydırılarak da erişilemiyor**. Kullanıcının tarifi tam buydu: "en aşağı kısım
+tam sıfıra dayanmıyor, biraz fazladan aşağı gidiyor, scroll yapılamıyor."
+
+- `env(safe-area-inset-bottom)` bunun tek CSS sinyali, ama **`viewport-fit=cover`
+  olmadan 0 döner**. Next App Router'da `viewport` export'u **layout başına** yapılabilir
+  (`src/app/messages/layout.tsx`), yani cover'ı tüm uygulamaya açmak zorunda değilsiniz —
+  iç içe export kök export'u *değiştirir* (merge etmez), o yüzden kökteki alanları
+  (themeColor, interactiveWidget) tekrar yazın.
+- İki düzeltmeyi **toplamayın**: biri çıkarma (`height: calc(100dvh - env(...))`), diğeri
+  **clamp** (`max-height: var(--visible-viewport-height)`) olsun. İkisi de aynı 48 px'i
+  bildirdiğinde clamp'te küçük olan kazanır; toplarsanız 96 px çıkarıp boşluk açarsınız.
+  Aynı sebeple `max(--fixed-bottom-inset, env(safe-area-inset-bottom))`: sabit alt bar
+  zaten kendi içinde inset kadar padding taşıyor (#935).
+- Tailwind arbitrary value içinde `max()`/`env()` sorunsuz derleniyor
+  (`h-[calc(100dvh_-_max(var(--x),env(safe-area-inset-bottom,0px)))]`), üretilen CSS'i
+  `grep "height:calc(100dvh" .next/static/css/*.css` ile doğrulayın.
+- **Cihaz elinizde olmasa da test edilebilir:** gizli şeridi, kabuğun dinlediği aynı
+  sinyali JS'ten kısarak taklit edin (`--visible-viewport-height = innerHeight - 48`) ve
+  composer'ın kalan alanda kaldığını assert edin. Negatif kontrol clamp'i silmekle
+  yapılıyor (630 > 616).
