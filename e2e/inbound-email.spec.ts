@@ -1,6 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { createHmac } from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { E2E_INBOUND_SECRET } from '../playwright.config';
+
+// The webhook's shared secret is mandatory outside development (#870), and CI
+// serves a production build — so every call here carries it. That is also the
+// production shape: the token gate below is the *second* factor, not the only
+// one.
+const authed = { 'x-inbound-secret': E2E_INBOUND_SECRET };
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -27,6 +34,7 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
   try {
     // Valid: correct token + participant sender → message created, quoted text stripped.
     const ok = await request.post('/api/inbound-email', {
+      headers: authed,
       data: { to: `reply+${token}@crm.ersah.in`, from: `Inb Mentee <${menteeEmail}>`, text: 'Thanks, see you then!\n\nOn Mon someone wrote:\n> earlier message' },
     });
     expect(ok.status()).toBe(200);
@@ -35,8 +43,15 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     expect(msg?.body).toBe('Thanks, see you then!');
     await expect.poll(async () => prisma.notification.count({ where: { userId: mentor.id, type: 'message' } })).toBeGreaterThan(0);
 
+    // No shared secret → refused before the token is even looked at (#870).
+    const anon = await request.post('/api/inbound-email', {
+      data: { to: `reply+${token}@crm.ersah.in`, from: menteeEmail, text: 'no secret' },
+    });
+    expect(anon.status()).toBe(401);
+
     // Tampered token → rejected.
     const bad = await request.post('/api/inbound-email', {
+      headers: authed,
       data: { to: `reply+${rel.id}.deadbeefdeadbeefdeadbeefdeadbeef@crm.ersah.in`, from: menteeEmail, text: 'hack' },
     });
     expect(bad.status()).toBe(400);
@@ -44,6 +59,7 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     // Legacy token (no recipient) + sender is not a participant → rejected,
     // because nothing else identifies the writer.
     const stranger = await request.post('/api/inbound-email', {
+      headers: authed,
       data: { to: `reply+${token}@crm.ersah.in`, from: 'stranger@evil.com', text: 'spoof' },
     });
     expect(stranger.status()).toBe(403);
@@ -56,6 +72,7 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     const messageId = `<replay-${rel.id}@mail.example>`;
     for (const attempt of [1, 2]) {
       const res = await request.post('/api/inbound-email', {
+        headers: authed,
         data: { to: `reply+${token}@crm.ersah.in`, from: menteeEmail, text: 'Sent twice by the mail server', messageId },
       });
       expect(res.status()).toBe(200);
@@ -68,6 +85,7 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     // Quote attribution lines other than "On … wrote:" are trimmed too — this
     // exact shape arrived from a real client and used to leak into the thread.
     const quoted = await request.post('/api/inbound-email', {
+      headers: authed,
       data: {
         to: `reply+${token}@crm.ersah.in`,
         from: menteeEmail,
@@ -86,6 +104,7 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     const scoped = makeScopedToken(rel.id, mentee.id);
     const forwardedId = `<forwarded-${rel.id}@mail.example>`;
     const forwarded = await request.post('/api/inbound-email', {
+      headers: authed,
       data: {
         to: `reply+${scoped}@crm.ersah.in`,
         from: 'personal-address-not-on-file@gmail.com',
@@ -103,6 +122,7 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     const outsider = await seedUser(uniqueEmail('inb-outsider'), 'x', 'MENTEE', 'Inb Outsider');
     try {
       const spoof = await request.post('/api/inbound-email', {
+        headers: authed,
         data: {
           to: `reply+${makeScopedToken(rel.id, outsider.id)}@crm.ersah.in`,
           from: 'stranger@evil.com',
