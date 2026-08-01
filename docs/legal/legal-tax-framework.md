@@ -10,24 +10,37 @@ tüzel kişiye devredilmemiştir (bkz. `LICENSE`,
 **gelirin hangi taraf üzerinden faturalandığını** ele alır — bu ayrı bir vergisel
 karardır ve hak sahipliğini değiştirmez.
 
-## Karar (teyit bekliyor)
-Ticarileşmenin **mevcut bcsit GmbH** (Almanya) üzerinden yürütülmesi öneriliyor. Yeni
-bir tüzel yapı kurulmaz — GmbH zaten var, sınırlı sorumluluk sağlıyor ve B2B SaaS
-faturalaması için uygun.
+## Karar: faturalayan taraf **ilk satışa kadar ertelendi** (maintainer, 2026-08-01)
 
-> ⚠️ **Açık karar:** Faturalamanın GmbH üzerinden mi, hak sahibinin şahsı üzerinden mi
-> yapılacağı maintainer tarafından teyit edilmeli. GmbH seçilirse, hak sahibinden
-> GmbH'ye **yazılı bir kullanım/dağıtım lisansı** (ör. münhasır olmayan, alt-lisans
-> verilebilir ticari dağıtım hakkı) gerekir — aksi halde GmbH, hakkı kendisinde olmayan
-> bir yazılımı satmış olur. Şahıs üzerinden faturalanırsa bu iç lisansa gerek kalmaz,
-> ancak sınırlı sorumluluk avantajı da kaybedilir; Enterprise müşteriler genelde tüzel
-> kişiyle sözleşme yapmayı tercih eder.
+Faturalamanın bcsit GmbH üzerinden mi, hak sahibinin şahsı üzerinden mi yapılacağı
+**şimdi karara bağlanmıyor**; ilk gerçek satış/talep geldiğinde karara bağlanacak. Bu
+bilinçli bir erteleme ve güvenlidir, çünkü:
+
+- Hak sahipliği **zaten net** (Mehmet Erşahin) — erteleyen karar yalnızca faturayı kimin
+  kestiği; bu, yazılımın hakları üzerinde hiçbir etki doğurmaz.
+- Karar, ilk müşterinin kim olduğuna göre değişebilir (kurumsal alıcı tüzel kişi ister,
+  küçük müşteri şahıs faturasını sorun etmez) — şimdi verilecek karar erken olur.
+- Geriye dönük düzeltilemeyen tek şey **fatura kesildikten sonrası**dır; imzadan önce
+  seçmek yeterli.
+
+> ⚠️ **İlk satıştan/imzadan önce yapılması gerekenler** (ertelemenin şartı):
+> 1. Faturalayan tarafı seç.
+> 2. **GmbH seçilirse**, hak sahibinden GmbH'ye **yazılı bir ticari dağıtım lisansı**
+>    (münhasır olmayan, alt-lisans verilebilir) imzalanmalı — aksi halde GmbH, hakkı
+>    kendisinde olmayan bir yazılımı satmış olur. Tek sayfalık bir metin yeterli, ama
+>    **fatura tarihinden önce** tarihli olmalı.
+> 3. Şahıs seçilirse iç lisansa gerek yok; ancak sınırlı sorumluluk avantajı olmaz ve
+>    Enterprise alıcılar genelde tüzel kişiyle sözleşme yapmak ister.
+>
+> Bunlar yapılmadan sözleşme imzalanmamalı/fatura kesilmemeli.
 
 ### 1. Tüzel yapı
-- **Yürütücü (varsayım):** bcsit GmbH (Almanya). Gelir, sözleşmeler ve faturalar GmbH
+- **Aday (henüz seçilmedi):** bcsit GmbH (Almanya) — gelir, sözleşmeler ve faturalar GmbH
   üzerinden; yazılımın hakları hak sahibinde kalır, GmbH iç lisansla satar.
 - Gerekçe: hazır yapı, sınırlı sorumluluk, kurumsal müşterinin (Enterprise) sözleşme
   yapmak isteyeceği tüzel kişilik.
+- **Alternatif:** hak sahibinin şahsı üzerinden faturalama (iç lisans gerekmez, kurulum
+  maliyeti sıfır; sınırlı sorumluluk yok).
 
 ### 2. Vergi / faturalama
 - **KDV (Umsatzsteuer):** GmbH KDV mükellefi; faturalarda %19 USt gösterilir.
@@ -57,8 +70,9 @@ faturalaması için uygun.
 - **Kullanım Şartları + Gizlilik** (mevcut `/terms`, `/privacy` ile uyumlu).
 
 ## Aksiyon listesi
-- [ ] **Faturalayan tarafı teyit et** (bcsit GmbH mi, hak sahibinin şahsı mı).
-- [ ] GmbH seçilirse: hak sahibi → GmbH ticari dağıtım lisansını yazılı hale getir.
+- [x] Kararı ilk satışa ertele (yukarıdaki şartlarla) — 2026-08-01.
+- [ ] **İlk talep geldiğinde:** faturalayan tarafı seç (bcsit GmbH mi, şahıs mı).
+- [ ] GmbH seçilirse: hak sahibi → GmbH ticari dağıtım lisansını **fatura öncesi** imzala.
 - [ ] Steuerberater ile KDV/reverse-charge faturalama akışını netleştir.
 - [ ] Avukatla B2B SaaS sözleşme + DPA şablonları hazırlat.
 - [ ] Success-fee kullanılacaksa AÜG/SGB III değerlendirmesi (ayrı, ertelenebilir).
