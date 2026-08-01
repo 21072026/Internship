@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.35.2-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'The admin candidate list is now easier to use on a phone: each candidate appears in a compact card with their stage and mentor up front, while education, city and skills remain close at hand. Filters can be opened when needed, and the page no longer scrolls sideways at 375px.',
+      ],
+      tr: [
+        'Yönetici aday listesi artık telefonda daha rahat kullanılıyor: her aday, aşaması ve mentoru önde olacak şekilde kompakt bir kartta gösteriliyor; eğitim, şehir ve yetkinlik bilgileri de hemen altında yer alıyor. Filtreler gerektiğinde açılabiliyor ve sayfa 375px genişlikte artık yatay kaymıyor.',
+      ],
+      de: [
+        'Die Kandidatenliste für Admins ist jetzt auf dem Handy leichter nutzbar: Jede Person erscheint in einer kompakten Karte, in der Phase und Mentor zuerst sichtbar sind; Ausbildung, Ort und Skills stehen direkt darunter. Die Filter lassen sich bei Bedarf öffnen, und bei 375px scrollt die Seite nicht mehr seitwärts.',
+      ],
+    },
+  },
+  {
     version: '0.35.1-beta',
     date: '2026-08-01',
     highlights: {
