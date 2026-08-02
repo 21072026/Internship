@@ -2075,3 +2075,44 @@ yeni `impersonation` vakası) gerçekten koşup geçtiği böyle görüldü. Sha
 kırmızı `e2e/questions.spec.ts:17` idi ve **aynı test main'in 03:00 UTC koşusunda da
 kırmızıydı** — yani mevcut bir sorun. Bir shard kırmızı olduğunda önce aynı testin son
 main koşusundaki durumuna bak; "benim değişikliğim mi" sorusunu 30 saniyede kapatıyor.
+
+## 2026-08-02 — Guard'ı yazmak kolay, endpoint'in *bütün* yüzeylerini bulmak asıl iş (#1039, 0.39.1-beta)
+
+`/api/account/2fa` impersonation guard'ı olmayan tek hesap endpoint'iydi: "Kullanıcı olarak
+gir" ile giren admin, sahibinin elinde olmayan bir authenticator'ı hesaba bağlayabiliyor
+(30 dakikalık impersonation penceresinden sonra da yaşayan kalıcı bir ikinci kimlik
+bilgisi) ya da sahibi koruyan faktörü söküp atabiliyordu.
+
+**Aynı endpoint'in ikinci bir arayüz yüzeyi vardı.** `/account` kartı bariz olanıydı;
+`/security-setup` (org 2FA zorunluluk kapısı) aynı endpoint'e POST ediyor. Rol layout'ları
+bu kapıyı impersonation'da zaten atlıyor, yani oraya ancak URL elle yazılarak ulaşılıyor —
+ama guard eklendikten sonra orası da "gönderilince 400 dönen form" olacaktı, yani bir
+önceki dersin (#1036) tuzağının aynısı. **Kural:** guard eklerken `grep -rn
+"api/<endpoint>" src/` çalıştır ve çıkan her çağrı noktasını ayrı ayrı karara bağla; kartı
+gizlemek "arayüz tarafı bitti" demek değil.
+
+**Engellemeden önce alternatif yolun var mı diye bak.** `sign-out-all`'ı da kapattım, ama
+önce admin'in bir kullanıcıyı kilitleme yolu olup olmadığını kontrol ettim:
+`POST /api/admin/users/[id]/reset-password` var ve **admin'in kendi id'siyle** loglanıyor.
+Olmasaydı doğru hamle "engelle" değil, "engelle + admin tarafı eşdeğerini ekle" olurdu —
+yoksa guard bir yeteneği karşılıksız siler.
+
+**Denetim kaydı tek başına guard gerekçesidir.** `logActivity` bu rotalarda
+`actorId: session.user.id` yazıyor; impersonation'da bu, işlemi yapan admin değil
+*kullanıcı* demek. İşleme izin verilseydi bile kayıt yanlış kişiyi gösterecekti. Bir
+eylemin impersonation'da serbest olup olmayacağını tartışırken "kim yaptı diye sorulursa
+kayıt ne diyor?" sorusu, "zararlı mı?" sorusundan daha hızlı sonuç veriyor.
+
+**GET'i engelleme.** Salt-okunur durum sorgusunu da 400'lemek arayüzün mount'ta yaptığı
+`fetch`'i kırar, karşılığında hiçbir şey kazandırmaz. Guard mutasyona konur.
+
+**`gh run view --job X --log | grep` sessizce boş dönebiliyor.** Dört shard'da da yeni
+testin adını aradım, dördü de `0` eşleşme verdi — test koşmamış gibi göründü. Aynı log'u
+önce dosyaya yazıp (`> s$j.log`) grep'leyince eşleşmeler çıktı (shard 2, `✓
+impersonation.spec.ts:136`). **Log'da bir şey bulamamak "yok" demek değil**: önce dosyaya
+yaz, sonra ara.
+
+**Ve merge'den önce koştur.** Bir önceki dersin tam da bunu söylediğini (`gh workflow run
+e2e-full.yml --ref <branch>`) merge ettikten *sonra* fark ettim; bu turda tam suite main'de
+koşup 349/349 geçti, ama doğru sıra branch'te koşturmak. `docs/agent-experience.md`'yi
+oturumun *başında* okumanın nedeni bu — sonunda yazmak yetmiyor.
