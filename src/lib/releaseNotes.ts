@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.39.1-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Two-factor authentication now belongs to the account holder alone. While an admin is viewing your account through "Login as", they can no longer turn 2FA on — which would have paired an authenticator app only they hold — nor turn it off, nor sign your devices out. Those cards are hidden during impersonation and the server refuses the changes even if the request is sent directly.',
+        'This also fixes the audit trail: such a change used to be recorded under your name rather than the admin\'s. Admins who need to lock an account out still start a password reset for it from the user list, which is logged as their own action.',
+      ],
+      tr: [
+        'İki faktörlü doğrulama artık yalnızca hesap sahibinin elinde. Bir yönetici "Kullanıcı olarak gir" ile hesabına baktığında 2FA\'yı açamaz (bu, yalnızca onun elindeki bir doğrulayıcı uygulamayı hesabına bağlardı), kapatamaz ve cihazlarından çıkış yaptıramaz. Bu kartlar kimliğe bürünme sırasında gizleniyor; istek doğrudan gönderilse bile sunucu reddediyor.',
+        'Bu aynı zamanda denetim kaydını da düzeltiyor: böyle bir değişiklik önce yöneticinin değil senin adına kaydediliyordu. Bir hesabın erişimini kesmesi gereken yöneticiler bunu yine kullanıcı listesinden parola sıfırlama başlatarak yapıyor — o işlem kendi adlarına kaydediliyor.',
+      ],
+      de: [
+        'Die Zwei-Faktor-Authentifizierung gehört jetzt allein dem Kontoinhaber. Solange eine Administratorin dein Konto per „Anmelden als“ ansieht, kann sie 2FA weder aktivieren — das hätte eine Authenticator-App eingerichtet, die nur sie besitzt — noch deaktivieren, noch deine Geräte abmelden. Diese Karten sind während der Identitätsübernahme ausgeblendet, und der Server lehnt die Änderungen auch bei direkt gesendeten Anfragen ab.',
+        'Damit stimmt auch das Protokoll wieder: Eine solche Änderung wurde bisher unter deinem Namen statt unter dem der Administratorin festgehalten. Wer ein Konto aussperren muss, startet dafür weiterhin aus der Nutzerliste ein Passwort-Zurücksetzen — das wird als eigene Aktion protokolliert.',
+      ],
+    },
+  },
+  {
     version: '0.39.0-beta',
     date: '2026-08-02',
     highlights: {

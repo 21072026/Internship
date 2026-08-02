@@ -12,6 +12,17 @@ export async function POST() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Not from an impersonation session (#1039). Revoking every device of an
+  // account is a security decision for its owner: it is logged as the user
+  // though an admin pressed it, it locks the owner out of sessions the admin
+  // knows nothing about, and it takes the impersonation session down with it —
+  // so the admin lands on the sign-in page as if they had been signed out. An
+  // admin who genuinely needs to lock someone out uses
+  // POST /api/admin/users/[id]/reset-password, which is audited under their own id.
+  if (session.user.impersonatorId) {
+    return NextResponse.json({ error: 'Cannot sign out all devices while impersonating' }, { status: 400 });
+  }
+
   return await withTenantScope(session, async () => {
   await prisma.user.update({
     where: { id: session.user.id },
