@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.1-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'A project now has one screen instead of two. The card in the project list is a summary — who is on it, progress, links — and everything else (team, goals, the recurring meeting, join requests, adding people) is on the project page. If your account is both admin and mentor you reach that list from two places, which is why two half-views used to alternate.',
+        'The phone layout of those screens was reworked: the old "add a task" box that shrank to a sliver is gone, and the goal, meeting and member forms now stack instead of squeezing into one row.',
+      ],
+      tr: [
+        'Bir projenin artık iki değil tek ekranı var. Proje listesindeki kart bir özet — kimler var, ilerleme, linkler — geri kalan her şey (ekip, hedefler, düzenli toplantı, katılma talepleri, kişi ekleme) proje sayfasında. Hesabın hem admin hem mentörse o listeye iki yerden ulaşıyorsun; iki yarım görünümün dönüşümlü çıkmasının sebebi buydu.',
+        'Bu ekranların mobil düzeni yenilendi: incecik kalan eski "görev ekle" kutusu kaldırıldı; hedef, toplantı ve üye formları tek satıra sıkışmak yerine alt alta diziliyor.',
+      ],
+      de: [
+        'Ein Projekt hat jetzt einen Bildschirm statt zwei. Die Karte in der Projektliste ist eine Zusammenfassung — wer dabei ist, Fortschritt, Links — alles andere (Team, Ziele, wiederkehrendes Treffen, Beitrittsanfragen, Personen hinzufügen) liegt auf der Projektseite. Wer sowohl Admin als auch Mentor ist, erreicht diese Liste über zwei Wege; daher wechselten sich bisher zwei halbe Ansichten ab.',
+        'Das Handy-Layout dieser Seiten wurde überarbeitet: Das alte, auf wenige Pixel geschrumpfte „Aufgabe hinzufügen“-Feld ist weg, und die Formulare für Ziele, Treffen und Mitglieder stapeln sich statt sich in eine Zeile zu quetschen.',
+      ],
+    },
+  },
+  {
     version: '0.40.0-beta',
     date: '2026-08-02',
     highlights: {

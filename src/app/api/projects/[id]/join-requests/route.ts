@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
@@ -193,17 +194,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       await createOrGetProjectConversation(id);
     }
 
-    const updated = await prisma.projectJoinRequest.update({
-      where: { id: requestId },
-      data: {
-        status: decision,
-        functionalRole,
-        decidedById: session.user.id,
-        decidedAt: new Date(),
-        decisionNote: note || null,
-      },
-      select: requestSelect,
-    });
+    // A double-clicked Approve (or a request withdrawn in between) would
+    // otherwise surface as a 500 from Prisma's P2025.
+    let updated;
+    try {
+      updated = await prisma.projectJoinRequest.update({
+        where: { id: requestId },
+        data: {
+          status: decision,
+          functionalRole,
+          decidedById: session.user.id,
+          decidedAt: new Date(),
+          decisionNote: note || null,
+        },
+        select: requestSelect,
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+      throw e;
+    }
 
     await notify(
       existing.userId,

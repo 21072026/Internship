@@ -46,16 +46,16 @@ export function ReferralLinkCard() {
         <span className="font-medium text-gray-900 dark:text-gray-100">{t.referral.title}</span>
       </div>
       <p className="mb-3 text-sm text-gray-500">{t.referral.hint}</p>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           readOnly
           value={url}
           onFocus={(e) => e.currentTarget.select()}
           aria-label={t.referral.yourLink}
           data-testid="referral-url"
-          className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+          className="w-full min-w-0 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 sm:flex-1"
         />
-        <Button type="button" size="sm" variant="outline" onClick={copy} data-testid="referral-copy">
+        <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={copy} data-testid="referral-copy">
           {copied ? <Check className="mr-1 h-3.5 w-3.5" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
           {copied ? t.referral.copied : t.referral.copy}
         </Button>

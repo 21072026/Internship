@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 /**
  * A mentee member's view of their own project (#51).
@@ -46,7 +46,7 @@ test('a mentee member sees the roster and their own goals on their project', { t
   try {
     // The owner sees the merged roster with the functional role on the card.
     await signInAndSettle(page, mentorEmail, password, '/mentor');
-    await page.goto('/mentor/projects');
+    await gotoSettled(page, '/mentor/projects');
     const card = page.locator('[data-testid="project-card"]').filter({ hasText: project.name });
     await expect(card.locator('[data-testid="project-members"]')).toContainText('Team Mentee');
     await expect(card.locator('[data-testid="project-members"]')).toContainText('Tester');
@@ -60,7 +60,7 @@ test('a mentee member sees the roster and their own goals on their project', { t
     // The mentee opens the project: roster visible (private project, member
     // access), and the goal is theirs to tick off.
     await signInAsFreshUser(page, menteeEmail, password, '/portal');
-    await page.goto(`/projects/${project.id}`);
+    await gotoSettled(page, `/projects/${project.id}`);
     await expect(page.locator('[data-testid="project-team"]')).toContainText('Team Mentor');
     await expect(page.locator('[data-testid="project-team"]')).toContainText('Team Mentee');
     await expect(page.locator('[data-testid="project-goals"]')).toContainText('Read the project and understand it');
@@ -110,7 +110,7 @@ test('a mentee can ask to join a public project and the owner approves it', asyn
 
   try {
     await signInAndSettle(page, menteeEmail, password, '/portal');
-    await page.goto(`/projects/${project.id}`);
+    await gotoSettled(page, `/projects/${project.id}`);
     await page.locator('[data-testid="request-to-join"]').click();
     await page.locator('[data-testid="join-role"]').selectOption('TESTER');
     await page.locator('[data-testid="submit-join-request"]').click();
@@ -122,7 +122,7 @@ test('a mentee can ask to join a public project and the owner approves it', asyn
 
     // The owner approves, which is also what creates the membership.
     await signInAsFreshUser(page, mentorEmail, password, '/mentor');
-    await page.goto(`/projects/${project.id}`);
+    await gotoSettled(page, `/projects/${project.id}`);
     await page.locator(`[data-testid="approve-${request!.id}"]`).click();
     await expect
       .poll(
@@ -166,7 +166,7 @@ test('the weekly meeting an owner sets is what a member reads', async ({ page })
 
   try {
     await signInAndSettle(page, mentorEmail, password, '/mentor');
-    await page.goto(`/projects/${project.id}`);
+    await gotoSettled(page, `/projects/${project.id}`);
     await page.locator('[data-testid="add-weekly-meeting"]').click();
     await page.getByRole('button', { name: 'Thu', exact: true }).click();
     await page.locator('input[type="time"]').fill('18:30');
@@ -182,7 +182,7 @@ test('the weekly meeting an owner sets is what a member reads', async ({ page })
     expect(series?.fixedLink).toBeTruthy();
 
     await signInAsFreshUser(page, menteeEmail, password, '/portal');
-    await page.goto(`/projects/${project.id}`);
+    await gotoSettled(page, `/projects/${project.id}`);
     await expect(page.locator('[data-testid="weekly-meeting"]')).toContainText('18:30');
   } finally {
     await prisma.meetingSeriesReminder.deleteMany({ where: { series: { projectId: project.id } } });

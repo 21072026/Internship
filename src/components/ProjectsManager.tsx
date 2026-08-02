@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2, Inbox } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDate, durationSince } from '@/lib/relativeTime';
+import { formatDate } from '@/lib/relativeTime';
 import type { TeamMember } from '@/lib/projectTeam';
 
 interface Task {
@@ -60,8 +60,9 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Only the owner picker needs a directory here now; the member pickers moved
+  // to the project page with the panel.
   const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
-  const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [ownerType, setOwnerType] = useState('ADMIN');
   const [ownerUserId, setOwnerUserId] = useState('');
@@ -76,12 +77,10 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    // Mentors get a minimal directory too — needed for the member picker (#618).
     fetch('/api/users?view=picker').then((r) => (r.ok ? r.json() : { users: [] }))
       .then((d) => {
         const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
         setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));
-        setMentees(users.filter((u) => u.role === 'MENTEE'));
       })
       .catch(() => {});
     if (!isAdmin) return;
@@ -165,28 +164,6 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     await load();
   };
 
-  const [taskDraft, setTaskDraft] = useState<Record<string, string>>({});
-  const addTask = async (projectId: string) => {
-    const title = (taskDraft[projectId] ?? '').trim();
-    if (!title) return;
-    await fetch(`/api/projects/${projectId}/tasks`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
-    });
-    setTaskDraft((p) => ({ ...p, [projectId]: '' }));
-    await load();
-  };
-  const toggleTask = async (task: Task) => {
-    await fetch(`/api/project-tasks/${task.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: !task.done }),
-    });
-    await load();
-  };
-  const deleteTask = async (task: Task) => {
-    if (!window.confirm(t.projects.confirmDeleteTask.replace('{title}', task.title))) return;
-    await fetch(`/api/project-tasks/${task.id}`, { method: 'DELETE' });
-    await load();
-  };
-
   const ownerLabel = (p: Project) =>
     p.ownerType === 'COMPANY' ? p.ownerCompany?.name : p.ownerUser?.fullName;
 
@@ -201,51 +178,13 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
         ? t.projects.roleOwner
         : t.projects.roleMentorMember;
 
-  // Owner management + transfer (#618) on top of /api/projects/[id]/members.
-  const [manageId, setManageId] = useState<string | null>(null);
-  const [addUserId, setAddUserId] = useState('');
-  const [addRole, setAddRole] = useState<'OWNER' | 'MENTOR'>('MENTOR');
-  // Mentee members (#51): a separate picker so a mentee can be added with a
-  // functional (job) role, kept distinct from the owner/mentor management row.
-  const [addMenteeId, setAddMenteeId] = useState('');
-  const [addFunc, setAddFunc] = useState<'DEVELOPER' | 'TESTER' | 'MARKETING'>('DEVELOPER');
-  const [memberErr, setMemberErr] = useState('');
+  // Who may open the project's member management (now on the project page).
   const canManageMembers = (p: Project) =>
     isAdmin || (p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER');
   // Owner-only fields (#619): non-owner mentor members get a limited form.
   const isOwnerOf = (p: Project) =>
     isAdmin || p.ownerUser?.id === meId || (p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER');
   const [editingOwner, setEditingOwner] = useState(true);
-
-  const memberCall = async (projectId: string, method: 'POST' | 'DELETE', body: Record<string, unknown>) => {
-    setMemberErr('');
-    const res = await fetch(`/api/projects/${projectId}/members`, {
-      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      setMemberErr(d.code === 'last_owner' ? t.projects.lastOwnerError : d.error || t.common.error);
-      return false;
-    }
-    await load();
-    return true;
-  };
-
-  const addMember = (projectId: string) => {
-    if (!addUserId) return;
-    memberCall(projectId, 'POST', { userId: addUserId, role: addRole }).then((ok) => { if (ok) setAddUserId(''); });
-  };
-  const addMenteeMember = (projectId: string) => {
-    if (!addMenteeId) return;
-    memberCall(projectId, 'POST', { userId: addMenteeId, role: 'MENTEE', functionalRole: addFunc }).then((ok) => { if (ok) setAddMenteeId(''); });
-  };
-  // Transfer = make the target an OWNER, then step down yourself.
-  const transferTo = async (projectId: string) => {
-    if (!addUserId) return;
-    if (await memberCall(projectId, 'POST', { userId: addUserId, role: 'OWNER' })) {
-      await memberCall(projectId, 'DELETE', { userId: meId });
-    }
-  };
 
   return (
     <div>
@@ -387,42 +326,23 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       )}
                     </div>
 
-                    {/* Tasks + progress */}
-                    {(() => {
-                      const tasks = p.tasks ?? [];
+                    {/* Progress only. The editable checklist that used to live
+                        here moved to the project page (#51): goals now belong to
+                        a person, and having them in two places meant a card and a
+                        detail view that disagreed — plus, on a phone, an "add a
+                        task" box squeezed to a few pixels. */}
+                    {(p.tasks?.length ?? 0) > 0 && (() => {
+                      const tasks = p.tasks!;
                       const done = tasks.filter((tk) => tk.done).length;
-                      const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
+                      const pct = Math.round((done / tasks.length) * 100);
                       return (
                         <div className="mt-3 max-w-md">
-                          {tasks.length > 0 && (
-                            <>
-                              <div className="flex justify-between text-xs text-gray-500 mb-1">
-                                <span>{done}/{tasks.length} {t.projects.tasksDone}</span>
-                                <span>{pct}%</span>
-                              </div>
-                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
-                                <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
-                              </div>
-                              <div className="space-y-1">
-                                {tasks.map((tk) => (
-                                  <div key={tk.id} data-testid={`task-${tk.id}`} className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={tk.done} onChange={() => toggleTask(tk)} />
-                                    <span className={`flex-1 ${tk.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>{tk.title}</span>
-                                    <button onClick={() => deleteTask(tk)} aria-label={t.common.delete} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
-                                  </div>
-                                ))}
-                              </div>
-                            </>
-                          )}
-                          <div className="flex gap-2 mt-2">
-                            <input
-                              value={taskDraft[p.id] ?? ''}
-                              onChange={(e) => setTaskDraft((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTask(p.id); } }}
-                              placeholder={t.projects.addTask}
-                              className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1 text-sm"
-                            />
-                            <Button type="button" size="sm" variant="outline" onClick={() => addTask(p.id)}>{t.projects.add}</Button>
+                          <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>{done}/{tasks.length} {t.projects.tasksDone}</span>
+                            <span>{pct}%</span>
+                          </div>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                       );
@@ -430,7 +350,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     {canManageMembers(p) && (
-                      <button onClick={() => { setManageId(manageId === p.id ? null : p.id); setAddUserId(''); setMemberErr(''); }} aria-label={t.projects.manageOwners} data-testid="manage-owners" className="p-2 text-gray-400 hover:text-blue-600"><Users2 className="h-4 w-4" /></button>
+                      <a href={`/projects/${p.id}`} aria-label={t.projects.manageOwners} data-testid="manage-owners" className="p-2 text-gray-400 hover:text-blue-600"><Users2 className="h-4 w-4" /></a>
                     )}
                     <button onClick={() => edit(p)} aria-label={t.projects.editProject} className="p-2 text-gray-400 hover:text-blue-600"><Pencil className="h-4 w-4" /></button>
                     {isOwnerOf(p) && (
@@ -439,83 +359,6 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                   </div>
                 </div>
 
-                {manageId === p.id && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800" data-testid="owners-panel">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">{t.projects.manageOwners}</p>
-                    {memberErr && <p className="text-xs text-red-600 mb-2">{memberErr}</p>}
-                    <div className="space-y-1 mb-3" data-testid="owners-members">
-                      {(p.members ?? []).map((m) => (
-                        <div key={m.user.id} className="flex items-center gap-2 text-sm">
-                          <Badge variant={m.role === 'OWNER' ? 'info' : m.role === 'MENTEE' ? 'purple' : 'default'} className="text-xs">
-                            {m.role === 'OWNER' ? t.projects.roleOwner : m.role === 'MENTEE' ? t.projects.roleMentee : t.projects.roleMentorMember}
-                          </Badge>
-                          {m.role === 'MENTEE' && m.functionalRole && (
-                            <Badge variant="default" className="text-xs">
-                              {(t.projects.functionalRoles as Record<string, string>)[m.functionalRole]}
-                            </Badge>
-                          )}
-                          <span className="flex-1 text-gray-800 dark:text-gray-200">
-                            {m.user.fullName}
-                            {m.addedAt && (() => {
-                              const { count, unit } = durationSince(m.addedAt);
-                              const noun = count === 1 ? t.membership[unit] : t.membership[`${unit}s` as 'days' | 'months' | 'years'];
-                              return <span className="ml-1.5 text-xs text-gray-400">· {t.membership.inProjectFor.replace('{d}', `${count} ${noun}`)}</span>;
-                            })()}
-                          </span>
-                          <button onClick={() => memberCall(p.id, 'DELETE', { userId: m.user.id })} aria-label={t.common.delete} data-testid={`member-remove-${m.user.id}`} className="text-gray-300 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-2 flex-wrap items-center">
-                      <select value={addUserId} onChange={(e) => setAddUserId(e.target.value)} data-testid="member-picker"
-                        className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-sm">
-                        <option value="">—</option>
-                        {mentors.filter((m) => !(p.members ?? []).some((x) => x.user.id === m.id)).map((m) => (
-                          <option key={m.id} value={m.id}>{m.fullName}</option>
-                        ))}
-                      </select>
-                      <select value={addRole} onChange={(e) => setAddRole(e.target.value as 'OWNER' | 'MENTOR')}
-                        className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-sm">
-                        <option value="MENTOR">{t.projects.roleMentorMember}</option>
-                        <option value="OWNER">{t.projects.roleOwner}</option>
-                      </select>
-                      <Button type="button" size="sm" variant="outline" disabled={!addUserId} onClick={() => addMember(p.id)} data-testid="member-add">
-                        {t.projects.add}
-                      </Button>
-                      {(p.members ?? []).some((m) => m.user.id === meId && m.role === 'OWNER') && (
-                        <Button type="button" size="sm" variant="secondary" disabled={!addUserId} onClick={() => transferTo(p.id)} data-testid="member-transfer">
-                          {t.projects.transfer}
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* Mentee members with a functional (job) role (#51). */}
-                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{t.projects.addMenteeMember}</p>
-                      <div className="flex gap-2 flex-wrap items-center">
-                        <select value={addMenteeId} onChange={(e) => setAddMenteeId(e.target.value)} data-testid="mentee-picker"
-                          className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-sm">
-                          <option value="">—</option>
-                          {mentees.filter((m) => !(p.members ?? []).some((x) => x.user.id === m.id)).map((m) => (
-                            <option key={m.id} value={m.id}>{m.fullName}</option>
-                          ))}
-                        </select>
-                        <select value={addFunc} onChange={(e) => setAddFunc(e.target.value as 'DEVELOPER' | 'TESTER' | 'MARKETING')} data-testid="functional-role-picker"
-                          className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-1.5 text-sm">
-                          {(['DEVELOPER', 'TESTER', 'MARKETING'] as const).map((fr) => (
-                            <option key={fr} value={fr}>{(t.projects.functionalRoles as Record<string, string>)[fr]}</option>
-                          ))}
-                        </select>
-                        <Button type="button" size="sm" variant="outline" disabled={!addMenteeId} onClick={() => addMenteeMember(p.id)} data-testid="mentee-add">
-                          {t.projects.add}
-                        </Button>
-                      </div>
-                      {mentees.length === 0 && (
-                        <p className="text-xs text-gray-400 mt-1.5">{t.projects.noMenteesToAdd}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
               </Card>
             ))}
           </div>

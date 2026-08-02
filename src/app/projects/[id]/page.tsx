@@ -11,6 +11,7 @@ import { ProjectQuickActions } from '@/components/project/ProjectQuickActions';
 import { ProjectWeeklyMeeting } from '@/components/project/ProjectWeeklyMeeting';
 import { ProjectGoals } from '@/components/project/ProjectGoals';
 import { ProjectJoinRequests } from '@/components/project/ProjectJoinRequests';
+import { ProjectMembersPanel } from '@/components/project/ProjectMembersPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,7 +95,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         : t.projects.roleMentorMember;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 px-3 py-6 sm:px-4 sm:py-12">
       <div className="max-w-2xl mx-auto">
         {/* Back link: internal viewers return to their own project list (where
             they came from); public visitors get the showcase header link. */}
@@ -106,7 +107,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             ? <><ArrowLeft className="h-4 w-4" /> {t.projects.allProjects}</>
             : <><GraduationCap className="h-4 w-4 text-blue-600" /> {t.projects.showcaseTitle}</>}
         </Link>
-        <div className="bg-white rounded-2xl border border-gray-200 p-8">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-8">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900">{p.name}</h1>
             {canInternal && <Badge variant={STATUS_VARIANT[p.status]}>{statusLabel}</Badge>}
@@ -119,7 +120,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               {tech.map((x) => <span key={x} className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-sm">{x}</span>)}
             </div>
           )}
-          <div className="flex gap-4 mt-6 text-sm">
+          <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-sm">
             {p.repoUrl && <a href={p.repoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline"><Github className="h-4 w-4" />{t.projects.repo}</a>}
             {p.demoUrl && <a href={p.demoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline"><ExternalLink className="h-4 w-4" />{t.projects.demo}</a>}
             {p.boardUrl && <a href={p.boardUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline"><Trello className="h-4 w-4" />{t.projects.board}</a>}
@@ -164,6 +165,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 )}
                 <p className="mt-1.5 text-xs text-gray-400">{interns} {t.projects.members}</p>
               </div>
+
+              {isLead && session && <ProjectMembersPanel projectId={id} myId={session.user.id} />}
 
               {isLead && <ProjectJoinRequests projectId={id} />}
 

@@ -8,6 +8,29 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.1-beta] - 2026-08-02
+
+### Changed
+- **One project screen instead of two** (#51 follow-up). A project card carried its own
+  half-view of the project — an editable flat task checklist and the expandable
+  "Manage owners & mentors" panel — while `/projects/[id]` grew the team, the recurring
+  meeting and per-person goals. An account that is both admin and mentor reaches the same
+  list at `/admin/projects` and `/mentor/projects`, so the two views alternated depending on
+  where you came from. The card is now a summary (roster, progress, links) and everything
+  about one project lives on its page: `ProjectMembersPanel` moved there, the card's members
+  icon links to it, and the card's task checklist is gone (goals belong to a person now, and
+  keeping an editable copy in the card guaranteed the two would disagree).
+
+### Fixed
+- **Phone layout of the project screens.** The card's "add a task" box shared a row with its
+  button and collapsed to a few pixels wide at 390px — the widest instance of a pattern that
+  also affected the goal composer, the recurring-meeting form, the member pickers and the
+  referral link box. Those rows now stack below `sm`, long goal titles wrap, and the project
+  page uses phone-sized padding. `e2e/mobile-responsive.spec.ts` locks it down mechanically:
+  no horizontal overflow and no text field under 120px, with the collapsible forms expanded.
+- `PATCH /api/projects/[id]/join-requests` answers 404 instead of 500 when the request is
+  already gone (a double-clicked *Approve* hit Prisma's P2025).
+
 ## [0.40.0-beta] - 2026-08-02
 
 ### Added

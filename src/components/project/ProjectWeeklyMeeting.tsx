@@ -179,19 +179,19 @@ export function ProjectWeeklyMeeting({ projectId, canManage }: { projectId: stri
               );
             })}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <input
               type="time"
               value={form.timeOfDay}
               onChange={(e) => setForm({ ...form, timeOfDay: e.target.value })}
-              className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900"
+              className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
             />
             <input
               type="url"
               value={form.meetLink}
               onChange={(e) => setForm({ ...form, meetLink: e.target.value })}
               placeholder={t.projects.meetingLinkPlaceholder}
-              className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900"
+              className="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-1"
             />
           </div>
           <p className="text-xs text-gray-400">{t.projects.meetingLinkHint}</p>

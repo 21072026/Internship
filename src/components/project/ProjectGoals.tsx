@@ -135,7 +135,7 @@ export function ProjectGoals({
   };
 
   const row = (task: Task, opts: { canTick: boolean; canClaim?: boolean; canRelease?: boolean }) => (
-    <li key={task.id} className="flex items-center gap-2 text-sm" data-testid={`goal-${task.id}`}>
+    <li key={task.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" data-testid={`goal-${task.id}`}>
       {opts.canTick ? (
         <button type="button" onClick={() => toggle(task)} disabled={busy === task.id} aria-label={task.done ? t.goals.markOpen : t.goals.markDone}>
           {task.done ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Circle className="h-4 w-4 text-gray-300" />}
@@ -145,7 +145,7 @@ export function ProjectGoals({
       ) : (
         <Circle className="h-4 w-4 shrink-0 text-gray-300" />
       )}
-      <span className={task.done ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-200'}>{task.title}</span>
+      <span className={`min-w-0 break-words ${task.done ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-200'}`}>{task.title}</span>
       {task.assignee && task.assigneeId !== myId && (
         <span className="text-xs text-gray-400">· {task.assignee.fullName}</span>
       )}
@@ -212,27 +212,29 @@ export function ProjectGoals({
 
       {canLead && (
         <div className="space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
-          <div className="flex flex-wrap gap-2">
+          {/* Stacked below sm: an input sharing a row with a select and a button
+              collapses to a few characters wide on a phone (#51 follow-up). */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addGoal(); } }}
               placeholder={t.projects.addTask}
               data-testid="goal-input"
-              className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900"
+              className="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-1"
             />
             <select
               value={draftAssignee}
               onChange={(e) => setDraftAssignee(e.target.value)}
               data-testid="goal-assignee"
-              className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900"
+              className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
             >
               <option value="">{t.projects.unassigned}</option>
               {assignable.map((m) => (
                 <option key={m.id} value={m.id}>{m.fullName}</option>
               ))}
             </select>
-            <Button type="button" size="sm" variant="outline" loading={busy === 'add'} onClick={addGoal}>
+            <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" loading={busy === 'add'} onClick={addGoal}>
               <Plus className="mr-1 h-3.5 w-3.5" /> {t.projects.add}
             </Button>
           </div>
@@ -271,12 +273,12 @@ export function ProjectGoals({
                     ))}
                   </ul>
                 )}
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                   <select
                     value={templateTarget}
                     onChange={(e) => setTemplateTarget(e.target.value)}
                     data-testid="template-target"
-                    className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900"
+                    className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
                   >
                     <option value="">{t.projects.selectMember}</option>
                     {assignable.map((m) => (
