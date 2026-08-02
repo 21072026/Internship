@@ -91,3 +91,41 @@ test('admin can impersonate a user and return to their own account', async ({ pa
     await cleanupByEmail(adminEmail);
   }
 });
+
+test('the account page hides credential + delete cards while impersonating', async ({ page }) => {
+  const adminEmail = uniqueEmail('impacct-admin');
+  const menteeEmail = uniqueEmail('impacct-mentee');
+  await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'ImpAcct Admin');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123!', 'MENTEE', 'ImpAcct Mentee');
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', adminEmail);
+    await page.fill('input[type="password"]', 'AdminPass123!');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    // Sanity check: on the admin's OWN account page the danger zone is there.
+    await page.goto('/account');
+    await expect(page.getByTestId('delete-account-card')).toBeVisible({ timeout: 10_000 });
+
+    await page.goto('/admin/users');
+    const row = page.getByTestId(`user-row-${mentee.id}`);
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.getByRole('button', { name: 'Login as' }).click();
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    // Impersonated: /api/account rejects credential changes and deletion, so the
+    // cards must not be offered — they used to ask for a password the admin
+    // cannot know, and would have 400'd even with the right one.
+    await page.goto('/account');
+    await expect(page.getByTestId('impersonation-account-notice')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('delete-account-card')).toHaveCount(0);
+    await expect(page.locator('#email-current-password')).toHaveCount(0);
+    await expect(page.locator('#delete-current-password')).toHaveCount(0);
+  } finally {
+    await prisma.auditLog.deleteMany({ where: { targetId: mentee.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});

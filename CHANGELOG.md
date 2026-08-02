@@ -8,6 +8,21 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.38.4-beta] - 2026-08-02
+
+### Fixed
+- **The account page offered credential changes and account deletion inside an
+  impersonation session, where the API refuses all three.** `/api/account` PUT and
+  DELETE both bail out with 400 when `session.user.impersonatorId` is set, but
+  `AccountSettings` rendered the e-mail card, the password card and the "Delete
+  account" danger zone regardless. An admin who opened a user's account settings to
+  delete it was asked for "current password" — a password only the account holder
+  knows, and one the endpoint would have rejected anyway. The three cards are now
+  hidden while impersonating and replaced by a notice
+  (`data-testid="impersonation-account-notice"`) pointing at the admin path;
+  the danger zone carries `data-testid="delete-account-card"` so the e2e spec can
+  assert its absence. Nothing changes for a user in their own session.
+
 ## [0.38.3-beta] - 2026-08-02
 
 ### Fixed

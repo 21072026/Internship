@@ -19,8 +19,15 @@ import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 // change email, change password, and delete the account.
 export function AccountSettings() {
   const t = useT();
-  const { update } = useSession();
+  const { data: session, update } = useSession();
   const router = useRouter();
+  // While an admin impersonates someone, `/api/account` refuses every
+  // credential change and the account deletion outright (PUT/DELETE both 400).
+  // Rendering those cards anyway made the page a trap: an admin who wanted to
+  // delete a user's account was asked for a password only the user knows, and
+  // even the right one would have been rejected. Admin-side erasure lives on
+  // the candidate/user screens instead.
+  const impersonating = Boolean(session?.user?.impersonatorId);
   const [email, setEmail] = useState('');
   const [emailPassword, setEmailPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -350,6 +357,15 @@ export function AccountSettings() {
         </Card>
       )}
 
+      {impersonating && (
+        <Card className="mb-6 max-w-4xl border-purple-200 dark:border-purple-800">
+          <p className="text-sm text-purple-900 dark:text-purple-100" data-testid="impersonation-account-notice">
+            {t.account.impersonationNotice}
+          </p>
+        </Card>
+      )}
+
+      {!impersonating && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl">
         <Card>
           <CardHeader><CardTitle>{t.account.emailSection}</CardTitle></CardHeader>
@@ -370,6 +386,7 @@ export function AccountSettings() {
           </form>
         </Card>
       </div>
+      )}
 
       {role === 'MENTOR' && (
         <Card className="mt-6 max-w-4xl">
@@ -528,7 +545,8 @@ export function AccountSettings() {
         </a>
       </Card>
 
-      <Card className="mt-6 max-w-4xl border-red-200">
+      {!impersonating && (
+      <Card className="mt-6 max-w-4xl border-red-200" data-testid="delete-account-card">
         <CardHeader><CardTitle>{t.account.deleteSection}</CardTitle></CardHeader>
         <p className="text-sm text-gray-600 mb-4">{t.account.deleteWarning}</p>
         {confirmDelete ? (
@@ -544,6 +562,7 @@ export function AccountSettings() {
           <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t.account.deleteButton}</Button>
         )}
       </Card>
+      )}
     </div>
   );
 }
