@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.38.2-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Meeting reminder emails now show the right time. A meeting at 09:00 in the app arrived as "07:00" in the email, because the times were written on the server\'s clock. Emails and notifications now use your own timezone and spell it out, e.g. "2 Aug 2026, 09:00 (GMT+2)". Nothing was ever scheduled at the wrong time — only the reminder text was misleading.',
+        'Your timezone is picked up from your browser automatically if you never set one. Mentees can still choose it by hand under Profile, and a zone you chose yourself is never overwritten.',
+      ],
+      tr: [
+        'Toplantı hatırlatma e-postalarındaki saat artık doğru. Uygulamada 09:00 görünen bir toplantı e-postada "07:00" olarak geliyordu, çünkü saatler sunucunun saatiyle yazılıyordu. E-postalar ve bildirimler artık sizin saat diliminizi kullanıyor ve bunu açıkça yazıyor: örneğin "2 Aug 2026, 09:00 (GMT+2)". Toplantılar hiçbir zaman yanlış saate kurulmadı — yalnızca hatırlatma metni yanıltıcıydı.',
+        'Hiç seçmediyseniz saat diliminiz tarayıcınızdan otomatik olarak alınır. Mentee’ler Profil sayfasından elle de seçebilir; kendi seçtiğiniz saat dilimi hiçbir zaman üzerine yazılmaz.',
+      ],
+      de: [
+        'Erinnerungs-E-Mails zu Terminen zeigen jetzt die richtige Uhrzeit. Ein Termin, den die App um 09:00 anzeigte, kam in der E-Mail als „07:00“ an, weil die Zeiten auf der Uhr des Servers geschrieben wurden. E-Mails und Benachrichtigungen verwenden nun Ihre eigene Zeitzone und nennen sie ausdrücklich, z. B. „2 Aug 2026, 09:00 (GMT+2)“. Kein Termin lag jemals falsch — nur der Erinnerungstext war irreführend.',
+        'Ihre Zeitzone wird automatisch aus dem Browser übernommen, falls Sie nie eine gesetzt haben. Mentees können sie im Profil weiterhin selbst wählen; eine selbst gewählte Zone wird nie überschrieben.',
+      ],
+    },
+  },
+  {
     version: '0.38.1-beta',
     date: '2026-08-01',
     highlights: {
