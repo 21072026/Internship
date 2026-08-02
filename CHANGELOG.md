@@ -8,6 +8,26 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.38.3-beta] - 2026-08-02
+
+### Fixed
+- **The impersonation banner disappeared on the screens that have no app shell.**
+  "You are viewing the app as …" + "Return to your account" was rendered by
+  `ResponsiveShell`, so it existed only on the role-scoped areas (/admin, /mentor,
+  /portal, /company, /source). Open Messages — or /account, /notifications,
+  /announcements, which render their own chrome — and the bar was simply gone: no
+  warning that the session belongs to someone else, and no way back except typing an
+  admin URL by hand. The banner now renders once app-wide in `Providers`, above every
+  page shell, as a sticky full-width strip (`data-testid="impersonation-banner"`), and
+  `ResponsiveShell` no longer renders its own copy.
+- The strip is in normal flow, which the viewport-sized chat frame (`MessagesShell`,
+  `100dvh`) cannot see, so it would have pushed the composer below the fold. New
+  `useTopBannerInset` hook publishes the strip's measured height as
+  `--top-banner-inset` (mirror of `--fixed-bottom-inset`/#935) and the frame subtracts
+  it from both its height and its `--visible-viewport-height` clamp.
+- `e2e/impersonation.spec.ts` now asserts the banner on /messages and /account and
+  returns to the admin account from a shell-less screen.
+
 ## [0.38.2-beta] - 2026-08-02
 
 ### Fixed

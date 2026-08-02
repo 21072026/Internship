@@ -13,6 +13,13 @@
      * end of a page scrollable above the bar instead of buried under it (#935).
      */
     --fixed-bottom-inset: 0px;
+    /*
+     * Height of the app-wide banner strip at the top of the document (the
+     * impersonation bar). It is in normal flow, so pages need no correction —
+     * only viewport-sized screens (the chat frame) subtract it. 0px when none
+     * is showing. Published by useTopBannerInset.
+     */
+    --top-banner-inset: 0px;
   }
 
   body {
