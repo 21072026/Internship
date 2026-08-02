@@ -2168,3 +2168,44 @@ yardımcısını yazan başka spec'ler var (`grep -l "goto('/auth/signin')" e2e/
 `helpers/auth` import etmeyenleri kesiştir; ≥2 giriş yapanlar riskli). Şu an yeşiller, yani
 aynı yarış onlarda **uykuda**. Hepsini bu PR'da taşımak yeşil testleri riske atardı;
 ayrı bir süpürme işi.
+
+## 2026-08-02 — Uykudaki giriş yarışının süpürmesi (#1043): "≥2 giriş" değil, "aynı `page`'te ≥2 giriş"
+
+Bir önceki girdinin (`questions.spec.ts`) kapsam dışı bıraktığı iş. Başlangıç ölçütü —
+"`goto('/auth/signin')` içeren ama `helpers/auth` import etmeyen, ≥2 giriş yapan spec'ler" —
+doğru yere bakıyor ama **çok geniş**: 27 dosya eşleşiyor, gerçekte taşınması gereken **7**.
+
+**Eleyen soru "kaç giriş?" değil, "aynı oturum devrediliyor mu?".** Yarış ancak *aynı*
+`page` üstünde ikinci bir giriş yapılınca oluşuyor. Üç yaygın yanlış pozitif:
+
+1. **Girişler ayrı `test()` bloklarında.** Her test taze bir `page` fixture'ı alır; devreden
+   bir çerez yok. 27 adayın 18'i bu. (`account`, `evaluation`, `impersonation`, `projects`, …)
+2. **Her kullanıcıya kendi `browser.newContext()`'i.** Ayrı çerez kavanozu, yarış yok.
+   (`admin-support`, `free-core-regression`, `interaction-summary`, `sign-out-all`,
+   `support-attachments`, `talent-pool-early-access`, `mentorship-request`'in 3 testinden 2'si)
+3. **İkinci `goto('/auth/signin')` iddianın kendisi.** `redirect.spec.ts` bir kez giriyor;
+   ikinci gidiş "giriş yapmış kullanıcı buradan atılmalı" testi.
+
+Ayıklama grep'le değil, **test bloğu başına sayarak** yapılır: dosyayı satır satır gez,
+`test(` görünce sayacı sıfırla, `goto('/auth/signin')` *veya yerel giriş yardımcısının çağrısı*
+görünce artır. Yerel yardımcı adımı şart — `announcements-feed` gibi dosyalarda dosyada tek
+bir `goto` literali var ama yardımcı test başına iki kez çağrılıyor; sadece literal sayan bir
+tarama bunları **kaçırır**.
+
+**Aynı kullanıcıya yeniden giriş de bu sınıfa girebiliyor.** `email-verification` iki kez
+*aynı* hesapla giriyor, dolayısıyla "kullanıcı değişimi" filtresine takılmıyor — ama amacı
+bayat JWT'deki `emailVerified: false`'ı tazelemek. Eski oturumla sessizce `/mentor`'a
+dönmek `waitForURL`'i geçirir ve testi *yanlış sebeple* kırar (banner hâlâ ekranda).
+Ölçüt "farklı e-posta" değil, **"bu girişin gerçekten yeniden kimlik doğrulaması gerekiyor mu"**.
+
+**Girişin bir iniş sayfası yoksa `submitSignInForm`.** `admin-user-active`'de ikinci giriş
+devre dışı bırakılmış bir hesapla yapılıyor: doğru sonuç `/auth/signin`'de kalmak.
+`signInAsFreshUser` orada 20 sn bekleyip düşerdi. Aynı ayrım `two-factor.spec.ts`'te de var.
+
+**Yeşil testleri taşırken doğrulama CI'da yapılır, lokalde değil.** Bu yarış hızlı makinede
+tekrar üretilemiyor (bir önceki girdi), dolayısıyla "lokalde geçti" hiçbir şey söylemiyor.
+Kullanılan zincir: `gh workflow run e2e.yml --ref <branch> -f grep='<8 testi kapsayan regex>'`
+→ log'da **`Running 8 tests`** satırını doğrula (0 olsaydı regex tutmamış demektir, ve koşu
+yine de yeşil raporlardı — sessiz yanlış pozitif) → merge'den önce `e2e-full.yml` branch'te.
+`npx playwright test --list --grep '<regex>'` lokalde regex'i bedavaya doğruluyor; dispatch
+etmeden önce onu koştur.

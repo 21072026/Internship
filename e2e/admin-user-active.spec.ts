@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser, submitSignInForm } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -14,11 +15,7 @@ test('admin deactivates a user and that user can no longer sign in', async ({ pa
 
   try {
     // Admin signs in and opens the Users page.
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', adminEmail);
-    await page.fill('input[type="password"]', 'AdminPass123!');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+    await signInAsFreshUser(page, adminEmail, 'AdminPass123!', '/admin');
 
     await page.goto('/admin/users');
     // Deactivate the seeded mentor via its row.
@@ -34,11 +31,9 @@ test('admin deactivates a user and that user can no longer sign in', async ({ pa
     expect(updated!.isActive).toBe(false);
 
     // The deactivated mentor cannot sign in.
-    await page.context().clearCookies();
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', mentorEmail);
-    await page.fill('input[type="password"]', mentorPw);
-    await page.click('button[type="submit"]');
+    // submitSignInForm, not signInAsFreshUser: a deactivated account is *supposed*
+    // to stay on /auth/signin, so there is no landing page to wait for.
+    await submitSignInForm(page, mentorEmail, mentorPw);
     await expect(page.getByText(/deactivated/i)).toBeVisible({ timeout: 15_000 });
     expect(new URL(page.url()).pathname).toContain('/auth/signin');
   } finally {

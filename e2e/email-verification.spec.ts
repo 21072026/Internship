@@ -2,18 +2,11 @@ import { test, expect } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { prisma, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
-
-async function signIn(page: import('@playwright/test').Page, email: string, password: string) {
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
-}
 
 test('unverified user is read-only until they confirm their email', async ({ page }) => {
   const email = uniqueEmail('unverified');
@@ -25,7 +18,7 @@ test('unverified user is read-only until they confirm their email', async ({ pag
 
   try {
     // Signed in but unverified → the read-only banner is shown.
-    await signIn(page, email, password);
+    await signInAsFreshUser(page, email, password, '/mentor');
     await expect(page.getByText(/read-only until you confirm/i)).toBeVisible();
 
     // A write is rejected by middleware with 403.
@@ -45,8 +38,9 @@ test('unverified user is read-only until they confirm their email', async ({ pag
     expect(refreshed!.emailVerified).toBe(true);
 
     // Re-sign-in to pick up the verified flag in the session, then a write works.
-    await page.context().clearCookies();
-    await signIn(page, email, password);
+    // Same user, but the stale JWT still carries emailVerified: false — the sign-in
+    // has to actually happen, so it needs the same session teardown as a user switch.
+    await signInAsFreshUser(page, email, password, '/mentor');
     await expect(page.getByText(/read-only until you confirm/i)).toHaveCount(0);
     const allowed = await page.request.post('/api/mentor/mentees', {
       data: { fullName: 'Now Allowed Mentee' },

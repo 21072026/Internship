@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -16,11 +17,7 @@ test('a source user can log in and submit mentees that show up for the admin', a
 
   try {
     // Source signs in and lands on the source portal.
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', sourceUserEmail);
-    await page.fill('input[type="password"]', 'SourcePass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/source'), { timeout: 20_000 });
+    await signInAsFreshUser(page, sourceUserEmail, 'SourcePass123', '/source');
 
     // Submit a mentee.
     const res = await page.request.post('/api/source/mentees', {
@@ -40,12 +37,7 @@ test('a source user can log in and submit mentees that show up for the admin', a
     expect(mentee?.sourceId).toBe(source.id);
 
     // Admin can filter candidates by this source and find the mentee.
-    await page.context().clearCookies();
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', adminEmail);
-    await page.fill('input[type="password"]', 'AdminPass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+    await signInAsFreshUser(page, adminEmail, 'AdminPass123', '/admin');
     const cands = await (await page.request.get(`/api/candidates?source=${source.id}`)).json();
     expect(cands.candidates.some((c: { id: string }) => c.id === mentee!.id)).toBeTruthy();
   } finally {

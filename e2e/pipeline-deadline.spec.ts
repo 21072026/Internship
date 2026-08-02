@@ -1,18 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
-
-async function signIn(page: import('@playwright/test').Page, email: string, password: string, home: string) {
-  await page.context().clearCookies();
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => u.pathname.startsWith(home), { timeout: 20_000 });
-}
 
 test('stage deadlines flag overdue, surface on the calendar, and trigger reminders', async ({ page }) => {
   const adminEmail = uniqueEmail('dl-admin');
@@ -25,7 +17,7 @@ test('stage deadlines flag overdue, surface on the calendar, and trigger reminde
 
   try {
     // Admin sets a stage deadline in the past.
-    await signIn(page, adminEmail, 'AdminPass123', '/admin');
+    await signInAsFreshUser(page, adminEmail, 'AdminPass123', '/admin');
     const put = await page.request.put(`/api/mentorship/${rel.id}`, { data: { stageDeadline: '2020-01-01' } });
     expect(put.ok()).toBeTruthy();
 
@@ -42,7 +34,7 @@ test('stage deadlines flag overdue, surface on the calendar, and trigger reminde
     expect(after?.deadlineReminderSentAt).toBeTruthy();
 
     // The mentor received an in-app deadline notification.
-    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const notifs = await (await page.request.get('/api/notifications')).json();
     expect(notifs.items.some((n: { type: string }) => n.type === 'deadline')).toBeTruthy();
   } finally {
