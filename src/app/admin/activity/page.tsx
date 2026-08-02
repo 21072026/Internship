@@ -98,7 +98,7 @@ export default function AdminActivityPage() {
                     {e.ip}
                   </span>
                 )}
-                <span className="text-xs text-gray-400 flex-shrink-0">{formatDateTime(e.createdAt, locale)}</span>
+                <span data-testid="activity-date" className="text-xs text-gray-400 flex-shrink-0">{formatDateTime(e.createdAt, locale)}</span>
               </div>
             ))}
           </div>

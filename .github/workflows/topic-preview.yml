@@ -106,7 +106,7 @@ jobs:
           ./infra/server/topic-deploy.sh
 
       - name: Comment topic URL on the PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const topic = '${{ steps.t.outputs.topic }}';

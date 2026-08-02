@@ -9,12 +9,14 @@ export function EmptyState({
   description,
   actionLabel,
   actionHref,
+  actionOnClick,
 }: {
   icon?: LucideIcon;
   title: string;
   description?: string;
   actionLabel?: string;
   actionHref?: string;
+  actionOnClick?: () => void;
 }) {
   return (
     <div className="text-center py-14 px-4">
@@ -30,6 +32,15 @@ export function EmptyState({
         >
           {actionLabel}
         </Link>
+      )}
+      {actionLabel && actionOnClick && !actionHref && (
+        <button
+          type="button"
+          onClick={actionOnClick}
+          className="inline-flex items-center mt-4 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          {actionLabel}
+        </button>
       )}
     </div>
   );

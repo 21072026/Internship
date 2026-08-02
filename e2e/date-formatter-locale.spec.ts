@@ -24,7 +24,9 @@ test('dates on admin/activity follow the selected app language, not the browser 
     await page.goto('/admin/activity');
 
     // TR formatting uses dots (gg.aa.yyyy), never the en-US slash format.
-    const firstDate = page.locator('span.text-gray-400').first();
+    // Target the test id, not `span.text-gray-400` — the row also carries an
+    // IP chip in that colour (#881), and it comes first in the DOM.
+    const firstDate = page.getByTestId('activity-date').first();
     await expect(firstDate).toBeVisible();
     await expect(firstDate).toHaveText(/\d{2}\.\d{2}\.\d{4}/);
     await expect(firstDate).not.toHaveText(/\d{1,2}\/\d{1,2}\/\d{4}/);

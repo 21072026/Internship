@@ -162,10 +162,19 @@ prisma/         # schema.prisma + seed
 
 ## License
 
+Copyright © 2026 **Mehmet Erşahin**, the project's sole rights holder.
+
 Licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later) —
 see [LICENSE](LICENSE). You are free to use, study, modify, and self-host this software. If
 you run a modified version as a network service, the AGPL requires you to make your modified
 source available to its users.
+
+### Trademarks
+
+The AGPL covers the **code only**. The name "Internship CRM", the project's logo and the
+`crm.ersah.in` domain are **not** licensed with it — forks and derivative services must use
+their own name and branding, and may not imply endorsement by or affiliation with the rights
+holder.
 
 ## Commercial licensing & hosting
 
@@ -175,10 +184,12 @@ paths exist for organizations:
 - **Hosted service** — use the maintained deployment at https://crm.ersah.in (support,
   updates, backups included) instead of running it yourself.
 - **Commercial license** — if AGPL's source-sharing obligations don't fit your product (e.g.
-  embedding in a closed-source offering), a separate commercial license is available.
+  embedding in a closed-source offering), a separate commercial license is available. Because
+  all rights are held by a single person, such a license can be granted directly.
 
 For hosting, a commercial license, custom deployment, or support, contact
-**ersahin@bcsit-gmbh.de**.
+**ersahin@bcsit-gmbh.de**. Strategy and rationale:
+[docs/legal/licensing-strategy.md](docs/legal/licensing-strategy.md).
 
 ## Contributing
 
@@ -190,5 +201,9 @@ Everyone taking part — contributors, mentors, mentees, admins — is expected 
 [Code of Conduct](CODE_OF_CONDUCT.md)
 ([Türkçe](docs/code-of-conduct.tr.md), [Deutsch](docs/code-of-conduct.de.md)).
 
-By contributing you agree that your contributions are licensed under AGPL-3.0-or-later, and
-that the maintainer may also offer them under a commercial license (dual licensing).
+**Contributor terms.** By opening a pull request you agree that your contribution is
+licensed under AGPL-3.0-or-later; that the exclusive right to use it passes to the rights
+holder (Mehmet Erşahin), who may also offer it under a separate commercial license (dual
+licensing); and that you make no copyright, license, fee, or equity claim over the
+application. You keep the right to show your own contributions in a personal portfolio. Full
+wording: [CONTRIBUTING.md → Contributor terms (IP)](CONTRIBUTING.md#contributor-terms-ip).

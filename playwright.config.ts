@@ -14,6 +14,12 @@ const PORT = 3000;
 const localURL = `http://localhost:${PORT}`;
 // Shared with e2e/health.spec.ts, which asserts both sides of the token gate.
 export const E2E_HEALTH_TOKEN = 'e2e-health-token';
+// Shared with e2e/inbound-email.spec.ts. CI serves a production build, and
+// since #870 the inbound webhook's fail-open is dev-only — so without this the
+// endpoint answers 401 to everything. Setting it also makes the spec exercise
+// the shape production actually runs (secret required AND supplied) instead of
+// the lenient path.
+export const E2E_INBOUND_SECRET = 'e2e-inbound-secret';
 
 export default defineConfig({
   testDir: './e2e',
@@ -52,6 +58,7 @@ export default defineConfig({
           // keeps its legacy fully-public response and health.spec.ts's
           // assertions about what an anonymous caller may see would be vacuous.
           HEALTH_TOKEN: E2E_HEALTH_TOKEN,
+          INBOUND_SECRET: E2E_INBOUND_SECRET,
         },
       },
 });

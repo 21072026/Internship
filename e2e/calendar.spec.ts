@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -21,6 +22,32 @@ test('a mentor can add and list availability slots', async ({ page }) => {
     expect(await prisma.availabilitySlot.count({ where: { mentorId: mentor.id } })).toBeGreaterThan(0);
   } finally {
     await prisma.availabilitySlot.deleteMany({ where: { mentorId: mentor.id } });
+    await cleanupByEmail(email);
+  }
+});
+
+/**
+ * The admin path through the same page. POST has always accepted ADMINs (they
+ * reach the mentor shell through the view switch), but GET only defaulted to
+ * "my own slots" for MENTORs, so the list came back empty and the Add button
+ * looked dead. Driven through the UI because the API-level mentor test above
+ * passed the whole time this was broken.
+ */
+test('an admin sees the slot they just added on the availability page', async ({ page }) => {
+  const email = uniqueEmail('av-admin');
+  const admin = await seedUser(email, 'AdminPass123', 'ADMIN', 'Av Admin');
+  try {
+    await signInAndSettle(page, email, 'AdminPass123', '/admin');
+    await page.goto('/mentor/availability');
+
+    // The form ships with usable defaults (Monday, 09:00–10:00) — just submit.
+    const form = page.locator('form').filter({ has: page.locator('input[type="time"]') });
+    await form.locator('button[type="submit"]').click();
+
+    await expect(page.getByText('09:00–10:00')).toBeVisible();
+    expect(await prisma.availabilitySlot.count({ where: { mentorId: admin.id } })).toBe(1);
+  } finally {
+    await prisma.availabilitySlot.deleteMany({ where: { mentorId: admin.id } });
     await cleanupByEmail(email);
   }
 });

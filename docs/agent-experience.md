@@ -1701,3 +1701,470 @@ kırmızı. Ayrıca elle başlatılan `npm run dev`'i Playwright yeniden kulland
 `executablePath` numarasını geçici bir `playwright.local.config.ts` ile verdim
 (`{...base, use: {...base.use, launchOptions: {executablePath: '/opt/pw-browsers/chromium'}}}`)
 — commit etmeyin.
+
+### Ek: 2026-08-01 — "alt kısım tam sıfıra dayanmıyor" (#1009)
+
+**`100dvh` görünür yükseklik DEĞİL.** Android'de kurulu PWA (edge-to-edge) sistem
+gezinme çubuğunun *arkasına* çiziyor, yani `100dvh` gördüğünüzden ~48 px fazla. Tam
+`100dvh` yüksekliğinde bir çerçeve kurunca dokümanda taşma da olmuyor → gizli kalan
+şerit **kaydırılarak da erişilemiyor**. Kullanıcının tarifi tam buydu: "en aşağı kısım
+tam sıfıra dayanmıyor, biraz fazladan aşağı gidiyor, scroll yapılamıyor."
+
+- `env(safe-area-inset-bottom)` bunun tek CSS sinyali, ama **`viewport-fit=cover`
+  olmadan 0 döner**. Next App Router'da `viewport` export'u **layout başına** yapılabilir
+  (`src/app/messages/layout.tsx`), yani cover'ı tüm uygulamaya açmak zorunda değilsiniz —
+  iç içe export kök export'u *değiştirir* (merge etmez), o yüzden kökteki alanları
+  (themeColor, interactiveWidget) tekrar yazın.
+- İki düzeltmeyi **toplamayın**: biri çıkarma (`height: calc(100dvh - env(...))`), diğeri
+  **clamp** (`max-height: var(--visible-viewport-height)`) olsun. İkisi de aynı 48 px'i
+  bildirdiğinde clamp'te küçük olan kazanır; toplarsanız 96 px çıkarıp boşluk açarsınız.
+  Aynı sebeple `max(--fixed-bottom-inset, env(safe-area-inset-bottom))`: sabit alt bar
+  zaten kendi içinde inset kadar padding taşıyor (#935).
+- Tailwind arbitrary value içinde `max()`/`env()` sorunsuz derleniyor
+  (`h-[calc(100dvh_-_max(var(--x),env(safe-area-inset-bottom,0px)))]`), üretilen CSS'i
+  `grep "height:calc(100dvh" .next/static/css/*.css` ile doğrulayın.
+- **Cihaz elinizde olmasa da test edilebilir:** gizli şeridi, kabuğun dinlediği aynı
+  sinyali JS'ten kısarak taklit edin (`--visible-viewport-height = innerHeight - 48`) ve
+  composer'ın kalan alanda kaldığını assert edin. Negatif kontrol clamp'i silmekle
+  yapılıyor (630 > 616).
+
+## 2026-08-01 — CodeQL merge'ü check olarak değil, *konuşma* olarak bloke ediyor
+
+**Zorunlu check listesinde olmayan CodeQL yine de merge'ü durdurabiliyor.** #1004'te üç
+zorunlu check (`Lint · Typecheck · Build`, `Playwright smoke`, `Deploy topic environment`)
+yeşildi, `mergeable: MERGEABLE` idi ama `mergeStateStatus: BLOCKED` takılı kaldı ve
+auto-merge girmedi. Sebep dal korumasındaki `required_conversation_resolution: true`:
+`github-advanced-security` botu bulguyu diff üzerine bir **inceleme başlığı** olarak
+bırakıyor ve o başlık çözülmeden PR merge edilemiyor. Yani "CodeQL zorunlu check değil,
+bloke etmez" yanlış bir çıkarım. Teşhis yolu — `gh pr checks` bunu göstermiyor:
+```
+gh api graphql -f query='{repository(owner:"O",name:"R"){pullRequest(number:N){
+  reviewThreads(first:20){nodes{isResolved path line}}}}}'
+```
+Çözünce durum anında `UNSTABLE`'a (= zorunlular yeşil, zorunlu-olmayan kırmızı) düşüyor ve
+auto-merge çalışıyor. Not: başlığı çözmek **uyarıyı kapatmıyor**; alert Security
+sekmesinde açık kalıyor, o yüzden ikisi ayrı karar.
+
+**Object-URL önizlemeleri `js/xss-through-dom` (high) veriyor ve bu bir false positive.**
+`URL.createObjectURL(file)` → `<img src>` deseni her ek/görsel önizlemesinde var; main'de
+`MessageThread.tsx:42,44` zaten aynı şekilde işaretli. Değer tarayıcının ürettiği
+`blob:<origin>/<uuid>`, `javascript:`/`data:` olamaz ve `<img src>` SVG byte'ları için bile
+script çalıştırmaz. **Yeni bir composer eklerken bunu bekle**; toplu karar #1005'te.
+
+**`pull_request` olayları bir PR için sessizce kesilebiliyor.** #992'de ilk açılışta 4
+workflow koştu, sonraki iki push ve `close`+`reopen` hiçbir run yaratmadı — head commit'te
+sıfır check, dolayısıyla zorunlular hiç oluşmadı (aynı anda başka PR'lar sorunsuz
+koşuyordu, yani depo/kota sorunu değildi). Boş commit de tetiklemedi. İşe yarayan iki şey:
+`gh workflow run <wf>.yml --ref <branch>` (dispatch run'ları check-run'larını **head
+commit'e** iliştiriyor, yani zorunlu context'leri karşılıyorlar) ve nihayetinde aynı daldan
+**yeni bir PR** açmak. Teşhis: `gh api repos/O/R/commits/<sha>/check-runs` boş dönüyorsa
+olay hiç gelmemiş demektir.
+
+**PR gate `@smoke` koştuğu için yeni spec'in gate'te hiç çalışmıyor.** Etiketlemediysen
+(ki küçük tutmak için genelde etiketlememelisin) tek gerçek doğrulama
+`gh workflow run e2e-full.yml --ref <branch>`. Bunu PR'ı merge etmeden önce yap ve sonucu
+PR'a yaz; aksi halde "CI yeşil" yalnızca özelliğinin *derlendiğini* söylüyor.
+
+**Kırmızı tam suite'i regresyon sanmadan önce main'de kontrol koşusu al.** Bu turda dal 3
+testte kırmızıydı; aynı anda başlamış `main` zamanlanmış koşusu **6** testte kırmızıydı
+(üst küme). `gh run list --workflow e2e-full.yml --branch main` ile en yakın koşuyu bulup
+`✘` satırlarını karşılaştırmak, "benim mi, zaten bozuk mu" sorusunu tek adımda kapatıyor.
+
+**Paste'i e2e'de test etmek:** Playwright işletim sistemi panosuna görsel yazamıyor.
+Görsel için sentetik `ClipboardEvent` + `DataTransfer` gönder (`el.dispatchEvent`) — handler
+`clipboardData`'yı okuduğu için bu gerçek yolu kapsıyor. Ama **sentetik olay tarayıcının
+varsayılan yapıştırmasını tetiklemiyor**, o yüzden "düz metin hâlâ kutuya yazılıyor" testi
+`toHaveValue` ile yazılamaz; onun yerine sözleşmeyi ölç: `event.defaultPrevented === false`.
+
+---
+
+## 2026-08-01 — Admin ↔ mentor görünüm anahtarı (#1014, 0.37.0-beta)
+
+**"Garip bir hata" bazen zaten var olan bir yetki + eksik bir arayüz.** Kullanıcı,
+bildirime tıklayınca admin panelinin birden mentör paneline dönüşmesini hata sandı.
+Kod tarafında hata yoktu: `src/app/mentor/layout.tsx`'in rol kontrolü **her zaman**
+`ADMIN`'i kabul ediyordu, yani `/mentor/*` çoktan erişilebilirdi. Eksik olan tek şey
+oraya götüren bir kontrol ve "şu an oradasın" işaretiydi. **Yeni bir özellik yazmadan
+önce mevcut rol guard'larını oku** — bazen iş, yeni yetki eklemek değil, var olanı
+görünür kılmak.
+
+**Modu URL'den türet, saklama.** Cookie/DB'de "mentör modundayım" bayrağı tutmak, tam
+da bu senaryoyu (dışarıdan gelen bir link seni öbür kabuğa düşürüyor) kenar çubuğu ile
+adres çubuğunun çelişmesine çeviriyordu. `modeOf(pathname)` + `counterpartPath()`
+(`src/lib/appMode.ts`) ile şema, session ve API yüzeyi hiç değişmeden çözülüyor.
+
+**Sürüm çakışması artık kural, istisna değil.** Dalı açtığımda main 0.35.3-beta idi;
+PR'ı açana kadar paralel bir oturum **0.36.0-beta**'yı (#976 mentör global arama)
+shiplemişti ve ben de 0.36.0-beta'ya bump etmiştim. Ders: **bump'ı rebase anında
+doğrula**, dal açılışında değil — `git show origin/main:package.json | grep version`.
+Aynı gün main 8 commit ilerledi (dependabot + iki feature); `git diff origin/main`
+sana *kendi* commit'ini değil, main'in de ilerlemesini gösterir — kendi diff'ini
+görmek için `git show --stat HEAD` ya da `git diff origin/main..HEAD` kullan.
+
+**Smoke olmayan yeni spec'leri ucuza koştur:** `e2e.yml`'nin `workflow_dispatch`
+`grep` girdisi 4-shard e2e-full'e gerek bırakmıyor —
+`gh workflow run e2e.yml --ref <dal> -f grep='<başlık regex>'` üç testi 11.5 sn'de
+koşturdu. **Ama logda `Running N tests` satırını doğrula**: yanlış yazılmış bir grep
+0 test koşup yeşil döner, yani sahte yeşil.
+
+**`gh pr merge` worktree'de "başarısız" görünüp aslında merge edebiliyor.** Başka bir
+worktree `main`'i tuttuğunda `fatal: 'main' is already used by worktree ...` hatası
+alıyorsun — ama bu hata **uzaktaki merge'den sonra**, yerel checkout adımında oluşuyor.
+Tekrar denemeden önce `gh pr view <n> --json state,mergedAt` ile bak (bende MERGED'di);
+sonra uzak dalı elle sil:
+`gh api --method DELETE repos/O/R/git/refs/heads/<dal>`.
+
+**DB'siz makinede görsel doğrulama.** Bu oturumdaki Mac'te ne MySQL ne Docker vardı,
+yani giriş gerektiren ekran açılamıyor. Salt CSS/yerleşim için işe yarayan yol:
+projenin **gerçek** Tailwind'ini statik bir mock'a derle —
+`npx tailwindcss -i src/app/globals.css -o out.css --content mock.html` — CSS'i inline
+et, `python3 -m http.server` ile servis et, açık+koyu tema ekran görüntüsü al. `globals.css`'teki
+dark-mode retint tuzağını DB olmadan yakalıyor. (Mock'a `<meta charset="utf-8">` koymayı
+unutma, yoksa Türkçe dizeler mojibake görünür ve olmayan bir hatayı kovalarsın.)
+
+**Worktree'de `npm run lint` yanıltıcı:** `.claude/worktrees/` repo'nun *içinde* olduğu
+için üst dizinin `.eslintrc.json`'ı da yükleniyor ve ESLint
+`Plugin "@next/next" was conflicted between ...` ile ölüyor. Bu senin değişikliğinle
+ilgili değil; `npm run build` ve CI'ya güven.
+
+**Bayat Prisma client'ın imzası:** dokunmadığın dosyalarda (`src/lib/auth.ts`,
+`announcements/route.ts`, `src/lib/activity.ts`) ~18 hayalet TS hatası. `npm install &&
+npx prisma generate` temizliyor. CLAUDE.md bunu söylüyor ama *belirti* şekli — "hiç
+açmadığım dosyalar kırmızı" — teşhisi tek bakışta veriyor.
+
+---
+
+## 2026-08-01 — Değerlendirme silme (#1013, 0.38.0-beta)
+
+**Kesilen `pull_request` olayı bu kez ilk push'ta oldu — ve rebase force-push'u
+tetikledi.** PR açıldı, `gh pr checks` "no checks reported" dedi,
+`gh api repos/O/R/commits/<sha>/check-runs` → `total_count: 0`. 20 dakika bekledim,
+hiçbir şey gelmedi. Sonra main'e rebase edip `git push --force-with-lease` yapınca beş
+workflow da 8 saniye içinde koştu. Yani #992'de işe yaramayan boş commit'in aksine
+**gerçek bir yeni head SHA** (rebase) olayı geri getiriyor. Önceki oturumun önerdiği
+`gh workflow run` yolunu denemeye gerek kalmadı. Pratik sıra: PR açtıktan ~1 dk sonra
+`check-runs` sayısına bak; 0 ise beklemeden dalı main'e rebase edip force-push et —
+sürüm çakışmasını da aynı anda çözüyorsun.
+
+**`releaseNotes.ts` çakışmasında "benimkini al" karşı tarafın notunu siler.** Sürüm
+çakışması bu oturumda üçüncü kez yaşandı (main 0.35.3 → 0.37.0 ilerlemişti) ama asıl
+tuzak çözümdeydi: `RELEASE_NOTES` dizisinde çakışma **en üstteki girdinin *içine*** düşüyor
+— `<<<<<<<` HEAD'in sürüm numarası + `=======` senin metnin şeklinde. Blok olarak
+"benimkini al" dersen karşı tarafın sürüm numarası kalır, **kullanıcıya görünen notu
+kaybolur**. Doğrusu: HEAD tarafını olduğu gibi bırak, kendi girdini dizinin başına *yeni*
+bir eleman olarak ekle. Aynı hata `CHANGELOG.md`'de daha görünür (başlık kaybolur), ama
+release notes'ta sessiz. Çözdükten sonra `grep -n "version: '0\." src/lib/releaseNotes.ts`
+ile sürümlerin azalan sırada ve tekrarsız olduğunu doğrula.
+
+**`@smoke` olmayan yeni bir spec'i doğrulamanın ucuz yolu `e2e-full` değil.**
+`e2e.yml` workflow_dispatch bir `grep` girdisi alıyor:
+`gh workflow run e2e.yml --ref <dal> -f grep="testin başlığından bir parça"`. Tek test,
+~1 dakika, 4-shard suite'i ve zorunlu özet e-postasını hiç uyandırmadan. Sonucu körlemesine
+"success" diye okuma — `gh run view <id> --log | grep -E "Running [0-9]+ test|passed"` ile
+testin **gerçekten koştuğunu** teyit et (`Running 1 test` + `1 passed`), yoksa hiçbir şeyle
+eşleşmeyen bir grep de yeşil görünebilir.
+
+**Yetki matrisi olan bir endpoint'te e2e, tarayıcı doğrulamasının yerine geçebiliyor.**
+Bu makinede yerel MySQL yok, yani paneli tıklayarak deneyemedim. Bunun yerine spec iki
+yönü de ölçtü: mentee'nin değerlendirmesine `403` + satır duruyor, mentorun kendi
+kaydına `200` + satır gitti. Görsel doğrulama yapılamayan ortamda **kuralı** test etmek,
+"derlendi" demekten çok daha fazlasını veriyor — PR'a da bu logu yapıştır.
+
+## 2026-08-01 — Zamanlanmış koşuda 2 kırmızı + 6 flaky: üçü de farklı sınıf
+
+Tek bir e2e raporundaki üç grup, üç ayrı iş çıkardı. Ayırt etme sırası şu:
+
+**1. `failed,failed` mi `failed,passed` mi?** Shard JSON'larını indirip retry desenine bak
+(yöntem bir önceki girdide). Bu koşuda 2 test retry'da da düştü → gerçek kırılma;
+6 test retry'da geçti → yarış koşulu. İkisine bakış açısı tamamen farklı: birincide
+"hangi commit bunu bozdu", ikincide "hangi bekleme eksik".
+
+**2. Kırmızıların ikisi de "test ortamı bir fail-open'a yaslanmış" sınıfındaydı.**
+`inbound-email` 401 veriyordu çünkü #870 webhook'un dev-dışı fail-open'ını kapattı ve CI
+production build (`next start`) servis ediyor — `NODE_ENV=production` + `INBOUND_SECRET`
+yok = 401. Endpoint doğru davranıyordu; **test ortamı, kapatılmış olan gevşek yola
+bağlıydı**. Doğru düzeltme testi gevşetmek değil, `playwright.config.ts`'in `webServer.env`
+bloğuna sırrı eklemek (`HEALTH_TOKEN` ile aynı desen) ve spec'ten göndermek — böylece test
+production'ın gerçek şeklini koşuyor. Bir güvenlik PR'ı bir fail-open'ı kapattığında,
+**o fail-open'a yaslanan e2e'ler o PR'da güncellenmeli**; yoksa fatura zamanlanmış koşuya
+kesiliyor.
+
+**3. Diğer kırmızı, CLAUDE.md'de zaten yazan locator tuzağının aynısı.** #881
+`/admin/activity` satırına bir IP çipi ekledi — o da `text-gray-400` ve DOM'da tarihten
+önce. `span.text-gray-400.first()` artık IP'yi yakalıyor ("unknown", çünkü e2e sunucusu
+bilerek `TRUSTED_PROXY_COUNT=0` ile koşuyor). Sınıf tabanlı locator, o sınıfı kullanan
+**yeni bir kardeş eklendiği gün** kırılır. `data-testid` ekle.
+
+**4. Altı flaky'nin hepsi, repoda zaten var olan yardımcıları kullanmıyordu.**
+`e2e/helpers/auth.ts` bu iki şekli önlemek için yazılmış ve doc comment'lerinde tam olarak
+bu hataları anlatıyor; spec'ler sadece geçmemişti. Yeni bir flake görünce **önce helper'ın
+var olup olmadığına bak** — muhtemelen problem çözülmüş, sadece uygulanmamış.
+İkinci şeklin sebebi blanket `clearCookies()`: `storageState`'ten gelen consent cookie'sini
+de siliyor *ve* terk edilen sayfanın uçuştaki `/api/auth/session` çağrısı session
+cookie'sini geri yazıyor, böylece `/auth/signin` test hâlâ yazarken eski dashboard'a
+`router.replace()` ediyor. `two-factor`'da submit, önceki sayfanın **disabled "Add note"**
+düğmesine çözünüp 15 sn boyunca onu denedi. Belirtisi hep aynı: hata mesajında
+"locator resolved to <...>" ile gelen element, o an bulunduğunu sandığın sayfaya ait değil.
+
+**Yardımcıyı bölerken:** 2FA açık hesap submit'ten sonra `/auth/signin`'de kalmalı, yani
+`signInAsFreshUser`'ın landing beklemesi orada yanlış. Gövdesini `submitSignInForm` olarak
+dışa aç, `signInAsFreshUser` onu çağırsın — guard'lar tek yerde kalır.
+
+**Süreç notu:** iki iş (kırmızı onarımı + flaky onarımı) ayrı PR'lara ayrıldı. Aynı dala
+yığmak, kırmızı düzeltmesinin merge'ünü flaky işinin CI'sine bağlardı; `git stash` + yeni
+dal (`git checkout -B <yeni> origin/main` + `stash pop`) bunu 10 saniyede ayırıyor.
+
+**Ek ders (aynı oturum, ilk denemem kırdı):** flaky'leri helper'a taşırken
+`submitSignInForm`'u "about:blank → sadece session cookie'sini sil → /auth/signin" olarak
+yazmak `two-factor.spec.ts`'i **deterministik olarak** bozdu (failed,failed) — parola alanı
+hiç gelmedi. Sebep: `/auth/signin` girişi tamamlarken `/api/auth/session`'ı yoklayıp
+`window.location.assign(roleHome)` yapıyor. `waitForURL()` dönüyor ama **terk edilen sayfa
+hâlâ session okuyor**; `clearCookies()`'ten sonra düşen bir yanıt cookie'yi geri yazıyor,
+sıradaki `/auth/signin` `authenticated` görüp dashboard'a `router.replace()` ediyor.
+Ekranda bunu söyleyen hiçbir şey yok — belirti sadece "parola alanı 15 sn'de gelmedi".
+Çözüm: cookie'yi düşürmeden **önce** çıkan sayfanın susmasını bekle (`networkidle`), form
+yine yoksa cookie'yi bir kez daha düşürüp yeniden yükle.
+
+İki genel kural: (1) blanket `clearCookies()`'i seçmeli silmeyle değiştirirken, o blanket
+silmenin **yan etkisiyle** neyi maskelediğini varsayma — doğrula; (2) grep'li dispatch
+koşusu bittikten sonra logu **oku**, "yaklaşım doğru" diye peşinen yeşil ilan etme. Bu
+oturumda 8 testten 7'si geçmişti; kalan 1'i sadece log gösterdi.
+
+## 2026-08-02 — "Düğme hiçbir şey yapmıyor" aslında bir *okuma* hatasıydı (#1028, 0.38.1-beta)
+
+Bildirim: Müsaitlik sayfasında **Ekle**'ye basınca hiçbir şey olmuyor. İlk refleks — submit
+handler'ı, `Button`'ın `type`'ı, hidrasyon — hepsi temizdi. Hata yazma yolunda değil,
+**okuma** yolundaydı: `POST /api/availability` ADMIN'i kabul ediyor (admin mentor kabuğuna
+0.37.0-beta'daki görünüm anahtarıyla giriyor), ama `GET` `mentorId`'yi yalnızca
+`role === 'MENTOR'` iken oturumdaki kullanıcıya düşürüyor, diğer herkese `{ slots: [] }`
+dönüyordu. Yani: 201 dönüyor, sayfa listeyi yeniden yüklüyor, boş dizi alıyor ve
+"Saatlerin (0)"da kalıyor. Yazma sessizce başarılı, ekranda sıfır iz.
+
+**Genel kural:** bir kaynağın POST'u ile GET'i **farklı rol kümesine** varsayılan
+davranıyorsa, kullanıcıya görünen belirti "kayıt olmuyor" değil "düğme ölü" olur. Bir
+endpoint çiftine dokunurken yazma tarafının kabul ettiği rolleri okuma tarafının
+varsayılanıyla yan yana koy; ikisi ayrışıyorsa bu tek başına bir bug'dır.
+
+**Test dersi:** `e2e/calendar.spec.ts`'teki mevcut müsaitlik testi bu hata boyunca hep
+yeşildi — çünkü `page.request.post` ile **sadece API'yi** ve sadece MENTOR'ü deniyordu.
+Yazma+okuma döngüsünün kırıldığı yerde API-seviyesi test hiçbir şey kanıtlamaz; regresyon
+testi sayfayı sürmeli (giriş → `/mentor/availability` → formu gönder → satırı gör).
+
+**Ortam notu:** dal değiştirdikten sonra `tsc --noEmit` 20+ Prisma tipi hatası verdi
+(`lastTotpStep does not exist`, `announcementImage` yok…). Hepsi bayat client; tek
+`npx prisma generate` ile sıfırlandı. Bu Mac'te DB yok, o yüzden doğrulama grep'li
+`e2e.yml` dispatch'i ile yapıldı (`-f grep='<test başlığı>'`) — 1 test, ~8 sn, PR
+smoke gate'ini beklemeden fix'i kanıtlıyor.
+
+## 2026-08-02 — Sunucunun saati kullanıcının saati değildir (#1030, 0.38.2-beta)
+
+Bildirim: uygulamada **09:00** görünen toplantının hatırlatma e-postası **07:00** diyor.
+İki ekran görüntüsü tek başına kök nedeni veriyordu: fark tam **2 saat**, yani okuyanın
+ofseti GMT+2 (Europe/Berlin) ve sunucu UTC. Koda bakmadan önce farkı hesapla — hangi iki
+saat diliminin karşı karşıya olduğunu söyler, gerisi doğrulamadır.
+
+Hata `Date.toLocaleString('en-GB', …)`'in **`timeZone` verilmeden** çağrılmasıydı:
+`timeZone` yoksa Node süreç saat dilimini kullanır, container ise UTC. Tarayıcı tarafında
+aynı çağrı doğru çalışıyor (`lib/relativeTime.ts`), çünkü orada süreç saati = kullanıcının
+saati. **Genel kural:** kullanıcının tarayıcı *dışında* okuyacağı her tarih — e-posta,
+DB'ye yazılan bildirim metni, PDF, webhook payload'u — açık bir IANA dilimi taşımalı;
+istemci formatlayıcısını sunucuya kopyalamak sessizce yanlış çıktı üretir.
+
+**Asıl tuzak — alan var, veri yok:** `User.timezone` şemada zaten vardı, ama picker
+yalnızca mentee profil formunda. Mentor ve adminlerde alan hep `null`, yani "alıcının
+dilimini kullan" düzeltmesi tam da şikâyet eden kullanıcı için hiçbir şey değiştirmezdi.
+Bir alanı okumaya başlamadan önce **kimlerde dolu olduğunu** sor; şemada bulunması
+doldurulduğu anlamına gelmiyor. Çözüm: tarayıcı dilimini oturumda bir kez yakalayıp
+**yalnızca boşsa** yazmak (kullanıcının elle seçtiği dilim asla ezilmez).
+
+**Intl ayrıntısı:** `dateStyle`/`timeStyle` ile `timeZoneName` aynı anda verilemez
+(TypeError). Ofset etiketini (`(GMT+2)`) ikinci bir `formatToParts` çağrısından alıp
+metne eklemek gerekiyor.
+
+**DB'siz doğrulama:** `TZ=UTC node --experimental-strip-types` ile `src/lib/timezone.ts`'i
+doğrudan import etmek container davranışını birebir taklit ediyor — rapordaki gerçek anı
+(`2026-08-02T07:00:00Z`) verip Berlin alıcısında `09:00 (GMT+2)` çıktığını görmek, tüm
+uygulamayı ayağa kaldırmadan en ucuz kanıt.
+
+**Kapsam notu:** regresyon testi `e2e/cron-jobs.spec.ts`'e eklendi ve bu spec `@smoke`
+değil — yani PR gate'i yeşil dönmesi o testin **çalıştığı** anlamına gelmiyor; kanıt bir
+sonraki zamanlanmış tam koşuda geliyor. Smoke dışı bir spec'e test eklerken bunu açıkça
+söyle, "CI yeşil" diye kapatma.
+
+## 2026-08-02 — Global durum, sayfa kabuğuna gömülmez (#1034, 0.38.3-beta)
+
+Bildirim: kimlik taklidi bandı ("… olarak görüntülüyorsun / Kendi hesabına dön")
+Mesajlar ekranında yok. Kök neden tek satırdı: bant `ResponsiveShell` içinde
+render ediliyordu, yani yalnızca rol kabuğu olan alanlarda (`/admin`, `/mentor`,
+`/portal`, `/company`, `/source`) vardı. Kendi chrome'unu üreten rotalar
+(`/messages`, `/account`, `/notifications`, `/announcements`) o kabuğu hiç
+kullanmıyor. **Kural:** "her ekranda görünmeli" diyen bir öğe (oturum uyarısı,
+bakım bandı, global hata) sayfa kabuğuna değil `Providers`'a konur; yoksa yeni
+kabuksuz her rota sessizce aynı hatayı tekrar eder. Bir bileşenin nerede
+görüneceğini `grep -rn '<Bileşen'` ile değil, **hangi layout'ların onu içeren
+kabuğu kullandığıyla** ölç.
+
+**Yan etki — `100dvh` çerçeveler üstten eklenen şeridi göremez:** `MessagesShell`
+kendini `calc(100dvh - …)` ile boyutluyor. Belgenin en üstüne akışta duran 61px'lik
+bir şerit koyunca toplam yükseklik viewport'u tam o kadar aşıyor ve composer
+görünmez alana düşüyor. Çözüm mevcut `--fixed-bottom-inset`/#935 kalıbının aynası:
+`useTopBannerInset` şeridin ölçülen yüksekliğini `--top-banner-inset` olarak
+yayınlıyor, çerçeve hem `height` hem `--visible-viewport-height` clamp'inden
+düşüyor. Viewport'a göre boyutlanan bir ekranın üstüne/altına bir şey eklerken
+her zaman bu iki yeri birlikte gözden geçir.
+
+**Doğrulama (bu Mac'te DB yok):** Browser pane, proje dışındaki `file://` sayfaları
+"statik snapshot" olarak açıyor — script çalışmıyor, `javascript_tool`/`resize_window`
+"No site is open in this tab" diyor. Bunun yerine CSS matematiğini birebir kopyalayan
+bir mock HTML yazıp **doğrudan Playwright ile headless** açmak (repoda kurulu,
+`chromium.launch()` sorunsuz) en ucuz kanıt: 375×812'de `banner 61px + frame 751px =
+812px`, `docOverflow=0`, listeyi kaydırınca `banner.top === 0`. Layout/`calc()`
+işlerinde uygulamayı ayağa kaldırmadan gerçek tarayıcı ölçümü alınabiliyor.
+
+**Ortam tuzağı:** `npm run lint`, `.claude/worktrees/<ad>` içinden çalıştırıldığında
+üst repodaki `.eslintrc.json` ile çakışıp `Plugin "@next/next" was conflicted…` ile
+exit 1 veriyor. Kodla ilgisi yok — CI depo kökünden koştuğu için yeşil; worktree'de
+kırmızı lint görürsen önce bunu ele.
+
+**Kapsam notu:** eklenen iddialar `e2e/impersonation.spec.ts` içinde ve bu spec
+`@smoke` değil — PR gate'inde çalışmadılar, kanıt bir sonraki zamanlanmış tam koşuda.
+
+## 2026-08-02 — Sunucu reddediyorsa arayüz de sormamalı; silme yetkisi kimin parolasıyla? (#1036/#1037, 0.38.4 / 0.39.0-beta)
+
+Bildirim: "başkasının hesabına admin olarak girip o hesabı silmek istediğimde hesap
+parolası soruyor, ama ben o parolayı bilmiyorum." İki ayrı iş çıktı.
+
+**1) Ölü arayüz tuzağı (#1036).** `/api/account` PUT ve DELETE, `session.user.impersonatorId`
+doluysa 400 dönüyordu — yani sunucu tarafı zaten doğruydu. Ama `AccountSettings` e-posta,
+parola ve "Hesabı sil" kartlarını her koşulda render ediyordu. Sonuç: kullanıcıya
+bilemediği bir parola sorulan, doğru girse bile 400 dönecek bir form. **Kural:** bir
+endpoint'e koşullu bir red eklerken (`if (impersonating) return 400`) aynı koşulu
+arayüzde de ara; yoksa doğru sunucu davranışı, kullanıcıya "bozuk özellik" olarak
+görünür. Bunu bulmanın hızlı yolu: guard'ı ekleyen commit'te `grep` ile o endpoint'i
+çağıran bileşenleri kontrol et.
+
+**2) Adım-yükseltmeli kimlik doğrulama, doğru parolayla (#1037).** Self-service silmede
+hesap sahibinin parolası sorulur; admin yolunda böyle bir karşılık yok. Var olan
+`/api/admin/users/[id]/erase` yalnızca "hedefin tam adını yaz" kapısına dayanıyordu —
+bu yanlış-tıklama koruması, kimlik doğrulama değil: çalınmış bir admin oturumu hiç
+parola bilmeden hesap silebilirdi. Eklenen `adminPassword`, **admin'in kendi**
+parolasıdır; hedefin parolası hiçbir zaman istenmez (istenmesi zaten 1. maddedeki
+tuzağın kaynağıydı).
+
+**Restrict modundaki FK'lar sessiz mayın.** `hardDeleteUser` yalnızca
+`mentorshipRelation` + `statusChange` temizliyordu. `SupportTicket.assignedAdminId`,
+`MentorshipRequest.decidedById` ve `Project.ownerUserId` ise cascade **değil** (şemada
+`onDelete` yok → restrict), dolayısıyla proje sahibi bir mentoru silmek anlaşılmaz bir
+FK hatasıyla patlıyordu — self-service silme de aynı fonksiyondan geçtiği için bu hata
+yeni kod olmadan da erişilebilirdi. **Kural:** `user.delete` yazan bir yol eklemeden önce
+`grep -n "User? \+@relation" prisma/schema.prisma` ile cascade'i olmayan opsiyonel
+referansları çıkar; org'a ait satırları silmek değil, `null`'a çekmek gerekiyor.
+
+**`logActivity` → `activityLog`, `auditLog` değil.** Impersonation testleri
+`prisma.auditLog`'a bakıyor (o tabloya `IMPERSONATE_*` yazılıyor), ama `logActivity`
+`prisma.activityLog`'a yazıyor. Yeni bir eylemin loglandığını test ederken hangi tabloya
+yazıldığını `src/lib/activity.ts` içinden doğrula; yanlış tablo sorgusu sessizce `null`
+döner ve test "log yok" diye yanlış yerde kırılır.
+
+**Smoke dışı spec'i merge'den önce doğrulamanın yolu var.** Bu depoda tekrar eden şikâyet
+("kanıt bir sonraki zamanlanmış tam koşuda") için çözüm: `e2e-full.yml` `workflow_dispatch`
+kabul ediyor, yani `gh workflow run e2e-full.yml --ref <branch>` ile tam suite'i **kendi
+branch'inde** koşturabiliyorsun (4 shard, ~5 dk, ubuntu-latest → public repo'da ücretsiz).
+Bu turda dört ilgili spec'in de (`admin-user-erase`, güncellenen `candidate-erasure` ×2,
+yeni `impersonation` vakası) gerçekten koşup geçtiği böyle görüldü. Shard 4'teki tek
+kırmızı `e2e/questions.spec.ts:17` idi ve **aynı test main'in 03:00 UTC koşusunda da
+kırmızıydı** — yani mevcut bir sorun. Bir shard kırmızı olduğunda önce aynı testin son
+main koşusundaki durumuna bak; "benim değişikliğim mi" sorusunu 30 saniyede kapatıyor.
+
+## 2026-08-02 — Guard'ı yazmak kolay, endpoint'in *bütün* yüzeylerini bulmak asıl iş (#1039, 0.39.1-beta)
+
+`/api/account/2fa` impersonation guard'ı olmayan tek hesap endpoint'iydi: "Kullanıcı olarak
+gir" ile giren admin, sahibinin elinde olmayan bir authenticator'ı hesaba bağlayabiliyor
+(30 dakikalık impersonation penceresinden sonra da yaşayan kalıcı bir ikinci kimlik
+bilgisi) ya da sahibi koruyan faktörü söküp atabiliyordu.
+
+**Aynı endpoint'in ikinci bir arayüz yüzeyi vardı.** `/account` kartı bariz olanıydı;
+`/security-setup` (org 2FA zorunluluk kapısı) aynı endpoint'e POST ediyor. Rol layout'ları
+bu kapıyı impersonation'da zaten atlıyor, yani oraya ancak URL elle yazılarak ulaşılıyor —
+ama guard eklendikten sonra orası da "gönderilince 400 dönen form" olacaktı, yani bir
+önceki dersin (#1036) tuzağının aynısı. **Kural:** guard eklerken `grep -rn
+"api/<endpoint>" src/` çalıştır ve çıkan her çağrı noktasını ayrı ayrı karara bağla; kartı
+gizlemek "arayüz tarafı bitti" demek değil.
+
+**Engellemeden önce alternatif yolun var mı diye bak.** `sign-out-all`'ı da kapattım, ama
+önce admin'in bir kullanıcıyı kilitleme yolu olup olmadığını kontrol ettim:
+`POST /api/admin/users/[id]/reset-password` var ve **admin'in kendi id'siyle** loglanıyor.
+Olmasaydı doğru hamle "engelle" değil, "engelle + admin tarafı eşdeğerini ekle" olurdu —
+yoksa guard bir yeteneği karşılıksız siler.
+
+**Denetim kaydı tek başına guard gerekçesidir.** `logActivity` bu rotalarda
+`actorId: session.user.id` yazıyor; impersonation'da bu, işlemi yapan admin değil
+*kullanıcı* demek. İşleme izin verilseydi bile kayıt yanlış kişiyi gösterecekti. Bir
+eylemin impersonation'da serbest olup olmayacağını tartışırken "kim yaptı diye sorulursa
+kayıt ne diyor?" sorusu, "zararlı mı?" sorusundan daha hızlı sonuç veriyor.
+
+**GET'i engelleme.** Salt-okunur durum sorgusunu da 400'lemek arayüzün mount'ta yaptığı
+`fetch`'i kırar, karşılığında hiçbir şey kazandırmaz. Guard mutasyona konur.
+
+**`gh run view --job X --log | grep` sessizce boş dönebiliyor.** Dört shard'da da yeni
+testin adını aradım, dördü de `0` eşleşme verdi — test koşmamış gibi göründü. Aynı log'u
+önce dosyaya yazıp (`> s$j.log`) grep'leyince eşleşmeler çıktı (shard 2, `✓
+impersonation.spec.ts:136`). **Log'da bir şey bulamamak "yok" demek değil**: önce dosyaya
+yaz, sonra ara.
+
+**Ve merge'den önce koştur.** Bir önceki dersin tam da bunu söylediğini (`gh workflow run
+e2e-full.yml --ref <branch>`) merge ettikten *sonra* fark ettim; bu turda tam suite main'de
+koşup 349/349 geçti, ama doğru sıra branch'te koşturmak. `docs/agent-experience.md`'yi
+oturumun *başında* okumanın nedeni bu — sonunda yazmak yetmiyor.
+
+## 2026-08-02 — `questions.spec.ts`: "sorular UI'ı değişmiş" değildi, *ikinci* giriş yarışıydı
+
+Zamanlanmış tam koşuda (shard 4/4) sürekli kırmızı olan tek test. Bildirimdeki tahmin
+"sorular ekranı değişti, spec geride kaldı" idi — **yanlış**. Spec, sorular UI'ına hiç
+dokunmuyor: üç `page.request` çağrısıyla `/api/questions`'ı sürüyor. `page.fill` /
+`page.click` yalnızca kendi yazdığı `signIn()` yardımcısının içinde geçiyor. Yığın izi
+zaten bunu söylüyordu (`at signIn (…:12:14)` ← `…:31:5`, yani **mentor** girişi).
+
+**Kural: hata satırını değil, hatanın geçtiği fonksiyonu oku.** "Timeout on `page.fill`"
+görüp özellik ekranını aramak, yığın izinin ilk satırını atlamaktır. Testin adı ("mentee
+asks a question") nerede kırıldığını söylemez.
+
+**Kesin kanıt, teoriden ucuzdu.** `gh run download <run-id> -R 21072026/Internship -n
+playwright-report-full-shard-4` ile inen rapordaki `data/*.png`, hata anında ekranda
+**önceki kullanıcının portal panosunu** ("Welcome, QA Mentee!", sol altta mentee çipi)
+gösteriyor — `/auth/signin` değil. Bu tek kare tüm tartışmayı bitirdi: `router.replace()`
+testi mentee portalına geri atmış, parola alanı hiç var olmamış. Retry #1'de aynı sebep
+başka yüzle geldi: `button[type="submit"]` **5 elemana** çözündü ve ilki portalın
+*disabled* "Add" düğmesiydi. Zamanlanmış koşuda bir spec kırıldığında **önce artifact'ı
+indir**; log'daki "locator resolved to <…>" satırı ve ekran görüntüsü, hangi sayfada
+olduğunu tahmin etmekten hızlıdır.
+
+**Sebep, repoda zaten yazılı ve zaten çözülmüştü.** `e2e/helpers/auth.ts`'in doc
+comment'leri bu iki belirtiyi (kaybolan parola alanı + disabled "Add" düğmesi) birebir
+anlatıyor; #965/#969/#1018 altı spec'i bu yardımcılara taşıdı. `questions.spec.ts`
+o süpürmelerde **atlanmış** — #342'den beri hiç dokunulmamış. Düzeltme tek satır:
+kendi `signIn()`'ini sil, `signInAsFreshUser` kullan. Bir önceki girdinin kuralı bir kez
+daha geçerli: *yeni bir flake görünce önce helper'ın var olup olmadığına bak.*
+
+**Bu Mac'te yarış tekrar üretilemiyor — ve bunu dürüstçe söylemek gerekiyor.** Lokal DB
+kuruldu (`brew install mariadb`; `mariadbd-safe --datadir=/usr/local/var/mysql &`, root
+socket-auth olduğu için `mariadb -u <os-kullanıcısı>` ile bağlanıp `crm`/`crm` kullanıcısı
+açıldı — playbook'un `apt` tarifi macOS'ta geçmiyor, Docker daemon da kapalı). Spec hem
+dev sunucuda hem `CI=1` + production build ile **geçti** (2.8 s). `/api/auth/session`'ı
+2.5 sn geciktirip yavaş runner'ı taklit etmek de yarışı tetiklemedi. Yani "lokalde geçiyor"
+bu sınıf için **kanıt değil**; yarış GitHub runner'ının yavaşlığına bağlı. Doğrulama
+zinciri: artifact (ne olduğu) + helper'ın doc comment'i (neden) + zamanlanmış koşu (düzeldi mi).
+
+**`@smoke` kararı: hayır, dışarıda kalıyor.** Gerekçe: (1) smoke seti şu an **31** test,
+CLAUDE.md'nin hedefi ~15-20 — her "bu da önemli" eklemesi tam olarak bu aşımı üretti;
+(2) bu spec üç API iddiası için **iki tam UI girişi** ödüyor (CI'da ~16 sn), gate ~3,5 dk;
+(3) konusu olan rol-aşırı yetkilendirme smoke'ta zaten `authz-matrix` + `role-scoping` ile
+temsil ediliyor; (4) kırılma bir ürün regresyonu değildi, ortak yardımcıya geçmemiş bir
+spec'ti — ve artık geçti. Tespit mekanizması da çalıştı: bunu zamanlanmış koşunun özet
+e-postası yakaladı. Smoke'a terfi, PR'da görünürlük isteyen **ürün** yollarına saklanmalı.
+
+**Açık kalan (kapsam dışı bırakıldı):** kullanıcı **değiştiren** ve hâlâ kendi giriş
+yardımcısını yazan başka spec'ler var (`grep -l "goto('/auth/signin')" e2e/*.spec.ts` ile
+`helpers/auth` import etmeyenleri kesiştir; ≥2 giriş yapanlar riskli). Şu an yeşiller, yani
+aynı yarış onlarda **uykuda**. Hepsini bu PR'da taşımak yeşil testleri riske atardı;
+ayrı bir süpürme işi.

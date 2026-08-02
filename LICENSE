@@ -1,6 +1,11 @@
 Internship CRM
 Copyright (C) 2026 Mehmet Erşahin
 
+Mehmet Erşahin is the sole rights holder of this software. Contributions by
+others are made under the contributor terms in CONTRIBUTING.md, which grant the
+rights holder an exclusive right to use them; no contributor holds a licensing
+claim over the software.
+
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU Affero General Public License as published by the Free
 Software Foundation, either version 3 of the License, or (at your option) any
@@ -15,6 +20,11 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 
 A commercial license (without AGPL obligations) is also available — see the
 "Commercial licensing & hosting" section of README.md.
+
+This license covers the source code only. The name "Internship CRM", the project
+logo and the crm.ersah.in domain are trademarks / identifiers of the rights
+holder and are NOT licensed under the AGPL; forks and derivative services must
+use their own name and branding.
 
 The complete text of the GNU Affero General Public License v3.0 follows.
 ================================================================================

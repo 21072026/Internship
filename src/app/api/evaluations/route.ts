@@ -20,11 +20,14 @@ export async function GET(request: Request) {
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const evaluations = await prisma.evaluation.findMany({ where: { relationId }, orderBy: { createdAt: 'desc' } });
-  // Tag each evaluation with its direction so the UI can pick the right rubric.
+  // Tag each evaluation with its direction so the UI can pick the right rubric,
+  // and with whether the viewer may remove it (author or admin) so the panel
+  // only offers a delete button where the DELETE route would actually allow it.
   return NextResponse.json({
     evaluations: evaluations.map((e) => ({
       ...e,
       direction: e.authorId === rel.menteeId ? 'MENTEE_ON_MENTOR' : 'MENTOR_ON_MENTEE',
+      canDelete: e.authorId === session.user.id || session.user.role === 'ADMIN',
     })),
   });
   });

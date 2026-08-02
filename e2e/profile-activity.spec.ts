@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -19,31 +20,17 @@ test('a user\'s activity is visible to admin and to their mentor, but not to str
 
   try {
     // Admin can read it.
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', adminEmail);
-    await page.fill('input[type="password"]', 'AdminPass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
     const asAdmin = await (await page.request.get(`/api/users/${mentee.id}/activity`)).json();
     expect(asAdmin.items.some((i: { action: string }) => i.action === 'auth.login')).toBeTruthy();
 
     // The mentee's mentor can read it.
-    await page.context().clearCookies();
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', mentorEmail);
-    await page.fill('input[type="password"]', 'MentorPass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const asMentor = await page.request.get(`/api/users/${mentee.id}/activity`);
     expect(asMentor.ok()).toBeTruthy();
 
     // An unrelated mentor cannot.
-    await page.context().clearCookies();
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', strangerEmail);
-    await page.fill('input[type="password"]', 'StrangerPass123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+    await signInAsFreshUser(page, strangerEmail, 'StrangerPass123', '/mentor');
     const asStranger = await page.request.get(`/api/users/${mentee.id}/activity`);
     expect(asStranger.status()).toBe(403);
   } finally {

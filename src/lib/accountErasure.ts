@@ -11,6 +11,14 @@ import { prisma } from '@/lib/prisma';
 export async function hardDeleteUser(userId: string): Promise<void> {
   await prisma.mentorshipRelation.deleteMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] } });
   await prisma.statusChange.deleteMany({ where: { changedById: userId } });
+  // Optional references without a DB-level cascade (FK restrict) would abort
+  // the delete instead of cascading — and the rows themselves belong to the
+  // org, not to the user, so they are detached rather than deleted. Without
+  // this, deleting a mentor who owns a project or an admin who is assigned a
+  // support ticket failed with an opaque FK error.
+  await prisma.supportTicket.updateMany({ where: { assignedAdminId: userId }, data: { assignedAdminId: null } });
+  await prisma.mentorshipRequest.updateMany({ where: { decidedById: userId }, data: { decidedById: null } });
+  await prisma.project.updateMany({ where: { ownerUserId: userId }, data: { ownerUserId: null } });
   await prisma.user.delete({ where: { id: userId } });
 }
 

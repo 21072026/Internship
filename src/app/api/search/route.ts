@@ -16,10 +16,11 @@ export async function GET(request: Request) {
     const q = (new URL(request.url).searchParams.get('q') || '').trim();
     if (q.length < 2) return NextResponse.json({ users: [], companies: [] });
 
+    const isMentor = session.user.role === 'MENTOR';
     const userWhere: Prisma.UserWhereInput = {
       OR: [{ fullName: { contains: q } }, { email: { contains: q } }],
     };
-    if (session.user.role === 'MENTOR') {
+    if (isMentor) {
       userWhere.role = 'MENTEE';
       userWhere.menteeRelations = { some: { mentorId: session.user.id } };
     }
@@ -27,7 +28,10 @@ export async function GET(request: Request) {
     const [users, companies] = await Promise.all([
       prisma.user.findMany({
         where: userWhere,
-        select: { id: true, fullName: true, email: true, role: true },
+        select: {
+          id: true, fullName: true, email: true, role: true,
+          menteeRelations: isMentor ? { where: { mentorId: session.user.id }, select: { id: true }, take: 1 } : false,
+        },
         take: 8,
         orderBy: { fullName: 'asc' },
       }),
@@ -36,6 +40,14 @@ export async function GET(request: Request) {
         : Promise.resolve([]),
     ]);
 
-    return NextResponse.json({ users, companies });
+    const usersOut = users.map((u) => ({
+      id: u.id,
+      fullName: u.fullName,
+      email: u.email,
+      role: u.role,
+      relationId: isMentor ? ((u as { menteeRelations?: { id: string }[] }).menteeRelations?.[0]?.id ?? null) : null,
+    }));
+
+    return NextResponse.json({ users: usersOut, companies });
   });
 }

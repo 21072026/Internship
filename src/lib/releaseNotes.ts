@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.35.2-beta',
-    date: '2026-08-01',
+    version: '0.39.2-beta',
+    date: '2026-08-02',
     highlights: {
       en: [
         'The admin candidate list is now easier to use on a phone: each candidate appears in a compact card with their stage and mentor up front, while education, city and skills remain close at hand. Filters can be opened when needed, and the page no longer scrolls sideways at 375px.',
@@ -28,20 +28,200 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
+    version: '0.39.1-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Two-factor authentication now belongs to the account holder alone. While an admin is viewing your account through "Login as", they can no longer turn 2FA on — which would have paired an authenticator app only they hold — nor turn it off, nor sign your devices out. Those cards are hidden during impersonation and the server refuses the changes even if the request is sent directly.',
+        'This also fixes the audit trail: such a change used to be recorded under your name rather than the admin\'s. Admins who need to lock an account out still start a password reset for it from the user list, which is logged as their own action.',
+      ],
+      tr: [
+        'İki faktörlü doğrulama artık yalnızca hesap sahibinin elinde. Bir yönetici "Kullanıcı olarak gir" ile hesabına baktığında 2FA\'yı açamaz (bu, yalnızca onun elindeki bir doğrulayıcı uygulamayı hesabına bağlardı), kapatamaz ve cihazlarından çıkış yaptıramaz. Bu kartlar kimliğe bürünme sırasında gizleniyor; istek doğrudan gönderilse bile sunucu reddediyor.',
+        'Bu aynı zamanda denetim kaydını da düzeltiyor: böyle bir değişiklik önce yöneticinin değil senin adına kaydediliyordu. Bir hesabın erişimini kesmesi gereken yöneticiler bunu yine kullanıcı listesinden parola sıfırlama başlatarak yapıyor — o işlem kendi adlarına kaydediliyor.',
+      ],
+      de: [
+        'Die Zwei-Faktor-Authentifizierung gehört jetzt allein dem Kontoinhaber. Solange eine Administratorin dein Konto per „Anmelden als“ ansieht, kann sie 2FA weder aktivieren — das hätte eine Authenticator-App eingerichtet, die nur sie besitzt — noch deaktivieren, noch deine Geräte abmelden. Diese Karten sind während der Identitätsübernahme ausgeblendet, und der Server lehnt die Änderungen auch bei direkt gesendeten Anfragen ab.',
+        'Damit stimmt auch das Protokoll wieder: Eine solche Änderung wurde bisher unter deinem Namen statt unter dem der Administratorin festgehalten. Wer ein Konto aussperren muss, startet dafür weiterhin aus der Nutzerliste ein Passwort-Zurücksetzen — das wird als eigene Aktion protokolliert.',
+      ],
+    },
+  },
+  {
+    version: '0.39.0-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Admins can now delete a user account from the user list. Open Users, pick a row and choose "Erase account" — candidates can also be anonymized instead, which keeps their pipeline history but removes every personal detail. Deleting someone else\'s account no longer requires knowing their password: you confirm with your own, plus typing the account holder\'s exact name.',
+        'Deletions are recorded with the name and role of the erased account and the admin who did it, so there is still a trace once the account itself is gone. Admin accounts cannot be erased this way — change the role first, or let the owner delete their own account.',
+      ],
+      tr: [
+        'Yöneticiler artık bir kullanıcı hesabını kullanıcı listesinden silebiliyor. Kullanıcılar sayfasında ilgili satırdaki "Hesabı sil" seçeneğini kullan; adaylar için silme yerine anonimleştirme de var (süreç geçmişi kalır, kişisel bilgiler temizlenir). Başkasının hesabını silmek için onun parolasını bilmen gerekmiyor: kendi parolanla onaylıyorsun, ayrıca hesap sahibinin adını tam olarak yazıyorsun.',
+        'Silme işlemleri; silinen hesabın adı, rolü ve işlemi yapan yönetici ile birlikte kaydediliyor — hesap gittikten sonra da bir iz kalıyor. Yönetici hesapları bu yolla silinemez; önce rolünü değiştir ya da hesap sahibi kendi hesabını silsin.',
+      ],
+      de: [
+        'Administratoren können ein Benutzerkonto jetzt direkt aus der Nutzerliste löschen. Unter Benutzer in der jeweiligen Zeile „Konto löschen“ wählen — Kandidaten lassen sich alternativ anonymisieren: die Pipeline-Historie bleibt, alle persönlichen Angaben verschwinden. Für das Löschen eines fremden Kontos ist dessen Passwort nicht mehr nötig: du bestätigst mit deinem eigenen und tippst den genauen Namen des Kontoinhabers.',
+        'Jede Löschung wird mit Name und Rolle des gelöschten Kontos sowie der ausführenden Administratorin protokolliert — es bleibt also eine Spur, wenn das Konto selbst weg ist. Admin-Konten lassen sich so nicht löschen: erst die Rolle ändern, oder der Inhaber löscht sein Konto selbst.',
+      ],
+    },
+  },
+  {
+    version: '0.38.4-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'The account page no longer offers dead controls while you are viewing someone else\'s account as an admin. "Change e-mail", "Change password" and "Delete account" asked for the account holder\'s current password — which an admin cannot know, and which the server rejected in any case. Those cards are now hidden during impersonation, with a note explaining where account deletion belongs. In your own account nothing changes.',
+      ],
+      tr: [
+        'Bir hesabı yönetici olarak görüntülerken hesap sayfası artık çalışmayan seçenekler göstermiyor. "E-postayı değiştir", "Parolayı değiştir" ve "Hesabı sil" hesap sahibinin mevcut parolasını istiyordu; yöneticinin bilemeyeceği ve sunucunun zaten kabul etmediği bir parola. Bu kartlar kimliğe bürünme sırasında artık gizli ve yerine hesap silmenin nereden yapılacağını anlatan bir not var. Kendi hesabında hiçbir şey değişmiyor.',
+      ],
+      de: [
+        'Die Kontoseite zeigt keine funktionslosen Aktionen mehr, wenn du ein Konto als Admin ansiehst. „E-Mail ändern“, „Passwort ändern“ und „Konto löschen“ verlangten das aktuelle Passwort des Kontoinhabers — das ein Admin nicht kennen kann und das der Server ohnehin abgelehnt hat. Diese Karten sind während der Identitätsübernahme jetzt ausgeblendet, mit einem Hinweis, wo das Löschen eines Kontos hingehört. Im eigenen Konto ändert sich nichts.',
+      ],
+    },
+  },
+  {
+    version: '0.38.3-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'The "You are viewing the app as …" bar now follows you everywhere. On Messages, Account, Notifications and Announcements it used to vanish, so an admin viewing someone else\'s account had no reminder of it — and no "Return to your account" link to get back. It is now a strip at the top of every screen that stays visible while you scroll.',
+      ],
+      tr: [
+        '"Uygulamayı … olarak görüntülüyorsun" çubuğu artık her ekranda görünüyor. Mesajlar, Hesap, Bildirimler ve Duyurular sayfalarında kayboluyordu; başkasının hesabını görüntüleyen bir yönetici bunu hatırlatan bir uyarıyı da, "Kendi hesabına dön" bağlantısını da göremiyordu. Çubuk artık her ekranın en üstünde ve sayfayı kaydırırken de görünür kalıyor.',
+      ],
+      de: [
+        'Die Leiste „Du siehst die App als …“ erscheint jetzt auf jedem Bildschirm. Unter Nachrichten, Konto, Benachrichtigungen und Ankündigungen verschwand sie bisher — eine Administratorin im Konto einer anderen Person sah weder den Hinweis noch den Link „Zu deinem Konto zurückkehren“. Die Leiste sitzt nun oben auf jedem Bildschirm und bleibt beim Scrollen sichtbar.',
+      ],
+    },
+  },
+  {
+    version: '0.38.2-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Meeting reminder emails now show the right time. A meeting at 09:00 in the app arrived as "07:00" in the email, because the times were written on the server\'s clock. Emails and notifications now use your own timezone and spell it out, e.g. "2 Aug 2026, 09:00 (GMT+2)". Nothing was ever scheduled at the wrong time — only the reminder text was misleading.',
+        'Your timezone is picked up from your browser automatically if you never set one. Mentees can still choose it by hand under Profile, and a zone you chose yourself is never overwritten.',
+      ],
+      tr: [
+        'Toplantı hatırlatma e-postalarındaki saat artık doğru. Uygulamada 09:00 görünen bir toplantı e-postada "07:00" olarak geliyordu, çünkü saatler sunucunun saatiyle yazılıyordu. E-postalar ve bildirimler artık sizin saat diliminizi kullanıyor ve bunu açıkça yazıyor: örneğin "2 Aug 2026, 09:00 (GMT+2)". Toplantılar hiçbir zaman yanlış saate kurulmadı — yalnızca hatırlatma metni yanıltıcıydı.',
+        'Hiç seçmediyseniz saat diliminiz tarayıcınızdan otomatik olarak alınır. Mentee’ler Profil sayfasından elle de seçebilir; kendi seçtiğiniz saat dilimi hiçbir zaman üzerine yazılmaz.',
+      ],
+      de: [
+        'Erinnerungs-E-Mails zu Terminen zeigen jetzt die richtige Uhrzeit. Ein Termin, den die App um 09:00 anzeigte, kam in der E-Mail als „07:00“ an, weil die Zeiten auf der Uhr des Servers geschrieben wurden. E-Mails und Benachrichtigungen verwenden nun Ihre eigene Zeitzone und nennen sie ausdrücklich, z. B. „2 Aug 2026, 09:00 (GMT+2)“. Kein Termin lag jemals falsch — nur der Erinnerungstext war irreführend.',
+        'Ihre Zeitzone wird automatisch aus dem Browser übernommen, falls Sie nie eine gesetzt haben. Mentees können sie im Profil weiterhin selbst wählen; eine selbst gewählte Zone wird nie überschrieben.',
+      ],
+    },
+  },
+  {
+    version: '0.38.1-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Availability: the "Add" button now works for admins too. Adding a slot did save it, but the list underneath kept showing "Your slots (0)", so it looked like nothing happened. Any slots you added earlier were never lost — they are all visible again.',
+      ],
+      tr: [
+        'Müsaitlik: "Ekle" düğmesi artık yöneticiler için de çalışıyor. Saat aslında kaydediliyordu, ama alttaki liste "Saatlerin (0)" göstermeye devam ettiği için hiçbir şey olmamış gibi görünüyordu. Daha önce eklediğiniz saatler kaybolmadı — hepsi yeniden görünüyor.',
+      ],
+      de: [
+        'Verfügbarkeit: Die Schaltfläche „Hinzufügen“ funktioniert jetzt auch für Admins. Das Zeitfenster wurde zwar gespeichert, die Liste darunter zeigte aber weiterhin „Deine Zeitfenster (0)“ — es sah also aus, als passiere nichts. Früher angelegte Zeitfenster gingen nie verloren und sind wieder sichtbar.',
+      ],
+    },
+  },
+  {
+    version: '0.38.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'An evaluation you added by mistake can now be deleted: click the trash icon on the entry in the evaluation list. You can only remove evaluations you wrote yourself — admins can remove any — so nobody can erase an evaluation written about them.',
+      ],
+      tr: [
+        'Yanlışlıkla eklediğiniz bir değerlendirmeyi artık silebilirsiniz: değerlendirme listesindeki kaydın üzerindeki çöp kutusu simgesine tıklayın. Yalnızca kendi yazdığınız değerlendirmeleri silebilirsiniz (yöneticiler hepsini silebilir), böylece kimse hakkında yazılan bir değerlendirmeyi kaldıramaz.',
+      ],
+      de: [
+        'Eine versehentlich eingetragene Bewertung lässt sich jetzt löschen: einfach auf das Papierkorb-Symbol beim Eintrag in der Bewertungsliste klicken. Löschen können Sie nur Ihre eigenen Bewertungen — Admins alle —, damit niemand eine Bewertung über sich selbst entfernen kann.',
+      ],
+    },
+  },
+  {
+    version: '0.37.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Admins who also mentor can now switch the whole app into the mentor view and back, from a new "View as" control at the bottom of the sidebar. Mentor view shows only the mentees you mentor yourself, without the org-wide admin pages — handy for actually working with your own mentees instead of reading the dense admin screens.',
+        'The switch keeps your place: from the admin board you land on the mentor board, from the candidate list on your own mentees, and so on. Pages that exist only for admins take you to the mentor dashboard instead.',
+      ],
+      tr: [
+        'Aynı zamanda mentorluk yapan yöneticiler artık uygulamayı tümüyle mentor görünümüne alıp geri dönebilir; kenar çubuğunun altındaki yeni "Görünüm" düğmesiyle. Mentor görünümü, kurum genelindeki yönetim sayfaları olmadan yalnızca kendi mentorluk yaptığınız mentee’leri gösterir — yoğun yönetim ekranlarıyla uğraşmak yerine kendi mentee’lerinizle çalışmak için pratik bir yol.',
+        'Düğme bulunduğunuz yeri korur: yönetici panosundan mentor panosuna, aday listesinden kendi mentee’lerinize geçersiniz. Yalnızca yöneticilere özel sayfalarda ise mentor paneline yönlendirilirsiniz.',
+      ],
+      de: [
+        'Admins, die selbst mentorieren, können die App jetzt komplett in die Mentoren-Ansicht umschalten und zurück — über das neue Feld „Ansicht“ unten in der Seitenleiste. Die Mentoren-Ansicht zeigt nur die Mentees, die Sie selbst betreuen, ohne die organisationsweiten Admin-Seiten.',
+        'Der Umschalter behält Ihren Kontext: vom Admin-Board landen Sie auf dem Mentoren-Board, von der Kandidatenliste bei Ihren eigenen Mentees. Seiten, die es nur für Admins gibt, führen stattdessen zum Mentoren-Dashboard.',
+      ],
+    },
+  },
+  {
+    version: '0.36.0-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Mentors now have the same global search as admins, right in the header — find one of your mentees by name or email and jump straight to their profile.',
+      ],
+      tr: [
+        'Mentorlar artık adminlerle aynı genel aramaya, üst menüden erişebiliyor — mentilerinden birini ad veya e-postayla bulup doğrudan profiline gidebilirsiniz.',
+      ],
+      de: [
+        'Mentoren haben jetzt dieselbe globale Suche wie Admins, direkt in der Kopfzeile — finde einen deiner Mentees per Name oder E-Mail und springe direkt zu seinem Profil.',
+      ],
+    },
+  },
+  {
+    version: '0.35.3-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'You can now paste an image straight into an announcement, just like in messages — take a screenshot, press paste in the message box, and it is attached. Choosing a file from disk still works as before.',
+      ],
+      tr: [
+        'Artık duyuruya doğrudan görsel yapıştırabilirsiniz, tıpkı mesajlardaki gibi — ekran görüntüsünü alıp mesaj kutusunda yapıştırın, görsel eklenir. Dosya seçerek eklemek de eskisi gibi çalışıyor.',
+      ],
+      de: [
+        'Sie können ein Bild jetzt direkt in eine Ankündigung einfügen, genau wie in Nachrichten — Screenshot machen, im Nachrichtenfeld einfügen, fertig. Eine Datei auszuwählen funktioniert weiterhin wie bisher.',
+      ],
+    },
+  },
+  {
+    version: '0.35.2-beta',
+    date: '2026-08-01',
+    highlights: {
+      en: [
+        'Fixed the bottom edge of the message screens on a phone: the reply box (and the last row of your conversation list) could end up behind the system navigation bar, with no way to scroll it into view. The screen now ends exactly where the visible area ends.',
+      ],
+      tr: [
+        'Telefonda mesaj ekranlarının alt kenarı düzeltildi: cevap kutusu (ve sohbet listesinin son satırı) sistemin gezinme çubuğunun arkasında kalabiliyordu ve kaydırarak görünür hâle getirmek mümkün olmuyordu. Ekran artık tam olarak görünür alanın bittiği yerde bitiyor.',
+      ],
+      de: [
+        'Der untere Rand der Nachrichten-Bildschirme auf dem Handy ist korrigiert: Das Antwortfeld (und die letzte Zeile der Unterhaltungsliste) konnte hinter der System-Navigationsleiste liegen, ohne sich ins Bild scrollen zu lassen. Der Bildschirm endet jetzt genau dort, wo der sichtbare Bereich endet.',
+      ],
+    },
+  },
+  {
     version: '0.35.1-beta',
     date: '2026-08-01',
     highlights: {
       en: [
+        'The talent pool now tells you whether it is still loading, your search has no matches, or no candidates have joined the pool yet. Empty searches also suggest changing or clearing the filters.',
         'Messages now fill the screen on a phone. A conversation used to be a long page you had to scroll down before you could even reach the reply box — now the message list is the only thing that scrolls, and the reply box stays where it is at the bottom of the screen.',
         'Every message screen also has a header on a phone: it shows who you are talking to, with a back arrow to your conversations and a home button — no more relying on the browser\'s back button to get out.',
         'When the on-screen keyboard opens, the reply box stays visible above it instead of disappearing behind it.',
       ],
       tr: [
+        'Yetenek havuzu artık hâlâ yükleniyor mu, aramanızla eşleşen aday mı yok, yoksa havuza henüz hiç aday mı katılmamış açıkça gösteriyor. Sonuçsuz aramalarda filtreleri değiştirme veya temizleme önerisi de sunuluyor.',
         'Mesajlar telefonda artık ekranı tam kullanıyor. Bir sohbet, cevap kutusuna ulaşmak için önce aşağı kaydırmanız gereken uzun bir sayfaydı — artık yalnızca mesaj listesi kayıyor, cevap kutusu ekranın altında sabit duruyor.',
         'Her mesaj ekranında telefonda bir başlık çubuğu var: kiminle konuştuğunuzu gösteriyor, geri okuyla sohbetlerinize, ev butonuyla ana ekranınıza dönüyorsunuz — çıkmak için tarayıcının geri tuşuna ihtiyaç kalmadı.',
         'Ekran klavyesi açıldığında cevap kutusu klavyenin arkasında kaybolmuyor, üstünde görünür kalıyor.',
       ],
       de: [
+        'Der Talentpool zeigt jetzt klar, ob er noch lädt, die Suche keine Treffer hat oder noch keine Kandidaten im Pool sind. Bei einer erfolglosen Suche wird außerdem empfohlen, die Filter zu ändern oder zu löschen.',
         'Nachrichten nutzen auf dem Handy jetzt den ganzen Bildschirm. Eine Unterhaltung war eine lange Seite, die man erst nach unten scrollen musste, um überhaupt das Antwortfeld zu erreichen — jetzt scrollt nur noch die Nachrichtenliste, und das Antwortfeld bleibt unten am Bildschirm stehen.',
         'Jeder Nachrichten-Bildschirm hat auf dem Handy außerdem eine Kopfzeile: Sie zeigt, mit wem du schreibst, mit einem Zurück-Pfeil zu deinen Unterhaltungen und einer Start-Schaltfläche — der Zurück-Button des Browsers ist nicht mehr der einzige Ausweg.',
         'Wenn die Bildschirmtastatur aufgeht, bleibt das Antwortfeld darüber sichtbar statt dahinter zu verschwinden.',

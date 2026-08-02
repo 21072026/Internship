@@ -29,6 +29,9 @@ test('admin can anonymize a candidate (wrong-name confirm is rejected)', async (
     // Wrong name → the confirm button stays disabled; nothing happens.
     const nameInput = page.getByTestId('erasure-confirm-name');
     await nameInput.fill('Wrong Name');
+    // The admin's own password is the second gate (#1036 follow-up): fill it so
+    // the disabled state below is about the name, not the missing password.
+    await page.getByTestId('erasure-admin-password').fill('AdminPass123');
     await expect(page.getByRole('button', { name: /^Yes, anonymize$/i })).toBeDisabled();
 
     // Correct name → succeeds.
@@ -50,7 +53,7 @@ test('admin can anonymize a candidate (wrong-name confirm is rejected)', async (
   }
 });
 
-test('admin can permanently delete a candidate; the erase endpoint refuses non-MENTEE targets', async ({ page }) => {
+test('admin can permanently delete a candidate; the erase endpoint refuses self-targeting and a missing password', async ({ page }) => {
   const adminEmail = uniqueEmail('erase-admin2');
   const menteeEmail = uniqueEmail('erase-mentee2');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Erase Admin 2');
@@ -67,19 +70,26 @@ test('admin can permanently delete a candidate; the erase endpoint refuses non-M
     await expect(page.getByText(/Danger zone/i)).toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: /^Delete permanently$/i }).click();
     await page.getByTestId('erasure-confirm-name').fill('Delete Me Fully');
+    await page.getByTestId('erasure-admin-password').fill('AdminPass123');
     await page.getByRole('button', { name: /^Yes, delete permanently$/i }).click();
 
     await page.waitForURL('**/admin/candidates', { timeout: 10_000 });
     await expect.poll(async () => prisma.user.findUnique({ where: { id: mentee.id } })).toBeNull();
 
-    // Guard: targeting a non-MENTEE (the admin itself) is refused.
+    // Guard: an admin cannot erase their own account through the admin path.
     const admin = await prisma.user.findUnique({ where: { email: adminEmail } });
     const guardRes = await page.request.post(`/api/admin/users/${admin!.id}/erase`, {
-      data: { mode: 'delete', confirmName: admin!.fullName },
+      data: { mode: 'delete', confirmName: admin!.fullName, adminPassword: 'AdminPass123' },
     });
-    expect(guardRes.status()).toBe(404);
+    expect(guardRes.status()).toBe(400);
     const adminAfter = await prisma.user.findUnique({ where: { id: admin!.id } });
     expect(adminAfter).not.toBeNull();
+
+    // Guard: the admin's own password is required, and a wrong one is refused.
+    const noPwRes = await page.request.post(`/api/admin/users/${admin!.id}/erase`, {
+      data: { mode: 'delete', confirmName: admin!.fullName },
+    });
+    expect(noPwRes.status()).toBe(400);
   } finally {
     await cleanupByEmail(adminEmail);
   }

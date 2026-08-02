@@ -196,6 +196,12 @@ workaround, #636, and it compiled on every PR push).
 - **Work is tracked on a GitHub Project board** (Epics #5–#11, stories #12+). Move the issue
   to the matching column as you work.
 - Co-author trailer on commits: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- **Licensing & IP**: the project is `AGPL-3.0-or-later` with **dual licensing**, and the
+  **sole rights holder is Mehmet Erşahin (a natural person — not bcsit GmbH)**. Don't name a
+  company as the IP owner in docs or license texts; the invoicing entity is a *separate*,
+  still-open question (`docs/legal/legal-tax-framework.md`). Contributor terms live in
+  `CONTRIBUTING.md` (§ Contributor terms (IP)) and are confirmed via the PR template;
+  rationale in [`docs/legal/licensing-strategy.md`](docs/legal/licensing-strategy.md).
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

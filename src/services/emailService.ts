@@ -8,6 +8,7 @@ import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
+import { formatInTimeZone } from '@/lib/timezone';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -272,6 +273,7 @@ export async function sendMeetingInviteEmail({
   scheduledAt,
   meetLink,
   rsvpToken,
+  timeZone,
 }: {
   to: string;
   fullName?: string | null;
@@ -279,13 +281,15 @@ export async function sendMeetingInviteEmail({
   scheduledAt: Date | null;
   meetLink?: string | null;
   rsvpToken: string;
+  // The recipient's saved IANA zone; falls back to the deployment default.
+  timeZone?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
   const no = `${appUrl}/rsvp/${rsvpToken}?r=no`;
   // A meeting with no set time is just a shared link — skip the "when" line and
   // the RSVP ask entirely.
-  const when = scheduledAt ? scheduledAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }) : null;
+  const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
 
   await sendEmail({
     to,
@@ -460,6 +464,7 @@ export async function sendMeetingRequestEmail({
   proposedAt,
   link,
   orgId,
+  timeZone,
 }: {
   to: string;
   fullName?: string | null;
@@ -468,9 +473,10 @@ export async function sendMeetingRequestEmail({
   proposedAt: Date | null;
   link: string;
   orgId?: string | null;
+  timeZone?: string | null;
 }) {
   const brand = await emailBrand(orgId);
-  const when = proposedAt ? proposedAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }) : null;
+  const when = proposedAt ? formatInTimeZone(proposedAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
   await sendEmail({
     to,
     fromName: brand.name,
@@ -496,6 +502,7 @@ export async function sendMeetingRequestDecisionEmail({
   meetLink,
   link,
   orgId,
+  timeZone,
 }: {
   to: string;
   fullName?: string | null;
@@ -505,9 +512,10 @@ export async function sendMeetingRequestDecisionEmail({
   meetLink?: string | null;
   link: string;
   orgId?: string | null;
+  timeZone?: string | null;
 }) {
   const brand = await emailBrand(orgId);
-  const when = scheduledAt ? scheduledAt.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' }) : null;
+  const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
   await sendEmail({
     to,
     fromName: brand.name,
@@ -747,6 +755,7 @@ export async function sendMeetingReminders() {
     orgId: true,
     emailNotifications: true,
     notificationPrefs: true,
+    timezone: true,
   } as const;
 
   const meetings = await prisma.meeting.findMany({
@@ -775,7 +784,6 @@ export async function sendMeetingReminders() {
     if (claim.count === 0) continue;
     reminded++;
 
-    const when = m.scheduledAt!.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
     const minutes = Math.max(1, Math.round((m.scheduledAt!.getTime() - Date.now()) / 60000));
 
     // Both sides of the relation are participants. Series-generated meetings
@@ -786,6 +794,9 @@ export async function sendMeetingReminders() {
 
     for (const user of participants) {
       const link = user.role === 'MENTEE' ? '/portal' : '/mentor/meetings';
+      // Per participant: the two sides of a relation can sit in different zones,
+      // and each must read the time on their own clock (#1030).
+      const when = formatInTimeZone(m.scheduledAt!, user.timezone);
       // In-app: unconditional (notify() never throws).
       await notify(
         user.id,

@@ -1,20 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+// This spec hops between three sessions, so every sign-in is a user switch —
+// see signInAsFreshUser for why a blanket clearCookies() is not enough (it also
+// drops the seeded consent cookie, putting the banner back over the form).
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
-
-async function signIn(page: import('@playwright/test').Page, email: string, password: string, home: string) {
-  // Drop any existing session so the sign-in form is shown (an authenticated
-  // visit to /auth/signin would just redirect to the role home).
-  await page.context().clearCookies();
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => u.pathname.startsWith(home), { timeout: 20_000 });
-}
 
 test('messages track read/unread and the sender sees a read receipt', async ({ page }) => {
   const mentorEmail = uniqueEmail('cm-mentor');
@@ -25,12 +18,12 @@ test('messages track read/unread and the sender sees a read receipt', async ({ p
 
   try {
     // Mentor posts a message.
-    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const posted = await page.request.post('/api/messages', { data: { relationId: rel.id, body: 'Hello mentee' } });
     expect(posted.status()).toBe(201);
 
     // Mentee has one unread message until they open the thread.
-    await signIn(page, menteeEmail, 'MenteePass123', '/portal');
+    await signInAsFreshUser(page, menteeEmail, 'MenteePass123', '/portal');
     let unread = await (await page.request.get('/api/messages/unread')).json();
     expect(unread.count).toBe(1);
     await page.request.get(`/api/messages?relationId=${rel.id}`); // opening marks it read
@@ -38,7 +31,7 @@ test('messages track read/unread and the sender sees a read receipt', async ({ p
     expect(unread.count).toBe(0);
 
     // Back as mentor, the message now carries a readAt timestamp.
-    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const thread = await (await page.request.get(`/api/messages?relationId=${rel.id}`)).json();
     expect(thread.messages[0].readAt).toBeTruthy();
   } finally {
@@ -57,20 +50,20 @@ test('admin broadcasts an announcement to all users and toggles email preference
 
   try {
     // A user opts out of email notifications via their profile API.
-    await signIn(page, userEmail, 'UserPass123', '/portal');
+    await signInAsFreshUser(page, userEmail, 'UserPass123', '/portal');
     const pref = await page.request.put('/api/profile', { data: { emailNotifications: false } });
     expect(pref.ok()).toBeTruthy();
     const me = await (await page.request.get('/api/profile')).json();
     expect(me.user.emailNotifications).toBe(false);
 
     // Admin broadcasts an announcement.
-    await signIn(page, adminEmail, 'AdminPass123', '/admin');
+    await signInAsFreshUser(page, adminEmail, 'AdminPass123', '/admin');
     const sent = await page.request.post('/api/admin/announcements', { data: { text: 'Welcome to the platform!' } });
     expect(sent.status()).toBe(201);
     expect((await sent.json()).recipients).toBeGreaterThan(0);
 
     // The user received it as an in-app notification.
-    await signIn(page, userEmail, 'UserPass123', '/portal');
+    await signInAsFreshUser(page, userEmail, 'UserPass123', '/portal');
     const notifs = await (await page.request.get('/api/notifications')).json();
     expect(notifs.items.some((n: { text: string }) => n.text === 'Welcome to the platform!')).toBeTruthy();
   } finally {

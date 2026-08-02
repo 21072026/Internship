@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.35.2-beta] - 2026-08-01
+## [0.39.2-beta] - 2026-08-02
 
 ### Changed
 - **The admin candidate list is now usable at 375px without horizontal page overflow.**
@@ -16,6 +16,230 @@ version is shown in the sidebar footer of every page (links to the
   by education, city and skills. The seven existing filters stay unchanged but are collapsed
   behind a visible Filters control on small screens. The existing desktop candidate grid and
   its actions remain unchanged.
+
+## [0.39.1-beta] - 2026-08-02
+
+### Fixed
+- **Impersonated sessions can no longer change the account holder's second factor**
+  (#1039). `POST /api/account/2fa` had no impersonation guard, so an admin using
+  "Login as" could run `setup`/`enable` — enrolling an authenticator the owner does not
+  hold, which outlives the 30-minute impersonation window — or `disable`, stripping the
+  factor that protects the owner from that same admin. Both were written to the activity
+  log as the *user* (`actorId: session.user.id`), so the audit trail named the wrong
+  person. The route now 400s on POST while `session.user.impersonatorId` is set, matching
+  `/api/account`. GET (read-only status) stays available.
+- **`POST /api/account/sign-out-all` is refused while impersonating** too, for the same
+  reasons plus one of its own: it stamped `sessionsValidFrom` on the impersonated user,
+  which revoked the impersonation session along with the user's, dropping the admin at
+  the sign-in page as if they had been signed out. An admin who needs to lock someone out
+  uses `POST /api/admin/users/[id]/reset-password`, which is audited under their own id.
+
+### Changed
+- The two-factor and sessions cards are hidden on `/account` during impersonation, and
+  the impersonation notice now names all four disabled actions and points at the
+  admin-side password reset. Same treatment the credential/delete cards got in #1036 —
+  a card whose endpoint 400s is a trap, not a feature.
+- `/security-setup` (the org 2FA enforcement gate) redirects home during impersonation
+  instead of rendering an enrolment form the endpoint now refuses. The role layouts
+  already skipped the gate there; only hand-typing the URL could reach it.
+
+## [0.39.0-beta] - 2026-08-02
+
+### Added
+- **Admin-side account deletion from the user list** (`/admin/users`). Every non-admin
+  row gets an "Erase account" action that opens the erasure panel inline;
+  `POST /api/admin/users/[id]/erase` backs both it and the candidate danger zone. This
+  is the answer to "how does an admin delete someone else's account?" — previously the
+  only account-deletion UI was the self-service one, which asks for the account
+  holder's own password and refuses to run inside an impersonation session.
+- **Step-up authentication on admin erasure**: the endpoint now requires the acting
+  admin's OWN password (`adminPassword`, bcrypt-compared against their row) on top of
+  the existing "type the target's exact full name" gate. The name is a misclick guard,
+  not authentication — without a password check, a hijacked admin session could erase
+  accounts silently. It is deliberately never the target's password: no admin can know
+  that one.
+
+### Changed
+- The erase endpoint accepts every role except `ADMIN` (was: `MENTEE` only). Admin
+  targets are refused with a clear message — demote the account first, or let its owner
+  delete it — which also keeps the last admin account from disappearing. Anonymize
+  stays candidate-only, since preserving pipeline history only means something there.
+  Self-targeting is refused too, and an impersonation session is rejected outright so
+  an erasure can never be attributed to a merely-impersonated admin.
+- Audit action renamed `candidate.erase.*` → `user.erase.*` (nothing consumed the old
+  names) and now records the target's role + name in `detail` plus the request IP/UA —
+  after a hard delete the log line is the only remaining trace of the account.
+- `hardDeleteUser` detaches the three user references that neither cascade nor were
+  cleaned up (`SupportTicket.assignedAdminId`, `MentorshipRequest.decidedById`,
+  `Project.ownerUserId`). They belong to the org rather than the user, and left in
+  place they aborted the delete with an opaque FK error — reachable from the
+  self-service delete too, not just the new admin path.
+- `CandidateEraseDangerZone` now wraps the shared `UserEraseForm` (same
+  `data-testid="erasure-confirm-name"`, new `data-testid="erasure-admin-password"`),
+  so the candidate page and the user list can't drift apart.
+
+## [0.38.4-beta] - 2026-08-02
+
+### Fixed
+- **The account page offered credential changes and account deletion inside an
+  impersonation session, where the API refuses all three.** `/api/account` PUT and
+  DELETE both bail out with 400 when `session.user.impersonatorId` is set, but
+  `AccountSettings` rendered the e-mail card, the password card and the "Delete
+  account" danger zone regardless. An admin who opened a user's account settings to
+  delete it was asked for "current password" — a password only the account holder
+  knows, and one the endpoint would have rejected anyway. The three cards are now
+  hidden while impersonating and replaced by a notice
+  (`data-testid="impersonation-account-notice"`) pointing at the admin path;
+  the danger zone carries `data-testid="delete-account-card"` so the e2e spec can
+  assert its absence. Nothing changes for a user in their own session.
+
+## [0.38.3-beta] - 2026-08-02
+
+### Fixed
+- **The impersonation banner disappeared on the screens that have no app shell.**
+  "You are viewing the app as …" + "Return to your account" was rendered by
+  `ResponsiveShell`, so it existed only on the role-scoped areas (/admin, /mentor,
+  /portal, /company, /source). Open Messages — or /account, /notifications,
+  /announcements, which render their own chrome — and the bar was simply gone: no
+  warning that the session belongs to someone else, and no way back except typing an
+  admin URL by hand. The banner now renders once app-wide in `Providers`, above every
+  page shell, as a sticky full-width strip (`data-testid="impersonation-banner"`), and
+  `ResponsiveShell` no longer renders its own copy.
+- The strip is in normal flow, which the viewport-sized chat frame (`MessagesShell`,
+  `100dvh`) cannot see, so it would have pushed the composer below the fold. New
+  `useTopBannerInset` hook publishes the strip's measured height as
+  `--top-banner-inset` (mirror of `--fixed-bottom-inset`/#935) and the frame subtracts
+  it from both its height and its `--visible-viewport-height` clamp.
+- `e2e/impersonation.spec.ts` now asserts the banner on /messages and /account and
+  returns to the admin account from a shell-less screen.
+
+## [0.38.2-beta] - 2026-08-02
+
+### Fixed
+- **Meeting reminder emails printed the wrong time.** A meeting the app showed at
+  09:00 arrived as "07:00" in the reminder. The instant stored in the DB was right
+  the whole time; the *rendering* was not. Emails and the stored text of in-app
+  notifications are produced server-side, where `toLocaleString()` without a
+  `timeZone` falls back to the process zone — and the container runs on UTC. So
+  every recipient read every meeting time on the UTC clock while the browser
+  showed it on theirs. Server-rendered times now name an explicit zone
+  (`src/lib/timezone.ts`): the recipient's saved `User.timezone`, else
+  `APP_TIMEZONE`, else `Europe/Istanbul` — and carry a `(GMT+3)`-style suffix so a
+  time is never ambiguous across zones. Applies to the meeting reminder, the
+  meeting invite, the meeting request and the request-decision emails; the
+  reminder resolves the zone per participant, so a mentor and a mentee in
+  different zones each read their own clock.
+
+### Added
+- **The browser's timezone is captured for profiles that have none**
+  (`TimezoneSync` → `POST /api/profile/timezone`, once per browser session). Only
+  the mentee profile form exposes a zone picker, so mentors and admins had no zone
+  at all and would have kept reading times on the deployment default. The endpoint
+  fills the field **only when it is empty** — an explicitly chosen zone is never
+  overwritten — and ignores impersonated sessions.
+
+## [0.38.1-beta] - 2026-08-01
+
+### Fixed
+- **Availability: the "Add" button did nothing for admins.** `POST /api/availability`
+  has always accepted ADMINs — they reach the mentor shell through the view switch
+  added in 0.37.0-beta — but `GET` only defaulted `mentorId` to the session user when
+  the role was `MENTOR`, and returned `{ slots: [] }` for everyone else. So an admin's
+  slot was created (201), the page reloaded the list, got nothing back, and stayed on
+  "Your slots (0)": a silent write with no visible effect. `GET` without `?mentorId=`
+  now means "my own slots" for any role, matching what `POST` writes. Regression test
+  drives the page through the UI (`e2e/calendar.spec.ts`) — the existing mentor test
+  hits the API only and passed the entire time this was broken.
+
+## [0.38.0-beta] - 2026-08-01
+
+### Added
+- **An evaluation can be deleted** (`DELETE /api/evaluations/[id]`, trash icon in
+  `EvaluationPanel`). Until now a mis-clicked rating was permanent: the panel only ever
+  appended, and there was no route to remove a row. Only the evaluation's **own author**
+  (or an ADMIN) may delete it — an evaluation is the author's judgement, so the other
+  side of the relation cannot erase one written about them. The list endpoint now returns
+  a `canDelete` flag per evaluation so the button only appears where the DELETE route
+  would actually allow it, and the deletion is recorded in the activity log
+  (`evaluation.deleted`).
+
+## [0.37.0-beta] - 2026-08-01
+
+### Added
+- **A view switch for admins who also mentor** (`ModeSwitcher`, pinned above the account
+  menu in both the admin and the mentor shell, `ADMIN`-only). An admin was already
+  *allowed* into `/mentor/*` — the mentor layout's role check has always accepted `ADMIN`
+  — but nothing in the UI led there, so the only way in was to follow a link that happened
+  to point at it (a reminder notification, say), and the entire shell would change with no
+  visible cause. Now it is a deliberate, reversible control, and the active segment
+  doubles as the "why does this look different" marker that was missing.
+- The switch **keeps your place**: sections that exist in both shells map 1:1
+  (`/admin/board` ⇄ `/mentor/board`, and the same for projects, meetings, calendar,
+  email, mentee-activity, analytics), `candidates`/`mentorship` map to `mentees` and back,
+  and anything without a counterpart falls back to the target dashboard rather than
+  guessing (`src/lib/appMode.ts`).
+
+### Notes
+- The mode is **derived from the URL**, never stored. A persisted flag is exactly what
+  would let the sidebar, the page and the address bar disagree after an inbound link drops
+  an admin into the other shell — the bug this feature grew out of. No schema change, no
+  session change, no new API surface: an admin in mentor view is just an admin on a
+  `/mentor` route, with the same per-mentor data scoping (`where: { mentorId }`) every
+  mentor page already applies.
+
+## [0.36.0-beta] - 2026-08-01
+
+### Added
+- **Mentors get global search too.** `GlobalSearch` (previously admin-only) is now also
+  in the `/mentor` header. `GET /api/search` already scoped mentor results to their own
+  mentees (`menteeRelations: { some: { mentorId } }`); it now also returns each hit's
+  `relationId`, so a mentor's search result opens `/mentor/mentees/<relationId>` instead
+  of the admin candidate route. Admin search behaviour and response shape are unchanged.
+  Input gained `data-testid="global-search-input"`.
+
+## [0.35.3-beta] - 2026-08-01
+
+### Added
+- **An announcement image can be pasted** into the message box, not only picked from
+  disk (`/admin/announcements`). A screenshot is the most common thing attached to a
+  broadcast, and "save to disk, then browse for it" was pure friction. Same gesture and
+  same implementation shape as the message composer (`MessageThreadView`): the paste
+  handler takes the first `image/*` item off `clipboardData`, renames it (clipboard
+  images all arrive as `image.png`), and runs it through the *existing* `pickImage()`,
+  so a pasted file gets exactly the same type/size/signature validation as a picked
+  one. A paste carrying no image is left alone — it is not `preventDefault`-ed, so
+  ordinary text paste keeps working.
+
+## [0.35.2-beta] - 2026-08-01
+
+### Fixed
+- **The chat frame's bottom edge now lands on the *visible* bottom** (#1009). Follow-up
+  to #1006, reported from an installed PWA on Android: the end of the composer (and the
+  last row of the inbox) sat behind the system navigation bar and could not be scrolled
+  into view. `100dvh` is the *layout* viewport, and an edge-to-edge PWA draws behind the
+  navigation bar, so it is ~48px taller than what you can see — and since the frame
+  fits `100dvh` exactly, the document has no overflow either, which is why nothing
+  scrolled. Two independent corrections, neither of which does anything when there is
+  nothing hidden:
+  - The frame subtracts `env(safe-area-inset-bottom)`, and `/messages` opts into real
+    inset values with a **route-scoped** `viewport-fit=cover` (`viewport` export in
+    `src/app/messages/layout.tsx`, so no other route changes behaviour). The header
+    picks up `env(safe-area-inset-top)` and the frame the left/right insets for
+    landscape notches. `max(--fixed-bottom-inset, env(safe-area-inset-bottom))` rather
+    than a sum — the cookie banner already pads itself past the inset (#935), so
+    subtracting both would leave a gap above it.
+  - New `useVisibleViewportHeight` publishes `min(innerHeight, visualViewport.height)`
+    as `--visible-viewport-height`, which the frame applies as a **`max-height`
+    clamp**. Being a clamp and not a second subtraction is the point: if both signals
+    report the same hidden strip, the smaller one simply wins instead of the strip
+    being deducted twice. Pinch-zoom (`scale > 1.01`) is ignored, and the clamp also
+    tracks the on-screen keyboard.
+- `e2e/mobile-chat-layout.spec.ts` grew two assertions: the frame's height equals the
+  visible height (a malformed `calc()` shows up immediately), and — reproducing the
+  reported condition through the same signal the shell listens to — with 48px of the
+  viewport hidden the whole composer still fits inside what is left. Negative control:
+  without the clamp the send button sits 630px into a 616px visible area. A third test
+  pins the `viewport-fit=cover` scoping (present on `/messages`, absent on `/mentor`).
 
 ## [0.35.1-beta] - 2026-08-01
 
@@ -204,6 +428,13 @@ mentee and a mentor actually hit on a phone.
 - **`docs/security-exceptions.md`** — the accepted findings, each with why it can't
   be fixed, whether it is reachable *in this application* (naming the code path, not
   just the advisory), and what the permanent fix is.
+
+### Fixed
+- **Talent-pool empty states now distinguish loading, no search results and an empty pool.**
+  The company talent pool keeps its existing skeleton while loading, shows filter guidance
+  when a search has no matches, and explains when no candidates have made their profiles
+  public yet. Both empty states reuse the shared, dark-mode-safe `EmptyState` pattern and
+  expose `data-testid="talent-pool-empty-state"` for stable UI checks.
 
 ## [0.33.1-beta] - 2026-07-31
 
