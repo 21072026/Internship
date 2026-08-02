@@ -2116,3 +2116,55 @@ yaz, sonra ara.
 e2e-full.yml --ref <branch>`) merge ettikten *sonra* fark ettim; bu turda tam suite main'de
 koşup 349/349 geçti, ama doğru sıra branch'te koşturmak. `docs/agent-experience.md`'yi
 oturumun *başında* okumanın nedeni bu — sonunda yazmak yetmiyor.
+
+## 2026-08-02 — `questions.spec.ts`: "sorular UI'ı değişmiş" değildi, *ikinci* giriş yarışıydı
+
+Zamanlanmış tam koşuda (shard 4/4) sürekli kırmızı olan tek test. Bildirimdeki tahmin
+"sorular ekranı değişti, spec geride kaldı" idi — **yanlış**. Spec, sorular UI'ına hiç
+dokunmuyor: üç `page.request` çağrısıyla `/api/questions`'ı sürüyor. `page.fill` /
+`page.click` yalnızca kendi yazdığı `signIn()` yardımcısının içinde geçiyor. Yığın izi
+zaten bunu söylüyordu (`at signIn (…:12:14)` ← `…:31:5`, yani **mentor** girişi).
+
+**Kural: hata satırını değil, hatanın geçtiği fonksiyonu oku.** "Timeout on `page.fill`"
+görüp özellik ekranını aramak, yığın izinin ilk satırını atlamaktır. Testin adı ("mentee
+asks a question") nerede kırıldığını söylemez.
+
+**Kesin kanıt, teoriden ucuzdu.** `gh run download <run-id> -R 21072026/Internship -n
+playwright-report-full-shard-4` ile inen rapordaki `data/*.png`, hata anında ekranda
+**önceki kullanıcının portal panosunu** ("Welcome, QA Mentee!", sol altta mentee çipi)
+gösteriyor — `/auth/signin` değil. Bu tek kare tüm tartışmayı bitirdi: `router.replace()`
+testi mentee portalına geri atmış, parola alanı hiç var olmamış. Retry #1'de aynı sebep
+başka yüzle geldi: `button[type="submit"]` **5 elemana** çözündü ve ilki portalın
+*disabled* "Add" düğmesiydi. Zamanlanmış koşuda bir spec kırıldığında **önce artifact'ı
+indir**; log'daki "locator resolved to <…>" satırı ve ekran görüntüsü, hangi sayfada
+olduğunu tahmin etmekten hızlıdır.
+
+**Sebep, repoda zaten yazılı ve zaten çözülmüştü.** `e2e/helpers/auth.ts`'in doc
+comment'leri bu iki belirtiyi (kaybolan parola alanı + disabled "Add" düğmesi) birebir
+anlatıyor; #965/#969/#1018 altı spec'i bu yardımcılara taşıdı. `questions.spec.ts`
+o süpürmelerde **atlanmış** — #342'den beri hiç dokunulmamış. Düzeltme tek satır:
+kendi `signIn()`'ini sil, `signInAsFreshUser` kullan. Bir önceki girdinin kuralı bir kez
+daha geçerli: *yeni bir flake görünce önce helper'ın var olup olmadığına bak.*
+
+**Bu Mac'te yarış tekrar üretilemiyor — ve bunu dürüstçe söylemek gerekiyor.** Lokal DB
+kuruldu (`brew install mariadb`; `mariadbd-safe --datadir=/usr/local/var/mysql &`, root
+socket-auth olduğu için `mariadb -u <os-kullanıcısı>` ile bağlanıp `crm`/`crm` kullanıcısı
+açıldı — playbook'un `apt` tarifi macOS'ta geçmiyor, Docker daemon da kapalı). Spec hem
+dev sunucuda hem `CI=1` + production build ile **geçti** (2.8 s). `/api/auth/session`'ı
+2.5 sn geciktirip yavaş runner'ı taklit etmek de yarışı tetiklemedi. Yani "lokalde geçiyor"
+bu sınıf için **kanıt değil**; yarış GitHub runner'ının yavaşlığına bağlı. Doğrulama
+zinciri: artifact (ne olduğu) + helper'ın doc comment'i (neden) + zamanlanmış koşu (düzeldi mi).
+
+**`@smoke` kararı: hayır, dışarıda kalıyor.** Gerekçe: (1) smoke seti şu an **31** test,
+CLAUDE.md'nin hedefi ~15-20 — her "bu da önemli" eklemesi tam olarak bu aşımı üretti;
+(2) bu spec üç API iddiası için **iki tam UI girişi** ödüyor (CI'da ~16 sn), gate ~3,5 dk;
+(3) konusu olan rol-aşırı yetkilendirme smoke'ta zaten `authz-matrix` + `role-scoping` ile
+temsil ediliyor; (4) kırılma bir ürün regresyonu değildi, ortak yardımcıya geçmemiş bir
+spec'ti — ve artık geçti. Tespit mekanizması da çalıştı: bunu zamanlanmış koşunun özet
+e-postası yakaladı. Smoke'a terfi, PR'da görünürlük isteyen **ürün** yollarına saklanmalı.
+
+**Açık kalan (kapsam dışı bırakıldı):** kullanıcı **değiştiren** ve hâlâ kendi giriş
+yardımcısını yazan başka spec'ler var (`grep -l "goto('/auth/signin')" e2e/*.spec.ts` ile
+`helpers/auth` import etmeyenleri kesiştir; ≥2 giriş yapanlar riskli). Şu an yeşiller, yani
+aynı yarış onlarda **uykuda**. Hepsini bu PR'da taşımak yeşil testleri riske atardı;
+ayrı bir süpürme işi.
