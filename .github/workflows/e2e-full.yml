@@ -136,7 +136,7 @@ jobs:
           node-version: 22
 
       - name: Download per-shard JSON results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: e2e-json-shard-*
           path: e2e-json-reports
