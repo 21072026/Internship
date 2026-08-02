@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.38.4-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'The account page no longer offers dead controls while you are viewing someone else\'s account as an admin. "Change e-mail", "Change password" and "Delete account" asked for the account holder\'s current password — which an admin cannot know, and which the server rejected in any case. Those cards are now hidden during impersonation, with a note explaining where account deletion belongs. In your own account nothing changes.',
+      ],
+      tr: [
+        'Bir hesabı yönetici olarak görüntülerken hesap sayfası artık çalışmayan seçenekler göstermiyor. "E-postayı değiştir", "Parolayı değiştir" ve "Hesabı sil" hesap sahibinin mevcut parolasını istiyordu; yöneticinin bilemeyeceği ve sunucunun zaten kabul etmediği bir parola. Bu kartlar kimliğe bürünme sırasında artık gizli ve yerine hesap silmenin nereden yapılacağını anlatan bir not var. Kendi hesabında hiçbir şey değişmiyor.',
+      ],
+      de: [
+        'Die Kontoseite zeigt keine funktionslosen Aktionen mehr, wenn du ein Konto als Admin ansiehst. „E-Mail ändern“, „Passwort ändern“ und „Konto löschen“ verlangten das aktuelle Passwort des Kontoinhabers — das ein Admin nicht kennen kann und das der Server ohnehin abgelehnt hat. Diese Karten sind während der Identitätsübernahme jetzt ausgeblendet, mit einem Hinweis, wo das Löschen eines Kontos hingehört. Im eigenen Konto ändert sich nichts.',
+      ],
+    },
+  },
+  {
     version: '0.38.3-beta',
     date: '2026-08-02',
     highlights: {
