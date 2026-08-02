@@ -8,6 +8,31 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.38.2-beta] - 2026-08-02
+
+### Fixed
+- **Meeting reminder emails printed the wrong time.** A meeting the app showed at
+  09:00 arrived as "07:00" in the reminder. The instant stored in the DB was right
+  the whole time; the *rendering* was not. Emails and the stored text of in-app
+  notifications are produced server-side, where `toLocaleString()` without a
+  `timeZone` falls back to the process zone — and the container runs on UTC. So
+  every recipient read every meeting time on the UTC clock while the browser
+  showed it on theirs. Server-rendered times now name an explicit zone
+  (`src/lib/timezone.ts`): the recipient's saved `User.timezone`, else
+  `APP_TIMEZONE`, else `Europe/Istanbul` — and carry a `(GMT+3)`-style suffix so a
+  time is never ambiguous across zones. Applies to the meeting reminder, the
+  meeting invite, the meeting request and the request-decision emails; the
+  reminder resolves the zone per participant, so a mentor and a mentee in
+  different zones each read their own clock.
+
+### Added
+- **The browser's timezone is captured for profiles that have none**
+  (`TimezoneSync` → `POST /api/profile/timezone`, once per browser session). Only
+  the mentee profile form exposes a zone picker, so mentors and admins had no zone
+  at all and would have kept reading times on the deployment default. The endpoint
+  fills the field **only when it is empty** — an explicitly chosen zone is never
+  overwritten — and ignores impersonated sessions.
+
 ## [0.38.1-beta] - 2026-08-01
 
 ### Fixed

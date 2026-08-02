@@ -19,11 +19,11 @@ async function emailDecision(
 ) {
   const user = await prisma.user.findUnique({
     where: { id: requestedById },
-    select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
+    select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, timezone: true },
   });
   if (!user?.email || !emailAllowed(user, 'meetingReminders')) return;
   try {
-    await sendMeetingRequestDecisionEmail({ to: user.email, fullName: user.fullName, orgId: user.orgId, ...args });
+    await sendMeetingRequestDecisionEmail({ to: user.email, fullName: user.fullName, orgId: user.orgId, timeZone: user.timezone, ...args });
   } catch (e) {
     console.error('Meeting request decision email failed:', e);
   }

@@ -5,6 +5,7 @@ import { LocaleProvider } from '@/i18n/client';
 import { ToastProvider } from '@/components/ui/Toast';
 import { CookieConsent } from '@/components/CookieConsent';
 import { ActivityTracker } from '@/components/ActivityTracker';
+import { TimezoneSync } from '@/components/TimezoneSync';
 import type { Locale } from '@/i18n/config';
 import type { ClientDictionary } from '@/i18n/dictionaries';
 
@@ -24,6 +25,7 @@ export function Providers({
           {children}
           <CookieConsent />
           <ActivityTracker />
+          <TimezoneSync />
         </ToastProvider>
       </LocaleProvider>
     </SessionProvider>

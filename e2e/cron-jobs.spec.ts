@@ -13,14 +13,20 @@ test('admin cron run sends meeting reminders and stamps reminderSentAt', async (
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Cron Admin');
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Cron Mentor');
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Cron Mentee');
+  // Two participants, two clocks — each reminder must be rendered in the
+  // recipient's own zone, never the server's (#1030).
+  const ZONES: Record<string, string> = { [mentor.id]: 'Europe/Istanbul', [mentee.id]: 'Pacific/Honolulu' };
+  await prisma.user.update({ where: { id: mentor.id }, data: { timezone: ZONES[mentor.id] } });
+  await prisma.user.update({ where: { id: mentee.id }, data: { timezone: ZONES[mentee.id] } });
   const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
+  const scheduledAt = new Date(Date.now() + 30 * 60 * 1000);
   const meeting = await prisma.meeting.create({
     data: {
       relationId: rel.id,
       title: 'Soon Meeting',
       // Inside the 60-minute reminder window (#777) — a meeting further out is
       // deliberately NOT reminded yet.
-      scheduledAt: new Date(Date.now() + 30 * 60 * 1000),
+      scheduledAt,
       rsvpToken: randomBytes(12).toString('hex'),
       createdById: mentor.id,
     },
@@ -59,6 +65,14 @@ test('admin cron run sends meeting reminders and stamps reminderSentAt', async (
       const notes = await prisma.notification.findMany({ where: { userId, type: 'meeting_reminder' } });
       expect(notes.length).toBe(1);
       expect(notes[0].text).toContain('Soon Meeting');
+      // …and the time reads on the recipient's clock, not the server's.
+      const timeZone = ZONES[userId];
+      const expectedTime = new Intl.DateTimeFormat('en-GB', { timeStyle: 'short', timeZone }).format(scheduledAt);
+      const expectedZone = new Intl.DateTimeFormat('en-GB', { timeZone, timeZoneName: 'shortOffset' })
+        .formatToParts(scheduledAt)
+        .find((p) => p.type === 'timeZoneName')!.value;
+      expect(notes[0].text).toContain(expectedTime);
+      expect(notes[0].text).toContain(`(${expectedZone})`);
     }
 
     // Idempotent: a second run must not produce a second reminder.

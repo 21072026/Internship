@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         : { id: { in: relationIds }, mentorId: session.user.id };
     const relations = await prisma.mentorshipRelation.findMany({
       where,
-      include: { mentee: { select: { email: true, fullName: true } } },
+      include: { mentee: { select: { email: true, fullName: true, timezone: true } } },
     });
 
     // Bulk scheduling creates ONE shared meeting: everyone selected joins the
@@ -85,6 +85,7 @@ export async function POST(request: Request) {
           scheduledAt: when,
           meetLink: link,
           rsvpToken,
+          timeZone: rel.mentee.timezone,
         });
       } catch (e) {
         console.error('Meeting invite email failed:', e);

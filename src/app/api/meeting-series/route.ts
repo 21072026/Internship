@@ -94,7 +94,7 @@ async function generateForSeries(series: {
       ...(role === 'MENTOR' ? { mentorId: sessionUserId } : {}),
       ...(menteeIds.length > 0 ? { menteeId: { in: menteeIds } } : {}),
     },
-    include: { mentee: { select: { email: true, fullName: true } } },
+    include: { mentee: { select: { email: true, fullName: true, timezone: true } } },
   });
   if (relations.length === 0) return { created: 0, fixedLink: series.fixedLink };
 
@@ -143,6 +143,7 @@ async function generateForSeries(series: {
           scheduledAt: when,
           meetLink: fixedLink,
           rsvpToken,
+          timeZone: rel.mentee.timezone,
         });
       } catch (e) {
         console.error('Meeting series invite email failed:', e);

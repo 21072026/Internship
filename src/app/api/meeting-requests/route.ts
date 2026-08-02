@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     // never gets answered. Opt-out respected, failures logged.
     const rcpt = await prisma.user.findUnique({
       where: { id: recipient },
-      select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
+      select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, timezone: true },
     });
     if (rcpt?.email && emailAllowed(rcpt, 'meetingReminders')) {
       try {
@@ -67,6 +67,7 @@ export async function POST(request: Request) {
           proposedAt: req.proposedAt,
           link,
           orgId: rcpt.orgId,
+          timeZone: rcpt.timezone,
         });
       } catch (e) {
         console.error('Meeting request email failed:', e);
