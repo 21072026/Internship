@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus } from 'lucide-react';
+import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2, FolderOpen } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
@@ -38,7 +38,13 @@ interface Msg {
 
 // Fixed reaction set (mirrors the server's REACTION_EMOJIS).
 const REACTIONS = ['👍', '❤️', '😂', '😮', '🎉'] as const;
-interface Party { id: string; fullName: string }
+interface Party {
+  id: string;
+  fullName: string;
+  // Group (project) chats also carry who each person is on the project (#51).
+  role?: 'OWNER' | 'MENTOR' | 'MENTEE' | null;
+  functionalRole?: 'DEVELOPER' | 'TESTER' | 'MARKETING' | null;
+}
 
 // Which thread this view is showing. A mentorship thread is addressed by its
 // relation id (the original path); a conversation by its own id (#769/#770).
@@ -59,6 +65,10 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   // Everyone in this thread, used to label incoming bubbles and the header.
   const [parties, setParties] = useState<Party[]>([]);
+  // Set for a project group chat: which project it belongs to, so the header can
+  // name the room, list who is in it and link back to the project (#51).
+  const [group, setGroup] = useState<{ projectId: string | null; projectName: string | null } | null>(null);
+  const [showParties, setShowParties] = useState(false);
   const [body, setBody] = useState('');
   // Pending attachments (picked files + pasted images), each with an object URL
   // for an instant thumbnail/preview. Uploaded with the message on send.
@@ -129,6 +139,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     // A mentorship thread answers with mentor/mentee; a conversation with a
     // participants array. Normalize both to one list.
     setParties(d.participants ?? [d.mentor, d.mentee].filter(Boolean));
+    setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null } : null);
     setCanPost(d.canPost !== false);
     setLoading(false);
   }, [target.kind, target.id]);
@@ -244,8 +255,21 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const nameFor = (id: string) => parties.find((p) => p.id === id)?.fullName ?? '—';
   // Header shows the other side (the only other party in a 1:1 thread).
   const other = parties.find((p) => p.id !== myId) ?? null;
+  // A group chat has no "other side" — it is named after its project.
+  const threadTitle = group ? group.projectName ?? t.messages.groupChat : other?.fullName;
   // On mobile the shell's header is the only title, so it carries the name.
-  useMessagesHeaderTitle(other?.fullName);
+  useMessagesHeaderTitle(threadTitle);
+
+  const partyRole = (p: Party) =>
+    p.role === 'MENTEE'
+      ? p.functionalRole
+        ? (t.projects.functionalRoles as Record<string, string>)[p.functionalRole]
+        : t.projects.roleMentee
+      : p.role === 'OWNER'
+        ? t.projects.roleOwner
+        : p.role === 'MENTOR'
+          ? t.projects.roleMentorMember
+          : null;
 
   if (loading) return <p className="text-center py-12 text-gray-400">{t.common.loading}</p>;
   if (forbidden) return <p className="text-center py-12 text-gray-400">{t.common.notFound}</p>;
@@ -259,7 +283,44 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       {!narrow && (
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">{t.messages.title}</h1>
-          <p className="text-gray-500">{other?.fullName}</p>
+          <p className="text-gray-500">{threadTitle}</p>
+        </div>
+      )}
+
+      {/* Who is in this room. A group chat used to be an anonymous thread: you
+          could read the names on the bubbles but never see the roster (#51). */}
+      {group && (
+        <div className="mb-3 rounded-xl border border-gray-200 bg-white p-3 text-sm dark:border-gray-800 dark:bg-gray-900" data-testid="group-participants">
+          <div className="flex items-center gap-2">
+            <Users2 className="h-4 w-4 shrink-0 text-gray-400" />
+            <button
+              type="button"
+              onClick={() => setShowParties((v) => !v)}
+              className="font-medium text-gray-700 hover:text-blue-600 dark:text-gray-200"
+              aria-expanded={showParties}
+              data-testid="group-participants-toggle"
+            >
+              {t.messages.participantCount.replace('{n}', String(parties.length))}
+            </button>
+            {group.projectId && (
+              <a href={`/projects/${group.projectId}`} className="ml-auto inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                <FolderOpen className="h-3.5 w-3.5" /> {t.messages.openProject}
+              </a>
+            )}
+          </div>
+          {showParties && (
+            <ul className="mt-2 space-y-1">
+              {parties.map((p) => (
+                <li key={p.id} className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-800 dark:text-gray-200">
+                    {p.fullName}
+                    {p.id === myId && <span className="text-gray-400"> · {t.messages.you}</span>}
+                  </span>
+                  {partyRole(p) && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-500 dark:bg-gray-800">{partyRole(p)}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

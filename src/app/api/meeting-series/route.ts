@@ -165,6 +165,40 @@ async function generateForSeries(series: {
   return { created, fixedLink };
 }
 
+// GET ?projectId= — the project's recurring meetings. Readable by anyone who can
+// see the project's internals, mentee members included (#51): "the weekly call is
+// Mon+Thu 09:30, here is the link" is exactly what a member needs, and it was
+// stored but never surfaced anywhere in the UI.
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  return await withTenantScope(session, async () => {
+    const projectId = new URL(request.url).searchParams.get('projectId') || '';
+    if (!projectId) return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true },
+    });
+    if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (
+      session.user.role !== 'ADMIN' &&
+      !canManageProject(session.user, project) &&
+      !(await isProjectMember(session.user, projectId))
+    ) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const series = await prisma.meetingSeries.findMany({
+      where: { projectId, active: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, title: true, daysOfWeek: true, timeOfDay: true, fixedLink: true, active: true },
+    });
+    return NextResponse.json({ series });
+  });
+}
+
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {

@@ -7,9 +7,10 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
-import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2 } from 'lucide-react';
+import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2, Inbox } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate, durationSince } from '@/lib/relativeTime';
+import type { TeamMember } from '@/lib/projectTeam';
 
 interface Task {
   id: string;
@@ -36,7 +37,10 @@ interface Project {
   tasks?: Task[];
   relations?: { mentee: { id: string; fullName: string } }[];
   members?: { role: 'OWNER' | 'MENTOR' | 'MENTEE'; functionalRole?: 'DEVELOPER' | 'TESTER' | 'MARKETING' | null; addedAt?: string; user: { id: string; fullName: string; role: string } }[];
-  _count?: { relations: number };
+  // Merged roster (members + legacy relations) served by /api/projects (#51).
+  team?: TeamMember[];
+  internCount?: number;
+  _count?: { relations: number; joinRequests?: number };
 }
 
 const STATUS_VARIANT: Record<ProjectStatus, 'success' | 'info' | 'default' | 'warning'> = {
@@ -186,6 +190,17 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const ownerLabel = (p: Project) =>
     p.ownerType === 'COMPANY' ? p.ownerCompany?.name : p.ownerUser?.fullName;
 
+  // What to print next to a team member's name: the job they do when we know it
+  // (developer/tester/…), otherwise their structural role.
+  const roleLabel = (m: TeamMember) =>
+    m.role === 'MENTEE'
+      ? m.functionalRole
+        ? (t.projects.functionalRoles as Record<string, string>)[m.functionalRole]
+        : t.projects.roleMentee
+      : m.role === 'OWNER'
+        ? t.projects.roleOwner
+        : t.projects.roleMentorMember;
+
   // Owner management + transfer (#618) on top of /api/projects/[id]/members.
   const [manageId, setManageId] = useState<string | null>(null);
   const [addUserId, setAddUserId] = useState('');
@@ -329,18 +344,22 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       {p.isPublic && <Badge variant="purple">{t.projects.public}</Badge>}
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {t.projects.owner}: {ownerLabel(p)} · {p._count?.relations ?? 0} {t.projects.members}
+                      {t.projects.owner}: {ownerLabel(p)} · {p.internCount ?? 0} {t.projects.members}
                     </p>
-                    {(p.relations?.length ?? 0) > 0 && (
+                    {/* The roster, from the merged team (#51) — the chips used to
+                        come from legacy MentorshipRelation rows only, so people
+                        added through the member panel never showed up. */}
+                    {(p.team?.length ?? 0) > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5" data-testid="project-members">
-                        {p.relations!.slice(0, 6).map((r) => (
-                          <span key={r.mentee.id} className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
-                            {r.mentee.fullName}
+                        {p.team!.slice(0, 8).map((m) => (
+                          <span key={m.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
+                            {m.fullName}
+                            <span className="text-gray-400">· {roleLabel(m)}</span>
                           </span>
                         ))}
-                        {(p._count?.relations ?? 0) > 6 && (
+                        {p.team!.length > 8 && (
                           <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs">
-                            +{(p._count?.relations ?? 0) - 6}
+                            +{p.team!.length - 8}
                           </span>
                         )}
                       </div>
@@ -356,6 +375,11 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       {p.demoUrl && <a href={p.demoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><ExternalLink className="h-3.5 w-3.5" />{t.projects.demo}</a>}
                       {p.boardUrl && <a href={p.boardUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-gray-600 hover:text-blue-600"><Trello className="h-3.5 w-3.5" />{t.projects.board}</a>}
                       <a href={`/projects/${p.id}`} className="inline-flex items-center gap-1 text-blue-600 hover:underline" data-testid="project-detail-link"><Eye className="h-3.5 w-3.5" />{t.projects.viewDetail}</a>
+                      {(p._count?.joinRequests ?? 0) > 0 && (
+                        <a href={`/projects/${p.id}`} className="inline-flex items-center gap-1 text-amber-600 hover:underline" data-testid="pending-join-requests">
+                          <Inbox className="h-3.5 w-3.5" />{t.projects.joinRequests} ({p._count!.joinRequests})
+                        </a>
+                      )}
                       {(p.startDate || p.endDate) && (
                         <span className="text-gray-400">
                           {p.startDate ? formatDate(p.startDate, locale) : '…'} – {p.endDate ? formatDate(p.endDate, locale) : '…'}

@@ -8,6 +8,67 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.0-beta] - 2026-08-02
+
+### Added
+- **Project teams are read from the membership table, with roles** (#51). `src/lib/projectTeam.ts`
+  merges `ProjectMember` (the canonical table since #617) with the legacy
+  `MentorshipRelation.projectId` rows into one roster and derives the intern count from it.
+  The admin/mentor cards, the project detail page and the group chat all consume it, and each
+  name carries its functional role (developer / tester / marketing).
+- **Project members get the internal view of their own project.** `canViewProject` only ever
+  considered ownership and the public flag, so a mentee added to a project saw the anonymous
+  visitor page (three links and an intern count) and a *private* project was invisible to them
+  entirely. Membership is now a read right: `GET /api/projects/[id]`, the `MENTEE` project scope
+  in `authzScope.ts` and `/projects/[id]` all accept it, and `GET /api/projects` strips names only
+  for projects the caller is *not* on.
+- **Recurring project meetings are visible and manageable** (`ProjectWeeklyMeeting`). `MeetingSeries`
+  and its API landed in #774 but nothing ever rendered them — there was no field anywhere saying
+  "the weekly call is Mon+Thu 09:30, link here". Adds `GET /api/meeting-series?projectId=`
+  (member-readable) plus a day/time/link editor for owners.
+- **Reminders for the recurring meeting go to the whole project.** `sendProjectMeetingSeriesReminders()`
+  drives off the series rule instead of the per-relation `Meeting` rows (most project members have no
+  `MentorshipRelation` carrying the project), at two lead times — a day before and an hour before.
+  Idempotency is a new `MeetingSeriesReminder` row per `(series, occurrence, lead)`, claimed before
+  anything is sent. Honors `emailAllowed(user, 'meetingReminders')`; in-app notifications are
+  unconditional as everywhere else.
+- **Goals belong to people** (`ProjectTask.assigneeId`, `doneAt`). A member sees their own goals and
+  ticks them off, an unassigned goal can be claimed ("üstlen") or handed over by a lead. Renaming and
+  assigning to someone else stay owner-only; a mentee can only delete their own goal.
+- **A goal-template pool** (`ProjectTaskTemplate`): every goal written on a project is captured, the
+  pool is backfilled from pre-existing tasks on first read, and a lead sends any selection to a new
+  member in one call (`POST /api/projects/[id]/tasks` with `templateIds`).
+- **Join requests for public projects** (`ProjectJoinRequest` + `/api/projects/[id]/join-requests`).
+  Anyone signed in may ask; the owner or an admin approves, which is what creates the `ProjectMember`
+  row (with the requested functional role) and pulls them into the group chat. Owners are notified
+  in-app and by email (`mentorship` category).
+- **Group chats say who is in them.** `GET /api/messages?conversationId=` now returns the conversation
+  type, its project and each participant's project role, and the thread header lists them with a link
+  back to the project.
+- **Shortcuts**: "message the owner" and "group chat" on a project, "send a message" and (for admins)
+  "login as" on a person's profile.
+- **Invitations can connect people on registration** — `InvitationToken` gained `invitedById`,
+  `mentorId`, `menteeId` and `projectId`. An admin picks the counterpart in the invite form and the
+  mentorship (and project membership) exists the moment the invitee registers, which is what a
+  mentor's own invite has always done. Mentors and mentees may now create invitations too, limited to
+  the roles they are allowed to invite.
+- **Personal referral links** (`User.referralCode`, `/api/referral`, `/auth/register?ref=`): mentees,
+  mentors and admins each get a shareable link, and whoever registers through it is recorded in
+  `User.referredById`. Admins can also set that pointer by hand on a candidate — any person, not only
+  a `Source` row, can be the source.
+- **A mentor-side onboarding wizard** for a newly joined mentee (`MenteeOnboarding`,
+  `/api/mentee-onboarding`, shown on the mentor dashboard). Steps the app can observe — a first
+  message, a booked meeting, project membership, assigned goals, a pipeline move — tick themselves; a
+  stored tick covers what happened outside the app.
+
+### Changed
+- `GET /api/invite` returns the caller's own invitations for non-admins (admins still see all).
+- `MeetingSeries` list/read is available to project members, not just managers.
+
+### Fixed
+- `ensureReferralCode` only retries on a genuine unique collision (`P2002`) and returns null for a
+  deleted account, instead of looping five times and reporting "could not allocate a referral code".
+
 ## [0.39.1-beta] - 2026-08-02
 
 ### Fixed

@@ -8,9 +8,14 @@ import { sendVerificationEmail } from '@/services/emailService';
 import { passwordSchema } from '@/lib/password';
 import { notify } from '@/lib/notify';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
+import { resolveReferrer } from '@/lib/referral';
+import { createOrGetProjectConversation } from '@/lib/conversations';
 
 const registerSchema = z.object({
   token: z.string().optional(),
+  // Personal referral code from /auth/register?ref=<code> (#51). Only read when
+  // there is no invitation token — an invitation already names its sender.
+  ref: z.string().max(64).optional(),
   email: z.string().email('Invalid email'),
   password: passwordSchema,
   fullName: z.string().min(1, 'Full name is required'),
@@ -53,6 +58,10 @@ export async function POST(request: Request) {
     // are the self-serve intake; mentors/companies/sources arrive by invitation.
     // Same safety net as before: unverified email + inactive until admin approval.
     let role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE' = 'MENTEE';
+    // Set from the invitation (its sender) or from a referral code, and written
+    // onto the new account so "who brought this person in" is answerable later.
+    let referredById: string | null = null;
+    let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
 
     if (token) {
       const invitation = await prisma.invitationToken.findUnique({ where: { token } });
@@ -69,6 +78,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Email does not match the invitation' }, { status: 400 });
       }
       role = invitation.role;
+      referredById = invitation.invitedById;
+      autoLink = { mentorId: invitation.mentorId, menteeId: invitation.menteeId, projectId: invitation.projectId };
+    } else {
+      // An open registration may still carry a referral link.
+      const referrer = await resolveReferrer(parsed.data.ref);
+      if (referrer?.isActive) referredById = referrer.id;
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -88,8 +103,8 @@ export async function POST(request: Request) {
     const pending = !token;
 
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !pending, consentAt: new Date() },
-      select: { id: true, email: true, fullName: true, role: true, createdAt: true },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !pending, consentAt: new Date(), referredById },
+      select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
     });
 
     // Record which privacy-notice version was accepted, so consent is auditable
@@ -123,6 +138,48 @@ export async function POST(request: Request) {
         where: { token, openedAt: null },
         data: { openedAt: now },
       });
+
+      // "Click the link and you are connected" (#51): the invitation carries the
+      // counterpart, so the mentorship (and the project membership) exist before
+      // the invitee ever reaches their dashboard. Best-effort — a failure here
+      // must not undo a valid registration, the account is already usable.
+      try {
+        const mentorId = role === 'MENTEE' ? autoLink.mentorId : null;
+        const menteeId = role === 'MENTOR' ? autoLink.menteeId : null;
+        const pair = mentorId
+          ? { mentorId, menteeId: user.id }
+          : menteeId
+            ? { mentorId: user.id, menteeId }
+            : null;
+        if (pair) {
+          const already = await prisma.mentorshipRelation.findFirst({ where: pair, select: { id: true } });
+          if (!already) {
+            await prisma.mentorshipRelation.create({ data: { ...pair, orgId: user.orgId } });
+          }
+          const counterpartId = pair.mentorId === user.id ? pair.menteeId : pair.mentorId;
+          await notify(
+            counterpartId,
+            'mentorship',
+            `${user.fullName} joined through your invitation — you are now connected.`,
+            role === 'MENTEE' ? '/mentor/mentees' : '/admin/mentorship'
+          );
+        }
+        if (autoLink.projectId) {
+          await prisma.projectMember.upsert({
+            where: { projectId_userId: { projectId: autoLink.projectId, userId: user.id } },
+            update: {},
+            create: {
+              projectId: autoLink.projectId,
+              userId: user.id,
+              role: role === 'MENTEE' ? 'MENTEE' : 'MENTOR',
+              functionalRole: role === 'MENTEE' ? 'DEVELOPER' : null,
+            },
+          });
+          await createOrGetProjectConversation(autoLink.projectId);
+        }
+      } catch (e) {
+        console.error('Invitation auto-link failed:', e);
+      }
     } else {
       const verifyToken = await createEmailVerificationToken(user.id);
       try {

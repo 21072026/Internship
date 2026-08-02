@@ -75,7 +75,15 @@ const BUILDERS: {
     MENTOR: async (u) => ({
       OR: [{ ownerUserId: u.id }, { members: { some: { userId: u.id } } }],
     }),
-    MENTEE: async () => ({ isPublic: true }),
+    // The public showcase, plus every project this mentee actually works on —
+    // a private project they were added to used to be invisible to them (#51).
+    MENTEE: async (u) => ({
+      OR: [
+        { isPublic: true },
+        { members: { some: { userId: u.id } } },
+        { relations: { some: { menteeId: u.id } } },
+      ],
+    }),
     COMPANY: async (u) => ({ ownerCompanyId: u.companyId ?? NO_MATCH }),
     // A source has no project workflow of its own; it used to fall through and
     // read every project, private ones included. Limited to the public

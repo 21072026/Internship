@@ -13,6 +13,45 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.0-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'A project now shows the people who are actually on it. The roster comes from the members you add, each with what they do (developer, tester, marketing), so the old "2 interns" line with two unrelated names is gone.',
+        'If you work on a project, you see the project. Members — mentees included — get the team list, the goals and the recurring meeting instead of the anonymous visitor page, and a private project you were added to is no longer invisible to you.',
+        'The recurring meeting has a home: an owner sets the days, the time and the link, everyone on the project reads it, and reminders go out a day before and an hour before — in the app, and by email unless you switched meeting emails off.',
+        'Goals belong to someone. Your own goals are yours to tick off, an unclaimed project goal can be taken with one click, and a mentor can hand the standard starter goals to whoever joined last: every goal ever written on the project is kept as a template.',
+        'Public projects accept join requests. Ask to join, say what you would like to do, and the project owner (or an admin) approves — which is also what adds you to the project and its group chat.',
+        'Group chats say who is in the room, with each person\'s role on the project, and link back to the project.',
+        'Shortcuts where you need them: message the project owner or open the group chat from the project, send a message from someone\'s profile, and — for admins — view the app as them from the same place.',
+        'Invite links now connect people. An admin can pick the mentor a new mentee should be paired with (or the mentee for a new mentor) and a project to join; the connection exists the moment the person registers. Mentees, mentors and admins each also get a personal link to share with their circle, and whoever signs up through it is recorded as having come from them.',
+        'Mentors get an onboarding checklist when someone new joins: say hello, book the kick-off, add them to a project, send the starter goals, move them along the pipeline. Steps the app can see tick themselves.',
+      ],
+      tr: [
+        'Bir proje artık gerçekten içinde olan kişileri gösteriyor. Ekip, eklediğin üyelerden geliyor ve herkesin ne yaptığı (geliştirici, tester, pazarlama) yanında yazıyor; eski "2 stajyer" satırı ve alakasız iki isim tarih oldu.',
+        'Bir projede çalışıyorsan projeyi görüyorsun. Üyeler — mentee’ler dahil — ziyaretçi görünümü yerine ekibi, hedefleri ve düzenli toplantıyı görüyor; eklendiğin özel bir proje artık sana kapalı değil.',
+        'Düzenli toplantının yeri var: proje sahibi günleri, saati ve linki tanımlıyor, projedeki herkes bunu görüyor ve hatırlatmalar bir gün önce ve bir saat önce gidiyor — uygulama içinde, toplantı e-postalarını kapatmadıysan e-posta ile de.',
+        'Hedefler artık bir kişiye ait. Kendi hedeflerini sen işaretliyorsun, sahipsiz bir proje hedefini tek tıkla üstlenebiliyorsun ve mentör, standart başlangıç hedeflerini en son katılan kişiye tek seferde gönderebiliyor: projede yazılmış her hedef şablon olarak saklanıyor.',
+        'Açık projeler katılma talebi alıyor. Katılmak istediğini ve ne yapmak istediğini yazıyorsun; proje sahibi (ya da bir admin) onaylıyor — bu onay aynı zamanda seni projeye ve grup sohbetine ekliyor.',
+        'Grup sohbetleri artık içinde kimlerin olduğunu, herkesin projedeki rolüyle gösteriyor ve projeye geri link veriyor.',
+        'Kısayollar gerektiği yerde: projeden proje sahibine mesaj ya da grup sohbeti, bir kişinin profilinden mesaj gönderme ve adminler için aynı yerden "bu kullanıcı olarak görüntüle".',
+        'Davet linkleri artık bağlantı kuruyor. Admin, yeni bir mentee’nin hangi mentöre bağlanacağını (ya da yeni bir mentörün hangi mentee’yi alacağını) ve katılacağı projeyi seçebiliyor; kişi kaydolduğu anda bağlantı kurulmuş oluyor. Ayrıca mentee, mentör ve adminlerin çevresine paylaşacağı kişisel bir linki var; o linkle gelen herkesin kaynağı o kişi olarak kaydediliyor.',
+        'Yeni biri katıldığında mentöre bir onboarding listesi çıkıyor: merhaba de, tanışma toplantısını ayarla, projeye ekle, başlangıç hedeflerini gönder, pipeline’da ilerlet. Uygulamanın görebildiği adımlar kendiliğinden işaretleniyor.',
+      ],
+      de: [
+        'Ein Projekt zeigt jetzt die Menschen, die wirklich daran arbeiten. Das Team kommt aus den Mitgliedern, die du hinzufügst — jeweils mit ihrer Aufgabe (Entwicklung, Test, Marketing). Die alte Zeile „2 Praktikanten“ mit zwei unbeteiligten Namen ist weg.',
+        'Wer an einem Projekt arbeitet, sieht das Projekt. Mitglieder — auch Mentees — bekommen Team, Ziele und das wiederkehrende Treffen statt der Besucheransicht, und ein privates Projekt, zu dem du hinzugefügt wurdest, ist für dich nicht mehr unsichtbar.',
+        'Das wiederkehrende Treffen hat einen Platz: Der Owner legt Tage, Zeit und Link fest, alle im Projekt sehen das, und Erinnerungen gehen einen Tag vorher und eine Stunde vorher raus — in der App und per E-Mail, sofern du Meeting-E-Mails nicht deaktiviert hast.',
+        'Ziele gehören jemandem. Deine eigenen Ziele hakst du selbst ab, ein freies Projektziel kannst du mit einem Klick übernehmen, und eine Mentorin kann die Standard-Startziele an die zuletzt hinzugekommene Person schicken: Jedes je formulierte Ziel wird als Vorlage aufbewahrt.',
+        'Öffentliche Projekte nehmen Beitrittsanfragen an. Du fragst an und sagst, was du machen möchtest; der Owner (oder eine Administratorin) gibt frei — und genau das fügt dich zum Projekt und seinem Gruppenchat hinzu.',
+        'Gruppenchats zeigen, wer im Raum ist — mit der jeweiligen Rolle im Projekt — und verlinken zurück zum Projekt.',
+        'Shortcuts da, wo man sie braucht: aus dem Projekt den Owner anschreiben oder den Gruppenchat öffnen, aus einem Profil eine Nachricht senden und — für Admins — von dort die App als diese Person ansehen.',
+        'Einladungslinks verbinden jetzt. Eine Administratorin kann wählen, mit welchem Mentor ein neuer Mentee verbunden wird (oder mit welchem Mentee eine neue Mentorin) und welchem Projekt beigetreten wird; die Verbindung besteht mit der Registrierung. Mentees, Mentoren und Admins haben zusätzlich einen persönlichen Link fürs eigene Umfeld — wer sich darüber registriert, wird ihnen als Quelle zugeordnet.',
+        'Mentoren bekommen eine Onboarding-Liste, wenn jemand Neues dazukommt: Hallo sagen, Kick-off buchen, zu einem Projekt hinzufügen, Startziele senden, in der Pipeline weiterbewegen. Was die App sehen kann, hakt sich selbst ab.',
+      ],
+    },
+  },
+  {
     version: '0.39.1-beta',
     date: '2026-08-02',
     highlights: {

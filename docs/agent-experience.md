@@ -10,6 +10,60 @@ Newest entries on top.
 
 ---
 
+## 2026-08-02 — Proje ekipleri, hedefler, katılma talepleri, davet/referans (#51, 0.40.0-beta)
+
+**"Yanlış isim görünüyor" şikâyeti neredeyse hep iki kaynaklı veridir.** Proje kartı
+"2 stajyer" derken üye panelinde 6 mentee vardı: sayı ve chip'ler `MentorshipRelation.projectId`
+(eski yol) üzerinden, panel ise `ProjectMember` (#617'den beri kanonik tablo) üzerinden
+okuyordu. Çözüm tek bir birleştirici (`src/lib/projectTeam.ts` → `mergeTeam`) ve *her*
+tüketicinin ondan beslenmesi. Benzer bir uyumsuzluk görürsen önce "kaç tablo bu soruyu
+cevaplıyor?" diye sor.
+
+**"Alan yok" sanılan şey bazen sadece render edilmemiştir.** Haftalık toplantı için
+`MeetingSeries` modeli + tam CRUD API'si #774'ten beri duruyordu; `grep -rln MeetingSeries src/`
+tek dosya döndürdü: kendi route'u. Yeni özelliğe başlamadan bu grep'i yapmak, sıfırdan model
+tasarlamakla mevcut backend'e GET + UI eklemek arasındaki farkı belirliyor.
+
+**Görünürlük kuralı ile üyelik kuralı ayrı yerlerde yaşıyor.** `canViewProject()` yalnızca
+sahiplik + `isPublic` bakıyordu, dolayısıyla projeye eklenmiş bir mentee kendi projesini
+göremiyordu (özel projede 404). Üyelik bir okuma hakkıysa bunu üç yere birlikte eklemek gerekti:
+route (`GET /api/projects/[id]`), rol kapsamı (`authzScope.ts` → MENTEE) ve sayfanın kendi
+`canInternal` hesabı. Birini atlarsan sonuç sessizce tutarsız olur.
+
+**Hatırlatmayı taşıyan satır yoksa hatırlatma da yoktur.** Proje toplantısını `Meeting`
+satırlarına bağlamak işe yaramaz: proje üyelerinin çoğunun o projeye bağlı bir
+`MentorshipRelation`'ı yok, `generateForSeries` de yalnızca ilişkili mentee'lere satır üretiyor.
+Kuraldan (seri + occurrence) türeten ayrı bir cron ve idempotency için `(seriesId, occurrenceAt,
+lead)` unique satırı gerekti — "önce claim et, sonra gönder" deseni `sendMeetingReminders`'tan
+kopyalandı.
+
+**`ensureReferralCode` dersi: retry'ı hata koduna bağla.** İlk sürüm her hatada 5 kez deneyip
+"Could not allocate a referral code" atıyordu; e2e sırasında kullanıcı silindiği için P2025
+alıyordu ve gerçek sebep kayboluyordu. Yalnızca P2002'de (gerçek çakışma) tekrar dene, P2025'te
+null dön, geri kalanı olduğu gibi fırlat.
+
+**Bu container'da iki pre-existing e2e hatası var** (temiz ağaçta `git stash` ile doğruladım,
+değişiklikle ilgisi yok): `smoke.spec.ts:53` (`/admin` → next-auth `CLIENT_FETCH_ERROR`, in-flight
+session fetch navigasyonla iptal ediliyor) ve `pipeline.spec.ts:8` (aşama değişimi 1800 ms
+içinde persist etmiyor). Bir hatayı kendine yazmadan önce **stash'leyip baseline al** — 30
+saniyelik iş, yanlış teşhisten çok daha ucuz.
+
+**Playwright tarayıcı sürümü yine tutmadı.** Beklenen `chromium_headless_shell-1234`, kurulu olan
+`-1194`. `playwright install` yerine dizin yapısını taklit eden symlink:
+`mkdir -p /opt/pw-browsers/chromium_headless_shell-1234/chrome-headless-shell-linux64 && ln -s
+…-1194/chrome-linux/headless_shell …/chrome-headless-shell` (binary adı da farklı,
+`headless_shell` → `chrome-headless-shell`).
+
+**`seed:demo` `.env`'i okumuyor.** `npm run seed:demo` `DATABASE_URL` yoksa önce
+"does not look local" der (yanıltıcı), sonra Prisma init hatası verir. `export DATABASE_URL=…
+SEED_DEMO_FORCE=1` ile çalıştır.
+
+**60 sn'lik test bütçesi tek başına geçip suite içinde patlar.** İki sign-in + beş navigasyon
+içeren yeni spec tek başına ~50 sn, yüklü suite'te 60 sn'yi aştı. `test.slow()` (bütçeyi 3'e
+katlar) doğru araç; timeout'u global olarak yükseltmek değil.
+
+---
+
 ## 2026-07-31 — Inbound mail bridge (#974, 0.29.0/0.29.1-beta)
 
 **"The email can't go out" was actually "the email arrives and nothing reads
