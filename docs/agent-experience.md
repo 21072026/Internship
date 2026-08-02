@@ -2028,3 +2028,50 @@ kırmızı lint görürsen önce bunu ele.
 
 **Kapsam notu:** eklenen iddialar `e2e/impersonation.spec.ts` içinde ve bu spec
 `@smoke` değil — PR gate'inde çalışmadılar, kanıt bir sonraki zamanlanmış tam koşuda.
+
+## 2026-08-02 — Sunucu reddediyorsa arayüz de sormamalı; silme yetkisi kimin parolasıyla? (#1036/#1037, 0.38.4 / 0.39.0-beta)
+
+Bildirim: "başkasının hesabına admin olarak girip o hesabı silmek istediğimde hesap
+parolası soruyor, ama ben o parolayı bilmiyorum." İki ayrı iş çıktı.
+
+**1) Ölü arayüz tuzağı (#1036).** `/api/account` PUT ve DELETE, `session.user.impersonatorId`
+doluysa 400 dönüyordu — yani sunucu tarafı zaten doğruydu. Ama `AccountSettings` e-posta,
+parola ve "Hesabı sil" kartlarını her koşulda render ediyordu. Sonuç: kullanıcıya
+bilemediği bir parola sorulan, doğru girse bile 400 dönecek bir form. **Kural:** bir
+endpoint'e koşullu bir red eklerken (`if (impersonating) return 400`) aynı koşulu
+arayüzde de ara; yoksa doğru sunucu davranışı, kullanıcıya "bozuk özellik" olarak
+görünür. Bunu bulmanın hızlı yolu: guard'ı ekleyen commit'te `grep` ile o endpoint'i
+çağıran bileşenleri kontrol et.
+
+**2) Adım-yükseltmeli kimlik doğrulama, doğru parolayla (#1037).** Self-service silmede
+hesap sahibinin parolası sorulur; admin yolunda böyle bir karşılık yok. Var olan
+`/api/admin/users/[id]/erase` yalnızca "hedefin tam adını yaz" kapısına dayanıyordu —
+bu yanlış-tıklama koruması, kimlik doğrulama değil: çalınmış bir admin oturumu hiç
+parola bilmeden hesap silebilirdi. Eklenen `adminPassword`, **admin'in kendi**
+parolasıdır; hedefin parolası hiçbir zaman istenmez (istenmesi zaten 1. maddedeki
+tuzağın kaynağıydı).
+
+**Restrict modundaki FK'lar sessiz mayın.** `hardDeleteUser` yalnızca
+`mentorshipRelation` + `statusChange` temizliyordu. `SupportTicket.assignedAdminId`,
+`MentorshipRequest.decidedById` ve `Project.ownerUserId` ise cascade **değil** (şemada
+`onDelete` yok → restrict), dolayısıyla proje sahibi bir mentoru silmek anlaşılmaz bir
+FK hatasıyla patlıyordu — self-service silme de aynı fonksiyondan geçtiği için bu hata
+yeni kod olmadan da erişilebilirdi. **Kural:** `user.delete` yazan bir yol eklemeden önce
+`grep -n "User? \+@relation" prisma/schema.prisma` ile cascade'i olmayan opsiyonel
+referansları çıkar; org'a ait satırları silmek değil, `null`'a çekmek gerekiyor.
+
+**`logActivity` → `activityLog`, `auditLog` değil.** Impersonation testleri
+`prisma.auditLog`'a bakıyor (o tabloya `IMPERSONATE_*` yazılıyor), ama `logActivity`
+`prisma.activityLog`'a yazıyor. Yeni bir eylemin loglandığını test ederken hangi tabloya
+yazıldığını `src/lib/activity.ts` içinden doğrula; yanlış tablo sorgusu sessizce `null`
+döner ve test "log yok" diye yanlış yerde kırılır.
+
+**Smoke dışı spec'i merge'den önce doğrulamanın yolu var.** Bu depoda tekrar eden şikâyet
+("kanıt bir sonraki zamanlanmış tam koşuda") için çözüm: `e2e-full.yml` `workflow_dispatch`
+kabul ediyor, yani `gh workflow run e2e-full.yml --ref <branch>` ile tam suite'i **kendi
+branch'inde** koşturabiliyorsun (4 shard, ~5 dk, ubuntu-latest → public repo'da ücretsiz).
+Bu turda dört ilgili spec'in de (`admin-user-erase`, güncellenen `candidate-erasure` ×2,
+yeni `impersonation` vakası) gerçekten koşup geçtiği böyle görüldü. Shard 4'teki tek
+kırmızı `e2e/questions.spec.ts:17` idi ve **aynı test main'in 03:00 UTC koşusunda da
+kırmızıydı** — yani mevcut bir sorun. Bir shard kırmızı olduğunda önce aynı testin son
+main koşusundaki durumuna bak; "benim değişikliğim mi" sorusunu 30 saniyede kapatıyor.
