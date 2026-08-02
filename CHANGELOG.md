@@ -8,6 +8,41 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.39.0-beta] - 2026-08-02
+
+### Added
+- **Admin-side account deletion from the user list** (`/admin/users`). Every non-admin
+  row gets an "Erase account" action that opens the erasure panel inline;
+  `POST /api/admin/users/[id]/erase` backs both it and the candidate danger zone. This
+  is the answer to "how does an admin delete someone else's account?" — previously the
+  only account-deletion UI was the self-service one, which asks for the account
+  holder's own password and refuses to run inside an impersonation session.
+- **Step-up authentication on admin erasure**: the endpoint now requires the acting
+  admin's OWN password (`adminPassword`, bcrypt-compared against their row) on top of
+  the existing "type the target's exact full name" gate. The name is a misclick guard,
+  not authentication — without a password check, a hijacked admin session could erase
+  accounts silently. It is deliberately never the target's password: no admin can know
+  that one.
+
+### Changed
+- The erase endpoint accepts every role except `ADMIN` (was: `MENTEE` only). Admin
+  targets are refused with a clear message — demote the account first, or let its owner
+  delete it — which also keeps the last admin account from disappearing. Anonymize
+  stays candidate-only, since preserving pipeline history only means something there.
+  Self-targeting is refused too, and an impersonation session is rejected outright so
+  an erasure can never be attributed to a merely-impersonated admin.
+- Audit action renamed `candidate.erase.*` → `user.erase.*` (nothing consumed the old
+  names) and now records the target's role + name in `detail` plus the request IP/UA —
+  after a hard delete the log line is the only remaining trace of the account.
+- `hardDeleteUser` detaches the three user references that neither cascade nor were
+  cleaned up (`SupportTicket.assignedAdminId`, `MentorshipRequest.decidedById`,
+  `Project.ownerUserId`). They belong to the org rather than the user, and left in
+  place they aborted the delete with an opaque FK error — reachable from the
+  self-service delete too, not just the new admin path.
+- `CandidateEraseDangerZone` now wraps the shared `UserEraseForm` (same
+  `data-testid="erasure-confirm-name"`, new `data-testid="erasure-admin-password"`),
+  so the candidate page and the user list can't drift apart.
+
 ## [0.38.4-beta] - 2026-08-02
 
 ### Fixed

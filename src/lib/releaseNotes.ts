@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.39.0-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Admins can now delete a user account from the user list. Open Users, pick a row and choose "Erase account" — candidates can also be anonymized instead, which keeps their pipeline history but removes every personal detail. Deleting someone else\'s account no longer requires knowing their password: you confirm with your own, plus typing the account holder\'s exact name.',
+        'Deletions are recorded with the name and role of the erased account and the admin who did it, so there is still a trace once the account itself is gone. Admin accounts cannot be erased this way — change the role first, or let the owner delete their own account.',
+      ],
+      tr: [
+        'Yöneticiler artık bir kullanıcı hesabını kullanıcı listesinden silebiliyor. Kullanıcılar sayfasında ilgili satırdaki "Hesabı sil" seçeneğini kullan; adaylar için silme yerine anonimleştirme de var (süreç geçmişi kalır, kişisel bilgiler temizlenir). Başkasının hesabını silmek için onun parolasını bilmen gerekmiyor: kendi parolanla onaylıyorsun, ayrıca hesap sahibinin adını tam olarak yazıyorsun.',
+        'Silme işlemleri; silinen hesabın adı, rolü ve işlemi yapan yönetici ile birlikte kaydediliyor — hesap gittikten sonra da bir iz kalıyor. Yönetici hesapları bu yolla silinemez; önce rolünü değiştir ya da hesap sahibi kendi hesabını silsin.',
+      ],
+      de: [
+        'Administratoren können ein Benutzerkonto jetzt direkt aus der Nutzerliste löschen. Unter Benutzer in der jeweiligen Zeile „Konto löschen“ wählen — Kandidaten lassen sich alternativ anonymisieren: die Pipeline-Historie bleibt, alle persönlichen Angaben verschwinden. Für das Löschen eines fremden Kontos ist dessen Passwort nicht mehr nötig: du bestätigst mit deinem eigenen und tippst den genauen Namen des Kontoinhabers.',
+        'Jede Löschung wird mit Name und Rolle des gelöschten Kontos sowie der ausführenden Administratorin protokolliert — es bleibt also eine Spur, wenn das Konto selbst weg ist. Admin-Konten lassen sich so nicht löschen: erst die Rolle ändern, oder der Inhaber löscht sein Konto selbst.',
+      ],
+    },
+  },
+  {
     version: '0.38.4-beta',
     date: '2026-08-02',
     highlights: {
