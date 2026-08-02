@@ -53,7 +53,7 @@ test('admin can anonymize a candidate (wrong-name confirm is rejected)', async (
   }
 });
 
-test('admin can permanently delete a candidate; the erase endpoint refuses non-MENTEE targets', async ({ page }) => {
+test('admin can permanently delete a candidate; the erase endpoint refuses self-targeting and a missing password', async ({ page }) => {
   const adminEmail = uniqueEmail('erase-admin2');
   const menteeEmail = uniqueEmail('erase-mentee2');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Erase Admin 2');
