@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.2-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Setting up a recurring meeting used to email everyone once for every future occurrence — dozens of near-identical invitations from a single click. Now only the next meeting is announced; every one after that is covered by the reminder a day before and an hour before.',
+        'Those reminders were also being sent twice to anyone who had both a mentorship and a project membership. One reminder now, to the whole project team.',
+        'The project page shows the app header again, so on a phone you still see where you are and can get back to your dashboard.',
+      ],
+      tr: [
+        'Düzenli toplantı tanımlayınca gelecekteki her tekrar için herkese ayrı e-posta gidiyordu — tek tıkla onlarca benzer davet. Artık sadece bir sonraki toplantı duyuruluyor; sonrakiler için bir gün önce ve bir saat önce gelen hatırlatma yeterli.',
+        'Bu hatırlatmalar, hem mentorluğu hem proje üyeliği olan kişilere iki kez gidiyordu. Artık tek hatırlatma, projedeki herkese.',
+        'Proje sayfasında uygulama başlığı yeniden görünüyor; mobilde nerede olduğunu görüyor ve panele geri dönebiliyorsun.',
+      ],
+      de: [
+        'Beim Anlegen eines wiederkehrenden Treffens ging bisher für jeden künftigen Termin eine eigene E-Mail an alle — Dutzende fast identischer Einladungen mit einem Klick. Jetzt wird nur das nächste Treffen angekündigt; für alle weiteren genügen die Erinnerungen einen Tag und eine Stunde vorher.',
+        'Diese Erinnerungen gingen außerdem doppelt an alle, die sowohl eine Mentorschaft als auch eine Projektmitgliedschaft haben. Jetzt eine Erinnerung, an das ganze Projektteam.',
+        'Die Projektseite zeigt wieder die App-Kopfzeile — auf dem Handy siehst du also, wo du bist, und kommst zurück zu deinem Dashboard.',
+      ],
+    },
+  },
+  {
     version: '0.40.1-beta',
     date: '2026-08-02',
     highlights: {

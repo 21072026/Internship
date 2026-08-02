@@ -8,6 +8,26 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.2-beta] - 2026-08-02
+
+### Fixed
+- **Setting up a recurring meeting no longer mails everyone once per occurrence.**
+  `generateForSeries` fills the calendar `weeksAhead` (default 7) and used to call
+  `sendMeetingInviteEmail` inside the occurrence × relation loop — one click on "save"
+  meant e.g. 6 mentees × 7 weeks = 42 near-identical invitations. Only the *next*
+  occurrence is announced now; every later one is covered by the day-before and
+  hour-before reminders. The response reports `invitesSent` alongside `createdMeetings`.
+- **Series meetings were reminded twice.** `sendMeetingReminders()` (per relation, an hour
+  before) and `sendProjectMeetingSeriesReminders()` (per project, a day and an hour before)
+  both matched a series-generated `Meeting`, so anyone with both a relation and a membership
+  got two hour-before emails. The per-relation job now skips `seriesId != null`; the
+  project-level one is the single source for recurring meetings, and it reads the merged
+  team (`loadProjectTeam`) so a mentee attached only through a relation is still reminded.
+- **The project page had no header.** It lives outside the admin/mentor shell so a public
+  visitor can read it, which meant opening a project on a phone replaced the app chrome with
+  nothing — no title, and no way back other than a small text link. It carries its own brand
+  bar now, linking to the viewer's own dashboard (or `/` when signed out).
+
 ## [0.40.1-beta] - 2026-08-02
 
 ### Changed

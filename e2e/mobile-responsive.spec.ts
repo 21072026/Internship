@@ -95,6 +95,10 @@ test('phone width: the project page and project list stay inside the viewport', 
     // The goal composer — the row that used to collapse — is genuinely usable.
     await page.goto(`/projects/${project.id}`);
     await page.waitForLoadState('networkidle');
+    // The project page is outside the app shell, so it carries its own header:
+    // without one, opening a project on a phone left the screen with no title
+    // and no way back into the app.
+    await expect(page.getByRole('banner')).toBeVisible();
     const goalInput = page.getByTestId('goal-input');
     await expect(goalInput).toBeVisible();
     const box = await goalInput.boundingBox();

@@ -143,6 +143,62 @@ test('a mentee can ask to join a public project and the owner approves it', asyn
   }
 });
 
+test('setting up a series announces only the next meeting, not every occurrence', async ({ page }) => {
+  const mentorEmail = uniqueEmail('blast-mentor');
+  const menteeEmail = uniqueEmail('blast-mentee');
+  const mentor = await seedUser(mentorEmail, password, 'MENTOR', 'Blast Mentor');
+  const mentee = await seedUser(menteeEmail, password, 'MENTEE', 'Blast Mentee');
+
+  const project = await prisma.project.create({
+    data: {
+      name: `Blast Project ${Date.now()}`,
+      ownerType: 'MENTOR',
+      ownerUserId: mentor.id,
+      members: {
+        create: [
+          { userId: mentor.id, role: 'OWNER' },
+          { userId: mentee.id, role: 'MENTEE', functionalRole: 'DEVELOPER' },
+        ],
+      },
+    },
+  });
+  // A relation bound to the project is what makes the generator produce Meeting
+  // rows (and, before this fix, one invitation email per row).
+  const relation = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: mentee.id, projectId: project.id },
+  });
+
+  try {
+    await signInAndSettle(page, mentorEmail, password, '/mentor');
+    const res = await page.request.post('/api/meeting-series', {
+      data: {
+        projectId: project.id,
+        title: 'Weekly sync',
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // every day, to get many occurrences fast
+        timeOfDay: '09:00',
+        weeksAhead: 4,
+      },
+    });
+    expect(res.status()).toBe(201);
+    const body = await res.json();
+
+    // Weeks of meetings are created …
+    expect(body.createdMeetings).toBeGreaterThan(5);
+    // … and exactly one invitation goes out: the next one. The rest are covered
+    // by the day-before / hour-before reminders.
+    expect(body.invitesSent).toBe(1);
+  } finally {
+    await prisma.meetingSeriesReminder.deleteMany({ where: { series: { projectId: project.id } } });
+    await prisma.meeting.deleteMany({ where: { relationId: relation.id } });
+    await prisma.meetingSeries.deleteMany({ where: { projectId: project.id } });
+    await prisma.projectMember.deleteMany({ where: { projectId: project.id } });
+    await prisma.conversation.deleteMany({ where: { projectId: project.id } });
+    await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(menteeEmail);
+  }
+});
+
 test('the weekly meeting an owner sets is what a member reads', async ({ page }) => {
   const mentorEmail = uniqueEmail('meet-mentor');
   const menteeEmail = uniqueEmail('meet-mentee');

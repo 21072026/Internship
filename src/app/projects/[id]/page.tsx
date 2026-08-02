@@ -12,6 +12,8 @@ import { ProjectWeeklyMeeting } from '@/components/project/ProjectWeeklyMeeting'
 import { ProjectGoals } from '@/components/project/ProjectGoals';
 import { ProjectJoinRequests } from '@/components/project/ProjectJoinRequests';
 import { ProjectMembersPanel } from '@/components/project/ProjectMembersPanel';
+import { BrandWordmark } from '@/components/BrandWordmark';
+import { roleHome } from '@/lib/roleHome';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,7 +97,20 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         : t.projects.roleMentorMember;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 px-3 py-6 sm:px-4 sm:py-12">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+      {/* This route lives outside the admin/mentor shell (a public visitor has to
+          be able to read it), so without a bar of its own the app's header simply
+          vanished when you opened a project — on a phone, where there is no
+          sidebar either, that left the screen with no title and no way back into
+          the app (#51 follow-up). */}
+      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm">
+        <div className="mx-auto flex h-16 max-w-2xl items-center gap-2 px-3 sm:px-4">
+          <Link href={session ? roleHome(role) : '/'} className="flex min-w-0 items-center gap-2">
+            <BrandWordmark />
+          </Link>
+        </div>
+      </header>
+      <div className="px-3 py-6 sm:px-4 sm:py-12">
       <div className="max-w-2xl mx-auto">
         {/* Back link: internal viewers return to their own project list (where
             they came from); public visitors get the showcase header link. */}
@@ -180,6 +195,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <p className="text-xs text-gray-400 mt-6">{interns} {t.projects.members}</p>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

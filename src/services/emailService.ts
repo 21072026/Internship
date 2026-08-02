@@ -10,6 +10,7 @@ import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone } from '@/lib/timezone';
+import { loadProjectTeam } from '@/lib/projectTeam';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -801,7 +802,12 @@ export async function sendMeetingReminders() {
   } as const;
 
   const meetings = await prisma.meeting.findMany({
-    where: { scheduledAt: { gt: now, lte: horizon }, reminderSentAt: null },
+    // `seriesId: null` — a recurring project meeting is reminded by
+    // sendProjectMeetingSeriesReminders(), which covers the whole project team
+    // rather than only the two sides of a relation. Without this exclusion the
+    // people who have both a relation and a membership got the hour-before
+    // reminder twice (#51).
+    where: { scheduledAt: { gt: now, lte: horizon }, reminderSentAt: null, seriesId: null },
     include: {
       relation: {
         include: {
@@ -941,23 +947,25 @@ export async function sendProjectMeetingSeriesReminders() {
     const occurrences = seriesOccurrences(days, series.timeOfDay, now, SERIES_LOOKAHEAD_MINUTES);
     if (occurrences.length === 0) continue;
 
-    const members = await prisma.projectMember.findMany({
-      where: { projectId: series.projectId },
+    // The whole team, not just the ProjectMember rows: a mentee attached to the
+    // project the legacy way (MentorshipRelation.projectId) is expected at the
+    // same call, and since series meetings are now excluded from the
+    // per-relation reminder they would otherwise be reminded by nobody.
+    const team = await loadProjectTeam(series.projectId);
+    if (team.length === 0) continue;
+    const recipients = await prisma.user.findMany({
+      where: { id: { in: team.map((m) => m.id) }, isActive: true },
       select: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            fullName: true,
-            role: true,
-            emailNotifications: true,
-            notificationPrefs: true,
-            timezone: true,
-          },
-        },
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        emailNotifications: true,
+        notificationPrefs: true,
+        timezone: true,
       },
     });
-    if (members.length === 0) continue;
+    if (recipients.length === 0) continue;
 
     for (const when of occurrences) {
       const lead = leadFor((when.getTime() - now.getTime()) / 60000);
@@ -973,7 +981,7 @@ export async function sendProjectMeetingSeriesReminders() {
       reminded++;
 
       const projectName = series.project?.name ?? '';
-      for (const { user } of members) {
+      for (const user of recipients) {
         const link = `/projects/${series.projectId}`;
         const whenLocal = formatInTimeZone(when, user.timezone);
         await notify(

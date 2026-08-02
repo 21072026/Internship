@@ -79,7 +79,7 @@ async function generateForSeries(series: {
   fixedLink: string | null;
   active: boolean;
 }, sessionUserId: string, weeksAhead: number, role: string) {
-  if (!series.active || !series.projectId) return { created: 0, fixedLink: series.fixedLink };
+  if (!series.active || !series.projectId) return { created: 0, invited: 0, fixedLink: series.fixedLink };
 
   const memberMentees = await prisma.projectMember.findMany({
     where: { projectId: series.projectId, role: 'MENTEE' },
@@ -96,12 +96,12 @@ async function generateForSeries(series: {
     },
     include: { mentee: { select: { email: true, fullName: true, timezone: true } } },
   });
-  if (relations.length === 0) return { created: 0, fixedLink: series.fixedLink };
+  if (relations.length === 0) return { created: 0, invited: 0, fixedLink: series.fixedLink };
 
   const days = z.array(z.number().int().min(0).max(6)).min(1).parse(series.daysOfWeek);
   const now = new Date();
   const targets = targetsFromRule(days, series.timeOfDay, weeksAhead, now);
-  if (targets.length === 0) return { created: 0, fixedLink: series.fixedLink };
+  if (targets.length === 0) return { created: 0, invited: 0, fixedLink: series.fixedLink };
 
   const start = targets[0];
   const end = targets[targets.length - 1];
@@ -117,7 +117,15 @@ async function generateForSeries(series: {
     await prisma.meetingSeries.update({ where: { id: series.id }, data: { fixedLink } });
   }
 
+  // Only the *next* occurrence is announced by email. Setting up a weekly series
+  // fills the calendar weeks ahead, and mailing an invitation per occurrence per
+  // person meant one click sent dozens of near-identical emails (6 mentees ×
+  // 7 weeks = 42). Everything after the first one is covered by the reminders the
+  // cron sends a day before and an hour before, so nobody misses a meeting.
+  const firstIso = targets[0].toISOString();
+
   let created = 0;
+  let invited = 0;
   for (const when of targets) {
     const whenIso = when.toISOString();
     for (const rel of relations) {
@@ -135,18 +143,21 @@ async function generateForSeries(series: {
           seriesId: series.id,
         },
       });
-      try {
-        await sendMeetingInviteEmail({
-          to: rel.mentee.email,
-          fullName: rel.mentee.fullName,
-          title: series.title,
-          scheduledAt: when,
-          meetLink: fixedLink,
-          rsvpToken,
-          timeZone: rel.mentee.timezone,
-        });
-      } catch (e) {
-        console.error('Meeting series invite email failed:', e);
+      if (whenIso === firstIso) {
+        try {
+          await sendMeetingInviteEmail({
+            to: rel.mentee.email,
+            fullName: rel.mentee.fullName,
+            title: series.title,
+            scheduledAt: when,
+            meetLink: fixedLink,
+            rsvpToken,
+            timeZone: rel.mentee.timezone,
+          });
+          invited++;
+        } catch (e) {
+          console.error('Meeting series invite email failed:', e);
+        }
       }
       dedupe.add(key);
       created++;
@@ -162,7 +173,7 @@ async function generateForSeries(series: {
     });
   }
 
-  return { created, fixedLink };
+  return { created, invited, fixedLink };
 }
 
 // GET ?projectId= — the project's recurring meetings. Readable by anyone who can
@@ -229,7 +240,7 @@ export async function POST(request: Request) {
 
     const generation = await generateForSeries(series, session.user.id, weeksAhead, session.user.role);
     return NextResponse.json(
-      { series: { ...series, fixedLink: generation.fixedLink }, createdMeetings: generation.created },
+      { series: { ...series, fixedLink: generation.fixedLink }, createdMeetings: generation.created, invitesSent: generation.invited },
       { status: 201 }
     );
   });
@@ -273,7 +284,7 @@ export async function PUT(request: Request) {
 
     const updated = await prisma.meetingSeries.update({ where: { id }, data });
     const generation = await generateForSeries(updated, session.user.id, weeksAhead, session.user.role);
-    return NextResponse.json({ series: { ...updated, fixedLink: generation.fixedLink }, createdMeetings: generation.created });
+    return NextResponse.json({ series: { ...updated, fixedLink: generation.fixedLink }, createdMeetings: generation.created, invitesSent: generation.invited });
   });
 }
 
