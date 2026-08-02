@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
-import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { NotificationBell } from '@/components/NotificationBell';
 import { MessagesButton } from '@/components/MessagesButton';
 import { BetaBadge } from '@/components/BetaBadge';
@@ -87,7 +86,8 @@ export function ResponsiveShell({
           <NotificationBell />
         </div>
         <div className="p-4 lg:p-8 lg:pt-2">
-          <ImpersonationBanner />
+          {/* The impersonation banner is rendered app-wide in Providers — it has to
+              show on the shell-less screens too (/messages, /account, ...). */}
           <EmailVerificationBanner />
           {children}
         </div>

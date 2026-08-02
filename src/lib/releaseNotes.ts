@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.38.3-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'The "You are viewing the app as …" bar now follows you everywhere. On Messages, Account, Notifications and Announcements it used to vanish, so an admin viewing someone else\'s account had no reminder of it — and no "Return to your account" link to get back. It is now a strip at the top of every screen that stays visible while you scroll.',
+      ],
+      tr: [
+        '"Uygulamayı … olarak görüntülüyorsun" çubuğu artık her ekranda görünüyor. Mesajlar, Hesap, Bildirimler ve Duyurular sayfalarında kayboluyordu; başkasının hesabını görüntüleyen bir yönetici bunu hatırlatan bir uyarıyı da, "Kendi hesabına dön" bağlantısını da göremiyordu. Çubuk artık her ekranın en üstünde ve sayfayı kaydırırken de görünür kalıyor.',
+      ],
+      de: [
+        'Die Leiste „Du siehst die App als …“ erscheint jetzt auf jedem Bildschirm. Unter Nachrichten, Konto, Benachrichtigungen und Ankündigungen verschwand sie bisher — eine Administratorin im Konto einer anderen Person sah weder den Hinweis noch den Link „Zu deinem Konto zurückkehren“. Die Leiste sitzt nun oben auf jedem Bildschirm und bleibt beim Scrollen sichtbar.',
+      ],
+    },
+  },
+  {
     version: '0.38.2-beta',
     date: '2026-08-02',
     highlights: {

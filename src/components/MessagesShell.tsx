@@ -74,12 +74,15 @@ export function MessagesShell({
         they resolve to 0px everywhere else, so desktop is unchanged.
         `max()` rather than a sum: a fixed bottom bar pads itself past the inset
         already (CookieConsent), so subtracting both would leave a gap above it.
+        `--top-banner-inset` is the app-wide banner strip above the frame
+        (impersonation): it sits in normal flow, so the frame has to give back
+        exactly its height or the document overflows the viewport by that much.
         `--visible-viewport-height` (useVisibleViewportHeight) clamps the same thing
         from the other direction — as a max-height, so if both signals report the
         same hidden strip the smaller one simply wins instead of it being subtracted
         twice.
       */}
-      <div className="flex h-[calc(100dvh_-_max(var(--fixed-bottom-inset),env(safe-area-inset-bottom,0px)))] max-h-[var(--visible-viewport-height,100dvh)] flex-col overflow-hidden bg-gray-50 pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] lg:h-auto lg:max-h-none lg:min-h-screen lg:overflow-visible lg:px-0" data-testid="messages-frame">
+      <div className="flex h-[calc(100dvh_-_var(--top-banner-inset,0px)_-_max(var(--fixed-bottom-inset),env(safe-area-inset-bottom,0px)))] max-h-[calc(var(--visible-viewport-height,100dvh)_-_var(--top-banner-inset,0px))] flex-col overflow-hidden bg-gray-50 pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] lg:h-auto lg:max-h-none lg:min-h-screen lg:overflow-visible lg:px-0" data-testid="messages-frame">
         {/* `bg-white/95` is not the `bg-white` globals.css retints, so dark mode
             needs its own surface here. `viewport-fit=cover` also puts the status
             bar inside the viewport, hence the top inset on the header. */}

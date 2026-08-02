@@ -73,7 +73,15 @@ test('admin can impersonate a user and return to their own account', async ({ pa
     });
     expect(started).not.toBeNull();
 
-    // Return to the admin account.
+    // …and on the screens that render their own chrome instead of the app shell:
+    // Messages used to drop the banner entirely, stranding the admin in the
+    // impersonated session with no visible way back.
+    await page.goto('/messages');
+    await expect(page.getByTestId('impersonation-banner')).toBeVisible({ timeout: 10_000 });
+    await page.goto('/account');
+    await expect(page.getByTestId('impersonation-banner')).toBeVisible({ timeout: 10_000 });
+
+    // Return to the admin account — from a shell-less screen, which is the point.
     await page.getByRole('button', { name: /Return to your account/ }).click();
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
     await expect(page.getByText(/viewing the app as/i)).toHaveCount(0);
