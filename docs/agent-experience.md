@@ -1990,3 +1990,41 @@ uygulamayı ayağa kaldırmadan en ucuz kanıt.
 değil — yani PR gate'i yeşil dönmesi o testin **çalıştığı** anlamına gelmiyor; kanıt bir
 sonraki zamanlanmış tam koşuda geliyor. Smoke dışı bir spec'e test eklerken bunu açıkça
 söyle, "CI yeşil" diye kapatma.
+
+## 2026-08-02 — Global durum, sayfa kabuğuna gömülmez (#1034, 0.38.3-beta)
+
+Bildirim: kimlik taklidi bandı ("… olarak görüntülüyorsun / Kendi hesabına dön")
+Mesajlar ekranında yok. Kök neden tek satırdı: bant `ResponsiveShell` içinde
+render ediliyordu, yani yalnızca rol kabuğu olan alanlarda (`/admin`, `/mentor`,
+`/portal`, `/company`, `/source`) vardı. Kendi chrome'unu üreten rotalar
+(`/messages`, `/account`, `/notifications`, `/announcements`) o kabuğu hiç
+kullanmıyor. **Kural:** "her ekranda görünmeli" diyen bir öğe (oturum uyarısı,
+bakım bandı, global hata) sayfa kabuğuna değil `Providers`'a konur; yoksa yeni
+kabuksuz her rota sessizce aynı hatayı tekrar eder. Bir bileşenin nerede
+görüneceğini `grep -rn '<Bileşen'` ile değil, **hangi layout'ların onu içeren
+kabuğu kullandığıyla** ölç.
+
+**Yan etki — `100dvh` çerçeveler üstten eklenen şeridi göremez:** `MessagesShell`
+kendini `calc(100dvh - …)` ile boyutluyor. Belgenin en üstüne akışta duran 61px'lik
+bir şerit koyunca toplam yükseklik viewport'u tam o kadar aşıyor ve composer
+görünmez alana düşüyor. Çözüm mevcut `--fixed-bottom-inset`/#935 kalıbının aynası:
+`useTopBannerInset` şeridin ölçülen yüksekliğini `--top-banner-inset` olarak
+yayınlıyor, çerçeve hem `height` hem `--visible-viewport-height` clamp'inden
+düşüyor. Viewport'a göre boyutlanan bir ekranın üstüne/altına bir şey eklerken
+her zaman bu iki yeri birlikte gözden geçir.
+
+**Doğrulama (bu Mac'te DB yok):** Browser pane, proje dışındaki `file://` sayfaları
+"statik snapshot" olarak açıyor — script çalışmıyor, `javascript_tool`/`resize_window`
+"No site is open in this tab" diyor. Bunun yerine CSS matematiğini birebir kopyalayan
+bir mock HTML yazıp **doğrudan Playwright ile headless** açmak (repoda kurulu,
+`chromium.launch()` sorunsuz) en ucuz kanıt: 375×812'de `banner 61px + frame 751px =
+812px`, `docOverflow=0`, listeyi kaydırınca `banner.top === 0`. Layout/`calc()`
+işlerinde uygulamayı ayağa kaldırmadan gerçek tarayıcı ölçümü alınabiliyor.
+
+**Ortam tuzağı:** `npm run lint`, `.claude/worktrees/<ad>` içinden çalıştırıldığında
+üst repodaki `.eslintrc.json` ile çakışıp `Plugin "@next/next" was conflicted…` ile
+exit 1 veriyor. Kodla ilgisi yok — CI depo kökünden koştuğu için yeşil; worktree'de
+kırmızı lint görürsen önce bunu ele.
+
+**Kapsam notu:** eklenen iddialar `e2e/impersonation.spec.ts` içinde ve bu spec
+`@smoke` değil — PR gate'inde çalışmadılar, kanıt bir sonraki zamanlanmış tam koşuda.
