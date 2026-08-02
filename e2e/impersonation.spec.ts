@@ -129,3 +129,65 @@ test('the account page hides credential + delete cards while impersonating', asy
     await cleanupByEmail(adminEmail);
   }
 });
+
+// #1039 — an impersonating admin must not be able to touch the account holder's
+// second factor (enrolling an authenticator only the admin holds, or stripping
+// the one that protects the owner) or revoke every device they are signed in on.
+test('impersonation cannot change 2FA or sign out the user\'s devices', async ({ page }) => {
+  const adminEmail = uniqueEmail('imp2fa-admin');
+  const menteeEmail = uniqueEmail('imp2fa-mentee');
+  await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'Imp2fa Admin');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123!', 'MENTEE', 'Imp2fa Mentee');
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', adminEmail);
+    await page.fill('input[type="password"]', 'AdminPass123!');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    // Sanity check: on the admin's OWN account page both cards are offered.
+    await page.goto('/account');
+    await expect(page.getByTestId('two-factor-card')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('sessions-card')).toBeVisible();
+
+    await page.goto('/admin/users');
+    const row = page.getByTestId(`user-row-${mentee.id}`);
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.getByRole('button', { name: 'Login as' }).click();
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    await page.goto('/account');
+    await expect(page.getByTestId('impersonation-account-notice')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('two-factor-card')).toHaveCount(0);
+    await expect(page.getByTestId('sessions-card')).toHaveCount(0);
+
+    // The endpoints refuse it too — hiding the cards is not the guard.
+    for (const action of ['setup', 'enable', 'disable']) {
+      const res = await page.request.post('/api/account/2fa', {
+        data: { action, code: '123456' },
+      });
+      expect(res.status(), `2fa ${action} while impersonating`).toBe(400);
+    }
+    const signOut = await page.request.post('/api/account/sign-out-all');
+    expect(signOut.status()).toBe(400);
+
+    // Reading the status stays allowed, and nothing was written to the account:
+    // no pending secret from the rejected `setup`, no session cutoff.
+    expect((await page.request.get('/api/account/2fa')).status()).toBe(200);
+    const after = await prisma.user.findUnique({
+      where: { id: mentee.id },
+      select: { twoFactorEnabled: true, twoFactorSecret: true, sessionsValidFrom: true },
+    });
+    expect(after?.twoFactorEnabled).toBeFalsy();
+    expect(after?.twoFactorSecret).toBeNull();
+    expect(after?.sessionsValidFrom).toBeNull();
+
+    // The impersonation session survived — the admin can still get back out.
+    await expect(page.getByTestId('impersonation-banner')).toBeVisible();
+  } finally {
+    await prisma.auditLog.deleteMany({ where: { targetId: mentee.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});

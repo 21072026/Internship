@@ -8,6 +8,32 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.39.1-beta] - 2026-08-02
+
+### Fixed
+- **Impersonated sessions can no longer change the account holder's second factor**
+  (#1039). `POST /api/account/2fa` had no impersonation guard, so an admin using
+  "Login as" could run `setup`/`enable` — enrolling an authenticator the owner does not
+  hold, which outlives the 30-minute impersonation window — or `disable`, stripping the
+  factor that protects the owner from that same admin. Both were written to the activity
+  log as the *user* (`actorId: session.user.id`), so the audit trail named the wrong
+  person. The route now 400s on POST while `session.user.impersonatorId` is set, matching
+  `/api/account`. GET (read-only status) stays available.
+- **`POST /api/account/sign-out-all` is refused while impersonating** too, for the same
+  reasons plus one of its own: it stamped `sessionsValidFrom` on the impersonated user,
+  which revoked the impersonation session along with the user's, dropping the admin at
+  the sign-in page as if they had been signed out. An admin who needs to lock someone out
+  uses `POST /api/admin/users/[id]/reset-password`, which is audited under their own id.
+
+### Changed
+- The two-factor and sessions cards are hidden on `/account` during impersonation, and
+  the impersonation notice now names all four disabled actions and points at the
+  admin-side password reset. Same treatment the credential/delete cards got in #1036 —
+  a card whose endpoint 400s is a trap, not a feature.
+- `/security-setup` (the org 2FA enforcement gate) redirects home during impersonation
+  instead of rendering an enrolment form the endpoint now refuses. The role layouts
+  already skipped the gate there; only hand-typing the URL could reach it.
+
 ## [0.39.0-beta] - 2026-08-02
 
 ### Added

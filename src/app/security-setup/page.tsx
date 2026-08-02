@@ -18,7 +18,10 @@ export default async function SecuritySetupPage() {
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { twoFactorEnabled: true } });
 
   // Nothing to do here if 2FA isn't required for this role or it's already on.
-  if (me?.twoFactorEnabled || !(await is2faRequiredFor(session.user.role))) {
+  // Nor during impersonation (#1039): the role layouts already skip the gate
+  // there, and `/api/account/2fa` refuses the enrolment behind it — reaching
+  // this page by hand would otherwise present a form that cannot succeed.
+  if (me?.twoFactorEnabled || session.user.impersonatorId || !(await is2faRequiredFor(session.user.role))) {
     redirect(home);
   }
 
