@@ -9,6 +9,7 @@ import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { roleHome } from '@/lib/roleHome';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { UserEraseForm } from '@/components/UserEraseForm';
 import { useT } from '@/i18n/client';
 
 interface AdminUser {
@@ -39,6 +40,11 @@ export default function AdminUsersPage() {
   const [archivedCount, setArchivedCount] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [impersonateError, setImpersonateError] = useState<{ userId: string; message: string } | null>(null);
+  // Row whose erasure panel is open. Deleting an account is an admin action
+  // that belongs here, not inside an impersonated session — /api/account
+  // refuses credential changes and deletion while impersonating, and no admin
+  // knows the account holder's password anyway.
+  const [eraseId, setEraseId] = useState<string | null>(null);
   const PAGE_SIZE = 20;
 
   const loginAs = async (u: AdminUser) => {
@@ -177,7 +183,8 @@ export default function AdminUsersPage() {
         ) : (
           <div className="divide-y divide-gray-50">
             {shown.map((u) => (
-              <div key={u.id} data-testid={`user-row-${u.id}`} className="flex flex-col items-start gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <div key={u.id} className="py-3">
+              <div data-testid={`user-row-${u.id}`} className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <div className="min-w-0 w-full sm:w-auto">
                   {u.role === 'MENTEE' ? (
                     <Link href={`/admin/candidates/${u.id}`} className="text-sm font-medium text-gray-900 hover:text-blue-600 truncate block">
@@ -209,7 +216,33 @@ export default function AdminUsersPage() {
                   >
                     {u.isActive ? t.usersAdmin.deactivate : t.usersAdmin.activate}
                   </Button>
+                  {/* Admin accounts are out of scope (the endpoint refuses them):
+                      demote first, or let the owner delete their own account. */}
+                  {u.role !== 'ADMIN' && u.id !== session?.user?.id && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      data-testid={`erase-user-${u.id}`}
+                      onClick={() => setEraseId(eraseId === u.id ? null : u.id)}
+                    >
+                      {t.usersAdmin.erase}
+                    </Button>
+                  )}
                 </div>
+              </div>
+              {eraseId === u.id && (
+                <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900 p-3">
+                  <UserEraseForm
+                    userId={u.id}
+                    fullName={u.fullName}
+                    // Anonymizing keeps the pipeline history, which only means
+                    // something for a candidate; other roles get delete or nothing.
+                    allowAnonymize={u.role === 'MENTEE'}
+                    onCancel={() => setEraseId(null)}
+                    onDone={() => { setEraseId(null); load(); }}
+                  />
+                </div>
+              )}
               </div>
             ))}
           </div>
