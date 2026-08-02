@@ -1955,3 +1955,38 @@ testi sayfayı sürmeli (giriş → `/mentor/availability` → formu gönder →
 `npx prisma generate` ile sıfırlandı. Bu Mac'te DB yok, o yüzden doğrulama grep'li
 `e2e.yml` dispatch'i ile yapıldı (`-f grep='<test başlığı>'`) — 1 test, ~8 sn, PR
 smoke gate'ini beklemeden fix'i kanıtlıyor.
+
+## 2026-08-02 — Sunucunun saati kullanıcının saati değildir (#1030, 0.38.2-beta)
+
+Bildirim: uygulamada **09:00** görünen toplantının hatırlatma e-postası **07:00** diyor.
+İki ekran görüntüsü tek başına kök nedeni veriyordu: fark tam **2 saat**, yani okuyanın
+ofseti GMT+2 (Europe/Berlin) ve sunucu UTC. Koda bakmadan önce farkı hesapla — hangi iki
+saat diliminin karşı karşıya olduğunu söyler, gerisi doğrulamadır.
+
+Hata `Date.toLocaleString('en-GB', …)`'in **`timeZone` verilmeden** çağrılmasıydı:
+`timeZone` yoksa Node süreç saat dilimini kullanır, container ise UTC. Tarayıcı tarafında
+aynı çağrı doğru çalışıyor (`lib/relativeTime.ts`), çünkü orada süreç saati = kullanıcının
+saati. **Genel kural:** kullanıcının tarayıcı *dışında* okuyacağı her tarih — e-posta,
+DB'ye yazılan bildirim metni, PDF, webhook payload'u — açık bir IANA dilimi taşımalı;
+istemci formatlayıcısını sunucuya kopyalamak sessizce yanlış çıktı üretir.
+
+**Asıl tuzak — alan var, veri yok:** `User.timezone` şemada zaten vardı, ama picker
+yalnızca mentee profil formunda. Mentor ve adminlerde alan hep `null`, yani "alıcının
+dilimini kullan" düzeltmesi tam da şikâyet eden kullanıcı için hiçbir şey değiştirmezdi.
+Bir alanı okumaya başlamadan önce **kimlerde dolu olduğunu** sor; şemada bulunması
+doldurulduğu anlamına gelmiyor. Çözüm: tarayıcı dilimini oturumda bir kez yakalayıp
+**yalnızca boşsa** yazmak (kullanıcının elle seçtiği dilim asla ezilmez).
+
+**Intl ayrıntısı:** `dateStyle`/`timeStyle` ile `timeZoneName` aynı anda verilemez
+(TypeError). Ofset etiketini (`(GMT+2)`) ikinci bir `formatToParts` çağrısından alıp
+metne eklemek gerekiyor.
+
+**DB'siz doğrulama:** `TZ=UTC node --experimental-strip-types` ile `src/lib/timezone.ts`'i
+doğrudan import etmek container davranışını birebir taklit ediyor — rapordaki gerçek anı
+(`2026-08-02T07:00:00Z`) verip Berlin alıcısında `09:00 (GMT+2)` çıktığını görmek, tüm
+uygulamayı ayağa kaldırmadan en ucuz kanıt.
+
+**Kapsam notu:** regresyon testi `e2e/cron-jobs.spec.ts`'e eklendi ve bu spec `@smoke`
+değil — yani PR gate'i yeşil dönmesi o testin **çalıştığı** anlamına gelmiyor; kanıt bir
+sonraki zamanlanmış tam koşuda geliyor. Smoke dışı bir spec'e test eklerken bunu açıkça
+söyle, "CI yeşil" diye kapatma.
