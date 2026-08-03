@@ -8,6 +8,64 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.8-beta] - 2026-08-03
+
+### Added
+- **A notes window that floats above everything** (#1057). `openFloatingWindow`
+  (`src/lib/floatingWindow.ts`) opens a Document Picture-in-Picture window — the only web
+  API that gives an always-on-top window with a real DOM — and falls back to a plain popup
+  where it is missing (Safari, Firefox, mobile). Rendered through a React portal, so it is
+  ordinary UI code in the opener's context. Autosaves 2s after typing stops, flushes on
+  close (a debounce that never fired would lose the last sentence), and mirrors every
+  keystroke into `localStorage` so a failed request can't take the notes with it. The
+  fallback says out loud that it can't stay on top; a blocked popup says so too.
+- **`PersonalNote.meetingId`** (#1056) — a note taken in a meeting now knows which one, and
+  `GET /api/notes?meetingId=` reads them back. `onDelete: SetNull`, not Cascade: deleting the
+  meeting must not delete what was written in it. A note created with a `meetingId` defaults
+  to the `MEETING` category without anyone selecting it, and `NotesPanel` shows the room's
+  name on the note.
+- `e2e/meeting-notes.spec.ts` — the note↔meeting link surviving the meeting's deletion, both
+  window branches (each *forced*, see below), and a popup-fallback window that really saves.
+
+### Security
+- Attaching a note to a meeting is authorized server-side (`src/lib/noteMeeting.ts`): the
+  author must have been in the room — organizer, either side of the relation, project member,
+  or chat participant (admins too). The note itself is private, but the id is a foreign key
+  into someone else's meeting, and `?meetingId=` would otherwise confirm it exists. `PATCH`
+  is guarded identically — re-pointing a note at a meeting you weren't in is a probe, not an
+  edit.
+
+### Note for future test-writers
+- **Headless Chromium *does* expose `documentPictureInPicture`.** A test that just asserts the
+  fallback would silently exercise the PiP branch and prove nothing about Safari/Firefox
+  users. Both branches are therefore forced with `addInitScript` — one deletes the API, the
+  other stubs `requestWindow`. The genuine always-on-top behaviour can't be asserted
+  headlessly and is verified by hand.
+
+## [0.40.7-beta] - 2026-08-03
+
+### Added
+- **Start a meeting for a whole project team** (#1055). A button next to the recurring rule
+  on the project page — the two sit together but are different things: one books a weekly
+  slot, the other opens a room now. Visible to admins and OWNER/MENTOR members, mirroring
+  the server rule in `resolveMeetingContext`; mentee members join a call, they don't summon
+  one. `ProjectWeeklyMeeting` no longer hides itself when there is no series but the viewer
+  may still start a call.
+- **Start a meeting from a group chat, and the link lands in the chat** (#1055). Button in
+  the thread header (and its own row on a phone, where that header is hidden). The
+  conversation branch of `/api/meetings/instant` now also posts the room into the thread, as
+  the organizer rather than a faceless system row — `Message` has no system flag, and "who
+  called us in" is worth knowing. Any participant may start one; a non-participant gets 403
+  and no message is written.
+- `e2e/instant-meeting-team.spec.ts` — team call by an owner (incl. the member's in-app
+  notification), a mentee member refused, a chat call landing in the thread, and an outsider
+  refused with nothing posted.
+
+### Note
+- Only *conversation* threads get the button. The legacy relation thread is left out: its
+  mentee would be refused server-side anyway (relations are mentor-scoped), and a button
+  that always fails is worse than no button. Mentors reach 1:1 calls from the mentee card.
+
 ## [0.40.6-beta] - 2026-08-03
 
 ### Added

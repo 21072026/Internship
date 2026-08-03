@@ -8,6 +8,7 @@ import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
 import { TimezoneSync } from '@/components/TimezoneSync';
 import { MeetingLauncherProvider } from '@/components/meeting/MeetingLauncher';
+import { FloatingNotesProvider } from '@/components/meeting/FloatingNotes';
 import type { Locale } from '@/i18n/config';
 import type { ClientDictionary } from '@/i18n/dictionaries';
 
@@ -30,7 +31,9 @@ export function Providers({
           <ImpersonationBanner />
           {/* Above the page shells on purpose: a call in progress has to survive
               navigating from the mentee list to their profile (#1054). */}
-          <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
+          <FloatingNotesProvider>
+            <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
+          </FloatingNotesProvider>
           <CookieConsent />
           <ActivityTracker />
           <TimezoneSync />

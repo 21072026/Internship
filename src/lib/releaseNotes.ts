@@ -13,6 +13,48 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.8-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'A small notes window you can open from your notes page. On Chrome and Edge it stays on top of everything — even other apps — so you can write during a call without hunting for the right tab. Other browsers get the same window, just not pinned on top, and it tells you so.',
+        'It saves itself while you type, saves again when you close it, and keeps a copy on your device in case a save fails — so notes do not get lost.',
+        'Notes taken during a meeting now remember which meeting they belong to, and show its name. Deleting the meeting never deletes the notes.',
+      ],
+      tr: [
+        'Notlar sayfandan açabileceğin küçük bir not penceresi. Chrome ve Edge\'de her şeyin — diğer uygulamaların bile — üstünde duruyor; görüşme sırasında doğru sekmeyi aramadan yazabiliyorsun. Diğer tarayıcılarda aynı pencere açılıyor, sadece üstte sabitlenmiyor ve bunu sana söylüyor.',
+        'Sen yazarken kendini kaydediyor, kapatırken bir daha kaydediyor ve kayıt başarısız olursa bir kopyayı cihazında tutuyor — notlar kaybolmuyor.',
+        'Görüşme sırasında alınan notlar artık hangi görüşmeye ait olduklarını hatırlıyor ve adını gösteriyor. Görüşmeyi silmek notları asla silmiyor.',
+      ],
+      de: [
+        'Ein kleines Notizfenster, das du auf deiner Notizseite öffnen kannst. In Chrome und Edge bleibt es über allem — auch über anderen Programmen — sodass du während eines Gesprächs schreiben kannst, ohne den richtigen Tab zu suchen. Andere Browser bekommen dasselbe Fenster, nur nicht im Vordergrund fixiert, und sagen dir das auch.',
+        'Es speichert sich beim Tippen, speichert beim Schließen noch einmal und behält eine Kopie auf deinem Gerät, falls das Speichern fehlschlägt — so gehen Notizen nicht verloren.',
+        'Während einer Besprechung erfasste Notizen merken sich jetzt, zu welcher sie gehören, und zeigen deren Namen. Das Löschen der Besprechung löscht die Notizen nie mit.',
+      ],
+    },
+  },
+  {
+    version: '0.40.7-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'The same one-click meeting now works for a whole project team: a button on the project page, next to the weekly meeting. Everyone on the team gets the link — you no longer invite people one at a time.',
+        'And from a group chat: start a call and the link is posted straight into the conversation, so anyone reading the thread can just tap it.',
+        'Who may start one follows who runs the space: project owners and mentors for a team call, and any participant of a chat for a chat call.',
+      ],
+      tr: [
+        'Aynı tek tıklık görüşme artık bütün bir proje ekibi için de var: proje sayfasında, haftalık toplantının yanında bir buton. Link ekipteki herkese gidiyor — kişileri tek tek davet etmene gerek kalmıyor.',
+        'Grup sohbetinden de olur: görüşmeyi başlat, link doğrudan konuşmaya düşsün; sohbeti okuyan herkes tıklayıp katılsın.',
+        'Kimin başlatabileceği, o alanı kimin yürüttüğüne göre: ekip görüşmesini proje sahipleri ve mentörler, sohbet görüşmesini o sohbetteki herkes başlatabiliyor.',
+      ],
+      de: [
+        'Dieselbe Ein-Klick-Besprechung gibt es jetzt für ein ganzes Projektteam: eine Schaltfläche auf der Projektseite, neben der wöchentlichen Besprechung. Alle im Team bekommen den Link — niemand muss mehr einzeln eingeladen werden.',
+        'Und aus einem Gruppenchat heraus: Besprechung starten, und der Link landet direkt im Gespräch, sodass alle Mitlesenden einfach darauf tippen können.',
+        'Wer starten darf, richtet sich danach, wer den Raum führt: Projekt-Eigentümer und Mentoren für einen Teamanruf, und jede teilnehmende Person eines Chats für einen Chat-Anruf.',
+      ],
+    },
+  },
+  {
     version: '0.40.6-beta',
     date: '2026-08-03',
     highlights: {
