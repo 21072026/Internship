@@ -2377,3 +2377,69 @@ runner'ı için `executablePath` override'ı ayrı bir config dosyasına yazıl�
 **repo kökünde** olmalı — `playwright.config.ts` içindeki `globalSetup: './e2e/global-setup.ts'`
 gibi göreli yollar config'in bulunduğu dizine göre çözülüyor, scratchpad'e koyunca
 `MODULE_NOT_FOUND` veriyor. Commit'ten önce silmeyi unutma.
+
+## 2026-08-03 — Anlık görüşme + yüzen not penceresi paketi (#1051–#1059, 0.40.5→0.40.9-beta)
+
+Beş PR'lık bir zincir (şema → endpoint → butonlar/yan panel → proje & sohbet → not penceresi
+→ nottan işe). Çıkan dersler, sırayla en pahalıya mal olanlar:
+
+**`git checkout -B <dal> origin/main` upstream'i `origin/main` yapar.** Squash-merge edilmiş
+bir PR'ın üstüne yeni dal kurarken bunu kullandım; sonrasındaki düz `git push` **dalıma
+değil main'e** gitmeye çalıştı. Main korumalı olduğu için reddedildi (yoksa doğrudan main'e
+commit'lerdim), ama asıl zarar sessizdi: dalın uzaktaki hâli **eski commit'te kaldı**, PR o
+eski commit'le açıldı ve **hiç CI tetiklenmedi**. "PR'da 0 check var" gördüğünde önce
+`git status -sb` ile upstream'e bak; `-B` sonrası her zaman
+`git push origin <dal>:<dal>` yaz ya da `--set-upstream-to`'yu düzelt.
+
+**Squash-merge edilen bir PR'ın üstündeki dalı `rebase` etme, `cherry-pick`'le yeniden kur.**
+Zincirdeki her PR bir öncekinin dalından çıkıyordu; üsttekiler squash'lanınca
+`git rebase origin/main` her seferinde aynı içeriği "AA" çakışmasıyla getirdi. Doğrusu:
+`git checkout -B <dal> origin/main && git cherry-pick <kendi commit'im>`.
+
+**Headless Chromium `documentPictureInPicture`'ı SUNUYOR.** "Tarayıcı desteklemiyor, o yüzden
+fallback'i test ederim" varsayımı yanlış — o test sessizce **PiP dalını** çalıştırır ve
+Safari/Firefox hakkında hiçbir şey kanıtlamaz. İki dalı da `context.addInitScript` ile zorla:
+biri `delete window.documentPictureInPicture`, diğeri `requestWindow`'u `window.open` ile
+stub'lar. Gerçek "her şeyin üstünde durma" davranışı headless doğrulanamıyor; elle bakıldı.
+
+**Transient user activation, `await`'ten sonra tükenmiş sayılır.** `documentPictureInPicture
+.requestWindow()` ve `window.open()` canlı bir kullanıcı jesti istiyor. "Görüşme başlat"
+akışında pencereyi `await fetch(...)`'ten **sonra** açmak sessiz bir başarısızlık — hata yok,
+pencere de yok. Sıra: tıklama handler'ının senkron başında pencereyi aç, fetch'i paralel
+yürüt, oda dönünce pencereye iliştir. Yanıt hatalıysa pencereyi kapat, yoksa hiçbir şeye ait
+olmayan boş bir pencere ekranda yüzer.
+
+**"Gezinmeye rağmen ayakta kalıyor" iki ayrı iddiadır.** Paneli sayfa kabuklarının üstüne
+(`Providers`) mount etmek **client-side** gezinmeyi çözer; `page.goto()` ise tam belge
+yüklemesidir ve React state'ini siler. Smoke testi bunu ilk turda yakaladı — düzeltmesi
+`sessionStorage`'a yazıp mount sonrası geri okumak (render sırasında değil: hidrasyon kırılır).
+`localStorage` değil `sessionStorage`: oda bu sekmeye ait, yarın açılan sekmeye musallat
+olmamalı.
+
+**CSP ve `Permissions-Policy`, gömülü görüşmeyi iki ayrı şekilde öldürüyordu.**
+`camera=(), microphone=()` **kendi frame'imiz dahil** her şeyi kapatıyor; CSP'de `frame-src`
+yoksa `default-src 'self'` iframe'i tamamen bloke ediyor. İkisini de tek host'a daralt ve
+allowlist'i kodda aynala (`EMBEDDABLE_MEETING_HOSTS`) — birini genişletip diğerini unutmak ya
+boş kutu ya görüntüsüz görüşme demek. Header'ları `curl -sI` ile gerçek yanıtta doğrula.
+
+**Client bileşeninin kullanacağı yardımcıyı Prisma'lı modülden ayır.** `isEmbeddableMeetingLink`
+başta `meetingContext.ts` içindeydi; oradan import etmek Prisma'yı (ve `node:crypto`'yu)
+tarayıcı paketine sürüklerdi. Import'suz ayrı bir `meetingLink.ts` doğru yer.
+
+**`ProjectMember` bir `TENANT_MODEL` değil, `Project` öyle.** Üyeleri doğrudan sorgulamak
+kiracılar arası okuma demek. Önce `prisma.project.findUnique` (org-scoped), sonra üyelik.
+
+**Nullable'a çevrilen bir kolon, onu deref eden her yeri kırar — ama `tsc` hepsini gösterir.**
+`Meeting.relationId`'yi nullable yapmak yalnızca 3 hata verdi; asıl iş, mevcut endpoint'lerin
+**şeklini korumaktı**: `GET /api/meetings`, `/api/calendar-events` ve hatırlatma cron'u
+`relationId: { not: null }` ile süzülerek birebir aynı davranışta bırakıldı.
+
+**Yerel MariaDB'de `root` sudo istiyor, ama oturum kullanıcısı unix_socket ile giriyor.**
+`mysql -u <kullanıcı>` çalışıyor; oradan TCP parolalı bir kullanıcı açıp
+(`CREATE USER 'e2e'@'127.0.0.1'`) Prisma'yı ona bağlamak, sudo beklemeden yerel e2e koşmanın
+en hızlı yolu. Bir kere kurunca **her PR'ı push'lamadan önce yerelde koşabildim** — bu paket
+için CI'a giden tek kırmızı, bu kurulumdan *önceki* PR'dı.
+
+**Dev sunucusu eski Prisma client'ıyla kalır.** `prisma generate` sonrası `next dev`'i
+yeniden başlatmazsan yeni kolona yazan endpoint 500 döner ve hata testin değil sunucunun
+olur. Şema değişince sunucuyu yeniden başlat.
