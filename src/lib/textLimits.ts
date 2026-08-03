@@ -49,6 +49,10 @@ export const TEXT_LIMITS = {
   supportMessageBody: 5000,
   /** User.bio — @db.Text */
   bio: 2000,
+  /** MentorApplication.experience — @db.Text */
+  mentorApplicationExperience: 2000,
+  /** MentorApplication.motivation — @db.Text */
+  mentorApplicationMotivation: 2000,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;
