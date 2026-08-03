@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Copy, Check } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { wallClockToInstantISO } from '@/lib/timezone';
 
 interface Relation {
   id: string;
@@ -42,7 +43,11 @@ export function MeetingsManager() {
   // Time is optional. With a date the meeting has a time (defaulting to
   // midnight if no clock time) and expects an RSVP; with no date it's a
   // no-time meeting (just a link, no RSVP).
-  const scheduledAt = date ? `${date}T${time || '00:00'}` : '';
+  //
+  // Sent as a zone-qualified instant, not the bare "2026-08-03T16:30" the inputs
+  // produce: the server runs UTC and would have read that wall clock as UTC,
+  // pushing the meeting forward by the organizer's offset (#1061).
+  const scheduledAt = date ? wallClockToInstantISO(date, time || '00:00') : '';
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);

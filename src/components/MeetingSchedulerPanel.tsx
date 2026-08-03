@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Copy, Check, Video } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { wallClockToInstantISO } from '@/lib/timezone';
 
 interface Meeting {
   id: string;
@@ -31,8 +32,8 @@ export function MeetingSchedulerPanel({ relationId }: { relationId: string }) {
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // Time optional: a date gives the meeting a time (+ RSVP); no date → no-time
-  // meeting (just a link).
-  const scheduledAt = date ? `${date}T${time || '00:00'}` : '';
+  // meeting (just a link). Sent zone-qualified — see MeetingsManager (#1061).
+  const scheduledAt = date ? wallClockToInstantISO(date, time || '00:00') : '';
 
   const load = useCallback(async () => {
     const r = await fetch('/api/meetings');
