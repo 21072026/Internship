@@ -40,7 +40,14 @@ test('mentee card starts a meeting in one click and opens the side panel', { tag
     expect(meeting?.scheduledAt).toBeNull();
 
     // The panel outlives navigation — a call must not drop when the mentor
-    // walks over to the mentee's profile.
+    // walks over to their dashboard. Checked twice on purpose: client-side
+    // navigation is covered by mounting above the page shells, a full document
+    // load only by the sessionStorage restore.
+    // Targeted by href, not by label — the sidebar text is translated.
+    await page.locator('a[href="/mentor"]').first().click();
+    await expect(page).toHaveURL(/\/mentor$/);
+    await expect(page.getByTestId('meeting-side-panel')).toBeVisible();
+
     await page.goto('/mentor');
     await expect(page.getByTestId('meeting-side-panel')).toBeVisible();
 

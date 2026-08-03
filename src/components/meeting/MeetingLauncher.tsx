@@ -34,6 +34,34 @@ interface ActiveMeeting {
 
 const LauncherContext = createContext<((opts: StartOptions) => void) | null>(null);
 
+// Mounting above the page shells keeps the panel alive across client-side
+// navigation, but a full page load (an external link back into the app, a
+// refresh, a hard nav) still rebuilds the tree — and dropping a call in progress
+// because someone reloaded is not acceptable. sessionStorage, not localStorage:
+// the room belongs to this tab and should not haunt a new one tomorrow.
+const ACTIVE_KEY = 'active-meeting';
+
+function readActive(): ActiveMeeting | null {
+  try {
+    const raw = sessionStorage.getItem(ACTIVE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ActiveMeeting>;
+    if (!parsed?.meetingId || !parsed?.meetLink) return null;
+    return { meetingId: parsed.meetingId, meetLink: parsed.meetLink, title: parsed.title ?? '' };
+  } catch {
+    return null;
+  }
+}
+
+function writeActive(meeting: ActiveMeeting | null) {
+  try {
+    if (meeting) sessionStorage.setItem(ACTIVE_KEY, JSON.stringify(meeting));
+    else sessionStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    /* private mode / storage disabled — the panel just won't survive a reload */
+  }
+}
+
 export function useMeetingLauncher() {
   const start = useContext(LauncherContext);
   if (!start) throw new Error('useMeetingLauncher must be used inside MeetingLauncherProvider');
@@ -60,6 +88,18 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
     if (pending) inputRef.current?.focus();
   }, [pending]);
 
+  // After mount, never during render: reading storage while rendering would
+  // make the server and client markup disagree.
+  useEffect(() => {
+    const restored = readActive();
+    if (restored) setActive(restored);
+  }, []);
+
+  const openPanel = useCallback((meeting: ActiveMeeting | null) => {
+    setActive(meeting);
+    writeActive(meeting);
+  }, []);
+
   const confirm = async () => {
     if (!pending || busy) return;
     const trimmed = title.trim();
@@ -81,7 +121,7 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
       }
       const data: { meetingId: string; meetLink: string; invited: number } = await res.json();
       setPending(null);
-      setActive({ meetingId: data.meetingId, meetLink: data.meetLink, title: trimmed });
+      openPanel({ meetingId: data.meetingId, meetLink: data.meetLink, title: trimmed });
       // Copying is best-effort: the link is on screen either way, and a blocked
       // clipboard must not read as "the meeting failed".
       try {
@@ -149,7 +189,7 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {active && <MeetingSidePanel meeting={active} onClose={() => setActive(null)} />}
+      {active && <MeetingSidePanel meeting={active} onClose={() => openPanel(null)} />}
     </LauncherContext.Provider>
   );
 }
