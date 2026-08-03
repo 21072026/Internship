@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.3-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Maintenance only: the new "who referred them" and project member pickers made three automated tests ambiguous, because an option in a dropdown is text like any other. Nothing changed on screen.',
+      ],
+      tr: [
+        'Yalnızca bakım: yeni "getiren kişi" ve proje üye seçicileri, üç otomatik testi belirsiz hale getirmişti — açılır listedeki bir seçenek de sonuçta metin. Ekranda değişen bir şey yok.',
+      ],
+      de: [
+        'Nur Wartung: Die neuen Auswahlfelder „wer hat sie geworben“ und für Projektmitglieder machten drei automatisierte Tests mehrdeutig — eine Option in einem Dropdown ist auch nur Text. Auf dem Bildschirm ändert sich nichts.',
+      ],
+    },
+  },
+  {
     version: '0.40.2-beta',
     date: '2026-08-02',
     highlights: {

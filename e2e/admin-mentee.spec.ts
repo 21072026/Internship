@@ -28,7 +28,9 @@ test('admin can open a mentee detail page with profile + mentorship', async ({ p
     await page.goto(`/admin/candidates/${mentee.id}`);
     await expect(page.getByRole('heading', { name: 'Detail Mentee' })).toBeVisible();
     await expect(page.getByText('Köln')).toBeVisible();
-    await expect(page.getByText('Detail Mentor')).toBeVisible();
+    // Scoped to the mentorship card: the page also carries a "who referred them"
+    // picker whose <option> list contains every mentor's name (#51).
+    await expect(page.getByTestId('mentorship-mentor')).toHaveText('Detail Mentor');
     await expect(page.getByText('450 · Internship in progress').first()).toBeVisible();
   } finally {
     await cleanupByEmail(mentorEmail);

@@ -339,6 +339,7 @@ export default function AdminMenteeDetailPage() {
                 can be the source; invite/referral links set it automatically. */}
             <Select
               label={t.referral.sourcePerson}
+              data-testid="referred-by-select"
               disabled={saving}
               value={user.referredById ?? ''}
               onChange={(e) => changeReferredBy(e.target.value)}
@@ -359,13 +360,14 @@ export default function AdminMenteeDetailPage() {
           ) : (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                <div><span className="text-gray-500">{t.candidateDetail.mentor}:</span> <span className="font-medium">{rel.mentor.fullName}</span></div>
+                <div><span className="text-gray-500">{t.candidateDetail.mentor}:</span> <span className="font-medium" data-testid="mentorship-mentor">{rel.mentor.fullName}</span></div>
                 {rel.company && <div><span className="text-gray-500">{t.candidateDetail.company}:</span> <span className="font-medium">{rel.company.name}</span></div>}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg">
                 <Select
                   label={t.candidateDetail.stage}
+                  data-testid="stage-select"
                   options={stages.map((s) => ({ value: s.key, label: s.label }))}
                   value={rel.pipelineStatus}
                   disabled={saving}

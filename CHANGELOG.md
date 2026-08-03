@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.3-beta] - 2026-08-03
+
+### Fixed
+- **Three scheduled full-suite failures caused by the new selects** (#51 follow-up). The
+  candidate page gained a "who referred them" picker and the project page gained the member
+  pickers, and an `<option>` is text like any other: `getByText('Detail Mentor')` and
+  `getByTestId('project-internal').getByText('Detail Member')` became strict-mode violations,
+  while `locator('select').first()` on the candidate page stopped resolving to the stage
+  dropdown (the profile card above it now has a select of its own). Fixed at the source
+  rather than in the assertions alone — `data-testid="stage-select"`,
+  `data-testid="referred-by-select"` and `data-testid="mentorship-mentor"` on the candidate
+  page — and the three specs target those (the project one scopes to `project-team`).
+
 ## [0.40.2-beta] - 2026-08-02
 
 ### Fixed
