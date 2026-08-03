@@ -8,6 +8,33 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.5-beta] - 2026-08-03
+
+### Added
+- **`POST /api/meetings/instant` — start a meeting now and get the room back in the
+  response** (#1052). `POST /api/meetings` answers `{ created }`, so a UI that wants to
+  show or open the link has to re-fetch the list; that round trip is what makes "call this
+  person" feel slow. The new endpoint always creates a time-less room (no RSVP, no
+  reminder) and returns `{ meetingId, meetLink, invited }`. Invitees get an in-app
+  notification unconditionally and an email when `emailAllowed(user, 'meetingReminders')`.
+  Rate-limited to 10/min per IP — each call fans out invitations. The existing
+  `POST /api/meetings` contract is untouched.
+- **`Meeting` can hang off a project or a conversation, not only a mentorship** (#1051).
+  `relationId` is now nullable and joined by `projectId` / `conversationId`. MySQL can't
+  express "exactly one of three" as a CHECK, so the rule and the membership authorization
+  live in `src/lib/meetingContext.ts` (`resolveMeetingContext`) and every write path goes
+  through it: project meetings need an OWNER/MENTOR membership (or admin), conversation
+  meetings need participation, relation meetings keep the mentor-scoped rule. The project
+  lookup goes through `prisma.project` first because `Project` is a `TENANT_MODEL` and
+  `ProjectMember` is not — querying members directly would reach across tenants.
+
+### Changed
+- Jitsi room generation moved out of the route into `generateMeetingLink()` so the two
+  endpoints can't drift; `isEmbeddableMeetingLink()` joins it for the upcoming side panel.
+- `GET /api/meetings`, `/api/calendar-events` and the meeting-reminder cron now filter on
+  `relationId: { not: null }`, keeping their shape and behaviour identical now that the
+  column is nullable.
+
 ## [0.40.4-beta] - 2026-08-03
 
 ### Fixed
