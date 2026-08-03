@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.5-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Groundwork for starting a meeting on the spot: the server can now open a room and hand back the link in one step, instead of making the page look it up afterwards. A meeting can also belong to a whole project or a group chat, not just to one mentorship. Nothing new on screen yet — the buttons come next.',
+      ],
+      tr: [
+        'Anında görüşme başlatmanın altyapısı: sunucu artık odayı açıp linki tek adımda geri veriyor, sayfanın sonradan aramasına gerek kalmıyor. Bir görüşme artık tek bir mentorluğa değil, bütün bir projeye ya da grup sohbetine de ait olabiliyor. Ekranda henüz yeni bir şey yok — butonlar sırada.',
+      ],
+      de: [
+        'Grundlage für das sofortige Starten einer Besprechung: Der Server öffnet den Raum jetzt und gibt den Link in einem Schritt zurück, statt die Seite ihn nachträglich suchen zu lassen. Eine Besprechung kann außerdem zu einem ganzen Projekt oder einem Gruppenchat gehören, nicht nur zu einer Mentorschaft. Auf dem Bildschirm ist noch nichts Neues zu sehen — die Schaltflächen folgen.',
+      ],
+    },
+  },
+  {
     version: '0.40.4-beta',
     date: '2026-08-03',
     highlights: {
