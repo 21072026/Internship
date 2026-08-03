@@ -8,6 +8,35 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.4-beta] - 2026-08-03
+
+### Fixed
+- **Scheduled meetings landed at the wrong time for any organizer outside UTC** (#1061).
+  The scheduler's split Date + Time inputs produce a bare wall clock
+  (`"2026-08-03T16:30"`) with no zone, and it was POSTed as-is and read with
+  `new Date()` on a server that runs UTC — so the string was taken to mean 16:30 **UTC**.
+  An organizer in Germany (CEST, GMT+2) who picked 16:30 got a meeting stored at
+  `16:30Z`, which the app and the reminder email then correctly rendered in their zone
+  as **18:30**: every meeting silently jumped forward by the organizer's offset, and the
+  invitees were told the wrong time. Fixed on both sides — `MeetingsManager` and
+  `MeetingSchedulerPanel` now send a zone-qualified instant built from the viewer's own
+  clock (`wallClockToInstantISO`), and `/api/meetings` + `/api/meeting-requests` no longer
+  hand a bare wall clock to `new Date()`: `parseUserDateTime` anchors it to the
+  organizer's saved `User.timezone` (→ `APP_TIMEZONE` → Europe/Istanbul), so API clients
+  and browsers on a cached bundle are covered too. New `parseWallClockInZone` resolves the
+  offset through `Intl`, iteratively, so DST is handled per date rather than assumed.
+- As a side effect, **date-only meetings** (no clock time) are now stored at local midnight
+  instead of UTC midnight, so they no longer show up on the previous day on the calendar for
+  viewers west of UTC.
+- Note: `Meeting` rows created *before* this fix keep their shifted `scheduledAt` — there is
+  no reschedule/cancel path to correct them in place, and a blanket backfill can't tell a
+  form-created row from a correctly-stored one (series occurrences and accepted meeting
+  requests always were correct).
+
+### Added
+- `e2e/meeting-timezone.spec.ts` — schedules 16:30 in a `Europe/Berlin` browser and asserts
+  the **stored instant** is `14:30Z`. Verified to fail (`16:30Z`) against the pre-fix code.
+
 ## [0.40.3-beta] - 2026-08-03
 
 ### Fixed

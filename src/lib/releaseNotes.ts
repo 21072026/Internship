@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.4-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Important fix: a meeting you scheduled was saved at the wrong time unless your clock happened to match UTC. Picking 16:30 in Germany created an 18:30 meeting — the time jumped forward by your own time-zone offset, and that wrong time is what the invitation and the reminder email told everyone. The time you pick is now the time that gets saved, wherever you are, summer time included.',
+        'Meetings you give a date but no time to now sit on that date on the calendar for everyone, instead of slipping to the day before for anyone west of London.',
+        'Meetings created before this fix keep their shifted time — please check any upcoming meeting you scheduled earlier and set it up again if the time is off.',
+      ],
+      tr: [
+        'Önemli düzeltme: planladığın toplantı, saatin UTC ile aynı olmadığı her durumda yanlış saatte kaydediliyordu. Almanya\'da 16:30 seçmek 18:30\'luk bir toplantı oluşturuyordu — saat kendi saat dilimi farkın kadar ileri kayıyordu ve davet ile hatırlatma e-postası herkese bu yanlış saati söylüyordu. Artık seçtiğin saat, nerede olursan ol (yaz saati dahil) kaydedilen saat.',
+        'Tarih verip saat vermediğin toplantılar artık takvimde herkes için o tarihte duruyor; Londra\'nın batısındakiler için bir gün öncesine kaymıyor.',
+        'Bu düzeltmeden önce oluşturulan toplantıların saati kayık kalıyor — daha önce planladığın yaklaşan toplantıları kontrol et ve saati yanlışsa yeniden oluştur.',
+      ],
+      de: [
+        'Wichtige Korrektur: Ein von dir geplantes Meeting wurde zur falschen Zeit gespeichert, sofern deine Uhr nicht ohnehin UTC entsprach. Wer in Deutschland 16:30 wählte, bekam ein Meeting um 18:30 — die Zeit sprang um deinen eigenen Zeitzonen-Versatz nach vorn, und genau diese falsche Zeit stand in der Einladung und in der Erinnerungs-E-Mail. Jetzt wird die Zeit gespeichert, die du auswählst — überall, Sommerzeit inklusive.',
+        'Meetings mit Datum, aber ohne Uhrzeit liegen im Kalender nun für alle an diesem Datum, statt für alle westlich von London auf den Vortag zu rutschen.',
+        'Vor dieser Korrektur erstellte Meetings behalten ihre verschobene Zeit — prüfe bitte deine bereits geplanten kommenden Meetings und lege sie bei falscher Zeit neu an.',
+      ],
+    },
+  },
+  {
     version: '0.40.3-beta',
     date: '2026-08-03',
     highlights: {

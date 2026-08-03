@@ -2311,3 +2311,69 @@ Kullanılan zincir: `gh workflow run e2e.yml --ref <branch> -f grep='<8 testi ka
 yine de yeşil raporlardı — sessiz yanlış pozitif) → merge'den önce `e2e-full.yml` branch'te.
 `npx playwright test --list --grep '<regex>'` lokalde regex'i bedavaya doğruluyor; dispatch
 etmeden önce onu koştur.
+
+## 2026-08-03 — Aynı hatanın diğer yarısı: *giriş* yönü (#1061, 0.40.4-beta)
+
+#1030 (bir gün önce, hemen yukarıda) tarih/saatin **çıkış** yönünü düzeltmişti: sunucuda
+`timeZone` vermeden formatlamak. Bugün gelen bildirim neredeyse aynı görünüyordu — "16:30
+seçtim, 18:30 oldu", yine tam **2 saat**, yine Berlin/UTC — ama kök neden **karşı yönde**
+idi: bu kez format değil, **parse**.
+
+**Ayırt edici soru: yanlış olan gösterim mi, saklanan veri mi?** #1030'da DB doğruydu,
+e-posta yanlış render ediyordu. Burada e-posta *doğru* render ediyordu ("18:30 (GMT+2)" —
+saklanan an gerçekten 18:30 Berlin'di); bozuk olan `scheduledAt`'in kendisiydi. Ekran
+görüntülerinden bunu ayırmanın yolu: **ilan edilen ofset etiketiyle** tutarlı mı? "18:30
+(GMT+2)" iç tutarlı bir cümle, dolayısıyla formatlayıcı suçlu değil. Tutarlıysa yukarı,
+yazma yoluna bak.
+
+**Kural:** `<input type="date">` + `<input type="time">` (ve `datetime-local`) **saat dilimi
+taşımayan** bir duvar saati üretir (`"2026-08-03T16:30"`). ECMAScript'e göre belirteçsiz bir
+tarih-saat dizesi **çalışma zamanının yerel diliminde** yorumlanır — tarayıcıda kullanıcının
+dilimi, sunucuda ise UTC. Yani aynı dize iki uçta **iki farklı an** demek. Bu dize asla ham
+hâlde POST edilmemeli; `new Date(bareString)` sunucuda her zaman bir hatadır.
+
+**Neden hem istemci hem sunucu düzeltildi:** istemci tarafı yetkili çözüm (kullanıcının
+dilimini yalnızca tarayıcı bilir), ama sunucu tarafı `new Date()` çağrısı bırakılırsa
+önbellekteki eski paketle gelen tarayıcı ve API tüketicileri hatayı yaşamaya devam eder.
+Sunucuda "diliminden emin değilsen" fallback'i organizatörün `User.timezone`'u → `APP_TIMEZONE`
+→ Europe/Istanbul; UTC varsaymaktan her koşulda daha iyi (ama #1030'un tuzağı burada da
+geçerli: bu alan mentor/adminlerde boş olabilir, o yüzden istemci düzeltmesi asıl olan).
+
+**IANA duvar saati → an dönüşümü, kütüphanesiz:** aradığın ofset, çözmeye çalıştığın anın
+kendisine bağlıdır (DST). Yineleyerek çöz — duvar saatini UTC varsay, oradaki ofsetle
+düzelt, bir kez daha düzelt. İki geçiş, ofseti ~1 saatten az kayan her dilim için tam
+sonuç veriyor. Ofseti `Intl.DateTimeFormat(...).formatToParts` ile geri okumak, kendi ofset
+tablonu tutmaktan iyidir. `hour12: false` bazı ICU sürümlerinde gece yarısını **"24"**
+döndürür — `% 24` şart.
+
+**Regex tuzağı — "saat dilimi belirteci var mı":** naif `/(?:Z|[+-]\d{2}:?\d{2})$/` deseni
+yalnızca-tarih olan `"2026-08-03"`'ü de **eşleştirir** (`-08-03` bir "-08:03" ofseti gibi
+okunur) ve dizeyi "zaten dilimli" sayıp UTC gece yarısına çevirir. Belirteci **bir saatin
+ardından** aramak gerekiyor; `.000Z` için kesirli saniyeyi de kapsa.
+
+**Düzeltmenin gerçekten çalıştığını kanıtlama — testi eski kodda kırmızı gör.** Yeni e2e
+`git stash push -- src/` ile düzeltme geri alınıp koşuldu: `Received: 16:30Z` (bildirilen
+hatanın tam kendisi), düzeltmeyle `14:30Z`. Yeşil bir test tek başına hiçbir şey kanıtlamaz;
+Playwright'ta `test.use({ timezoneId: 'Europe/Berlin' })` bu tür hataları görünür kılan tek
+satırdır — **UTC tarayıcıda bu hata görünmez**, yani varsayılan dilimle yazılmış bir test
+sessizce yeşil kalırdı. Ayrıca iddia **saklanan anı** (`prisma.meeting.findFirst` →
+`scheduledAt.toISOString()`) kontrol etmeli; ekranda okunan metin hem doğru hem yanlış
+veriyle "16:30" gösterebilir.
+
+**Formattan bağımsız iddia yaz:** ekrandaki saati doğrulayan satır ilk denemede kırıldı,
+çünkü liste `Intl`'i tarayıcının **locale**'iyle çalıştırıyor ve `en-US` 12 saatlik
+("4:30 PM") biçim veriyor. `/(16:30|4:30\s*PM)/` gibi iki biçimi de kabul et — yoksa test
+saat dilimini değil locale'i test eder.
+
+**Geriye dönük veri:** düzeltmeden önce oluşmuş satırlar kayık kalıyor ve toptan bir
+backfill **yapılmadı** — form kaynaklı satırı doğru saklanmış satırdan (seri tekrarları,
+kabul edilmiş toplantı istekleri) ayırt edecek bir işaret yok, `createdById` üzerinden ofset
+tahmini doğru satırları bozardı. Yerinde düzeltme için bir yeniden planlama/iptal yolu da
+yok (`/api/meetings` yalnızca GET+POST). Bunu kullanıcıya **açıkça söyle**; "düzelttim"
+demek yeni kayıtlar için doğru, mevcut kayıt için değil.
+
+**Ortam:** yerel MariaDB + `.env` + `db push` playbook'taki gibi sorunsuz kuruldu. Playwright
+runner'ı için `executablePath` override'ı ayrı bir config dosyasına yazılıyor ve bu dosya
+**repo kökünde** olmalı — `playwright.config.ts` içindeki `globalSetup: './e2e/global-setup.ts'`
+gibi göreli yollar config'in bulunduğu dizine göre çözülüyor, scratchpad'e koyunca
+`MODULE_NOT_FOUND` veriyor. Commit'ten önce silmeyi unutma.
