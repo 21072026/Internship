@@ -8,6 +8,20 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.4-beta] - 2026-08-03
+
+### Changed
+- **Added a reusable `ConfirmDialog` component** (`src/components/ui/ConfirmDialog.tsx`) and
+  replaced all 12 native `window.confirm(...)` calls under `src/` with it — across
+  `RelationNotesPanel`, `GoalsPanel`, `NotesPanel`, `DocumentsManager`, `EvaluationPanel`,
+  `MessageThreadView`, `ProjectGoals`, `ProjectWeeklyMeeting`, the admin cohorts page, the
+  mentor availability page, the mentee detail page, and `ProjectsManager`. Each delete (or
+  stop, for the weekly-meeting series) now opens an accessible modal
+  (`role="dialog"`/`aria-modal`, Escape/overlay-to-cancel, focus starts on Cancel) instead of
+  the browser's blocking `confirm()` prompt, with a `loading` state that disables the buttons
+  during the request to prevent double-submits. Existing i18n confirm messages, API calls and
+  delete behavior are unchanged.
+
 ## [0.40.3-beta] - 2026-08-03
 
 ### Fixed

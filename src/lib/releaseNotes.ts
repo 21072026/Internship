@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.4-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Maintenance only: delete (and "stop meeting") confirmations across the app now use a proper dialog instead of the browser\'s plain confirm popup — same question, same buttons, just easier to read and consistent everywhere. Nothing you can do has changed.',
+      ],
+      tr: [
+        'Yalnızca bakım: uygulamadaki silme (ve "toplantıyı durdur") onayları artık tarayıcının düz onay kutusu yerine düzgün bir pencere kullanıyor — aynı soru, aynı butonlar, sadece daha okunaklı ve her yerde tutarlı. Yapabildiklerinde bir değişiklik yok.',
+      ],
+      de: [
+        'Nur Wartung: Lösch- (und „Treffen beenden“-)Bestätigungen verwenden jetzt in der ganzen App einen richtigen Dialog statt des einfachen Browser-Bestätigungsfensters — gleiche Frage, gleiche Buttons, nur besser lesbar und überall einheitlich. An deinen Möglichkeiten ändert sich nichts.',
+      ],
+    },
+  },
+  {
     version: '0.40.3-beta',
     date: '2026-08-03',
     highlights: {
