@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { ApplyLinkBox } from '@/components/ApplyLinkBox';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 
 interface MentorshipRelation {
   id: string;
@@ -110,11 +111,18 @@ export default function MenteesPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <Badge variant="default">{rel._count.interactions} {t.mentor.interactions}</Badge>
-                <Link href={`/mentor/mentees/${rel.id}`}>
-                  <Button size="sm" variant="outline">{t.mentor.viewDetails}</Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <StartMeetingButton
+                    target={{ relationIds: [rel.id] }}
+                    defaultTitle={t.meetings.instant.defaultWith.replace('{name}', rel.mentee.fullName)}
+                    testId={`start-meeting-${rel.id}`}
+                  />
+                  <Link href={`/mentor/mentees/${rel.id}`}>
+                    <Button size="sm" variant="outline">{t.mentor.viewDetails}</Button>
+                  </Link>
+                </div>
               </div>
             </Card>
           ))}

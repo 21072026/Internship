@@ -66,6 +66,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     role === 'ADMIN' ||
     (!!session && p.ownerUserId === session.user.id) ||
     (!!session && p.members.some((m) => m.user.id === session.user.id && m.role === 'OWNER'));
+  // Who may summon the whole team into a room (#1055). Mirrors the server rule
+  // in resolveMeetingContext: admins and OWNER/MENTOR members — mentee members
+  // join a call, they don't call everyone in.
+  const canStartMeeting =
+    isLead ||
+    (!!session && p.members.some((m) => m.user.id === session.user.id && m.role === 'MENTOR'));
   const canInternal =
     isLead ||
     isMember ||
@@ -185,7 +191,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
               {isLead && <ProjectJoinRequests projectId={id} />}
 
-              <ProjectWeeklyMeeting projectId={id} canManage={isLead} />
+              <ProjectWeeklyMeeting projectId={id} canManage={isLead} canStartInstant={canStartMeeting} projectName={p.name} />
 
               {session && (
                 <ProjectGoals projectId={id} myId={session.user.id} canLead={isLead} isMember={isMember} />

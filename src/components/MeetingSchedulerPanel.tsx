@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { Copy, Check, Video } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
+import { wallClockToInstantISO } from '@/lib/timezone';
 
 interface Meeting {
   id: string;
@@ -20,7 +22,7 @@ interface Meeting {
 // detail screen (#661). Reuses the role-aware /api/meetings endpoint (admins may
 // schedule for any relation; a video link auto-generates server-side) and lists
 // this relation's meetings with a one-click copyable link.
-export function MeetingSchedulerPanel({ relationId }: { relationId: string }) {
+export function MeetingSchedulerPanel({ relationId, menteeName }: { relationId: string; menteeName?: string }) {
   const t = useT();
   const locale = useLocale();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -31,8 +33,8 @@ export function MeetingSchedulerPanel({ relationId }: { relationId: string }) {
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // Time optional: a date gives the meeting a time (+ RSVP); no date → no-time
-  // meeting (just a link).
-  const scheduledAt = date ? `${date}T${time || '00:00'}` : '';
+  // meeting (just a link). Sent zone-qualified — see MeetingsManager (#1061).
+  const scheduledAt = date ? wallClockToInstantISO(date, time || '00:00') : '';
 
   const load = useCallback(async () => {
     const r = await fetch('/api/meetings');
@@ -83,6 +85,18 @@ export function MeetingSchedulerPanel({ relationId }: { relationId: string }) {
         <div className="flex items-center gap-2">
           <Video className="h-5 w-5 text-blue-600" />
           <CardTitle>{t.meetings.schedule}</CardTitle>
+          {/* Planning and calling are different intents: the form below books a
+              time, this books nothing and opens a room now (#1053). */}
+          <StartMeetingButton
+            className="ml-auto"
+            target={{ relationIds: [relationId] }}
+            defaultTitle={
+              menteeName
+                ? t.meetings.instant.defaultWith.replace('{name}', menteeName)
+                : t.meetings.instant.panelTitle
+            }
+            testId="start-meeting-candidate"
+          />
         </div>
       </CardHeader>
 
