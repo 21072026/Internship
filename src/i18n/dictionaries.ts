@@ -761,6 +761,11 @@ const en = {
       meeting_request: 'Meeting request',
       announcement: 'Announcement',
     },
+    deadlineEmail: {
+      subject: "Overdue: {mentee}'s stage deadline",
+      greeting: 'Hi {mentor},',
+      body: 'The stage deadline for {mentee} has passed. Please review their progress.',
+    },
   },
   announcementFeed: {
     cardTitle: 'Announcements',
@@ -1105,6 +1110,8 @@ const en = {
   },
   announcements: {
     title: 'Announcements',
+    emailSubject: 'Announcement',
+    emailOpenLink: 'Open announcement link',
     subtitle: 'Broadcast a message to every active user',
     newAnnouncement: 'New announcement',
     message: 'Message',
@@ -2414,6 +2421,11 @@ const tr: Dict = {
       meeting_request: 'Toplantı talebi',
       announcement: 'Duyuru',
     },
+    deadlineEmail: {
+      subject: 'Gecikmiş: {mentee} için aşama son tarihi',
+      greeting: 'Merhaba {mentor},',
+      body: '{mentee} için aşama son tarihi geçti. Lütfen ilerleme durumunu gözden geçirin.',
+    },
   },
   announcementFeed: {
     cardTitle: 'Duyurular',
@@ -2758,6 +2770,8 @@ const tr: Dict = {
   },
   announcements: {
     title: 'Duyurular',
+    emailSubject: 'Duyuru',
+    emailOpenLink: 'Duyuru bağlantısını aç',
     subtitle: 'Tüm aktif kullanıcılara bir mesaj yayınla',
     newAnnouncement: 'Yeni duyuru',
     message: 'Mesaj',
@@ -4065,6 +4079,11 @@ const de: Dict = {
       meeting_request: 'Meeting-Anfrage',
       announcement: 'Ankündigung',
     },
+    deadlineEmail: {
+      subject: 'Überfällig: Phasenfrist für {mentee}',
+      greeting: 'Hallo {mentor},',
+      body: 'Die Phasenfrist für {mentee} ist abgelaufen. Bitte prüfe den Fortschritt.',
+    },
   },
   announcementFeed: {
     cardTitle: 'Ankündigungen',
@@ -4409,6 +4428,8 @@ const de: Dict = {
   },
   announcements: {
     title: 'Ankündigungen',
+    emailSubject: 'Ankündigung',
+    emailOpenLink: 'Ankündigungslink öffnen',
     subtitle: 'Sende eine Nachricht an alle aktiven Benutzer',
     newAnnouncement: 'Neue Ankündigung',
     message: 'Nachricht',

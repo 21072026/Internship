@@ -8,6 +8,8 @@ import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
+import { defaultLocale, isLocale } from '@/i18n/config';
+import { getDictionary } from '@/i18n/dictionaries';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -699,16 +701,33 @@ export async function checkStageDeadlineReminders() {
       deadlineReminderSentAt: null,
       pipelineStatus: { notIn: [...TERMINAL] },
     },
-    include: { mentor: true, mentee: true },
+    include: {
+      mentor: {
+        select: {
+          email: true,
+          fullName: true,
+          emailNotifications: true,
+          notificationPrefs: true,
+          preferredLanguage: true,
+        },
+      },
+      mentee: { select: { fullName: true } },
+    },
   });
 
   for (const rel of overdue) {
     await notify(rel.mentorId, 'deadline', `Stage deadline passed for ${rel.mentee.fullName}.`, `/admin/candidates/${rel.menteeId}`);
     if (emailAllowed(rel.mentor, 'deadlines')) {
+      const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
+      const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
+      const emailText = getDictionary(locale).notifications.deadlineEmail;
+      const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
+      const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
+      const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
       await sendEmail({
         to: rel.mentor.email,
-        subject: `Overdue: ${rel.mentee.fullName}'s stage deadline`,
-        html: `<p>Hi ${rel.mentor.fullName},</p><p>The stage deadline for <strong>${rel.mentee.fullName}</strong> has passed. Please review their progress.</p>`,
+        subject,
+        html: `<p>${greeting}</p><p>${body}</p>`,
       }).catch((error) => {
         console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
       });
