@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.9-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'The notes window now opens together with the meeting, already tied to it — start a call and you can just begin typing. If you would rather it did not, there is a switch in your account settings (per device).',
+        'What you wrote can become work: any line of a meeting note turns into a goal on that mentorship, or a task on that project, with one click. The line is ticked off in the note rather than removed, so the note still says what was said — and the same line cannot be turned into two tasks.',
+      ],
+      tr: [
+        'Not penceresi artık görüşmeyle birlikte, ona bağlı olarak açılıyor — görüşmeyi başlat, doğrudan yazmaya geç. İstemiyorsan hesap ayarlarında bir anahtar var (cihaz başına).',
+        'Yazdıkların işe dönüşebiliyor: bir görüşme notunun herhangi bir satırı tek tıkla o mentorlukta hedefe, o projede göreve dönüşüyor. Satır notta silinmiyor, işaretleniyor — not neyin konuşulduğunu söylemeye devam ediyor ve aynı satır iki kez göreve çevrilemiyor.',
+      ],
+      de: [
+        'Das Notizfenster öffnet sich jetzt zusammen mit der Besprechung und ist ihr bereits zugeordnet — Gespräch starten und einfach lostippen. Wer das nicht möchte, findet in den Kontoeinstellungen einen Schalter (pro Gerät).',
+        'Geschriebenes kann zu Arbeit werden: Jede Zeile einer Besprechungsnotiz wird mit einem Klick zu einem Ziel in dieser Mentorschaft oder zu einer Aufgabe in diesem Projekt. Die Zeile wird in der Notiz abgehakt statt entfernt — die Notiz sagt weiterhin, was gesagt wurde, und dieselbe Zeile lässt sich nicht zweimal umwandeln.',
+      ],
+    },
+  },
+  {
     version: '0.40.8-beta',
     date: '2026-08-03',
     highlights: {

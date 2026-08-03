@@ -8,6 +8,37 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.9-beta] - 2026-08-03
+
+### Added
+- **Starting a meeting opens the notes window in the same click** (#1058). The subtle part:
+  `notes.open()` is called *before* the `fetch`, not after. Opening a floating window needs
+  transient user activation and awaiting the API round trip spends it — the window would
+  then silently never open. So the window is opened on the click and the room is attached to
+  it once the server answers (`notes.attach`). If the meeting fails to start, the window is
+  closed rather than left floating with nothing to belong to.
+- **A per-device toggle** in account settings for that behaviour (default on). Per-device
+  like the composer's enter-to-send: which machine you take notes on is a property of the
+  machine, not the account.
+- **A note line becomes a goal or a project task** (#1059). `POST /api/notes/[id]/convert`
+  reuses the existing `Goal` / `ProjectTask` models — no new one needed. The target follows
+  the meeting: a mentorship meeting yields a goal, a project meeting a task. Where there is
+  neither (a chat meeting, or no meeting), the affordance is hidden rather than offered and
+  then refused.
+- `e2e/note-to-work.spec.ts` — the window opening on the same click and its notes landing
+  against that meeting, a line converting exactly once, and both refusals below.
+
+### Security
+- The convert endpoint checks that the line **is actually in the note** — otherwise it is a
+  generic "create a goal anywhere" wearing a note id — and that the caller may write to the
+  target (the relation's mentor, or a member of the project; admins too). An assignee who
+  isn't on the project is rejected rather than handed a task they cannot see.
+
+### Changed
+- A converted line is marked `✓` in place rather than deleted: the note is the record of
+  what was said, and quietly removing sentences from it would rewrite history. The mark is
+  also what makes a second click a no-op (409) instead of a duplicate.
+
 ## [0.40.8-beta] - 2026-08-03
 
 ### Added

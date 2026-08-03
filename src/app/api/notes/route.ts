@@ -15,7 +15,11 @@ export async function GET(request: Request) {
   const notes = await prisma.personalNote.findMany({
     where: { userId: session.user.id, ...(meetingId ? { meetingId } : {}) },
     orderBy: { updatedAt: 'desc' },
-    include: { meeting: { select: { id: true, title: true, createdAt: true } } },
+    // relationId/projectId come along so the panel knows what a line from this
+    // note could become — a goal on that mentorship, or a task on that project.
+    include: {
+      meeting: { select: { id: true, title: true, createdAt: true, relationId: true, projectId: true } },
+    },
   });
   return NextResponse.json({ notes });
 }
