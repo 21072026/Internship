@@ -85,6 +85,23 @@ export async function POST(request: Request) {
         select: { id: true, relationId: true, rsvpToken: true },
       });
       meetingId = row.id;
+
+      // A call started from a chat belongs in that chat (#1055): the people who
+      // are already reading the thread shouldn't have to find the link in a
+      // notification. Posted as the organizer, not as a faceless system row —
+      // Message has no system flag, and "who called us in" is worth knowing.
+      if (ctx.conversationId) {
+        const who = session.user.name ?? 'Someone';
+        await prisma.message.create({
+          data: {
+            conversationId: ctx.conversationId,
+            senderId: session.user.id,
+            body: `📹 ${who} started a meeting: ${title}\n${meetLink}`,
+            channel: 'IN_APP',
+          },
+        });
+      }
+
       await inviteAll(ctx.invitees, [row], title, meetLink, session.user.name ?? null);
     }
 

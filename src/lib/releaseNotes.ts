@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.7-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'The same one-click meeting now works for a whole project team: a button on the project page, next to the weekly meeting. Everyone on the team gets the link — you no longer invite people one at a time.',
+        'And from a group chat: start a call and the link is posted straight into the conversation, so anyone reading the thread can just tap it.',
+        'Who may start one follows who runs the space: project owners and mentors for a team call, and any participant of a chat for a chat call.',
+      ],
+      tr: [
+        'Aynı tek tıklık görüşme artık bütün bir proje ekibi için de var: proje sayfasında, haftalık toplantının yanında bir buton. Link ekipteki herkese gidiyor — kişileri tek tek davet etmene gerek kalmıyor.',
+        'Grup sohbetinden de olur: görüşmeyi başlat, link doğrudan konuşmaya düşsün; sohbeti okuyan herkes tıklayıp katılsın.',
+        'Kimin başlatabileceği, o alanı kimin yürüttüğüne göre: ekip görüşmesini proje sahipleri ve mentörler, sohbet görüşmesini o sohbetteki herkes başlatabiliyor.',
+      ],
+      de: [
+        'Dieselbe Ein-Klick-Besprechung gibt es jetzt für ein ganzes Projektteam: eine Schaltfläche auf der Projektseite, neben der wöchentlichen Besprechung. Alle im Team bekommen den Link — niemand muss mehr einzeln eingeladen werden.',
+        'Und aus einem Gruppenchat heraus: Besprechung starten, und der Link landet direkt im Gespräch, sodass alle Mitlesenden einfach darauf tippen können.',
+        'Wer starten darf, richtet sich danach, wer den Raum führt: Projekt-Eigentümer und Mentoren für einen Teamanruf, und jede teilnehmende Person eines Chats für einen Chat-Anruf.',
+      ],
+    },
+  },
+  {
     version: '0.40.6-beta',
     date: '2026-08-03',
     highlights: {

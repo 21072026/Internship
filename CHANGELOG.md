@@ -8,6 +8,30 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.7-beta] - 2026-08-03
+
+### Added
+- **Start a meeting for a whole project team** (#1055). A button next to the recurring rule
+  on the project page — the two sit together but are different things: one books a weekly
+  slot, the other opens a room now. Visible to admins and OWNER/MENTOR members, mirroring
+  the server rule in `resolveMeetingContext`; mentee members join a call, they don't summon
+  one. `ProjectWeeklyMeeting` no longer hides itself when there is no series but the viewer
+  may still start a call.
+- **Start a meeting from a group chat, and the link lands in the chat** (#1055). Button in
+  the thread header (and its own row on a phone, where that header is hidden). The
+  conversation branch of `/api/meetings/instant` now also posts the room into the thread, as
+  the organizer rather than a faceless system row — `Message` has no system flag, and "who
+  called us in" is worth knowing. Any participant may start one; a non-participant gets 403
+  and no message is written.
+- `e2e/instant-meeting-team.spec.ts` — team call by an owner (incl. the member's in-app
+  notification), a mentee member refused, a chat call landing in the thread, and an outsider
+  refused with nothing posted.
+
+### Note
+- Only *conversation* threads get the button. The legacy relation thread is left out: its
+  mentee would be refused server-side anyway (relations are mentor-scoped), and a button
+  that always fails is worse than no button. Mentors reach 1:1 calls from the mentee card.
+
 ## [0.40.6-beta] - 2026-08-03
 
 ### Added
