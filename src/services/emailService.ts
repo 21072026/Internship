@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import cron from 'node-cron';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { getSetting } from '@/lib/settings';
@@ -9,6 +10,7 @@ import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone } from '@/lib/timezone';
+import { loadProjectTeam } from '@/lib/projectTeam';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -573,6 +575,47 @@ export async function sendPublicContactEmail({
   });
 }
 
+// --- Project join requests (#51) --------------------------------------------
+
+export async function sendProjectJoinRequestEmail({
+  to,
+  fullName,
+  projectId,
+  projectName,
+  requesterName,
+  message,
+  recipient,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  projectId: string;
+  projectName: string;
+  requesterName: string;
+  message?: string | null;
+  // Preferences are honoured here rather than at the call site so no caller can
+  // forget: this is a 'mentorship'-category notification (someone wants in).
+  recipient: { emailNotifications?: boolean | null; notificationPrefs?: unknown };
+  orgId?: string | null;
+}) {
+  if (!to || !emailAllowed(recipient, 'mentorship')) return;
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: `Join request: ${requesterName} → ${projectName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'Someone wants to join your project')}
+        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+        <p><strong>${esc(requesterName)}</strong> asked to join <strong>${esc(projectName)}</strong>.</p>
+        ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>` : ''}
+        ${ctaBlock(brand, `${appUrl()}/projects/${projectId}`, 'Review the request')}
+      </div>
+    `,
+  });
+}
+
 export async function checkMentorInteractionReminders() {
   const days = parseInt(await getSetting('reminderDays'), 10) || 14;
   const fourteenDaysAgo = new Date();
@@ -759,7 +802,12 @@ export async function sendMeetingReminders() {
   } as const;
 
   const meetings = await prisma.meeting.findMany({
-    where: { scheduledAt: { gt: now, lte: horizon }, reminderSentAt: null },
+    // `seriesId: null` — a recurring project meeting is reminded by
+    // sendProjectMeetingSeriesReminders(), which covers the whole project team
+    // rather than only the two sides of a relation. Without this exclusion the
+    // people who have both a relation and a membership got the hour-before
+    // reminder twice (#51).
+    where: { scheduledAt: { gt: now, lte: horizon }, reminderSentAt: null, seriesId: null },
     include: {
       relation: {
         include: {
@@ -830,6 +878,150 @@ export async function sendMeetingReminders() {
     }
   }
   return { checked: meetings.length, reminded, notified, emailed };
+}
+
+// --- Recurring project meetings (#51) ---------------------------------------
+//
+// A project's weekly call belongs to the whole project, not to a mentorship: the
+// people who should show up are its members (owner, mentors, mentee developers
+// and testers alike), and most of them have no MentorshipRelation carrying the
+// project. So these reminders are driven straight off the MeetingSeries rule
+// instead of the per-relation `Meeting` rows, and their idempotency marker is a
+// MeetingSeriesReminder row per (series, occurrence, lead time): the insert has
+// to win before anything is sent, so an overlapping cron tick can't double-mail.
+//
+// Two lead times, because "the weekly meeting is tomorrow" and "it starts in an
+// hour" are different reminders: DAY_BEFORE (~24h) and HOUR_BEFORE (~1h).
+const SERIES_LOOKAHEAD_MINUTES = 25 * 60;
+
+function seriesOccurrences(daysOfWeek: number[], timeOfDay: string, from: Date, withinMinutes: number): Date[] {
+  const [hour, minute] = timeOfDay.split(':').map((v) => Number(v));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return [];
+  const allowed = new Set(daysOfWeek);
+  const out: Date[] = [];
+  const horizon = new Date(from.getTime() + withinMinutes * 60 * 1000);
+  // Wall-clock times are stored as UTC by the series generator; stay consistent.
+  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
+  for (let i = 0; i <= Math.ceil(withinMinutes / (24 * 60)) + 1; i++) {
+    const day = new Date(cursor);
+    day.setUTCDate(day.getUTCDate() + i);
+    if (!allowed.has(day.getUTCDay())) continue;
+    const when = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hour, minute, 0, 0));
+    if (when > from && when <= horizon) out.push(when);
+  }
+  return out;
+}
+
+function leadFor(minutesAway: number): 'DAY_BEFORE' | 'HOUR_BEFORE' | null {
+  if (minutesAway <= 60) return 'HOUR_BEFORE';
+  if (minutesAway >= 23 * 60) return 'DAY_BEFORE';
+  return null;
+}
+
+export async function sendProjectMeetingSeriesReminders() {
+  const now = new Date();
+  const seriesList = await prisma.meetingSeries.findMany({
+    where: { active: true, projectId: { not: null } },
+    select: {
+      id: true,
+      title: true,
+      daysOfWeek: true,
+      timeOfDay: true,
+      fixedLink: true,
+      projectId: true,
+      project: { select: { id: true, name: true, orgId: true } },
+    },
+  });
+
+  let reminded = 0;
+  let notified = 0;
+  let emailed = 0;
+
+  for (const series of seriesList) {
+    if (!series.projectId) continue;
+    const days = Array.isArray(series.daysOfWeek)
+      ? (series.daysOfWeek as unknown[]).map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+      : [];
+    if (days.length === 0) continue;
+
+    const occurrences = seriesOccurrences(days, series.timeOfDay, now, SERIES_LOOKAHEAD_MINUTES);
+    if (occurrences.length === 0) continue;
+
+    // The whole team, not just the ProjectMember rows: a mentee attached to the
+    // project the legacy way (MentorshipRelation.projectId) is expected at the
+    // same call, and since series meetings are now excluded from the
+    // per-relation reminder they would otherwise be reminded by nobody.
+    const team = await loadProjectTeam(series.projectId);
+    if (team.length === 0) continue;
+    const recipients = await prisma.user.findMany({
+      where: { id: { in: team.map((m) => m.id) }, isActive: true },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        emailNotifications: true,
+        notificationPrefs: true,
+        timezone: true,
+      },
+    });
+    if (recipients.length === 0) continue;
+
+    for (const when of occurrences) {
+      const lead = leadFor((when.getTime() - now.getTime()) / 60000);
+      if (!lead) continue;
+
+      // Claim first — see the idempotency note above.
+      try {
+        await prisma.meetingSeriesReminder.create({ data: { seriesId: series.id, occurrenceAt: when, lead } });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') continue;
+        throw e;
+      }
+      reminded++;
+
+      const projectName = series.project?.name ?? '';
+      for (const user of recipients) {
+        const link = `/projects/${series.projectId}`;
+        const whenLocal = formatInTimeZone(when, user.timezone);
+        await notify(
+          user.id,
+          'meeting_reminder',
+          lead === 'HOUR_BEFORE'
+            ? `"${series.title}" (${projectName}) starts soon — ${whenLocal}.`
+            : `"${series.title}" (${projectName}) is tomorrow — ${whenLocal}.`,
+          link
+        );
+        notified++;
+
+        if (!user.email || !emailAllowed(user, 'meetingReminders')) continue;
+        try {
+          const brand = await emailBrand(series.project?.orgId ?? null);
+          await sendEmail({
+            to: user.email,
+            fromName: brand.name,
+            subject:
+              lead === 'HOUR_BEFORE'
+                ? `Reminder: ${series.title} starts soon`
+                : `Tomorrow: ${series.title} (${projectName})`,
+            html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              ${brandHeader(brand, 'Recurring project meeting')}
+              <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(series.title)}</strong>${projectName ? ` (${esc(projectName)})` : ''}.</p>
+              <p><strong>When:</strong> ${whenLocal}</p>
+              ${series.fixedLink ? `<p><strong>Meeting link:</strong> <a href="${series.fixedLink}">${esc(series.fixedLink)}</a></p>` : ''}
+              ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the project')}
+            </div>`,
+          });
+          emailed++;
+        } catch (e) {
+          // One bad address must not cost the rest of the team their reminder.
+          console.error('Project meeting reminder email failed:', e);
+        }
+      }
+    }
+  }
+
+  return { series: seriesList.length, reminded, notified, emailed };
 }
 
 // Weekly per-mentor digest: stale mentees, upcoming meetings, new applications.
@@ -1310,6 +1502,12 @@ export function initCronJobs() {
       const r = await sendMeetingReminders();
       if (r.reminded) {
         console.log(`[Cron] Meeting reminders. Reminded: ${r.reminded}, in-app: ${r.notified}, emails: ${r.emailed}`);
+      }
+      // Recurring project meetings ride the same tick: their windows are 1h/24h
+      // wide, so a quarter-hourly check is what makes "an hour before" accurate.
+      const s = await sendProjectMeetingSeriesReminders();
+      if (s.reminded) {
+        console.log(`[Cron] Project meeting reminders. Occurrences: ${s.reminded}, in-app: ${s.notified}, emails: ${s.emailed}`);
       }
     } catch (e) {
       console.error('[Cron] Meeting reminder error:', e);

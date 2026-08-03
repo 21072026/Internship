@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { getConversationIfAllowed, otherConversationParticipants, canPostToConversation } from '@/lib/conversations';
+import { loadProjectTeam } from '@/lib/projectTeam';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { sendEmail } from '@/services/emailService';
@@ -102,12 +103,39 @@ export async function GET(request: Request) {
       });
     }
 
+    // A group chat is a room, so it has to say who is in it (#51): the roster is
+    // the project's team, annotated onto the participant list so the chat header
+    // can show "6 people · who they are" instead of an anonymous thread.
+    let group: { type: string; projectId: string | null; projectName: string | null } | null = null;
+    let participants: { id: string; fullName: string; role: string | null; functionalRole: string | null }[] = [];
+    if (conversation) {
+      const team =
+        conversation.type === 'GROUP' && conversation.projectId
+          ? await loadProjectTeam(conversation.projectId)
+          : [];
+      const project =
+        conversation.type === 'GROUP' && conversation.projectId
+          ? await prisma.project.findUnique({ where: { id: conversation.projectId }, select: { name: true } })
+          : null;
+      group = { type: conversation.type, projectId: conversation.projectId, projectName: project?.name ?? null };
+      participants = conversation.participants.map((p) => {
+        const member = team.find((m) => m.id === p.user.id);
+        return {
+          id: p.user.id,
+          fullName: p.user.fullName,
+          role: member?.role ?? null,
+          functionalRole: member?.functionalRole ?? null,
+        };
+      });
+    }
+
     return NextResponse.json({
       ...(rel
         ? { relationId: rel.id, mentor: rel.mentor, mentee: rel.mentee }
         : {
             conversationId: conversation!.id,
-            participants: conversation!.participants.map((p) => ({ id: p.user.id, fullName: p.user.fullName })),
+            ...group,
+            participants,
             // Lets the client render the thread read-only instead of failing on
             // send. The POST route enforces the same rule regardless (#770).
             canPost: await canPostToConversation(session.user, conversation!),

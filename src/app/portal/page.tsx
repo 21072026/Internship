@@ -10,6 +10,7 @@ import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
+import { ReferralLinkCard } from '@/components/ReferralLinkCard';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -86,6 +87,10 @@ export default async function PortalDashboard() {
         </h1>
         <p className="text-gray-500 mt-1">{t.portal.dashSubtitle}</p>
       </div>
+
+      {/* "Invite your circle" (#51): anyone who signs up through this link is
+          credited to this mentee as their source. */}
+      <ReferralLinkCard />
 
       {!profileComplete && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center justify-between">

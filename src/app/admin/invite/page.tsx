@@ -17,6 +17,11 @@ import { formatDate, formatDateTime } from '@/lib/relativeTime';
 const inviteSchema = z.object({
   email: z.string().email('Invalid email'),
   role: z.enum(['MENTOR', 'MENTEE', 'ADMIN']),
+  // Optional counterpart + project: with these set, registering through the link
+  // creates the mentorship and the project membership straight away (#51).
+  mentorId: z.string().optional(),
+  menteeId: z.string().optional(),
+  projectId: z.string().optional(),
 });
 
 type InviteData = z.infer<typeof inviteSchema>;
@@ -84,15 +89,37 @@ export default function InvitePage() {
     }
   };
 
+  // Pickers for the auto-connect fields.
+  const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
+  const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch('/api/users?view=picker')
+      .then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((d) => {
+        const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
+        setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));
+        setMentees(users.filter((u) => u.role === 'MENTEE'));
+      })
+      .catch(() => {});
+    fetch('/api/projects')
+      .then((r) => (r.ok ? r.json() : { projects: [] }))
+      .then((d) => setProjects(d.projects ?? []))
+      .catch(() => {});
+  }, []);
+
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<InviteData>({
     resolver: zodResolver(inviteSchema),
     defaultValues: { role: 'MENTEE' },
   });
+
+  const watchedRole = watch('role');
 
   const onSubmit = handleSubmit(async (data) => {
     setLoading(true);
@@ -103,7 +130,14 @@ export default function InvitePage() {
       const res = await fetch('/api/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          // Empty select → no counterpart, rather than an empty string the API
+          // would have to interpret.
+          mentorId: data.mentorId || undefined,
+          menteeId: data.menteeId || undefined,
+          projectId: data.projectId || undefined,
+        }),
       });
 
       const body = await res.json();
@@ -170,6 +204,30 @@ export default function InvitePage() {
               {...register('role')}
               error={errors.role?.message}
             />
+            {/* "Click the link and you are connected" (#51): the same behaviour a
+                mentor's own invite has, now available to an admin for either side. */}
+            {watchedRole === 'MENTEE' && (
+              <Select
+                label={t.invite.connectMentor}
+                options={[{ value: '', label: '—' }, ...mentors.map((m) => ({ value: m.id, label: m.fullName }))]}
+                {...register('mentorId')}
+              />
+            )}
+            {watchedRole === 'MENTOR' && (
+              <Select
+                label={t.invite.connectMentee}
+                options={[{ value: '', label: '—' }, ...mentees.map((m) => ({ value: m.id, label: m.fullName }))]}
+                {...register('menteeId')}
+              />
+            )}
+            {watchedRole !== 'ADMIN' && (
+              <Select
+                label={t.invite.addToProject}
+                options={[{ value: '', label: '—' }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
+                {...register('projectId')}
+              />
+            )}
+            {watchedRole !== 'ADMIN' && <p className="-mt-2 text-xs text-gray-500">{t.invite.connectHint}</p>}
             <Button type="submit" className="w-full" loading={loading}>
               <Send className="h-4 w-4" />
               {t.invite.send}

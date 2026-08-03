@@ -13,6 +13,84 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.2-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Setting up a recurring meeting used to email everyone once for every future occurrence — dozens of near-identical invitations from a single click. Now only the next meeting is announced; every one after that is covered by the reminder a day before and an hour before.',
+        'Those reminders were also being sent twice to anyone who had both a mentorship and a project membership. One reminder now, to the whole project team.',
+        'The project page shows the app header again, so on a phone you still see where you are and can get back to your dashboard.',
+      ],
+      tr: [
+        'Düzenli toplantı tanımlayınca gelecekteki her tekrar için herkese ayrı e-posta gidiyordu — tek tıkla onlarca benzer davet. Artık sadece bir sonraki toplantı duyuruluyor; sonrakiler için bir gün önce ve bir saat önce gelen hatırlatma yeterli.',
+        'Bu hatırlatmalar, hem mentorluğu hem proje üyeliği olan kişilere iki kez gidiyordu. Artık tek hatırlatma, projedeki herkese.',
+        'Proje sayfasında uygulama başlığı yeniden görünüyor; mobilde nerede olduğunu görüyor ve panele geri dönebiliyorsun.',
+      ],
+      de: [
+        'Beim Anlegen eines wiederkehrenden Treffens ging bisher für jeden künftigen Termin eine eigene E-Mail an alle — Dutzende fast identischer Einladungen mit einem Klick. Jetzt wird nur das nächste Treffen angekündigt; für alle weiteren genügen die Erinnerungen einen Tag und eine Stunde vorher.',
+        'Diese Erinnerungen gingen außerdem doppelt an alle, die sowohl eine Mentorschaft als auch eine Projektmitgliedschaft haben. Jetzt eine Erinnerung, an das ganze Projektteam.',
+        'Die Projektseite zeigt wieder die App-Kopfzeile — auf dem Handy siehst du also, wo du bist, und kommst zurück zu deinem Dashboard.',
+      ],
+    },
+  },
+  {
+    version: '0.40.1-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'A project now has one screen instead of two. The card in the project list is a summary — who is on it, progress, links — and everything else (team, goals, the recurring meeting, join requests, adding people) is on the project page. If your account is both admin and mentor you reach that list from two places, which is why two half-views used to alternate.',
+        'The phone layout of those screens was reworked: the old "add a task" box that shrank to a sliver is gone, and the goal, meeting and member forms now stack instead of squeezing into one row.',
+      ],
+      tr: [
+        'Bir projenin artık iki değil tek ekranı var. Proje listesindeki kart bir özet — kimler var, ilerleme, linkler — geri kalan her şey (ekip, hedefler, düzenli toplantı, katılma talepleri, kişi ekleme) proje sayfasında. Hesabın hem admin hem mentörse o listeye iki yerden ulaşıyorsun; iki yarım görünümün dönüşümlü çıkmasının sebebi buydu.',
+        'Bu ekranların mobil düzeni yenilendi: incecik kalan eski "görev ekle" kutusu kaldırıldı; hedef, toplantı ve üye formları tek satıra sıkışmak yerine alt alta diziliyor.',
+      ],
+      de: [
+        'Ein Projekt hat jetzt einen Bildschirm statt zwei. Die Karte in der Projektliste ist eine Zusammenfassung — wer dabei ist, Fortschritt, Links — alles andere (Team, Ziele, wiederkehrendes Treffen, Beitrittsanfragen, Personen hinzufügen) liegt auf der Projektseite. Wer sowohl Admin als auch Mentor ist, erreicht diese Liste über zwei Wege; daher wechselten sich bisher zwei halbe Ansichten ab.',
+        'Das Handy-Layout dieser Seiten wurde überarbeitet: Das alte, auf wenige Pixel geschrumpfte „Aufgabe hinzufügen“-Feld ist weg, und die Formulare für Ziele, Treffen und Mitglieder stapeln sich statt sich in eine Zeile zu quetschen.',
+      ],
+    },
+  },
+  {
+    version: '0.40.0-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'A project now shows the people who are actually on it. The roster comes from the members you add, each with what they do (developer, tester, marketing), so the old "2 interns" line with two unrelated names is gone.',
+        'If you work on a project, you see the project. Members — mentees included — get the team list, the goals and the recurring meeting instead of the anonymous visitor page, and a private project you were added to is no longer invisible to you.',
+        'The recurring meeting has a home: an owner sets the days, the time and the link, everyone on the project reads it, and reminders go out a day before and an hour before — in the app, and by email unless you switched meeting emails off.',
+        'Goals belong to someone. Your own goals are yours to tick off, an unclaimed project goal can be taken with one click, and a mentor can hand the standard starter goals to whoever joined last: every goal ever written on the project is kept as a template.',
+        'Public projects accept join requests. Ask to join, say what you would like to do, and the project owner (or an admin) approves — which is also what adds you to the project and its group chat.',
+        'Group chats say who is in the room, with each person\'s role on the project, and link back to the project.',
+        'Shortcuts where you need them: message the project owner or open the group chat from the project, send a message from someone\'s profile, and — for admins — view the app as them from the same place.',
+        'Invite links now connect people. An admin can pick the mentor a new mentee should be paired with (or the mentee for a new mentor) and a project to join; the connection exists the moment the person registers. Mentees, mentors and admins each also get a personal link to share with their circle, and whoever signs up through it is recorded as having come from them.',
+        'Mentors get an onboarding checklist when someone new joins: say hello, book the kick-off, add them to a project, send the starter goals, move them along the pipeline. Steps the app can see tick themselves.',
+      ],
+      tr: [
+        'Bir proje artık gerçekten içinde olan kişileri gösteriyor. Ekip, eklediğin üyelerden geliyor ve herkesin ne yaptığı (geliştirici, tester, pazarlama) yanında yazıyor; eski "2 stajyer" satırı ve alakasız iki isim tarih oldu.',
+        'Bir projede çalışıyorsan projeyi görüyorsun. Üyeler — mentee’ler dahil — ziyaretçi görünümü yerine ekibi, hedefleri ve düzenli toplantıyı görüyor; eklendiğin özel bir proje artık sana kapalı değil.',
+        'Düzenli toplantının yeri var: proje sahibi günleri, saati ve linki tanımlıyor, projedeki herkes bunu görüyor ve hatırlatmalar bir gün önce ve bir saat önce gidiyor — uygulama içinde, toplantı e-postalarını kapatmadıysan e-posta ile de.',
+        'Hedefler artık bir kişiye ait. Kendi hedeflerini sen işaretliyorsun, sahipsiz bir proje hedefini tek tıkla üstlenebiliyorsun ve mentör, standart başlangıç hedeflerini en son katılan kişiye tek seferde gönderebiliyor: projede yazılmış her hedef şablon olarak saklanıyor.',
+        'Açık projeler katılma talebi alıyor. Katılmak istediğini ve ne yapmak istediğini yazıyorsun; proje sahibi (ya da bir admin) onaylıyor — bu onay aynı zamanda seni projeye ve grup sohbetine ekliyor.',
+        'Grup sohbetleri artık içinde kimlerin olduğunu, herkesin projedeki rolüyle gösteriyor ve projeye geri link veriyor.',
+        'Kısayollar gerektiği yerde: projeden proje sahibine mesaj ya da grup sohbeti, bir kişinin profilinden mesaj gönderme ve adminler için aynı yerden "bu kullanıcı olarak görüntüle".',
+        'Davet linkleri artık bağlantı kuruyor. Admin, yeni bir mentee’nin hangi mentöre bağlanacağını (ya da yeni bir mentörün hangi mentee’yi alacağını) ve katılacağı projeyi seçebiliyor; kişi kaydolduğu anda bağlantı kurulmuş oluyor. Ayrıca mentee, mentör ve adminlerin çevresine paylaşacağı kişisel bir linki var; o linkle gelen herkesin kaynağı o kişi olarak kaydediliyor.',
+        'Yeni biri katıldığında mentöre bir onboarding listesi çıkıyor: merhaba de, tanışma toplantısını ayarla, projeye ekle, başlangıç hedeflerini gönder, pipeline’da ilerlet. Uygulamanın görebildiği adımlar kendiliğinden işaretleniyor.',
+      ],
+      de: [
+        'Ein Projekt zeigt jetzt die Menschen, die wirklich daran arbeiten. Das Team kommt aus den Mitgliedern, die du hinzufügst — jeweils mit ihrer Aufgabe (Entwicklung, Test, Marketing). Die alte Zeile „2 Praktikanten“ mit zwei unbeteiligten Namen ist weg.',
+        'Wer an einem Projekt arbeitet, sieht das Projekt. Mitglieder — auch Mentees — bekommen Team, Ziele und das wiederkehrende Treffen statt der Besucheransicht, und ein privates Projekt, zu dem du hinzugefügt wurdest, ist für dich nicht mehr unsichtbar.',
+        'Das wiederkehrende Treffen hat einen Platz: Der Owner legt Tage, Zeit und Link fest, alle im Projekt sehen das, und Erinnerungen gehen einen Tag vorher und eine Stunde vorher raus — in der App und per E-Mail, sofern du Meeting-E-Mails nicht deaktiviert hast.',
+        'Ziele gehören jemandem. Deine eigenen Ziele hakst du selbst ab, ein freies Projektziel kannst du mit einem Klick übernehmen, und eine Mentorin kann die Standard-Startziele an die zuletzt hinzugekommene Person schicken: Jedes je formulierte Ziel wird als Vorlage aufbewahrt.',
+        'Öffentliche Projekte nehmen Beitrittsanfragen an. Du fragst an und sagst, was du machen möchtest; der Owner (oder eine Administratorin) gibt frei — und genau das fügt dich zum Projekt und seinem Gruppenchat hinzu.',
+        'Gruppenchats zeigen, wer im Raum ist — mit der jeweiligen Rolle im Projekt — und verlinken zurück zum Projekt.',
+        'Shortcuts da, wo man sie braucht: aus dem Projekt den Owner anschreiben oder den Gruppenchat öffnen, aus einem Profil eine Nachricht senden und — für Admins — von dort die App als diese Person ansehen.',
+        'Einladungslinks verbinden jetzt. Eine Administratorin kann wählen, mit welchem Mentor ein neuer Mentee verbunden wird (oder mit welchem Mentee eine neue Mentorin) und welchem Projekt beigetreten wird; die Verbindung besteht mit der Registrierung. Mentees, Mentoren und Admins haben zusätzlich einen persönlichen Link fürs eigene Umfeld — wer sich darüber registriert, wird ihnen als Quelle zugeordnet.',
+        'Mentoren bekommen eine Onboarding-Liste, wenn jemand Neues dazukommt: Hallo sagen, Kick-off buchen, zu einem Projekt hinzufügen, Startziele senden, in der Pipeline weiterbewegen. Was die App sehen kann, hakt sich selbst ab.',
+      ],
+    },
+  },
+  {
     version: '0.39.1-beta',
     date: '2026-08-02',
     highlights: {

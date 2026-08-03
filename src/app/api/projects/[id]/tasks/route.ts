@@ -4,11 +4,24 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { canManageProject, isProjectMember } from '@/lib/projectAccess';
+import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 
-const schema = z.object({ title: z.string().min(1).max(300) });
+// A task may be created from free text (`title`) or from the template pool
+// (`templateIds`) — the latter is the "send the standard goals to the person who
+// just joined" path (#51). Either way `assigneeId` decides whether it lands as a
+// personal goal or stays an unassigned project-wide one that a member can claim.
+const schema = z
+  .object({
+    title: z.string().min(1).max(300).optional(),
+    templateIds: z.array(z.string().min(1)).max(50).optional(),
+    assigneeId: z.string().min(1).nullable().optional(),
+  })
+  .refine((d) => Boolean(d.title) || (d.templateIds?.length ?? 0) > 0, {
+    message: 'title or templateIds is required',
+  });
 
-// POST — add a task to a project (project managers only).
+// POST — add task(s) to a project (project managers and members).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -24,11 +37,72 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+    const { assigneeId } = parsed.data;
 
-    const count = await prisma.projectTask.count({ where: { projectId: id } });
-    const task = await prisma.projectTask.create({
-      data: { projectId: id, title: parsed.data.title, order: count },
-    });
-    return NextResponse.json({ task }, { status: 201 });
+    // Only someone already on the project can be given one of its goals.
+    if (assigneeId) {
+      const member = await prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId: id, userId: assigneeId } },
+        select: { id: true },
+      });
+      const legacy = member
+        ? null
+        : await prisma.mentorshipRelation.findFirst({
+            where: { projectId: id, menteeId: assigneeId },
+            select: { id: true },
+          });
+      if (!member && !legacy) {
+        return NextResponse.json({ error: 'The assignee must be a project member' }, { status: 400 });
+      }
+    }
+
+    const titles: string[] = [];
+    if (parsed.data.templateIds?.length) {
+      const templates = await prisma.projectTaskTemplate.findMany({
+        where: { id: { in: parsed.data.templateIds }, OR: [{ projectId: id }, { projectId: null }] },
+        select: { id: true, title: true },
+      });
+      titles.push(...templates.map((t) => t.title));
+      if (templates.length > 0) {
+        await prisma.projectTaskTemplate.updateMany({
+          where: { id: { in: templates.map((t) => t.id) } },
+          data: { useCount: { increment: 1 } },
+        });
+      }
+    }
+    if (parsed.data.title) titles.push(parsed.data.title);
+    if (titles.length === 0) return NextResponse.json({ error: 'Nothing to create' }, { status: 400 });
+
+    let order = await prisma.projectTask.count({ where: { projectId: id } });
+    const created = [];
+    for (const title of titles) {
+      created.push(
+        await prisma.projectTask.create({
+          data: { projectId: id, title, order: order++, assigneeId: assigneeId ?? null },
+        })
+      );
+      // Keep the pool current: a goal written by hand becomes a template too, so
+      // the next member can be given it in one click.
+      await prisma.projectTaskTemplate
+        .upsert({
+          where: { projectId_title: { projectId: id, title } },
+          update: {},
+          create: { projectId: id, title, createdById: session.user.id },
+        })
+        .catch(() => null);
+    }
+
+    if (assigneeId && assigneeId !== session.user.id) {
+      await notify(
+        assigneeId,
+        'project',
+        created.length === 1
+          ? `New goal on "${project.name}": ${created[0].title}`
+          : `${created.length} new goals on "${project.name}".`,
+        `/projects/${id}`
+      );
+    }
+
+    return NextResponse.json({ tasks: created, task: created[0] }, { status: 201 });
   });
 }

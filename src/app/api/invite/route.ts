@@ -6,19 +6,42 @@ import { logActivity } from '@/lib/activity';
 import { sendInvitationEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
+import { isProjectOwner } from '@/lib/projectAccess';
 import { z } from 'zod';
 import crypto from 'crypto';
 
+// Email invitations (#51).
+//
+// Who may invite whom, and what happens when the link is used:
+//   ADMIN  → ADMIN | MENTOR | MENTEE. May name the mentor a new mentee should be
+//            attached to (`mentorId`), or the mentee a new mentor should take on
+//            (`menteeId`), and a project to join. Registering through the link
+//            then creates that mentorship straight away — the same "click and you
+//            are connected" behaviour a mentor's own invite has always had.
+//   MENTOR → MENTEE. The mentorship is with the inviting mentor.
+//   MENTEE → MENTEE. No mentorship (a mentee cannot mentor); the invitee is
+//            recorded as referred by them.
+// Every invitation also records `invitedById`, which becomes the new account's
+// `referredById` — so admins and mentors count as a *source* just like mentees.
 const inviteSchema = z.object({
   email: z.string().email('Invalid email'),
   role: z.enum(['MENTOR', 'MENTEE', 'ADMIN']),
+  mentorId: z.string().min(1).optional().nullable(),
+  menteeId: z.string().min(1).optional().nullable(),
+  projectId: z.string().min(1).optional().nullable(),
 });
+
+const ALLOWED_ROLES: Record<string, ReadonlyArray<'MENTOR' | 'MENTEE' | 'ADMIN'>> = {
+  ADMIN: ['ADMIN', 'MENTOR', 'MENTEE'],
+  MENTOR: ['MENTEE'],
+  MENTEE: ['MENTEE'],
+};
 
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
+    const allowed = session ? ALLOWED_ROLES[session.user.role] : undefined;
+    if (!session || !allowed) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -34,6 +57,42 @@ export async function POST(request: Request) {
       }
 
       const { email, role } = parsed.data;
+      if (!allowed.includes(role)) {
+        return NextResponse.json({ error: `You cannot invite a ${role.toLowerCase()}` }, { status: 403 });
+      }
+
+      // Who the invitee gets connected to. A mentor invites on their own behalf;
+      // an admin picks the counterpart explicitly.
+      let mentorId: string | null = null;
+      let menteeId: string | null = null;
+      if (session.user.role === 'MENTOR' && role === 'MENTEE') {
+        mentorId = session.user.id;
+      } else if (session.user.role === 'ADMIN') {
+        mentorId = parsed.data.mentorId || null;
+        menteeId = parsed.data.menteeId || null;
+      }
+      if (mentorId) {
+        const mentor = await prisma.user.findUnique({ where: { id: mentorId }, select: { role: true, isActive: true } });
+        if (!mentor?.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
+          return NextResponse.json({ error: 'The chosen mentor is not an active mentor' }, { status: 400 });
+        }
+      }
+      if (menteeId) {
+        const mentee = await prisma.user.findUnique({ where: { id: menteeId }, select: { role: true, isActive: true } });
+        if (!mentee?.isActive || mentee.role !== 'MENTEE') {
+          return NextResponse.json({ error: 'The chosen mentee is not an active mentee' }, { status: 400 });
+        }
+      }
+      // A mentee invite may name a mentor; a mentor invite may name a mentee.
+      if (role === 'MENTEE') menteeId = null;
+      if (role === 'MENTOR') mentorId = null;
+      if (role === 'ADMIN') { mentorId = null; menteeId = null; }
+
+      // Only somebody who runs the project may hand out membership to it.
+      const projectId: string | null = parsed.data.projectId || null;
+      if (projectId && !(await isProjectOwner(session.user, projectId))) {
+        return NextResponse.json({ error: 'You cannot add members to that project' }, { status: 403 });
+      }
 
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) {
@@ -63,6 +122,10 @@ export async function POST(request: Request) {
           email,
           role,
           expiresAt,
+          invitedById: session.user.id,
+          mentorId,
+          menteeId,
+          projectId,
         },
       });
 
@@ -110,12 +173,14 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     return await withTenantScope(session, async () => {
+      // Admins audit every invitation; everyone else sees the ones they sent.
       const invitations = await prisma.invitationToken.findMany({
+        where: session.user.role === 'ADMIN' ? {} : { invitedById: session.user.id },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
@@ -127,6 +192,7 @@ export async function GET() {
           openedAt: true,
           registeredAt: true,
           verifiedAt: true,
+          invitedBy: { select: { id: true, fullName: true } },
         },
       });
 

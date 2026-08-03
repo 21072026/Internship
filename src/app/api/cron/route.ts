@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import {
   checkMentorInteractionReminders,
   sendMeetingReminders,
+  sendProjectMeetingSeriesReminders,
   sendWeeklyMentorDigests,
   checkStageDeadlineReminders,
   checkRetentionReminders,
@@ -19,9 +20,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [interactions, meetings, digests, deadlines, retention, needMatches, analyticsReport] = await Promise.all([
+    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
+      sendProjectMeetingSeriesReminders(),
       sendWeeklyMentorDigests(),
       checkStageDeadlineReminders(),
       checkRetentionReminders(),
@@ -33,6 +35,7 @@ export async function GET() {
       message: 'Scheduled jobs ran',
       interactions,
       meetings,
+      projectMeetings,
       digests,
       deadlines,
       retention,

@@ -71,6 +71,8 @@ function RegisterForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token: data.token,
+          // Personal referral link (#51) — credits whoever shared it.
+          ref: searchParams.get('ref') || undefined,
           email: data.email,
           password: data.password,
           fullName: data.fullName,
