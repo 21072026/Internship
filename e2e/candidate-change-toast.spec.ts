@@ -27,8 +27,10 @@ test('changing a candidate\'s stage shows a confirmation toast', async ({ page }
     await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
     await page.goto(`/admin/candidates/${mentee.id}`);
-    // The stage dropdown is the first <select> in the mentorship card.
-    await page.locator('select').first().selectOption('INTERVIEW_PENDING_250');
+    // By test id, not `select.first()`: the profile card above the mentorship card
+    // now has a select of its own ("who referred them", #51), so positional
+    // matching picked the wrong control.
+    await page.getByTestId('stage-select').selectOption('INTERVIEW_PENDING_250');
 
     // A success toast confirms the save.
     await expect(page.getByRole('status').filter({ hasText: /saved|kaydedildi|gespeichert/i })).toBeVisible({ timeout: 10_000 });

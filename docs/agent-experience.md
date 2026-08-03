@@ -10,6 +10,54 @@ Newest entries on top.
 
 ---
 
+## 2026-08-02 — #51'in kullanıcı geri bildirim turları (0.40.1/0.40.2-beta)
+
+Aynı oturumda özellik canlıya gitmeden önce üç tur geri bildirim geldi; hepsi
+"kod doğru ama davranış yanlış" cinsindendi.
+
+**Bir e-posta göndericisi döngünün içindeyse kaç kez çağrıldığını say.**
+`generateForSeries`, `sendMeetingInviteEmail`'i `tekrar × ilişki` döngüsünün
+içinde çağırıyordu: 6 mentee × 7 hafta = tek tıkla 42 e-posta. Kod #774'ten beri
+böyleydi ama UI olmadığı için kimse tetiklemiyordu — **var olan bir backend'e UI
+eklemek, o backend'in maliyetini de senin devraldığın anlamına geliyor.** Ölçüt:
+"bir kullanıcı eylemi kaç e-posta üretiyor?" sorusunu UI'ı yazmadan önce sor.
+
+**İki cron aynı satırı hedefliyorsa çift bildirim gider.** Yeni proje-bazlı
+hatırlatma ile mevcut ilişki-bazlı `sendMeetingReminders` aynı seri
+`Meeting` satırlarını eşleştiriyordu; hem ilişkisi hem üyeliği olan kişi 1 saat
+önce iki e-posta alıyordu. Yeni bir bildirim yolu eklerken **eski yolun aynı
+kaydı görüp görmediğini** kontrol et (`seriesId: null` ile dışladım) — ve dışlama
+yaptığında eski yolun kapsadığı kişileri yeni yolun da kapsadığından emin ol
+(`loadProjectTeam`, yalnız `ProjectMember` değil).
+
+**App shell'in dışındaki route mobilde başlıksız kalır.** `/projects/[id]` public
+ziyaretçi okuyabilsin diye admin/mentor layout'unun dışında; sonuç: projeyi açınca
+header tamamen kayboluyor, telefonda sidebar da olmadığı için ne başlık ne çıkış
+yolu kalıyor. Layout dışına sayfa koyarken kendi bar'ını da koy.
+
+**Responsive'i akıl yürütmeyle değil ekran görüntüsüyle doğrula — ama panelleri
+bekle.** 390px'te `page.screenshot()` aldığımda client panelleri boş çıktı; dev
+server route'u derlerken `networkidle` yetmiyor. `locator(...).waitFor()` ile
+beklemek gerçek durumu gösterdi. Kalıcı kontrol için mekanik denetim yazdım
+(yatay taşma yok + 120px altı metin alanı yok, açılır formlar açık halde):
+`e2e/mobile-responsive.spec.ts`. 20 ekranlık süpürme temiz çıktı, yani sorun
+uygulamanın genelinde değil tek bir kartta.
+
+**`signInAsFreshUser` sonrası `page.goto` yerine `gotoSettled` kullan.**
+Helper URL eşleşince dönüyor, landing push'u hâlâ uçuşta: "Navigation … is
+interrupted by another navigation" alıyorsun. `helpers/auth.ts` bunu zaten
+belgeliyor, yeni spec yazarken atlamak kolay.
+
+**Bu container'da MariaDB uzun koşular arasında kendi kendine düşüyor.** Testte
+"Can't reach database server at 127.0.0.1:3306" görünce ilk iş
+`service mariadb start` — değişikliğini suçlamadan önce.
+
+**Deploy beklemek için foreground `sleep` bloklu.** `until curl … | grep -q
+'"sha":"<sha>'; do sleep 15; done` komutunu `run_in_background: true` ile başlat;
+prod `/api/health` sha'yı flip ettiğinde bildirim geliyor.
+
+---
+
 ## 2026-08-02 — Proje ekipleri, hedefler, katılma talepleri, davet/referans (#51, 0.40.0-beta)
 
 **"Yanlış isim görünüyor" şikâyeti neredeyse hep iki kaynaklı veridir.** Proje kartı
