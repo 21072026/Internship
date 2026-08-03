@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.41.0-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Half an hour before a meeting, your dashboard says so — with the join link right there. It covers both kinds: a meeting booked with you, and your project\u2019s recurring call (you see that one even if you have no mentorship attached to the project).',
+        'While a meeting is running, a green "Join" appears in the top right of every page, so you can get in from wherever you happen to be. It disappears an hour after the start.',
+      ],
+      tr: [
+        'Bir toplantıdan yarım saat önce panelin bunu söylüyor — katılım linki de orada. İki türü de kapsıyor: seninle ayarlanmış bir toplantı ve projenin düzenli görüşmesi (projeye bağlı bir mentorluğun olmasa da onu görürsün).',
+        'Toplantı devam ederken her sayfanın sağ üstünde yeşil bir "Katıl" çıkıyor; nerede olursan ol oradan girebiliyorsun. Başlangıçtan bir saat sonra kayboluyor.',
+      ],
+      de: [
+        'Eine halbe Stunde vor einem Treffen sagt dein Dashboard es dir — mit dem Teilnahmelink direkt daneben. Beide Arten sind abgedeckt: ein mit dir vereinbartes Treffen und der wiederkehrende Projekt-Call (den siehst du auch ohne Mentorschaft zum Projekt).',
+        'Während ein Treffen läuft, erscheint oben rechts auf jeder Seite ein grünes „Teilnehmen“ — so kommst du von überall hinein. Eine Stunde nach dem Start verschwindet es.',
+      ],
+    },
+  },
+  {
     version: '0.40.3-beta',
     date: '2026-08-03',
     highlights: {

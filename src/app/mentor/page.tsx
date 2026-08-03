@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
 import { MenteeOnboardingWizard } from '@/components/MenteeOnboardingWizard';
+import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { getServerDictionary } from "@/i18n/server";
@@ -80,6 +81,8 @@ export default async function MentorDashboard() {
         </h1>
         <p className="text-gray-500 mt-1">{t.mentor.dashSubtitle}</p>
       </div>
+
+      <UpcomingMeetingBanner />
 
       {/* Volunteers itself while a newly joined mentee still needs onboarding (#51). */}
       <MenteeOnboardingWizard />

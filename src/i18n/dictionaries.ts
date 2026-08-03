@@ -904,6 +904,14 @@ const en = {
     selectAll: 'Select all',
     sendGoals: 'Send the goals',
   },
+  upcomingMeeting: {
+    inProgress: 'Meeting in progress',
+    startingIn: 'starts in {n} min',
+    startingNow: 'starting now',
+    join: 'Join',
+    joinAria: 'Join the meeting',
+    noLink: 'No meeting link — ask the organiser.',
+  },
   menteeOnboarding: {
     title: 'Onboarding',
     subtitle: '{name} is new — here is the first week.',
@@ -2655,6 +2663,14 @@ const tr: Dict = {
     selectAll: 'Tümünü seç',
     sendGoals: 'Hedefleri gönder',
   },
+  upcomingMeeting: {
+    inProgress: 'Toplantı devam ediyor',
+    startingIn: '{n} dk içinde başlıyor',
+    startingNow: 'şimdi başlıyor',
+    join: 'Katıl',
+    joinAria: 'Toplantıya katıl',
+    noLink: 'Toplantı linki yok — düzenleyene sor.',
+  },
   menteeOnboarding: {
     title: 'Onboarding',
     subtitle: '{name} yeni katıldı — ilk hafta böyle ilerliyor.',
@@ -4403,6 +4419,14 @@ const de: Dict = {
     selectMember: 'Mitglied wählen',
     selectAll: 'Alle auswählen',
     sendGoals: 'Ziele senden',
+  },
+  upcomingMeeting: {
+    inProgress: 'Treffen läuft',
+    startingIn: 'beginnt in {n} Min.',
+    startingNow: 'beginnt jetzt',
+    join: 'Teilnehmen',
+    joinAria: 'Am Treffen teilnehmen',
+    noLink: 'Kein Meeting-Link — frag die Organisatorin.',
   },
   menteeOnboarding: {
     title: 'Onboarding',
