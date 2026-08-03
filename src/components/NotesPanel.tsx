@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Trash2, Lock, Pencil } from 'lucide-react';
+import { Trash2, Lock, Pencil, PictureInPicture2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
+import { useFloatingNotes } from '@/components/meeting/FloatingNotes';
 
 type Category = 'MEETING' | 'FEEDBACK' | 'TASKS' | 'PERSONAL';
 const CATEGORIES: Category[] = ['MEETING', 'FEEDBACK', 'TASKS', 'PERSONAL'];
@@ -17,12 +18,15 @@ interface Note {
   body: string;
   category: Category;
   updatedAt: string;
+  // Set when the note was taken in a meeting (#1056).
+  meeting?: { id: string; title: string } | null;
 }
 
 // Private personal notes — visible only to the owner.
 export function NotesPanel() {
   const t = useT();
   const toast = useToast();
+  const openNotesWindow = useFloatingNotes();
   const [notes, setNotes] = useState<Note[]>([]);
   const [body, setBody] = useState('');
   const [category, setCategory] = useState<Category>('PERSONAL');
@@ -94,7 +98,23 @@ export function NotesPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Lock className="h-4 w-4 text-gray-400" />{t.portal.notes.title}</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Lock className="h-4 w-4 text-gray-400" />
+          {t.portal.notes.title}
+          {/* Opens the floating window (#1057). Must be a click handler that
+              calls straight through — the window API needs the live gesture. */}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            data-testid="open-notes-window"
+            onClick={() => void openNotesWindow({ title: t.meetings.notesWindow.title })}
+          >
+            <PictureInPicture2 className="h-4 w-4" />
+            {t.meetings.notesWindow.open}
+          </Button>
+        </CardTitle>
       </CardHeader>
       <p className="text-xs text-gray-400 mb-3">{t.portal.notes.privateHint}</p>
 
@@ -157,7 +177,16 @@ export function NotesPanel() {
           {shown.map((n) => (
             <div key={n.id} data-testid={`note-${n.id}`} className="group flex items-start justify-between gap-2 rounded-lg border border-gray-100 p-2.5">
               <div className="flex-1 min-w-0">
-                <Badge variant="default" className="text-[10px] mb-1">{t.portal.notes.categories[n.category]}</Badge>
+                <div className="mb-1 flex flex-wrap items-center gap-1">
+                  <Badge variant="default" className="text-[10px]">{t.portal.notes.categories[n.category]}</Badge>
+                  {/* Which room this was written in (#1056) — without it a
+                      MEETING note is just an undated wall of text. */}
+                  {n.meeting && (
+                    <Badge variant="info" className="text-[10px]" data-testid={`note-meeting-${n.id}`}>
+                      {n.meeting.title}
+                    </Badge>
+                  )}
+                </div>
                 {editingId === n.id ? (
                   <div>
                     <Textarea
