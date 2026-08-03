@@ -47,21 +47,10 @@ export function countContexts(input: MeetingContextInput): number {
 
 // The shared video room. Jitsi needs no account and — unlike Meet/Zoom — allows
 // being embedded in an iframe, which is what the in-app side panel relies on.
+// Server-only (node:crypto); the embeddability check lives in @/lib/meetingLink
+// so client components can import it.
 export function generateMeetingLink(): string {
   return `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
-}
-
-// True when the link can safely be embedded in an iframe. Meet/Zoom/Teams all
-// send X-Frame-Options and would render an empty box, so the UI must offer
-// "open in a new tab" for anything else.
-export function isEmbeddableMeetingLink(link: string | null | undefined): boolean {
-  if (!link) return false;
-  try {
-    const host = new URL(link).hostname.toLowerCase();
-    return host === 'meet.jit.si' || host.endsWith('.jit.si');
-  } catch {
-    return false;
-  }
 }
 
 const INVITEE_SELECT = {

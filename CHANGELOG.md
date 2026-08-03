@@ -8,6 +8,40 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.6-beta] - 2026-08-03
+
+### Added
+- **"Start meeting" wherever the person already is** (#1053). A button on each mentee card
+  (`/mentor/mentees`), on the candidate detail scheduler and on the bulk selection in
+  `MeetingsManager`. One click asks for the topic — nothing else — and calls
+  `/api/meetings/instant`; the link is copied to the clipboard and the room opens on screen
+  without a list refresh. The candidate/bulk buttons sit next to the existing form on
+  purpose: booking a time and calling now are different intents.
+- **In-app meeting side panel** (#1054). `MeetingLauncherProvider` is mounted in
+  `Providers`, *above* every page shell, so a call in progress survives navigating from the
+  mentee list to their profile — a panel owned by a page would drop the meeting. Jitsi rooms
+  are embedded in an iframe; anything else (Meet/Zoom/Teams send `X-Frame-Options`) gets an
+  explicit "open in a new tab" instead of an empty box. On a phone the panel is a bar with a
+  Join button — a video that small helps nobody.
+- `e2e/instant-meeting.spec.ts` — one-click start from a mentee card (`@smoke`, also asserts
+  the panel survives navigation), the endpoint returning its link, and a mentor being unable
+  to start a meeting for someone else's mentee.
+
+### Fixed
+- **The embedded call would have had no camera and no frame.** `Permissions-Policy` was a
+  blanket `camera=(), microphone=()`, which disables them for every frame including our own,
+  and the CSP had no `frame-src`, so `default-src 'self'` blocked the Jitsi iframe outright.
+  Both are now narrowed to the one host we generate links for —
+  `frame-src 'self' https://meet.jit.si` and `camera=(self "https://meet.jit.si")` (same for
+  `microphone` / `display-capture`); `geolocation` stays fully denied. The allowlist is
+  mirrored in `EMBEDDABLE_MEETING_HOSTS` (`src/lib/meetingLink.ts`) — widening one without
+  the other yields an empty box or a call with no picture.
+
+### Changed
+- `isEmbeddableMeetingLink` moved from `meetingContext.ts` to a new import-free
+  `src/lib/meetingLink.ts`, so client components can use it without pulling Prisma (or
+  `node:crypto`) into the browser bundle. It now also requires `https:`.
+
 ## [0.40.5-beta] - 2026-08-03
 
 ### Added

@@ -7,6 +7,7 @@ import { CookieConsent } from '@/components/CookieConsent';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
 import { TimezoneSync } from '@/components/TimezoneSync';
+import { MeetingLauncherProvider } from '@/components/meeting/MeetingLauncher';
 import type { Locale } from '@/i18n/config';
 import type { ClientDictionary } from '@/i18n/dictionaries';
 
@@ -27,7 +28,9 @@ export function Providers({
               visible (and reversible) on screens that render their own chrome —
               /messages, /account, /notifications — not just inside ResponsiveShell. */}
           <ImpersonationBanner />
-          {children}
+          {/* Above the page shells on purpose: a call in progress has to survive
+              navigating from the mentee list to their profile (#1054). */}
+          <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
           <CookieConsent />
           <ActivityTracker />
           <TimezoneSync />
