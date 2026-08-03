@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Copy, Check } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { wallClockToInstantISO } from '@/lib/timezone';
 
 interface Relation {
@@ -116,7 +117,19 @@ export function MeetingsManager() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>{t.meetings.schedule} ({chosen.length})</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>{t.meetings.schedule} ({chosen.length})</CardTitle>
+              {/* Same selection, the other intent: skip the date/time and open a
+                  room for everyone ticked, right now (#1053). */}
+              {chosen.length > 0 && (
+                <StartMeetingButton
+                  className="ml-auto"
+                  target={{ relationIds: chosen }}
+                  defaultTitle={title.trim() || undefined}
+                  testId="start-meeting-bulk"
+                />
+              )}
+            </div>
           </CardHeader>
           <div className="space-y-4">
             <div className="max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-lg p-2">

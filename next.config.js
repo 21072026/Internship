@@ -9,6 +9,11 @@ const csp = [
   "img-src 'self' data: blob:",
   "font-src 'self'",
   "connect-src 'self'",
+  // The in-app meeting side panel embeds the Jitsi room we generate (#1054).
+  // Narrow on purpose: only the host we actually create links for, and only
+  // that host is allowed camera/microphone below. Keep this list in sync with
+  // EMBEDDABLE_MEETING_HOSTS in src/lib/meetingLink.ts.
+  "frame-src 'self' https://meet.jit.si",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -20,7 +25,15 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // camera/microphone/display-capture are granted to the app itself and to the
+  // embedded Jitsi room only — a blanket `camera=()` disables them for every
+  // frame, which would leave the meeting panel with a picture of nobody.
+  // geolocation stays fully denied.
+  {
+    key: 'Permissions-Policy',
+    value:
+      'camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), display-capture=(self "https://meet.jit.si"), geolocation=()',
+  },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 ];
 

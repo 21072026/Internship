@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.40.6-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Start a meeting in one click, from wherever the person already is: a "Start meeting" button now sits on every mentee card, on the candidate page and on the meetings screen. You are asked one thing — what it is about — and that is it.',
+        'The room then opens beside your work instead of stealing a tab: the invitee gets the link straight away by notification and email, the link is copied to your clipboard, and you can keep clicking around the app without dropping the call.',
+        'On a phone the panel becomes a simple Join button, and a link we cannot show inside the app offers to open in a new tab instead of showing you an empty box.',
+      ],
+      tr: [
+        'Görüşmeyi tek tıkla, kişinin zaten bulunduğu yerden başlat: artık her mentee kartında, aday sayfasında ve toplantılar ekranında bir "Görüşme başlat" butonu var. Sana tek bir şey soruluyor — konu ne — hepsi bu.',
+        'Oda sekmeni çalmak yerine işinin yanında açılıyor: karşı taraf linki anında bildirim ve e-posta ile alıyor, link panona kopyalanıyor ve uygulamada gezinmeye devam etsen de görüşme düşmüyor.',
+        'Telefonda panel sade bir "Katıl" butonuna dönüşüyor; uygulama içinde gösteremediğimiz bir link için boş kutu yerine yeni sekmede açma seçeneği çıkıyor.',
+      ],
+      de: [
+        'Eine Besprechung mit einem Klick starten — dort, wo die Person ohnehin steht: Eine Schaltfläche „Besprechung starten“ gibt es jetzt auf jeder Mentee-Karte, auf der Kandidatenseite und im Besprechungsbereich. Gefragt wird nur eines: worum es geht.',
+        'Der Raum öffnet sich dann neben deiner Arbeit, statt einen Tab zu belegen: Die eingeladene Person erhält den Link sofort per Benachrichtigung und E-Mail, der Link liegt in deiner Zwischenablage, und du kannst weiter in der App navigieren, ohne das Gespräch zu verlieren.',
+        'Auf dem Handy wird das Panel zu einer einfachen „Teilnehmen“-Schaltfläche; einen Link, den wir nicht in der App anzeigen können, bieten wir zum Öffnen in einem neuen Tab an, statt ein leeres Feld zu zeigen.',
+      ],
+    },
+  },
+  {
     version: '0.40.5-beta',
     date: '2026-08-03',
     highlights: {
