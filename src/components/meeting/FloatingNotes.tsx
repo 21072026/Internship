@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '@/i18n/client';
 import { openFloatingWindow, type FloatingWindow } from '@/lib/floatingWindow';
@@ -21,12 +21,47 @@ interface OpenOptions {
   title?: string;
 }
 
-const NotesContext = createContext<((opts: OpenOptions) => Promise<void>) | null>(null);
+interface NotesApi {
+  /**
+   * MUST be called from a live user gesture and NOT awaited behind anything
+   * else — see openFloatingWindow. Returns whether a window actually opened.
+   */
+  open: (opts: OpenOptions) => Promise<boolean>;
+  /**
+   * Fill in the meeting once it exists. Starting a call opens the window in the
+   * same click (the gesture can't wait for the API round trip), so the room's
+   * id arrives a moment later (#1058).
+   */
+  attach: (opts: OpenOptions) => void;
+  close: () => void;
+}
+
+const NotesContext = createContext<NotesApi | null>(null);
 
 export function useFloatingNotes() {
-  const open = useContext(NotesContext);
-  if (!open) throw new Error('useFloatingNotes must be used inside FloatingNotesProvider');
-  return open;
+  const api = useContext(NotesContext);
+  if (!api) throw new Error('useFloatingNotes must be used inside FloatingNotesProvider');
+  return api;
+}
+
+// Per-device preference (like the composer's enter-to-send): should starting a
+// meeting also open the notes window? Default on; once turned off, it stays off.
+const AUTO_OPEN_KEY = 'meeting-notes-auto-open';
+
+export function meetingNotesAutoOpen(): boolean {
+  try {
+    return localStorage.getItem(AUTO_OPEN_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function setMeetingNotesAutoOpen(on: boolean) {
+  try {
+    localStorage.setItem(AUTO_OPEN_KEY, on ? '1' : '0');
+  } catch {
+    /* storage disabled */
+  }
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -54,14 +89,23 @@ export function FloatingNotesProvider({ children }: { children: React.ReactNode 
     const win = await openFloatingWindow({ title: opts.title });
     if (!win) {
       setBlocked(true);
-      return;
+      return false;
     }
     setContext(opts);
     setFloating(win);
     // The opener owns this window; if it goes away on its own (the user closed
     // it, or the opener tab navigated), drop our reference.
     win.win.addEventListener('pagehide', () => setFloating(null), { once: true });
+    return true;
   }, []);
+
+  // Late-binding the meeting: the window is opened by the click, the room comes
+  // back from the server a moment later.
+  const attach = useCallback((opts: OpenOptions) => {
+    setContext((prev) => ({ ...prev, ...opts }));
+  }, []);
+
+  const api = useMemo(() => ({ open, attach, close }), [open, attach, close]);
 
   // Closing the opener must not leave an orphan window floating over the desktop.
   useEffect(() => {
@@ -78,7 +122,7 @@ export function FloatingNotesProvider({ children }: { children: React.ReactNode 
   }, [floating]);
 
   return (
-    <NotesContext.Provider value={open}>
+    <NotesContext.Provider value={api}>
       {children}
       {blocked && <PopupBlockedNotice onDismiss={() => setBlocked(false)} />}
       {floating &&

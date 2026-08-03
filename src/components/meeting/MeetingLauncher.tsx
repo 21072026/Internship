@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
 import { isEmbeddableMeetingLink } from '@/lib/meetingLink';
+import { meetingNotesAutoOpen, useFloatingNotes } from '@/components/meeting/FloatingNotes';
 
 // "Start a meeting now" (#1053, #1054).
 //
@@ -71,6 +72,9 @@ export function useMeetingLauncher() {
 export function MeetingLauncherProvider({ children }: { children: React.ReactNode }) {
   const t = useT();
   const toast = useToast();
+  // FloatingNotesProvider wraps this one (see Providers), so the notes window is
+  // available here and the two open on the same click.
+  const notes = useFloatingNotes();
   const [pending, setPending] = useState<StartOptions | null>(null);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -109,6 +113,14 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
     }
     setBusy(true);
     setError('');
+
+    // FIRST, before any await (#1058). Opening the floating window needs
+    // transient user activation, and the fetch below would spend it — the
+    // window would then silently never open. So the window is opened on the
+    // click and the room is attached to it once the server answers.
+    const wantsNotes = meetingNotesAutoOpen();
+    const notesOpening = wantsNotes ? notes.open({ title: trimmed }) : Promise.resolve(false);
+
     try {
       const res = await fetch('/api/meetings/instant', {
         method: 'POST',
@@ -117,11 +129,16 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
       });
       if (!res.ok) {
         setError(res.status === 429 ? t.meetings.instant.tooMany : t.meetings.instant.failed);
+        // Don't leave an empty notes window floating over a meeting that never
+        // started — the user would have no idea what it belongs to.
+        if (await notesOpening) notes.close();
         return;
       }
       const data: { meetingId: string; meetLink: string; invited: number } = await res.json();
       setPending(null);
       openPanel({ meetingId: data.meetingId, meetLink: data.meetLink, title: trimmed });
+      // Now the window knows which room it is taking notes for.
+      if (await notesOpening) notes.attach({ meetingId: data.meetingId, title: trimmed });
       // Copying is best-effort: the link is on screen either way, and a blocked
       // clipboard must not read as "the meeting failed".
       try {
@@ -132,6 +149,7 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
       }
     } catch {
       setError(t.meetings.instant.failed);
+      if (await notesOpening) notes.close();
     } finally {
       setBusy(false);
     }
