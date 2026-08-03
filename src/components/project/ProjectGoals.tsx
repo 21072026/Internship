@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Circle, Hand, Trash2, Send, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import type { TeamMember } from '@/lib/projectTeam';
 
@@ -53,6 +54,7 @@ export function ProjectGoals({
   const [picked, setPicked] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/projects/${projectId}`);
@@ -107,9 +109,12 @@ export function ProjectGoals({
     call(`/api/project-tasks/${task.id}`, 'PATCH', { assigneeId: myId }, task.id);
   const release = (task: Task) =>
     call(`/api/project-tasks/${task.id}`, 'PATCH', { assigneeId: null }, task.id);
-  const remove = (task: Task) => {
-    if (!window.confirm(t.projects.confirmDeleteTask.replace('{title}', task.title))) return;
-    return call(`/api/project-tasks/${task.id}`, 'DELETE', undefined, task.id);
+  const remove = (task: Task) => setPendingDelete({ id: task.id, title: task.title });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || busy === pendingDelete.id) return;
+    await call(`/api/project-tasks/${pendingDelete.id}`, 'DELETE', undefined, pendingDelete.id);
+    setPendingDelete(null);
   };
 
   const addGoal = async () => {
@@ -173,6 +178,7 @@ export function ProjectGoals({
   const pct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
 
   return (
+    <>
     <div className="space-y-4" data-testid="project-goals">
       <div>
         <div className="mb-1 flex justify-between text-xs text-gray-500">
@@ -309,5 +315,16 @@ export function ProjectGoals({
 
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.projects.confirmDeleteTask.replace('{title}', pendingDelete.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDelete ? busy === pendingDelete.id : false}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    </>
   );
 }

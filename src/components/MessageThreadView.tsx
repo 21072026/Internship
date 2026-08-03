@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import {
   MessageComposer,
@@ -87,6 +88,8 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [rowBusy, setRowBusy] = useState(false);
+  const [deleteEveryoneId, setDeleteEveryoneId] = useState<string | null>(null);
+  const [deletingEveryone, setDeletingEveryone] = useState(false);
   // Per-user (per-device) composer preference: when on, Enter sends and
   // Shift+Enter inserts a newline; when off (default), Enter is a newline and
   // Shift+Enter sends. Persisted in localStorage so it sticks for this user.
@@ -240,9 +243,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     finally { setRowBusy(false); }
   };
 
-  const remove = async (id: string, scope: 'everyone' | 'me') => {
-    setMenuId(null);
-    if (scope === 'everyone' && !window.confirm(t.messages.deleteEveryoneConfirm)) return;
+  const performDelete = async (id: string, scope: 'everyone' | 'me') => {
     setRowBusy(true);
     try {
       const res = await fetch(`/api/messages/${id}?scope=${scope}`, { method: 'DELETE' });
@@ -250,6 +251,23 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       else setAttachError(t.messages.deleteFailed);
     } catch { setAttachError(t.messages.deleteFailed); }
     finally { setRowBusy(false); }
+  };
+
+  const remove = (id: string, scope: 'everyone' | 'me') => {
+    setMenuId(null);
+    if (scope === 'everyone') { setDeleteEveryoneId(id); return; }
+    void performDelete(id, 'me');
+  };
+
+  const confirmDeleteEveryone = async () => {
+    if (!deleteEveryoneId || deletingEveryone) return;
+    setDeletingEveryone(true);
+    try {
+      await performDelete(deleteEveryoneId, 'everyone');
+    } finally {
+      setDeletingEveryone(false);
+      setDeleteEveryoneId(null);
+    }
   };
 
   const nameFor = (id: string) => parties.find((p) => p.id === id)?.fullName ?? '—';
@@ -532,6 +550,16 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       </>
       )}
       </div>
+      <ConfirmDialog
+        open={deleteEveryoneId !== null}
+        message={t.messages.deleteEveryoneConfirm}
+        cancelLabel={t.messages.cancel}
+        confirmLabel={t.messages.deleteForEveryone}
+        variant="danger"
+        loading={deletingEveryone}
+        onConfirm={confirmDeleteEveryone}
+        onCancel={() => setDeleteEveryoneId(null)}
+      />
     </div>
   );
 }

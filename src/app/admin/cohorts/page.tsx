@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Pencil, Trash2 } from 'lucide-react';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 
 interface Cohort {
@@ -26,6 +27,7 @@ export default function AdminCohortsPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/cohorts');
@@ -64,14 +66,17 @@ export default function AdminCohortsPage() {
     }
   };
 
-  const remove = async (c: Cohort) => {
-    if (!window.confirm(t.cohorts.confirmDelete.replace('{name}', c.name))) return;
+  const remove = (c: Cohort) => setPendingDelete({ id: c.id, name: c.name });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || saving) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/cohorts/${c.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/cohorts/${pendingDelete.id}`, { method: 'DELETE' });
       if (res.ok) await load();
     } finally {
       setSaving(false);
+      setPendingDelete(null);
     }
   };
 
@@ -81,6 +86,7 @@ export default function AdminCohortsPage() {
   const filtered = cohorts.filter((c) => !q || c.name.toLowerCase().includes(q));
 
   return (
+    <>
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.cohorts.title}</h1>
@@ -154,5 +160,16 @@ export default function AdminCohortsPage() {
         )}
       </Card>
     </div>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.cohorts.confirmDelete.replace('{name}', pendingDelete.name) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={saving}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    </>
   );
 }

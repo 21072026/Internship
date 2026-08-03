@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Textarea';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 
@@ -32,6 +33,8 @@ export function NotesPanel() {
   const [editBody, setEditBody] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const editSavingRef = useRef(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/notes');
@@ -53,11 +56,19 @@ export function NotesPanel() {
     }
   };
 
-  const remove = async (id: string) => {
-    if (!window.confirm(t.common.confirmDelete)) return;
-    await fetch(`/api/notes/${id}`, { method: 'DELETE' });
-    await load();
-    toast(t.portal.notes.deleted);
+  const remove = (id: string) => setDeleteId(id);
+
+  const confirmRemove = async () => {
+    if (!deleteId || deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/notes/${deleteId}`, { method: 'DELETE' });
+      await load();
+      toast(t.portal.notes.deleted);
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
+    }
   };
 
   const startEdit = (note: Note) => {
@@ -92,6 +103,7 @@ export function NotesPanel() {
   const shown = categoryFilter === 'ALL' ? notes : notes.filter((n) => n.category === categoryFilter);
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Lock className="h-4 w-4 text-gray-400" />{t.portal.notes.title}</CardTitle>
@@ -194,5 +206,16 @@ export function NotesPanel() {
         </div>
       )}
     </Card>
+    <ConfirmDialog
+      open={deleteId !== null}
+      message={t.common.confirmDelete}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={deleting}
+      onConfirm={confirmRemove}
+      onCancel={() => setDeleteId(null)}
+    />
+    </>
   );
 }
