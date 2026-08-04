@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.41.1-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Behind-the-scenes groundwork for letting someone apply to become a mentor without an account first — admins will see these applications and a review screen next; nothing new to see on screen yet.',
+      ],
+      tr: [
+        'Bir kişinin hesap açmadan mentör olmak için başvurabilmesi için perde arkası altyapı — bu başvuruları görecek admin ekranı bir sonraki adımda geliyor; ekranda henüz yeni bir şey yok.',
+      ],
+      de: [
+        'Vorarbeit im Hintergrund, damit sich jemand ohne Konto als Mentor bewerben kann — die Admin-Ansicht für diese Bewerbungen folgt als Nächstes; auf dem Bildschirm ändert sich noch nichts.',
+      ],
+    },
+  },
+  {
     version: '0.41.0-beta',
     date: '2026-08-04',
     highlights: {
