@@ -971,14 +971,21 @@ model ProjectTask {
 // Not tenant-anchored: reached through Project / User, like the other child
 // models (see TENANT_MODELS in src/lib/orgContext.ts).
 model ProjectTaskTemplate {
-  id          String   @id @default(cuid())
-  projectId   String?
-  title       String
-  createdById String?
+  id           String   @id @default(cuid())
+  projectId    String?
+  // The fallback wording, and the key the pool dedupes on. A localized title
+  // lives in `translations`; `title` is what a member sees when their language
+  // has no entry there.
+  title        String
+  // { en?, tr?, de? } — the goal in each language it has been written in. The
+  // task created from a template is a plain string, resolved once from the
+  // assignee's own language (src/lib/goalTemplates.ts).
+  translations Json?
+  createdById  String?
   // How many times this template has been handed to someone — the pool sorts
   // by it so the goals actually used float to the top.
-  useCount    Int      @default(0)
-  createdAt   DateTime @default(now())
+  useCount     Int      @default(0)
+  createdAt    DateTime @default(now())
 
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?    @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)

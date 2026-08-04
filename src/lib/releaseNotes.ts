@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.42.0-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Goal templates now have a home: Admin → Goal templates. Add a goal, reword one, delete what you don’t use, and see how often each has been handed out. Deleting a template never touches goals already given to someone.',
+        'A template can be written in English, Turkish and German — and the member gets it in their own language. The screen also shows you which languages a goal is still missing.',
+        'Inside a project you can still keep your own goal wordings: reword or remove the project’s own templates right there, while the shared ones are marked as admin-managed.',
+      ],
+      tr: [
+        'Hedef şablonlarının artık bir yeri var: Admin → Hedef şablonları. Hedef ekle, sözünü değiştir, kullanmadığını sil, hangisinin kaç kez verildiğini gör. Bir şablonu silmek, daha önce birine verilmiş hedeflere dokunmaz.',
+        'Bir şablonu İngilizce, Türkçe ve Almanca yazabiliyorsun — üye kendi dilinde alıyor. Ekran, bir hedefin hangi dillerinin eksik olduğunu da gösteriyor.',
+        'Proje içinde kendi hedef metinlerin sende kalıyor: projenin kendi şablonlarını orada düzenleyip silebiliyorsun, ortak olanlar ise admin tarafından yönetildiği belli olacak şekilde işaretli.',
+      ],
+      de: [
+        'Zielvorlagen haben jetzt einen Ort: Admin → Zielvorlagen. Ziel hinzufügen, umformulieren, Ungenutztes löschen und sehen, wie oft jedes vergeben wurde. Das Löschen einer Vorlage lässt bereits vergebene Ziele unberührt.',
+        'Eine Vorlage kann auf Englisch, Türkisch und Deutsch geschrieben werden — das Mitglied erhält sie in seiner Sprache. Die Ansicht zeigt außerdem, welche Sprachen noch fehlen.',
+        'Im Projekt bleiben eigene Formulierungen deine: die projekteigenen Vorlagen kannst du dort umschreiben oder löschen, die gemeinsamen sind als admin-verwaltet gekennzeichnet.',
+      ],
+    },
+  },
+  {
     version: '0.41.5-beta',
     date: '2026-08-04',
     highlights: {

@@ -7,6 +7,7 @@ import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { goalLinkFor } from '@/lib/projectGoalLink';
+import { resolveTemplateTitle } from '@/lib/goalTemplates';
 
 // A task may be created from free text (`title`) or from the template pool
 // (`templateIds`) — the latter is the "send the standard goals to the person who
@@ -58,12 +59,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const titles: string[] = [];
+    // Titles that came from the pool: they are already templates, so the capture
+    // below must not copy the resolved wording back in as a new one.
+    const fromTemplate = new Set<string>();
     if (parsed.data.templateIds?.length) {
       const templates = await prisma.projectTaskTemplate.findMany({
         where: { id: { in: parsed.data.templateIds }, OR: [{ projectId: id }, { projectId: null }] },
-        select: { id: true, title: true },
+        select: { id: true, title: true, translations: true },
       });
-      titles.push(...templates.map((t) => t.title));
+      // A template can be written in three languages; the goal the assignee
+      // reads is a plain string, so resolve it here in *their* language.
+      const assigneeLanguage = assigneeId
+        ? (
+            await prisma.user.findUnique({
+              where: { id: assigneeId },
+              select: { preferredLanguage: true },
+            })
+          )?.preferredLanguage
+        : null;
+      for (const tpl of templates) {
+        const resolved = resolveTemplateTitle(tpl, assigneeLanguage);
+        titles.push(resolved);
+        fromTemplate.add(resolved);
+      }
       if (templates.length > 0) {
         await prisma.projectTaskTemplate.updateMany({
           where: { id: { in: templates.map((t) => t.id) } },
@@ -83,14 +101,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         })
       );
       // Keep the pool current: a goal written by hand becomes a template too, so
-      // the next member can be given it in one click.
-      await prisma.projectTaskTemplate
-        .upsert({
-          where: { projectId_title: { projectId: id, title } },
-          update: {},
-          create: { projectId: id, title, createdById: session.user.id },
-        })
-        .catch(() => null);
+      // the next member can be given it in one click. A goal that came *from*
+      // the pool is skipped — capturing it would clone the shared template into
+      // this project under whatever language it was resolved to.
+      if (!fromTemplate.has(title)) {
+        await prisma.projectTaskTemplate
+          .upsert({
+            where: { projectId_title: { projectId: id, title } },
+            update: {},
+            create: { projectId: id, title, createdById: session.user.id },
+          })
+          .catch(() => null);
+      }
     }
 
     if (assigneeId && assigneeId !== session.user.id) {

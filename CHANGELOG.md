@@ -8,6 +8,38 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.42.0-beta] - 2026-08-04
+
+### Added
+- **Goal templates are managed, and multilingual.** `ProjectTaskTemplate` gains a nullable
+  `translations` Json column (`{ en?, tr?, de? }`); `title` stays the canonical wording, the
+  pool's dedupe key and the fallback. `src/lib/goalTemplates.ts` normalizes input, derives the
+  canonical title (default locale first, then any filled language) and resolves the wording one
+  person should read.
+- **New admin screen `/admin/goal-templates`** (+ `AdminNav` entry) over
+  `GET/POST/PATCH/DELETE /api/admin/goal-templates` (ADMIN only, shared pool = `projectId: null`):
+  add a goal in up to three languages, reword it, delete it, see which languages are still
+  missing and how often each has been handed out. Deleting a template leaves goals already handed
+  out alone — by then they are tasks of their own.
+- **Per-project template management** in `ProjectGoals`: the pool box now shows each entry in the
+  viewer's language, marks the admin-managed shared ones as read-only ("shared" badge), and lets
+  a project lead reword (new `PATCH /api/projects/[id]/task-templates`) or delete the project's
+  own entries. `POST` on that route accepts `translations` alongside the legacy `title`.
+
+### Changed
+- A goal handed out from the pool is created in the **assignee's** language
+  (`User.preferredLanguage`, falling back to the default locale, then `title`) — a task is a
+  single string, so the language is resolved once, at hand-over.
+- Sending a shared template no longer clones it into the project's own pool: the automatic
+  "capture what was written" upsert now skips titles that came from the pool, which would
+  otherwise copy a shared goal in under whatever language it resolved to.
+- `prisma/seed-goal-templates.mjs` seeds all 20 starter goals in EN/TR/DE and back-fills
+  translations onto rows seeded before the column existed. Still idempotent, still keyed on the
+  Turkish `title`.
+- `isLocale()` accepts `null` (it is now fed `User.preferredLanguage`).
+- Feature catalogue: the `projectTeams` entry describes the managed multilingual pool and goals
+  living on the person's profile.
+
 ## [0.41.5-beta] - 2026-08-04
 
 ### Fixed
