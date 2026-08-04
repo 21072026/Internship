@@ -7,14 +7,18 @@ import { canViewProject, resolveOwner, isProjectOwner, isProjectMember } from '@
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { createOrGetProjectConversation } from '@/lib/conversations';
+import { mergeTeam, internCount } from '@/lib/projectTeam';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
   ownerCompany: { select: { id: true, name: true } },
   relations: {
-    select: { id: true, pipelineStatus: true, mentee: { select: { id: true, fullName: true } }, mentor: { select: { fullName: true } } },
+    select: { id: true, pipelineStatus: true, mentee: { select: { id: true, fullName: true } }, mentor: { select: { id: true, fullName: true } } },
   },
-  tasks: { orderBy: { order: 'asc' } },
+  tasks: {
+    orderBy: { order: 'asc' },
+    include: { assignee: { select: { id: true, fullName: true } } },
+  },
   members: {
     orderBy: { addedAt: 'asc' },
     select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, role: true } } },
@@ -28,8 +32,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     const project = await prisma.project.findUnique({ where: { id }, include });
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (!canViewProject(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    return NextResponse.json({ project });
+    const team = mergeTeam(project.members, project.relations);
+    // Being on the project is itself a right to read it (#51): a mentee added to
+    // a private project could not open it, because visibility only ever looked at
+    // ownership and the public flag.
+    const onTheTeam = team.some((m) => m.id === session.user.id);
+    if (!canViewProject(session.user, project) && !onTheTeam) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    return NextResponse.json({ project: { ...project, team, internCount: internCount(team) } });
   });
 }
 

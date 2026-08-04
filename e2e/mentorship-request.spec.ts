@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -213,22 +214,13 @@ test('admin rejects a mentorship request and the mentee is notified with no rela
 
   let requestId = '';
   try {
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', menteeEmail);
-    await page.fill('input[type="password"]', pw);
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+    await signInAsFreshUser(page, menteeEmail, pw, '/portal');
 
     const created = await page.request.post('/api/mentorship-requests', { data: {} });
     expect(created.status()).toBe(201);
     requestId = (await created.json()).request.id;
 
-    await page.context().clearCookies();
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', adminEmail);
-    await page.fill('input[type="password"]', pw);
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+    await signInAsFreshUser(page, adminEmail, pw, '/admin');
 
     const reject = await page.request.put('/api/admin/mentorship-requests', {
       data: { requestId, action: 'reject' },

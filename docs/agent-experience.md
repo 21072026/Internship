@@ -10,6 +10,108 @@ Newest entries on top.
 
 ---
 
+## 2026-08-02 — #51'in kullanıcı geri bildirim turları (0.40.1/0.40.2-beta)
+
+Aynı oturumda özellik canlıya gitmeden önce üç tur geri bildirim geldi; hepsi
+"kod doğru ama davranış yanlış" cinsindendi.
+
+**Bir e-posta göndericisi döngünün içindeyse kaç kez çağrıldığını say.**
+`generateForSeries`, `sendMeetingInviteEmail`'i `tekrar × ilişki` döngüsünün
+içinde çağırıyordu: 6 mentee × 7 hafta = tek tıkla 42 e-posta. Kod #774'ten beri
+böyleydi ama UI olmadığı için kimse tetiklemiyordu — **var olan bir backend'e UI
+eklemek, o backend'in maliyetini de senin devraldığın anlamına geliyor.** Ölçüt:
+"bir kullanıcı eylemi kaç e-posta üretiyor?" sorusunu UI'ı yazmadan önce sor.
+
+**İki cron aynı satırı hedefliyorsa çift bildirim gider.** Yeni proje-bazlı
+hatırlatma ile mevcut ilişki-bazlı `sendMeetingReminders` aynı seri
+`Meeting` satırlarını eşleştiriyordu; hem ilişkisi hem üyeliği olan kişi 1 saat
+önce iki e-posta alıyordu. Yeni bir bildirim yolu eklerken **eski yolun aynı
+kaydı görüp görmediğini** kontrol et (`seriesId: null` ile dışladım) — ve dışlama
+yaptığında eski yolun kapsadığı kişileri yeni yolun da kapsadığından emin ol
+(`loadProjectTeam`, yalnız `ProjectMember` değil).
+
+**App shell'in dışındaki route mobilde başlıksız kalır.** `/projects/[id]` public
+ziyaretçi okuyabilsin diye admin/mentor layout'unun dışında; sonuç: projeyi açınca
+header tamamen kayboluyor, telefonda sidebar da olmadığı için ne başlık ne çıkış
+yolu kalıyor. Layout dışına sayfa koyarken kendi bar'ını da koy.
+
+**Responsive'i akıl yürütmeyle değil ekran görüntüsüyle doğrula — ama panelleri
+bekle.** 390px'te `page.screenshot()` aldığımda client panelleri boş çıktı; dev
+server route'u derlerken `networkidle` yetmiyor. `locator(...).waitFor()` ile
+beklemek gerçek durumu gösterdi. Kalıcı kontrol için mekanik denetim yazdım
+(yatay taşma yok + 120px altı metin alanı yok, açılır formlar açık halde):
+`e2e/mobile-responsive.spec.ts`. 20 ekranlık süpürme temiz çıktı, yani sorun
+uygulamanın genelinde değil tek bir kartta.
+
+**`signInAsFreshUser` sonrası `page.goto` yerine `gotoSettled` kullan.**
+Helper URL eşleşince dönüyor, landing push'u hâlâ uçuşta: "Navigation … is
+interrupted by another navigation" alıyorsun. `helpers/auth.ts` bunu zaten
+belgeliyor, yeni spec yazarken atlamak kolay.
+
+**Bu container'da MariaDB uzun koşular arasında kendi kendine düşüyor.** Testte
+"Can't reach database server at 127.0.0.1:3306" görünce ilk iş
+`service mariadb start` — değişikliğini suçlamadan önce.
+
+**Deploy beklemek için foreground `sleep` bloklu.** `until curl … | grep -q
+'"sha":"<sha>'; do sleep 15; done` komutunu `run_in_background: true` ile başlat;
+prod `/api/health` sha'yı flip ettiğinde bildirim geliyor.
+
+---
+
+## 2026-08-02 — Proje ekipleri, hedefler, katılma talepleri, davet/referans (#51, 0.40.0-beta)
+
+**"Yanlış isim görünüyor" şikâyeti neredeyse hep iki kaynaklı veridir.** Proje kartı
+"2 stajyer" derken üye panelinde 6 mentee vardı: sayı ve chip'ler `MentorshipRelation.projectId`
+(eski yol) üzerinden, panel ise `ProjectMember` (#617'den beri kanonik tablo) üzerinden
+okuyordu. Çözüm tek bir birleştirici (`src/lib/projectTeam.ts` → `mergeTeam`) ve *her*
+tüketicinin ondan beslenmesi. Benzer bir uyumsuzluk görürsen önce "kaç tablo bu soruyu
+cevaplıyor?" diye sor.
+
+**"Alan yok" sanılan şey bazen sadece render edilmemiştir.** Haftalık toplantı için
+`MeetingSeries` modeli + tam CRUD API'si #774'ten beri duruyordu; `grep -rln MeetingSeries src/`
+tek dosya döndürdü: kendi route'u. Yeni özelliğe başlamadan bu grep'i yapmak, sıfırdan model
+tasarlamakla mevcut backend'e GET + UI eklemek arasındaki farkı belirliyor.
+
+**Görünürlük kuralı ile üyelik kuralı ayrı yerlerde yaşıyor.** `canViewProject()` yalnızca
+sahiplik + `isPublic` bakıyordu, dolayısıyla projeye eklenmiş bir mentee kendi projesini
+göremiyordu (özel projede 404). Üyelik bir okuma hakkıysa bunu üç yere birlikte eklemek gerekti:
+route (`GET /api/projects/[id]`), rol kapsamı (`authzScope.ts` → MENTEE) ve sayfanın kendi
+`canInternal` hesabı. Birini atlarsan sonuç sessizce tutarsız olur.
+
+**Hatırlatmayı taşıyan satır yoksa hatırlatma da yoktur.** Proje toplantısını `Meeting`
+satırlarına bağlamak işe yaramaz: proje üyelerinin çoğunun o projeye bağlı bir
+`MentorshipRelation`'ı yok, `generateForSeries` de yalnızca ilişkili mentee'lere satır üretiyor.
+Kuraldan (seri + occurrence) türeten ayrı bir cron ve idempotency için `(seriesId, occurrenceAt,
+lead)` unique satırı gerekti — "önce claim et, sonra gönder" deseni `sendMeetingReminders`'tan
+kopyalandı.
+
+**`ensureReferralCode` dersi: retry'ı hata koduna bağla.** İlk sürüm her hatada 5 kez deneyip
+"Could not allocate a referral code" atıyordu; e2e sırasında kullanıcı silindiği için P2025
+alıyordu ve gerçek sebep kayboluyordu. Yalnızca P2002'de (gerçek çakışma) tekrar dene, P2025'te
+null dön, geri kalanı olduğu gibi fırlat.
+
+**Bu container'da iki pre-existing e2e hatası var** (temiz ağaçta `git stash` ile doğruladım,
+değişiklikle ilgisi yok): `smoke.spec.ts:53` (`/admin` → next-auth `CLIENT_FETCH_ERROR`, in-flight
+session fetch navigasyonla iptal ediliyor) ve `pipeline.spec.ts:8` (aşama değişimi 1800 ms
+içinde persist etmiyor). Bir hatayı kendine yazmadan önce **stash'leyip baseline al** — 30
+saniyelik iş, yanlış teşhisten çok daha ucuz.
+
+**Playwright tarayıcı sürümü yine tutmadı.** Beklenen `chromium_headless_shell-1234`, kurulu olan
+`-1194`. `playwright install` yerine dizin yapısını taklit eden symlink:
+`mkdir -p /opt/pw-browsers/chromium_headless_shell-1234/chrome-headless-shell-linux64 && ln -s
+…-1194/chrome-linux/headless_shell …/chrome-headless-shell` (binary adı da farklı,
+`headless_shell` → `chrome-headless-shell`).
+
+**`seed:demo` `.env`'i okumuyor.** `npm run seed:demo` `DATABASE_URL` yoksa önce
+"does not look local" der (yanıltıcı), sonra Prisma init hatası verir. `export DATABASE_URL=…
+SEED_DEMO_FORCE=1` ile çalıştır.
+
+**60 sn'lik test bütçesi tek başına geçip suite içinde patlar.** İki sign-in + beş navigasyon
+içeren yeni spec tek başına ~50 sn, yüklü suite'te 60 sn'yi aştı. `test.slow()` (bütçeyi 3'e
+katlar) doğru araç; timeout'u global olarak yükseltmek değil.
+
+---
+
 ## 2026-07-31 — Inbound mail bridge (#974, 0.29.0/0.29.1-beta)
 
 **"The email can't go out" was actually "the email arrives and nothing reads
@@ -2168,3 +2270,176 @@ yardımcısını yazan başka spec'ler var (`grep -l "goto('/auth/signin')" e2e/
 `helpers/auth` import etmeyenleri kesiştir; ≥2 giriş yapanlar riskli). Şu an yeşiller, yani
 aynı yarış onlarda **uykuda**. Hepsini bu PR'da taşımak yeşil testleri riske atardı;
 ayrı bir süpürme işi.
+
+## 2026-08-02 — Uykudaki giriş yarışının süpürmesi (#1043): "≥2 giriş" değil, "aynı `page`'te ≥2 giriş"
+
+Bir önceki girdinin (`questions.spec.ts`) kapsam dışı bıraktığı iş. Başlangıç ölçütü —
+"`goto('/auth/signin')` içeren ama `helpers/auth` import etmeyen, ≥2 giriş yapan spec'ler" —
+doğru yere bakıyor ama **çok geniş**: 27 dosya eşleşiyor, gerçekte taşınması gereken **7**.
+
+**Eleyen soru "kaç giriş?" değil, "aynı oturum devrediliyor mu?".** Yarış ancak *aynı*
+`page` üstünde ikinci bir giriş yapılınca oluşuyor. Üç yaygın yanlış pozitif:
+
+1. **Girişler ayrı `test()` bloklarında.** Her test taze bir `page` fixture'ı alır; devreden
+   bir çerez yok. 27 adayın 18'i bu. (`account`, `evaluation`, `impersonation`, `projects`, …)
+2. **Her kullanıcıya kendi `browser.newContext()`'i.** Ayrı çerez kavanozu, yarış yok.
+   (`admin-support`, `free-core-regression`, `interaction-summary`, `sign-out-all`,
+   `support-attachments`, `talent-pool-early-access`, `mentorship-request`'in 3 testinden 2'si)
+3. **İkinci `goto('/auth/signin')` iddianın kendisi.** `redirect.spec.ts` bir kez giriyor;
+   ikinci gidiş "giriş yapmış kullanıcı buradan atılmalı" testi.
+
+Ayıklama grep'le değil, **test bloğu başına sayarak** yapılır: dosyayı satır satır gez,
+`test(` görünce sayacı sıfırla, `goto('/auth/signin')` *veya yerel giriş yardımcısının çağrısı*
+görünce artır. Yerel yardımcı adımı şart — `announcements-feed` gibi dosyalarda dosyada tek
+bir `goto` literali var ama yardımcı test başına iki kez çağrılıyor; sadece literal sayan bir
+tarama bunları **kaçırır**.
+
+**Aynı kullanıcıya yeniden giriş de bu sınıfa girebiliyor.** `email-verification` iki kez
+*aynı* hesapla giriyor, dolayısıyla "kullanıcı değişimi" filtresine takılmıyor — ama amacı
+bayat JWT'deki `emailVerified: false`'ı tazelemek. Eski oturumla sessizce `/mentor`'a
+dönmek `waitForURL`'i geçirir ve testi *yanlış sebeple* kırar (banner hâlâ ekranda).
+Ölçüt "farklı e-posta" değil, **"bu girişin gerçekten yeniden kimlik doğrulaması gerekiyor mu"**.
+
+**Girişin bir iniş sayfası yoksa `submitSignInForm`.** `admin-user-active`'de ikinci giriş
+devre dışı bırakılmış bir hesapla yapılıyor: doğru sonuç `/auth/signin`'de kalmak.
+`signInAsFreshUser` orada 20 sn bekleyip düşerdi. Aynı ayrım `two-factor.spec.ts`'te de var.
+
+**Yeşil testleri taşırken doğrulama CI'da yapılır, lokalde değil.** Bu yarış hızlı makinede
+tekrar üretilemiyor (bir önceki girdi), dolayısıyla "lokalde geçti" hiçbir şey söylemiyor.
+Kullanılan zincir: `gh workflow run e2e.yml --ref <branch> -f grep='<8 testi kapsayan regex>'`
+→ log'da **`Running 8 tests`** satırını doğrula (0 olsaydı regex tutmamış demektir, ve koşu
+yine de yeşil raporlardı — sessiz yanlış pozitif) → merge'den önce `e2e-full.yml` branch'te.
+`npx playwright test --list --grep '<regex>'` lokalde regex'i bedavaya doğruluyor; dispatch
+etmeden önce onu koştur.
+
+## 2026-08-03 — Aynı hatanın diğer yarısı: *giriş* yönü (#1061, 0.40.4-beta)
+
+#1030 (bir gün önce, hemen yukarıda) tarih/saatin **çıkış** yönünü düzeltmişti: sunucuda
+`timeZone` vermeden formatlamak. Bugün gelen bildirim neredeyse aynı görünüyordu — "16:30
+seçtim, 18:30 oldu", yine tam **2 saat**, yine Berlin/UTC — ama kök neden **karşı yönde**
+idi: bu kez format değil, **parse**.
+
+**Ayırt edici soru: yanlış olan gösterim mi, saklanan veri mi?** #1030'da DB doğruydu,
+e-posta yanlış render ediyordu. Burada e-posta *doğru* render ediyordu ("18:30 (GMT+2)" —
+saklanan an gerçekten 18:30 Berlin'di); bozuk olan `scheduledAt`'in kendisiydi. Ekran
+görüntülerinden bunu ayırmanın yolu: **ilan edilen ofset etiketiyle** tutarlı mı? "18:30
+(GMT+2)" iç tutarlı bir cümle, dolayısıyla formatlayıcı suçlu değil. Tutarlıysa yukarı,
+yazma yoluna bak.
+
+**Kural:** `<input type="date">` + `<input type="time">` (ve `datetime-local`) **saat dilimi
+taşımayan** bir duvar saati üretir (`"2026-08-03T16:30"`). ECMAScript'e göre belirteçsiz bir
+tarih-saat dizesi **çalışma zamanının yerel diliminde** yorumlanır — tarayıcıda kullanıcının
+dilimi, sunucuda ise UTC. Yani aynı dize iki uçta **iki farklı an** demek. Bu dize asla ham
+hâlde POST edilmemeli; `new Date(bareString)` sunucuda her zaman bir hatadır.
+
+**Neden hem istemci hem sunucu düzeltildi:** istemci tarafı yetkili çözüm (kullanıcının
+dilimini yalnızca tarayıcı bilir), ama sunucu tarafı `new Date()` çağrısı bırakılırsa
+önbellekteki eski paketle gelen tarayıcı ve API tüketicileri hatayı yaşamaya devam eder.
+Sunucuda "diliminden emin değilsen" fallback'i organizatörün `User.timezone`'u → `APP_TIMEZONE`
+→ Europe/Istanbul; UTC varsaymaktan her koşulda daha iyi (ama #1030'un tuzağı burada da
+geçerli: bu alan mentor/adminlerde boş olabilir, o yüzden istemci düzeltmesi asıl olan).
+
+**IANA duvar saati → an dönüşümü, kütüphanesiz:** aradığın ofset, çözmeye çalıştığın anın
+kendisine bağlıdır (DST). Yineleyerek çöz — duvar saatini UTC varsay, oradaki ofsetle
+düzelt, bir kez daha düzelt. İki geçiş, ofseti ~1 saatten az kayan her dilim için tam
+sonuç veriyor. Ofseti `Intl.DateTimeFormat(...).formatToParts` ile geri okumak, kendi ofset
+tablonu tutmaktan iyidir. `hour12: false` bazı ICU sürümlerinde gece yarısını **"24"**
+döndürür — `% 24` şart.
+
+**Regex tuzağı — "saat dilimi belirteci var mı":** naif `/(?:Z|[+-]\d{2}:?\d{2})$/` deseni
+yalnızca-tarih olan `"2026-08-03"`'ü de **eşleştirir** (`-08-03` bir "-08:03" ofseti gibi
+okunur) ve dizeyi "zaten dilimli" sayıp UTC gece yarısına çevirir. Belirteci **bir saatin
+ardından** aramak gerekiyor; `.000Z` için kesirli saniyeyi de kapsa.
+
+**Düzeltmenin gerçekten çalıştığını kanıtlama — testi eski kodda kırmızı gör.** Yeni e2e
+`git stash push -- src/` ile düzeltme geri alınıp koşuldu: `Received: 16:30Z` (bildirilen
+hatanın tam kendisi), düzeltmeyle `14:30Z`. Yeşil bir test tek başına hiçbir şey kanıtlamaz;
+Playwright'ta `test.use({ timezoneId: 'Europe/Berlin' })` bu tür hataları görünür kılan tek
+satırdır — **UTC tarayıcıda bu hata görünmez**, yani varsayılan dilimle yazılmış bir test
+sessizce yeşil kalırdı. Ayrıca iddia **saklanan anı** (`prisma.meeting.findFirst` →
+`scheduledAt.toISOString()`) kontrol etmeli; ekranda okunan metin hem doğru hem yanlış
+veriyle "16:30" gösterebilir.
+
+**Formattan bağımsız iddia yaz:** ekrandaki saati doğrulayan satır ilk denemede kırıldı,
+çünkü liste `Intl`'i tarayıcının **locale**'iyle çalıştırıyor ve `en-US` 12 saatlik
+("4:30 PM") biçim veriyor. `/(16:30|4:30\s*PM)/` gibi iki biçimi de kabul et — yoksa test
+saat dilimini değil locale'i test eder.
+
+**Geriye dönük veri:** düzeltmeden önce oluşmuş satırlar kayık kalıyor ve toptan bir
+backfill **yapılmadı** — form kaynaklı satırı doğru saklanmış satırdan (seri tekrarları,
+kabul edilmiş toplantı istekleri) ayırt edecek bir işaret yok, `createdById` üzerinden ofset
+tahmini doğru satırları bozardı. Yerinde düzeltme için bir yeniden planlama/iptal yolu da
+yok (`/api/meetings` yalnızca GET+POST). Bunu kullanıcıya **açıkça söyle**; "düzelttim"
+demek yeni kayıtlar için doğru, mevcut kayıt için değil.
+
+**Ortam:** yerel MariaDB + `.env` + `db push` playbook'taki gibi sorunsuz kuruldu. Playwright
+runner'ı için `executablePath` override'ı ayrı bir config dosyasına yazılıyor ve bu dosya
+**repo kökünde** olmalı — `playwright.config.ts` içindeki `globalSetup: './e2e/global-setup.ts'`
+gibi göreli yollar config'in bulunduğu dizine göre çözülüyor, scratchpad'e koyunca
+`MODULE_NOT_FOUND` veriyor. Commit'ten önce silmeyi unutma.
+
+## 2026-08-03 — Anlık görüşme + yüzen not penceresi paketi (#1051–#1059, 0.40.5→0.40.9-beta)
+
+Beş PR'lık bir zincir (şema → endpoint → butonlar/yan panel → proje & sohbet → not penceresi
+→ nottan işe). Çıkan dersler, sırayla en pahalıya mal olanlar:
+
+**`git checkout -B <dal> origin/main` upstream'i `origin/main` yapar.** Squash-merge edilmiş
+bir PR'ın üstüne yeni dal kurarken bunu kullandım; sonrasındaki düz `git push` **dalıma
+değil main'e** gitmeye çalıştı. Main korumalı olduğu için reddedildi (yoksa doğrudan main'e
+commit'lerdim), ama asıl zarar sessizdi: dalın uzaktaki hâli **eski commit'te kaldı**, PR o
+eski commit'le açıldı ve **hiç CI tetiklenmedi**. "PR'da 0 check var" gördüğünde önce
+`git status -sb` ile upstream'e bak; `-B` sonrası her zaman
+`git push origin <dal>:<dal>` yaz ya da `--set-upstream-to`'yu düzelt.
+
+**Squash-merge edilen bir PR'ın üstündeki dalı `rebase` etme, `cherry-pick`'le yeniden kur.**
+Zincirdeki her PR bir öncekinin dalından çıkıyordu; üsttekiler squash'lanınca
+`git rebase origin/main` her seferinde aynı içeriği "AA" çakışmasıyla getirdi. Doğrusu:
+`git checkout -B <dal> origin/main && git cherry-pick <kendi commit'im>`.
+
+**Headless Chromium `documentPictureInPicture`'ı SUNUYOR.** "Tarayıcı desteklemiyor, o yüzden
+fallback'i test ederim" varsayımı yanlış — o test sessizce **PiP dalını** çalıştırır ve
+Safari/Firefox hakkında hiçbir şey kanıtlamaz. İki dalı da `context.addInitScript` ile zorla:
+biri `delete window.documentPictureInPicture`, diğeri `requestWindow`'u `window.open` ile
+stub'lar. Gerçek "her şeyin üstünde durma" davranışı headless doğrulanamıyor; elle bakıldı.
+
+**Transient user activation, `await`'ten sonra tükenmiş sayılır.** `documentPictureInPicture
+.requestWindow()` ve `window.open()` canlı bir kullanıcı jesti istiyor. "Görüşme başlat"
+akışında pencereyi `await fetch(...)`'ten **sonra** açmak sessiz bir başarısızlık — hata yok,
+pencere de yok. Sıra: tıklama handler'ının senkron başında pencereyi aç, fetch'i paralel
+yürüt, oda dönünce pencereye iliştir. Yanıt hatalıysa pencereyi kapat, yoksa hiçbir şeye ait
+olmayan boş bir pencere ekranda yüzer.
+
+**"Gezinmeye rağmen ayakta kalıyor" iki ayrı iddiadır.** Paneli sayfa kabuklarının üstüne
+(`Providers`) mount etmek **client-side** gezinmeyi çözer; `page.goto()` ise tam belge
+yüklemesidir ve React state'ini siler. Smoke testi bunu ilk turda yakaladı — düzeltmesi
+`sessionStorage`'a yazıp mount sonrası geri okumak (render sırasında değil: hidrasyon kırılır).
+`localStorage` değil `sessionStorage`: oda bu sekmeye ait, yarın açılan sekmeye musallat
+olmamalı.
+
+**CSP ve `Permissions-Policy`, gömülü görüşmeyi iki ayrı şekilde öldürüyordu.**
+`camera=(), microphone=()` **kendi frame'imiz dahil** her şeyi kapatıyor; CSP'de `frame-src`
+yoksa `default-src 'self'` iframe'i tamamen bloke ediyor. İkisini de tek host'a daralt ve
+allowlist'i kodda aynala (`EMBEDDABLE_MEETING_HOSTS`) — birini genişletip diğerini unutmak ya
+boş kutu ya görüntüsüz görüşme demek. Header'ları `curl -sI` ile gerçek yanıtta doğrula.
+
+**Client bileşeninin kullanacağı yardımcıyı Prisma'lı modülden ayır.** `isEmbeddableMeetingLink`
+başta `meetingContext.ts` içindeydi; oradan import etmek Prisma'yı (ve `node:crypto`'yu)
+tarayıcı paketine sürüklerdi. Import'suz ayrı bir `meetingLink.ts` doğru yer.
+
+**`ProjectMember` bir `TENANT_MODEL` değil, `Project` öyle.** Üyeleri doğrudan sorgulamak
+kiracılar arası okuma demek. Önce `prisma.project.findUnique` (org-scoped), sonra üyelik.
+
+**Nullable'a çevrilen bir kolon, onu deref eden her yeri kırar — ama `tsc` hepsini gösterir.**
+`Meeting.relationId`'yi nullable yapmak yalnızca 3 hata verdi; asıl iş, mevcut endpoint'lerin
+**şeklini korumaktı**: `GET /api/meetings`, `/api/calendar-events` ve hatırlatma cron'u
+`relationId: { not: null }` ile süzülerek birebir aynı davranışta bırakıldı.
+
+**Yerel MariaDB'de `root` sudo istiyor, ama oturum kullanıcısı unix_socket ile giriyor.**
+`mysql -u <kullanıcı>` çalışıyor; oradan TCP parolalı bir kullanıcı açıp
+(`CREATE USER 'e2e'@'127.0.0.1'`) Prisma'yı ona bağlamak, sudo beklemeden yerel e2e koşmanın
+en hızlı yolu. Bir kere kurunca **her PR'ı push'lamadan önce yerelde koşabildim** — bu paket
+için CI'a giden tek kırmızı, bu kurulumdan *önceki* PR'dı.
+
+**Dev sunucusu eski Prisma client'ıyla kalır.** `prisma generate` sonrası `next dev`'i
+yeniden başlatmazsan yeni kolona yazan endpoint 500 döner ve hata testin değil sunucunun
+olur. Şema değişince sunucuyu yeniden başlat.

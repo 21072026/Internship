@@ -2,6 +2,8 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
+import { MenteeOnboardingWizard } from '@/components/MenteeOnboardingWizard';
+import { ReferralLinkCard } from '@/components/ReferralLinkCard';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
@@ -79,7 +81,12 @@ export default async function MentorDashboard() {
         <p className="text-gray-500 mt-1">{t.mentor.dashSubtitle}</p>
       </div>
 
+      {/* Volunteers itself while a newly joined mentee still needs onboarding (#51). */}
+      <MenteeOnboardingWizard />
+
       <MentorAttentionQueue items={attentionItems} t={t} />
+
+      <ReferralLinkCard />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">

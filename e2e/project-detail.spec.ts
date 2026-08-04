@@ -44,7 +44,9 @@ test('project detail: internal section for the admin, PII-free public view, 404 
     await expect(adminPage.getByRole('heading', { name: 'Private Detail Project' })).toBeVisible({ timeout: 10_000 });
     const internal = adminPage.getByTestId('project-internal');
     await expect(internal).toBeVisible();
-    await expect(internal.getByText('Detail Member')).toBeVisible();
+    // Scoped to the roster: the internal section also holds the member pickers,
+    // whose <option> lists repeat every candidate's name (#51).
+    await expect(internal.getByTestId('project-team').getByText('Detail Member')).toBeVisible();
     await expect(internal.getByText('Ship the detail view')).toBeVisible();
     await expect(internal.getByText('Open task')).toBeVisible();
 

@@ -1,17 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
-
-async function signIn(page: import('@playwright/test').Page, email: string, pw: string, home: string) {
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', pw);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => u.pathname.startsWith(home), { timeout: 20_000 });
-}
 
 // #920: admin broadcasts fan out to every active user (see POST
 // /api/admin/announcements — there's no per-role/org targeting), so a mentee
@@ -26,12 +19,11 @@ test('an admin announcement shows up in the mentee dashboard card and the shared
   const uniqueText = `Feed announcement ${Date.now().toString(36)}`;
 
   try {
-    await signIn(page, adminEmail, 'AdminPass123', '/admin');
+    await signInAsFreshUser(page, adminEmail, 'AdminPass123', '/admin');
     const res = await page.request.post('/api/admin/announcements', { data: { text: uniqueText } });
     expect(res.ok()).toBeTruthy();
 
-    await page.context().clearCookies();
-    await signIn(page, menteeEmail, 'MenteePass123', '/portal');
+    await signInAsFreshUser(page, menteeEmail, 'MenteePass123', '/portal');
 
     // Dashboard card (client-fetched — wait for it to leave the loading state).
     await expect(page.getByText(uniqueText)).toBeVisible({ timeout: 10_000 });
@@ -54,12 +46,11 @@ test('an admin announcement is also visible to mentors, via the same shared feed
   const uniqueText = `Mentor feed announcement ${Date.now().toString(36)}`;
 
   try {
-    await signIn(page, adminEmail, 'AdminPass123', '/admin');
+    await signInAsFreshUser(page, adminEmail, 'AdminPass123', '/admin');
     const res = await page.request.post('/api/admin/announcements', { data: { text: uniqueText } });
     expect(res.ok()).toBeTruthy();
 
-    await page.context().clearCookies();
-    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
 
     await expect(page.getByText(uniqueText)).toBeVisible({ timeout: 10_000 });
   } finally {

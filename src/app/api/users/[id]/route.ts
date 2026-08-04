@@ -27,6 +27,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           birthDate: true,
           referralSource: true,
           sourceId: true,
+          referredById: true,
+          referredBy: { select: { id: true, fullName: true, role: true } },
           source: { select: { id: true, name: true } },
           university: true,
           department: true,
@@ -92,6 +94,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const data: {
         isActive?: boolean;
         sourceId?: string | null;
+        referredById?: string | null;
         skills?: string[];
         mentorCapacity?: number | null;
       } = {};
@@ -107,6 +110,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       // Assign / clear the mentee's referral source.
       if ('sourceId' in body && (typeof body.sourceId === 'string' || body.sourceId === null)) {
         data.sourceId = body.sourceId || null;
+      }
+
+      // Who brought this person in (#51). Any person — mentee, mentor or admin —
+      // can be the source, so this is a plain user pointer rather than a Source
+      // row; it is also set automatically by invitation/referral links. Self-
+      // reference would make the "who referred whom" tree lie.
+      if ('referredById' in body && (typeof body.referredById === 'string' || body.referredById === null)) {
+        const target = body.referredById || null;
+        if (target === id) {
+          return NextResponse.json({ error: 'A user cannot be their own source' }, { status: 400 });
+        }
+        if (target) {
+          const referrer = await prisma.user.findUnique({ where: { id: target }, select: { role: true } });
+          if (!referrer || !['ADMIN', 'MENTOR', 'MENTEE'].includes(referrer.role)) {
+            return NextResponse.json({ error: 'Invalid source user' }, { status: 400 });
+          }
+        }
+        data.referredById = target;
       }
 
       // Mentor expertise (skills) — admin can populate so skill-match works.
@@ -133,7 +154,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const user = await prisma.user.update({
         where: { id },
         data,
-        select: { id: true, isActive: true, sourceId: true, skills: true, mentorCapacity: true },
+        select: { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true },
       });
 
       // Activation state is the security-relevant part of this endpoint — it is

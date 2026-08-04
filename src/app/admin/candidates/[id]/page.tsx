@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { ArrowLeft, KeyRound, Trash2, Plus } from 'lucide-react';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { UserQuickActions } from '@/components/UserQuickActions';
 import { CvManager } from '@/components/CvManager';
 import { nextAction } from '@/lib/matching';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
@@ -46,9 +47,12 @@ interface MenteeDetail {
   whatsapp?: string;
   city?: string;
   birthDate?: string;
+  role?: string;
   referralSource?: string;
   sourceId?: string | null;
   source?: { id: string; name: string } | null;
+  referredById?: string | null;
+  referredBy?: { id: string; fullName: string; role: string } | null;
   university?: string;
   department?: string;
   graduationYear?: number;
@@ -84,6 +88,8 @@ export default function AdminMenteeDetailPage() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
   const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
+  // Every admin/mentor/mentee, so a person can be picked as the referral source.
+  const [people, setPeople] = useState<{ id: string; fullName: string }[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -197,11 +203,34 @@ export default function AdminMenteeDetailPage() {
       .then((r) => (r.ok ? r.json() : { cohorts: [] }))
       .then((d) => setCohorts(d.cohorts ?? []))
       .catch((e) => console.error('[candidate] cohorts load failed', e));
+    fetch('/api/users?view=picker')
+      .then((r) => (r.ok ? r.json() : { users: [] }))
+      .then((d) => setPeople(d.users ?? []))
+      .catch((e) => console.error('[candidate] people load failed', e));
     fetch('/api/admin/sources')
       .then((r) => (r.ok ? r.json() : { sources: [] }))
       .then((d) => setSources(d.sources ?? []))
       .catch((e) => console.error('[candidate] sources load failed', e));
   }, [id]);
+
+  const changeReferredBy = useCallback(
+    async (referredById: string) => {
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/users/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ referredById: referredById || null }),
+        });
+        if (!res.ok) throw new Error();
+        await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [id, load, toast, t]
+  );
 
   const changeSource = useCallback(
     async (sourceId: string) => {
@@ -253,13 +282,15 @@ export default function AdminMenteeDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           {t.candidateDetail.back}
         </Link>
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.fullName}</h1>
             <p className="text-gray-500">{user.email}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
+            {/* Message / view-as shortcuts, right where the profile is read (#51). */}
+            <UserQuickActions userId={user.id} role={user.role} />
             <Button variant="outline" size="sm" loading={resetting} onClick={resetPassword}>
               <KeyRound className="h-4 w-4 mr-1" />
               {t.candidateDetail.resetPassword}
@@ -304,6 +335,16 @@ export default function AdminMenteeDetailPage() {
                 </div>
               </div>
             )}
+            {/* Who brought this candidate in (#51). Any admin, mentor or mentee
+                can be the source; invite/referral links set it automatically. */}
+            <Select
+              label={t.referral.sourcePerson}
+              data-testid="referred-by-select"
+              disabled={saving}
+              value={user.referredById ?? ''}
+              onChange={(e) => changeReferredBy(e.target.value)}
+              options={[{ value: '', label: t.referral.noSource }, ...people.map((p) => ({ value: p.id, label: p.fullName }))]}
+            />
             <div className="pt-1">
               <CvManager targetUserId={user.id} initialCvUrl={user.cvUrl} />
             </div>
@@ -319,13 +360,14 @@ export default function AdminMenteeDetailPage() {
           ) : (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                <div><span className="text-gray-500">{t.candidateDetail.mentor}:</span> <span className="font-medium">{rel.mentor.fullName}</span></div>
+                <div><span className="text-gray-500">{t.candidateDetail.mentor}:</span> <span className="font-medium" data-testid="mentorship-mentor">{rel.mentor.fullName}</span></div>
                 {rel.company && <div><span className="text-gray-500">{t.candidateDetail.company}:</span> <span className="font-medium">{rel.company.name}</span></div>}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg">
                 <Select
                   label={t.candidateDetail.stage}
+                  data-testid="stage-select"
                   options={stages.map((s) => ({ value: s.key, label: s.label }))}
                   value={rel.pipelineStatus}
                   disabled={saving}
@@ -449,7 +491,7 @@ export default function AdminMenteeDetailPage() {
             </div>
           )}
         </Card>
-        {rel && <MeetingSchedulerPanel relationId={rel.id} />}
+        {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
         <DocumentsManager targetUserId={id} />

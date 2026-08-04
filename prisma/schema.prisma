@@ -144,6 +144,14 @@ model User {
   city                    String?
   birthDate               DateTime?
   referralSource          String?
+  // Person-level referral (#51): which *person* brought this user in — the
+  // mentee, mentor or admin whose invite/referral link they signed up through.
+  // Orthogonal to `sourceId` (an institution/channel) and `referralSource`
+  // (free text typed by whoever created the record).
+  referredById            String?
+  // Stable personal referral code behind /auth/register?ref=<code>. Generated
+  // on first use so existing rows need no backfill.
+  referralCode            String?       @unique
   // Extended profile (all optional; safe to add to existing rows).
   displayName             String?
   bio                     String?       @db.Text
@@ -237,8 +245,18 @@ model User {
   supportMessages          SupportMessage[]          @relation("SupportMessageSender")
   authoredRelationNotes    RelationNote[]            @relation("RelationNoteAuthor")
   pageViews                PageView[]
+  referredBy               User?                     @relation("UserReferrals", fields: [referredById], references: [id])
+  referredUsers            User[]                    @relation("UserReferrals")
+  sentInvitations          InvitationToken[]         @relation("InvitationInviter")
+  assignedProjectTasks     ProjectTask[]             @relation("ProjectTaskAssignee")
+  projectJoinRequests      ProjectJoinRequest[]      @relation("JoinRequester")
+  decidedJoinRequests      ProjectJoinRequest[]      @relation("JoinRequestDecider")
+  taskTemplates            ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
+  mentorOnboardings        MenteeOnboarding[]        @relation("OnboardingMentor")
+  menteeOnboarding         MenteeOnboarding[]        @relation("OnboardingMentee")
 
   @@index([role])
+  @@index([referredById])
 }
 
 // Consent-gated activity trail: one row per page visit, with the dwell time on
@@ -340,6 +358,7 @@ model Conversation {
   project      Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   participants ConversationParticipant[]
   messages     Message[]
+  meetings     Meeting[]
 
   // MySQL permits multiple NULL values, so DIRECT conversations remain
   // unaffected while each project can have only one GROUP conversation.
@@ -825,13 +844,16 @@ model Project {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  ownerUser     User?                @relation("ProjectOwner", fields: [ownerUserId], references: [id])
-  ownerCompany  Company?             @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
+  ownerUser     User?                 @relation("ProjectOwner", fields: [ownerUserId], references: [id])
+  ownerCompany  Company?              @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
   relations     MentorshipRelation[]
   tasks         ProjectTask[]
   members       ProjectMember[]
   conversations Conversation[]
   meetingSeries MeetingSeries[]
+  meetings      Meeting[]
+  taskTemplates ProjectTaskTemplate[]
+  joinRequests  ProjectJoinRequest[]
 
   @@index([ownerUserId])
   @@index([ownerCompanyId])
@@ -874,16 +896,105 @@ model ProjectMember {
 
 // A task within a project — supports a task list + progress % (checklist 4).
 model ProjectTask {
-  id        String   @id @default(cuid())
-  projectId String
-  title     String
-  done      Boolean  @default(false)
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  projectId  String
+  title      String
+  done       Boolean   @default(false)
+  order      Int       @default(0)
+  createdAt  DateTime  @default(now())
+  // Optional owner of the task (#51). Null = an unassigned project-wide goal
+  // that any member may claim ("üstlen"); set = a personal goal, which is what
+  // a mentor sends a fresh member from the template pool.
+  assigneeId String?
+  // Who ticked it off, and when — so a mentor can see progress per person
+  // without reading the activity log.
+  doneAt     DateTime?
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+  @@index([assigneeId])
+}
+
+// Reusable goal/task text (#51). Every task written for a project member is
+// worth keeping: a new member usually gets the same starter goals. A template
+// with `projectId` set belongs to that project; `projectId = null` makes it
+// available everywhere (the shared starter pool).
+// Not tenant-anchored: reached through Project / User, like the other child
+// models (see TENANT_MODELS in src/lib/orgContext.ts).
+model ProjectTaskTemplate {
+  id          String   @id @default(cuid())
+  projectId   String?
+  title       String
+  createdById String?
+  // How many times this template has been handed to someone — the pool sorts
+  // by it so the goals actually used float to the top.
+  useCount    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  // One template per wording per project, so capturing a goal that already
+  // exists is a no-op. MySQL allows many NULLs here, so the shared (global)
+  // pool is not constrained by it.
+  @@unique([projectId, title])
+  @@index([projectId])
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A request to join a *public* project (#51). Anyone signed in may ask; the
+// project's owner (or an admin) approves, which creates the ProjectMember row.
+model ProjectJoinRequest {
+  id             String                 @id @default(cuid())
+  projectId      String
+  userId         String
+  message        String?                @db.Text
+  // What the applicant wants to do on the project; carried onto the member row.
+  functionalRole ProjectFunctionalRole?
+  status         JoinRequestStatus      @default(PENDING)
+  decidedById    String?
+  decidedAt      DateTime?
+  decisionNote   String?                @db.Text
+  createdAt      DateTime               @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation("JoinRequester", fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy User?   @relation("JoinRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  // One open-or-decided request per person per project; re-applying reuses the row.
+  @@unique([projectId, userId])
+  @@index([status])
+}
+
+// Mentor-side onboarding checklist for a mentee (#51). Created lazily the first
+// time the mentor opens the wizard for a mentee who joined the site or one of
+// their projects. `steps` holds { "<stepKey>": true } so adding a step later
+// never needs a migration.
+model MenteeOnboarding {
+  id          String    @id @default(cuid())
+  mentorId    String
+  menteeId    String
+  // The project whose membership triggered the wizard, when it was a project
+  // join rather than a plain site signup. Informational.
+  projectId   String?
+  steps       Json      @default("{}")
+  dismissedAt DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  mentor User @relation("OnboardingMentor", fields: [mentorId], references: [id], onDelete: Cascade)
+  mentee User @relation("OnboardingMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([mentorId, menteeId])
+  @@index([menteeId])
 }
 
 // A mentor's recurring weekly availability window.
@@ -1042,13 +1153,19 @@ model PersonalNote {
   // 'MEETING' | 'FEEDBACK' | 'TASKS' | 'PERSONAL' — validated in the API, not
   // a DB enum, so new categories don't need a schema change.
   category  String   @default("PERSONAL")
+  // Which meeting this note was taken in (#1056). Null for a free-standing note.
+  // SetNull rather than Cascade: deleting the meeting must not delete what was
+  // written in it — the note is the durable part.
+  meetingId String?
   body      String   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meeting Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([meetingId])
 }
 
 // A mentor-private note on a mentorship relation (impressions, prep notes,
@@ -1110,11 +1227,22 @@ enum RsvpStatus {
   DECLINED
 }
 
-// A scheduled meeting between a mentor and a mentee, with a Google Meet link
-// and an emailed RSVP (responded to via a public token link).
+// A scheduled meeting, with a video link and an emailed RSVP (responded to via
+// a public token link).
+//
+// A meeting hangs off exactly ONE context (#1051):
+//   relationId     — the original mentor ↔ mentee meeting (one row per invitee,
+//                    each with its own rsvpToken; the shared room is meetLink)
+//   projectId      — an ad-hoc meeting for a whole project team
+//   conversationId — an ad-hoc meeting for a group chat
+// MySQL can't express "exactly one of three" as a CHECK, so the rule lives in
+// src/lib/meetingContext.ts and every write path goes through it.
 model Meeting {
   id             String     @id @default(cuid())
-  relationId     String
+  // Nullable since #1051: project/conversation meetings have no relation.
+  relationId     String?
+  projectId      String?
+  conversationId String?
   title          String
   // Optional: a meeting with a set time expects an RSVP and gets reminders; a
   // meeting with no time (null) is just a shared link — no RSVP, no reminder.
@@ -1128,10 +1256,15 @@ model Meeting {
   // Null for manually scheduled meetings; set for auto-generated series instances.
   seriesId       String?
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  series   MeetingSeries?     @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  relation     MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  project      Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversation Conversation?       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  series       MeetingSeries?      @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  notes        PersonalNote[]
 
   @@index([relationId])
+  @@index([projectId])
+  @@index([conversationId])
   @@index([seriesId])
 }
 
@@ -1150,10 +1283,33 @@ model MeetingSeries {
   createdById String
   createdAt   DateTime @default(now())
 
-  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  meetings Meeting[]
+  project   Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  meetings  Meeting[]
+  reminders MeetingSeriesReminder[]
 
   @@index([projectId])
+}
+
+// One row per (series, occurrence, lead time) that has been reminded (#51).
+// The recurring project meeting is announced to *every* project member, not
+// only the mentees who happen to have a MentorshipRelation, so its reminders
+// cannot ride on `Meeting.reminderSentAt`. The unique key is the idempotency
+// guard: the cron claims the row first and only mails when the insert wins.
+enum MeetingReminderLead {
+  DAY_BEFORE
+  HOUR_BEFORE
+}
+
+model MeetingSeriesReminder {
+  id           String              @id @default(cuid())
+  seriesId     String
+  occurrenceAt DateTime
+  lead         MeetingReminderLead
+  sentAt       DateTime            @default(now())
+
+  series MeetingSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, occurrenceAt, lead])
 }
 
 // Audit trail of pipeline stage changes for a mentorship.
@@ -1177,6 +1333,19 @@ model InvitationToken {
   used         Boolean   @default(false)
   createdAt    DateTime  @default(now())
   expiresAt    DateTime
+  // Who sent the invitation (#51). Nullable: pre-existing rows have no inviter,
+  // and the seeder/system can invite without a user. Drives two things on
+  // registration — the new account's `referredById`, and the automatic
+  // mentorship link below.
+  invitedById  String?
+  // When set, registering through this invitation immediately creates the
+  // mentorship: `mentorId` mentors the new MENTEE (or, for a MENTOR invite, the
+  // invited mentor is paired with `menteeId`). A mentor inviting a mentee sets
+  // this to itself; an admin picks the mentor in the invite form.
+  mentorId     String?
+  menteeId     String?
+  // The project the invitee should join on registration, if any.
+  projectId    String?
   // Lifecycle timestamps (nullable — each set once, the first time it happens):
   // openedAt  → the register link was clicked/opened
   // registeredAt → the account was created from this invitation
@@ -1184,6 +1353,13 @@ model InvitationToken {
   openedAt     DateTime?
   registeredAt DateTime?
   verifiedAt   DateTime?
+
+  // Only the inviter gets a relation; mentorId/menteeId/projectId stay plain
+  // columns (validated when the invitation is created) so the User model does
+  // not grow three more back-relations for a write-once pointer.
+  invitedBy User? @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([invitedById])
 }
 
 // Single-use, time-limited token for self-service password reset and for the

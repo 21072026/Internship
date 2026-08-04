@@ -21,7 +21,11 @@ export async function GET() {
 
   const [meetings, relations, loggedMeetings] = await Promise.all([
     prisma.meeting.findMany({
-      where: { relation: relWhere },
+      // `relationId: { not: null }` — since #1051 a meeting may instead hang off
+      // a project or a conversation. Those are always time-less (instant rooms),
+      // so they'd be dropped by the scheduledAt filter below anyway; excluding
+      // them here keeps `relation` non-null for the mapping.
+      where: { relationId: { not: null }, relation: relWhere },
       include: { relation: { include: { mentee: { select: { fullName: true } } } } },
       orderBy: { scheduledAt: 'asc' },
     }),
@@ -41,11 +45,11 @@ export async function GET() {
 
   const events = [
     // No-time meetings (nullable scheduledAt) don't belong on a calendar.
-    ...meetings.filter((m) => m.scheduledAt).map((m) => ({
+    ...meetings.filter((m) => m.scheduledAt && m.relation).map((m) => ({
       id: `meeting-${m.id}`,
       type: 'meeting' as const,
       title: m.title,
-      who: m.relation.mentee.fullName,
+      who: m.relation!.mentee.fullName,
       date: m.scheduledAt!.toISOString(),
       link: m.meetLink ?? null,
     })),

@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.39.2-beta] - 2026-08-02
+## [0.40.10-beta] - 2026-08-04
 
 ### Changed
 - **The admin candidate list is now usable at 375px without horizontal page overflow.**
@@ -16,6 +16,302 @@ version is shown in the sidebar footer of every page (links to the
   by education, city and skills. The seven existing filters stay unchanged but are collapsed
   behind a visible Filters control on small screens. The existing desktop candidate grid and
   its actions remain unchanged.
+
+## [0.40.9-beta] - 2026-08-03
+
+### Added
+- **Starting a meeting opens the notes window in the same click** (#1058). The subtle part:
+  `notes.open()` is called *before* the `fetch`, not after. Opening a floating window needs
+  transient user activation and awaiting the API round trip spends it — the window would
+  then silently never open. So the window is opened on the click and the room is attached to
+  it once the server answers (`notes.attach`). If the meeting fails to start, the window is
+  closed rather than left floating with nothing to belong to.
+- **A per-device toggle** in account settings for that behaviour (default on). Per-device
+  like the composer's enter-to-send: which machine you take notes on is a property of the
+  machine, not the account.
+- **A note line becomes a goal or a project task** (#1059). `POST /api/notes/[id]/convert`
+  reuses the existing `Goal` / `ProjectTask` models — no new one needed. The target follows
+  the meeting: a mentorship meeting yields a goal, a project meeting a task. Where there is
+  neither (a chat meeting, or no meeting), the affordance is hidden rather than offered and
+  then refused.
+- `e2e/note-to-work.spec.ts` — the window opening on the same click and its notes landing
+  against that meeting, a line converting exactly once, and both refusals below.
+
+### Security
+- The convert endpoint checks that the line **is actually in the note** — otherwise it is a
+  generic "create a goal anywhere" wearing a note id — and that the caller may write to the
+  target (the relation's mentor, or a member of the project; admins too). An assignee who
+  isn't on the project is rejected rather than handed a task they cannot see.
+
+### Changed
+- A converted line is marked `✓` in place rather than deleted: the note is the record of
+  what was said, and quietly removing sentences from it would rewrite history. The mark is
+  also what makes a second click a no-op (409) instead of a duplicate.
+
+## [0.40.8-beta] - 2026-08-03
+
+### Added
+- **A notes window that floats above everything** (#1057). `openFloatingWindow`
+  (`src/lib/floatingWindow.ts`) opens a Document Picture-in-Picture window — the only web
+  API that gives an always-on-top window with a real DOM — and falls back to a plain popup
+  where it is missing (Safari, Firefox, mobile). Rendered through a React portal, so it is
+  ordinary UI code in the opener's context. Autosaves 2s after typing stops, flushes on
+  close (a debounce that never fired would lose the last sentence), and mirrors every
+  keystroke into `localStorage` so a failed request can't take the notes with it. The
+  fallback says out loud that it can't stay on top; a blocked popup says so too.
+- **`PersonalNote.meetingId`** (#1056) — a note taken in a meeting now knows which one, and
+  `GET /api/notes?meetingId=` reads them back. `onDelete: SetNull`, not Cascade: deleting the
+  meeting must not delete what was written in it. A note created with a `meetingId` defaults
+  to the `MEETING` category without anyone selecting it, and `NotesPanel` shows the room's
+  name on the note.
+- `e2e/meeting-notes.spec.ts` — the note↔meeting link surviving the meeting's deletion, both
+  window branches (each *forced*, see below), and a popup-fallback window that really saves.
+
+### Security
+- Attaching a note to a meeting is authorized server-side (`src/lib/noteMeeting.ts`): the
+  author must have been in the room — organizer, either side of the relation, project member,
+  or chat participant (admins too). The note itself is private, but the id is a foreign key
+  into someone else's meeting, and `?meetingId=` would otherwise confirm it exists. `PATCH`
+  is guarded identically — re-pointing a note at a meeting you weren't in is a probe, not an
+  edit.
+
+### Note for future test-writers
+- **Headless Chromium *does* expose `documentPictureInPicture`.** A test that just asserts the
+  fallback would silently exercise the PiP branch and prove nothing about Safari/Firefox
+  users. Both branches are therefore forced with `addInitScript` — one deletes the API, the
+  other stubs `requestWindow`. The genuine always-on-top behaviour can't be asserted
+  headlessly and is verified by hand.
+
+## [0.40.7-beta] - 2026-08-03
+
+### Added
+- **Start a meeting for a whole project team** (#1055). A button next to the recurring rule
+  on the project page — the two sit together but are different things: one books a weekly
+  slot, the other opens a room now. Visible to admins and OWNER/MENTOR members, mirroring
+  the server rule in `resolveMeetingContext`; mentee members join a call, they don't summon
+  one. `ProjectWeeklyMeeting` no longer hides itself when there is no series but the viewer
+  may still start a call.
+- **Start a meeting from a group chat, and the link lands in the chat** (#1055). Button in
+  the thread header (and its own row on a phone, where that header is hidden). The
+  conversation branch of `/api/meetings/instant` now also posts the room into the thread, as
+  the organizer rather than a faceless system row — `Message` has no system flag, and "who
+  called us in" is worth knowing. Any participant may start one; a non-participant gets 403
+  and no message is written.
+- `e2e/instant-meeting-team.spec.ts` — team call by an owner (incl. the member's in-app
+  notification), a mentee member refused, a chat call landing in the thread, and an outsider
+  refused with nothing posted.
+
+### Note
+- Only *conversation* threads get the button. The legacy relation thread is left out: its
+  mentee would be refused server-side anyway (relations are mentor-scoped), and a button
+  that always fails is worse than no button. Mentors reach 1:1 calls from the mentee card.
+
+## [0.40.6-beta] - 2026-08-03
+
+### Added
+- **"Start meeting" wherever the person already is** (#1053). A button on each mentee card
+  (`/mentor/mentees`), on the candidate detail scheduler and on the bulk selection in
+  `MeetingsManager`. One click asks for the topic — nothing else — and calls
+  `/api/meetings/instant`; the link is copied to the clipboard and the room opens on screen
+  without a list refresh. The candidate/bulk buttons sit next to the existing form on
+  purpose: booking a time and calling now are different intents.
+- **In-app meeting side panel** (#1054). `MeetingLauncherProvider` is mounted in
+  `Providers`, *above* every page shell, so a call in progress survives navigating from the
+  mentee list to their profile — a panel owned by a page would drop the meeting. Jitsi rooms
+  are embedded in an iframe; anything else (Meet/Zoom/Teams send `X-Frame-Options`) gets an
+  explicit "open in a new tab" instead of an empty box. On a phone the panel is a bar with a
+  Join button — a video that small helps nobody.
+- `e2e/instant-meeting.spec.ts` — one-click start from a mentee card (`@smoke`, also asserts
+  the panel survives navigation), the endpoint returning its link, and a mentor being unable
+  to start a meeting for someone else's mentee.
+
+### Fixed
+- **The embedded call would have had no camera and no frame.** `Permissions-Policy` was a
+  blanket `camera=(), microphone=()`, which disables them for every frame including our own,
+  and the CSP had no `frame-src`, so `default-src 'self'` blocked the Jitsi iframe outright.
+  Both are now narrowed to the one host we generate links for —
+  `frame-src 'self' https://meet.jit.si` and `camera=(self "https://meet.jit.si")` (same for
+  `microphone` / `display-capture`); `geolocation` stays fully denied. The allowlist is
+  mirrored in `EMBEDDABLE_MEETING_HOSTS` (`src/lib/meetingLink.ts`) — widening one without
+  the other yields an empty box or a call with no picture.
+
+### Changed
+- `isEmbeddableMeetingLink` moved from `meetingContext.ts` to a new import-free
+  `src/lib/meetingLink.ts`, so client components can use it without pulling Prisma (or
+  `node:crypto`) into the browser bundle. It now also requires `https:`.
+
+## [0.40.5-beta] - 2026-08-03
+
+### Added
+- **`POST /api/meetings/instant` — start a meeting now and get the room back in the
+  response** (#1052). `POST /api/meetings` answers `{ created }`, so a UI that wants to
+  show or open the link has to re-fetch the list; that round trip is what makes "call this
+  person" feel slow. The new endpoint always creates a time-less room (no RSVP, no
+  reminder) and returns `{ meetingId, meetLink, invited }`. Invitees get an in-app
+  notification unconditionally and an email when `emailAllowed(user, 'meetingReminders')`.
+  Rate-limited to 10/min per IP — each call fans out invitations. The existing
+  `POST /api/meetings` contract is untouched.
+- **`Meeting` can hang off a project or a conversation, not only a mentorship** (#1051).
+  `relationId` is now nullable and joined by `projectId` / `conversationId`. MySQL can't
+  express "exactly one of three" as a CHECK, so the rule and the membership authorization
+  live in `src/lib/meetingContext.ts` (`resolveMeetingContext`) and every write path goes
+  through it: project meetings need an OWNER/MENTOR membership (or admin), conversation
+  meetings need participation, relation meetings keep the mentor-scoped rule. The project
+  lookup goes through `prisma.project` first because `Project` is a `TENANT_MODEL` and
+  `ProjectMember` is not — querying members directly would reach across tenants.
+
+### Changed
+- Jitsi room generation moved out of the route into `generateMeetingLink()` so the two
+  endpoints can't drift; `isEmbeddableMeetingLink()` joins it for the upcoming side panel.
+- `GET /api/meetings`, `/api/calendar-events` and the meeting-reminder cron now filter on
+  `relationId: { not: null }`, keeping their shape and behaviour identical now that the
+  column is nullable.
+
+## [0.40.4-beta] - 2026-08-03
+
+### Fixed
+- **Scheduled meetings landed at the wrong time for any organizer outside UTC** (#1061).
+  The scheduler's split Date + Time inputs produce a bare wall clock
+  (`"2026-08-03T16:30"`) with no zone, and it was POSTed as-is and read with
+  `new Date()` on a server that runs UTC — so the string was taken to mean 16:30 **UTC**.
+  An organizer in Germany (CEST, GMT+2) who picked 16:30 got a meeting stored at
+  `16:30Z`, which the app and the reminder email then correctly rendered in their zone
+  as **18:30**: every meeting silently jumped forward by the organizer's offset, and the
+  invitees were told the wrong time. Fixed on both sides — `MeetingsManager` and
+  `MeetingSchedulerPanel` now send a zone-qualified instant built from the viewer's own
+  clock (`wallClockToInstantISO`), and `/api/meetings` + `/api/meeting-requests` no longer
+  hand a bare wall clock to `new Date()`: `parseUserDateTime` anchors it to the
+  organizer's saved `User.timezone` (→ `APP_TIMEZONE` → Europe/Istanbul), so API clients
+  and browsers on a cached bundle are covered too. New `parseWallClockInZone` resolves the
+  offset through `Intl`, iteratively, so DST is handled per date rather than assumed.
+- As a side effect, **date-only meetings** (no clock time) are now stored at local midnight
+  instead of UTC midnight, so they no longer show up on the previous day on the calendar for
+  viewers west of UTC.
+- Note: `Meeting` rows created *before* this fix keep their shifted `scheduledAt` — there is
+  no reschedule/cancel path to correct them in place, and a blanket backfill can't tell a
+  form-created row from a correctly-stored one (series occurrences and accepted meeting
+  requests always were correct).
+
+### Added
+- `e2e/meeting-timezone.spec.ts` — schedules 16:30 in a `Europe/Berlin` browser and asserts
+  the **stored instant** is `14:30Z`. Verified to fail (`16:30Z`) against the pre-fix code.
+
+## [0.40.3-beta] - 2026-08-03
+
+### Fixed
+- **Three scheduled full-suite failures caused by the new selects** (#51 follow-up). The
+  candidate page gained a "who referred them" picker and the project page gained the member
+  pickers, and an `<option>` is text like any other: `getByText('Detail Mentor')` and
+  `getByTestId('project-internal').getByText('Detail Member')` became strict-mode violations,
+  while `locator('select').first()` on the candidate page stopped resolving to the stage
+  dropdown (the profile card above it now has a select of its own). Fixed at the source
+  rather than in the assertions alone — `data-testid="stage-select"`,
+  `data-testid="referred-by-select"` and `data-testid="mentorship-mentor"` on the candidate
+  page — and the three specs target those (the project one scopes to `project-team`).
+
+## [0.40.2-beta] - 2026-08-02
+
+### Fixed
+- **Setting up a recurring meeting no longer mails everyone once per occurrence.**
+  `generateForSeries` fills the calendar `weeksAhead` (default 7) and used to call
+  `sendMeetingInviteEmail` inside the occurrence × relation loop — one click on "save"
+  meant e.g. 6 mentees × 7 weeks = 42 near-identical invitations. Only the *next*
+  occurrence is announced now; every later one is covered by the day-before and
+  hour-before reminders. The response reports `invitesSent` alongside `createdMeetings`.
+- **Series meetings were reminded twice.** `sendMeetingReminders()` (per relation, an hour
+  before) and `sendProjectMeetingSeriesReminders()` (per project, a day and an hour before)
+  both matched a series-generated `Meeting`, so anyone with both a relation and a membership
+  got two hour-before emails. The per-relation job now skips `seriesId != null`; the
+  project-level one is the single source for recurring meetings, and it reads the merged
+  team (`loadProjectTeam`) so a mentee attached only through a relation is still reminded.
+- **The project page had no header.** It lives outside the admin/mentor shell so a public
+  visitor can read it, which meant opening a project on a phone replaced the app chrome with
+  nothing — no title, and no way back other than a small text link. It carries its own brand
+  bar now, linking to the viewer's own dashboard (or `/` when signed out).
+
+## [0.40.1-beta] - 2026-08-02
+
+### Changed
+- **One project screen instead of two** (#51 follow-up). A project card carried its own
+  half-view of the project — an editable flat task checklist and the expandable
+  "Manage owners & mentors" panel — while `/projects/[id]` grew the team, the recurring
+  meeting and per-person goals. An account that is both admin and mentor reaches the same
+  list at `/admin/projects` and `/mentor/projects`, so the two views alternated depending on
+  where you came from. The card is now a summary (roster, progress, links) and everything
+  about one project lives on its page: `ProjectMembersPanel` moved there, the card's members
+  icon links to it, and the card's task checklist is gone (goals belong to a person now, and
+  keeping an editable copy in the card guaranteed the two would disagree).
+
+### Fixed
+- **Phone layout of the project screens.** The card's "add a task" box shared a row with its
+  button and collapsed to a few pixels wide at 390px — the widest instance of a pattern that
+  also affected the goal composer, the recurring-meeting form, the member pickers and the
+  referral link box. Those rows now stack below `sm`, long goal titles wrap, and the project
+  page uses phone-sized padding. `e2e/mobile-responsive.spec.ts` locks it down mechanically:
+  no horizontal overflow and no text field under 120px, with the collapsible forms expanded.
+- `PATCH /api/projects/[id]/join-requests` answers 404 instead of 500 when the request is
+  already gone (a double-clicked *Approve* hit Prisma's P2025).
+
+## [0.40.0-beta] - 2026-08-02
+
+### Added
+- **Project teams are read from the membership table, with roles** (#51). `src/lib/projectTeam.ts`
+  merges `ProjectMember` (the canonical table since #617) with the legacy
+  `MentorshipRelation.projectId` rows into one roster and derives the intern count from it.
+  The admin/mentor cards, the project detail page and the group chat all consume it, and each
+  name carries its functional role (developer / tester / marketing).
+- **Project members get the internal view of their own project.** `canViewProject` only ever
+  considered ownership and the public flag, so a mentee added to a project saw the anonymous
+  visitor page (three links and an intern count) and a *private* project was invisible to them
+  entirely. Membership is now a read right: `GET /api/projects/[id]`, the `MENTEE` project scope
+  in `authzScope.ts` and `/projects/[id]` all accept it, and `GET /api/projects` strips names only
+  for projects the caller is *not* on.
+- **Recurring project meetings are visible and manageable** (`ProjectWeeklyMeeting`). `MeetingSeries`
+  and its API landed in #774 but nothing ever rendered them — there was no field anywhere saying
+  "the weekly call is Mon+Thu 09:30, link here". Adds `GET /api/meeting-series?projectId=`
+  (member-readable) plus a day/time/link editor for owners.
+- **Reminders for the recurring meeting go to the whole project.** `sendProjectMeetingSeriesReminders()`
+  drives off the series rule instead of the per-relation `Meeting` rows (most project members have no
+  `MentorshipRelation` carrying the project), at two lead times — a day before and an hour before.
+  Idempotency is a new `MeetingSeriesReminder` row per `(series, occurrence, lead)`, claimed before
+  anything is sent. Honors `emailAllowed(user, 'meetingReminders')`; in-app notifications are
+  unconditional as everywhere else.
+- **Goals belong to people** (`ProjectTask.assigneeId`, `doneAt`). A member sees their own goals and
+  ticks them off, an unassigned goal can be claimed ("üstlen") or handed over by a lead. Renaming and
+  assigning to someone else stay owner-only; a mentee can only delete their own goal.
+- **A goal-template pool** (`ProjectTaskTemplate`): every goal written on a project is captured, the
+  pool is backfilled from pre-existing tasks on first read, and a lead sends any selection to a new
+  member in one call (`POST /api/projects/[id]/tasks` with `templateIds`).
+- **Join requests for public projects** (`ProjectJoinRequest` + `/api/projects/[id]/join-requests`).
+  Anyone signed in may ask; the owner or an admin approves, which is what creates the `ProjectMember`
+  row (with the requested functional role) and pulls them into the group chat. Owners are notified
+  in-app and by email (`mentorship` category).
+- **Group chats say who is in them.** `GET /api/messages?conversationId=` now returns the conversation
+  type, its project and each participant's project role, and the thread header lists them with a link
+  back to the project.
+- **Shortcuts**: "message the owner" and "group chat" on a project, "send a message" and (for admins)
+  "login as" on a person's profile.
+- **Invitations can connect people on registration** — `InvitationToken` gained `invitedById`,
+  `mentorId`, `menteeId` and `projectId`. An admin picks the counterpart in the invite form and the
+  mentorship (and project membership) exists the moment the invitee registers, which is what a
+  mentor's own invite has always done. Mentors and mentees may now create invitations too, limited to
+  the roles they are allowed to invite.
+- **Personal referral links** (`User.referralCode`, `/api/referral`, `/auth/register?ref=`): mentees,
+  mentors and admins each get a shareable link, and whoever registers through it is recorded in
+  `User.referredById`. Admins can also set that pointer by hand on a candidate — any person, not only
+  a `Source` row, can be the source.
+- **A mentor-side onboarding wizard** for a newly joined mentee (`MenteeOnboarding`,
+  `/api/mentee-onboarding`, shown on the mentor dashboard). Steps the app can observe — a first
+  message, a booked meeting, project membership, assigned goals, a pipeline move — tick themselves; a
+  stored tick covers what happened outside the app.
+
+### Changed
+- `GET /api/invite` returns the caller's own invitations for non-admins (admins still see all).
+- `MeetingSeries` list/read is available to project members, not just managers.
+
+### Fixed
+- `ensureReferralCode` only retries on a genuine unique collision (`P2002`) and returns null for a
+  deleted account, instead of looping five times and reporting "could not allocate a referral code".
 
 ## [0.39.1-beta] - 2026-08-02
 

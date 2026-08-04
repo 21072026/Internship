@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.39.2-beta',
-    date: '2026-08-02',
+    version: '0.40.10-beta',
+    date: '2026-08-04',
     highlights: {
       en: [
         'The admin candidate list is now easier to use on a phone: each candidate appears in a compact card with their stage and mentor up front, while education, city and skills remain close at hand. Filters can be opened when needed, and the page no longer scrolls sideways at 375px.',
@@ -24,6 +24,216 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Die Kandidatenliste für Admins ist jetzt auf dem Handy leichter nutzbar: Jede Person erscheint in einer kompakten Karte, in der Phase und Mentor zuerst sichtbar sind; Ausbildung, Ort und Skills stehen direkt darunter. Die Filter lassen sich bei Bedarf öffnen, und bei 375px scrollt die Seite nicht mehr seitwärts.',
+      ],
+    },
+  },
+  {
+    version: '0.40.9-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'The notes window now opens together with the meeting, already tied to it — start a call and you can just begin typing. If you would rather it did not, there is a switch in your account settings (per device).',
+        'What you wrote can become work: any line of a meeting note turns into a goal on that mentorship, or a task on that project, with one click. The line is ticked off in the note rather than removed, so the note still says what was said — and the same line cannot be turned into two tasks.',
+      ],
+      tr: [
+        'Not penceresi artık görüşmeyle birlikte, ona bağlı olarak açılıyor — görüşmeyi başlat, doğrudan yazmaya geç. İstemiyorsan hesap ayarlarında bir anahtar var (cihaz başına).',
+        'Yazdıkların işe dönüşebiliyor: bir görüşme notunun herhangi bir satırı tek tıkla o mentorlukta hedefe, o projede göreve dönüşüyor. Satır notta silinmiyor, işaretleniyor — not neyin konuşulduğunu söylemeye devam ediyor ve aynı satır iki kez göreve çevrilemiyor.',
+      ],
+      de: [
+        'Das Notizfenster öffnet sich jetzt zusammen mit der Besprechung und ist ihr bereits zugeordnet — Gespräch starten und einfach lostippen. Wer das nicht möchte, findet in den Kontoeinstellungen einen Schalter (pro Gerät).',
+        'Geschriebenes kann zu Arbeit werden: Jede Zeile einer Besprechungsnotiz wird mit einem Klick zu einem Ziel in dieser Mentorschaft oder zu einer Aufgabe in diesem Projekt. Die Zeile wird in der Notiz abgehakt statt entfernt — die Notiz sagt weiterhin, was gesagt wurde, und dieselbe Zeile lässt sich nicht zweimal umwandeln.',
+      ],
+    },
+  },
+  {
+    version: '0.40.8-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'A small notes window you can open from your notes page. On Chrome and Edge it stays on top of everything — even other apps — so you can write during a call without hunting for the right tab. Other browsers get the same window, just not pinned on top, and it tells you so.',
+        'It saves itself while you type, saves again when you close it, and keeps a copy on your device in case a save fails — so notes do not get lost.',
+        'Notes taken during a meeting now remember which meeting they belong to, and show its name. Deleting the meeting never deletes the notes.',
+      ],
+      tr: [
+        'Notlar sayfandan açabileceğin küçük bir not penceresi. Chrome ve Edge\'de her şeyin — diğer uygulamaların bile — üstünde duruyor; görüşme sırasında doğru sekmeyi aramadan yazabiliyorsun. Diğer tarayıcılarda aynı pencere açılıyor, sadece üstte sabitlenmiyor ve bunu sana söylüyor.',
+        'Sen yazarken kendini kaydediyor, kapatırken bir daha kaydediyor ve kayıt başarısız olursa bir kopyayı cihazında tutuyor — notlar kaybolmuyor.',
+        'Görüşme sırasında alınan notlar artık hangi görüşmeye ait olduklarını hatırlıyor ve adını gösteriyor. Görüşmeyi silmek notları asla silmiyor.',
+      ],
+      de: [
+        'Ein kleines Notizfenster, das du auf deiner Notizseite öffnen kannst. In Chrome und Edge bleibt es über allem — auch über anderen Programmen — sodass du während eines Gesprächs schreiben kannst, ohne den richtigen Tab zu suchen. Andere Browser bekommen dasselbe Fenster, nur nicht im Vordergrund fixiert, und sagen dir das auch.',
+        'Es speichert sich beim Tippen, speichert beim Schließen noch einmal und behält eine Kopie auf deinem Gerät, falls das Speichern fehlschlägt — so gehen Notizen nicht verloren.',
+        'Während einer Besprechung erfasste Notizen merken sich jetzt, zu welcher sie gehören, und zeigen deren Namen. Das Löschen der Besprechung löscht die Notizen nie mit.',
+      ],
+    },
+  },
+  {
+    version: '0.40.7-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'The same one-click meeting now works for a whole project team: a button on the project page, next to the weekly meeting. Everyone on the team gets the link — you no longer invite people one at a time.',
+        'And from a group chat: start a call and the link is posted straight into the conversation, so anyone reading the thread can just tap it.',
+        'Who may start one follows who runs the space: project owners and mentors for a team call, and any participant of a chat for a chat call.',
+      ],
+      tr: [
+        'Aynı tek tıklık görüşme artık bütün bir proje ekibi için de var: proje sayfasında, haftalık toplantının yanında bir buton. Link ekipteki herkese gidiyor — kişileri tek tek davet etmene gerek kalmıyor.',
+        'Grup sohbetinden de olur: görüşmeyi başlat, link doğrudan konuşmaya düşsün; sohbeti okuyan herkes tıklayıp katılsın.',
+        'Kimin başlatabileceği, o alanı kimin yürüttüğüne göre: ekip görüşmesini proje sahipleri ve mentörler, sohbet görüşmesini o sohbetteki herkes başlatabiliyor.',
+      ],
+      de: [
+        'Dieselbe Ein-Klick-Besprechung gibt es jetzt für ein ganzes Projektteam: eine Schaltfläche auf der Projektseite, neben der wöchentlichen Besprechung. Alle im Team bekommen den Link — niemand muss mehr einzeln eingeladen werden.',
+        'Und aus einem Gruppenchat heraus: Besprechung starten, und der Link landet direkt im Gespräch, sodass alle Mitlesenden einfach darauf tippen können.',
+        'Wer starten darf, richtet sich danach, wer den Raum führt: Projekt-Eigentümer und Mentoren für einen Teamanruf, und jede teilnehmende Person eines Chats für einen Chat-Anruf.',
+      ],
+    },
+  },
+  {
+    version: '0.40.6-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Start a meeting in one click, from wherever the person already is: a "Start meeting" button now sits on every mentee card, on the candidate page and on the meetings screen. You are asked one thing — what it is about — and that is it.',
+        'The room then opens beside your work instead of stealing a tab: the invitee gets the link straight away by notification and email, the link is copied to your clipboard, and you can keep clicking around the app without dropping the call.',
+        'On a phone the panel becomes a simple Join button, and a link we cannot show inside the app offers to open in a new tab instead of showing you an empty box.',
+      ],
+      tr: [
+        'Görüşmeyi tek tıkla, kişinin zaten bulunduğu yerden başlat: artık her mentee kartında, aday sayfasında ve toplantılar ekranında bir "Görüşme başlat" butonu var. Sana tek bir şey soruluyor — konu ne — hepsi bu.',
+        'Oda sekmeni çalmak yerine işinin yanında açılıyor: karşı taraf linki anında bildirim ve e-posta ile alıyor, link panona kopyalanıyor ve uygulamada gezinmeye devam etsen de görüşme düşmüyor.',
+        'Telefonda panel sade bir "Katıl" butonuna dönüşüyor; uygulama içinde gösteremediğimiz bir link için boş kutu yerine yeni sekmede açma seçeneği çıkıyor.',
+      ],
+      de: [
+        'Eine Besprechung mit einem Klick starten — dort, wo die Person ohnehin steht: Eine Schaltfläche „Besprechung starten“ gibt es jetzt auf jeder Mentee-Karte, auf der Kandidatenseite und im Besprechungsbereich. Gefragt wird nur eines: worum es geht.',
+        'Der Raum öffnet sich dann neben deiner Arbeit, statt einen Tab zu belegen: Die eingeladene Person erhält den Link sofort per Benachrichtigung und E-Mail, der Link liegt in deiner Zwischenablage, und du kannst weiter in der App navigieren, ohne das Gespräch zu verlieren.',
+        'Auf dem Handy wird das Panel zu einer einfachen „Teilnehmen“-Schaltfläche; einen Link, den wir nicht in der App anzeigen können, bieten wir zum Öffnen in einem neuen Tab an, statt ein leeres Feld zu zeigen.',
+      ],
+    },
+  },
+  {
+    version: '0.40.5-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Groundwork for starting a meeting on the spot: the server can now open a room and hand back the link in one step, instead of making the page look it up afterwards. A meeting can also belong to a whole project or a group chat, not just to one mentorship. Nothing new on screen yet — the buttons come next.',
+      ],
+      tr: [
+        'Anında görüşme başlatmanın altyapısı: sunucu artık odayı açıp linki tek adımda geri veriyor, sayfanın sonradan aramasına gerek kalmıyor. Bir görüşme artık tek bir mentorluğa değil, bütün bir projeye ya da grup sohbetine de ait olabiliyor. Ekranda henüz yeni bir şey yok — butonlar sırada.',
+      ],
+      de: [
+        'Grundlage für das sofortige Starten einer Besprechung: Der Server öffnet den Raum jetzt und gibt den Link in einem Schritt zurück, statt die Seite ihn nachträglich suchen zu lassen. Eine Besprechung kann außerdem zu einem ganzen Projekt oder einem Gruppenchat gehören, nicht nur zu einer Mentorschaft. Auf dem Bildschirm ist noch nichts Neues zu sehen — die Schaltflächen folgen.',
+      ],
+    },
+  },
+  {
+    version: '0.40.4-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Important fix: a meeting you scheduled was saved at the wrong time unless your clock happened to match UTC. Picking 16:30 in Germany created an 18:30 meeting — the time jumped forward by your own time-zone offset, and that wrong time is what the invitation and the reminder email told everyone. The time you pick is now the time that gets saved, wherever you are, summer time included.',
+        'Meetings you give a date but no time to now sit on that date on the calendar for everyone, instead of slipping to the day before for anyone west of London.',
+        'Meetings created before this fix keep their shifted time — please check any upcoming meeting you scheduled earlier and set it up again if the time is off.',
+      ],
+      tr: [
+        'Önemli düzeltme: planladığın toplantı, saatin UTC ile aynı olmadığı her durumda yanlış saatte kaydediliyordu. Almanya\'da 16:30 seçmek 18:30\'luk bir toplantı oluşturuyordu — saat kendi saat dilimi farkın kadar ileri kayıyordu ve davet ile hatırlatma e-postası herkese bu yanlış saati söylüyordu. Artık seçtiğin saat, nerede olursan ol (yaz saati dahil) kaydedilen saat.',
+        'Tarih verip saat vermediğin toplantılar artık takvimde herkes için o tarihte duruyor; Londra\'nın batısındakiler için bir gün öncesine kaymıyor.',
+        'Bu düzeltmeden önce oluşturulan toplantıların saati kayık kalıyor — daha önce planladığın yaklaşan toplantıları kontrol et ve saati yanlışsa yeniden oluştur.',
+      ],
+      de: [
+        'Wichtige Korrektur: Ein von dir geplantes Meeting wurde zur falschen Zeit gespeichert, sofern deine Uhr nicht ohnehin UTC entsprach. Wer in Deutschland 16:30 wählte, bekam ein Meeting um 18:30 — die Zeit sprang um deinen eigenen Zeitzonen-Versatz nach vorn, und genau diese falsche Zeit stand in der Einladung und in der Erinnerungs-E-Mail. Jetzt wird die Zeit gespeichert, die du auswählst — überall, Sommerzeit inklusive.',
+        'Meetings mit Datum, aber ohne Uhrzeit liegen im Kalender nun für alle an diesem Datum, statt für alle westlich von London auf den Vortag zu rutschen.',
+        'Vor dieser Korrektur erstellte Meetings behalten ihre verschobene Zeit — prüfe bitte deine bereits geplanten kommenden Meetings und lege sie bei falscher Zeit neu an.',
+      ],
+    },
+  },
+  {
+    version: '0.40.3-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Maintenance only: the new "who referred them" and project member pickers made three automated tests ambiguous, because an option in a dropdown is text like any other. Nothing changed on screen.',
+      ],
+      tr: [
+        'Yalnızca bakım: yeni "getiren kişi" ve proje üye seçicileri, üç otomatik testi belirsiz hale getirmişti — açılır listedeki bir seçenek de sonuçta metin. Ekranda değişen bir şey yok.',
+      ],
+      de: [
+        'Nur Wartung: Die neuen Auswahlfelder „wer hat sie geworben“ und für Projektmitglieder machten drei automatisierte Tests mehrdeutig — eine Option in einem Dropdown ist auch nur Text. Auf dem Bildschirm ändert sich nichts.',
+      ],
+    },
+  },
+  {
+    version: '0.40.2-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'Setting up a recurring meeting used to email everyone once for every future occurrence — dozens of near-identical invitations from a single click. Now only the next meeting is announced; every one after that is covered by the reminder a day before and an hour before.',
+        'Those reminders were also being sent twice to anyone who had both a mentorship and a project membership. One reminder now, to the whole project team.',
+        'The project page shows the app header again, so on a phone you still see where you are and can get back to your dashboard.',
+      ],
+      tr: [
+        'Düzenli toplantı tanımlayınca gelecekteki her tekrar için herkese ayrı e-posta gidiyordu — tek tıkla onlarca benzer davet. Artık sadece bir sonraki toplantı duyuruluyor; sonrakiler için bir gün önce ve bir saat önce gelen hatırlatma yeterli.',
+        'Bu hatırlatmalar, hem mentorluğu hem proje üyeliği olan kişilere iki kez gidiyordu. Artık tek hatırlatma, projedeki herkese.',
+        'Proje sayfasında uygulama başlığı yeniden görünüyor; mobilde nerede olduğunu görüyor ve panele geri dönebiliyorsun.',
+      ],
+      de: [
+        'Beim Anlegen eines wiederkehrenden Treffens ging bisher für jeden künftigen Termin eine eigene E-Mail an alle — Dutzende fast identischer Einladungen mit einem Klick. Jetzt wird nur das nächste Treffen angekündigt; für alle weiteren genügen die Erinnerungen einen Tag und eine Stunde vorher.',
+        'Diese Erinnerungen gingen außerdem doppelt an alle, die sowohl eine Mentorschaft als auch eine Projektmitgliedschaft haben. Jetzt eine Erinnerung, an das ganze Projektteam.',
+        'Die Projektseite zeigt wieder die App-Kopfzeile — auf dem Handy siehst du also, wo du bist, und kommst zurück zu deinem Dashboard.',
+      ],
+    },
+  },
+  {
+    version: '0.40.1-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'A project now has one screen instead of two. The card in the project list is a summary — who is on it, progress, links — and everything else (team, goals, the recurring meeting, join requests, adding people) is on the project page. If your account is both admin and mentor you reach that list from two places, which is why two half-views used to alternate.',
+        'The phone layout of those screens was reworked: the old "add a task" box that shrank to a sliver is gone, and the goal, meeting and member forms now stack instead of squeezing into one row.',
+      ],
+      tr: [
+        'Bir projenin artık iki değil tek ekranı var. Proje listesindeki kart bir özet — kimler var, ilerleme, linkler — geri kalan her şey (ekip, hedefler, düzenli toplantı, katılma talepleri, kişi ekleme) proje sayfasında. Hesabın hem admin hem mentörse o listeye iki yerden ulaşıyorsun; iki yarım görünümün dönüşümlü çıkmasının sebebi buydu.',
+        'Bu ekranların mobil düzeni yenilendi: incecik kalan eski "görev ekle" kutusu kaldırıldı; hedef, toplantı ve üye formları tek satıra sıkışmak yerine alt alta diziliyor.',
+      ],
+      de: [
+        'Ein Projekt hat jetzt einen Bildschirm statt zwei. Die Karte in der Projektliste ist eine Zusammenfassung — wer dabei ist, Fortschritt, Links — alles andere (Team, Ziele, wiederkehrendes Treffen, Beitrittsanfragen, Personen hinzufügen) liegt auf der Projektseite. Wer sowohl Admin als auch Mentor ist, erreicht diese Liste über zwei Wege; daher wechselten sich bisher zwei halbe Ansichten ab.',
+        'Das Handy-Layout dieser Seiten wurde überarbeitet: Das alte, auf wenige Pixel geschrumpfte „Aufgabe hinzufügen“-Feld ist weg, und die Formulare für Ziele, Treffen und Mitglieder stapeln sich statt sich in eine Zeile zu quetschen.',
+      ],
+    },
+  },
+  {
+    version: '0.40.0-beta',
+    date: '2026-08-02',
+    highlights: {
+      en: [
+        'A project now shows the people who are actually on it. The roster comes from the members you add, each with what they do (developer, tester, marketing), so the old "2 interns" line with two unrelated names is gone.',
+        'If you work on a project, you see the project. Members — mentees included — get the team list, the goals and the recurring meeting instead of the anonymous visitor page, and a private project you were added to is no longer invisible to you.',
+        'The recurring meeting has a home: an owner sets the days, the time and the link, everyone on the project reads it, and reminders go out a day before and an hour before — in the app, and by email unless you switched meeting emails off.',
+        'Goals belong to someone. Your own goals are yours to tick off, an unclaimed project goal can be taken with one click, and a mentor can hand the standard starter goals to whoever joined last: every goal ever written on the project is kept as a template.',
+        'Public projects accept join requests. Ask to join, say what you would like to do, and the project owner (or an admin) approves — which is also what adds you to the project and its group chat.',
+        'Group chats say who is in the room, with each person\'s role on the project, and link back to the project.',
+        'Shortcuts where you need them: message the project owner or open the group chat from the project, send a message from someone\'s profile, and — for admins — view the app as them from the same place.',
+        'Invite links now connect people. An admin can pick the mentor a new mentee should be paired with (or the mentee for a new mentor) and a project to join; the connection exists the moment the person registers. Mentees, mentors and admins each also get a personal link to share with their circle, and whoever signs up through it is recorded as having come from them.',
+        'Mentors get an onboarding checklist when someone new joins: say hello, book the kick-off, add them to a project, send the starter goals, move them along the pipeline. Steps the app can see tick themselves.',
+      ],
+      tr: [
+        'Bir proje artık gerçekten içinde olan kişileri gösteriyor. Ekip, eklediğin üyelerden geliyor ve herkesin ne yaptığı (geliştirici, tester, pazarlama) yanında yazıyor; eski "2 stajyer" satırı ve alakasız iki isim tarih oldu.',
+        'Bir projede çalışıyorsan projeyi görüyorsun. Üyeler — mentee’ler dahil — ziyaretçi görünümü yerine ekibi, hedefleri ve düzenli toplantıyı görüyor; eklendiğin özel bir proje artık sana kapalı değil.',
+        'Düzenli toplantının yeri var: proje sahibi günleri, saati ve linki tanımlıyor, projedeki herkes bunu görüyor ve hatırlatmalar bir gün önce ve bir saat önce gidiyor — uygulama içinde, toplantı e-postalarını kapatmadıysan e-posta ile de.',
+        'Hedefler artık bir kişiye ait. Kendi hedeflerini sen işaretliyorsun, sahipsiz bir proje hedefini tek tıkla üstlenebiliyorsun ve mentör, standart başlangıç hedeflerini en son katılan kişiye tek seferde gönderebiliyor: projede yazılmış her hedef şablon olarak saklanıyor.',
+        'Açık projeler katılma talebi alıyor. Katılmak istediğini ve ne yapmak istediğini yazıyorsun; proje sahibi (ya da bir admin) onaylıyor — bu onay aynı zamanda seni projeye ve grup sohbetine ekliyor.',
+        'Grup sohbetleri artık içinde kimlerin olduğunu, herkesin projedeki rolüyle gösteriyor ve projeye geri link veriyor.',
+        'Kısayollar gerektiği yerde: projeden proje sahibine mesaj ya da grup sohbeti, bir kişinin profilinden mesaj gönderme ve adminler için aynı yerden "bu kullanıcı olarak görüntüle".',
+        'Davet linkleri artık bağlantı kuruyor. Admin, yeni bir mentee’nin hangi mentöre bağlanacağını (ya da yeni bir mentörün hangi mentee’yi alacağını) ve katılacağı projeyi seçebiliyor; kişi kaydolduğu anda bağlantı kurulmuş oluyor. Ayrıca mentee, mentör ve adminlerin çevresine paylaşacağı kişisel bir linki var; o linkle gelen herkesin kaynağı o kişi olarak kaydediliyor.',
+        'Yeni biri katıldığında mentöre bir onboarding listesi çıkıyor: merhaba de, tanışma toplantısını ayarla, projeye ekle, başlangıç hedeflerini gönder, pipeline’da ilerlet. Uygulamanın görebildiği adımlar kendiliğinden işaretleniyor.',
+      ],
+      de: [
+        'Ein Projekt zeigt jetzt die Menschen, die wirklich daran arbeiten. Das Team kommt aus den Mitgliedern, die du hinzufügst — jeweils mit ihrer Aufgabe (Entwicklung, Test, Marketing). Die alte Zeile „2 Praktikanten“ mit zwei unbeteiligten Namen ist weg.',
+        'Wer an einem Projekt arbeitet, sieht das Projekt. Mitglieder — auch Mentees — bekommen Team, Ziele und das wiederkehrende Treffen statt der Besucheransicht, und ein privates Projekt, zu dem du hinzugefügt wurdest, ist für dich nicht mehr unsichtbar.',
+        'Das wiederkehrende Treffen hat einen Platz: Der Owner legt Tage, Zeit und Link fest, alle im Projekt sehen das, und Erinnerungen gehen einen Tag vorher und eine Stunde vorher raus — in der App und per E-Mail, sofern du Meeting-E-Mails nicht deaktiviert hast.',
+        'Ziele gehören jemandem. Deine eigenen Ziele hakst du selbst ab, ein freies Projektziel kannst du mit einem Klick übernehmen, und eine Mentorin kann die Standard-Startziele an die zuletzt hinzugekommene Person schicken: Jedes je formulierte Ziel wird als Vorlage aufbewahrt.',
+        'Öffentliche Projekte nehmen Beitrittsanfragen an. Du fragst an und sagst, was du machen möchtest; der Owner (oder eine Administratorin) gibt frei — und genau das fügt dich zum Projekt und seinem Gruppenchat hinzu.',
+        'Gruppenchats zeigen, wer im Raum ist — mit der jeweiligen Rolle im Projekt — und verlinken zurück zum Projekt.',
+        'Shortcuts da, wo man sie braucht: aus dem Projekt den Owner anschreiben oder den Gruppenchat öffnen, aus einem Profil eine Nachricht senden und — für Admins — von dort die App als diese Person ansehen.',
+        'Einladungslinks verbinden jetzt. Eine Administratorin kann wählen, mit welchem Mentor ein neuer Mentee verbunden wird (oder mit welchem Mentee eine neue Mentorin) und welchem Projekt beigetreten wird; die Verbindung besteht mit der Registrierung. Mentees, Mentoren und Admins haben zusätzlich einen persönlichen Link fürs eigene Umfeld — wer sich darüber registriert, wird ihnen als Quelle zugeordnet.',
+        'Mentoren bekommen eine Onboarding-Liste, wenn jemand Neues dazukommt: Hallo sagen, Kick-off buchen, zu einem Projekt hinzufügen, Startziele senden, in der Pipeline weiterbewegen. Was die App sehen kann, hakt sich selbst ab.',
       ],
     },
   },

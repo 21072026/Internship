@@ -5,8 +5,12 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// #618 UI: the card's "Manage owners & mentors" panel — add a mentor as OWNER
-// from the picker, then remove; the last-owner guard error surfaces inline.
+// #618 UI: the "Manage owners & mentors" panel — add a mentor as OWNER from the
+// picker, then remove; the last-owner guard error surfaces inline.
+//
+// The panel moved from the project *card* to the project page (#51): a project
+// had two half-views, and the card's copy is the one that went away. The card's
+// members icon is now a link to the same panel.
 test('owners panel: add an owner from the picker; last-owner removal shows the error', async ({ browser }) => {
   const adminEmail = uniqueEmail('own-admin');
   const mentorEmail = uniqueEmail('own-mentor');
@@ -33,8 +37,10 @@ test('owners panel: add an owner from the picker; last-owner removal shows the e
     await page.goto('/admin/projects');
     const card = page.locator('[data-testid="project-card"]', { hasText: 'Owners UI Project' });
     await expect(card).toBeVisible({ timeout: 10_000 });
+    // The card's members icon opens the project page, where the panel lives.
     await card.getByTestId('manage-owners').click();
-    const panel = card.getByTestId('owners-panel');
+    await page.waitForURL(new RegExp(`/projects/${project.id}`), { timeout: 20_000 });
+    const panel = page.getByTestId('members-panel');
     // Scope to the member list: the panel also contains the member-picker
     // <select>, whose options are the users NOT in the project — so a removed
     // member reappears there and a panel-wide text match still finds them.

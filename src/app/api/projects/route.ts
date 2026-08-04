@@ -8,22 +8,32 @@ import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { createOrGetProjectConversation } from '@/lib/conversations';
+import { mergeTeam, internCount } from '@/lib/projectTeam';
 
 const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
   ownerCompany: { select: { id: true, name: true } },
-  tasks: { orderBy: { order: 'asc' } },
-  // Member (mentee) names for the card's "who's on it" row (#616).
+  tasks: {
+    orderBy: { order: 'asc' },
+    include: { assignee: { select: { id: true, fullName: true } } },
+  },
+  // Legacy membership source for the card's "who's on it" row (#616). No `take`
+  // here any more: the row is merged with `members` into the team (#51), and a
+  // truncated list would silently under-count the interns.
   relations: {
     where: { status: 'ACTIVE' },
-    select: { mentee: { select: { id: true, fullName: true } } },
-    take: 12,
+    select: {
+      mentee: { select: { id: true, fullName: true } },
+      mentor: { select: { id: true, fullName: true } },
+    },
   },
   members: {
     orderBy: { addedAt: 'asc' },
     select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, role: true } } },
   },
-  _count: { select: { relations: true } },
+  // Filtered relation count: the card shows an owner there is something waiting
+  // without loading every request (#51).
+  _count: { select: { relations: true, joinRequests: { where: { status: 'PENDING' } } } },
 } as const;
 
 // GET — projects visible to the caller (admin: all; mentor: owned; company: their company's).
@@ -42,14 +52,24 @@ export async function GET() {
   }
 
   const projects = await prisma.project.findMany({ where, include, orderBy: { updatedAt: 'desc' } });
+  // The card's "who's on it" row and its intern count come from the merged team
+  // (members + legacy relations), never from `_count.relations` alone (#51).
+  const withTeam = projects.map((p) => {
+    const team = mergeTeam(p.members, p.relations);
+    return { ...p, team, internCount: internCount(team) };
+  });
   // Showcase-only roles (mentee, source) browse the public set — keep it
-  // PII-free (member/relation names stripped, count only).
+  // PII-free (names stripped, count only) for projects they are NOT on. A mentee
+  // who is a member of the project is a colleague of everyone in it, so they see
+  // the roster (they are in the same group chat anyway).
   if (session.user.role === 'MENTEE' || session.user.role === 'SOURCE') {
     return NextResponse.json({
-      projects: projects.map(({ relations: _relations, members: _members, ...rest }) => rest),
+      projects: withTeam.map(({ relations: _relations, members: _members, team, ...rest }) =>
+        team.some((m) => m.id === session.user.id) ? { ...rest, team } : rest
+      ),
     });
   }
-  return NextResponse.json({ projects });
+  return NextResponse.json({ projects: withTeam });
   });
 }
 
