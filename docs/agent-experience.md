@@ -2311,3 +2311,135 @@ Kullanılan zincir: `gh workflow run e2e.yml --ref <branch> -f grep='<8 testi ka
 yine de yeşil raporlardı — sessiz yanlış pozitif) → merge'den önce `e2e-full.yml` branch'te.
 `npx playwright test --list --grep '<regex>'` lokalde regex'i bedavaya doğruluyor; dispatch
 etmeden önce onu koştur.
+
+## 2026-08-03 — Aynı hatanın diğer yarısı: *giriş* yönü (#1061, 0.40.4-beta)
+
+#1030 (bir gün önce, hemen yukarıda) tarih/saatin **çıkış** yönünü düzeltmişti: sunucuda
+`timeZone` vermeden formatlamak. Bugün gelen bildirim neredeyse aynı görünüyordu — "16:30
+seçtim, 18:30 oldu", yine tam **2 saat**, yine Berlin/UTC — ama kök neden **karşı yönde**
+idi: bu kez format değil, **parse**.
+
+**Ayırt edici soru: yanlış olan gösterim mi, saklanan veri mi?** #1030'da DB doğruydu,
+e-posta yanlış render ediyordu. Burada e-posta *doğru* render ediyordu ("18:30 (GMT+2)" —
+saklanan an gerçekten 18:30 Berlin'di); bozuk olan `scheduledAt`'in kendisiydi. Ekran
+görüntülerinden bunu ayırmanın yolu: **ilan edilen ofset etiketiyle** tutarlı mı? "18:30
+(GMT+2)" iç tutarlı bir cümle, dolayısıyla formatlayıcı suçlu değil. Tutarlıysa yukarı,
+yazma yoluna bak.
+
+**Kural:** `<input type="date">` + `<input type="time">` (ve `datetime-local`) **saat dilimi
+taşımayan** bir duvar saati üretir (`"2026-08-03T16:30"`). ECMAScript'e göre belirteçsiz bir
+tarih-saat dizesi **çalışma zamanının yerel diliminde** yorumlanır — tarayıcıda kullanıcının
+dilimi, sunucuda ise UTC. Yani aynı dize iki uçta **iki farklı an** demek. Bu dize asla ham
+hâlde POST edilmemeli; `new Date(bareString)` sunucuda her zaman bir hatadır.
+
+**Neden hem istemci hem sunucu düzeltildi:** istemci tarafı yetkili çözüm (kullanıcının
+dilimini yalnızca tarayıcı bilir), ama sunucu tarafı `new Date()` çağrısı bırakılırsa
+önbellekteki eski paketle gelen tarayıcı ve API tüketicileri hatayı yaşamaya devam eder.
+Sunucuda "diliminden emin değilsen" fallback'i organizatörün `User.timezone`'u → `APP_TIMEZONE`
+→ Europe/Istanbul; UTC varsaymaktan her koşulda daha iyi (ama #1030'un tuzağı burada da
+geçerli: bu alan mentor/adminlerde boş olabilir, o yüzden istemci düzeltmesi asıl olan).
+
+**IANA duvar saati → an dönüşümü, kütüphanesiz:** aradığın ofset, çözmeye çalıştığın anın
+kendisine bağlıdır (DST). Yineleyerek çöz — duvar saatini UTC varsay, oradaki ofsetle
+düzelt, bir kez daha düzelt. İki geçiş, ofseti ~1 saatten az kayan her dilim için tam
+sonuç veriyor. Ofseti `Intl.DateTimeFormat(...).formatToParts` ile geri okumak, kendi ofset
+tablonu tutmaktan iyidir. `hour12: false` bazı ICU sürümlerinde gece yarısını **"24"**
+döndürür — `% 24` şart.
+
+**Regex tuzağı — "saat dilimi belirteci var mı":** naif `/(?:Z|[+-]\d{2}:?\d{2})$/` deseni
+yalnızca-tarih olan `"2026-08-03"`'ü de **eşleştirir** (`-08-03` bir "-08:03" ofseti gibi
+okunur) ve dizeyi "zaten dilimli" sayıp UTC gece yarısına çevirir. Belirteci **bir saatin
+ardından** aramak gerekiyor; `.000Z` için kesirli saniyeyi de kapsa.
+
+**Düzeltmenin gerçekten çalıştığını kanıtlama — testi eski kodda kırmızı gör.** Yeni e2e
+`git stash push -- src/` ile düzeltme geri alınıp koşuldu: `Received: 16:30Z` (bildirilen
+hatanın tam kendisi), düzeltmeyle `14:30Z`. Yeşil bir test tek başına hiçbir şey kanıtlamaz;
+Playwright'ta `test.use({ timezoneId: 'Europe/Berlin' })` bu tür hataları görünür kılan tek
+satırdır — **UTC tarayıcıda bu hata görünmez**, yani varsayılan dilimle yazılmış bir test
+sessizce yeşil kalırdı. Ayrıca iddia **saklanan anı** (`prisma.meeting.findFirst` →
+`scheduledAt.toISOString()`) kontrol etmeli; ekranda okunan metin hem doğru hem yanlış
+veriyle "16:30" gösterebilir.
+
+**Formattan bağımsız iddia yaz:** ekrandaki saati doğrulayan satır ilk denemede kırıldı,
+çünkü liste `Intl`'i tarayıcının **locale**'iyle çalıştırıyor ve `en-US` 12 saatlik
+("4:30 PM") biçim veriyor. `/(16:30|4:30\s*PM)/` gibi iki biçimi de kabul et — yoksa test
+saat dilimini değil locale'i test eder.
+
+**Geriye dönük veri:** düzeltmeden önce oluşmuş satırlar kayık kalıyor ve toptan bir
+backfill **yapılmadı** — form kaynaklı satırı doğru saklanmış satırdan (seri tekrarları,
+kabul edilmiş toplantı istekleri) ayırt edecek bir işaret yok, `createdById` üzerinden ofset
+tahmini doğru satırları bozardı. Yerinde düzeltme için bir yeniden planlama/iptal yolu da
+yok (`/api/meetings` yalnızca GET+POST). Bunu kullanıcıya **açıkça söyle**; "düzelttim"
+demek yeni kayıtlar için doğru, mevcut kayıt için değil.
+
+**Ortam:** yerel MariaDB + `.env` + `db push` playbook'taki gibi sorunsuz kuruldu. Playwright
+runner'ı için `executablePath` override'ı ayrı bir config dosyasına yazılıyor ve bu dosya
+**repo kökünde** olmalı — `playwright.config.ts` içindeki `globalSetup: './e2e/global-setup.ts'`
+gibi göreli yollar config'in bulunduğu dizine göre çözülüyor, scratchpad'e koyunca
+`MODULE_NOT_FOUND` veriyor. Commit'ten önce silmeyi unutma.
+
+## 2026-08-03 — Anlık görüşme + yüzen not penceresi paketi (#1051–#1059, 0.40.5→0.40.9-beta)
+
+Beş PR'lık bir zincir (şema → endpoint → butonlar/yan panel → proje & sohbet → not penceresi
+→ nottan işe). Çıkan dersler, sırayla en pahalıya mal olanlar:
+
+**`git checkout -B <dal> origin/main` upstream'i `origin/main` yapar.** Squash-merge edilmiş
+bir PR'ın üstüne yeni dal kurarken bunu kullandım; sonrasındaki düz `git push` **dalıma
+değil main'e** gitmeye çalıştı. Main korumalı olduğu için reddedildi (yoksa doğrudan main'e
+commit'lerdim), ama asıl zarar sessizdi: dalın uzaktaki hâli **eski commit'te kaldı**, PR o
+eski commit'le açıldı ve **hiç CI tetiklenmedi**. "PR'da 0 check var" gördüğünde önce
+`git status -sb` ile upstream'e bak; `-B` sonrası her zaman
+`git push origin <dal>:<dal>` yaz ya da `--set-upstream-to`'yu düzelt.
+
+**Squash-merge edilen bir PR'ın üstündeki dalı `rebase` etme, `cherry-pick`'le yeniden kur.**
+Zincirdeki her PR bir öncekinin dalından çıkıyordu; üsttekiler squash'lanınca
+`git rebase origin/main` her seferinde aynı içeriği "AA" çakışmasıyla getirdi. Doğrusu:
+`git checkout -B <dal> origin/main && git cherry-pick <kendi commit'im>`.
+
+**Headless Chromium `documentPictureInPicture`'ı SUNUYOR.** "Tarayıcı desteklemiyor, o yüzden
+fallback'i test ederim" varsayımı yanlış — o test sessizce **PiP dalını** çalıştırır ve
+Safari/Firefox hakkında hiçbir şey kanıtlamaz. İki dalı da `context.addInitScript` ile zorla:
+biri `delete window.documentPictureInPicture`, diğeri `requestWindow`'u `window.open` ile
+stub'lar. Gerçek "her şeyin üstünde durma" davranışı headless doğrulanamıyor; elle bakıldı.
+
+**Transient user activation, `await`'ten sonra tükenmiş sayılır.** `documentPictureInPicture
+.requestWindow()` ve `window.open()` canlı bir kullanıcı jesti istiyor. "Görüşme başlat"
+akışında pencereyi `await fetch(...)`'ten **sonra** açmak sessiz bir başarısızlık — hata yok,
+pencere de yok. Sıra: tıklama handler'ının senkron başında pencereyi aç, fetch'i paralel
+yürüt, oda dönünce pencereye iliştir. Yanıt hatalıysa pencereyi kapat, yoksa hiçbir şeye ait
+olmayan boş bir pencere ekranda yüzer.
+
+**"Gezinmeye rağmen ayakta kalıyor" iki ayrı iddiadır.** Paneli sayfa kabuklarının üstüne
+(`Providers`) mount etmek **client-side** gezinmeyi çözer; `page.goto()` ise tam belge
+yüklemesidir ve React state'ini siler. Smoke testi bunu ilk turda yakaladı — düzeltmesi
+`sessionStorage`'a yazıp mount sonrası geri okumak (render sırasında değil: hidrasyon kırılır).
+`localStorage` değil `sessionStorage`: oda bu sekmeye ait, yarın açılan sekmeye musallat
+olmamalı.
+
+**CSP ve `Permissions-Policy`, gömülü görüşmeyi iki ayrı şekilde öldürüyordu.**
+`camera=(), microphone=()` **kendi frame'imiz dahil** her şeyi kapatıyor; CSP'de `frame-src`
+yoksa `default-src 'self'` iframe'i tamamen bloke ediyor. İkisini de tek host'a daralt ve
+allowlist'i kodda aynala (`EMBEDDABLE_MEETING_HOSTS`) — birini genişletip diğerini unutmak ya
+boş kutu ya görüntüsüz görüşme demek. Header'ları `curl -sI` ile gerçek yanıtta doğrula.
+
+**Client bileşeninin kullanacağı yardımcıyı Prisma'lı modülden ayır.** `isEmbeddableMeetingLink`
+başta `meetingContext.ts` içindeydi; oradan import etmek Prisma'yı (ve `node:crypto`'yu)
+tarayıcı paketine sürüklerdi. Import'suz ayrı bir `meetingLink.ts` doğru yer.
+
+**`ProjectMember` bir `TENANT_MODEL` değil, `Project` öyle.** Üyeleri doğrudan sorgulamak
+kiracılar arası okuma demek. Önce `prisma.project.findUnique` (org-scoped), sonra üyelik.
+
+**Nullable'a çevrilen bir kolon, onu deref eden her yeri kırar — ama `tsc` hepsini gösterir.**
+`Meeting.relationId`'yi nullable yapmak yalnızca 3 hata verdi; asıl iş, mevcut endpoint'lerin
+**şeklini korumaktı**: `GET /api/meetings`, `/api/calendar-events` ve hatırlatma cron'u
+`relationId: { not: null }` ile süzülerek birebir aynı davranışta bırakıldı.
+
+**Yerel MariaDB'de `root` sudo istiyor, ama oturum kullanıcısı unix_socket ile giriyor.**
+`mysql -u <kullanıcı>` çalışıyor; oradan TCP parolalı bir kullanıcı açıp
+(`CREATE USER 'e2e'@'127.0.0.1'`) Prisma'yı ona bağlamak, sudo beklemeden yerel e2e koşmanın
+en hızlı yolu. Bir kere kurunca **her PR'ı push'lamadan önce yerelde koşabildim** — bu paket
+için CI'a giden tek kırmızı, bu kurulumdan *önceki* PR'dı.
+
+**Dev sunucusu eski Prisma client'ıyla kalır.** `prisma generate` sonrası `next dev`'i
+yeniden başlatmazsan yeni kolona yazan endpoint 500 döner ve hata testin değil sunucunun
+olur. Şema değişince sunucuyu yeniden başlat.

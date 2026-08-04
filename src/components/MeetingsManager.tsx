@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Copy, Check } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
+import { wallClockToInstantISO } from '@/lib/timezone';
 
 interface Relation {
   id: string;
@@ -42,7 +44,11 @@ export function MeetingsManager() {
   // Time is optional. With a date the meeting has a time (defaulting to
   // midnight if no clock time) and expects an RSVP; with no date it's a
   // no-time meeting (just a link, no RSVP).
-  const scheduledAt = date ? `${date}T${time || '00:00'}` : '';
+  //
+  // Sent as a zone-qualified instant, not the bare "2026-08-03T16:30" the inputs
+  // produce: the server runs UTC and would have read that wall clock as UTC,
+  // pushing the meeting forward by the organizer's offset (#1061).
+  const scheduledAt = date ? wallClockToInstantISO(date, time || '00:00') : '';
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -111,7 +117,19 @@ export function MeetingsManager() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>{t.meetings.schedule} ({chosen.length})</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>{t.meetings.schedule} ({chosen.length})</CardTitle>
+              {/* Same selection, the other intent: skip the date/time and open a
+                  room for everyone ticked, right now (#1053). */}
+              {chosen.length > 0 && (
+                <StartMeetingButton
+                  className="ml-auto"
+                  target={{ relationIds: chosen }}
+                  defaultTitle={title.trim() || undefined}
+                  testId="start-meeting-bulk"
+                />
+              )}
+            </div>
           </CardHeader>
           <div className="space-y-4">
             <div className="max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-lg p-2">

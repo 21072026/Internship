@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma';
 // Two things can put a meeting on someone's calendar here, and the answer has to
 // cover both:
 //   1. a `Meeting` row — a one-off, or an occurrence generated from a series,
-//      always tied to a MentorshipRelation (so: its mentor and its mentee);
+//      tied to a MentorshipRelation (so: its mentor and its mentee), or since
+//      #1051 to a project or a conversation (so: its members / participants);
 //   2. a `MeetingSeries` rule on a project — the recurring project call, which
 //      every project member is expected at whether or not they have a relation
 //      carrying that project.
@@ -73,7 +74,13 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
     prisma.meeting.findMany({
       where: {
         scheduledAt: { gte: windowStart, lte: windowEnd },
-        relation: { OR: [{ mentorId: userId }, { menteeId: userId }] },
+        // A Meeting row hangs off a relation, a project or a conversation (#1051);
+        // whichever it is, the user is expected there if they are on that side of it.
+        OR: [
+          { relation: { OR: [{ mentorId: userId }, { menteeId: userId }] } },
+          { project: { members: { some: { userId } } } },
+          { conversation: { participants: { some: { userId } } } },
+        ],
       },
       orderBy: { scheduledAt: 'asc' },
       select: {
@@ -81,6 +88,8 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
         title: true,
         scheduledAt: true,
         meetLink: true,
+        projectId: true,
+        project: { select: { name: true } },
         relation: { select: { projectId: true, project: { select: { name: true } } } },
       },
     }),
@@ -98,8 +107,8 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
       title: m.title,
       startsAt: m.scheduledAt!,
       meetLink: m.meetLink,
-      projectId: m.relation.projectId,
-      projectName: m.relation.project?.name ?? null,
+      projectId: m.projectId ?? m.relation?.projectId ?? null,
+      projectName: m.project?.name ?? m.relation?.project?.name ?? null,
     }));
 
   const projectIds = [

@@ -491,7 +491,7 @@ export default function AdminMenteeDetailPage() {
             </div>
           )}
         </Card>
-        {rel && <MeetingSchedulerPanel relationId={rel.id} />}
+        {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
         <DocumentsManager targetUserId={id} />

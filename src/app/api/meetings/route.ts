@@ -7,6 +7,8 @@ import { randomBytes } from 'crypto';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
+import { hasTimeZoneDesignator, parseUserDateTime } from '@/lib/timezone';
+import { generateMeetingLink } from '@/lib/meetingContext';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -22,8 +24,14 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return await withTenantScope(session, async () => {
+    // `relationId: { not: null }` keeps this endpoint's shape after #1051 made
+    // the column nullable: every consumer (MeetingsManager, MeetingSchedulerPanel)
+    // reads `m.relation.mentee.fullName`, and an admin's unfiltered query would
+    // otherwise start returning project/conversation rows with a null relation.
     const where =
-      session.user.role === 'ADMIN' ? {} : { relation: { mentorId: session.user.id } };
+      session.user.role === 'ADMIN'
+        ? { relationId: { not: null } }
+        : { relationId: { not: null }, relation: { mentorId: session.user.id } };
     const meetings = await prisma.meeting.findMany({
       where,
       include: { relation: { include: { mentee: { select: { fullName: true } } } } },
@@ -47,7 +55,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
     const { relationIds, title, scheduledAt, meetLink } = parsed.data;
-    const when = scheduledAt ? new Date(scheduledAt) : null;
+
+    // `scheduledAt` normally arrives zone-qualified from the browser. A bare wall
+    // clock ("2026-08-03T16:30") still has to be honoured for API clients and for
+    // browsers on a cached bundle — and must NOT go through `new Date()`, which
+    // reads it in the container's zone (UTC) and so shifts the meeting by the
+    // organizer's offset (#1061). Anchor it to the organizer's own zone instead.
+    let when: Date | null = null;
+    if (scheduledAt) {
+      const organizer = hasTimeZoneDesignator(scheduledAt)
+        ? null
+        : await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { timezone: true },
+          });
+      when = parseUserDateTime(scheduledAt, organizer?.timezone);
+      if (!when) {
+        return NextResponse.json({ error: 'Validation failed', details: { scheduledAt: 'Invalid date/time' } }, { status: 400 });
+      }
+    }
 
     const where =
       session.user.role === 'ADMIN'
@@ -62,7 +88,7 @@ export async function POST(request: Request) {
     // same room, so the video link is generated once (Jitsi, no account needed)
     // when the organizer didn't paste one. The per-person RSVP token stays
     // unique — each participant confirms attendance individually.
-    const link = meetLink || `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
+    const link = meetLink || generateMeetingLink();
 
     let created = 0;
     for (const rel of relations) {

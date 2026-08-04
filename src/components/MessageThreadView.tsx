@@ -16,6 +16,8 @@ import {
 } from '@/components/MessageThread';
 import { useMessagesHeaderTitle } from '@/components/MessagesShell';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
+import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
+import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 
 interface Attachment {
   id: string;
@@ -257,6 +259,13 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const other = parties.find((p) => p.id !== myId) ?? null;
   // A group chat has no "other side" — it is named after its project.
   const threadTitle = group ? group.projectName ?? t.messages.groupChat : other?.fullName;
+  // Only conversation threads can host a call (#1055): membership is derived
+  // from ConversationParticipant, so either side may start one. The legacy
+  // relation thread is left out — its mentee would be refused server-side
+  // anyway (relations are mentor-scoped), and a button that always fails is
+  // worse than no button. Mentors reach 1:1 calls from the mentee card.
+  const startMeetingTarget: MeetingTarget | null =
+    target.kind === 'conversation' ? { conversationId: target.id } : null;
   // On mobile the shell's header is the only title, so it carries the name.
   useMessagesHeaderTitle(threadTitle);
 
@@ -281,9 +290,31 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       {/* On mobile the shell header is the heading (and names the thread), so this
           block would be a duplicate title eating a third of a phone screen. */}
       {!narrow && (
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">{t.messages.title}</h1>
-          <p className="text-gray-500">{threadTitle}</p>
+        <div className="mb-6 flex items-start gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">{t.messages.title}</h1>
+            <p className="text-gray-500">{threadTitle}</p>
+          </div>
+          {startMeetingTarget && (
+            <StartMeetingButton
+              className="ml-auto flex-shrink-0"
+              target={startMeetingTarget}
+              defaultTitle={threadTitle ?? undefined}
+              testId="start-meeting-conversation"
+            />
+          )}
+        </div>
+      )}
+
+      {/* On a phone the header above is hidden, so the action needs its own row —
+          otherwise starting a call from a chat is desktop-only. */}
+      {narrow && startMeetingTarget && (
+        <div className="mb-2 flex justify-end">
+          <StartMeetingButton
+            target={startMeetingTarget}
+            defaultTitle={threadTitle ?? undefined}
+            testId="start-meeting-conversation-mobile"
+          />
         </div>
       )}
 

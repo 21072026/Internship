@@ -7,6 +7,7 @@ import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMeetingRequestEmail } from '@/services/emailService';
+import { hasTimeZoneDesignator, parseUserDateTime } from '@/lib/timezone';
 
 // GET ?relationId= — meeting requests for a thread (participants/admin).
 export async function GET(request: Request) {
@@ -36,12 +37,20 @@ export async function POST(request: Request) {
   const rel = await getThreadIfAllowed(session.user, parsed.data.relationId);
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  // The panel sends a zone-qualified instant; a bare wall clock is anchored to
+  // the requester's zone rather than the container's UTC (#1061).
+  const requester = hasTimeZoneDesignator(parsed.data.proposedAt)
+    ? null
+    : await prisma.user.findUnique({ where: { id: session.user.id }, select: { timezone: true } });
+  const proposedAt = parseUserDateTime(parsed.data.proposedAt, requester?.timezone);
+  if (!proposedAt) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+
   const req = await prisma.meetingRequest.create({
     data: {
       relationId: rel.id,
       requestedById: session.user.id,
       topic: parsed.data.topic,
-      proposedAt: new Date(parsed.data.proposedAt),
+      proposedAt,
     },
   });
 
