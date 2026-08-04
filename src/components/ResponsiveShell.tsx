@@ -6,6 +6,7 @@ import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { NotificationBell } from '@/components/NotificationBell';
 import { MessagesButton } from '@/components/MessagesButton';
 import { BetaBadge } from '@/components/BetaBadge';
+import { JoinMeetingPill } from '@/components/JoinMeetingPill';
 
 // App shell: sidebar is a static column on desktop and an off-canvas drawer
 // (with a hamburger top bar) on mobile.
@@ -35,6 +36,8 @@ export function ResponsiveShell({
           <BetaBadge className="ml-2" />
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Only visible while a meeting is actually running (#51 follow-up). */}
+          <JoinMeetingPill />
           <MessagesButton />
           <NotificationBell />
           {/* No negative margin: `-mr-2` pushed the icon 8px past the bar's px-4 and
@@ -82,6 +85,7 @@ export function ResponsiveShell({
         {/* Desktop-only top strip for search + notifications */}
         <div className="hidden lg:flex items-center justify-end gap-3 px-8 pt-4 no-print">
           {headerExtra}
+          <JoinMeetingPill />
           <MessagesButton />
           <NotificationBell />
         </div>
