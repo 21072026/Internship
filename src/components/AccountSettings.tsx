@@ -14,6 +14,7 @@ import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/l
 import { durationSince } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
+import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -21,6 +22,10 @@ export function AccountSettings() {
   const t = useT();
   const { data: session, update } = useSession();
   const router = useRouter();
+  // Read after mount, not during render: localStorage doesn't exist on the
+  // server and reading it while rendering would break hydration.
+  const [notesAutoOpen, setNotesAutoOpen] = useState(true);
+  useEffect(() => setNotesAutoOpen(meetingNotesAutoOpen()), []);
   // While an admin impersonates someone, `/api/account` refuses every
   // credential change and the account deletion outright (PUT/DELETE both 400).
   // Rendering those cards anyway made the page a trap: an admin who wanted to
@@ -441,6 +446,25 @@ export function AccountSettings() {
         <Button variant="outline" loading={signOutBusy} onClick={signOutAll}>{t.account.signOutAll}</Button>
       </Card>
       )}
+
+      <Card className="mt-6 max-w-4xl" data-testid="meeting-notes-card">
+        <CardHeader><CardTitle>{t.meetings.notesWindow.title}</CardTitle></CardHeader>
+        {/* Per-device, like the composer's enter-to-send: which machine you take
+            notes on is a property of the machine, not the account (#1058). */}
+        <label className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={notesAutoOpen}
+            data-testid="meeting-notes-auto-open"
+            onChange={(e) => {
+              setNotesAutoOpen(e.target.checked);
+              setMeetingNotesAutoOpen(e.target.checked);
+            }}
+          />
+          {t.account.notesAutoOpen}
+        </label>
+        <p className="text-xs text-gray-400 mt-1">{t.account.notesAutoOpenHint}</p>
+      </Card>
 
       <Card className="mt-6 max-w-4xl">
         <CardHeader><CardTitle>{t.account.notificationsSection}</CardTitle></CardHeader>
