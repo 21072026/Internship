@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, Video, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 
 // The project's recurring meeting (#51).
 //
@@ -23,7 +24,19 @@ interface Series {
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
-export function ProjectWeeklyMeeting({ projectId, canManage }: { projectId: string; canManage: boolean }) {
+export function ProjectWeeklyMeeting({
+  projectId,
+  canManage,
+  canStartInstant = false,
+  projectName,
+}: {
+  projectId: string;
+  canManage: boolean;
+  // Separate from canManage: editing the weekly rule and starting an ad-hoc call
+  // are different permissions (MENTOR members get the second, not the first).
+  canStartInstant?: boolean;
+  projectName?: string;
+}) {
   const t = useT();
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,12 +119,24 @@ export function ProjectWeeklyMeeting({ projectId, canManage }: { projectId: stri
   };
 
   if (loading) return null;
-  if (series.length === 0 && !canManage) return null;
+  // `|| canStartInstant`: a MENTOR member who may summon the team but can't edit
+  // the schedule still needs somewhere to press the button (#1055).
+  if (series.length === 0 && !canManage && !canStartInstant) return null;
 
   return (
     <div data-testid="weekly-meeting">
       <h2 className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
         <CalendarClock className="h-4 w-4 text-gray-400" /> {t.projects.weeklyMeeting}
+        {/* The recurring rule and an ad-hoc "everyone, now" call are separate
+            things; they just live next to each other. */}
+        {canStartInstant && (
+          <StartMeetingButton
+            className="ml-auto"
+            target={{ projectId }}
+            defaultTitle={projectName}
+            testId="start-meeting-project"
+          />
+        )}
       </h2>
 
       {series.length === 0 ? (

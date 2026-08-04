@@ -807,7 +807,15 @@ export async function sendMeetingReminders() {
     // rather than only the two sides of a relation. Without this exclusion the
     // people who have both a relation and a membership got the hour-before
     // reminder twice (#51).
-    where: { scheduledAt: { gt: now, lte: horizon }, reminderSentAt: null, seriesId: null },
+    // `relationId: { not: null }` — a project/conversation meeting (#1051) has
+    // no two-sided relation to remind; those rooms are instant and time-less,
+    // so they never match the scheduledAt window either.
+    where: {
+      scheduledAt: { gt: now, lte: horizon },
+      reminderSentAt: null,
+      seriesId: null,
+      relationId: { not: null },
+    },
     include: {
       relation: {
         include: {
@@ -824,6 +832,8 @@ export async function sendMeetingReminders() {
   let emailed = 0;
 
   for (const m of meetings) {
+    // Guaranteed by the query above; the guard is what tells TypeScript so.
+    if (!m.relation) continue;
     // Claim it first — see the idempotency note above.
     const claim = await prisma.meeting.updateMany({
       where: { id: m.id, reminderSentAt: null },

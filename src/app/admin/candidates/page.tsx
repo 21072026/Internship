@@ -66,6 +66,7 @@ export default function CandidatesPage() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // Deactivated candidates are hidden by default and live in the archive view.
   const [archived, setArchived] = useState(false);
 
@@ -212,7 +213,7 @@ export default function CandidatesPage() {
 
   return (
     <div>
-      <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.candidates.title}</h1>
         <p className="text-gray-500 mt-1">{t.candidates.subtitle}</p>
@@ -233,7 +234,7 @@ export default function CandidatesPage() {
           </div>
         )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex max-w-full flex-wrap gap-2">
           <Button variant="outline" onClick={exportCsv} disabled={candidates.length === 0}>
             <Download className="h-4 w-4" />
             {t.candidates.exportCsv}
@@ -253,48 +254,70 @@ export default function CandidatesPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-        <div className="flex items-center gap-2 mb-3">
+        <button
+          type="button"
+          data-testid="candidates-mobile-filter-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="candidate-filters"
+          onClick={() => setFiltersOpen((open) => !open)}
+          className="flex w-full items-center justify-between gap-2 text-left md:hidden"
+        >
+          <span className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.candidates.filters}</span>
+          </span>
+          <span aria-hidden className="text-sm text-gray-500">{filtersOpen ? '−' : '+'}</span>
+        </button>
+        <div className="hidden items-center gap-2 mb-3 md:flex">
           <Filter className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-medium text-gray-700">{t.candidates.filters}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.candidates.filters}</span>
         </div>
+        <div id="candidate-filters" className={`${filtersOpen ? 'block mt-3' : 'hidden'} md:block md:mt-0`}>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
               placeholder={t.candidates.searchPlaceholder}
+              data-testid="candidates-search-input"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
             />
           </div>
           <Input
+            data-testid="candidates-skill-filter"
             placeholder={t.candidates.skillsPlaceholder}
             value={skillFilter}
             onChange={(e) => setSkillFilter(e.target.value)}
           />
           <Select
+            data-testid="candidates-year-filter"
             options={[{ value: '', label: t.candidates.allYears }, ...gradYears]}
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
             placeholder={t.candidates.allGradYears}
           />
           <Input
+            data-testid="candidates-city-filter"
             placeholder={t.candidates.cityPlaceholder}
             value={cityFilter}
             onChange={(e) => setCityFilter(e.target.value)}
           />
           <Input
+            data-testid="candidates-project-filter"
             placeholder={t.candidates.projectPlaceholder}
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
           />
           <Select
+            data-testid="candidates-source-filter"
             options={[{ value: '', label: t.candidates.allSources }, ...sources.map((s) => ({ value: s.id, label: s.name }))]}
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
           />
           <Select
+            data-testid="candidates-stage-filter"
             aria-label={t.candidates.allStages}
             options={[{ value: '', label: t.candidates.allStages }, ...stages.map((s) => ({ value: s.key, label: s.label }))]}
             value={statusFilter}
@@ -332,6 +355,7 @@ export default function CandidatesPage() {
               setProjectFilter(f.projectFilter || '');
             }}
           />
+        </div>
         </div>
       </div>
 
@@ -410,7 +434,71 @@ export default function CandidatesPage() {
           )}
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <>
+        <div data-testid="candidates-mobile-list" className="space-y-4 md:hidden">
+          {candidates.map((candidate) => {
+            const activeRelation = candidate.menteeRelations[0];
+
+            return (
+              <Card key={candidate.id} padding="sm" data-testid={`candidate-mobile-card-${candidate.id}`} className={!candidate.isActive ? 'opacity-60' : undefined}>
+                <div className="flex min-w-0 items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1 flex-shrink-0"
+                    checked={selected.has(candidate.id)}
+                    onChange={() => toggleSelect(candidate.id)}
+                    aria-label={t.candidates.selectOne}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/admin/candidates/${candidate.id}`}
+                      className="block break-words font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
+                    >
+                      {candidate.fullName}
+                    </Link>
+                    <p className="mt-1 min-w-0 break-words text-sm text-gray-600 dark:text-gray-300">
+                      {t.candidates.mentor}: {activeRelation?.mentor.fullName ?? t.candidates.unassigned}
+                    </p>
+                  </div>
+                  <Badge data-testid="candidate-mobile-stage" variant={activeRelation?.pipelineStatus ? 'info' : 'warning'} className="max-w-[9rem] flex-shrink-0 text-center whitespace-normal break-words">
+                    {activeRelation?.pipelineStatus ? label(activeRelation.pipelineStatus) : t.candidates.unassigned}
+                  </Badge>
+                </div>
+
+                {(candidate.university || candidate.department || candidate.graduationYear || candidate.city || candidate.skills.length > 0) && (
+                  <div className="mt-4 min-w-0 space-y-2 border-t border-gray-100 pt-3 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-300">
+                    {(candidate.university || candidate.department) && (
+                      <p className="break-words">
+                        {[candidate.university, candidate.department].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    {candidate.graduationYear && <p>{t.candidates.classOf} {candidate.graduationYear}</p>}
+                    {candidate.city && <p className="break-words">{candidate.city}</p>}
+                    {candidate.skills.length > 0 && (
+                      <div className="flex min-w-0 flex-wrap gap-1">
+                        {candidate.skills.map((skill) => (
+                          <Badge key={skill} variant="info" className="max-w-full whitespace-normal break-words text-xs">{skill}</Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {candidate.cvUrl && (
+                  <a href={candidate.cvUrl} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-1 text-sm text-blue-600 dark:text-blue-300 hover:underline">
+                    <ExternalLink className="h-3 w-3" />
+                    {t.candidates.viewCv}
+                  </a>
+                )}
+
+                {!activeRelation && candidate.isActive && (
+                  <AssignMentorInline menteeId={candidate.id} mentors={mentors} meId={session?.user?.id} onAssigned={fetchCandidates} />
+                )}
+              </Card>
+            );
+          })}
+        </div>
+        <div data-testid="candidates-desktop-list" className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-6">
           {candidates.map((candidate) => {
             const activeRelation = candidate.menteeRelations[0];
 
@@ -500,6 +588,7 @@ export default function CandidatesPage() {
             );
           })}
         </div>
+        </>
       )}
 
       {!loading && totalPages > 1 && (

@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.40.4-beta',
-    date: '2026-08-03',
+    version: '0.41.2-beta',
+    date: '2026-08-04',
     highlights: {
       en: [
         'Fixed: the "average days to hire" number on mentor and admin analytics could be thrown off by a manually corrected or imported hire date — it now ignores that one record instead of pulling the average down, and shows "—" if no valid record is left.',
@@ -24,6 +24,138 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Behoben: Die Kennzahl „durchschnittliche Tage bis zur Einstellung" in der Mentor- und Admin-Analyse konnte durch ein manuell korrigiertes oder importiertes Einstellungsdatum verfälscht werden — dieser Datensatz wird jetzt ausgeschlossen statt den Durchschnitt zu verzerren; bleibt kein gültiger Datensatz übrig, erscheint „—".',
+      ],
+    },
+  },
+  {
+    version: '0.40.10-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'The admin candidate list is now easier to use on a phone: each candidate appears in a compact card with their stage and mentor up front, while education, city and skills remain close at hand. Filters can be opened when needed, and the page no longer scrolls sideways at 375px.',
+      ],
+      tr: [
+        'Yönetici aday listesi artık telefonda daha rahat kullanılıyor: her aday, aşaması ve mentoru önde olacak şekilde kompakt bir kartta gösteriliyor; eğitim, şehir ve yetkinlik bilgileri de hemen altında yer alıyor. Filtreler gerektiğinde açılabiliyor ve sayfa 375px genişlikte artık yatay kaymıyor.',
+      ],
+      de: [
+        'Die Kandidatenliste für Admins ist jetzt auf dem Handy leichter nutzbar: Jede Person erscheint in einer kompakten Karte, in der Phase und Mentor zuerst sichtbar sind; Ausbildung, Ort und Skills stehen direkt darunter. Die Filter lassen sich bei Bedarf öffnen, und bei 375px scrollt die Seite nicht mehr seitwärts.',
+      ],
+    },
+  },
+  {
+    version: '0.40.9-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'The notes window now opens together with the meeting, already tied to it — start a call and you can just begin typing. If you would rather it did not, there is a switch in your account settings (per device).',
+        'What you wrote can become work: any line of a meeting note turns into a goal on that mentorship, or a task on that project, with one click. The line is ticked off in the note rather than removed, so the note still says what was said — and the same line cannot be turned into two tasks.',
+      ],
+      tr: [
+        'Not penceresi artık görüşmeyle birlikte, ona bağlı olarak açılıyor — görüşmeyi başlat, doğrudan yazmaya geç. İstemiyorsan hesap ayarlarında bir anahtar var (cihaz başına).',
+        'Yazdıkların işe dönüşebiliyor: bir görüşme notunun herhangi bir satırı tek tıkla o mentorlukta hedefe, o projede göreve dönüşüyor. Satır notta silinmiyor, işaretleniyor — not neyin konuşulduğunu söylemeye devam ediyor ve aynı satır iki kez göreve çevrilemiyor.',
+      ],
+      de: [
+        'Das Notizfenster öffnet sich jetzt zusammen mit der Besprechung und ist ihr bereits zugeordnet — Gespräch starten und einfach lostippen. Wer das nicht möchte, findet in den Kontoeinstellungen einen Schalter (pro Gerät).',
+        'Geschriebenes kann zu Arbeit werden: Jede Zeile einer Besprechungsnotiz wird mit einem Klick zu einem Ziel in dieser Mentorschaft oder zu einer Aufgabe in diesem Projekt. Die Zeile wird in der Notiz abgehakt statt entfernt — die Notiz sagt weiterhin, was gesagt wurde, und dieselbe Zeile lässt sich nicht zweimal umwandeln.',
+      ],
+    },
+  },
+  {
+    version: '0.40.8-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'A small notes window you can open from your notes page. On Chrome and Edge it stays on top of everything — even other apps — so you can write during a call without hunting for the right tab. Other browsers get the same window, just not pinned on top, and it tells you so.',
+        'It saves itself while you type, saves again when you close it, and keeps a copy on your device in case a save fails — so notes do not get lost.',
+        'Notes taken during a meeting now remember which meeting they belong to, and show its name. Deleting the meeting never deletes the notes.',
+      ],
+      tr: [
+        'Notlar sayfandan açabileceğin küçük bir not penceresi. Chrome ve Edge\'de her şeyin — diğer uygulamaların bile — üstünde duruyor; görüşme sırasında doğru sekmeyi aramadan yazabiliyorsun. Diğer tarayıcılarda aynı pencere açılıyor, sadece üstte sabitlenmiyor ve bunu sana söylüyor.',
+        'Sen yazarken kendini kaydediyor, kapatırken bir daha kaydediyor ve kayıt başarısız olursa bir kopyayı cihazında tutuyor — notlar kaybolmuyor.',
+        'Görüşme sırasında alınan notlar artık hangi görüşmeye ait olduklarını hatırlıyor ve adını gösteriyor. Görüşmeyi silmek notları asla silmiyor.',
+      ],
+      de: [
+        'Ein kleines Notizfenster, das du auf deiner Notizseite öffnen kannst. In Chrome und Edge bleibt es über allem — auch über anderen Programmen — sodass du während eines Gesprächs schreiben kannst, ohne den richtigen Tab zu suchen. Andere Browser bekommen dasselbe Fenster, nur nicht im Vordergrund fixiert, und sagen dir das auch.',
+        'Es speichert sich beim Tippen, speichert beim Schließen noch einmal und behält eine Kopie auf deinem Gerät, falls das Speichern fehlschlägt — so gehen Notizen nicht verloren.',
+        'Während einer Besprechung erfasste Notizen merken sich jetzt, zu welcher sie gehören, und zeigen deren Namen. Das Löschen der Besprechung löscht die Notizen nie mit.',
+      ],
+    },
+  },
+  {
+    version: '0.40.7-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'The same one-click meeting now works for a whole project team: a button on the project page, next to the weekly meeting. Everyone on the team gets the link — you no longer invite people one at a time.',
+        'And from a group chat: start a call and the link is posted straight into the conversation, so anyone reading the thread can just tap it.',
+        'Who may start one follows who runs the space: project owners and mentors for a team call, and any participant of a chat for a chat call.',
+      ],
+      tr: [
+        'Aynı tek tıklık görüşme artık bütün bir proje ekibi için de var: proje sayfasında, haftalık toplantının yanında bir buton. Link ekipteki herkese gidiyor — kişileri tek tek davet etmene gerek kalmıyor.',
+        'Grup sohbetinden de olur: görüşmeyi başlat, link doğrudan konuşmaya düşsün; sohbeti okuyan herkes tıklayıp katılsın.',
+        'Kimin başlatabileceği, o alanı kimin yürüttüğüne göre: ekip görüşmesini proje sahipleri ve mentörler, sohbet görüşmesini o sohbetteki herkes başlatabiliyor.',
+      ],
+      de: [
+        'Dieselbe Ein-Klick-Besprechung gibt es jetzt für ein ganzes Projektteam: eine Schaltfläche auf der Projektseite, neben der wöchentlichen Besprechung. Alle im Team bekommen den Link — niemand muss mehr einzeln eingeladen werden.',
+        'Und aus einem Gruppenchat heraus: Besprechung starten, und der Link landet direkt im Gespräch, sodass alle Mitlesenden einfach darauf tippen können.',
+        'Wer starten darf, richtet sich danach, wer den Raum führt: Projekt-Eigentümer und Mentoren für einen Teamanruf, und jede teilnehmende Person eines Chats für einen Chat-Anruf.',
+      ],
+    },
+  },
+  {
+    version: '0.40.6-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Start a meeting in one click, from wherever the person already is: a "Start meeting" button now sits on every mentee card, on the candidate page and on the meetings screen. You are asked one thing — what it is about — and that is it.',
+        'The room then opens beside your work instead of stealing a tab: the invitee gets the link straight away by notification and email, the link is copied to your clipboard, and you can keep clicking around the app without dropping the call.',
+        'On a phone the panel becomes a simple Join button, and a link we cannot show inside the app offers to open in a new tab instead of showing you an empty box.',
+      ],
+      tr: [
+        'Görüşmeyi tek tıkla, kişinin zaten bulunduğu yerden başlat: artık her mentee kartında, aday sayfasında ve toplantılar ekranında bir "Görüşme başlat" butonu var. Sana tek bir şey soruluyor — konu ne — hepsi bu.',
+        'Oda sekmeni çalmak yerine işinin yanında açılıyor: karşı taraf linki anında bildirim ve e-posta ile alıyor, link panona kopyalanıyor ve uygulamada gezinmeye devam etsen de görüşme düşmüyor.',
+        'Telefonda panel sade bir "Katıl" butonuna dönüşüyor; uygulama içinde gösteremediğimiz bir link için boş kutu yerine yeni sekmede açma seçeneği çıkıyor.',
+      ],
+      de: [
+        'Eine Besprechung mit einem Klick starten — dort, wo die Person ohnehin steht: Eine Schaltfläche „Besprechung starten“ gibt es jetzt auf jeder Mentee-Karte, auf der Kandidatenseite und im Besprechungsbereich. Gefragt wird nur eines: worum es geht.',
+        'Der Raum öffnet sich dann neben deiner Arbeit, statt einen Tab zu belegen: Die eingeladene Person erhält den Link sofort per Benachrichtigung und E-Mail, der Link liegt in deiner Zwischenablage, und du kannst weiter in der App navigieren, ohne das Gespräch zu verlieren.',
+        'Auf dem Handy wird das Panel zu einer einfachen „Teilnehmen“-Schaltfläche; einen Link, den wir nicht in der App anzeigen können, bieten wir zum Öffnen in einem neuen Tab an, statt ein leeres Feld zu zeigen.',
+      ],
+    },
+  },
+  {
+    version: '0.40.5-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Groundwork for starting a meeting on the spot: the server can now open a room and hand back the link in one step, instead of making the page look it up afterwards. A meeting can also belong to a whole project or a group chat, not just to one mentorship. Nothing new on screen yet — the buttons come next.',
+      ],
+      tr: [
+        'Anında görüşme başlatmanın altyapısı: sunucu artık odayı açıp linki tek adımda geri veriyor, sayfanın sonradan aramasına gerek kalmıyor. Bir görüşme artık tek bir mentorluğa değil, bütün bir projeye ya da grup sohbetine de ait olabiliyor. Ekranda henüz yeni bir şey yok — butonlar sırada.',
+      ],
+      de: [
+        'Grundlage für das sofortige Starten einer Besprechung: Der Server öffnet den Raum jetzt und gibt den Link in einem Schritt zurück, statt die Seite ihn nachträglich suchen zu lassen. Eine Besprechung kann außerdem zu einem ganzen Projekt oder einem Gruppenchat gehören, nicht nur zu einer Mentorschaft. Auf dem Bildschirm ist noch nichts Neues zu sehen — die Schaltflächen folgen.',
+      ],
+    },
+  },
+  {
+    version: '0.40.4-beta',
+    date: '2026-08-03',
+    highlights: {
+      en: [
+        'Important fix: a meeting you scheduled was saved at the wrong time unless your clock happened to match UTC. Picking 16:30 in Germany created an 18:30 meeting — the time jumped forward by your own time-zone offset, and that wrong time is what the invitation and the reminder email told everyone. The time you pick is now the time that gets saved, wherever you are, summer time included.',
+        'Meetings you give a date but no time to now sit on that date on the calendar for everyone, instead of slipping to the day before for anyone west of London.',
+        'Meetings created before this fix keep their shifted time — please check any upcoming meeting you scheduled earlier and set it up again if the time is off.',
+      ],
+      tr: [
+        'Önemli düzeltme: planladığın toplantı, saatin UTC ile aynı olmadığı her durumda yanlış saatte kaydediliyordu. Almanya\'da 16:30 seçmek 18:30\'luk bir toplantı oluşturuyordu — saat kendi saat dilimi farkın kadar ileri kayıyordu ve davet ile hatırlatma e-postası herkese bu yanlış saati söylüyordu. Artık seçtiğin saat, nerede olursan ol (yaz saati dahil) kaydedilen saat.',
+        'Tarih verip saat vermediğin toplantılar artık takvimde herkes için o tarihte duruyor; Londra\'nın batısındakiler için bir gün öncesine kaymıyor.',
+        'Bu düzeltmeden önce oluşturulan toplantıların saati kayık kalıyor — daha önce planladığın yaklaşan toplantıları kontrol et ve saati yanlışsa yeniden oluştur.',
+      ],
+      de: [
+        'Wichtige Korrektur: Ein von dir geplantes Meeting wurde zur falschen Zeit gespeichert, sofern deine Uhr nicht ohnehin UTC entsprach. Wer in Deutschland 16:30 wählte, bekam ein Meeting um 18:30 — die Zeit sprang um deinen eigenen Zeitzonen-Versatz nach vorn, und genau diese falsche Zeit stand in der Einladung und in der Erinnerungs-E-Mail. Jetzt wird die Zeit gespeichert, die du auswählst — überall, Sommerzeit inklusive.',
+        'Meetings mit Datum, aber ohne Uhrzeit liegen im Kalender nun für alle an diesem Datum, statt für alle westlich von London auf den Vortag zu rutschen.',
+        'Vor dieser Korrektur erstellte Meetings behalten ihre verschobene Zeit — prüfe bitte deine bereits geplanten kommenden Meetings und lege sie bei falscher Zeit neu an.',
       ],
     },
   },
