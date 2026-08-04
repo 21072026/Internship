@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.43.0-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Mentor applications now go all the way: admins get a new "Mentor Applications" section to review, put on hold, approve or reject each one, and approving automatically sets up the mentor’s account (or upgrades their existing one) — no manual account creation needed. Applicants get an email at every step.',
+        'A "Become a mentor" link is now on the homepage and sign-in page, so applying no longer requires knowing the direct link.',
+      ],
+      tr: [
+        'Mentor başvuruları artık uçtan uca işliyor: adminler her başvuruyu incelemek, incelemeye almak, onaylamak veya reddetmek için yeni bir "Mentor Başvuruları" bölümü kazandı; onaylandığında mentörün hesabı otomatik kuruluyor (ya da mevcut hesabı yükseltiliyor) — elle hesap açmaya gerek kalmıyor. Başvuranlar her adımda e-posta alıyor.',
+        'Ana sayfada ve giriş sayfasında artık bir "Mentör Ol" bağlantısı var — başvurmak için doğrudan linki bilmek gerekmiyor.',
+      ],
+      de: [
+        'Mentor-Bewerbungen laufen jetzt durchgängig: Admins haben einen neuen Bereich „Mentor-Bewerbungen“, um jede Bewerbung zu prüfen, in Prüfung zu setzen, anzunehmen oder abzulehnen — bei Annahme wird das Mentor-Konto automatisch eingerichtet (oder ein bestehendes hochgestuft), ganz ohne manuelle Kontoerstellung. Bewerbende erhalten bei jedem Schritt eine E-Mail.',
+        'Auf der Startseite und der Anmeldeseite gibt es jetzt einen Link „Mentor werden“ — man muss den direkten Link nicht mehr kennen, um sich zu bewerben.',
+      ],
+    },
+  },
+  {
     version: '0.42.0-beta',
     date: '2026-08-04',
     highlights: {

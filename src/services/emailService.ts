@@ -11,6 +11,8 @@ import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type 
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone } from '@/lib/timezone';
 import { loadProjectTeam } from '@/lib/projectTeam';
+import { getDictionary } from '@/i18n/dictionaries';
+import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -451,6 +453,131 @@ export async function sendMentorshipRequestEmail({
         <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
         ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
         ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, 'Review the request')}
+      </div>
+    `,
+  });
+}
+
+// --- Mentor applications (#904/#905/#933) -----------------------------------
+// The only transactional emails in this file localized to the recipient: the
+// applicant is never a signed-in User with an account-level language, so the
+// `locale` captured on submit (src/app/apply-as-mentor/page.tsx) is all we have.
+function resolveLocale(locale?: string | null): Locale {
+  return isLocale(locale ?? undefined) ? (locale as Locale) : defaultLocale;
+}
+
+export async function sendMentorApplicationReceivedEmail({
+  to,
+  fullName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.received.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.received.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.received.body)}</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendMentorApplicationUnderReviewEmail({
+  to,
+  fullName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.underReview.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.underReview.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.underReview.body)}</p>
+      </div>
+    `,
+  });
+}
+
+// `registerUrl` set → no account existed yet, an invitation token was created
+// (mirrors sendInvitationEmail's link). Omitted → an existing account was
+// promoted to MENTOR in place, so the CTA is just "sign in".
+export async function sendMentorApplicationApprovedEmail({
+  to,
+  fullName,
+  locale,
+  orgId,
+  registerUrl,
+}: {
+  to: string;
+  fullName: string;
+  locale?: string | null;
+  orgId?: string | null;
+  registerUrl?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
+  const isNewAccount = !!registerUrl;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.approved.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.approved.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(isNewAccount ? M.approved.bodyNewAccount : M.approved.bodyExistingAccount)}</p>
+        ${ctaBlock(brand, registerUrl || `${appUrl()}/auth/signin`, isNewAccount ? M.approved.ctaRegister : M.approved.ctaSignIn)}
+      </div>
+    `,
+  });
+}
+
+// The rejection *reason* an admin records is internal-only (never sent here) —
+// the applicant gets a generic, kind decline instead.
+export async function sendMentorApplicationRejectedEmail({
+  to,
+  fullName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.rejected.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.rejected.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.rejected.body)}</p>
       </div>
     `,
   });

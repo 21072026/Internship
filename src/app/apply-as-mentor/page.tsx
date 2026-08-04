@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,6 +23,8 @@ const applyMentorSchema = z.object({
   capacity: z.string().optional(),
   linkedinUrl: z.string().url().optional().or(z.literal('')),
   consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required' }) }),
+  // Honeypot (mirrors PublicContactForm) — real users never fill this in.
+  website: z.string().optional(),
 });
 
 type ApplyMentorData = z.infer<typeof applyMentorSchema>;
@@ -33,6 +35,7 @@ export default function ApplyAsMentorPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const renderedAt = useRef(Date.now());
 
   const {
     register,
@@ -58,6 +61,8 @@ export default function ApplyAsMentorPage() {
           capacity: data.capacity ? Number(data.capacity) : undefined,
           linkedinUrl: data.linkedinUrl || undefined,
           locale,
+          website: data.website || undefined,
+          renderedAt: renderedAt.current,
         }),
       });
 
@@ -109,6 +114,15 @@ export default function ApplyAsMentorPage() {
                 </div>
               )}
               <form onSubmit={onSubmit} className="space-y-4" noValidate>
+                {/* Honeypot: visually hidden, off-tab; real users never fill it. */}
+                <input
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  className="hidden"
+                  aria-hidden="true"
+                  {...register('website')}
+                />
                 <Input
                   label={t.applyMentor.fullName}
                   required

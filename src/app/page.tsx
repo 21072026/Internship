@@ -91,6 +91,12 @@ export default async function HomePage() {
               {L.signIn}
             </Link>
           </div>
+          <p className="mt-4 text-sm text-gray-500">
+            {L.becomeMentor}{' '}
+            <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="become-mentor-link">
+              {L.becomeMentorLink}
+            </Link>
+          </p>
           <div className="mt-10 flex flex-wrap justify-center gap-2 sm:gap-3">
             {heroChips.map((chip) => (
               <span key={chip} className="inline-flex items-center gap-1.5 bg-white/70 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium">

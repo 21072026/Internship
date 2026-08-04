@@ -28,6 +28,13 @@ test('apply-as-mentor form requires consent, submits, and confirms no account wa
   expect(await prisma.mentorApplication.count({ where: { email } })).toBe(0);
 
   await page.getByRole('checkbox').check();
+
+  // The anti-spam min-render-time guard (mirrors public-contact's honeypot +
+  // timing check, src/app/api/mentor-applications/route.ts) silently drops
+  // anything submitted under 3s of the page mounting — Playwright's .fill()
+  // calls above are instant, so without this wait a real user's pace is never
+  // reached and the submission is a no-op.
+  await page.waitForTimeout(3200);
   await page.getByRole('button', { name: /submit application/i }).click();
 
   try {
