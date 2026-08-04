@@ -96,9 +96,8 @@ export function ProjectGoals({
     }
   };
 
-  const mine = useMemo(() => tasks.filter((tk) => tk.assigneeId === myId), [tasks, myId]);
   const unassigned = useMemo(() => tasks.filter((tk) => !tk.assigneeId), [tasks]);
-  const others = useMemo(() => tasks.filter((tk) => tk.assigneeId && tk.assigneeId !== myId), [tasks, myId]);
+  const assigned = useMemo(() => tasks.filter((tk) => tk.assigneeId), [tasks]);
   const assignable = useMemo(() => team.filter((m) => m.role === 'MENTEE'), [team]);
 
   const toggle = (task: Task) =>
@@ -184,13 +183,6 @@ export function ProjectGoals({
         </div>
       </div>
 
-      {mine.length > 0 && (
-        <div>
-          <h3 className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{t.projects.myGoals}</h3>
-          <ul className="space-y-1">{mine.map((tk) => row(tk, { canTick: true, canRelease: !canLead }))}</ul>
-        </div>
-      )}
-
       {unassigned.length > 0 && (
         <div>
           <h3 className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{t.projects.openGoals}</h3>
@@ -201,17 +193,20 @@ export function ProjectGoals({
         </div>
       )}
 
-      {others.length > 0 && (
-        <div>
-          <h3 className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{t.projects.teamGoals}</h3>
-          <ul className="space-y-1">{others.map((tk) => row(tk, { canTick: canLead }))}</ul>
-        </div>
+      {/* A personal goal belongs to the person, so it is listed on their profile
+          (PersonProjectGoals) instead of here in front of the whole team. Only
+          the count stays, so a lead can see the project is not idle. */}
+      {assigned.length > 0 && (
+        <p className="text-xs text-gray-400" data-testid="assigned-goals-count">
+          {t.projects.assignedGoalsCount.replace('{n}', String(assigned.length))}
+        </p>
       )}
 
       {tasks.length === 0 && <p className="text-sm text-gray-400">{t.projects.noGoals}</p>}
 
       {canLead && (
         <div className="space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+          <p className="text-xs text-gray-400">{t.projects.assignedGoalsHint}</p>
           {/* Stacked below sm: an input sharing a row with a select and a button
               collapses to a few characters wide on a phone (#51 follow-up). */}
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -226,6 +221,7 @@ export function ProjectGoals({
             <select
               value={draftAssignee}
               onChange={(e) => setDraftAssignee(e.target.value)}
+              title={t.projects.assignedGoalsHint}
               data-testid="goal-assignee"
               className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
             >

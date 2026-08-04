@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.41.4-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'A goal you give someone in a project is now shown on their profile instead of on the project page: they see it (and tick it off) on their own profile, and you see it on their page. The project page keeps the open goals anyone may claim.',
+        'The goal template pool starts full: 20 ready-made internship goals — get the project running, find a bug, fix it, open a pull request, weekly progress note, update your CV, and so on — so you can hand a new mentee a sensible starter list on day one.',
+      ],
+      tr: [
+        'Projede birine verdiğin hedef artık proje sayfasında değil, o kişinin profilinde görünüyor: kişi kendi profilinden görüp işaretliyor, sen de onun sayfasından takip ediyorsun. Proje sayfasında herkesin üstlenebileceği açık hedefler kalıyor.',
+        'Hedef şablon havuzu artık dolu geliyor: 20 hazır staj hedefi — projeyi çalıştır, bir hata bul, düzelt, pull request aç, haftalık ilerleme notu, CV’ni güncelle gibi — yeni bir mentee’ye ilk günden mantıklı bir liste verebilirsin.',
+      ],
+      de: [
+        'Ein Ziel, das du jemandem im Projekt gibst, erscheint jetzt in dessen Profil statt auf der Projektseite: die Person sieht und hakt es im eigenen Profil ab, du verfolgst es auf ihrer Seite. Auf der Projektseite bleiben die offenen Ziele, die sich jeder nehmen kann.',
+        'Der Zielvorlagen-Pool ist von Anfang an gefüllt: 20 fertige Praktikumsziele — Projekt zum Laufen bringen, einen Bug finden, beheben, Pull Request öffnen, Wochenbericht, Lebenslauf aktualisieren und mehr — damit ein neues Mentee am ersten Tag eine sinnvolle Liste bekommt.',
+      ],
+    },
+  },
+  {
     version: '0.41.3-beta',
     date: '2026-08-04',
     highlights: {

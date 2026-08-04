@@ -15,6 +15,7 @@ import { CvManager } from '@/components/CvManager';
 import { nextAction } from '@/lib/matching';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { PersonProjectGoals } from '@/components/PersonProjectGoals';
 import { MeetingSchedulerPanel } from '@/components/MeetingSchedulerPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
@@ -494,6 +495,7 @@ export default function AdminMenteeDetailPage() {
         {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
+        <PersonProjectGoals userId={id} />
         <DocumentsManager targetUserId={id} />
         <UserActivityPanel userId={id} />
         {user && <CandidateEraseDangerZone userId={id} fullName={user.fullName} onAnonymized={load} />}

@@ -8,6 +8,32 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.41.4-beta] - 2026-08-04
+
+### Changed
+- **A project goal assigned to someone now lives on that person's profile, not on the project
+  page.** `ProjectGoals` used to list "my goals" and "the team's goals" next to the unassigned
+  pool, so every member read everyone's personal checklist. The project page now keeps only the
+  unassigned goals anyone may claim, plus a count of how many are assigned; the goals themselves
+  are rendered by the new `PersonProjectGoals` panel on `/portal/profile` (your own),
+  `/mentor/mentees/[id]` and `/admin/candidates/[id]`.
+- New `GET /api/project-goals[?userId=]` — one person's assigned goals across all their projects,
+  grouped by project. Readable by the person themselves, an ADMIN, or their mentor; each goal
+  carries `canEdit` mirroring the tick rules of `PATCH /api/project-tasks/[taskId]` (your own
+  goals, or any goal if you lead the project). "Release" (hand a goal back to the open pool)
+  moved along with the goal, so nothing that was possible on the project page was lost.
+- Notifications about a new goal now link to where the goal actually is
+  (`src/lib/projectGoalLink.ts`: `/portal/profile` for a mentee, the project otherwise) instead
+  of a project page that no longer shows it.
+
+### Added
+- **A shared starter pool of 20 project-goal templates** (`prisma/seed-goal-templates.mjs`,
+  wired into `infra/deploy-prod.sh` next to `seed-templates`). Every project's template pool is
+  "its own templates + the shared ones", and the shared half was empty, so the "send the starter
+  goals" button had nothing to offer until a mentor had typed the set by hand. Idempotent: only
+  missing titles are inserted (MySQL does not enforce the `@@unique([projectId, title])` key
+  across NULL `projectId`s, so existence is checked in the script).
+
 ## [0.41.3-beta] - 2026-08-04
 
 ### Changed
