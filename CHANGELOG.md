@@ -20,6 +20,21 @@ version is shown in the sidebar footer of every page (links to the
   cohorts route, which already excluded them (`d >= 0`, since #538) — and reports
   `avgDaysToHired: null` when no valid duration remains. Positive durations are unaffected.
 
+## [0.41.1-beta] - 2026-08-04
+
+### Added
+- **Public "become a mentor" application API** (#904). `POST /api/mentor-applications` accepts
+  an unauthenticated submission (name, email, phone, expertise, experience, motivation,
+  capacity, LinkedIn URL, locale) without creating a `User` — turning an approved application
+  into an account is a later task. IP- and email-rate-limited (429 past the limit), rejects a
+  second submission while one is `PENDING` (409), and never reveals whether the email already
+  belongs to an account (same neutral `{ ok: true }` response either way, no row created).
+  `consentAt` is stamped server-side on every real submission. Active admins get an in-app
+  notification linking to `/admin/mentor-applications` (no admin UI yet — that and the
+  approve/reject decision endpoint are follow-up work). `GET /api/mentor-applications` is
+  ADMIN-only, filterable by `status`, and paginated like `/api/admin/activity`. New
+  `MentorApplication` model/`MentorApplicationStatus` enum in `prisma/schema.prisma`.
+
 ## [0.41.0-beta] - 2026-08-04
 
 ### Added
