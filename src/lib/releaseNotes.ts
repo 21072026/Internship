@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.41.2-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Fixed: the "average days to hire" number on mentor and admin analytics could be thrown off by a manually corrected or imported hire date — it now ignores that one record instead of pulling the average down, and shows "—" if no valid record is left.',
+      ],
+      tr: [
+        'Düzeltildi: mentor ve admin analitiğindeki "ortalama işe alım süresi" rakamı, elle düzeltilmiş ya da içe aktarılmış bir işe alım tarihinden ötürü yanlış çıkabiliyordu — artık o kaydı ortalamaya katmıyor, geçerli kayıt kalmazsa "—" gösteriyor.',
+      ],
+      de: [
+        'Behoben: Die Kennzahl „durchschnittliche Tage bis zur Einstellung" in der Mentor- und Admin-Analyse konnte durch ein manuell korrigiertes oder importiertes Einstellungsdatum verfälscht werden — dieser Datensatz wird jetzt ausgeschlossen statt den Durchschnitt zu verzerren; bleibt kein gültiger Datensatz übrig, erscheint „—".',
+      ],
+    },
+  },
+  {
     version: '0.41.1-beta',
     date: '2026-08-04',
     highlights: {

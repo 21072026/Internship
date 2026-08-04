@@ -8,6 +8,18 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.41.2-beta] - 2026-08-04
+
+### Fixed
+- **A backdated status change could drag "average days to hire" negative** (#933).
+  `GET /api/mentor/analytics` and `GET /api/admin/analytics/cohorts` compute the average
+  from `HIRED`/`EMPLOYED` transition timestamps minus the relation's `startDate`; a manually
+  corrected or imported transition dated before `startDate` produced a negative duration that
+  was averaged in as-is, pulling the whole metric down (or below zero). The mentor route now
+  drops negative durations from the average instead of counting them — matching the admin
+  cohorts route, which already excluded them (`d >= 0`, since #538) — and reports
+  `avgDaysToHired: null` when no valid duration remains. Positive durations are unaffected.
+
 ## [0.41.1-beta] - 2026-08-04
 
 ### Added
