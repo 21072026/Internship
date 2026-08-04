@@ -8,6 +8,23 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.41.3-beta] - 2026-08-04
+
+### Changed
+- **Mentee names on the mentor dashboard are links to their mentorship page.** The onboarding
+  card (`MenteeOnboardingWizard`) rendered the mentee's name as plain text inside its subtitle;
+  it now links to `/mentor/mentees/<relationId>` (plain text when the pair is only connected
+  through a shared project, where there is no relation page to open). The same applies to the
+  name in the "my mentees" card and to the mentee in the "recent interactions" list on
+  `/mentor`, which previously offered only a separate "view details" link.
+- The onboarding checklist's tick buttons now carry a `title` explaining why some of them are
+  not clickable: an auto-detected step is the app's own observation, the rest are the mentor's
+  to set (`menteeOnboarding.autoHint` / `markHint` / `unmarkHint`, EN/TR/DE).
+
+### Fixed
+- The "recent interactions" list on `/mentor` printed a hard-coded English `with <name>` on
+  every locale; it now uses `mentor.interactionWith` (EN/TR/DE).
+
 ## [0.41.2-beta] - 2026-08-04
 
 ### Fixed
