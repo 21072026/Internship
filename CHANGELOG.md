@@ -8,6 +8,25 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.41.5-beta] - 2026-08-04
+
+### Fixed
+- **"View CV" downloaded the file instead of showing it** — on a phone that reads as a dead
+  link: the tab opens blank and the file lands in Downloads. `GET /api/cv/[userId]` has answered
+  `Content-Disposition: attachment` for everything since #890; it now accepts `?inline=1` and
+  honours it for `application/pdf` only (upload accepts PDF and Word, and the bytes are verified
+  against the declared type in #888, so an inline PDF here really is a PDF and renders in the
+  browser's own viewer rather than as a page on our origin). Word CVs still download — no browser
+  renders them. Every "view CV" link now goes through `cvViewHref()` (`src/lib/cvLink.ts`):
+  mentee detail, admin candidates list and detail (`CvManager`), company candidate detail. An
+  external `cvUrl` (a Drive link a mentee typed in) is untouched.
+- **A long e-mail broke the mentee detail header on mobile** (`/mentor/mentees/[id]`). Name +
+  e-mail and the stage select shared one flex row with a `min-w-[240px]` right column, so a long
+  address ran under the select and pushed the status badge off the right edge of the screen. The
+  header now stacks below `sm`, and the text column is `min-w-0 break-words` so a long address
+  wraps instead of widening the row. Same `break-words` on the admin candidate detail header,
+  which had the identical text.
+
 ## [0.41.4-beta] - 2026-08-04
 
 ### Changed

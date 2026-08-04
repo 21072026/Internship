@@ -285,8 +285,8 @@ export default function AdminMenteeDetailPage() {
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.fullName}</h1>
-            <p className="text-gray-500">{user.email}</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{user.fullName}</h1>
+            <p className="text-gray-500 break-words">{user.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}

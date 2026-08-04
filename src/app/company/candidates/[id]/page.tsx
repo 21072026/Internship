@@ -11,6 +11,7 @@ import { useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { cvViewHref } from '@/lib/cvLink';
 
 type InterestStatus = 'INTERESTED' | 'SHORTLISTED' | 'PASS';
 interface Interest { status: InterestStatus; note?: string | null }
@@ -222,7 +223,7 @@ export default function CompanyCandidateDetailPage() {
 
         <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
           {candidate.cvUrl && (
-            <a href={candidate.cvUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+            <a href={cvViewHref(candidate.cvUrl)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">
               <FileText className="h-4 w-4" /> {t.cv.view}
             </a>
           )}

@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import Link from "next/link";
 import { useT } from "@/i18n/client";
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { cvViewHref } from '@/lib/cvLink';
 import { Card } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
@@ -485,7 +486,7 @@ export default function CandidatesPage() {
                 )}
 
                 {candidate.cvUrl && (
-                  <a href={candidate.cvUrl} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-1 text-sm text-blue-600 dark:text-blue-300 hover:underline">
+                  <a href={cvViewHref(candidate.cvUrl)} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center gap-1 text-sm text-blue-600 dark:text-blue-300 hover:underline">
                     <ExternalLink className="h-3 w-3" />
                     {t.candidates.viewCv}
                   </a>
@@ -566,7 +567,7 @@ export default function CandidatesPage() {
 
                 {candidate.cvUrl && (
                   <a
-                    href={candidate.cvUrl}
+                    href={cvViewHref(candidate.cvUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
