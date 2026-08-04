@@ -933,6 +933,12 @@ const en = {
     selectMember: 'Choose a member',
     selectAll: 'Select all',
     sendGoals: 'Send the goals',
+    assignedGoalsHint: 'A goal you hand to someone shows up on their own profile, not here.',
+    assignedGoalsCount: '{n} goal(s) assigned to team members',
+  },
+  projectGoals: {
+    title: 'Project goals',
+    progress: '{done} of {total} done',
   },
   upcomingMeeting: {
     inProgress: 'Meeting in progress',
@@ -2727,6 +2733,12 @@ const tr: Dict = {
     selectMember: 'Üye seç',
     selectAll: 'Tümünü seç',
     sendGoals: 'Hedefleri gönder',
+    assignedGoalsHint: 'Birine verdiğin hedef burada değil, o kişinin kendi profilinde görünür.',
+    assignedGoalsCount: 'Ekip üyelerine atanmış {n} hedef',
+  },
+  projectGoals: {
+    title: 'Proje hedefleri',
+    progress: '{total} hedefin {done} tanesi tamam',
   },
   upcomingMeeting: {
     inProgress: 'Toplantı devam ediyor',
@@ -4519,6 +4531,12 @@ const de: Dict = {
     selectMember: 'Mitglied wählen',
     selectAll: 'Alle auswählen',
     sendGoals: 'Ziele senden',
+    assignedGoalsHint: 'Ein Ziel, das du jemandem gibst, erscheint in dessen Profil — nicht hier.',
+    assignedGoalsCount: '{n} Ziel(e) an Teammitglieder vergeben',
+  },
+  projectGoals: {
+    title: 'Projektziele',
+    progress: '{done} von {total} erledigt',
   },
   upcomingMeeting: {
     inProgress: 'Treffen läuft',

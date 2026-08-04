@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { goalLinkFor } from '@/lib/projectGoalLink';
 
 // A task may be created from free text (`title`) or from the template pool
 // (`templateIds`) — the latter is the "send the standard goals to the person who
@@ -99,7 +100,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         created.length === 1
           ? `New goal on "${project.name}": ${created[0].title}`
           : `${created.length} new goals on "${project.name}".`,
-        `/projects/${id}`
+        await goalLinkFor(assigneeId, id)
       );
     }
 

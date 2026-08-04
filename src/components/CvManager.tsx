@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { FileText, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { cvViewHref } from '@/lib/cvLink';
 
 // Upload / view / replace / delete a CV. Used by the mentee (self) on the
 // portal profile and by mentor/admin on a mentee's detail page.
@@ -57,7 +58,7 @@ export function CvManager({ targetUserId, initialCvUrl, onChange }: { targetUser
       <div className="flex flex-wrap items-center gap-2">
         {cvUrl ? (
           <a
-            href={cvUrl}
+            href={cvViewHref(cvUrl)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
