@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.41.3-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'On your mentor dashboard, a mentee’s name is now a link — in the onboarding card, in your mentee list and in recent interactions — so you can open their page straight from the name.',
+        'The onboarding checklist now says what its ticks mean: hover one and you learn whether the app ticked it by itself (because it saw the message, the meeting, the project or the pipeline move) or whether it is yours to tick.',
+      ],
+      tr: [
+        'Mentor panelinde mentee’nin adı artık link — onboarding kartında, mentee listende ve son etkileşimlerde — böylece sayfasını doğrudan adından açabiliyorsun.',
+        'Onboarding listesi artık işaretlerin ne demek olduğunu söylüyor: üzerine geldiğinde, uygulamanın kendisi mi işaretledi (mesajı, toplantıyı, projeyi ya da pipeline hareketini gördüğü için) yoksa işaretlemesi sana mı kaldı, anlıyorsun.',
+      ],
+      de: [
+        'Im Mentor-Dashboard ist der Name eines Mentees jetzt ein Link — in der Onboarding-Karte, in der Mentee-Liste und in den letzten Interaktionen — du öffnest die Seite also direkt über den Namen.',
+        'Die Onboarding-Liste erklärt ihre Häkchen: Beim Überfahren siehst du, ob die App selbst abgehakt hat (weil sie die Nachricht, den Termin, das Projekt oder den Pipeline-Schritt erkannt hat) oder ob das Häkchen von dir kommen muss.',
+      ],
+    },
+  },
+  {
     version: '0.41.2-beta',
     date: '2026-08-04',
     highlights: {
