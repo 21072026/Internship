@@ -8,6 +8,23 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.41.0-beta] - 2026-08-04
+
+### Added
+- **"A meeting is about to start" on the dashboard, and a join link while it runs.**
+  `src/lib/upcomingMeeting.ts` answers one question for a user — the meeting in progress,
+  else the next one starting within `MEETING_LEAD_MINUTES` (30) — from *both* sources that
+  can put a meeting on someone's calendar: `Meeting` rows (either side of the relation) and
+  `MeetingSeries` rules on projects the user belongs to, so a member with no mentorship for
+  the project still sees the recurring call. A meeting has no end time in the schema, so
+  "still going" is a fixed `MEETING_DURATION_MINUTES` (60) window after the start; an
+  occurrence and the `Meeting` row generated from it are deduplicated.
+- `GET /api/meetings/upcoming` (`no-store`), `UpcomingMeetingBanner` on the three dashboards,
+  and `JoinMeetingPill` in `ResponsiveShell` — the pill shows **only while the meeting is
+  running**, so it keeps meaning something, and it follows the user across every page in the
+  shell. Both components share one poll a minute via `useUpcomingMeeting` rather than one
+  each.
+
 ## [0.40.10-beta] - 2026-08-04
 
 ### Changed
