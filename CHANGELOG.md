@@ -8,6 +8,15 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.10-beta] - 2026-08-04
+
+### Changed
+- **The admin candidate list is now usable at 375px without horizontal page overflow.**
+  Mobile shows compact candidate cards with name, pipeline stage and mentor first, followed
+  by education, city and skills. The seven existing filters stay unchanged but are collapsed
+  behind a visible Filters control on small screens. The existing desktop candidate grid and
+  its actions remain unchanged.
+
 ## [0.40.9-beta] - 2026-08-03
 
 ### Added
