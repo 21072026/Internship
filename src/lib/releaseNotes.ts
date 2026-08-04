@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.42.0-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'You can now apply to become a mentor without an account: fill in the new "Apply as mentor" form and an admin reviews it. No account is created until it’s approved.',
+      ],
+      tr: [
+        'Artık hesap açmadan mentör olmak için başvurabilirsin: yeni "Mentör olarak başvur" formunu doldur, bir yönetici inceleyecek. Onaylanana kadar hesap oluşturulmuyor.',
+      ],
+      de: [
+        'Du kannst dich jetzt ohne Konto als Mentor bewerben: Fülle das neue Formular „Als Mentor bewerben“ aus, ein Admin prüft es. Ein Konto wird erst bei Genehmigung angelegt.',
+      ],
+    },
+  },
+  {
     version: '0.41.2-beta',
     date: '2026-08-04',
     highlights: {

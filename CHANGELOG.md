@@ -8,6 +8,18 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.42.0-beta] - 2026-08-04
+
+### Added
+- **Public "apply as mentor" form** (#905), at `/apply-as-mentor`, on top of the #904
+  application API. No account is required or created — the success screen says so
+  explicitly. Fields: full name, email, phone, expertise/skills, experience summary,
+  motivation, mentee capacity, LinkedIn; a consent checkbox (linking to `/privacy` and
+  `/terms`) is mandatory before submit. The API's 409 (a pending application already
+  exists for this email) and 429 (rate limited) responses each get their own message
+  instead of a generic failure banner. Localized EN/TR/DE like the rest of the public
+  application surface (`/apply/[mentorId]`, `/auth/register`).
+
 ## [0.41.2-beta] - 2026-08-04
 
 ### Fixed
