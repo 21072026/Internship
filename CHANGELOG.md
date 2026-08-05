@@ -8,6 +8,25 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.43.0-beta] - 2026-08-05
+
+### Added
+- **Admin decision on mentor applications** (#906), completing #904 with the review side: a
+  new ADMIN-only `PATCH /api/mentor-applications/[id]` on top of the existing model/API — no
+  new model, no duplicate endpoint. **Approve** creates a 7-day `InvitationToken` (role
+  `MENTOR`) and sends the same invitation email an admin-created invite gets; no `User` is
+  created here, only when the applicant registers through the link. **Reject** requires a
+  reason (stored for the admin trail only) and sends the applicant a polite, generic decline —
+  the internal reason is never shown to them. Both decisions guard against a double-decide with
+  a conditional `updateMany` (`status: 'PENDING'`) run inside the same transaction that creates
+  the invitation, so a double click or retried request 409s (`already_decided`) instead of
+  sending a second invite or overwriting the decision. Every decision is written to
+  `ActivityLog` (`mentor_application.decided`). New admin screen `/admin/mentor-applications`
+  (+ `AdminNav` entry with a pending-count badge): Pending/Decided tabs, an expandable detail
+  card per applicant (contact info, expertise, experience, motivation, capacity, LinkedIn), and
+  approve/reject actions inline. `GET /api/mentor-applications` now also returns `decidedBy`
+  (id + name) for the admin view. EN/TR/DE translations for the new screen.
+
 ## [0.42.0-beta] - 2026-08-04
 
 ### Added
