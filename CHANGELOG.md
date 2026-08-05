@@ -8,6 +8,28 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.43.0-beta] - 2026-08-05
+
+### Added
+- **`selfRegistration` setting** (`src/lib/settings.ts`, admin → Settings, `auto` by default).
+  `auto` = an open sign-up admits itself the moment its email is verified; `manual` = it waits
+  for an admin, which is the escape hatch if sign-ups ever need vetting. Invited users are
+  unaffected — an invitation already proves the address.
+- **`User.pendingApproval`** (Boolean, default false) — set only under `manual`, so the sign-in
+  page can tell "we haven't reviewed you yet" apart from "an admin switched you off"; both are
+  `isActive = false`. Cleared when an admin activates the account, set when one deactivates it.
+- `auth.verifyEmailSent` string (EN/TR/DE) and a `?verify=true` notice on the sign-in page.
+
+### Changed
+- **Open registration no longer dead-ends.** `POST /api/register` creates a self-registered
+  account inactive as before, but `POST /api/auth/verify-email` now activates it (unless it is
+  parked for an admin or was deactivated by one). Registering used to leave the visitor stuck:
+  before verifying they were told "your email is not verified", and *after* verifying they were
+  told "this account has been deactivated" — the account never became reachable without an admin.
+- The post-registration redirect now distinguishes the three cases (invited → `registered`,
+  open sign-up → `verify`, manual approval → `pending`).
+- The admin notification for a new sign-up says whether it needs action or is an FYI.
+
 ## [0.42.0-beta] - 2026-08-04
 
 ### Added
