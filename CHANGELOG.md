@@ -8,6 +8,14 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.40.10-beta] - 2026-08-05
+
+### Changed
+- **Notification emails now respect each recipient's stored language preference** (Story #883).
+  Announcement emails use `preferredLanguage` for their EN/TR/DE subject and template text,
+  while stage-deadline cron emails use the mentor's stored preference without relying on
+  cookies or request context. Missing or unsupported language values fall back to English.
+
 ## [0.40.9-beta] - 2026-08-03
 
 ### Added
