@@ -25,7 +25,12 @@ test('candidates can be exported to Excel (.xlsx)', async ({ page }) => {
   try {
     await adminLogin(page, adminEmail, 'AdminPass123');
     await page.goto('/admin/candidates');
-    await expect(page.getByText('Xls Candidate')).toBeVisible({ timeout: 10_000 });
+    // /admin/candidates renders every candidate twice — once in the md:hidden
+    // mobile list, once in the desktop grid — so an unscoped name locator is a
+    // strict-mode violation. Scope to the list this viewport actually shows.
+    await expect(
+      page.getByTestId('candidates-desktop-list').getByText('Xls Candidate'),
+    ).toBeVisible({ timeout: 10_000 });
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),

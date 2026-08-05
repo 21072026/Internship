@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [Unreleased]
+
+### Fixed
+- **The five specs failing in the scheduled full e2e suite** (run 31051715943). Both causes were
+  test defects, not product bugs. Since #1008 gave `/admin/candidates` a separate `md:hidden`
+  mobile list, every candidate is in the DOM twice, so the unscoped `getByText('<name>')`
+  assertions in `admin-bulk-candidates`, `dashboard-links`, `export-filter` and `export` became
+  strict-mode violations — they now scope to `candidates-desktop-list` (the list the Desktop
+  Chrome viewport actually renders). `security-headers` still asserted the pre-Jitsi
+  `camera=()`; it now checks that camera/microphone/display-capture are delegated to
+  `self "https://meet.jit.si"` only, that `geolocation=()` stays denied and that no directive
+  opens up to `*`. No version bump — tests only.
+
 ## [0.42.1-beta] - 2026-08-05
 
 ### Changed
