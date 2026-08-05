@@ -217,6 +217,12 @@ export default async function HomePage() {
               {L.signIn}
             </Link>
           </div>
+          <p className="mt-6 text-sm text-blue-100">
+            {t.auth.wantMentor}{' '}
+            <Link href="/apply-as-mentor" className="text-white underline hover:text-blue-50 font-medium" data-testid="apply-as-mentor-link">
+              {t.auth.applyMentorLink}
+            </Link>
+          </p>
         </div>
       </section>
 

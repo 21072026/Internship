@@ -8,6 +8,17 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.42.1-beta] - 2026-08-05
+
+### Added
+- **Entry links to the "become a mentor" application page** (#907, depends on #905's
+  `/apply-as-mentor` page): a "Want to become a mentor?" prompt now points there from three
+  places without an invitation — a secondary CTA on the landing page's closing section, a link
+  on sign-in, and the same prompt next to the invitation-token field on register (whose hint
+  text now also points here). All copy is EN/TR/DE via `src/i18n/dictionaries.ts` (new
+  `auth.wantMentor` / `auth.applyMentorLink` keys, updated `auth.tokenHint`); no existing
+  landing copy changed.
+
 ## [0.42.0-beta] - 2026-08-04
 
 ### Added

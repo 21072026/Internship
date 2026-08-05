@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.42.1-beta',
+    date: '2026-08-05',
+    highlights: {
+      en: [
+        'Want to become a mentor? Look for the new "Apply here" prompt on the landing page, the sign-in page and the registration page — it takes you straight to the mentor application, no invitation needed.',
+      ],
+      tr: [
+        'Mentor olmak mı istiyorsun? Ana sayfada, giriş sayfasında ve kayıt sayfasında yeni bir "Buradan başvur" bağlantısı seni davete gerek kalmadan doğrudan mentor başvurusuna götürüyor.',
+      ],
+      de: [
+        'Möchtest du Mentor werden? Auf der Startseite, der Anmeldeseite und der Registrierungsseite findest du jetzt den Hinweis "Hier bewerben" — er führt dich ohne Einladung direkt zur Mentor-Bewerbung.',
+      ],
+    },
+  },
+  {
     version: '0.42.0-beta',
     date: '2026-08-04',
     highlights: {

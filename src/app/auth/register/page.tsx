@@ -124,6 +124,12 @@ function RegisterForm() {
               {...register('token')}
               error={errors.token?.message}
             />
+            <p className="text-xs text-gray-500">
+              {t.auth.wantMentor}{' '}
+              <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="apply-as-mentor-link">
+                {t.auth.applyMentorLink}
+              </Link>
+            </p>
             <Input
               label={t.auth.fullName}
               required
