@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.42.2-beta',
+    date: '2026-08-05',
+    highlights: {
+      en: [
+        'Mentors now get a "Get started" checklist on their dashboard: fill in your bio, add your interests or skills, set how many mentees you can take on, and add an availability slot — each links straight to the right page, and the checklist disappears once you\'re done.',
+      ],
+      tr: [
+        'Mentorlar artık kendi panelinde bir "Başlayalım" kontrol listesi görüyor: biyografini yaz, ilgi alanlarını veya yeteneklerini ekle, kaç mentee alabileceğini belirle ve bir müsaitlik aralığı ekle — her biri doğru sayfaya götürür, tamamlandığında liste kayboluyor.',
+      ],
+      de: [
+        'Mentoren sehen jetzt eine "Loslegen"-Checkliste auf ihrem Dashboard: Bio ausfüllen, Interessen oder Skills hinzufügen, die Mentee-Kapazität festlegen und einen Verfügbarkeitszeitraum hinzufügen — jeder Punkt führt direkt zur richtigen Seite, und die Checkliste verschwindet, sobald alles erledigt ist.',
+      ],
+    },
+  },
+  {
     version: '0.42.1-beta',
     date: '2026-08-05',
     highlights: {
