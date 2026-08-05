@@ -48,7 +48,7 @@ async function getMenteeData(menteeId: string) {
       where: { menteeId, status: 'ACTIVE' },
       include: {
         mentor: {
-          select: { id: true, fullName: true, email: true, department: true, phone: true },
+          select: { id: true, fullName: true, email: true, department: true, phone: true, publicProfile: true },
         },
         company: true,
         interactions: {
@@ -278,6 +278,12 @@ export default async function PortalDashboard() {
                     <MessageCircle className="h-4 w-4" />
                     {t.portal.messageMentor}
                   </Link>
+                  {activeRelation.mentor.publicProfile === true && (
+                    <Link href={`/p/${activeRelation.mentor.id}`} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
+                      <ExternalLink className="h-4 w-4" />
+                      {t.portal.viewMentorProfile}
+                    </Link>
+                  )}
                 </div>
               </div>
 
