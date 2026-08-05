@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.43.0-beta',
+    date: '2026-08-05',
+    highlights: {
+      en: [
+        'Admins can now decide on mentor applications: a new Admin → Mentor Applications screen lists who applied, with a badge showing how many are waiting. Approve sends the applicant an email invitation to join as a mentor; reject asks for a short reason (kept internal — the applicant only sees a polite decline).',
+      ],
+      tr: [
+        'Adminler artık mentor başvuruları hakkında karar verebiliyor: yeni Admin → Mentor Başvuruları ekranı kimlerin başvurduğunu listeler, bekleyen sayısını gösteren bir rozetle. Onaylamak başvurana mentor olarak katılması için bir davet e-postası gönderir; reddetmek kısa bir sebep ister (yalnızca dahili — başvuran nazik bir red mesajı görür).',
+      ],
+      de: [
+        'Admins können jetzt über Mentor-Bewerbungen entscheiden: Ein neuer Bereich Admin → Mentor-Bewerbungen listet alle Bewerbungen, mit einem Badge, das die Anzahl der wartenden anzeigt. Genehmigen sendet der bewerbenden Person eine Einladungs-E-Mail als Mentor; Ablehnen verlangt eine kurze Begründung (nur intern — die Person sieht lediglich eine höfliche Absage).',
+      ],
+    },
+  },
+  {
     version: '0.42.1-beta',
     date: '2026-08-05',
     highlights: {

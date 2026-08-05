@@ -368,6 +368,38 @@ export async function sendMentorshipDecisionEmail({
   });
 }
 
+// --- Mentor application decisions (#906) ------------------------------------
+// Approval reuses sendInvitationEmail (same InvitationToken flow as an admin
+// invite) — no dedicated "approved" template needed. Rejection gets its own,
+// deliberately generic: the admin's internal rejectReason is never shown to
+// the applicant, mirroring sendMentorshipDecisionEmail's rejected copy.
+
+export async function sendMentorApplicationRejectionEmail({
+  to,
+  fullName,
+  orgId,
+}: {
+  to: string;
+  fullName?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: 'Update on your mentor application',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, 'Update on your mentor application')}
+        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+        <p>Thank you for your interest in becoming a mentor at ${esc(brand.name)}. We reviewed
+        your application, but we are not able to move forward with it at this time.</p>
+        <p>You are welcome to apply again in the future.</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendMenteeAssignedEmail({
   to,
   mentorName,
