@@ -40,10 +40,10 @@ test('a fresh mentor sees the profile/availability checklist on the dashboard (#
 
     await expect(page.getByRole('heading', { name: 'Get started' })).toBeVisible({ timeout: 10_000 });
     const checklist = page.getByTestId('onboarding-checklist');
-    await expect(checklist.getByText('Write a short bio')).toBeVisible();
-    await expect(checklist.getByText('Add your interests or skills')).toBeVisible();
-    await expect(checklist.getByText('Set your mentee capacity')).toBeVisible();
-    await expect(checklist.getByText('Add an availability slot')).toBeVisible();
+    await expect(checklist.getByTestId('onboarding-step-bio')).toBeVisible();
+    await expect(checklist.getByTestId('onboarding-step-interestsOrSkills')).toBeVisible();
+    await expect(checklist.getByTestId('onboarding-step-mentorCapacity')).toBeVisible();
+    await expect(checklist.getByTestId('onboarding-step-availability')).toBeVisible();
   } finally {
     await cleanupByEmail(email);
   }
