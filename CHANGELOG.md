@@ -19,6 +19,12 @@ version is shown in the sidebar footer of every page (links to the
   `auth.wantMentor` / `auth.applyMentorLink` keys, updated `auth.tokenHint`); no existing
   landing copy changed.
 
+### Changed
+- **Notification emails now respect each recipient's stored language preference** (Story #883).
+  Announcement emails use `preferredLanguage` for their EN/TR/DE subject and template text,
+  while stage-deadline cron emails use the mentor's stored preference without relying on
+  cookies or request context. Missing or unsupported language values fall back to English.
+
 ## [0.42.0-beta] - 2026-08-04
 
 ### Added
@@ -165,7 +171,6 @@ version is shown in the sidebar footer of every page (links to the
   by education, city and skills. The seven existing filters stay unchanged but are collapsed
   behind a visible Filters control on small screens. The existing desktop candidate grid and
   its actions remain unchanged.
-
 ## [0.40.9-beta] - 2026-08-03
 
 ### Added
