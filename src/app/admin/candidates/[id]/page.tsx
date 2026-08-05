@@ -15,6 +15,7 @@ import { CvManager } from '@/components/CvManager';
 import { nextAction } from '@/lib/matching';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { PersonProjectGoals } from '@/components/PersonProjectGoals';
 import { MeetingSchedulerPanel } from '@/components/MeetingSchedulerPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
@@ -284,8 +285,8 @@ export default function AdminMenteeDetailPage() {
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.fullName}</h1>
-            <p className="text-gray-500">{user.email}</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{user.fullName}</h1>
+            <p className="text-gray-500 break-words">{user.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
@@ -494,6 +495,7 @@ export default function AdminMenteeDetailPage() {
         {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
+        <PersonProjectGoals userId={id} />
         <DocumentsManager targetUserId={id} />
         <UserActivityPanel userId={id} />
         {user && <CandidateEraseDangerZone userId={id} fullName={user.fullName} onAnonymized={load} />}

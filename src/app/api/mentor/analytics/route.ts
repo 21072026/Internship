@@ -68,7 +68,10 @@ export async function GET() {
           if (!last) return null;
           return Math.floor((last.createdAt.getTime() - r.startDate.getTime()) / (24 * 60 * 60 * 1000));
         })
-        .filter((d): d is number => d !== null);
+        // Backdated status changes can put the HIRED/EMPLOYED transition before
+        // the relation's startDate, producing a negative duration — drop it
+        // rather than average in a nonsensical value.
+        .filter((d): d is number => d !== null && d >= 0);
       if (durations.length > 0) {
         avgDaysToHired = Math.round(durations.reduce((s, d) => s + d, 0) / durations.length);
       }

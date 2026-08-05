@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
+import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { JourneyTracker } from '@/components/JourneyTracker';
@@ -87,6 +88,9 @@ export default async function PortalDashboard() {
         </h1>
         <p className="text-gray-500 mt-1">{t.portal.dashSubtitle}</p>
       </div>
+
+      {/* Half an hour before a meeting, and for as long as it runs (#51 follow-up). */}
+      <UpcomingMeetingBanner />
 
       {/* "Invite your circle" (#51): anyone who signs up through this link is
           credited to this mentee as their source. */}

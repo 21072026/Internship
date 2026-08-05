@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.40.10-beta] - 2026-08-05
+## [0.42.1-beta] - 2026-08-05
 
 ### Changed
 - **Notification emails now respect each recipient's stored language preference** (Story #883).
@@ -16,6 +16,152 @@ version is shown in the sidebar footer of every page (links to the
   while stage-deadline cron emails use the mentor's stored preference without relying on
   cookies or request context. Missing or unsupported language values fall back to English.
 
+## [0.42.0-beta] - 2026-08-04
+
+### Added
+- **Goal templates are managed, and multilingual.** `ProjectTaskTemplate` gains a nullable
+  `translations` Json column (`{ en?, tr?, de? }`); `title` stays the canonical wording, the
+  pool's dedupe key and the fallback. `src/lib/goalTemplates.ts` normalizes input, derives the
+  canonical title (default locale first, then any filled language) and resolves the wording one
+  person should read.
+- **New admin screen `/admin/goal-templates`** (+ `AdminNav` entry) over
+  `GET/POST/PATCH/DELETE /api/admin/goal-templates` (ADMIN only, shared pool = `projectId: null`):
+  add a goal in up to three languages, reword it, delete it, see which languages are still
+  missing and how often each has been handed out. Deleting a template leaves goals already handed
+  out alone — by then they are tasks of their own.
+- **Per-project template management** in `ProjectGoals`: the pool box now shows each entry in the
+  viewer's language, marks the admin-managed shared ones as read-only ("shared" badge), and lets
+  a project lead reword (new `PATCH /api/projects/[id]/task-templates`) or delete the project's
+  own entries. `POST` on that route accepts `translations` alongside the legacy `title`.
+
+### Changed
+- A goal handed out from the pool is created in the **assignee's** language
+  (`User.preferredLanguage`, falling back to the default locale, then `title`) — a task is a
+  single string, so the language is resolved once, at hand-over.
+- Sending a shared template no longer clones it into the project's own pool: the automatic
+  "capture what was written" upsert now skips titles that came from the pool, which would
+  otherwise copy a shared goal in under whatever language it resolved to.
+- `prisma/seed-goal-templates.mjs` seeds all 20 starter goals in EN/TR/DE and back-fills
+  translations onto rows seeded before the column existed. Still idempotent, still keyed on the
+  Turkish `title`.
+- `isLocale()` accepts `null` (it is now fed `User.preferredLanguage`).
+- Feature catalogue: the `projectTeams` entry describes the managed multilingual pool and goals
+  living on the person's profile.
+
+## [0.41.5-beta] - 2026-08-04
+
+### Fixed
+- **"View CV" downloaded the file instead of showing it** — on a phone that reads as a dead
+  link: the tab opens blank and the file lands in Downloads. `GET /api/cv/[userId]` has answered
+  `Content-Disposition: attachment` for everything since #890; it now accepts `?inline=1` and
+  honours it for `application/pdf` only (upload accepts PDF and Word, and the bytes are verified
+  against the declared type in #888, so an inline PDF here really is a PDF and renders in the
+  browser's own viewer rather than as a page on our origin). Word CVs still download — no browser
+  renders them. Every "view CV" link now goes through `cvViewHref()` (`src/lib/cvLink.ts`):
+  mentee detail, admin candidates list and detail (`CvManager`), company candidate detail. An
+  external `cvUrl` (a Drive link a mentee typed in) is untouched.
+- **A long e-mail broke the mentee detail header on mobile** (`/mentor/mentees/[id]`). Name +
+  e-mail and the stage select shared one flex row with a `min-w-[240px]` right column, so a long
+  address ran under the select and pushed the status badge off the right edge of the screen. The
+  header now stacks below `sm`, and the text column is `min-w-0 break-words` so a long address
+  wraps instead of widening the row. Same `break-words` on the admin candidate detail header,
+  which had the identical text.
+
+## [0.41.4-beta] - 2026-08-04
+
+### Changed
+- **A project goal assigned to someone now lives on that person's profile, not on the project
+  page.** `ProjectGoals` used to list "my goals" and "the team's goals" next to the unassigned
+  pool, so every member read everyone's personal checklist. The project page now keeps only the
+  unassigned goals anyone may claim, plus a count of how many are assigned; the goals themselves
+  are rendered by the new `PersonProjectGoals` panel on `/portal/profile` (your own),
+  `/mentor/mentees/[id]` and `/admin/candidates/[id]`.
+- New `GET /api/project-goals[?userId=]` — one person's assigned goals across all their projects,
+  grouped by project. Readable by the person themselves, an ADMIN, or their mentor; each goal
+  carries `canEdit` mirroring the tick rules of `PATCH /api/project-tasks/[taskId]` (your own
+  goals, or any goal if you lead the project). "Release" (hand a goal back to the open pool)
+  moved along with the goal, so nothing that was possible on the project page was lost.
+- Notifications about a new goal now link to where the goal actually is
+  (`src/lib/projectGoalLink.ts`: `/portal/profile` for a mentee, the project otherwise) instead
+  of a project page that no longer shows it.
+
+### Added
+- **A shared starter pool of 20 project-goal templates** (`prisma/seed-goal-templates.mjs`,
+  wired into `infra/deploy-prod.sh` next to `seed-templates`). Every project's template pool is
+  "its own templates + the shared ones", and the shared half was empty, so the "send the starter
+  goals" button had nothing to offer until a mentor had typed the set by hand. Idempotent: only
+  missing titles are inserted (MySQL does not enforce the `@@unique([projectId, title])` key
+  across NULL `projectId`s, so existence is checked in the script).
+
+## [0.41.3-beta] - 2026-08-04
+
+### Changed
+- **Mentee names on the mentor dashboard are links to their mentorship page.** The onboarding
+  card (`MenteeOnboardingWizard`) rendered the mentee's name as plain text inside its subtitle;
+  it now links to `/mentor/mentees/<relationId>` (plain text when the pair is only connected
+  through a shared project, where there is no relation page to open). The same applies to the
+  name in the "my mentees" card and to the mentee in the "recent interactions" list on
+  `/mentor`, which previously offered only a separate "view details" link.
+- The onboarding checklist's tick buttons now carry a `title` explaining why some of them are
+  not clickable: an auto-detected step is the app's own observation, the rest are the mentor's
+  to set (`menteeOnboarding.autoHint` / `markHint` / `unmarkHint`, EN/TR/DE).
+
+### Fixed
+- The "recent interactions" list on `/mentor` printed a hard-coded English `with <name>` on
+  every locale; it now uses `mentor.interactionWith` (EN/TR/DE).
+
+## [0.41.2-beta] - 2026-08-04
+
+### Fixed
+- **A backdated status change could drag "average days to hire" negative** (#933).
+  `GET /api/mentor/analytics` and `GET /api/admin/analytics/cohorts` compute the average
+  from `HIRED`/`EMPLOYED` transition timestamps minus the relation's `startDate`; a manually
+  corrected or imported transition dated before `startDate` produced a negative duration that
+  was averaged in as-is, pulling the whole metric down (or below zero). The mentor route now
+  drops negative durations from the average instead of counting them — matching the admin
+  cohorts route, which already excluded them (`d >= 0`, since #538) — and reports
+  `avgDaysToHired: null` when no valid duration remains. Positive durations are unaffected.
+
+## [0.41.1-beta] - 2026-08-04
+
+### Added
+- **Public "become a mentor" application API** (#904). `POST /api/mentor-applications` accepts
+  an unauthenticated submission (name, email, phone, expertise, experience, motivation,
+  capacity, LinkedIn URL, locale) without creating a `User` — turning an approved application
+  into an account is a later task. IP- and email-rate-limited (429 past the limit), rejects a
+  second submission while one is `PENDING` (409), and never reveals whether the email already
+  belongs to an account (same neutral `{ ok: true }` response either way, no row created).
+  `consentAt` is stamped server-side on every real submission. Active admins get an in-app
+  notification linking to `/admin/mentor-applications` (no admin UI yet — that and the
+  approve/reject decision endpoint are follow-up work). `GET /api/mentor-applications` is
+  ADMIN-only, filterable by `status`, and paginated like `/api/admin/activity`. New
+  `MentorApplication` model/`MentorApplicationStatus` enum in `prisma/schema.prisma`.
+
+## [0.41.0-beta] - 2026-08-04
+
+### Added
+- **"A meeting is about to start" on the dashboard, and a join link while it runs.**
+  `src/lib/upcomingMeeting.ts` answers one question for a user — the meeting in progress,
+  else the next one starting within `MEETING_LEAD_MINUTES` (30) — from *both* sources that
+  can put a meeting on someone's calendar: `Meeting` rows (either side of the relation) and
+  `MeetingSeries` rules on projects the user belongs to, so a member with no mentorship for
+  the project still sees the recurring call. A meeting has no end time in the schema, so
+  "still going" is a fixed `MEETING_DURATION_MINUTES` (60) window after the start; an
+  occurrence and the `Meeting` row generated from it are deduplicated.
+- `GET /api/meetings/upcoming` (`no-store`), `UpcomingMeetingBanner` on the three dashboards,
+  and `JoinMeetingPill` in `ResponsiveShell` — the pill shows **only while the meeting is
+  running**, so it keeps meaning something, and it follows the user across every page in the
+  shell. Both components share one poll a minute via `useUpcomingMeeting` rather than one
+  each.
+
+## [0.40.10-beta] - 2026-08-04
+
+### Changed
+- **The admin candidate list is now usable at 375px without horizontal page overflow.**
+  Mobile shows compact candidate cards with name, pipeline stage and mentor first, followed
+  by education, city and skills. The seven existing filters stay unchanged but are collapsed
+  behind a visible Filters control on small screens. The existing desktop candidate grid and
+  its actions remain unchanged.
 ## [0.40.9-beta] - 2026-08-03
 
 ### Added

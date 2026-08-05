@@ -15,6 +15,7 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { PersonProjectGoals } from '@/components/PersonProjectGoals';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { RelationNotesPanel } from '@/components/RelationNotesPanel';
@@ -25,6 +26,7 @@ import { useToast } from '@/components/ui/Toast';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { cvViewHref } from '@/lib/cvLink';
 
 interface InteractionLog {
   id: string;
@@ -168,12 +170,16 @@ export default function MenteeDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           {t.mentor.backToMentees}
         </Link>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{relation.mentee.fullName}</h1>
-            <p className="text-gray-500">{relation.mentee.email}</p>
+        {/* Stacked on a phone: side by side, a long e-mail ran under the stage
+            select and pushed the status badge off the right edge. `min-w-0` +
+            `break-words` keep a long address inside its own column instead of
+            widening the row. */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{relation.mentee.fullName}</h1>
+            <p className="text-gray-500 break-words">{relation.mentee.email}</p>
           </div>
-          <div className="flex flex-col items-end gap-2 min-w-[240px]">
+          <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:min-w-[240px] sm:items-end">
             <StatusBadge status={relation.status} />
             <div className="w-full">
               <Select
@@ -265,7 +271,7 @@ export default function MenteeDetailPage() {
             )}
             {relation.mentee.cvUrl && (
               <a
-                href={relation.mentee.cvUrl}
+                href={cvViewHref(relation.mentee.cvUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
@@ -426,6 +432,12 @@ export default function MenteeDetailPage() {
 
         <div className="lg:col-span-2">
           <GoalsPanel relationId={id} />
+        </div>
+
+        {/* Goals handed to this mentee inside a project live here now, not on the
+            project page in front of the whole team. */}
+        <div className="lg:col-span-2">
+          <PersonProjectGoals userId={relation.mentee.id} />
         </div>
 
         <div className="lg:col-span-2">

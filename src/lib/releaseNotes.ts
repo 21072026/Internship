@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.40.10-beta',
+    version: '0.42.1-beta',
     date: '2026-08-05',
     highlights: {
       en: [
@@ -24,6 +24,144 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Ankündigungs-E-Mails und Erinnerungen an überfällige Phasenfristen kommen jetzt in der ausgewählten Sprache der empfangenden Person an (Englisch, Türkisch oder Deutsch). Ist keine unterstützte Sprache gespeichert, wird die E-Mail auf Englisch gesendet.',
+      ],
+    },
+  },
+  {
+    version: '0.42.0-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Goal templates now have a home: Admin → Goal templates. Add a goal, reword one, delete what you don’t use, and see how often each has been handed out. Deleting a template never touches goals already given to someone.',
+        'A template can be written in English, Turkish and German — and the member gets it in their own language. The screen also shows you which languages a goal is still missing.',
+        'Inside a project you can still keep your own goal wordings: reword or remove the project’s own templates right there, while the shared ones are marked as admin-managed.',
+      ],
+      tr: [
+        'Hedef şablonlarının artık bir yeri var: Admin → Hedef şablonları. Hedef ekle, sözünü değiştir, kullanmadığını sil, hangisinin kaç kez verildiğini gör. Bir şablonu silmek, daha önce birine verilmiş hedeflere dokunmaz.',
+        'Bir şablonu İngilizce, Türkçe ve Almanca yazabiliyorsun — üye kendi dilinde alıyor. Ekran, bir hedefin hangi dillerinin eksik olduğunu da gösteriyor.',
+        'Proje içinde kendi hedef metinlerin sende kalıyor: projenin kendi şablonlarını orada düzenleyip silebiliyorsun, ortak olanlar ise admin tarafından yönetildiği belli olacak şekilde işaretli.',
+      ],
+      de: [
+        'Zielvorlagen haben jetzt einen Ort: Admin → Zielvorlagen. Ziel hinzufügen, umformulieren, Ungenutztes löschen und sehen, wie oft jedes vergeben wurde. Das Löschen einer Vorlage lässt bereits vergebene Ziele unberührt.',
+        'Eine Vorlage kann auf Englisch, Türkisch und Deutsch geschrieben werden — das Mitglied erhält sie in seiner Sprache. Die Ansicht zeigt außerdem, welche Sprachen noch fehlen.',
+        'Im Projekt bleiben eigene Formulierungen deine: die projekteigenen Vorlagen kannst du dort umschreiben oder löschen, die gemeinsamen sind als admin-verwaltet gekennzeichnet.',
+      ],
+    },
+  },
+  {
+    version: '0.41.5-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Fixed: "View CV" now opens the CV instead of quietly downloading it — a PDF opens in the browser’s viewer, which is what the link looked like it did all along. Word CVs still download, because no browser can show them.',
+        'Fixed: on a phone, a long e-mail address no longer breaks the top of a mentee’s page — the name, the address and the stage selector stack instead of colliding, and the status badge stays on screen.',
+      ],
+      tr: [
+        'Düzeltildi: "CV’yi gör" artık CV’yi açıyor, sessizce indirmiyor — PDF tarayıcının görüntüleyicisinde açılıyor, linkin baştan beri yaptığını sandığın şey. Word CV’leri indirilmeye devam ediyor, çünkü tarayıcılar onları gösteremiyor.',
+        'Düzeltildi: telefonda uzun bir e-posta adresi mentee sayfasının üst kısmını bozmuyor — isim, adres ve aşama seçimi çakışmak yerine alt alta diziliyor, durum etiketi de ekranda kalıyor.',
+      ],
+      de: [
+        'Behoben: „CV ansehen“ öffnet den Lebenslauf jetzt, statt ihn still herunterzuladen — ein PDF erscheint im Viewer des Browsers, so wie der Link es immer schon versprochen hat. Word-Dateien werden weiterhin heruntergeladen, weil kein Browser sie anzeigen kann.',
+        'Behoben: Auf dem Handy zerlegt eine lange E-Mail-Adresse nicht mehr den Kopfbereich der Mentee-Seite — Name, Adresse und Phasen-Auswahl stapeln sich statt sich zu überlagern, und das Status-Label bleibt sichtbar.',
+      ],
+    },
+  },
+  {
+    version: '0.41.4-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'A goal you give someone in a project is now shown on their profile instead of on the project page: they see it (and tick it off) on their own profile, and you see it on their page. The project page keeps the open goals anyone may claim.',
+        'The goal template pool starts full: 20 ready-made internship goals — get the project running, find a bug, fix it, open a pull request, weekly progress note, update your CV, and so on — so you can hand a new mentee a sensible starter list on day one.',
+      ],
+      tr: [
+        'Projede birine verdiğin hedef artık proje sayfasında değil, o kişinin profilinde görünüyor: kişi kendi profilinden görüp işaretliyor, sen de onun sayfasından takip ediyorsun. Proje sayfasında herkesin üstlenebileceği açık hedefler kalıyor.',
+        'Hedef şablon havuzu artık dolu geliyor: 20 hazır staj hedefi — projeyi çalıştır, bir hata bul, düzelt, pull request aç, haftalık ilerleme notu, CV’ni güncelle gibi — yeni bir mentee’ye ilk günden mantıklı bir liste verebilirsin.',
+      ],
+      de: [
+        'Ein Ziel, das du jemandem im Projekt gibst, erscheint jetzt in dessen Profil statt auf der Projektseite: die Person sieht und hakt es im eigenen Profil ab, du verfolgst es auf ihrer Seite. Auf der Projektseite bleiben die offenen Ziele, die sich jeder nehmen kann.',
+        'Der Zielvorlagen-Pool ist von Anfang an gefüllt: 20 fertige Praktikumsziele — Projekt zum Laufen bringen, einen Bug finden, beheben, Pull Request öffnen, Wochenbericht, Lebenslauf aktualisieren und mehr — damit ein neues Mentee am ersten Tag eine sinnvolle Liste bekommt.',
+      ],
+    },
+  },
+  {
+    version: '0.41.3-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'On your mentor dashboard, a mentee’s name is now a link — in the onboarding card, in your mentee list and in recent interactions — so you can open their page straight from the name.',
+        'The onboarding checklist now says what its ticks mean: hover one and you learn whether the app ticked it by itself (because it saw the message, the meeting, the project or the pipeline move) or whether it is yours to tick.',
+      ],
+      tr: [
+        'Mentor panelinde mentee’nin adı artık link — onboarding kartında, mentee listende ve son etkileşimlerde — böylece sayfasını doğrudan adından açabiliyorsun.',
+        'Onboarding listesi artık işaretlerin ne demek olduğunu söylüyor: üzerine geldiğinde, uygulamanın kendisi mi işaretledi (mesajı, toplantıyı, projeyi ya da pipeline hareketini gördüğü için) yoksa işaretlemesi sana mı kaldı, anlıyorsun.',
+      ],
+      de: [
+        'Im Mentor-Dashboard ist der Name eines Mentees jetzt ein Link — in der Onboarding-Karte, in der Mentee-Liste und in den letzten Interaktionen — du öffnest die Seite also direkt über den Namen.',
+        'Die Onboarding-Liste erklärt ihre Häkchen: Beim Überfahren siehst du, ob die App selbst abgehakt hat (weil sie die Nachricht, den Termin, das Projekt oder den Pipeline-Schritt erkannt hat) oder ob das Häkchen von dir kommen muss.',
+      ],
+    },
+  },
+  {
+    version: '0.41.2-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Fixed: the "average days to hire" number on mentor and admin analytics could be thrown off by a manually corrected or imported hire date — it now ignores that one record instead of pulling the average down, and shows "—" if no valid record is left.',
+      ],
+      tr: [
+        'Düzeltildi: mentor ve admin analitiğindeki "ortalama işe alım süresi" rakamı, elle düzeltilmiş ya da içe aktarılmış bir işe alım tarihinden ötürü yanlış çıkabiliyordu — artık o kaydı ortalamaya katmıyor, geçerli kayıt kalmazsa "—" gösteriyor.',
+      ],
+      de: [
+        'Behoben: Die Kennzahl „durchschnittliche Tage bis zur Einstellung" in der Mentor- und Admin-Analyse konnte durch ein manuell korrigiertes oder importiertes Einstellungsdatum verfälscht werden — dieser Datensatz wird jetzt ausgeschlossen statt den Durchschnitt zu verzerren; bleibt kein gültiger Datensatz übrig, erscheint „—".',
+      ],
+    },
+  },
+  {
+    version: '0.41.1-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Behind-the-scenes groundwork for letting someone apply to become a mentor without an account first — admins will see these applications and a review screen next; nothing new to see on screen yet.',
+      ],
+      tr: [
+        'Bir kişinin hesap açmadan mentör olmak için başvurabilmesi için perde arkası altyapı — bu başvuruları görecek admin ekranı bir sonraki adımda geliyor; ekranda henüz yeni bir şey yok.',
+      ],
+      de: [
+        'Vorarbeit im Hintergrund, damit sich jemand ohne Konto als Mentor bewerben kann — die Admin-Ansicht für diese Bewerbungen folgt als Nächstes; auf dem Bildschirm ändert sich noch nichts.',
+      ],
+    },
+  },
+  {
+    version: '0.41.0-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Half an hour before a meeting, your dashboard says so — with the join link right there. It covers both kinds: a meeting booked with you, and your project\u2019s recurring call (you see that one even if you have no mentorship attached to the project).',
+        'While a meeting is running, a green "Join" appears in the top right of every page, so you can get in from wherever you happen to be. It disappears an hour after the start.',
+      ],
+      tr: [
+        'Bir toplantıdan yarım saat önce panelin bunu söylüyor — katılım linki de orada. İki türü de kapsıyor: seninle ayarlanmış bir toplantı ve projenin düzenli görüşmesi (projeye bağlı bir mentorluğun olmasa da onu görürsün).',
+        'Toplantı devam ederken her sayfanın sağ üstünde yeşil bir "Katıl" çıkıyor; nerede olursan ol oradan girebiliyorsun. Başlangıçtan bir saat sonra kayboluyor.',
+      ],
+      de: [
+        'Eine halbe Stunde vor einem Treffen sagt dein Dashboard es dir — mit dem Teilnahmelink direkt daneben. Beide Arten sind abgedeckt: ein mit dir vereinbartes Treffen und der wiederkehrende Projekt-Call (den siehst du auch ohne Mentorschaft zum Projekt).',
+        'Während ein Treffen läuft, erscheint oben rechts auf jeder Seite ein grünes „Teilnehmen“ — so kommst du von überall hinein. Eine Stunde nach dem Start verschwindet es.',
+      ],
+    },
+  },
+  {
+    version: '0.40.10-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'The admin candidate list is now easier to use on a phone: each candidate appears in a compact card with their stage and mentor up front, while education, city and skills remain close at hand. Filters can be opened when needed, and the page no longer scrolls sideways at 375px.',
+      ],
+      tr: [
+        'Yönetici aday listesi artık telefonda daha rahat kullanılıyor: her aday, aşaması ve mentoru önde olacak şekilde kompakt bir kartta gösteriliyor; eğitim, şehir ve yetkinlik bilgileri de hemen altında yer alıyor. Filtreler gerektiğinde açılabiliyor ve sayfa 375px genişlikte artık yatay kaymıyor.',
+      ],
+      de: [
+        'Die Kandidatenliste für Admins ist jetzt auf dem Handy leichter nutzbar: Jede Person erscheint in einer kompakten Karte, in der Phase und Mentor zuerst sichtbar sind; Ausbildung, Ort und Skills stehen direkt darunter. Die Filter lassen sich bei Bedarf öffnen, und bei 375px scrollt die Seite nicht mehr seitwärts.',
       ],
     },
   },

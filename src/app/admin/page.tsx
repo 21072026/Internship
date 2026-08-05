@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
+import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
@@ -73,6 +74,9 @@ export default async function AdminDashboard() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.dashboard.title}</h1>
         <p className="text-gray-500 mt-1">{t.dashboard.subtitle}</p>
       </div>
+
+      {/* Half an hour before a meeting, and for as long as it runs (#51 follow-up). */}
+      <UpcomingMeetingBanner />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

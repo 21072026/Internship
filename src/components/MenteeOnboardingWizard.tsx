@@ -19,6 +19,7 @@ import { ONBOARDING_STEPS, type OnboardingStep } from '@/lib/menteeOnboarding';
 interface Onboarding {
   menteeId: string;
   menteeName: string;
+  relationId: string | null;
   projectId: string | null;
   steps: Record<OnboardingStep, { done: boolean; auto: boolean }>;
   remaining: number;
@@ -26,6 +27,9 @@ interface Onboarding {
 
 export function MenteeOnboardingWizard() {
   const t = useT();
+  // The subtitle carries the mentee's name mid-sentence; split it so the name
+  // itself can be a link to their mentorship page.
+  const [subtitleBefore, subtitleAfter] = t.menteeOnboarding.subtitle.split('{name}');
   const [items, setItems] = useState<Onboarding[]>([]);
   const [busy, setBusy] = useState('');
 
@@ -73,7 +77,21 @@ export function MenteeOnboardingWizard() {
             </button>
           </div>
           <p className="mb-3 text-sm text-gray-500">
-            {t.menteeOnboarding.subtitle.replace('{name}', item.menteeName)}
+            {subtitleBefore}
+            {item.relationId ? (
+              <Link
+                href={`/mentor/mentees/${item.relationId}`}
+                className="font-medium text-blue-600 hover:underline"
+                data-testid={`onboarding-mentee-link-${item.menteeId}`}
+              >
+                {item.menteeName}
+              </Link>
+            ) : (
+              // Connected through a shared project only — there is no
+              // mentorship page to link to.
+              <span className="font-medium text-gray-700 dark:text-gray-200">{item.menteeName}</span>
+            )}
+            {subtitleAfter}
           </p>
           <ul className="space-y-1.5">
             {ONBOARDING_STEPS.map((step) => {
@@ -88,6 +106,15 @@ export function MenteeOnboardingWizard() {
                     disabled={state.auto || busy === key}
                     onClick={() => patch({ menteeId: item.menteeId, step, done: !state.done }, key)}
                     aria-label={(t.menteeOnboarding.steps as Record<string, string>)[step]}
+                    // Say which ticks are the app's own observation and which
+                    // ones the mentor is expected to set.
+                    title={
+                      state.auto
+                        ? t.menteeOnboarding.autoHint
+                        : state.done
+                        ? t.menteeOnboarding.unmarkHint
+                        : t.menteeOnboarding.markHint
+                    }
                     data-testid={`onboarding-step-${step}`}
                   >
                     {state.done ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Circle className="h-4 w-4 text-gray-300" />}

@@ -14,7 +14,7 @@
 #      GitHub-hosted runner so this server never compiles) or build it locally
 #      from source, stamping GIT_SHA
 #   3. prisma db push --accept-data-loss  (schema sync, same as CI)
-#   4. seed-templates + backfill-project-members  (idempotent)
+#   4. seed-templates + seed-goal-templates + backfill-project-members (idempotent)
 #   5. swap the internship-crm container (host networking, port 3200, restart
 #      unless-stopped) — byte-for-byte the flags deploy.yml uses
 #   6. health-check http://127.0.0.1:3200 and prune old images
@@ -231,6 +231,9 @@ run_tool npx prisma db push --accept-data-loss
 # ── 4. Idempotent seeds / backfills ──────────────────────────────────────────
 log "seed-templates + project-member backfill (idempotent)"
 run_tool node prisma/seed-templates.mjs || true
+# The shared project-goal template pool (#51) — every project sees these on top
+# of its own. Only ever adds missing titles.
+run_tool node prisma/seed-goal-templates.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-organization.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't

@@ -90,13 +90,14 @@ model Organization {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  users          User[]
-  sources        Source[]
-  cohorts        Cohort[]
-  companies      Company[]
-  projects       Project[]
-  relations      MentorshipRelation[]
-  pipelineStages PipelineStage[]
+  users              User[]
+  sources            Source[]
+  cohorts            Cohort[]
+  companies          Company[]
+  projects           Project[]
+  relations          MentorshipRelation[]
+  pipelineStages     PipelineStage[]
+  mentorApplications MentorApplication[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -219,41 +220,42 @@ model User {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
-  mentorRelations          MentorshipRelation[]      @relation("MentorRelations")
-  menteeRelations          MentorshipRelation[]      @relation("MenteeRelations")
-  statusChanges            StatusChange[]            @relation("StatusChangedBy")
-  passwordResetTokens      PasswordResetToken[]
-  emailVerificationTokens  EmailVerificationToken[]
-  cvFile                   CvFile?
-  avatarFile               AvatarFile?
-  notifications            Notification[]
-  conversationParticipants ConversationParticipant[]
-  ownedProjects            Project[]                 @relation("ProjectOwner")
-  projectMemberships       ProjectMember[]           @relation("ProjectMemberships")
-  availabilitySlots        AvailabilitySlot[]
-  company                  Company?                  @relation("CompanyUsers", fields: [companyId], references: [id])
-  source                   Source?                   @relation(fields: [sourceId], references: [id])
-  documents                Document[]                @relation("DocumentOwner")
-  personalNotes            PersonalNote[]
-  consents                 UserConsent[]
-  companyInterests         CompanyInterest[]         @relation("CompanyInterestMentee")
-  companyNeedAlerts        CompanyNeedAlert[]        @relation("CompanyNeedAlertMentee")
-  mentorshipRequests       MentorshipRequest[]       @relation("MentorshipRequests")
-  decidedRequests          MentorshipRequest[]       @relation("DecidedMentorshipRequests")
-  supportTickets           SupportTicket[]           @relation("SupportRequester")
-  assignedSupportTickets   SupportTicket[]           @relation("SupportAssignee")
-  supportMessages          SupportMessage[]          @relation("SupportMessageSender")
-  authoredRelationNotes    RelationNote[]            @relation("RelationNoteAuthor")
-  pageViews                PageView[]
-  referredBy               User?                     @relation("UserReferrals", fields: [referredById], references: [id])
-  referredUsers            User[]                    @relation("UserReferrals")
-  sentInvitations          InvitationToken[]         @relation("InvitationInviter")
-  assignedProjectTasks     ProjectTask[]             @relation("ProjectTaskAssignee")
-  projectJoinRequests      ProjectJoinRequest[]      @relation("JoinRequester")
-  decidedJoinRequests      ProjectJoinRequest[]      @relation("JoinRequestDecider")
-  taskTemplates            ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
-  mentorOnboardings        MenteeOnboarding[]        @relation("OnboardingMentor")
-  menteeOnboarding         MenteeOnboarding[]        @relation("OnboardingMentee")
+  mentorRelations           MentorshipRelation[]      @relation("MentorRelations")
+  menteeRelations           MentorshipRelation[]      @relation("MenteeRelations")
+  statusChanges             StatusChange[]            @relation("StatusChangedBy")
+  passwordResetTokens       PasswordResetToken[]
+  emailVerificationTokens   EmailVerificationToken[]
+  cvFile                    CvFile?
+  avatarFile                AvatarFile?
+  notifications             Notification[]
+  conversationParticipants  ConversationParticipant[]
+  ownedProjects             Project[]                 @relation("ProjectOwner")
+  projectMemberships        ProjectMember[]           @relation("ProjectMemberships")
+  availabilitySlots         AvailabilitySlot[]
+  company                   Company?                  @relation("CompanyUsers", fields: [companyId], references: [id])
+  source                    Source?                   @relation(fields: [sourceId], references: [id])
+  documents                 Document[]                @relation("DocumentOwner")
+  personalNotes             PersonalNote[]
+  consents                  UserConsent[]
+  companyInterests          CompanyInterest[]         @relation("CompanyInterestMentee")
+  companyNeedAlerts         CompanyNeedAlert[]        @relation("CompanyNeedAlertMentee")
+  mentorshipRequests        MentorshipRequest[]       @relation("MentorshipRequests")
+  decidedRequests           MentorshipRequest[]       @relation("DecidedMentorshipRequests")
+  decidedMentorApplications MentorApplication[]       @relation("DecidedMentorApplications")
+  supportTickets            SupportTicket[]           @relation("SupportRequester")
+  assignedSupportTickets    SupportTicket[]           @relation("SupportAssignee")
+  supportMessages           SupportMessage[]          @relation("SupportMessageSender")
+  authoredRelationNotes     RelationNote[]            @relation("RelationNoteAuthor")
+  pageViews                 PageView[]
+  referredBy                User?                     @relation("UserReferrals", fields: [referredById], references: [id])
+  referredUsers             User[]                    @relation("UserReferrals")
+  sentInvitations           InvitationToken[]         @relation("InvitationInviter")
+  assignedProjectTasks      ProjectTask[]             @relation("ProjectTaskAssignee")
+  projectJoinRequests       ProjectJoinRequest[]      @relation("JoinRequester")
+  decidedJoinRequests       ProjectJoinRequest[]      @relation("JoinRequestDecider")
+  taskTemplates             ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
+  mentorOnboardings         MenteeOnboarding[]        @relation("OnboardingMentor")
+  menteeOnboarding          MenteeOnboarding[]        @relation("OnboardingMentee")
 
   @@index([role])
   @@index([referredById])
@@ -720,6 +722,51 @@ model MentorshipRequest {
   @@index([menteeId])
 }
 
+// A public, unauthenticated application to become a mentor (#904). No User
+// account is created on submission — an admin reviews the queue and, when
+// approving, is what turns an applicant into an account (a later task). One
+// PENDING application at a time per email, same shape as MentorshipRequest.
+enum MentorApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model MentorApplication {
+  orgId        String?
+  org          Organization?           @relation(fields: [orgId], references: [id])
+  id           String                  @id @default(cuid())
+  fullName     String
+  email        String
+  phone        String?
+  // Areas the applicant can mentor in — same shape as User.skills.
+  expertise    Json                    @default("[]")
+  // Free-form professional background.
+  experience   String?                 @db.Text
+  // Why they want to mentor.
+  motivation   String?                 @db.Text
+  // Max concurrent mentees they could take on — mirrors User.mentorCapacity.
+  capacity     Int?
+  linkedinUrl  String?
+  // Preferred UI language ('en' | 'tr' | 'de'), mirrors User.preferredLanguage.
+  locale       String?
+  status       MentorApplicationStatus @default(PENDING)
+  decidedAt    DateTime?
+  decidedById  String?
+  // Set when rejecting; explains the decision to the reviewing admin later.
+  rejectReason String?                 @db.Text
+  // When the applicant accepted the privacy/data terms — set server-side on
+  // submit, mirrors User.consentAt.
+  consentAt    DateTime?
+  createdAt    DateTime                @default(now())
+
+  decidedBy User? @relation("DecidedMentorApplications", fields: [decidedById], references: [id])
+
+  @@index([status])
+  @@index([email])
+  @@index([orgId])
+}
+
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
 // company+mentee: once a matching candidate has triggered an alert for a
 // company, we never re-notify for the same candidate (the "*SentAt" pattern).
@@ -924,14 +971,21 @@ model ProjectTask {
 // Not tenant-anchored: reached through Project / User, like the other child
 // models (see TENANT_MODELS in src/lib/orgContext.ts).
 model ProjectTaskTemplate {
-  id          String   @id @default(cuid())
-  projectId   String?
-  title       String
-  createdById String?
+  id           String   @id @default(cuid())
+  projectId    String?
+  // The fallback wording, and the key the pool dedupes on. A localized title
+  // lives in `translations`; `title` is what a member sees when their language
+  // has no entry there.
+  title        String
+  // { en?, tr?, de? } — the goal in each language it has been written in. The
+  // task created from a template is a plain string, resolved once from the
+  // assignee's own language (src/lib/goalTemplates.ts).
+  translations Json?
+  createdById  String?
   // How many times this template has been handed to someone — the pool sorts
   // by it so the goals actually used float to the top.
-  useCount    Int      @default(0)
-  createdAt   DateTime @default(now())
+  useCount     Int      @default(0)
+  createdAt    DateTime @default(now())
 
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?    @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
