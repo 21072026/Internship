@@ -9,6 +9,8 @@ import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { withTenantScope } from '@/lib/orgContext';
+import { defaultLocale, isLocale } from '@/i18n/config';
+import { getDictionary } from '@/i18n/dictionaries';
 import {
   validateAnnouncementImage,
   announcementImageUrl,
@@ -132,7 +134,7 @@ export async function POST(request: Request) {
 
   const users = await prisma.user.findMany({
     where: { isActive: true },
-    select: { id: true, email: true, emailNotifications: true, notificationPrefs: true },
+    select: { id: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
 
   // Bulk-create the in-app notifications in one statement.
@@ -147,19 +149,22 @@ export async function POST(request: Request) {
     // <id>/image requires a session, so an <img src="https://…"> would render as
     // a broken image in every mail client.
     const imageHtml = imageData ? `<p><img src="cid:${IMAGE_CID}" alt="" style="max-width:100%;height:auto"></p>` : '';
-    const html = `<p>${safe.replace(/\n/g, '<br>')}</p>${imageHtml}${link ? `<p><a href="${link}">${link}</a></p>` : ''}`;
     const attachments = imageData && image
       ? [{ filename: emailImageFilename(image.type), content: imageData, contentType: image.type, cid: IMAGE_CID }]
       : undefined;
     await Promise.all(
       users
         .filter((u) => u.email && emailAllowed(u, 'announcements'))
-        .map((u) =>
-          sendEmail({ to: u.email, subject: 'Announcement', html, attachments }).then(
+        .map((u) => {
+          const preferredLanguage = u.preferredLanguage ?? undefined;
+          const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
+          const t = getDictionary(locale);
+          const html = `<h2>${t.announcements.emailSubject}</h2><p>${safe.replace(/\n/g, '<br>')}</p>${imageHtml}${link ? `<p><a href="${link}">${t.announcements.emailOpenLink}</a></p>` : ''}`;
+          return sendEmail({ to: u.email, subject: t.announcements.emailSubject, html, attachments }).then(
             () => { emailed++; },
             (e) => logger.error('Failed to send announcement email', { error: String(e) })
-          )
-        )
+          );
+        })
     );
   }
 
