@@ -46,6 +46,63 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
+    version: '0.42.0-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Goal templates now have a home: Admin → Goal templates. Add a goal, reword one, delete what you don’t use, and see how often each has been handed out. Deleting a template never touches goals already given to someone.',
+        'A template can be written in English, Turkish and German — and the member gets it in their own language. The screen also shows you which languages a goal is still missing.',
+        'Inside a project you can still keep your own goal wordings: reword or remove the project’s own templates right there, while the shared ones are marked as admin-managed.',
+      ],
+      tr: [
+        'Hedef şablonlarının artık bir yeri var: Admin → Hedef şablonları. Hedef ekle, sözünü değiştir, kullanmadığını sil, hangisinin kaç kez verildiğini gör. Bir şablonu silmek, daha önce birine verilmiş hedeflere dokunmaz.',
+        'Bir şablonu İngilizce, Türkçe ve Almanca yazabiliyorsun — üye kendi dilinde alıyor. Ekran, bir hedefin hangi dillerinin eksik olduğunu da gösteriyor.',
+        'Proje içinde kendi hedef metinlerin sende kalıyor: projenin kendi şablonlarını orada düzenleyip silebiliyorsun, ortak olanlar ise admin tarafından yönetildiği belli olacak şekilde işaretli.',
+      ],
+      de: [
+        'Zielvorlagen haben jetzt einen Ort: Admin → Zielvorlagen. Ziel hinzufügen, umformulieren, Ungenutztes löschen und sehen, wie oft jedes vergeben wurde. Das Löschen einer Vorlage lässt bereits vergebene Ziele unberührt.',
+        'Eine Vorlage kann auf Englisch, Türkisch und Deutsch geschrieben werden — das Mitglied erhält sie in seiner Sprache. Die Ansicht zeigt außerdem, welche Sprachen noch fehlen.',
+        'Im Projekt bleiben eigene Formulierungen deine: die projekteigenen Vorlagen kannst du dort umschreiben oder löschen, die gemeinsamen sind als admin-verwaltet gekennzeichnet.',
+      ],
+    },
+  },
+  {
+    version: '0.41.5-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'Fixed: "View CV" now opens the CV instead of quietly downloading it — a PDF opens in the browser’s viewer, which is what the link looked like it did all along. Word CVs still download, because no browser can show them.',
+        'Fixed: on a phone, a long e-mail address no longer breaks the top of a mentee’s page — the name, the address and the stage selector stack instead of colliding, and the status badge stays on screen.',
+      ],
+      tr: [
+        'Düzeltildi: "CV’yi gör" artık CV’yi açıyor, sessizce indirmiyor — PDF tarayıcının görüntüleyicisinde açılıyor, linkin baştan beri yaptığını sandığın şey. Word CV’leri indirilmeye devam ediyor, çünkü tarayıcılar onları gösteremiyor.',
+        'Düzeltildi: telefonda uzun bir e-posta adresi mentee sayfasının üst kısmını bozmuyor — isim, adres ve aşama seçimi çakışmak yerine alt alta diziliyor, durum etiketi de ekranda kalıyor.',
+      ],
+      de: [
+        'Behoben: „CV ansehen“ öffnet den Lebenslauf jetzt, statt ihn still herunterzuladen — ein PDF erscheint im Viewer des Browsers, so wie der Link es immer schon versprochen hat. Word-Dateien werden weiterhin heruntergeladen, weil kein Browser sie anzeigen kann.',
+        'Behoben: Auf dem Handy zerlegt eine lange E-Mail-Adresse nicht mehr den Kopfbereich der Mentee-Seite — Name, Adresse und Phasen-Auswahl stapeln sich statt sich zu überlagern, und das Status-Label bleibt sichtbar.',
+      ],
+    },
+  },
+  {
+    version: '0.41.4-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'A goal you give someone in a project is now shown on their profile instead of on the project page: they see it (and tick it off) on their own profile, and you see it on their page. The project page keeps the open goals anyone may claim.',
+        'The goal template pool starts full: 20 ready-made internship goals — get the project running, find a bug, fix it, open a pull request, weekly progress note, update your CV, and so on — so you can hand a new mentee a sensible starter list on day one.',
+      ],
+      tr: [
+        'Projede birine verdiğin hedef artık proje sayfasında değil, o kişinin profilinde görünüyor: kişi kendi profilinden görüp işaretliyor, sen de onun sayfasından takip ediyorsun. Proje sayfasında herkesin üstlenebileceği açık hedefler kalıyor.',
+        'Hedef şablon havuzu artık dolu geliyor: 20 hazır staj hedefi — projeyi çalıştır, bir hata bul, düzelt, pull request aç, haftalık ilerleme notu, CV’ni güncelle gibi — yeni bir mentee’ye ilk günden mantıklı bir liste verebilirsin.',
+      ],
+      de: [
+        'Ein Ziel, das du jemandem im Projekt gibst, erscheint jetzt in dessen Profil statt auf der Projektseite: die Person sieht und hakt es im eigenen Profil ab, du verfolgst es auf ihrer Seite. Auf der Projektseite bleiben die offenen Ziele, die sich jeder nehmen kann.',
+        'Der Zielvorlagen-Pool ist von Anfang an gefüllt: 20 fertige Praktikumsziele — Projekt zum Laufen bringen, einen Bug finden, beheben, Pull Request öffnen, Wochenbericht, Lebenslauf aktualisieren und mehr — damit ein neues Mentee am ersten Tag eine sinnvolle Liste bekommt.',
+      ],
+    },
+  },
+  {
     version: '0.41.3-beta',
     date: '2026-08-04',
     highlights: {

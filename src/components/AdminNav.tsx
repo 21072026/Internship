@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText,
-  BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, Settings, Webhook, Search,
+  BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, Settings, Webhook, Search, ListChecks,
   ShieldCheck, Activity, LifeBuoy, Network, Video, GraduationCap,
   type LucideIcon,
 } from 'lucide-react';
@@ -22,6 +22,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' },
   { href: '/admin/projects', icon: FolderGit2, key: 'projects' },
+  { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates' },
   { href: '/admin/cohorts', icon: Layers, key: 'cohorts' },
   { href: '/admin/sources', icon: Radio, key: 'sources' },
   { href: '/admin/users', icon: UserCog, key: 'users' },

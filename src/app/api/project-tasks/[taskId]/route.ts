@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { canManageProject, isProjectMember, isProjectOwner } from '@/lib/projectAccess';
 import { notify } from '@/lib/notify';
+import { goalLinkFor } from '@/lib/projectGoalLink';
 
 async function taskIfManageable(userId: string, role: string, companyId: string | null | undefined, taskId: string) {
   const task = await prisma.projectTask.findUnique({ where: { id: taskId }, include: { project: true } });
@@ -86,7 +87,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
   });
 
   if (assigneeId && assigneeId !== session.user.id) {
-    await notify(assigneeId, 'project', `You were given a goal: ${updated.title}`, `/projects/${task.projectId}`);
+    await notify(assigneeId, 'project', `You were given a goal: ${updated.title}`, await goalLinkFor(assigneeId, task.projectId));
   }
   return NextResponse.json({ task: updated });
 }

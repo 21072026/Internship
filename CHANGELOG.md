@@ -48,6 +48,83 @@ version is shown in the sidebar footer of every page (links to the
   instead of a generic failure banner. Localized EN/TR/DE like the rest of the public
   application surface (`/apply/[mentorId]`, `/auth/register`).
 
+## [0.42.0-beta] - 2026-08-04
+
+### Added
+- **Goal templates are managed, and multilingual.** `ProjectTaskTemplate` gains a nullable
+  `translations` Json column (`{ en?, tr?, de? }`); `title` stays the canonical wording, the
+  pool's dedupe key and the fallback. `src/lib/goalTemplates.ts` normalizes input, derives the
+  canonical title (default locale first, then any filled language) and resolves the wording one
+  person should read.
+- **New admin screen `/admin/goal-templates`** (+ `AdminNav` entry) over
+  `GET/POST/PATCH/DELETE /api/admin/goal-templates` (ADMIN only, shared pool = `projectId: null`):
+  add a goal in up to three languages, reword it, delete it, see which languages are still
+  missing and how often each has been handed out. Deleting a template leaves goals already handed
+  out alone — by then they are tasks of their own.
+- **Per-project template management** in `ProjectGoals`: the pool box now shows each entry in the
+  viewer's language, marks the admin-managed shared ones as read-only ("shared" badge), and lets
+  a project lead reword (new `PATCH /api/projects/[id]/task-templates`) or delete the project's
+  own entries. `POST` on that route accepts `translations` alongside the legacy `title`.
+
+### Changed
+- A goal handed out from the pool is created in the **assignee's** language
+  (`User.preferredLanguage`, falling back to the default locale, then `title`) — a task is a
+  single string, so the language is resolved once, at hand-over.
+- Sending a shared template no longer clones it into the project's own pool: the automatic
+  "capture what was written" upsert now skips titles that came from the pool, which would
+  otherwise copy a shared goal in under whatever language it resolved to.
+- `prisma/seed-goal-templates.mjs` seeds all 20 starter goals in EN/TR/DE and back-fills
+  translations onto rows seeded before the column existed. Still idempotent, still keyed on the
+  Turkish `title`.
+- `isLocale()` accepts `null` (it is now fed `User.preferredLanguage`).
+- Feature catalogue: the `projectTeams` entry describes the managed multilingual pool and goals
+  living on the person's profile.
+
+## [0.41.5-beta] - 2026-08-04
+
+### Fixed
+- **"View CV" downloaded the file instead of showing it** — on a phone that reads as a dead
+  link: the tab opens blank and the file lands in Downloads. `GET /api/cv/[userId]` has answered
+  `Content-Disposition: attachment` for everything since #890; it now accepts `?inline=1` and
+  honours it for `application/pdf` only (upload accepts PDF and Word, and the bytes are verified
+  against the declared type in #888, so an inline PDF here really is a PDF and renders in the
+  browser's own viewer rather than as a page on our origin). Word CVs still download — no browser
+  renders them. Every "view CV" link now goes through `cvViewHref()` (`src/lib/cvLink.ts`):
+  mentee detail, admin candidates list and detail (`CvManager`), company candidate detail. An
+  external `cvUrl` (a Drive link a mentee typed in) is untouched.
+- **A long e-mail broke the mentee detail header on mobile** (`/mentor/mentees/[id]`). Name +
+  e-mail and the stage select shared one flex row with a `min-w-[240px]` right column, so a long
+  address ran under the select and pushed the status badge off the right edge of the screen. The
+  header now stacks below `sm`, and the text column is `min-w-0 break-words` so a long address
+  wraps instead of widening the row. Same `break-words` on the admin candidate detail header,
+  which had the identical text.
+
+## [0.41.4-beta] - 2026-08-04
+
+### Changed
+- **A project goal assigned to someone now lives on that person's profile, not on the project
+  page.** `ProjectGoals` used to list "my goals" and "the team's goals" next to the unassigned
+  pool, so every member read everyone's personal checklist. The project page now keeps only the
+  unassigned goals anyone may claim, plus a count of how many are assigned; the goals themselves
+  are rendered by the new `PersonProjectGoals` panel on `/portal/profile` (your own),
+  `/mentor/mentees/[id]` and `/admin/candidates/[id]`.
+- New `GET /api/project-goals[?userId=]` — one person's assigned goals across all their projects,
+  grouped by project. Readable by the person themselves, an ADMIN, or their mentor; each goal
+  carries `canEdit` mirroring the tick rules of `PATCH /api/project-tasks/[taskId]` (your own
+  goals, or any goal if you lead the project). "Release" (hand a goal back to the open pool)
+  moved along with the goal, so nothing that was possible on the project page was lost.
+- Notifications about a new goal now link to where the goal actually is
+  (`src/lib/projectGoalLink.ts`: `/portal/profile` for a mentee, the project otherwise) instead
+  of a project page that no longer shows it.
+
+### Added
+- **A shared starter pool of 20 project-goal templates** (`prisma/seed-goal-templates.mjs`,
+  wired into `infra/deploy-prod.sh` next to `seed-templates`). Every project's template pool is
+  "its own templates + the shared ones", and the shared half was empty, so the "send the starter
+  goals" button had nothing to offer until a mentor had typed the set by hand. Idempotent: only
+  missing titles are inserted (MySQL does not enforce the `@@unique([projectId, title])` key
+  across NULL `projectId`s, so existence is checked in the script).
+
 ## [0.41.3-beta] - 2026-08-04
 
 ### Changed
