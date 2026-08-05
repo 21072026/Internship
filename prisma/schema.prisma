@@ -16,6 +16,12 @@ enum Role {
   SOURCE
 }
 
+enum MentorOnboardingStatus {
+  PENDING
+  SKIPPED
+  COMPLETED
+}
+
 enum MentorshipStatus {
   ACTIVE
   COMPLETED
@@ -167,6 +173,8 @@ model User {
   interests               String?       @db.Text
   targetPosition          String?
   mentorCapacity          Int?
+  // Existing mentors remain unaffected; newly-created mentors explicitly start PENDING.
+  mentorOnboardingStatus  MentorOnboardingStatus @default(COMPLETED)
   // Default true so existing rows stay writable after the column is added;
   // new self-registrations are created with false until they verify by email.
   emailVerified           Boolean       @default(true)

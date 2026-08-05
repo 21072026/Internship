@@ -9,22 +9,23 @@ interface Step { key: string; done: boolean; href: string; optional?: boolean }
 
 // Role-aware first-run checklist shown on the dashboard. Hides itself when all
 // steps are done or the user dismisses it (remembered per role in localStorage).
-export function OnboardingChecklist() {
+export function OnboardingChecklist({ variant = 'default' }: { variant?: 'default' | 'mentor-profile' }) {
   const t = useT();
   const [steps, setSteps] = useState<Step[] | null>(null);
   const [role, setRole] = useState('');
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
-    fetch('/api/onboarding')
+    fetch(variant === 'default' ? '/api/onboarding' : `/api/onboarding?variant=${variant}`)
       .then((r) => r.json())
       .then((d) => {
         setSteps(d.steps ?? []);
         setRole(d.role ?? '');
-        setDismissed(localStorage.getItem(`onboarding-dismissed-${d.role}`) === '1');
+        const suffix = variant === 'default' ? '' : `-${variant}`;
+        setDismissed(localStorage.getItem(`onboarding-dismissed-${d.role}${suffix}`) === '1');
       })
       .catch(() => setSteps([]));
-  }, []);
+  }, [variant]);
 
   if (!steps || steps.length === 0 || dismissed) return null;
   // Only required steps decide completion — an optional step (e.g. the mentor's
@@ -36,12 +37,13 @@ export function OnboardingChecklist() {
   const doneCount = steps.filter((s) => s.done).length;
   const pct = Math.round((doneCount / steps.length) * 100);
   const dismiss = () => {
-    localStorage.setItem(`onboarding-dismissed-${role}`, '1');
+    const suffix = variant === 'default' ? '' : `-${variant}`;
+    localStorage.setItem(`onboarding-dismissed-${role}${suffix}`, '1');
     setDismissed(true);
   };
 
   return (
-    <div className="mb-6 rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 p-5" data-testid="onboarding-checklist">
+    <div className="mb-6 rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 p-5" data-testid={variant === 'default' ? 'onboarding-checklist' : 'mentor-profile-checklist'}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <Rocket className="h-5 w-5 text-blue-600 dark:text-blue-400" />

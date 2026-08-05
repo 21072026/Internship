@@ -4,7 +4,7 @@ import { getFeatures } from '@/lib/features';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
-import { roleHome } from '@/lib/roleHome';
+import { postLoginDestination } from '@/lib/postLoginDestination';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -14,7 +14,7 @@ import { APP_VERSION } from '@/lib/version';
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
-  if (session) redirect(roleHome(session.user.role));
+  if (session) redirect(await postLoginDestination(session.user.id, session.user.role));
 
   const { locale, t } = await getServerDictionary();
   const L = t.landing;

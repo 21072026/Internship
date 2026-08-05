@@ -37,7 +37,10 @@ export default function SignInPage() {
   // Already signed in → go straight to the role dashboard.
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace(roleHome(session?.user?.role));
+      fetch('/api/auth/destination', { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((body) => router.replace(body.destination || roleHome(session?.user?.role)))
+        .catch(() => router.replace(roleHome(session?.user?.role)));
     }
   }, [status, session, router]);
 
@@ -116,7 +119,13 @@ export default function SignInPage() {
       if (role) break;
       await new Promise((r) => setTimeout(r, 200));
     }
-    window.location.assign(roleHome(role));
+    let destination = roleHome(role);
+    try {
+      const destinationRes = await fetch('/api/auth/destination', { cache: 'no-store' });
+      const destinationBody = await destinationRes.json();
+      if (destinationRes.ok && destinationBody.destination) destination = destinationBody.destination;
+    } catch {}
+    window.location.assign(destination);
   });
 
   return (

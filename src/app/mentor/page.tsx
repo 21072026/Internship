@@ -75,6 +75,7 @@ export default async function MentorDashboard() {
   return (
     <div>
       <OnboardingChecklist />
+      <OnboardingChecklist variant="mentor-profile" />
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.mentor.welcomeBack}, {session.user.name}

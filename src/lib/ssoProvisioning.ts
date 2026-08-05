@@ -72,6 +72,7 @@ export async function provisionSsoUser(identity: SsoIdentity): Promise<Provision
       orgId: identity.orgId,
       emailVerified: true, // the IdP vouched for this address
       skills: [],
+      ...(identity.role === 'MENTOR' ? { mentorOnboardingStatus: 'PENDING' as const } : {}),
     },
     select: { id: true, email: true, role: true, orgId: true },
   });

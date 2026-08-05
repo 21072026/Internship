@@ -6,7 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 
 // GET — role-aware first-run checklist state for the current user.
 // Returns ordered steps with { key, done, href }.
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -25,6 +25,29 @@ export async function GET() {
           { key: 'profile', done: !!(user?.university && skills.length > 0), href: '/portal/profile' },
           { key: 'cv', done: !!user?.cvFile, href: '/portal/profile' },
           { key: 'public', done: !!user?.publicProfile, href: '/portal/profile' },
+        ],
+      });
+    }
+
+    if (role === 'MENTOR' && new URL(request.url).searchParams.get('variant') === 'mentor-profile') {
+      const [user, availability] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id },
+          select: { bio: true, interests: true, skills: true, mentorCapacity: true },
+        }),
+        prisma.availabilitySlot.count({ where: { mentorId: id } }),
+      ]);
+      const skills = Array.isArray(user?.skills)
+        ? user.skills.filter((skill): skill is string => typeof skill === 'string' && skill.trim().length > 0)
+        : [];
+      return NextResponse.json({
+        role,
+        variant: 'mentor-profile',
+        steps: [
+          { key: 'mentorProfile', done: !!user?.bio?.trim(), href: '/mentor/profile' },
+          { key: 'mentorExpertise', done: !!user?.interests?.trim() && skills.length > 0, href: '/mentor/profile' },
+          { key: 'mentorCapacity', done: user?.mentorCapacity != null, href: '/mentor/profile' },
+          { key: 'mentorAvailability', done: availability > 0, href: '/mentor/availability' },
         ],
       });
     }
@@ -63,4 +86,20 @@ export async function GET() {
 
     return NextResponse.json({ role, steps: [] });
   });
+}
+
+export async function PUT(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (session.user.role !== 'MENTOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const body = await request.json().catch(() => null);
+  if (!body || body.action !== 'skip' || Object.keys(body).some((key) => key !== 'action')) {
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+  }
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { mentorOnboardingStatus: 'SKIPPED' },
+  });
+  return NextResponse.json({ ok: true });
 }

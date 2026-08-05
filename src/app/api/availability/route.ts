@@ -27,13 +27,49 @@ const schema = z.object({
   endTime: z.string().regex(TIME),
 });
 
+const batchSchema = z.object({
+  slots: z.array(schema).min(1).max(50),
+}).strict();
+
 // POST — add a slot to the current mentor's availability.
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const parsed = schema.safeParse(await request.json());
+  const body = await request.json();
+
+  if (body && typeof body === 'object' && 'slots' in body) {
+    if (session.user.role !== 'MENTOR') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    const parsedBatch = batchSchema.safeParse(body);
+    if (!parsedBatch.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+    if (parsedBatch.data.slots.some((slot) => slot.endTime <= slot.startTime)) {
+      return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });
+    }
+    const keys = parsedBatch.data.slots.map((slot) => `${slot.weekday}:${slot.startTime}:${slot.endTime}`);
+    if (new Set(keys).size !== keys.length) {
+      return NextResponse.json({ error: 'Duplicate availability slots' }, { status: 400 });
+    }
+
+    const slots = await prisma.$transaction(async (tx) => {
+      await tx.availabilitySlot.createMany({
+        data: parsedBatch.data.slots.map((slot) => ({ mentorId: session.user.id, ...slot })),
+      });
+      await tx.user.update({
+        where: { id: session.user.id },
+        data: { mentorOnboardingStatus: 'COMPLETED' },
+      });
+      return tx.availabilitySlot.findMany({
+        where: { mentorId: session.user.id },
+        orderBy: [{ weekday: 'asc' }, { startTime: 'asc' }],
+      });
+    });
+    return NextResponse.json({ slots }, { status: 201 });
+  }
+
+  const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   if (parsed.data.endTime <= parsed.data.startTime) {
     return NextResponse.json({ error: 'End time must be after start time' }, { status: 400 });

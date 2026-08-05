@@ -29,7 +29,13 @@ export default async function MentorLayout({ children }: { children: React.React
   }
 
   const { locale, t } = await getServerDictionary();
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { avatarUrl: true, twoFactorEnabled: true, mentorOnboardingStatus: true },
+  });
+  if (session.user.role === 'MENTOR' && me?.mentorOnboardingStatus === 'PENDING') {
+    redirect('/onboarding');
+  }
   const customStages = await resolveCustomStages(session.user.orgId);
 
   // Auth hardening: hold in-scope roles at the 2FA setup gate until enabled.

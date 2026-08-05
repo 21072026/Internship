@@ -103,7 +103,11 @@ export async function POST(request: Request) {
     const pending = !token;
 
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !pending, consentAt: new Date(), referredById },
+      data: {
+        email, password: hashedPassword, fullName, role, skills: [], emailVerified,
+        isActive: !pending, consentAt: new Date(), referredById,
+        ...(role === 'MENTOR' ? { mentorOnboardingStatus: 'PENDING' as const } : {}),
+      },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
     });
 
