@@ -16,48 +16,54 @@ import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Users, BookOpen, MessageSquare, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
+import { MentorProfileCompletionBanner } from '@/components/MentorProfileCompletionBanner';
 
 async function getMentorData(mentorId: string) {
-  const relations = await prisma.mentorshipRelation.findMany({
-    where: { mentorId },
-    include: {
-      mentee: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          university: true,
-          department: true,
-          graduationYear: true,
-          skills: true,
-          phone: true,
-          cvUrl: true,
+  const [mentor, relations, recentInteractions] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: mentorId },
+      select: { bio: true, interests: true, mentorCapacity: true },
+    }),
+    prisma.mentorshipRelation.findMany({
+      where: { mentorId },
+      include: {
+        mentee: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            university: true,
+            department: true,
+            graduationYear: true,
+            skills: true,
+            phone: true,
+            cvUrl: true,
+          },
+        },
+        company: { select: { id: true, name: true, industry: true } },
+        interactions: {
+          orderBy: { date: 'desc' },
+          take: 3,
+        },
+        _count: { select: { interactions: true } },
+      },
+      orderBy: { startDate: 'desc' },
+    }),
+    prisma.interactionLog.findMany({
+      where: { relation: { mentorId } },
+      include: {
+        relation: {
+          include: {
+            mentee: { select: { fullName: true } },
+          },
         },
       },
-      company: { select: { id: true, name: true, industry: true } },
-      interactions: {
-        orderBy: { date: 'desc' },
-        take: 3,
-      },
-      _count: { select: { interactions: true } },
-    },
-    orderBy: { startDate: 'desc' },
-  });
+      orderBy: { date: 'desc' },
+      take: 10,
+    }),
+  ]);
 
-  const recentInteractions = await prisma.interactionLog.findMany({
-    where: { relation: { mentorId } },
-    include: {
-      relation: {
-        include: {
-          mentee: { select: { fullName: true } },
-        },
-      },
-    },
-    orderBy: { date: 'desc' },
-    take: 10,
-  });
-
-  return { relations, recentInteractions };
+  return { mentor, relations, recentInteractions };
 }
 
 export default async function MentorDashboard() {
@@ -67,10 +73,14 @@ export default async function MentorDashboard() {
   // which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const { relations, recentInteractions } = await getMentorData(session.user.id);
+  const { mentor, relations, recentInteractions } = await getMentorData(session.user.id);
   const attentionItems = await getAttentionItems(session.user.id);
 
   const activeRelations = relations.filter((r) => r.status === 'ACTIVE');
+  const profileIncomplete =
+    !mentor?.bio?.trim() ||
+    !mentor.interests?.trim() ||
+    mentor.mentorCapacity == null;
 
   return (
     <div>
@@ -81,6 +91,8 @@ export default async function MentorDashboard() {
         </h1>
         <p className="text-gray-500 mt-1">{t.mentor.dashSubtitle}</p>
       </div>
+
+      {profileIncomplete && <MentorProfileCompletionBanner />}
 
       <UpcomingMeetingBanner />
 

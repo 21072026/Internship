@@ -1,10 +1,8 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { BetaBadge } from '@/components/BetaBadge';
 import { AccountMenu } from '@/components/AccountMenu';
-import { LayoutDashboard, Columns3, Users, User, BookOpen, Mail, CalendarClock, CalendarRange, CalendarDays, FolderGit2, Activity, BarChart3 } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
@@ -16,6 +14,7 @@ import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
+import { MentorNav } from '@/components/MentorNav';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -53,90 +52,7 @@ export default async function MentorLayout({ children }: { children: React.React
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <Link
-            href="/mentor"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <LayoutDashboard className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.dashboard}
-          </Link>
-          <Link
-            href="/mentor/board"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <Columns3 className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.board}
-          </Link>
-          <Link
-            href="/mentor/mentees"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <Users className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.myMentees}
-          </Link>
-          <Link
-            href="/mentor/profile"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <User className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.myProfile}
-          </Link>
-          <Link
-            href="/mentor/projects"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <FolderGit2 className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.projects}
-          </Link>
-          <Link
-            href="/mentor/interactions"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <BookOpen className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.interactionLogs}
-          </Link>
-          <Link
-            href="/mentor/email"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <Mail className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.email}
-          </Link>
-          <Link
-            href="/mentor/meetings"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <CalendarClock className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.meetings}
-          </Link>
-          <Link
-            href="/mentor/availability"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <CalendarRange className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.availability}
-          </Link>
-          <Link
-            href="/mentor/calendar"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <CalendarDays className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.calendar}
-          </Link>
-          <Link
-            href="/mentor/mentee-activity"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <Activity className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.menteeActivity}
-          </Link>
-          <Link
-            href="/mentor/analytics"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors group"
-          >
-            <BarChart3 className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-            {t.nav.analytics}
-          </Link>
+          <MentorNav />
           <InstallAppButton />
         </nav>
 
