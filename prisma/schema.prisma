@@ -137,6 +137,8 @@ model User {
   department              String?
   graduationYear          Int?
   skills                  Json          @default("[]")
+  // Languages a mentor speaks; distinct from preferredLanguage (the UI locale).
+  languages               Json          @default("[]")
   // Mentee self-assessment: { "<skill>": 1..5 }
   skillLevels             Json          @default("{}")
   cvUrl                   String?
