@@ -13,7 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   GitBranch, Users, Building2, CalendarClock, FileText, Target,
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
-  Search, Bot, KeyRound, UserPlus, Users2, Share2, GraduationCap,
+  Search, Bot, KeyRound, UserPlus, Users2, Share2, GraduationCap, CalendarDays,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -59,5 +59,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'projectTeams', category: 'collaboration', icon: Users2, color: 'sky', title: C.projectTeams.t, desc: C.projectTeams.d },
     { key: 'joinRequests', category: 'tracking', icon: Share2, color: 'rose', title: C.joinRequests.t, desc: C.joinRequests.d },
     { key: 'mentorSelfApply', category: 'tracking', icon: GraduationCap, color: 'blue', title: C.mentorSelfApply.t, desc: C.mentorSelfApply.d },
+    { key: 'calendar', category: 'collaboration', icon: CalendarDays, color: 'indigo', title: C.calendar.t, desc: C.calendar.d },
   ];
 }

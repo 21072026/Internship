@@ -170,6 +170,11 @@ model User {
   emailVerified           Boolean       @default(true)
   // Admin can deactivate a user; inactive users cannot sign in.
   isActive                Boolean       @default(true)
+  // Set only when the `selfRegistration` setting is 'manual': the account was
+  // created by open sign-up and is waiting for an admin to let it in. Lets the
+  // sign-in page tell "we haven't reviewed you yet" apart from "an admin
+  // deactivated you" — both are isActive=false. Cleared on activation.
+  pendingApproval         Boolean       @default(false)
   // Opt-in: expose a limited, PII-free public profile at /p/[id].
   publicProfile           Boolean       @default(false)
   // For COMPANY-role users: which company they observe (read-only).
@@ -1333,6 +1338,11 @@ model MeetingSeries {
   daysOfWeek  Json
   // Wall-clock start time in "HH:mm" format (24-hour), e.g. "09:30".
   timeOfDay   String
+  // Which clock `timeOfDay` is on (IANA zone, e.g. "Europe/Istanbul"). Null for
+  // rules saved before #1110, which are read on the deployment default zone —
+  // the clock the UI always showed them on. Without this the wall clock was
+  // anchored to UTC, so a 09:00 rule was reminded as "12:00 (GMT+3)".
+  timeZone    String?
   fixedLink   String?
   active      Boolean  @default(true)
   createdById String

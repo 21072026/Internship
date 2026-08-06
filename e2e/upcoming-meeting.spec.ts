@@ -127,8 +127,9 @@ test('the recurring project meeting reaches a member with no mentorship for it',
     },
   });
 
-  // A rule whose next occurrence is 15 minutes out. Wall-clock times are stored
-  // as UTC by the series generator, so build the expectation the same way.
+  // A rule whose next occurrence is 15 minutes out. Since #1110 the wall clock
+  // is read on the series' own zone, so pin it to UTC and build the expectation
+  // the same way.
   const target = minutesFromNow(15);
   const hhmm = `${String(target.getUTCHours()).padStart(2, '0')}:${String(target.getUTCMinutes()).padStart(2, '0')}`;
   const series = await prisma.meetingSeries.create({
@@ -137,6 +138,7 @@ test('the recurring project meeting reaches a member with no mentorship for it',
       title: 'Weekly project call',
       daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
       timeOfDay: hhmm,
+      timeZone: 'UTC',
       fixedLink: 'https://meet.example.com/series-room',
       createdById: owner.id,
     },

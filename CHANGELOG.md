@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.43.0-beta] - 2026-08-04
+## [0.47.0-beta] - 2026-08-06
 
 ### Added
 - **Mentor self-application review lifecycle** (#933), completing #904/#905 end to end:
@@ -36,7 +36,7 @@ version is shown in the sidebar footer of every page (links to the
   and now sends the applicant a "received" confirmation email. Schema: added
   `UNDER_REVIEW` to `MentorApplicationStatus`.
 
-## [0.42.0-beta] - 2026-08-04
+## [0.46.0-beta] - 2026-08-04
 
 ### Added
 - **Public "apply as mentor" form** (#905), at `/apply-as-mentor`, on top of the #904
@@ -47,6 +47,104 @@ version is shown in the sidebar footer of every page (links to the
   exists for this email) and 429 (rate limited) responses each get their own message
   instead of a generic failure banner. Localized EN/TR/DE like the rest of the public
   application surface (`/apply/[mentorId]`, `/auth/register`).
+
+## [0.45.0-beta] - 2026-08-06
+
+### Fixed
+- **A cancelled recurring project meeting no longer haunts the calendar.** Setting one up used
+  to materialise a `Meeting` row per mentee per occurrence, weeks ahead; `DELETE
+  /api/meeting-series` only flipped `active` to false, so every generated row stayed on
+  everyone's calendar forever, and moving the meeting to another day/time left the old slots
+  sitting next to the new ones. A series is now a *rule* and nothing else — no occurrence rows
+  are written at all, and cancelling or moving one deletes every row the old generator left
+  behind (`purgeGeneratedMeetings`). Notes taken in those meetings survive
+  (`PersonalNote.meetingId` is `SetNull`).
+- **The recurring meeting is one calendar entry, not one per attendee.** Occurrences are
+  expanded from the rule in `/api/calendar-events` (`type: 'series'`) and carry the meeting's
+  own title with the project as context, where the generated rows showed each mentee's name.
+- **`timeOfDay` is on a real clock.** New `MeetingSeries.timeZone` (IANA, sent by the browser
+  on create). The wall clock used to be anchored to UTC, so a rule the UI displayed as "09:00"
+  was reminded to an Istanbul mentee as "12:00 (GMT+3)". Rules saved before this read on the
+  deployment default zone — the clock the UI was already showing them on. Editing an existing
+  rule keeps its zone, so saving the form from another country does not move the meeting.
+
+### Added
+- **Week, day and upcoming views on the calendar** (`CalendarView`), alongside the month grid.
+  A phone opens on "upcoming" — a flat chronological list — because a 30-cell month grid at
+  390px was unreadable; the choice is remembered per browser. Month cells cap at three chips
+  (dots on a phone) and a tapped day opens its full list underneath.
+- `/api/calendar-events` accepts `from`/`to` and returns only that window (max 400 days), so a
+  view fetches what it shows. Omitting both keeps the old unfiltered contract for API clients.
+- `src/lib/meetingSeriesOccurrences.ts` — the single rule-expansion used by the calendar, the
+  dashboard banner and the reminder cron, so they can't disagree about when a meeting is.
+
+### Changed
+- `POST`/`PUT /api/meeting-series` return `nextOccurrence` (the resolved instant) instead of
+  `createdMeetings`; `weeksAhead` is still accepted but no longer does anything. The project
+  page shows that next occurrence next to the rule, in the reader's own zone.
+- A series announcement email is sent on create and when the meeting *moves* — renaming it, or
+  saving the same form twice, no longer mails the whole team. It carries no RSVP buttons, as
+  there is no row to RSVP against.
+
+## [0.44.0-beta] - 2026-08-06
+
+### Changed
+- **The landing page now argues instead of listing.** Rebuilt around the three-sided loop
+  (mentee ↔ mentor ↔ company) that `docs/landing-value-proposition.md` derived from a
+  code-grounded capability audit: hero → the loop + chain of proof → "pick your side" cards →
+  one section per audience → how it works → pipeline → features → roles → transparency → FAQ →
+  a closing CTA with one button per audience. 152 new `landing.*` keys in EN/TR/DE.
+- **Every claim is one the code can back.** Dropped from the copy: "companies discover you"
+  (the interest signal reaches the mentor, not the mentee), "junior *and* senior talent"
+  (the talent-pool query filters `role: 'MENTEE'`), "reach out directly / go talent hunting"
+  (company users cannot message candidates), "manage your interns" (the company panel is
+  read-only) and "cheaper than ever" (there is no price to compare). Each is replaced by what
+  the product actually does, with its limit stated in the same sentence.
+- Hero drops its buttons: a single "Get Started" funnelled mentors and companies into the
+  mentee sign-up form. Mentor and company CTAs are an email to the program (from the
+  `supportEmail` setting) until their own entry pages land (#905, #1102) — and render only
+  when that address is configured, so the page never ships a dead button.
+- Landing header, transparency strip and footer now link the public source (AGPL-3.0), the
+  release notes and `/features`; the version count is read from `RELEASE_NOTES`, never typed in.
+
+### Added
+- FAQ section: 16 real objections with answers, grouped by audience.
+- `data-testid="role-card"` on the three audience cards, for the e2e assertions.
+
+## [0.43.0-beta] - 2026-08-05
+
+### Added
+- **`selfRegistration` setting** (`src/lib/settings.ts`, admin → Settings, `auto` by default).
+  `auto` = an open sign-up admits itself the moment its email is verified; `manual` = it waits
+  for an admin, which is the escape hatch if sign-ups ever need vetting. Invited users are
+  unaffected — an invitation already proves the address.
+- **`User.pendingApproval`** (Boolean, default false) — set only under `manual`, so the sign-in
+  page can tell "we haven't reviewed you yet" apart from "an admin switched you off"; both are
+  `isActive = false`. Cleared when an admin activates the account, set when one deactivates it.
+- `auth.verifyEmailSent` string (EN/TR/DE) and a `?verify=true` notice on the sign-in page.
+
+### Changed
+- **Open registration no longer dead-ends.** `POST /api/register` creates a self-registered
+  account inactive as before, but `POST /api/auth/verify-email` now activates it (unless it is
+  parked for an admin or was deactivated by one). Registering used to leave the visitor stuck:
+  before verifying they were told "your email is not verified", and *after* verifying they were
+  told "this account has been deactivated" — the account never became reachable without an admin.
+- The post-registration redirect now distinguishes the three cases (invited → `registered`,
+  open sign-up → `verify`, manual approval → `pending`).
+- The admin notification for a new sign-up says whether it needs action or is an FYI.
+
+## [Unreleased]
+
+### Fixed
+- **The five specs failing in the scheduled full e2e suite** (run 31051715943). Both causes were
+  test defects, not product bugs. Since #1008 gave `/admin/candidates` a separate `md:hidden`
+  mobile list, every candidate is in the DOM twice, so the unscoped `getByText('<name>')`
+  assertions in `admin-bulk-candidates`, `dashboard-links`, `export-filter` and `export` became
+  strict-mode violations — they now scope to `candidates-desktop-list` (the list the Desktop
+  Chrome viewport actually renders). `security-headers` still asserted the pre-Jitsi
+  `camera=()`; it now checks that camera/microphone/display-capture are delegated to
+  `self "https://meet.jit.si"` only, that `geolocation=()` stays denied and that no directive
+  opens up to `*`. No version bump — tests only.
 
 ## [0.42.1-beta] - 2026-08-05
 
