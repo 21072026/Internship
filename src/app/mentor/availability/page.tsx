@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Trash2 } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
@@ -18,6 +19,8 @@ export default function AvailabilityPage() {
   const [endTime, setEndTime] = useState('10:00');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/availability');
@@ -43,13 +46,22 @@ export default function AvailabilityPage() {
     }
   };
 
-  const remove = async (id: string) => {
-    if (!window.confirm(t.common.confirmDelete)) return;
-    await fetch(`/api/availability?id=${id}`, { method: 'DELETE' });
-    await load();
+  const remove = (id: string) => setDeleteId(id);
+
+  const confirmRemove = async () => {
+    if (!deleteId || deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/availability?id=${deleteId}`, { method: 'DELETE' });
+      await load();
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
+    }
   };
 
   return (
+    <>
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.availability.title}</h1>
@@ -92,5 +104,16 @@ export default function AvailabilityPage() {
         )}
       </Card>
     </div>
+    <ConfirmDialog
+      open={deleteId !== null}
+      message={t.common.confirmDelete}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={deleting}
+      onConfirm={confirmRemove}
+      onCancel={() => setDeleteId(null)}
+    />
+    </>
   );
 }

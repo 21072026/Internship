@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
@@ -39,6 +40,7 @@ export default function AdminGoalTemplatesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Translations>(emptyDraft);
   const [search, setSearch] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/goal-templates');
@@ -77,10 +79,12 @@ export default function AdminGoalTemplatesPage() {
     if (await call('PATCH', { id, translations: edit }, id)) setEditingId(null);
   };
 
-  const remove = async (tpl: Template) => {
-    const label = resolveTemplateTitle(tpl, locale);
-    if (!window.confirm(t.goalTemplateAdmin.confirmDelete.replace('{title}', label))) return;
-    await call('DELETE', { id: tpl.id }, tpl.id);
+  const remove = (tpl: Template) => setPendingDelete({ id: tpl.id, title: resolveTemplateTitle(tpl, locale) });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || busy === pendingDelete.id) return;
+    await call('DELETE', { id: pendingDelete.id }, pendingDelete.id);
+    setPendingDelete(null);
   };
 
   const startEdit = (tpl: Template) => {
@@ -110,6 +114,7 @@ export default function AdminGoalTemplatesPage() {
   );
 
   return (
+    <>
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.goalTemplateAdmin.title}</h1>
@@ -224,5 +229,16 @@ export default function AdminGoalTemplatesPage() {
         )}
       </Card>
     </div>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.goalTemplateAdmin.confirmDelete.replace('{title}', pendingDelete.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDelete ? busy === pendingDelete.id : false}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    </>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Check, Circle, Hand, Trash2, Send, Plus, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
@@ -68,6 +69,8 @@ export function ProjectGoals({
   const [picked, setPicked] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [pendingDeleteTemplate, setPendingDeleteTemplate] = useState<{ id: string; title: string } | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
   const [templateNew, setTemplateNew] = useState('');
   const [templateDraft, setTemplateDraft] = useState<Partial<Record<Locale, string>>>({});
@@ -128,9 +131,12 @@ export function ProjectGoals({
   // language; a hand-written one is its own text.
   const taskTitle = (task: Task) => (task.template ? resolveTemplateTitle(task.template, locale) : task.title);
 
-  const remove = (task: Task) => {
-    if (!window.confirm(t.projects.confirmDeleteTask.replace('{title}', taskTitle(task)))) return;
-    return call(`/api/project-tasks/${task.id}`, 'DELETE', undefined, task.id);
+  const remove = (task: Task) => setPendingDelete({ id: task.id, title: taskTitle(task) });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || busy === pendingDelete.id) return;
+    await call(`/api/project-tasks/${pendingDelete.id}`, 'DELETE', undefined, pendingDelete.id);
+    setPendingDelete(null);
   };
 
   const addGoal = async () => {
@@ -174,9 +180,13 @@ export function ProjectGoals({
     }
   };
 
-  const removeTemplate = (tpl: Template) => {
-    if (!window.confirm(t.goalTemplateAdmin.confirmDelete.replace('{title}', resolveTemplateTitle(tpl, locale)))) return;
-    return call(`/api/projects/${projectId}/task-templates`, 'DELETE', { id: tpl.id }, tpl.id);
+  const removeTemplate = (tpl: Template) =>
+    setPendingDeleteTemplate({ id: tpl.id, title: resolveTemplateTitle(tpl, locale) });
+
+  const confirmRemoveTemplate = async () => {
+    if (!pendingDeleteTemplate || busy === pendingDeleteTemplate.id) return;
+    await call(`/api/projects/${projectId}/task-templates`, 'DELETE', { id: pendingDeleteTemplate.id }, pendingDeleteTemplate.id);
+    setPendingDeleteTemplate(null);
   };
 
   const sendTemplates = async () => {
@@ -242,6 +252,7 @@ export function ProjectGoals({
   const pct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
 
   return (
+    <>
     <div className="space-y-4" data-testid="project-goals">
       <div>
         <div className="mb-1 flex justify-between text-xs text-gray-500">
@@ -459,5 +470,26 @@ export function ProjectGoals({
 
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.projects.confirmDeleteTask.replace('{title}', pendingDelete.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDelete ? busy === pendingDelete.id : false}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    <ConfirmDialog
+      open={pendingDeleteTemplate !== null}
+      message={pendingDeleteTemplate ? t.goalTemplateAdmin.confirmDelete.replace('{title}', pendingDeleteTemplate.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDeleteTemplate ? busy === pendingDeleteTemplate.id : false}
+      onConfirm={confirmRemoveTemplate}
+      onCancel={() => setPendingDeleteTemplate(null)}
+    />
+    </>
   );
 }

@@ -5,6 +5,7 @@ import { Trash2, Lock, Pencil } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
 
@@ -27,6 +28,8 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/relation-notes?relationId=${relationId}`);
@@ -50,10 +53,18 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
     }
   };
 
-  const remove = async (id: string) => {
-    if (!window.confirm(t.common.confirmDelete)) return;
-    await fetch(`/api/relation-notes/${id}`, { method: 'DELETE' });
-    await load();
+  const remove = (id: string) => setDeleteId(id);
+
+  const confirmRemove = async () => {
+    if (!deleteId || deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/relation-notes/${deleteId}`, { method: 'DELETE' });
+      await load();
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
+    }
   };
 
   const startEdit = (n: Note) => { setEditingId(n.id); setEditBody(n.body); };
@@ -74,6 +85,7 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
   };
 
   return (
+    <>
     <Card data-testid="relation-notes-panel">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -139,5 +151,16 @@ export function RelationNotesPanel({ relationId }: { relationId: string }) {
         </div>
       )}
     </Card>
+    <ConfirmDialog
+      open={deleteId !== null}
+      message={t.common.confirmDelete}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={deleting}
+      onConfirm={confirmRemove}
+      onCancel={() => setDeleteId(null)}
+    />
+    </>
   );
 }
