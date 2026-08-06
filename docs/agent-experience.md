@@ -10,6 +10,62 @@ Newest entries on top.
 
 ---
 
+## 2026-08-06 — Değer önerisi çalışması + kapıları açma paketi (#1085, #1107, #1121, #1122, 0.43→0.50.1)
+
+Landing'in üç kitleyi (mentee/mentör/firma) ikna edecek hale getirilmesi ve girişi tıkayan
+kapıların açılması. Beş PR. En pahalıya mal olan dersler, sırayla:
+
+**Konteynerden `api.github.com`'a doğrudan istek 403 dönüyor** — "GitHub access is not enabled
+for this session". Yani `curl`/`gh` ile yazılmış bir bekleme döngüsü **hiç ateşlenmez**, sessizce
+sonsuza kadar döner. CI durumu için tek yol MCP araçları (`mcp__github__pull_request_read`
+`get_check_runs`, `actions_list`, `actions_run_trigger`). Bir "until curl ..." poller'ı kurup
+10 dakika bekledikten sonra öğrendim.
+
+**CI bir süre `pull_request` olaylarında hiç tetiklenmedi.** `.github/workflows/ci.yml` ve
+`e2e.yml` `pull_request: branches: [main]` ile kurulu ama 17:30'dan sonra açılan PR'larda tek bir
+check görünmedi; aynı saatlerde başka oturumlar `workflow_dispatch` ile elle koşturmuş. Belirti:
+PR "blocked", `get_check_runs` → `total_count: 0`, `actions_list` → o dalda hiç run yok. Çözüm:
+`actions_run_trigger` (`run_workflow`, `ref: <dal>`; e2e için `inputs: {grep: "@smoke"}`). Boş
+commit atmak da bazen tetikliyor ama garantisi yok. **Auto-merge bu durumda işe yaramaz** —
+zorunlu check hiç doğmadığı için beklemeye devam eder; gerçek kapılar (lint/typecheck/build +
+@smoke) o sha'da yeşilse `merge_pull_request` ile elle merge etmek gerekiyor.
+
+**Squash-merge edilen bir dalın üstüne kurulan PR'ın base'i kendiliğinden `main` olmuyor.**
+GitHub yalnızca base dalı *silindiğinde* retarget ediyor. `update_pull_request` ile base'i main'e
+çevir, dalı `checkout -B <dal> origin/main && cherry-pick <commit>` ile yeniden kur (CLAUDE.md'nin
+"rebase etme, cherry-pick'le" kuralı), sonra `--force-with-lease`. Ayrıca base retarget'ından
+sonra **mevcut sha için CI doğmuyor** — bir commit daha gerekiyor.
+
+**`.next/types` dal değiştirince bayatlıyor.** Başka dalda var olan bir route için
+`tsc --noEmit` uydurma `TS2307: Cannot find module '.../route.js'` hataları veriyor. Dal
+değiştirdikten sonra typecheck'ten önce `rm -rf .next`. Üç kez tuzağa düştüm.
+
+**`releaseNotes.ts` çakışmasını "union" ile çözmek nesneyi bozuyor.** Her iki taraf da listenin
+başına giriş eklediği için çakışma bloğu, bizim girişimizin kapanış satırlarını (`],`, `},`, `},`,
+`{`) karşı tarafta bırakıyor. Union sonrası kapanışı elle geri koymadan `tsc` kırılıyor. Bu
+oturumda üç PR'da da aynı şekilde çıktı — script'e `if not a.rstrip().endswith('},')` kontrolü
+koymak işi bitiriyor.
+
+**Sürüm numarasını bump'lamadan önce `main`'in güncel sürümünü oku.** Paralel oturumlar hızlı
+merge ediyor; ben 0.42 sanıp bump ettim, main 0.49.1'deydi. `package.json` + `package-lock.json`
+(iki yerde) + `CHANGELOG.md` + `releaseNotes.ts` dördü birden.
+
+**150+ anahtarlık sözlük değişikliğini elle yazma.** EN/TR/DE üç `landing:` bloğuna 152 anahtar
+eklemek gerekti; anahtar/değer çiftlerini JSON'a çıkarıp "mevcutları değiştir, yenileri bloğun
+sonuna ekle" diye script'lemek hem hızlı hem de üç locale arasında pariteyi garantiliyor
+(`npm run check:i18n` ilk denemede yeşil geçti).
+
+**Landing metnini değiştiren PR üç spec'i birden kırıyor.** `landing-i18n.spec.ts` beklenen yer;
+ama `security-headers.spec.ts` ve `landing-cta-dark.spec.ts` de hero başlığını/CTA etiketini
+birebir assert ediyor. Metin değiştirmeden önce `grep -rn "<eski dize>" e2e/`.
+
+**İş tarafı dersi:** iddiaları koda dayamak, metni yazmaktan daha çok değer üretti. Envanter
+sonucunda landing'deki beş iddianın karşılığı olmadığı çıktı (senior yetenek havuzu, şirket→aday
+doğrudan mesajlaşma, "firmalar seni keşfeder", stajyer *yönetimi*, ucuzluk). Bunları silmek
+sayfayı zayıflatmadı; yerlerine konan "bugün gerçekten çalışan" maddeler daha ikna edici.
+`docs/landing-value-proposition.md` bu envanteri [BUGÜN VAR]/[YARIM]/[YOK] etiketleriyle tutuyor —
+yeni metin yazan herkes önce oraya bakmalı.
+
 ## 2026-08-06 — Placeholder mentee'nin çıkmaz sokağı: "değiştirilemeyen alan"ı ararken tüm yazma noktalarını tara (#1123, 0.49.2-beta)
 
 **"X sonradan düzeltilebiliyor mu?" sorusunun cevabı, X'i *yazan* tüm yerleri saymakla
