@@ -98,6 +98,7 @@ model Organization {
   relations          MentorshipRelation[]
   pipelineStages     PipelineStage[]
   mentorApplications MentorApplication[]
+  companyInquiries   CompanyInquiry[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -247,6 +248,7 @@ model User {
   mentorshipRequests        MentorshipRequest[]       @relation("MentorshipRequests")
   decidedRequests           MentorshipRequest[]       @relation("DecidedMentorshipRequests")
   decidedMentorApplications MentorApplication[]       @relation("DecidedMentorApplications")
+  handledCompanyInquiries   CompanyInquiry[]          @relation("HandledCompanyInquiries")
   supportTickets            SupportTicket[]           @relation("SupportRequester")
   assignedSupportTickets    SupportTicket[]           @relation("SupportAssignee")
   supportMessages           SupportMessage[]          @relation("SupportMessageSender")
@@ -732,6 +734,46 @@ model MentorshipRequest {
 // account is created on submission — an admin reviews the queue and, when
 // approving, is what turns an applicant into an account (a later task). One
 // PENDING application at a time per email, same shape as MentorshipRequest.
+enum CompanyInquiryStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
+// A company asking to be shown the product, submitted from the public
+// /for-companies page. Companies have no self-service sign-up — a COMPANY user
+// is only born from an InvitationToken — so this is the bridge: the enquiry is
+// stored (rather than only emailed) so a request cannot quietly go missing in
+// an inbox, and so an admin can see what is still unanswered.
+model CompanyInquiry {
+  orgId       String?
+  org         Organization?        @relation(fields: [orgId], references: [id])
+  id          String               @id @default(cuid())
+  companyName String
+  contactName String
+  email       String
+  phone       String?
+  // Roles they are hiring for, and anything else they typed.
+  openRoles   String?              @db.Text
+  message     String?              @db.Text
+  // Preferred UI language ('en' | 'tr' | 'de') — the language they read the
+  // page in, so a reply can be written in it.
+  locale      String?
+  status      CompanyInquiryStatus @default(NEW)
+  // When they accepted the privacy terms — set server-side on submit.
+  consentAt   DateTime?
+  handledAt   DateTime?
+  handledById String?
+  note        String?              @db.Text
+  createdAt   DateTime             @default(now())
+
+  handledBy User? @relation("HandledCompanyInquiries", fields: [handledById], references: [id])
+
+  @@index([status])
+  @@index([email])
+  @@index([orgId])
+}
+
 enum MentorApplicationStatus {
   PENDING
   UNDER_REVIEW
