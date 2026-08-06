@@ -10,6 +10,8 @@ version is shown in the sidebar footer of every page (links to the
 
 ## [0.46.0-beta] - 2026-08-06
 
+Closes #1113.
+
 ### Fixed
 - **The project goal pool stopped duplicating the goals handed out from it.** Two implicit
   captures fed it: `POST /api/projects/[id]/tasks` upserted every hand-written task into
