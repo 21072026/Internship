@@ -16,8 +16,15 @@ const include = {
     select: { id: true, pipelineStatus: true, mentee: { select: { id: true, fullName: true } }, mentor: { select: { id: true, fullName: true } } },
   },
   tasks: {
+    // Archived to-dos stay in the DB as a record but leave the project's list.
+    where: { archivedAt: null },
     orderBy: { order: 'asc' },
-    include: { assignee: { select: { id: true, fullName: true } } },
+    include: {
+      assignee: { select: { id: true, fullName: true } },
+      // A to-do from the shared pool reads its wording from the template, in the
+      // viewer's language (#1113) — so the client needs it alongside the snapshot.
+      template: { select: { id: true, title: true, translations: true, archivedAt: true } },
+    },
   },
   members: {
     orderBy: { addedAt: 'asc' },

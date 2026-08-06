@@ -16,7 +16,6 @@ import { SkillRating } from '@/components/SkillRating';
 import { AvatarManager } from '@/components/AvatarManager';
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
-import { PersonProjectGoals } from '@/components/PersonProjectGoals';
 import { useToast } from '@/components/ui/Toast';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -442,12 +441,6 @@ export default function ProfilePage() {
           </div>
         </form>
       </Card>
-
-      {/* Goals your mentor handed you inside a project (#51 follow-up): they are
-          yours, so they live here rather than on the project page. */}
-      <div className="max-w-4xl mt-6">
-        <PersonProjectGoals />
-      </div>
 
       {userId && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mt-6">
