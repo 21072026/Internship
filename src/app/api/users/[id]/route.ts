@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { isPendingActivation } from '@/lib/menteeAccount';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -21,6 +22,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           email: true,
           fullName: true,
           role: true,
+          // Only to derive `pendingActivation` below — destructured out before
+          // the response so the column never reaches a client.
+          password: true,
           phone: true,
           whatsapp: true,
           city: true,
@@ -72,7 +76,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ user });
+      // A mentee record typed in by a mentor (or imported) has a sentinel where
+      // the hash goes and can never sign in — the candidate page offers to fix
+      // the address and send the activation link (#1123).
+      const { password, ...rest } = user;
+
+      return NextResponse.json({
+        user: { ...rest, pendingActivation: isPendingActivation({ password }) },
+      });
     });
   } catch (error) {
     console.error('Get user error:', error);

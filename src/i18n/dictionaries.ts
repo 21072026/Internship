@@ -278,6 +278,22 @@ const en = {
     deleteEntry: 'Delete entry',
     nextAction: 'Next action',
   },
+  menteeActivation: {
+    title: 'No account yet',
+    placeholderNote:
+      'This mentee was added without an e-mail address, so they have a stand-in one and cannot sign in. Enter their real address to activate the account — the record, its interaction log and its stage history are kept.',
+    noPasswordNote:
+      'This mentee has not set a password yet. Correct the address if it is wrong, then send the activation link again.',
+    emailLabel: 'Real e-mail address',
+    saveAndSend: 'Save & send activation link',
+    resend: 'Send activation link',
+    sent: 'Activation link sent',
+    linkHint: 'We e-mailed a link to set a password. If it doesn’t arrive, share this link directly:',
+    mailFailedHint: 'The e-mail could not be sent. Share this link with the mentee directly:',
+    copyLink: 'Copy link',
+    copied: 'Copied!',
+    failed: 'Could not send the activation link',
+  },
   mentors: {
     title: 'Mentors',
     subtitle: 'All mentors on the platform',
@@ -2411,6 +2427,22 @@ const tr: Dict = {
     deleteEntry: 'Kaydı sil',
     nextAction: 'Sonraki aksiyon',
   },
+  menteeActivation: {
+    title: 'Henüz hesabı yok',
+    placeholderNote:
+      'Bu mentee e-posta adresi girilmeden eklendiği için geçici bir adresi var ve giriş yapamıyor. Gerçek adresini yazarak hesabı aktive edebilirsin — kayıt, etkileşim geçmişi ve aşama geçmişi korunur.',
+    noPasswordNote:
+      'Bu mentee henüz parola belirlemedi. Adres yanlışsa düzelt, sonra aktivasyon bağlantısını yeniden gönder.',
+    emailLabel: 'Gerçek e-posta adresi',
+    saveAndSend: 'Kaydet ve aktivasyon bağlantısı gönder',
+    resend: 'Aktivasyon bağlantısı gönder',
+    sent: 'Aktivasyon bağlantısı gönderildi',
+    linkHint: 'Parola belirleme bağlantısını e-postayla gönderdik. Ulaşmazsa bu bağlantıyı doğrudan paylaşabilirsin:',
+    mailFailedHint: 'E-posta gönderilemedi. Bu bağlantıyı mentee ile doğrudan paylaş:',
+    copyLink: 'Bağlantıyı kopyala',
+    copied: 'Kopyalandı!',
+    failed: 'Aktivasyon bağlantısı gönderilemedi',
+  },
   mentors: {
     title: 'Mentorlar',
     subtitle: 'Platformdaki tüm mentorlar',
@@ -4541,6 +4573,22 @@ const de: Dict = {
     addEntry: 'Eintrag hinzufügen',
     deleteEntry: 'Eintrag löschen',
     nextAction: 'Nächster Schritt',
+  },
+  menteeActivation: {
+    title: 'Noch kein Konto',
+    placeholderNote:
+      'Dieser Mentee wurde ohne E-Mail-Adresse angelegt, hat deshalb eine Platzhalteradresse und kann sich nicht anmelden. Trage die echte Adresse ein, um das Konto zu aktivieren — der Datensatz, das Interaktionsprotokoll und die Phasenhistorie bleiben erhalten.',
+    noPasswordNote:
+      'Dieser Mentee hat noch kein Passwort gesetzt. Korrigiere die Adresse, falls sie falsch ist, und sende den Aktivierungslink erneut.',
+    emailLabel: 'Echte E-Mail-Adresse',
+    saveAndSend: 'Speichern & Aktivierungslink senden',
+    resend: 'Aktivierungslink senden',
+    sent: 'Aktivierungslink gesendet',
+    linkHint: 'Wir haben einen Link zum Setzen des Passworts geschickt. Falls er nicht ankommt, teile diesen Link direkt:',
+    mailFailedHint: 'Die E-Mail konnte nicht gesendet werden. Teile diesen Link direkt mit dem Mentee:',
+    copyLink: 'Link kopieren',
+    copied: 'Kopiert!',
+    failed: 'Aktivierungslink konnte nicht gesendet werden',
   },
   mentors: {
     title: 'Mentoren',

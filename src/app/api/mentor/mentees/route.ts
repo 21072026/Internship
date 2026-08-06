@@ -10,6 +10,7 @@ import { slugify } from '@/lib/transliterate';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
+import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -38,10 +39,12 @@ export async function POST(request: Request) {
 
       // A real email means the mentee can be invited to set a password and log in.
       // No email → a deterministic placeholder for a tracking-only mentee (no login).
+      // Not a dead end: once the mentor learns the real address, PATCH on this
+      // route's [id] child fixes it and sends the activation link (#1123).
       const hasRealEmail = !!(email && email.length > 0);
       const finalEmail = hasRealEmail
-        ? email!
-        : `mentee.${slugify(fullName)}.${crypto.randomBytes(2).toString('hex')}@import.local`;
+        ? email!.trim().toLowerCase()
+        : `mentee.${slugify(fullName)}.${crypto.randomBytes(2).toString('hex')}@${PLACEHOLDER_EMAIL_DOMAIN}`;
 
       const existing = await prisma.user.findUnique({ where: { email: finalEmail } });
       if (existing) {
@@ -60,7 +63,7 @@ export async function POST(request: Request) {
       const mentee = await prisma.user.create({
         data: {
           email: finalEmail,
-          password: '!created-no-login',
+          password: NO_LOGIN_PASSWORD,
           role: 'MENTEE',
           fullName,
           orgId,
