@@ -2615,3 +2615,30 @@ oldu — zaten yazılması gereken e2e testi görsel kontrolün yerini fazlasıy
 `globals.css`'teki mevcut override'lar `text-gray-900`'ü kutu içinde `rgb(243,244,246)`'ya
 çeviriyor; hesaplanan değeri mevcut mentor kutusuyla karşılaştırmak yeni bir compound kurala
 gerek olmadığını kanıtladı. Kontrast tahmininde `getComputedStyle` gözden hızlıdır.
+
+## 2026-08-06 — Çakışmayı çözmeden önce sor: bu iş zaten yapıldı mı? (#1076 → #1120)
+
+**`git merge` çıktısındaki `CONFLICT (add/add)` bir uyarı işareti, sıradan bir çakışma değil.**
+İki taraf da *aynı yolu sıfırdan eklemişse* bu, iki paralel implementasyon demektir — hunk'ları
+birleştirmek yanlış cevaptır. #1076 (#906 mentör başvuru onay kuyruğu) `main`'e #1048 + #1072
+ile inen işle aynı dosyaları yaratmıştı. Sekiz çakışmalı dosyanın ikisi add/add'di ve tanı bu
+iki satırdan çıktı; hunk okumaya hiç gerek kalmadı.
+
+**Çakışma çözmeden önce iki tarafı özellik düzeyinde karşılaştır.** `git show origin/main:<yol>`
+ile karşı tarafın dosyasını okumak (diff'e bakmak değil) dakikalar sürüyor ve kararı tersine
+çevirebiliyor: `main`'in versiyonunda `UNDER_REVIEW` ara durumu, `withTenantScope`, mevcut
+MENTEE hesabını yükseltme, EN/TR/DE markalı e-postalar ve 6 `@smoke` testi vardı; PR'ınkinde
+hiçbiri yoktu. "Birleştirmek" burada daha iyi olanın üzerine yazmak olurdu. Kapatma kararını,
+issue'nun kabul kriterlerini tek tek `main`'in kodunda işaretleyerek gerekçelendirmek de
+tartışmayı bitirdi.
+
+**Yinelenen bir PR'ı kapatırken içindeki tekil parçayı ara.** #1076'nın 952 satırının
+yalnızca ~25'i `main`'de yoktu (nav'daki bekleyen başvuru rozeti). Onu ayrı bir PR'a taşımak
+hem katkıyı boşa çıkarmıyor hem de kapatma yorumunu "işin çöpe gitti" olmaktan çıkarıyor.
+Taşırken körü körüne kopyalamayın: 60 sn'lik `setInterval` polling'i her admin sayfasından
+çalışıyordu; her karar detay sayfasından ayrıldığı için `pathname` bağımlılığı aynı tazeliği
+sıfır timer'la veriyor.
+
+**Bu container'da `node_modules` yok.** `npm install` (~1 dk) arka planda başlatılıp bu sırada
+düzenlemeler yapılabiliyor; `npx prisma generate` sonrası `tsc --noEmit` + `npm run build` +
+`npm run check:i18n` üçlüsü lint uyarı gürültüsünden bağımsız net sinyal veriyor.
