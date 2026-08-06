@@ -1546,6 +1546,7 @@ const en = {
   mentorApplicationsAdmin: {
     title: 'Mentor Applications',
     subtitle: 'Review applications from people who want to become a mentor',
+    pendingBadge: '{count} applications waiting for review',
     none: 'No applications',
     searchPlaceholder: 'Search by name, email, or skill…',
     statusPending: 'Pending',
@@ -3677,6 +3678,7 @@ const tr: Dict = {
   mentorApplicationsAdmin: {
     title: 'Mentor Başvuruları',
     subtitle: 'Mentor olmak isteyenlerin başvurularını incele',
+    pendingBadge: 'İnceleme bekleyen {count} başvuru',
     none: 'Başvuru yok',
     searchPlaceholder: 'Ad, e-posta veya yetenek ile ara…',
     statusPending: 'Bekliyor',
@@ -5806,6 +5808,7 @@ const de: Dict = {
   mentorApplicationsAdmin: {
     title: 'Mentor-Bewerbungen',
     subtitle: 'Bewerbungen von Personen prüfen, die Mentor werden möchten',
+    pendingBadge: '{count} Bewerbungen warten auf Prüfung',
     none: 'Keine Bewerbungen',
     searchPlaceholder: 'Nach Name, E-Mail oder Skill suchen…',
     statusPending: 'Ausstehend',

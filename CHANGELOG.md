@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.49.2-beta] - 2026-08-06
+
+### Added
+- **Pending-count badge on the admin nav's "Mentor Applications" entry** (`AdminNav`) — a red
+  count bubble (`data-testid="mentor-applications-badge"`, `9+` above nine) fed by
+  `GET /api/mentor-applications?status=PENDING`, so the review queue is visible from any admin
+  page. The count is refetched on route changes rather than on a timer: every decision
+  (review/approve/reject) navigates away from the detail page, so navigation already covers the
+  moments the count can change. New i18n key `mentorApplicationsAdmin.pendingBadge` (EN/TR/DE)
+  backs its `title`/`aria-label`; e2e coverage in `e2e/mentor-application-review.spec.ts`.
+  Salvaged from #1076, which was otherwise superseded by the mentor-application review flow
+  already on `main` (#1048, #1072) and closed as a duplicate of #906.
+
 ## [0.49.1-beta] - 2026-08-06
 
 ### Changed
