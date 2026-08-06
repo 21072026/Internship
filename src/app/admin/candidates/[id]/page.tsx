@@ -21,6 +21,7 @@ import { DocumentsManager } from '@/components/DocumentsManager';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { AddInteractionForm } from '@/components/AddInteractionForm';
+import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
@@ -59,6 +60,8 @@ interface MenteeDetail {
   graduationYear?: number;
   skills: string[];
   cvUrl?: string;
+  // No password set yet → the candidate cannot sign in (#1123).
+  pendingActivation?: boolean;
   menteeRelations: Relation[];
 }
 
@@ -299,6 +302,16 @@ export default function AdminMenteeDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* A candidate typed in by a mentor (or imported) has no login yet — the
+          reset-password button above can't help, its mail goes to a stand-in
+          address. This is the way in (#1123). */}
+      <MenteeActivationPanel
+        menteeId={user.id}
+        email={user.email}
+        pending={user.role === 'MENTEE' && !!user.pendingActivation}
+        onUpdated={load}
+      />
 
       {resetSent !== null && (
         <div
