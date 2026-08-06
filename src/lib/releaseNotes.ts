@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.49.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'If you are on a project, you can now find it. "My projects" is in your sidebar, and your project also appears on your dashboard — before this, the only project list in the app was the public showcase, so a project that was not published simply did not show up anywhere for you.',
+        'Your project list shows what you need at a glance: who runs it, whether it is still running, the technologies, how many interns are on it, and links straight to the repository, the demo and the board.',
+        'Not on a project yet? The page points you to the showcase, where you can ask to join one.',
+      ],
+      tr: [
+        'Bir projede yer alıyorsan artık onu bulabiliyorsun. “Projelerim” kenar çubuğunda; projen ayrıca panelinde de görünüyor. Bundan önce uygulamadaki tek proje listesi herkese açık vitrindi — yayınlanmamış bir proje sana hiçbir yerde görünmüyordu.',
+        'Proje listen bir bakışta gerekeni gösteriyor: projeyi kim yürütüyor, hâlâ devam ediyor mu, hangi teknolojiler, kaç stajyer var — ve doğrudan repo, demo ve pano bağlantıları.',
+        'Henüz bir projede değilsen sayfa seni vitrine yönlendiriyor; oradan bir projeye katılmak isteyebilirsin.',
+      ],
+      de: [
+        'Wenn du in einem Projekt bist, findest du es jetzt auch. „Meine Projekte“ steht in deiner Seitenleiste, und dein Projekt erscheint zusätzlich auf deinem Dashboard — bisher war die einzige Projektliste in der App das öffentliche Schaufenster, ein nicht veröffentlichtes Projekt tauchte für dich also nirgends auf.',
+        'Deine Projektliste zeigt auf einen Blick, was zählt: wer es leitet, ob es noch läuft, die Technologien, wie viele Praktikantinnen und Praktikanten dabei sind — und direkte Links zu Repository, Demo und Board.',
+        'Noch in keinem Projekt? Die Seite führt dich zum Schaufenster, wo du um Aufnahme bitten kannst.',
+      ],
+    },
+  },
+  {
     version: '0.48.0-beta',
     date: '2026-08-06',
     highlights: {

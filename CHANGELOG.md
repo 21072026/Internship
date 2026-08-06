@@ -8,6 +8,33 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.49.0-beta] - 2026-08-06
+
+Closes #1116.
+
+### Fixed
+- **A mentee can see the project they are on.** Not an authorization bug — `scopeForRole`
+  already returned the mentee's own projects and `/projects/[id]` already gave a member the
+  internal view. The portal simply never linked there: `PortalNav` had no entry, the
+  dashboard's relation query selected `mentor`/`company`/`interactions` but not the project,
+  and the only list page (`/projects`) is the `isPublic: true` showcase, which by definition
+  excludes a private project. The project was reachable only by typing its URL.
+
+### Added
+- **`/portal/projects`** — the mentee's own project list (name, owner, status, technologies,
+  intern count, repo/demo/board links), with an empty state pointing at the public showcase,
+  where a mentee can still ask to join a project.
+- **Project card on the portal dashboard**, above the announcements, linking to the full list.
+- `lib/menteeProjects.ts` — one helper for "which projects is this person on?", unioning both
+  membership sources the way `mergeTeam` does (a `ProjectMember` row *and* a legacy
+  `MentorshipRelation.projectId`); reading only one of them is what made pre-#617 assignments
+  invisible. It deliberately does **not** include the showcase scope: it answers "mine", not
+  "browsable".
+
+### Changed
+- The project detail page's back link sends a mentee member to `/portal/projects` instead of
+  `/projects` — the showcase that does not contain their own project.
+
 ## [0.48.0-beta] - 2026-08-06
 
 Closes #1113.
