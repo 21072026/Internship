@@ -8,6 +8,44 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.45.0-beta] - 2026-08-06
+
+### Fixed
+- **A cancelled recurring project meeting no longer haunts the calendar.** Setting one up used
+  to materialise a `Meeting` row per mentee per occurrence, weeks ahead; `DELETE
+  /api/meeting-series` only flipped `active` to false, so every generated row stayed on
+  everyone's calendar forever, and moving the meeting to another day/time left the old slots
+  sitting next to the new ones. A series is now a *rule* and nothing else — no occurrence rows
+  are written at all, and cancelling or moving one deletes every row the old generator left
+  behind (`purgeGeneratedMeetings`). Notes taken in those meetings survive
+  (`PersonalNote.meetingId` is `SetNull`).
+- **The recurring meeting is one calendar entry, not one per attendee.** Occurrences are
+  expanded from the rule in `/api/calendar-events` (`type: 'series'`) and carry the meeting's
+  own title with the project as context, where the generated rows showed each mentee's name.
+- **`timeOfDay` is on a real clock.** New `MeetingSeries.timeZone` (IANA, sent by the browser
+  on create). The wall clock used to be anchored to UTC, so a rule the UI displayed as "09:00"
+  was reminded to an Istanbul mentee as "12:00 (GMT+3)". Rules saved before this read on the
+  deployment default zone — the clock the UI was already showing them on. Editing an existing
+  rule keeps its zone, so saving the form from another country does not move the meeting.
+
+### Added
+- **Week, day and upcoming views on the calendar** (`CalendarView`), alongside the month grid.
+  A phone opens on "upcoming" — a flat chronological list — because a 30-cell month grid at
+  390px was unreadable; the choice is remembered per browser. Month cells cap at three chips
+  (dots on a phone) and a tapped day opens its full list underneath.
+- `/api/calendar-events` accepts `from`/`to` and returns only that window (max 400 days), so a
+  view fetches what it shows. Omitting both keeps the old unfiltered contract for API clients.
+- `src/lib/meetingSeriesOccurrences.ts` — the single rule-expansion used by the calendar, the
+  dashboard banner and the reminder cron, so they can't disagree about when a meeting is.
+
+### Changed
+- `POST`/`PUT /api/meeting-series` return `nextOccurrence` (the resolved instant) instead of
+  `createdMeetings`; `weeksAhead` is still accepted but no longer does anything. The project
+  page shows that next occurrence next to the rule, in the reader's own zone.
+- A series announcement email is sent on create and when the meeting *moves* — renaming it, or
+  saving the same form twice, no longer mails the whole team. It carries no RSVP buttons, as
+  there is no row to RSVP against.
+
 ## [0.44.0-beta] - 2026-08-06
 
 ### Changed

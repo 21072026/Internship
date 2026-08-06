@@ -2486,3 +2486,47 @@ plugin'i sayesinde parolasız geçiyor, yeni kullanıcı/parola kurmaya gerek yo
 `~/Library/Caches/ms-playwright/` içinde komşu build'lar (1234) varken eksik olan yalnızca
 beklenen sürüm dizini (1228) olabilir; `chromium-1228 -> chromium-1234` ve aynısı
 `chromium_headless_shell` için symlink, ~150MB indirmeden koşmayı açıyor.
+
+## 2026-08-06 — Tekrarlayan toplantı: satır üretmek yerine kural okumak (#1110, 0.45.0-beta)
+
+**Şikâyet "silinen toplantı takvimde kalıyor"du; kök neden özelliğin şeklindeydi.** Seri
+kurulduğunda her mentee × her tekrar için bir `Meeting` satırı üretiliyordu (6 kişi × 7 hafta =
+84 satır). `DELETE` yalnızca `active`'i false yapıyordu; satırlar takvimde kalıyordu. Saati
+değiştirmek de eskiyi silmiyor, yenisini *yanına* yazıyordu. Tek tek bug'ları kapatmak yerine
+doğru düzeltme malzemeleştirmeyi tamamen bırakmaktı: seri artık sadece bir kural, tekrarlar
+okunurken `lib/meetingSeriesOccurrences.ts` ile hesaplanıyor. "Silme" davranışı, silinecek bir
+şey kalmayınca kendiliğinden doğru oluyor.
+
+**Aynı kuralı üç yerde ayrı ayrı açan üç kopya vardı** (takvim, dashboard banner'ı, hatırlatma
+cron'u) — üçü de "duvar saatini UTC'ye çivile" diyordu. Tek uygulamaya indirince ortaya çıkan
+şey bir bug'dı: arayüzün "09:00" gösterdiği kural, İstanbul'daki bir mentee'ye "12:00 (GMT+3)"
+olarak hatırlatılıyordu. `MeetingSeries.timeZone` eklendi; eski kayıtlar `null` kalıp deployment
+varsayılanına düşüyor — yani arayüzün zaten gösterdiği saate. Zaman dilimi yalnızca *oluştururken*
+gönderiliyor: mevcut bir kuralı başka ülkeden düzenlemek toplantıyı herkes için kaydırmasın diye.
+
+**Bir davranışı değiştirirken, o davranışı *doğrulayan* testler değil, ona *dayanan* testler de
+kırılır.** `upcoming-meeting.spec.ts` seriyi `timeOfDay`'i UTC'den türeterek kuruyordu ve bunu
+yorumda açıkça yazmıştı; `project-team-and-goals.spec.ts` ise `createdMeetings > 5` bekliyordu.
+İkisi de yeni sözleşmeye taşındı (`timeZone: 'UTC'`, ve "hiç satır üretilmedi" assertion'ı).
+Yorumda "X şöyle çalışıyor" yazan her test, X değiştiğinde aday listesindedir — `grep` ile ara.
+
+**Ay ızgarasında hücre başına 3 çip sınırı koymak, ilgisiz bir spec'i kırabilir.** Paylaşılan
+DB'de "bugün" hücresi taşınca `getByText('Cal Mentee')` görünmez oluyor. Böyle bir sınır
+eklerken, o günün *tam* listesini gösteren bir görünüm (gün görünümü) üzerinden assert etmeye
+geçmek hem daha sağlam hem daha okunur.
+
+**Bu konteynerde Playwright'ın beklediği build dizini `/opt/pw-browsers/chromium-1194`'ten
+farklı (1234) ve ikisinin *iç yapısı* da farklı:** headless shell 1194'te
+`chrome-linux/headless_shell`, beklenen yol ise
+`chrome-headless-shell-linux64/chrome-headless-shell`. Dizini symlink'lemek yetmiyor — dizini
+gerçek olarak oluşturup içindeki her girdiyi tek tek symlink'lemek, artı binary'ye beklenen adla
+bir symlink daha atmak gerekiyor. `INSTALLATION_COMPLETE` dosyasını da unutma.
+
+**`npx playwright test` `.env`'i okumaz.** Next dev sunucusu okur, test süreci okumaz; spec'ler
+Prisma'ya doğrudan bağlandığı için `DATABASE_URL` yoksa P1012 ile düşerler. `export $(grep -v
+'^#' .env | sed 's/"//g' | xargs -d '\n')` ile bir kez dışa aktarmak yeterli.
+
+**Ekran görüntüsü alırken "sayfa yüklendi" ≠ "veri geldi".** Dev sunucusunun ilk derlemesi
+sırasında alınan görüntüde takvim tamamen boş çıktı ve bir an gerçek bir hata sanıldı; DOM'u
+`innerHTML` ile yazdırmak 30 saniyede doğruyu söyledi. Görsel doğrulamada önce DOM'a sor,
+sonra piksele.

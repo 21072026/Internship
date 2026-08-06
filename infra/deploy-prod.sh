@@ -243,6 +243,11 @@ run_tool node prisma/backfill-cron-baseline.mjs || true
 # so the post-mentorship CV access window (#854) has an anchor instead of
 # revoking access outright. Only ever fills NULLs — idempotent.
 run_tool node prisma/backfill-relation-completed-at.mjs || true
+# Remove the Meeting rows the old recurring-meeting generator materialised. A
+# series is a rule now; those rows outlived their cancelled series and haunted
+# the calendar (#1110). Nothing writes them any more, so this converges to a
+# no-op on the next deploy.
+run_tool node prisma/backfill-series-meetings.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 log "Restarting $CONTAINER on :$PORT"
