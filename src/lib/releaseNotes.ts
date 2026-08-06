@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.43.0-beta',
+    date: '2026-08-05',
+    highlights: {
+      en: [
+        'Registering actually gets you in now. Sign up, click the link in the confirmation email, and your account is open — no waiting for someone to approve you.',
+        'If you did get stuck before, the sign-in page no longer tells you your account was “deactivated” when it is simply waiting for a review — and it says so only when that is really the case.',
+        'Admins who prefer to look at every sign-up first can switch open registration to “reviewed” under Settings.',
+      ],
+      tr: [
+        'Kaydolmak artık gerçekten içeri alıyor. Kaydol, e-postandaki bağlantıya tıkla, hesabın açılıyor — kimsenin onaylamasını beklemiyorsun.',
+        'Daha önce takıldıysan: giriş ekranı, aslında inceleme bekleyen bir hesap için artık “hesabın kapatıldı” demiyor; bunu yalnızca gerçekten öyleyse söylüyor.',
+        'Her kaydı önce görmek isteyen yöneticiler, Ayarlar’dan açık kaydı “incelemeli”ye çevirebiliyor.',
+      ],
+      de: [
+        'Eine Registrierung bringt dich jetzt wirklich hinein. Anmelden, den Link in der Bestätigungsmail anklicken — dein Konto ist offen, ganz ohne auf eine Freigabe zu warten.',
+        'Falls du vorher festhingst: Die Anmeldeseite sagt nicht mehr „Konto deaktiviert“, wenn es lediglich auf eine Prüfung wartet — sie sagt es nur, wenn es wirklich so ist.',
+        'Admins, die jede Anmeldung zuerst ansehen möchten, stellen die offene Registrierung in den Einstellungen auf „geprüft“ um.',
+      ],
+    },
+  },
+  {
     version: '0.42.1-beta',
     date: '2026-08-05',
     highlights: {

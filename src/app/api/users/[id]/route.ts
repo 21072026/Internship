@@ -93,6 +93,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const body = await request.json();
       const data: {
         isActive?: boolean;
+        pendingApproval?: boolean;
         sourceId?: string | null;
         referredById?: string | null;
         skills?: string[];
@@ -105,6 +106,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           return NextResponse.json({ error: 'You cannot deactivate your own account' }, { status: 400 });
         }
         data.isActive = body.isActive;
+        // An admin decision outranks the self-service door. Activating clears
+        // the "waiting for an admin" flag; deactivating sets it, so that a
+        // rejected sign-up cannot re-admit itself by clicking a verification
+        // link it still holds (see src/app/api/auth/verify-email/route.ts).
+        data.pendingApproval = !body.isActive;
       }
 
       // Assign / clear the mentee's referral source.

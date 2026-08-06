@@ -87,8 +87,10 @@ function RegisterForm() {
         throw new Error(body.error || 'Registration failed');
       }
 
-      // Token-less self-registration is created pending admin approval.
-      router.push(body.pending ? '/auth/signin?pending=true' : '/auth/signin?registered=true');
+      // Open sign-up: the account opens itself when the emailed link is
+      // clicked ('verify'), unless the org runs manual approval ('pending').
+      const next = body.pending ? 'pending' : body.selfRegistered ? 'verify' : 'registered';
+      router.push(`/auth/signin?${next}=true`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {

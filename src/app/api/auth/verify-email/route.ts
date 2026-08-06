@@ -17,8 +17,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This link is invalid or has expired' }, { status: 400 });
     }
 
+    // Clicking the emailed link is what opens the door for an open sign-up:
+    // the account was created inactive, and verifying proves the address is
+    // really theirs. It admits itself here unless it is explicitly parked for
+    // an admin (pendingApproval, set when `selfRegistration` is 'manual') or
+    // was deactivated by an admin after having been active — neither of which
+    // an email click may override.
+    const before = await prisma.user.findUnique({
+      where: { id: record.userId },
+      select: { isActive: true, emailVerified: true, pendingApproval: true },
+    });
+    const admitNow = !!before && !before.isActive && !before.emailVerified && !before.pendingApproval;
+
     const [user] = await prisma.$transaction([
-      prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true }, select: { email: true } }),
+      prisma.user.update({
+        where: { id: record.userId },
+        data: { emailVerified: true, ...(admitNow ? { isActive: true } : {}) },
+        select: { email: true },
+      }),
       prisma.emailVerificationToken.update({ where: { id: record.id }, data: { used: true } }),
     ]);
 

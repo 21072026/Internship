@@ -13,6 +13,7 @@ export default function AdminSettingsPage() {
   const [supportEmail, setSupportEmail] = useState('');
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [require2fa, setRequire2fa] = useState('off');
+  const [selfRegistration, setSelfRegistration] = useState('auto');
   const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
   const [premiumAnalytics, setPremiumAnalytics] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -58,6 +59,7 @@ export default function AdminSettingsPage() {
       setSupportEmail(settings.supportEmail ?? '');
       setWeeklyDigest(settings.weeklyDigest !== 'false');
       setRequire2fa(settings.require2fa ?? 'off');
+      setSelfRegistration(settings.selfRegistration ?? 'auto');
       setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
       setPremiumAnalytics(settings.premiumAnalytics === 'true');
     }
@@ -70,7 +72,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false' }),
+        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false' }),
       });
       if (res.ok) setFlash(t.settings.saved);
     } finally {
@@ -123,6 +125,19 @@ export default function AdminSettingsPage() {
               <input type="checkbox" checked={weeklyDigest} onChange={(e) => setWeeklyDigest(e.target.checked)} />
               {t.settings.weeklyDigest}
             </label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.selfRegistration}</label>
+              <select
+                value={selfRegistration}
+                onChange={(e) => setSelfRegistration(e.target.value)}
+                className="block w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3 py-2 text-sm"
+                data-testid="self-registration-select"
+              >
+                <option value="auto">{t.settings.selfRegistrationAuto}</option>
+                <option value="manual">{t.settings.selfRegistrationManual}</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">{t.settings.selfRegistrationHint}</p>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.require2fa}</label>
               <select
