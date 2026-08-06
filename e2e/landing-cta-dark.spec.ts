@@ -7,8 +7,9 @@ test('landing CTA "Get Started" button stays light in dark mode', async ({ page 
   await page.goto('/');
   await page.evaluate(() => document.documentElement.classList.add('dark'));
 
-  // Two "Get Started" links exist (hero + CTA); the CTA one is last in the DOM.
-  const cta = page.getByRole('link', { name: /get started/i }).last();
+  // The mentee CTA appears in its own section and again in the closing block;
+  // the closing one is last in the DOM.
+  const cta = page.getByRole('link', { name: /Create a free account/i }).last();
   await cta.scrollIntoViewIfNeeded();
 
   const bg = await cta.evaluate((el) => getComputedStyle(el).backgroundColor);

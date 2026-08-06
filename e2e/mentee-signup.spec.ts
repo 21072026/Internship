@@ -5,9 +5,11 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// #589: token-less self-registration is the mentee intake — creates a MENTEE,
-// unverified + inactive until an admin approves (same safety net as before).
-test('self-registration without a token creates an INACTIVE mentee pending approval', async ({ page }) => {
+// #589: token-less self-registration is the mentee intake — it creates a MENTEE,
+// unverified and inactive. What lets that account in is the emailed link: with
+// the `selfRegistration` setting on its default 'auto', verifying the address
+// activates the account, so the front door is open without an admin in the loop.
+test('self-registration opens the account once the email is verified', { tag: '@smoke' }, async ({ page }) => {
   const email = uniqueEmail('selfmentee');
   const password = 'MenteeSignup123!';
 
@@ -21,19 +23,32 @@ test('self-registration without a token creates an INACTIVE mentee pending appro
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.includes('/auth/signin'), { timeout: 20_000 });
 
-    // Account is created as a MENTEE but inactive (awaiting admin approval).
+    // Created as a MENTEE, inactive and unverified — the address is unproven.
     const user = await prisma.user.findUnique({ where: { email } });
     expect(user?.role).toBe('MENTEE');
     expect(user?.isActive).toBe(false);
+    expect(user?.emailVerified).toBe(false);
+    expect(user?.pendingApproval).toBe(false);
 
-    // Inactive accounts cannot sign in yet.
+    // Sign-in is refused while the address is unproven.
     await page.fill('input[type="email"], input[name="email"]', email);
     await page.fill('input[type="password"]', password);
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/auth\/signin/);
 
-    // After an admin activates them, sign-in works and lands on the mentee portal.
-    await prisma.user.update({ where: { id: user!.id }, data: { isActive: true } });
+    // Clicking the link from the verification email is the whole approval step.
+    const token = await prisma.emailVerificationToken.findFirst({
+      where: { userId: user!.id, used: false },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(token).not.toBeNull();
+    const res = await page.request.post('/api/auth/verify-email', { data: { token: token!.token } });
+    expect(res.ok()).toBeTruthy();
+
+    const verified = await prisma.user.findUnique({ where: { email } });
+    expect(verified?.emailVerified).toBe(true);
+    expect(verified?.isActive).toBe(true);
+
     await page.context().clearCookies();
     await page.goto('/auth/signin');
     await page.fill('input[type="email"], input[name="email"]', email);
@@ -42,5 +57,53 @@ test('self-registration without a token creates an INACTIVE mentee pending appro
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
   } finally {
     await cleanupByEmail(email);
+  }
+});
+
+// The escape hatch: with `selfRegistration = manual` the same flow parks the
+// account for an admin, and verifying the address must NOT let it in.
+test('manual mode parks a self-registration for an admin', async ({ page }) => {
+  const email = uniqueEmail('manualmentee');
+  const password = 'MenteeSignup123!';
+
+  await prisma.setting.upsert({
+    where: { key: 'selfRegistration' },
+    create: { key: 'selfRegistration', value: 'manual' },
+    update: { value: 'manual' },
+  });
+
+  try {
+    await page.goto('/auth/register');
+    await page.fill('input[name="fullName"]', 'Manual Mode Mentee');
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', password);
+    await page.fill('input[name="confirmPassword"]', password);
+    await page.check('input[name="consent"]');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.includes('/auth/signin'), { timeout: 20_000 });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    expect(user?.isActive).toBe(false);
+    expect(user?.pendingApproval).toBe(true);
+
+    const token = await prisma.emailVerificationToken.findFirst({
+      where: { userId: user!.id, used: false },
+      orderBy: { createdAt: 'desc' },
+    });
+    const res = await page.request.post('/api/auth/verify-email', { data: { token: token!.token } });
+    expect(res.ok()).toBeTruthy();
+
+    // Verified, but still waiting on a human — the email click cannot override it.
+    const after = await prisma.user.findUnique({ where: { email } });
+    expect(after?.emailVerified).toBe(true);
+    expect(after?.isActive).toBe(false);
+  } finally {
+    await cleanupByEmail(email);
+    // Leave the shared DB on the default, or every later test inherits 'manual'.
+    await prisma.setting.upsert({
+      where: { key: 'selfRegistration' },
+      create: { key: 'selfRegistration', value: 'auto' },
+      update: { value: 'auto' },
+    });
   }
 });

@@ -23,6 +23,12 @@ export const SETTING_DEFAULTS = {
   // default — basic analytics stay free. Single-tenant placeholder for real
   // billing; becomes a per-tenant entitlement with Faz 3 multi-tenancy.
   premiumAnalytics: 'false',
+  // Open sign-up policy. 'auto' (default) = a self-registered account activates
+  // itself the moment its email is verified, so the front door is genuinely
+  // open; 'manual' = it stays inactive and waits for an admin (pendingApproval),
+  // which is the escape hatch if sign-ups ever need vetting or get spammed.
+  // Invited users are unaffected — an invitation already proves the email.
+  selfRegistration: 'auto',
   // Monthly cap on AI provider calls across the org (Faz 2, #537). Every AI
   // feature consumes from this pool via runAiGated; '0' disables AI calls
   // entirely. Metered in AiUsage; resets each calendar month.

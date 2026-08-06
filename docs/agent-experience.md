@@ -10,6 +10,44 @@ Newest entries on top.
 
 ---
 
+## 2026-08-06 — `origin/main` merge'ünde smoke false-positive'leri: `npm run dev` vs prod build
+
+**`npm run test:e2e:smoke`'u yerelde çalıştırmak `npm run dev`'i başlatır, CI ise
+`npm run start`'la prod build'e karşı koşar** (`playwright.config.ts`: `command:
+process.env.CI ? 'npm run start' : 'npm run dev'`). Bu fark üç sahte kırmızıya yol açtı:
+`auth.spec.ts`'teki `button[aria-haspopup="menu"]` locator'ı dev modunda enjekte edilen
+"Next.js Dev Tools" düğmesiyle de eşleşip strict-mode ihlali veriyor (prod'da o düğme yok);
+`pipeline.spec.ts` dev sunucusunun Fast Refresh rebuild'i tam da PUT isteği uçuşurken
+tetiklenince isteği düşürüyor; `smoke.spec.ts`'teki `/admin/candidates` navigasyonu
+on-demand derleme yüzünden 30s'yi aşıyor. Üçü de `CI=true npm run build && npm run
+test:e2e:smoke` ile (prod build'e karşı) tekrar koşulunca temiz geçti — **merge'ün veya PR'ın
+kendisiyle ilgisi yoktu.**
+
+**Yerel `.env`'deki gerçek ama bu sandbox'tan erişilemeyen `SMTP_HOST`, e-posta gönderen her
+akışı TCP timeout'una kadar (~20-30s) bloke ediyor.** `.github/workflows/e2e.yml`'de SMTP
+secret'ları hiç tanımlı değil — `nodemailer.createTransport({host: undefined, ...})` orada
+hızlı başarısız oluyor, yerelde ise `crm.ersah.in:465`'e gerçek bir bağlantı denemesi ETIMEDOUT
+ile bitene kadar isteği bloke ediyor ve bu da `signInAndSettle`'daki `waitForLoadState
+('networkidle')`'ı 30s timeout'a düşürüyor (`invite.spec.ts`, `mentee-signup.spec.ts`). Tanı
+için `.env`'deki `SMTP_*` satırlarını geçici olarak yorum satırına aldım (dosya
+`.gitignore`'da, commit'e girmiyor), koştum, sonra geri açtım.
+
+**Ama hepsi bu değildi: `instant-meeting`, `pii-access-lifecycle`, `project-team-and-goals`,
+`upcoming-meeting` (×2) SMTP kapalıyken de aynı 30-33s `networkidle` timeout'unda kırmızı
+kaldı.** Trace ağ günlüğü giriş sonrası ~150ms içinde biten 80'den fazla istek gösteriyor,
+sonra timeout'a kadar **hiçbir yeni istek yok** — yani tekrarlayan bir poll değil, muhtemelen
+Playwright'ın `networkidle` sezgisiyle çakışan bir keep-alive/service-worker bağlantısı
+(`/sw.js` her girişte kayıtlı). Bu 4-5 spec merge'ün dokunmadığı dosyalar ve merge'ün
+dokunmadığı sayfaları test ediyor — üç ayrı koşuda tutarlı biçimde aynı testler kırmızı kaldı,
+bu yüzden makine/ortam kaynaklı, PR'a özgü olmayan bir flake olarak işaretledim (CLAUDE.md'nin
+"bilinen flake" listesine ikisi zaten kayıtlı; bu dördü/beşi de aynı kategoriye giriyor gibi
+duruyor, ayrı bir issue'yu hak ediyor).
+
+**Ders: bir smoke kırmızısını "PR'la ilgili mi" diye sınıflandırmadan önce, dosyanın merge/diff
+kapsamında olup olmadığına bak, sonra prod build'e karşı tekrar koştur.** `npm run dev`'in
+kendine özgü davranışları (HMR, Dev Tools düğmesi, on-demand derleme) CI'da hiç olmayan
+kırmızılar üretebiliyor; gerçek sinyal her zaman prod build'e karşı koşan sonuç.
+
 ## 2026-08-02 — #51'in kullanıcı geri bildirim turları (0.40.1/0.40.2-beta)
 
 Aynı oturumda özellik canlıya gitmeden önce üç tur geri bildirim geldi; hepsi
@@ -2443,3 +2481,46 @@ için CI'a giden tek kırmızı, bu kurulumdan *önceki* PR'dı.
 **Dev sunucusu eski Prisma client'ıyla kalır.** `prisma generate` sonrası `next dev`'i
 yeniden başlatmazsan yeni kolona yazan endpoint 500 döner ve hata testin değil sunucunun
 olur. Şema değişince sunucuyu yeniden başlat.
+
+## 2026-08-06 — Zamanlanmış tam koşunun 5 kırmızısı: ikisi de "ürün değişti, test değişmedi"
+
+**Duyarlı (responsive) ikinci liste, strict mode'u sessizce silahlandırıyor.** #1008
+`/admin/candidates`'e `md:hidden` bir mobil kart listesi ekledi; masaüstü grid'i zaten
+duruyordu. Artık **her aday DOM'da iki kez** var. Playwright'ın strict mode'u *görünür*
+eşleşmeyi değil **eşleşen düğüm sayısını** sayar, dolayısıyla `md:hidden` olması hiçbir şeyi
+kurtarmaz: `getByText('<isim>')` 2 döner ve `toBeVisible()` daha görünürlüğe bakmadan patlar.
+Dört spec (`admin-bulk-candidates`, `dashboard-links`, `export-filter`, `export`) tam bu yüzden
+düştü — hepsi `candidates-desktop-list` kapsamına alındı. Aynı sayfanın testid ile çalışan
+assertion'ları (`candidate-card-<id>`) hiç etkilenmedi; ders bu: **isimle değil kapsamla/testid
+ile hedefle.** `toHaveCount(0)` yazan yokluk assertion'ları kırmızıya düşmediği için bu ikizleme
+PR gate'inde de gizli kaldı (bu 4 spec `@smoke` değil).
+
+**"Yokluk" assertion'ı, bozulmuş bir locator'ı maskeler.** `getByText(x)).toHaveCount(0)` hem
+"öğe yok" hem "locator artık yanlış" durumunda yeşil. Bir sayfanın DOM'u ikizlendiğinde önce
+*varlık* assertion'ları düşer; yokluk olanlar aynı yanlışlığı taşıdıkları halde susar. İkizleme
+düzeltilirken ikisini birlikte kapsamla.
+
+**`dashboard-links`'te ikinci bir bomba ilk hatanın arkasında bekliyordu:** `getByRole('link',
+{ name: 'ZZ InStage Mentee' })` de 2 eşleşiyordu. İlk `getByText` düzeltilse ve o satır
+bırakılsa, spec bir sonraki koşuda aynı yerden yine düşerdi. Aynı sayfadaki **bütün** isim
+tabanlı locator'ları tek seferde tara.
+
+**Header testi, ürün kararının fotoğrafını çekmişti.** `security-headers` hâlâ Jitsi öncesi
+`camera=()`'yi arıyordu; gömülü görüşme için `Permissions-Policy` bilerek
+`camera=(self "https://meet.jit.si")`'ye genişletilmişti. Doğru düzeltme sabiti güncellemek
+değil, **niyeti** test etmek: yetkiler tek host'a delege edilmiş mi, `geolocation=()` kapalı mı,
+ve hiçbir direktif `*`'a açılmış mı. Böylesi bir gevşetme bir daha sessizce geçmez.
+
+**Yerel `.env` paylaşılan preview DB'sine bakıyor — e2e'yi ona karşı koşmak veri yazmak demek.**
+Doğru yol: `DATABASE_URL`'i komut satırında geçersiz kılmak. `process.env`, `.env`'i ezdiği için
+`DATABASE_URL='mysql://...' npx playwright test ...` yeterli, dosyaya dokunmak gerekmiyor.
+
+**MariaDB'ye parola üretmeden bağlanmanın yolu unix socket.** Önceki notta TCP'li bir `e2e`
+kullanıcısı açılmış ama parolası oturumla birlikte gitmiş. `root` sudo istiyor. Prisma socket'i
+destekliyor: `mysql://<oturum-kullanıcısı>@localhost/<db>?socket=/tmp/mysql.sock` — `unix_socket`
+plugin'i sayesinde parolasız geçiyor, yeni kullanıcı/parola kurmaya gerek yok.
+
+**Playwright tarayıcısı pinlenen sürümü istiyorsa, indirmeden önce cache'e bak.**
+`~/Library/Caches/ms-playwright/` içinde komşu build'lar (1234) varken eksik olan yalnızca
+beklenen sürüm dizini (1228) olabilir; `chromium-1228 -> chromium-1234` ve aynısı
+`chromium_headless_shell` için symlink, ~150MB indirmeden koşmayı açıyor.
