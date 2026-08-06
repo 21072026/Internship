@@ -15,7 +15,7 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
-import { PersonProjectGoals } from '@/components/PersonProjectGoals';
+import { PersonTodos } from '@/components/todos/PersonTodos';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { RelationNotesPanel } from '@/components/RelationNotesPanel';
@@ -434,10 +434,10 @@ export default function MenteeDetailPage() {
           <GoalsPanel relationId={id} />
         </div>
 
-        {/* Goals handed to this mentee inside a project live here now, not on the
-            project page in front of the whole team. */}
+        {/* Everything on this mentee's list — what came from a project and what a
+            mentor handed them directly — plus the box to add to it (#1113). */}
         <div className="lg:col-span-2">
-          <PersonProjectGoals userId={relation.mentee.id} />
+          <PersonTodos userId={relation.mentee.id} fullName={relation.mentee.fullName} />
         </div>
 
         <div className="lg:col-span-2">

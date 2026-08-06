@@ -13,6 +13,33 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.46.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Your to-dos have a page of their own. Everything is in one place now: what your mentor asked for, what your projects need, the open project goals you can take, and anything you write for yourself — with an archive for the ones you have finished.',
+        'A to-do that comes from the shared list is kept up to date centrally. Whoever maintains it can reword it once and it changes for everyone who has it, in each person’s own language — and if you switch your language, it follows you. You tick it off; you do not have to edit it.',
+        'Removing a to-do from the shared list only means it will not be handed out again. The people who already have it keep it, exactly as it was given.',
+        'The quick-pick list under a project stopped filling up with the to-dos you had just handed out. It now holds only what you put there on purpose, plus the shared list — the same wording no longer appears again and again, once per language.',
+        'A mentor can now give someone a to-do without a project in between, by hand or from the shared list. What you write for yourself stays yours: it is not shown on your mentor’s view of your list.',
+      ],
+      tr: [
+        'Yapılacaklar artık kendi sayfasında. Her şey tek yerde: mentorunun istedikleri, projelerinden gelenler, üstlenebileceğin sahipsiz proje hedefleri ve kendine yazdıkların — bitirdiklerin için de bir arşiv.',
+        'Ortak listeden gelen bir madde tek yerden güncel tutuluyor. Metnini bir kez düzenlemek, o maddeyi alan herkeste — hem de her birinin kendi dilinde — güncelliyor; dilini değiştirdiğinde de seninle birlikte değişiyor. Sen yalnızca işaretliyorsun, düzenlemek zorunda değilsin.',
+        'Ortak listeden bir maddeyi kaldırmak yalnızca “bundan sonra verilmeyecek” demek. Onu hâlihazırda almış olanlarda, verildiği gibi kalmaya devam ediyor.',
+        'Projenin altındaki hızlı seçim listesi, az önce dağıttığın maddelerle dolmayı bıraktı. Artık yalnızca bilerek eklediklerin ve ortak liste var — aynı metin her dil için bir kez, üst üste gelmiyor.',
+        'Mentor artık araya proje girmeden de birine yapılacak verebiliyor: elle ya da ortak listeden. Kendine yazdıkların sana ait kalıyor — mentorunun gördüğü listede görünmüyor.',
+      ],
+      de: [
+        'Deine Aufgaben haben eine eigene Seite. Alles an einem Ort: was deine Mentorin oder dein Mentor erwartet, was deine Projekte brauchen, offene Projektziele, die du übernehmen kannst, und was du dir selbst notierst — mit einem Archiv für alles Erledigte.',
+        'Eine Aufgabe aus der gemeinsamen Liste wird zentral gepflegt. Wer sie betreut, formuliert sie einmal neu, und sie ändert sich für alle, die sie haben — jeweils in deren Sprache; wechselst du die Sprache, kommt sie mit. Du hakst ab, du musst nichts bearbeiten.',
+        'Eine Aufgabe aus der gemeinsamen Liste zu entfernen heißt nur: sie wird nicht mehr vergeben. Wer sie schon hat, behält sie genau so, wie sie gegeben wurde.',
+        'Die Schnellauswahl unter einem Projekt füllt sich nicht mehr mit den Aufgaben, die du gerade verteilt hast. Dort steht jetzt nur, was du bewusst hinzugefügt hast, plus die gemeinsame Liste — derselbe Text erscheint nicht mehr immer wieder, einmal pro Sprache.',
+        'Mentorinnen und Mentoren können eine Aufgabe jetzt auch ohne Projekt dazwischen vergeben: selbst geschrieben oder aus der gemeinsamen Liste. Was du dir selbst notierst, bleibt deins — es erscheint nicht in der Ansicht deines Mentors.',
+      ],
+    },
+  },
+  {
     version: '0.45.0-beta',
     date: '2026-08-06',
     highlights: {

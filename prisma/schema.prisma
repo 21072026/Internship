@@ -256,6 +256,7 @@ model User {
   referredUsers             User[]                    @relation("UserReferrals")
   sentInvitations           InvitationToken[]         @relation("InvitationInviter")
   assignedProjectTasks      ProjectTask[]             @relation("ProjectTaskAssignee")
+  authoredProjectTasks      ProjectTask[]             @relation("ProjectTaskAuthor")
   projectJoinRequests       ProjectJoinRequest[]      @relation("JoinRequester")
   decidedJoinRequests       ProjectJoinRequest[]      @relation("JoinRequestDecider")
   taskTemplates             ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
@@ -946,27 +947,53 @@ model ProjectMember {
   @@index([projectId, role])
 }
 
-// A task within a project — supports a task list + progress % (checklist 4).
+// One to-do. Three shapes, one model, because one person reads them in a single
+// list (/todos):
+//   - a project goal            — projectId set, assigneeId null: open, claimable
+//   - a to-do handed to someone — projectId set, assigneeId set
+//   - a personal to-do          — projectId null, assigneeId set: written by the
+//                                 person for themselves (or by their mentor)
+//
+// `templateId` is what makes a to-do *shared* (#1113): the wording then lives in
+// the template, in every language, and this row only tracks that the person was
+// given it and whether they are done. `title` is a snapshot for search,
+// notifications and the day the template row disappears.
 model ProjectTask {
-  id         String    @id @default(cuid())
-  projectId  String
-  title      String
-  done       Boolean   @default(false)
-  order      Int       @default(0)
-  createdAt  DateTime  @default(now())
+  id          String    @id @default(cuid())
+  // Null = a personal to-do that belongs to no project.
+  projectId   String?
+  title       String
+  done        Boolean   @default(false)
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
   // Optional owner of the task (#51). Null = an unassigned project-wide goal
   // that any member may claim ("üstlen"); set = a personal goal, which is what
   // a mentor sends a fresh member from the template pool.
-  assigneeId String?
+  assigneeId  String?
+  // Who wrote it — so "your mentor gave you this" and "you wrote this yourself"
+  // are distinguishable on the to-do list.
+  createdById String?
   // Who ticked it off, and when — so a mentor can see progress per person
   // without reading the activity log.
-  doneAt     DateTime?
+  doneAt      DateTime?
+  // Finished and put away by the assignee. The row stays (it is the record that
+  // the work was done), it just leaves the active list.
+  archivedAt  DateTime?
+  // Set when this to-do came from the shared pool: the text is read from the
+  // template, in the reader's language, every time it is displayed.
+  templateId  String?
 
-  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee User?   @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  project  Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?                @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  author   User?                @relation("ProjectTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  // A template is archived rather than deleted, so this normally stays intact;
+  // SetNull is the safety net that leaves the snapshot title behind.
+  template ProjectTaskTemplate? @relation("TaskFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([assigneeId])
+  @@index([templateId])
+  @@index([createdById])
 }
 
 // Reusable goal/task text (#51). Every task written for a project member is
@@ -976,7 +1003,7 @@ model ProjectTask {
 // Not tenant-anchored: reached through Project / User, like the other child
 // models (see TENANT_MODELS in src/lib/orgContext.ts).
 model ProjectTaskTemplate {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   projectId    String?
   // The fallback wording, and the key the pool dedupes on. A localized title
   // lives in `translations`; `title` is what a member sees when their language
@@ -989,11 +1016,17 @@ model ProjectTaskTemplate {
   createdById  String?
   // How many times this template has been handed to someone — the pool sorts
   // by it so the goals actually used float to the top.
-  useCount     Int      @default(0)
-  createdAt    DateTime @default(now())
+  useCount     Int       @default(0)
+  createdAt    DateTime  @default(now())
+  // Retired from the pool, not deleted (#1113). Handing a to-do out creates a
+  // live reference to this row, so removing it would blank the wording for
+  // everyone who was ever given it. Archived means "don't offer this again";
+  // adding the same wording back revives the row.
+  archivedAt   DateTime?
 
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User?    @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?         @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  tasks     ProjectTask[] @relation("TaskFromTemplate")
 
   // One template per wording per project, so capturing a goal that already
   // exists is a no-op. MySQL allows many NULLs here, so the shared (global)

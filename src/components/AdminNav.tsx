@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText,
   BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, Settings, Webhook, Search, ListChecks,
-  ShieldCheck, Activity, LifeBuoy, Network, Video,
+  ShieldCheck, Activity, LifeBuoy, Network, Video, ClipboardList,
   type LucideIcon,
 } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
@@ -22,6 +22,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' },
   { href: '/admin/projects', icon: FolderGit2, key: 'projects' },
   { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates' },
+  { href: '/todos', icon: ClipboardList, key: 'todos' },
   { href: '/admin/cohorts', icon: Layers, key: 'cohorts' },
   { href: '/admin/sources', icon: Radio, key: 'sources' },
   { href: '/admin/users', icon: UserCog, key: 'users' },
