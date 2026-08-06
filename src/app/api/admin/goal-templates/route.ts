@@ -41,7 +41,7 @@ export async function GET() {
 
   return await withTenantScope(session, async () => {
     const templates = await prisma.projectTaskTemplate.findMany({
-      where: { projectId: null },
+      where: { projectId: null, archivedAt: null },
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: { id: true, title: true, translations: true, useCount: true },
     });
@@ -66,8 +66,18 @@ export async function POST(request: Request) {
     // projectIds, so the same wording twice has to be caught by hand.
     const existing = await prisma.projectTaskTemplate.findFirst({
       where: { projectId: null, title },
-      select: { id: true },
+      select: { id: true, archivedAt: true },
     });
+    if (existing?.archivedAt) {
+      // Adding back a wording that was retired revives the original row, so the
+      // to-dos handed out from it stay attached to it.
+      const revived = await prisma.projectTaskTemplate.update({
+        where: { id: existing.id },
+        data: { archivedAt: null, translations },
+        select: { id: true, title: true, translations: true, useCount: true },
+      });
+      return NextResponse.json({ template: serialize(revived) }, { status: 201 });
+    }
     if (existing) return NextResponse.json({ error: 'That goal is already in the pool' }, { status: 409 });
 
     const template = await prisma.projectTaskTemplate.create({
@@ -88,7 +98,7 @@ export async function PATCH(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
     const target = await prisma.projectTaskTemplate.findFirst({
-      where: { id: parsed.data.id, projectId: null },
+      where: { id: parsed.data.id, projectId: null, archivedAt: null },
       select: { id: true },
     });
     if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -112,8 +122,11 @@ export async function PATCH(request: Request) {
   });
 }
 
-// DELETE — drop a shared template. Goals already handed out are untouched: they
-// are tasks of their own by then, not references to this row.
+// DELETE — retire a shared template. The row is archived rather than removed
+// (#1113): a to-do handed out from the pool references this row and reads its
+// wording from it, in each person's language. Deleting is therefore "stop
+// offering this", not "take it back from everyone who has it" — those to-dos stay
+// exactly as they are, and keep following any future rewording.
 export async function DELETE(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -122,10 +135,11 @@ export async function DELETE(request: Request) {
     const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-    const deleted = await prisma.projectTaskTemplate.deleteMany({
-      where: { id: parsed.data.id, projectId: null },
+    const archived = await prisma.projectTaskTemplate.updateMany({
+      where: { id: parsed.data.id, projectId: null, archivedAt: null },
+      data: { archivedAt: new Date() },
     });
-    if (deleted.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (archived.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ ok: true });
   });
 }

@@ -8,6 +8,55 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.48.0-beta] - 2026-08-06
+
+Closes #1113.
+
+### Fixed
+- **The project goal pool stopped duplicating the goals handed out from it.** Two implicit
+  captures fed it: `POST /api/projects/[id]/tasks` upserted every hand-written task into
+  `ProjectTaskTemplate`, and `GET /api/projects/[id]/task-templates` backfilled the pool from
+  the project's existing tasks on every read. A goal sent from the *shared* pool was resolved
+  into the assignee's language before it was stored, so the backfill adopted that translation
+  as a new project-local template — the same goal reappeared in the pool once per language it
+  had ever been sent in, and grew every round. Both captures are gone: the pool is this
+  project's deliberately-added templates plus the shared ones, nothing else. The panel now has
+  its own "add to the pool" input (`new-project-template`).
+
+### Added
+- **`/todos` — one to-do list per person** (`MyTodos`, `TodoRow`), in every role's sidebar
+  (`nav.todos`). It holds what a mentor handed them, what their projects need, the open project
+  goals they may claim, and to-dos they write for themselves; finished ones are archived rather
+  than deleted (`ProjectTask.archivedAt`, `PATCH { archived }`). This replaces the split where
+  personal goals sat on `/portal/profile` and project goals on the project page — the goals card
+  is gone from the profile.
+- **Shared to-dos are now references, not copies** (`ProjectTask.templateId`). A to-do sent from
+  the pool reads its wording from the template on every render, resolved in the *reader's*
+  language (`resolveTaskTitle`, `taskTemplateSelect`): reword the pool entry and it changes for
+  everyone who has it, in each of their languages, and switching your app language re-reads it.
+  A shared to-do cannot be reworded (`409`) or deleted (`403`) by the person who received it —
+  they tick it off and archive it.
+- **Retiring a template no longer takes it away from anyone.** `DELETE` on both
+  `/api/admin/goal-templates` and `/api/projects/[id]/task-templates` sets
+  `ProjectTaskTemplate.archivedAt` instead of deleting the row: the entry stops being offered,
+  while the to-dos already handed out keep their wording and still follow later edits. Adding
+  the same wording back revives the archived row rather than creating a second one.
+- **A mentor can hand someone a to-do without a project** — `POST /api/todos` (free text or
+  shared-pool `templateIds`), surfaced by `PersonTodos` on the mentee and candidate pages, which
+  replaces `PersonProjectGoals`. `GET /api/todos?userId=` reads a mentee's list, minus the lines
+  they wrote for themselves.
+- `GET /api/todos/templates` — the shared pool for mentors/admins outside any project.
+
+### Changed
+- `ProjectTask.projectId` is nullable (a personal to-do belongs to no project) and the model
+  carries `createdById`, so "your mentor asked for this" and "you wrote this" are distinguishable.
+- `goalLinkFor()` points every goal notification at `/todos` instead of `/portal/profile` or the
+  project page.
+- `GET /api/projects/[id]` leaves archived tasks out of the project list and ships each task's
+  template alongside it. `/api/project-goals` is removed — `/api/todos` supersedes it.
+- E2E: new `e2e/todos.spec.ts` (pool reference, retire-without-loss, no re-capture, own to-dos +
+  privacy); the `@smoke` project-goals test now ticks the goal off on `/todos`.
+
 ## [0.47.0-beta] - 2026-08-06
 
 ### Added

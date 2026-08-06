@@ -1,15 +1,12 @@
-import { prisma } from '@/lib/prisma';
-
 /**
- * Where a person reads a project goal that was just assigned to them.
+ * Where a person reads a to-do that was just assigned to them.
  *
- * A personal goal is no longer listed on the project page — it lives on the
- * assignee's own profile — so a notification pointing at `/projects/<id>` would
- * send them somewhere the goal is not. Mentees read theirs in the portal; anyone
- * else (a mentor or admin who ended up with a goal) still manages the project
- * itself, so the project page is the useful destination for them.
+ * Everyone has one to-do list now (`/todos`): what a mentor handed them, what
+ * came with a project and what they wrote for themselves, in one place (#1113).
+ * This used to send mentees to their profile and everyone else to the project
+ * page — two destinations for the same kind of row, which is the split the to-do
+ * page replaced. Still async so callers (and their tests) stay unchanged.
  */
-export async function goalLinkFor(assigneeId: string, projectId: string): Promise<string> {
-  const user = await prisma.user.findUnique({ where: { id: assigneeId }, select: { role: true } });
-  return user?.role === 'MENTEE' ? '/portal/profile' : `/projects/${projectId}`;
+export async function goalLinkFor(_assigneeId: string, _projectId?: string | null): Promise<string> {
+  return '/todos';
 }
