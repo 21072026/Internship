@@ -7,13 +7,20 @@ import { withTenantScope } from '@/lib/orgContext';
 import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/goalTemplates';
 
-// The goal/task template pool (#51).
+// The goal/task template pool (#51, reworked in #1113).
 //
-// Every goal ever written on a project is worth keeping: the next person to join
-// usually gets the same starter set ("read the project", "find one bug", "find
-// one feature"). Templates are captured automatically when a task is created,
-// and — the first time this endpoint is read for a project — backfilled from the
-// tasks that already exist, so nothing written before this feature is lost.
+// This is the shortlist a lead picks from when handing work to a new member:
+// **this project's own hand-written templates plus the shared (admin-managed)
+// ones**, and nothing else. It used to also absorb every task on the project —
+// captured on create, backfilled on read — which meant the to-dos that had just
+// been handed out reappeared here as templates, once per language they were
+// resolved into, and the same wording piled up round after round. Nothing is
+// captured implicitly any more: a template exists because someone added it.
+//
+// Removing a template archives it (`archivedAt`) rather than deleting the row:
+// a to-do handed out from the pool *references* its template, so deleting it
+// would blank the wording for everyone who has it. Archived means "stop offering
+// this"; adding the same wording back revives the row.
 
 const localeText = z.string().trim().max(300).optional();
 const translationsSchema = z.object({ en: localeText, tr: localeText, de: localeText });
@@ -47,24 +54,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (a.status === 404) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!a.manage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    // Lazy, idempotent backfill: adopt the wording of tasks that predate the
-    // pool. `skipDuplicates` + the (projectId, title) unique key make repeat
-    // reads free of writes.
-    const [tasks, existing] = await Promise.all([
-      prisma.projectTask.findMany({ where: { projectId: id }, select: { title: true } }),
-      prisma.projectTaskTemplate.findMany({ where: { projectId: id }, select: { title: true } }),
-    ]);
-    const known = new Set(existing.map((t) => t.title));
-    const missing = [...new Set(tasks.map((t) => t.title))].filter((title) => !known.has(title));
-    if (missing.length > 0) {
-      await prisma.projectTaskTemplate.createMany({
-        data: missing.map((title) => ({ projectId: id, title })),
-        skipDuplicates: true,
-      });
-    }
-
     const rows = await prisma.projectTaskTemplate.findMany({
-      where: { OR: [{ projectId: id }, { projectId: null }] },
+      where: { archivedAt: null, OR: [{ projectId: id }, { projectId: null }] },
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: { id: true, title: true, translations: true, useCount: true, projectId: true },
     });
@@ -99,9 +90,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const title = canonicalTitle(translations, parsed.data.title);
     if (!title) return NextResponse.json({ error: 'Write the goal in at least one language' }, { status: 400 });
 
+    // Adding a wording that was archived earlier revives that row, so the to-dos
+    // already handed out from it stay attached to the template they came from.
     const template = await prisma.projectTaskTemplate.upsert({
       where: { projectId_title: { projectId: id, title } },
-      update: Object.keys(translations).length > 0 ? { translations } : {},
+      update: { archivedAt: null, ...(Object.keys(translations).length > 0 ? { translations } : {}) },
       create: { projectId: id, title, translations, createdById: session.user.id },
       select: { id: true, title: true, translations: true, useCount: true, projectId: true },
     });
@@ -128,7 +121,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
     const target = await prisma.projectTaskTemplate.findFirst({
-      where: { id: parsed.data.id, projectId: id },
+      where: { id: parsed.data.id, projectId: id, archivedAt: null },
       select: { id: true },
     });
     if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -154,8 +147,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
 }
 
-// DELETE — drop a template from this project's pool. Shared (global) templates
-// are left alone here; they are not this project's to remove.
+// DELETE — retire a template from this project's pool. The row is archived, not
+// removed: the to-dos handed out from it point at it, and their wording is read
+// from it. Deleting means "don't hand this out again", never "take it away from
+// the people who already have it". Shared (global) templates are left alone
+// here; they are not this project's to retire.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -168,7 +164,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
-    await prisma.projectTaskTemplate.deleteMany({ where: { id: parsed.data.id, projectId: id } });
+    await prisma.projectTaskTemplate.updateMany({
+      where: { id: parsed.data.id, projectId: id, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
     return NextResponse.json({ ok: true });
   });
 }

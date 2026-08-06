@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.45.1-beta] - 2026-08-06
+## [0.49.1-beta] - 2026-08-06
 
 ### Added
 - **Mentor onboarding wizard** (#911): a MENTOR's very first visit to `/mentor` now redirects once
@@ -20,6 +20,122 @@ version is shown in the sidebar footer of every page (links to the
   mentor finishes, skips, or abandons the wizard; both Finish and Skip return to `/mentor`. The
   MENTEE onboarding flow and the dashboard "Get started" checklist (`/api/onboarding`) are
   untouched. EN/TR/DE translations.
+
+## [0.49.0-beta] - 2026-08-06
+
+Closes #1116.
+
+### Fixed
+- **A mentee can see the project they are on.** Not an authorization bug — `scopeForRole`
+  already returned the mentee's own projects and `/projects/[id]` already gave a member the
+  internal view. The portal simply never linked there: `PortalNav` had no entry, the
+  dashboard's relation query selected `mentor`/`company`/`interactions` but not the project,
+  and the only list page (`/projects`) is the `isPublic: true` showcase, which by definition
+  excludes a private project. The project was reachable only by typing its URL.
+
+### Added
+- **`/portal/projects`** — the mentee's own project list (name, owner, status, technologies,
+  intern count, repo/demo/board links), with an empty state pointing at the public showcase,
+  where a mentee can still ask to join a project.
+- **Project card on the portal dashboard**, above the announcements, linking to the full list.
+- `lib/menteeProjects.ts` — one helper for "which projects is this person on?", unioning both
+  membership sources the way `mergeTeam` does (a `ProjectMember` row *and* a legacy
+  `MentorshipRelation.projectId`); reading only one of them is what made pre-#617 assignments
+  invisible. It deliberately does **not** include the showcase scope: it answers "mine", not
+  "browsable".
+
+### Changed
+- The project detail page's back link sends a mentee member to `/portal/projects` instead of
+  `/projects` — the showcase that does not contain their own project.
+
+## [0.48.0-beta] - 2026-08-06
+
+Closes #1113.
+
+### Fixed
+- **The project goal pool stopped duplicating the goals handed out from it.** Two implicit
+  captures fed it: `POST /api/projects/[id]/tasks` upserted every hand-written task into
+  `ProjectTaskTemplate`, and `GET /api/projects/[id]/task-templates` backfilled the pool from
+  the project's existing tasks on every read. A goal sent from the *shared* pool was resolved
+  into the assignee's language before it was stored, so the backfill adopted that translation
+  as a new project-local template — the same goal reappeared in the pool once per language it
+  had ever been sent in, and grew every round. Both captures are gone: the pool is this
+  project's deliberately-added templates plus the shared ones, nothing else. The panel now has
+  its own "add to the pool" input (`new-project-template`).
+
+### Added
+- **`/todos` — one to-do list per person** (`MyTodos`, `TodoRow`), in every role's sidebar
+  (`nav.todos`). It holds what a mentor handed them, what their projects need, the open project
+  goals they may claim, and to-dos they write for themselves; finished ones are archived rather
+  than deleted (`ProjectTask.archivedAt`, `PATCH { archived }`). This replaces the split where
+  personal goals sat on `/portal/profile` and project goals on the project page — the goals card
+  is gone from the profile.
+- **Shared to-dos are now references, not copies** (`ProjectTask.templateId`). A to-do sent from
+  the pool reads its wording from the template on every render, resolved in the *reader's*
+  language (`resolveTaskTitle`, `taskTemplateSelect`): reword the pool entry and it changes for
+  everyone who has it, in each of their languages, and switching your app language re-reads it.
+  A shared to-do cannot be reworded (`409`) or deleted (`403`) by the person who received it —
+  they tick it off and archive it.
+- **Retiring a template no longer takes it away from anyone.** `DELETE` on both
+  `/api/admin/goal-templates` and `/api/projects/[id]/task-templates` sets
+  `ProjectTaskTemplate.archivedAt` instead of deleting the row: the entry stops being offered,
+  while the to-dos already handed out keep their wording and still follow later edits. Adding
+  the same wording back revives the archived row rather than creating a second one.
+- **A mentor can hand someone a to-do without a project** — `POST /api/todos` (free text or
+  shared-pool `templateIds`), surfaced by `PersonTodos` on the mentee and candidate pages, which
+  replaces `PersonProjectGoals`. `GET /api/todos?userId=` reads a mentee's list, minus the lines
+  they wrote for themselves.
+- `GET /api/todos/templates` — the shared pool for mentors/admins outside any project.
+
+### Changed
+- `ProjectTask.projectId` is nullable (a personal to-do belongs to no project) and the model
+  carries `createdById`, so "your mentor asked for this" and "you wrote this" are distinguishable.
+- `goalLinkFor()` points every goal notification at `/todos` instead of `/portal/profile` or the
+  project page.
+- `GET /api/projects/[id]` leaves archived tasks out of the project list and ships each task's
+  template alongside it. `/api/project-goals` is removed — `/api/todos` supersedes it.
+- E2E: new `e2e/todos.spec.ts` (pool reference, retire-without-loss, no re-capture, own to-dos +
+  privacy); the `@smoke` project-goals test now ticks the goal off on `/todos`.
+
+## [0.47.0-beta] - 2026-08-06
+
+### Added
+- **Mentor self-application review lifecycle** (#933), completing #904/#905 end to end:
+  `Mentör Ol` / `Become a Mentor` / `Mentor werden` link on the landing page and sign-in
+  page, both leading to `/apply-as-mentor`. New admin section **Mentor Applications**
+  (`/admin/mentor-applications` + `/admin/mentor-applications/[id]`, nav entry added):
+  a status-filterable queue (Pending / Under review / Approved / Rejected) and a detail
+  screen showing contact info, skills, experience, motivation, capacity, consent, and an
+  admin-only review note. Admin actions — **Take under review**, **Approve**, **Reject**
+  (rejection reason required) — hit a new `PATCH /api/mentor-applications/[id]`
+  (`GET` added too) that guards every transition with a conditional `updateMany` so a
+  double click or retry 409s (`already_decided`) instead of repeating side effects.
+  Approving is one DB transaction: an email tied to no existing account gets an
+  `InvitationToken` (same `/auth/register?token=` flow as an admin invite) and the
+  application is only left `APPROVED` if that succeeds; an email tied to an existing
+  `MENTEE` account promotes it to `MENTOR` in place (filling in capacity/skills only if
+  unset) instead of creating a duplicate; an existing `ADMIN`/`COMPANY`/`SOURCE` account is
+  never silently repurposed — the transaction rolls back with `role_conflict` for manual
+  resolution. Applicants get transactional, localized (EN/TR/DE) emails at every stage —
+  received, under review, approved, rejected — via four new `emailService.ts` functions;
+  rejection email is a generic decline, never the admin's internal reason. Both the public
+  POST and the admin PATCH send email fire-and-forget (not awaited) so a slow/unreachable
+  SMTP server can never hold up the response. The public form also gained the same
+  honeypot + minimum-render-time anti-spam guard already used by the public contact form,
+  and now sends the applicant a "received" confirmation email. Schema: added
+  `UNDER_REVIEW` to `MentorApplicationStatus`.
+
+## [0.46.0-beta] - 2026-08-04
+
+### Added
+- **Public "apply as mentor" form** (#905), at `/apply-as-mentor`, on top of the #904
+  application API. No account is required or created — the success screen says so
+  explicitly. Fields: full name, email, phone, expertise/skills, experience summary,
+  motivation, mentee capacity, LinkedIn; a consent checkbox (linking to `/privacy` and
+  `/terms`) is mandatory before submit. The API's 409 (a pending application already
+  exists for this email) and 429 (rate limited) responses each get their own message
+  instead of a generic failure banner. Localized EN/TR/DE like the rest of the public
+  application surface (`/apply/[mentorId]`, `/auth/register`).
 
 ## [0.45.0-beta] - 2026-08-06
 

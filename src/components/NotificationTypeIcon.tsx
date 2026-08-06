@@ -14,6 +14,7 @@ import {
   UserCog,
   CalendarClock,
   Megaphone,
+  GraduationCap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -35,6 +36,7 @@ const NOTIFICATION_TYPE_ICONS: Record<string, LucideIcon> = {
   impersonation: UserCog,
   meeting_request: CalendarClock,
   announcement: Megaphone,
+  mentor_application: GraduationCap,
 };
 
 export function NotificationTypeIcon({ type, className }: { type: string; className?: string }) {

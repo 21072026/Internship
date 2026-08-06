@@ -8,11 +8,19 @@ import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { goalLinkFor } from '@/lib/projectGoalLink';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
+import { defaultLocale } from '@/i18n/config';
 
 // A task may be created from free text (`title`) or from the template pool
 // (`templateIds`) — the latter is the "send the standard goals to the person who
 // just joined" path (#51). Either way `assigneeId` decides whether it lands as a
 // personal goal or stays an unassigned project-wide one that a member can claim.
+//
+// A to-do sent from the pool keeps a reference to its template (#1113): the
+// wording is then read from the template on every render, so rewording it once
+// reaches everyone who has it, in their own language. Writing a to-do by hand no
+// longer copies it into the pool — that auto-capture is what filled the pool with
+// the very to-dos that had just been handed out, so the same wording came back
+// round after round. The pool is now only what someone put there on purpose.
 const schema = z
   .object({
     title: z.string().min(1).max(300).optional(),
@@ -58,29 +66,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     }
 
-    const titles: string[] = [];
-    // Titles that came from the pool: they are already templates, so the capture
-    // below must not copy the resolved wording back in as a new one.
-    const fromTemplate = new Set<string>();
+    // What to create: a hand-written to-do carries its own wording, a pooled one
+    // carries a reference and a snapshot of the wording for the day the template
+    // row is gone.
+    const rows: { title: string; templateId: string | null }[] = [];
     if (parsed.data.templateIds?.length) {
       const templates = await prisma.projectTaskTemplate.findMany({
-        where: { id: { in: parsed.data.templateIds }, OR: [{ projectId: id }, { projectId: null }] },
+        // An archived template is no longer offered, so it cannot be handed out
+        // either — the ones already assigned keep working.
+        where: {
+          id: { in: parsed.data.templateIds },
+          archivedAt: null,
+          OR: [{ projectId: id }, { projectId: null }],
+        },
         select: { id: true, title: true, translations: true },
       });
-      // A template can be written in three languages; the goal the assignee
-      // reads is a plain string, so resolve it here in *their* language.
-      const assigneeLanguage = assigneeId
-        ? (
-            await prisma.user.findUnique({
-              where: { id: assigneeId },
-              select: { preferredLanguage: true },
-            })
-          )?.preferredLanguage
-        : null;
+      // The snapshot is the canonical wording; what the assignee *reads* is
+      // resolved from the template in their own language on every render, so it
+      // follows both later edits and a change of language.
       for (const tpl of templates) {
-        const resolved = resolveTemplateTitle(tpl, assigneeLanguage);
-        titles.push(resolved);
-        fromTemplate.add(resolved);
+        rows.push({ title: resolveTemplateTitle(tpl, defaultLocale), templateId: tpl.id });
       }
       if (templates.length > 0) {
         await prisma.projectTaskTemplate.updateMany({
@@ -89,38 +94,46 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         });
       }
     }
-    if (parsed.data.title) titles.push(parsed.data.title);
-    if (titles.length === 0) return NextResponse.json({ error: 'Nothing to create' }, { status: 400 });
+    if (parsed.data.title) rows.push({ title: parsed.data.title, templateId: null });
+    if (rows.length === 0) return NextResponse.json({ error: 'Nothing to create' }, { status: 400 });
 
     let order = await prisma.projectTask.count({ where: { projectId: id } });
     const created = [];
-    for (const title of titles) {
+    for (const row of rows) {
       created.push(
         await prisma.projectTask.create({
-          data: { projectId: id, title, order: order++, assigneeId: assigneeId ?? null },
+          data: {
+            projectId: id,
+            title: row.title,
+            templateId: row.templateId,
+            order: order++,
+            assigneeId: assigneeId ?? null,
+            createdById: session.user.id,
+          },
         })
       );
-      // Keep the pool current: a goal written by hand becomes a template too, so
-      // the next member can be given it in one click. A goal that came *from*
-      // the pool is skipped — capturing it would clone the shared template into
-      // this project under whatever language it was resolved to.
-      if (!fromTemplate.has(title)) {
-        await prisma.projectTaskTemplate
-          .upsert({
-            where: { projectId_title: { projectId: id, title } },
-            update: {},
-            create: { projectId: id, title, createdById: session.user.id },
-          })
-          .catch(() => null);
-      }
     }
 
     if (assigneeId && assigneeId !== session.user.id) {
+      // The notification is written now, so it carries the wording the assignee
+      // reads — their language, not whoever sent it.
+      const assigneeLanguage = (
+        await prisma.user.findUnique({ where: { id: assigneeId }, select: { preferredLanguage: true } })
+      )?.preferredLanguage;
+      const firstTitle = created[0].templateId
+        ? resolveTemplateTitle(
+            (await prisma.projectTaskTemplate.findUnique({
+              where: { id: created[0].templateId },
+              select: { title: true, translations: true },
+            })) ?? { title: created[0].title },
+            assigneeLanguage
+          )
+        : created[0].title;
       await notify(
         assigneeId,
         'project',
         created.length === 1
-          ? `New goal on "${project.name}": ${created[0].title}`
+          ? `New goal on "${project.name}": ${firstTitle}`
           : `${created.length} new goals on "${project.name}".`,
         await goalLinkFor(assigneeId, id)
       );
