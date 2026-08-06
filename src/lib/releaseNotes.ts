@@ -34,6 +34,21 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
+    version: '0.42.1-beta',
+    date: '2026-08-05',
+    highlights: {
+      en: [
+        'Announcement emails and overdue stage-deadline reminders now arrive in the recipient\'s selected language (English, Turkish or German). If no supported language is saved, the email falls back to English.',
+      ],
+      tr: [
+        'Duyuru e-postaları ve gecikmiş aşama son tarihi hatırlatmaları artık alıcının seçtiği dilde (İngilizce, Türkçe veya Almanca) geliyor. Desteklenen bir dil kaydedilmemişse e-posta İngilizce olarak gönderiliyor.',
+      ],
+      de: [
+        'Ankündigungs-E-Mails und Erinnerungen an überfällige Phasenfristen kommen jetzt in der ausgewählten Sprache der empfangenden Person an (Englisch, Türkisch oder Deutsch). Ist keine unterstützte Sprache gespeichert, wird die E-Mail auf Englisch gesendet.',
+      ],
+    },
+  },
+  {
     version: '0.42.0-beta',
     date: '2026-08-04',
     highlights: {

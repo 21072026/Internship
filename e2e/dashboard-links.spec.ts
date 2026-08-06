@@ -39,11 +39,14 @@ test('candidates can be filtered by pipeline stage via ?status=', async ({ page 
     // Target the chip by testid: its label also renders as an <option> in the
     // "All stages" select, so matching on text is a strict-mode violation.
     await expect(page.getByTestId('candidates-status-filter-chip')).toContainText('660 · Hired');
-    await expect(page.getByText('ZZ InStage Mentee')).toBeVisible();
-    await expect(page.getByText('ZZ OutStage Mentee')).toHaveCount(0);
+    // Each candidate appears in both the md:hidden mobile list and the desktop
+    // grid, so scope to the list this viewport shows or strict mode trips.
+    const desktopList = page.getByTestId('candidates-desktop-list');
+    await expect(desktopList.getByText('ZZ InStage Mentee')).toBeVisible();
+    await expect(desktopList.getByText('ZZ OutStage Mentee')).toHaveCount(0);
 
     // Name links to the detail page
-    await page.getByRole('link', { name: 'ZZ InStage Mentee' }).click();
+    await desktopList.getByRole('link', { name: 'ZZ InStage Mentee' }).click();
     await page.waitForURL((u) => u.pathname.includes(`/admin/candidates/${inMentee.id}`), { timeout: 15_000 });
   } finally {
     await cleanupByEmail(mentorEmail);

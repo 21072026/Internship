@@ -27,8 +27,11 @@ test('candidates: city filter narrows results and CSV export downloads', async (
     await page.goto('/admin/candidates');
     await page.getByPlaceholder('Filter by city').fill(`Cologne${tag}`);
     await page.waitForTimeout(1200);
-    await expect(page.getByText(`${tag} Koln Mentee`)).toBeVisible();
-    await expect(page.getByText(`${tag} Berlin Mentee`)).toHaveCount(0);
+    // Candidates render twice (md:hidden mobile list + desktop grid) — scope the
+    // name assertions to one list so they stay strict-mode safe.
+    const desktopList = page.getByTestId('candidates-desktop-list');
+    await expect(desktopList.getByText(`${tag} Koln Mentee`)).toBeVisible();
+    await expect(desktopList.getByText(`${tag} Berlin Mentee`)).toHaveCount(0);
 
     // CSV export downloads
     const download = page.waitForEvent('download', { timeout: 15_000 });

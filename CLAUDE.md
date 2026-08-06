@@ -225,6 +225,13 @@ workaround, #636, and it compiled on every PR push).
   box; add a `data-testid` to any new search input and target that. `getByText('X')` does
   substring matching, so a seeded name like "RB Company" also matches `getByText('Company')`
   — use `{ exact: true }` or scope to a container (`page.locator('table').getByText(...)`).
+  **Responsive dual lists**: `/admin/candidates` renders every candidate *twice* — once in the
+  `md:hidden` mobile list (`candidates-mobile-list`, cards `candidate-mobile-card-<id>`) and
+  once in the desktop grid (`candidates-desktop-list`, cards `candidate-card-<id>`). Strict mode
+  counts matched elements regardless of CSS visibility, so any unscoped name locator there
+  resolves to 2 and throws; scope to `getByTestId('candidates-desktop-list')` (what the Desktop
+  Chrome viewport shows) or to a specific card testid. Assume the same for any future
+  mobile/desktop split.
 - **Known pre-existing CI flakes**: `e2e/account-self-service.spec.ts:52` and
   `e2e/sign-out-all.spec.ts:24` fail intermittently in the Playwright smoke job (usually
   preceded by a `[WebServer] TypeError: Cannot read properties of null (reading 'user')`
