@@ -10,6 +10,29 @@ Newest entries on top.
 
 ---
 
+## 2026-08-03 — Yaklaşan toplantı banner'ı + "Katıl" pili (#51 devamı, 0.41.0-beta)
+
+**`ResponsiveShell` header bileşenlerini İKİ kez render eder** — mobil üst bar ve
+masaüstü şeridi. Yani oraya koyduğun her `data-testid` DOM'da iki düğüme çözülür ve
+`getByTestId(...)` strict-mode ihlali verir; biri o viewport'ta `lg:hidden` ile
+gizli olduğu için `.first()` de yetmez. Repodaki yerleşik çözüm:
+`page.locator('[data-testid="x"]:visible').first()` (bkz. `messages-inbox.spec.ts`
+mesaj ikonunu tam böyle buluyor). Kabuk header'ına yeni bir şey eklerken testi
+baştan böyle yaz.
+
+**Aynı cevabı isteyen iki bileşen tek poll paylaşmalı.** Banner (panelde) ve pil
+(header'da) aynı anda mount oluyor; her biri kendi `setInterval`'ını kursa dakikada
+iki istek olurdu. `src/hooks/useUpcomingMeeting.ts`'teki modül seviyesi store
+(abone kümesi + tek timer) hem isteği tekilleştiriyor hem de sonradan mount olan
+bileşene mevcut cevabı anında veriyor.
+
+**Şemada bitiş saati yoksa "devam ediyor"u sen tanımlarsın.** `Meeting`'in süresi
+yok; "hâlâ sürüyor" başlangıçtan sonra sabit bir pencere (`MEETING_DURATION_MINUTES`,
+maintainer'ın onayıyla 60 dk) olarak tanımlandı. Böyle bir varsayımı sabit olarak
+dışa aç ve yorumda kimin onayladığını yaz — sonraki oturum bunu tahmin etmesin.
+
+---
+
 ## 2026-08-02 — #51'in kullanıcı geri bildirim turları (0.40.1/0.40.2-beta)
 
 Aynı oturumda özellik canlıya gitmeden önce üç tur geri bildirim geldi; hepsi
