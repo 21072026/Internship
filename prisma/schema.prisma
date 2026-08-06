@@ -1337,6 +1337,11 @@ model MeetingSeries {
   daysOfWeek  Json
   // Wall-clock start time in "HH:mm" format (24-hour), e.g. "09:30".
   timeOfDay   String
+  // Which clock `timeOfDay` is on (IANA zone, e.g. "Europe/Istanbul"). Null for
+  // rules saved before #1110, which are read on the deployment default zone —
+  // the clock the UI always showed them on. Without this the wall clock was
+  // anchored to UTC, so a 09:00 rule was reminded as "12:00 (GMT+3)".
+  timeZone    String?
   fixedLink   String?
   active      Boolean  @default(true)
   createdById String

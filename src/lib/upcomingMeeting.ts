@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { parseDaysOfWeek, seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 
 // "There is a meeting about to start / happening right now" (#51 follow-up).
 //
@@ -40,24 +41,6 @@ interface Candidate {
   meetLink: string | null;
   projectId: string | null;
   projectName: string | null;
-}
-
-function occurrencesInWindow(daysOfWeek: number[], timeOfDay: string, from: Date, to: Date): Date[] {
-  const [hour, minute] = timeOfDay.split(':').map((v) => Number(v));
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return [];
-  const allowed = new Set(daysOfWeek);
-  const out: Date[] = [];
-  // The series generator stores wall-clock times as UTC; stay consistent with it.
-  const day = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-  // The window is at most ~90 minutes, so it can only touch today and tomorrow.
-  for (let i = 0; i <= 1; i++) {
-    const cursor = new Date(day);
-    cursor.setUTCDate(cursor.getUTCDate() + i);
-    if (!allowed.has(cursor.getUTCDay())) continue;
-    const when = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate(), hour, minute, 0, 0));
-    if (when >= from && when <= to) out.push(when);
-  }
-  return out;
 }
 
 /**
@@ -126,17 +109,15 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
         title: true,
         daysOfWeek: true,
         timeOfDay: true,
+        timeZone: true,
         fixedLink: true,
         projectId: true,
         project: { select: { name: true } },
       },
     });
     for (const s of series) {
-      const days = Array.isArray(s.daysOfWeek)
-        ? (s.daysOfWeek as unknown[]).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
-        : [];
-      if (days.length === 0) continue;
-      for (const when of occurrencesInWindow(days, s.timeOfDay, windowStart, windowEnd)) {
+      if (parseDaysOfWeek(s.daysOfWeek).length === 0) continue;
+      for (const when of seriesOccurrences(s.daysOfWeek, s.timeOfDay, windowStart, windowEnd, s.timeZone)) {
         candidates.push({
           id: `${s.id}:${when.toISOString()}`,
           title: s.title,

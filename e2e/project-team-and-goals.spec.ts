@@ -171,8 +171,8 @@ test('setting up a series announces only the next meeting, not every occurrence'
       },
     },
   });
-  // A relation bound to the project is what makes the generator produce Meeting
-  // rows (and, before this fix, one invitation email per row).
+  // A relation bound to the project is what puts a mentee on the announcement
+  // list (and, before this fix, got them one invitation email per occurrence).
   const relation = await prisma.mentorshipRelation.create({
     data: { mentorId: mentor.id, menteeId: mentee.id, projectId: project.id },
   });
@@ -183,16 +183,15 @@ test('setting up a series announces only the next meeting, not every occurrence'
       data: {
         projectId: project.id,
         title: 'Weekly sync',
-        daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // every day, to get many occurrences fast
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // every day, so the next one is always close
         timeOfDay: '09:00',
-        weeksAhead: 4,
       },
     });
     expect(res.status()).toBe(201);
     const body = await res.json();
 
-    // Weeks of meetings are created …
-    expect(body.createdMeetings).toBeGreaterThan(5);
+    // The series is a rule — no occurrence rows are written at all (#1110) …
+    expect(await prisma.meeting.count({ where: { seriesId: body.series.id } })).toBe(0);
     // … and exactly one invitation goes out: the next one. The rest are covered
     // by the day-before / hour-before reminders.
     expect(body.invitesSent).toBe(1);
