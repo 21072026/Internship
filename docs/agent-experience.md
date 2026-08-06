@@ -10,6 +10,55 @@ Newest entries on top.
 
 ---
 
+## 2026-08-06 — Placeholder mentee'nin çıkmaz sokağı: "değiştirilemeyen alan"ı ararken tüm yazma noktalarını tara (#1123, 0.49.2-beta)
+
+**"X sonradan düzeltilebiliyor mu?" sorusunun cevabı, X'i *yazan* tüm yerleri saymakla
+bulunuyor — okuyan yerlerle değil.** Mentee'nin uydurma e-postasını kimin değiştirebildiğini
+`grep "prisma.user.update"` ile 23 dosyaya indirip her birinde `email` yazımı olup olmadığına
+bakmak 5 dakika sürdü ve kesin cevap verdi: sadece üç yer yazıyor (`/api/account` — kendi
+oturumu + `currentPassword`; `accountErasure` — anonimleştirme; SSO provisioning — yeni
+kullanıcı). Sayfaları tek tek gezip "düzenle butonu var mı" diye bakmak hem yavaş hem de
+eksik kalırdı. UI'da olmayan bir şeyin API'de olmadığını da ancak bu şekilde kanıtlayabildim.
+
+**Sentinel parola (`'!created-no-login'`) bir "hesap durumu" alanıdır, ama şemada öyle
+görünmez.** `bcrypt.compare` hiçbir zaman eşleşmediği için bu satır aslında "hesap değil,
+kayıt" demek — fakat bu bilgi yalnızca bir string literal olarak iki dosyada duruyordu
+(mentor route + `scripts/import-csv.mjs`'nin `'!imported-no-login'`'i). Yeni bir davranış bu
+duruma dayanacaksa önce onu adlandırmak gerekiyor: `src/lib/menteeAccount.ts` +
+`isPendingActivation()`. Aksi halde guard'ı yazarken import akışından gelen satırları sessizce
+dışarıda bırakırdım.
+
+**Aynı görünen iki endpoint'in güvenlik cevabı farklı olabilir; #875'i körü körüne
+genellemeyin.** Admin reset-password linki response'tan kaldırılmıştı (canlı bir hesabın
+tokenını üçüncü kişiye vermek = devralma). Yeni aktivasyon endpoint'i aynı linki *döndürüyor*,
+çünkü hedef hiçbir zaman hesap olmamış bir kayıt ve `POST /api/mentor/mentees` zaten aynı linki
+döndürüyor. Ayrımı koda yorum olarak yazmak, ileride "tutarsızlık" diye geri alınmasını
+engelliyor. Asıl kilit ise parola sentinel'i: parolasını belirlemiş biri için endpoint 409
+veriyor — güvenlik sınırı "kim çağırıyor" değil, "hedef kayıt hangi durumda".
+
+**`select`'e `password: true` ekleyip yanıttan destructure ile çıkarmak, ikinci bir sorgudan
+ucuz ama riski yorumla işaretlemek şart.** `GET /api/mentorship/[id]` ve `GET /api/users/[id]`
+artık `pendingActivation` türetiyor; `const { password, ...rest } = user` satırının hemen
+üstündeki yorum, birinin ileride `...user`'ı doğrudan spread etmesini engellemek için var.
+
+**Bu container'da Playwright'ı gerçekten koşturmak mümkün — repo config'ini scratchpad'den
+sarmalayın.** Kurulu Chromium 1194, Playwright 1.62 ise 1234 istiyor; `launchOptions.
+executablePath: '/opt/pw-browsers/chromium'` veren ve `playwright.config.ts`'i import edip
+üzerine yazan bir config yeterli. İki tuzak: `testDir`/`globalSetup` **mutlak** yol olmalı ve
+`webServer`'a `cwd: '/home/user/Internship'` eklenmeli — yoksa Playwright config'in bulunduğu
+scratchpad dizininde `npm run dev` çalıştırmaya çalışıp `ENOENT: package.json` ile ölüyor.
+`npx prisma db seed`'i atlamayın: admin ile giriş yapan spec'ler (`admin-mentee`,
+`mentor-detail`) tohumlanmış ADMIN yoksa sign-in timeout'uyla düşüyor ve bu, kodunuzla ilgisiz
+bir sahte kırmızı olarak görünüyor.
+
+**`pull_request` tetikleyicisi dursa bile CI'ı elle dispatch edebilirsiniz.** PR açıldıktan
+sonra 5 dakika boyunca hiç check run gelmedi; `list_workflow_runs` son saatlerdeki *tüm* CI/E2E
+koşularının `workflow_dispatch` olduğunu gösterdi — yani repo genelinde bir durum, PR'a özgü
+değil. `ci.yml` ve `e2e.yml` (input: `grep: '@smoke'`) branch üzerinde dispatch edilince check
+run'lar head sha'ya iliştiği için zorunlu kontroller karşılanıyor. Ayrıca API'nin
+`mergeable_state` alanı tembel hesaplanıyor: checks yeşilken bile dakikalarca `blocked`
+kalabiliyor, merge çağrısı yine de başarılı oluyor.
+
 ## 2026-08-06 — `origin/main` merge'ünde smoke false-positive'leri: `npm run dev` vs prod build
 
 **`npm run test:e2e:smoke`'u yerelde çalıştırmak `npm run dev`'i başlatır, CI ise
