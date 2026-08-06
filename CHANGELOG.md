@@ -8,6 +8,31 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.44.0-beta] - 2026-08-06
+
+### Changed
+- **The landing page now argues instead of listing.** Rebuilt around the three-sided loop
+  (mentee ↔ mentor ↔ company) that `docs/landing-value-proposition.md` derived from a
+  code-grounded capability audit: hero → the loop + chain of proof → "pick your side" cards →
+  one section per audience → how it works → pipeline → features → roles → transparency → FAQ →
+  a closing CTA with one button per audience. 152 new `landing.*` keys in EN/TR/DE.
+- **Every claim is one the code can back.** Dropped from the copy: "companies discover you"
+  (the interest signal reaches the mentor, not the mentee), "junior *and* senior talent"
+  (the talent-pool query filters `role: 'MENTEE'`), "reach out directly / go talent hunting"
+  (company users cannot message candidates), "manage your interns" (the company panel is
+  read-only) and "cheaper than ever" (there is no price to compare). Each is replaced by what
+  the product actually does, with its limit stated in the same sentence.
+- Hero drops its buttons: a single "Get Started" funnelled mentors and companies into the
+  mentee sign-up form. Mentor and company CTAs are an email to the program (from the
+  `supportEmail` setting) until their own entry pages land (#905, #1102) — and render only
+  when that address is configured, so the page never ships a dead button.
+- Landing header, transparency strip and footer now link the public source (AGPL-3.0), the
+  release notes and `/features`; the version count is read from `RELEASE_NOTES`, never typed in.
+
+### Added
+- FAQ section: 16 real objections with answers, grouped by audience.
+- `data-testid="role-card"` on the three audience cards, for the e2e assertions.
+
 ## [0.43.0-beta] - 2026-08-05
 
 ### Added
