@@ -734,6 +734,7 @@ model MentorshipRequest {
 // PENDING application at a time per email, same shape as MentorshipRequest.
 enum MentorApplicationStatus {
   PENDING
+  UNDER_REVIEW
   APPROVED
   REJECTED
 }

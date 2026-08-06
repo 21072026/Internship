@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.46.0-beta] - 2026-08-06
+## [0.48.0-beta] - 2026-08-06
 
 Closes #1113.
 
@@ -56,6 +56,46 @@ Closes #1113.
   template alongside it. `/api/project-goals` is removed — `/api/todos` supersedes it.
 - E2E: new `e2e/todos.spec.ts` (pool reference, retire-without-loss, no re-capture, own to-dos +
   privacy); the `@smoke` project-goals test now ticks the goal off on `/todos`.
+
+## [0.47.0-beta] - 2026-08-06
+
+### Added
+- **Mentor self-application review lifecycle** (#933), completing #904/#905 end to end:
+  `Mentör Ol` / `Become a Mentor` / `Mentor werden` link on the landing page and sign-in
+  page, both leading to `/apply-as-mentor`. New admin section **Mentor Applications**
+  (`/admin/mentor-applications` + `/admin/mentor-applications/[id]`, nav entry added):
+  a status-filterable queue (Pending / Under review / Approved / Rejected) and a detail
+  screen showing contact info, skills, experience, motivation, capacity, consent, and an
+  admin-only review note. Admin actions — **Take under review**, **Approve**, **Reject**
+  (rejection reason required) — hit a new `PATCH /api/mentor-applications/[id]`
+  (`GET` added too) that guards every transition with a conditional `updateMany` so a
+  double click or retry 409s (`already_decided`) instead of repeating side effects.
+  Approving is one DB transaction: an email tied to no existing account gets an
+  `InvitationToken` (same `/auth/register?token=` flow as an admin invite) and the
+  application is only left `APPROVED` if that succeeds; an email tied to an existing
+  `MENTEE` account promotes it to `MENTOR` in place (filling in capacity/skills only if
+  unset) instead of creating a duplicate; an existing `ADMIN`/`COMPANY`/`SOURCE` account is
+  never silently repurposed — the transaction rolls back with `role_conflict` for manual
+  resolution. Applicants get transactional, localized (EN/TR/DE) emails at every stage —
+  received, under review, approved, rejected — via four new `emailService.ts` functions;
+  rejection email is a generic decline, never the admin's internal reason. Both the public
+  POST and the admin PATCH send email fire-and-forget (not awaited) so a slow/unreachable
+  SMTP server can never hold up the response. The public form also gained the same
+  honeypot + minimum-render-time anti-spam guard already used by the public contact form,
+  and now sends the applicant a "received" confirmation email. Schema: added
+  `UNDER_REVIEW` to `MentorApplicationStatus`.
+
+## [0.46.0-beta] - 2026-08-04
+
+### Added
+- **Public "apply as mentor" form** (#905), at `/apply-as-mentor`, on top of the #904
+  application API. No account is required or created — the success screen says so
+  explicitly. Fields: full name, email, phone, expertise/skills, experience summary,
+  motivation, mentee capacity, LinkedIn; a consent checkbox (linking to `/privacy` and
+  `/terms`) is mandatory before submit. The API's 409 (a pending application already
+  exists for this email) and 429 (rate limited) responses each get their own message
+  instead of a generic failure banner. Localized EN/TR/DE like the rest of the public
+  application surface (`/apply/[mentorId]`, `/auth/register`).
 
 ## [0.45.0-beta] - 2026-08-06
 

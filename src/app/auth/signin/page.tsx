@@ -206,6 +206,12 @@ export default function SignInPage() {
               {t.auth.registerHere}
             </Link>
           </p>
+          <p className="text-center text-sm text-gray-500 mt-3">
+            {t.auth.becomeMentorPrompt}{' '}
+            <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="become-mentor-link">
+              {t.auth.becomeMentorLink}
+            </Link>
+          </p>
         </div>
 
         <div className="flex items-center justify-center gap-4 mt-6">

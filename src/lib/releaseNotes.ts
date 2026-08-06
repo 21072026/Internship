@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.46.0-beta',
+    version: '0.48.0-beta',
     date: '2026-08-06',
     highlights: {
       en: [
@@ -36,6 +36,39 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Eine Aufgabe aus der gemeinsamen Liste zu entfernen heißt nur: sie wird nicht mehr vergeben. Wer sie schon hat, behält sie genau so, wie sie gegeben wurde.',
         'Die Schnellauswahl unter einem Projekt füllt sich nicht mehr mit den Aufgaben, die du gerade verteilt hast. Dort steht jetzt nur, was du bewusst hinzugefügt hast, plus die gemeinsame Liste — derselbe Text erscheint nicht mehr immer wieder, einmal pro Sprache.',
         'Mentorinnen und Mentoren können eine Aufgabe jetzt auch ohne Projekt dazwischen vergeben: selbst geschrieben oder aus der gemeinsamen Liste. Was du dir selbst notierst, bleibt deins — es erscheint nicht in der Ansicht deines Mentors.',
+      ],
+    },
+  },
+  {
+    version: '0.47.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Mentor applications now go all the way: admins get a new "Mentor Applications" section to review, put on hold, approve or reject each one, and approving automatically sets up the mentor’s account (or upgrades their existing one) — no manual account creation needed. Applicants get an email at every step.',
+        'A "Become a mentor" link is now on the homepage and sign-in page, so applying no longer requires knowing the direct link.',
+      ],
+      tr: [
+        'Mentor başvuruları artık uçtan uca işliyor: adminler her başvuruyu incelemek, incelemeye almak, onaylamak veya reddetmek için yeni bir "Mentor Başvuruları" bölümü kazandı; onaylandığında mentörün hesabı otomatik kuruluyor (ya da mevcut hesabı yükseltiliyor) — elle hesap açmaya gerek kalmıyor. Başvuranlar her adımda e-posta alıyor.',
+        'Ana sayfada ve giriş sayfasında artık bir "Mentör Ol" bağlantısı var — başvurmak için doğrudan linki bilmek gerekmiyor.',
+      ],
+      de: [
+        'Mentor-Bewerbungen laufen jetzt durchgängig: Admins haben einen neuen Bereich „Mentor-Bewerbungen“, um jede Bewerbung zu prüfen, in Prüfung zu setzen, anzunehmen oder abzulehnen — bei Annahme wird das Mentor-Konto automatisch eingerichtet (oder ein bestehendes hochgestuft), ganz ohne manuelle Kontoerstellung. Bewerbende erhalten bei jedem Schritt eine E-Mail.',
+        'Auf der Startseite und der Anmeldeseite gibt es jetzt einen Link „Mentor werden“ — man muss den direkten Link nicht mehr kennen, um sich zu bewerben.',
+      ],
+    },
+  },
+  {
+    version: '0.46.0-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'You can now apply to become a mentor without an account: fill in the new "Apply as mentor" form and an admin reviews it. No account is created until it’s approved.',
+      ],
+      tr: [
+        'Artık hesap açmadan mentör olmak için başvurabilirsin: yeni "Mentör olarak başvur" formunu doldur, bir yönetici inceleyecek. Onaylanana kadar hesap oluşturulmuyor.',
+      ],
+      de: [
+        'Du kannst dich jetzt ohne Konto als Mentor bewerben: Fülle das neue Formular „Als Mentor bewerben“ aus, ein Admin prüft es. Ein Konto wird erst bei Genehmigung angelegt.',
       ],
     },
   },
