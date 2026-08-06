@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.50.1-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Signing up no longer looks like it needs an invitation: the invitation-code box is tucked away, and only opens for people who actually arrived with a code.',
+      ],
+      tr: [
+        'Kaydolmak artık davetiye gerektiriyormuş gibi görünmüyor: davet kodu kutusu katlandı ve yalnızca gerçekten kodla gelenler için açılıyor.',
+      ],
+      de: [
+        'Die Registrierung sieht nicht mehr so aus, als bräuchte sie eine Einladung: Das Feld für den Einladungscode ist eingeklappt und öffnet sich nur für alle, die tatsächlich mit einem Code kommen.',
+      ],
+    },
+  },
+  {
     version: '0.50.0-beta',
     date: '2026-08-06',
     highlights: {

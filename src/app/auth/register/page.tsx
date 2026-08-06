@@ -37,12 +37,19 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Registration is open: anyone can sign up as a mentee without an invitation.
+  // The token field used to sit at the top of the form, which read as "you need
+  // an invitation to be here" and turned the landing's open door into a locked
+  // one. It is now folded away, and only unfolded for people who arrived with a
+  // token in the link — the ones who actually have one.
+  const [showToken, setShowToken] = useState(false);
 
   // Record that the invitation link was opened (once), so admins see the invite
   // progress from "sent" to "link opened" before the invitee finishes signing up.
   const inviteToken = searchParams.get('token');
   useEffect(() => {
     if (!inviteToken) return;
+    setShowToken(true);
     fetch('/api/invite/opened', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -119,13 +126,24 @@ function RegisterForm() {
           )}
 
           <form method="post" onSubmit={onSubmit} className="space-y-4">
-            <Input
-              label={t.auth.invitationToken}
-              hint={t.auth.tokenHint}
-              placeholder={t.auth.tokenPlaceholder}
-              {...register('token')}
-              error={errors.token?.message}
-            />
+            {showToken ? (
+              <Input
+                label={t.auth.invitationToken}
+                hint={t.auth.tokenHint}
+                placeholder={t.auth.tokenPlaceholder}
+                {...register('token')}
+                error={errors.token?.message}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowToken(true)}
+                data-testid="have-invite-toggle"
+                className="text-sm text-blue-600 hover:underline"
+              >
+                {t.auth.haveInviteToggle}
+              </button>
+            )}
             <Input
               label={t.auth.fullName}
               required
