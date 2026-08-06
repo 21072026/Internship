@@ -13,8 +13,19 @@ import type { Page } from '@playwright/test';
  *   another navigation to "/admin"
  *
  * That killed admin-organizations, company-shortlist and message-attachments in
- * the scheduled full run. Waiting for the network to go quiet lets the landing
- * navigation finish first.
+ * the scheduled full run.
+ *
+ * Used to wait for `networkidle` here, but the app never actually goes
+ * network-idle on these pages: `TimezoneSync` fires a one-off
+ * `POST /api/profile/timezone` on every authenticated mount, and the sidebar's
+ * `<Link>`s prefetch every route in the nav. Under CI's single-core runner that
+ * burst of concurrent requests can take a request past Playwright's 30s
+ * `networkidle` budget even though the page itself has long finished rendering
+ * (#1081) — `instant-meeting`, `pii-access-lifecycle`, `project-team-and-goals`
+ * and `upcoming-meeting` all hung on exactly this. The account menu button is
+ * in the shared shell on every authenticated role page, so waiting for it is a
+ * deterministic "the landing page has actually mounted" signal that doesn't
+ * depend on background requests ever going quiet.
  */
 export async function signInAndSettle(page: Page, email: string, password: string, landing: string) {
   await page.goto('/auth/signin');
@@ -22,7 +33,7 @@ export async function signInAndSettle(page: Page, email: string, password: strin
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
-  await page.waitForLoadState('networkidle');
+  await page.getByTestId('account-menu-button').waitFor({ state: 'visible', timeout: 20_000 });
 }
 
 /**
