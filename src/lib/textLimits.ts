@@ -53,8 +53,6 @@ export const TEXT_LIMITS = {
   mentorApplicationExperience: 2000,
   /** MentorApplication.motivation — @db.Text */
   mentorApplicationMotivation: 2000,
-  /** MentorApplication.rejectReason — @db.Text */
-  mentorApplicationRejectReason: 1000,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;
