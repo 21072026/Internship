@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.49.2-beta',
+    version: '0.49.3-beta',
     date: '2026-08-06',
     highlights: {
       en: [
@@ -24,6 +24,30 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Mentor wirst du jetzt nur noch über einen Weg: das Bewerbungsformular. Die beiden Buttons auf der Startseite, die bisher dein E-Mail-Programm geöffnet haben, führen zum selben kurzen Formular wie der Link „Hier bewerben“ ganz oben — keine E-Mail mehr schreiben und auf Antwort warten. Außerdem sind sie immer sichtbar, auch ohne hinterlegte Support-Adresse.',
+      ],
+    },
+  },
+  {
+    version: '0.49.2-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'A mentee you added by hand can now get a real account. Until now, adding someone without an e-mail address gave them a stand-in one and there was no way back: they could never sign in, no reset mail could reach them, and nobody could correct the address afterwards.',
+        'On the mentee\'s page you now enter their real address and send them an activation link. It stays the same record — the interaction log, the stage history and the company link are all kept.',
+        'The same button resends the link if the e-mail did not arrive, and shows you the link so you can pass it on yourself.',
+        'Someone who has already set a password keeps control of their own address: only they can change it, from their account settings.',
+      ],
+      tr: [
+        'Elle eklediğin bir mentee artık gerçek bir hesaba kavuşabiliyor. Şimdiye kadar e-posta adresi girmeden eklediğin kişiye geçici bir adres veriliyordu ve geri dönüşü yoktu: hiç giriş yapamıyor, sıfırlama e-postası kendisine ulaşamıyor ve adresi sonradan kimse düzeltemiyordu.',
+        'Mentee sayfasında artık gerçek adresini yazıp ona aktivasyon bağlantısı gönderiyorsun. Kayıt aynı kayıt olarak kalıyor — etkileşim geçmişi, aşama geçmişi ve şirket bağlantısı korunuyor.',
+        'E-posta ulaşmadıysa aynı buton bağlantıyı yeniden gönderiyor; bağlantıyı ekranda da gösteriyor, istersen kendin iletebiliyorsun.',
+        'Parolasını çoktan belirlemiş biri kendi adresinin sahibi olmayı sürdürüyor: adresini yalnızca kendisi, hesap ayarlarından değiştirebiliyor.',
+      ],
+      de: [
+        'Ein von Hand angelegter Mentee kann jetzt ein echtes Konto bekommen. Bisher erhielt jemand ohne E-Mail-Adresse eine Platzhalteradresse und es gab keinen Weg zurück: Anmelden war unmöglich, keine Zurücksetzen-Mail kam an, und die Adresse ließ sich nachträglich von niemandem korrigieren.',
+        'Auf der Mentee-Seite trägst du nun die echte Adresse ein und schickst einen Aktivierungslink. Es bleibt derselbe Datensatz — Interaktionsprotokoll, Phasenhistorie und Firmenzuordnung bleiben erhalten.',
+        'Derselbe Button schickt den Link erneut, falls die E-Mail nicht ankam, und zeigt ihn dir an, damit du ihn selbst weitergeben kannst.',
+        'Wer bereits ein Passwort gesetzt hat, behält die Hoheit über die eigene Adresse: ändern kann sie nur die Person selbst, in den Kontoeinstellungen.',
       ],
     },
   },
