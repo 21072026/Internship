@@ -2,114 +2,238 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import crypto from 'crypto';
+import type { Session } from 'next-auth';
+import type { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { notify } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId } from '@/lib/orgScope';
-import { TEXT_LIMITS } from '@/lib/textLimits';
-import { sendInvitationEmail, sendMentorApplicationRejectionEmail } from '@/services/emailService';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import {
+  sendMentorApplicationUnderReviewEmail,
+  sendMentorApplicationApprovedEmail,
+  sendMentorApplicationRejectedEmail,
+} from '@/services/emailService';
 
-// Admin decision on a mentor application (#906), building on the #904 model/API
-// (src/app/api/mentor-applications/route.ts) — no new model, no duplicate
-// endpoint.
-//
-//   APPROVED: a 7-day InvitationToken (role MENTOR) is created and the same
-//             invite email an admin-created invitation gets is sent. No User
-//             is created here — that happens when the applicant registers
-//             through the link, same as any other invitation.
-//   REJECTED: rejectReason is required and stored for the admin trail only;
-//             the applicant gets a polite, generic decline (never the reason).
-//
-// Both paths guard against a double-decide with a conditional `updateMany`
-// (`status: 'PENDING'` in the `where`) run inside the transaction that also
-// creates the InvitationToken, so a double click or retried request can never
-// send two invitations or flip a decided application — the loser gets 409.
+// Admin decide endpoint for #904 mentor applications (#933): take into review,
+// approve (creates or upgrades the MENTOR account), or reject. Mirrors the
+// mentorship-requests decide endpoint (src/app/api/admin/mentorship-requests/route.ts):
+// a status guard via a conditional updateMany makes every action idempotent —
+// a second call (double click, retry) sees the row already decided and no-ops
+// with 409 instead of repeating the side effects.
 
-const decideSchema = z
-  .object({
-    action: z.enum(['approve', 'reject']),
-    rejectReason: z.string().max(TEXT_LIMITS.mentorApplicationRejectReason).optional(),
-  })
-  .refine((d) => d.action !== 'reject' || !!d.rejectReason?.trim(), {
-    message: 'A rejection reason is required',
-    path: ['rejectReason'],
-  });
+const DECIDABLE = ['PENDING', 'UNDER_REVIEW'] as const;
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function requireAdmin(): Promise<{ session: Session } | { error: NextResponse }> {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  if (session.user.role !== 'ADMIN') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  return { session };
+}
 
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdmin();
+  if ('error' in auth) return auth.error;
   const { id } = await params;
 
-  return await withTenantScope(session, async () => {
-    const parsed = decideSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? 'Validation failed' },
-        { status: 400 }
-      );
-    }
-    const { action, rejectReason } = parsed.data;
-
+  return await withTenantScope(auth.session, async () => {
     const application = await prisma.mentorApplication.findUnique({ where: { id } });
-    if (!application) {
-      return NextResponse.json({ error: 'Application not found' }, { status: 404 });
-    }
-    if (application.status !== 'PENDING') {
-      return NextResponse.json({ error: 'Application already decided', code: 'already_decided' }, { status: 409 });
-    }
+    if (!application) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ application });
+  });
+}
 
-    const now = new Date();
+const decideSchema = z.object({
+  action: z.enum(['review', 'approve', 'reject', 'note']),
+  reason: z.string().min(1).max(2000).optional(),
+  note: z.string().max(2000).optional(),
+});
 
-    if (action === 'approve') {
-      const token = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+// A signal (not a real error) used to unwind the approve transaction when the
+// email belongs to an account whose role we must not silently repurpose.
+class RoleConflictError extends Error {}
 
-      const invitation = await prisma.$transaction(async (tx) => {
-        const claimed = await tx.mentorApplication.updateMany({
-          where: { id, status: 'PENDING' },
-          data: { status: 'APPROVED', decidedAt: now, decidedById: session.user.id },
-        });
-        if (claimed.count === 0) return null;
-        return tx.invitationToken.create({
-          data: { token, email: application.email, role: 'MENTOR', expiresAt, invitedById: session.user.id },
-        });
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdmin();
+  if ('error' in auth) return auth.error;
+  const { session } = auth;
+  const { id } = await params;
+
+  const parsed = decideSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  const { action, reason, note } = parsed.data;
+  if (action === 'reject' && !reason?.trim()) {
+    return NextResponse.json({ error: 'A rejection reason is required' }, { status: 400 });
+  }
+
+  return await withTenantScope(session, async () => {
+    const application = await prisma.mentorApplication.findUnique({
+      where: { id },
+      select: { id: true, status: true, fullName: true, email: true, locale: true, orgId: true, capacity: true, expertise: true },
+    });
+    if (!application) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    if (action === 'note') {
+      await prisma.mentorApplication.update({ where: { id }, data: { rejectReason: note ?? '' } });
+      await logActivity({
+        action: 'mentor_application.note_saved',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        targetType: 'mentor_application',
+        targetId: id,
+        request,
       });
-      if (!invitation) {
-        return NextResponse.json({ error: 'Application already decided', code: 'already_decided' }, { status: 409 });
-      }
+      return NextResponse.json({ ok: true });
+    }
 
+    if (action === 'review') {
+      const updated = await prisma.mentorApplication.updateMany({
+        where: { id, status: 'PENDING' },
+        data: { status: 'UNDER_REVIEW' },
+      });
+      if (updated.count === 0) {
+        return NextResponse.json({ error: 'Already decided or already under review', code: 'already_decided' }, { status: 409 });
+      }
+      // Not awaited — a slow/unreachable SMTP server must not hold up the
+      // admin's click (see the identical note in the public POST handler).
+      void sendMentorApplicationUnderReviewEmail({
+        to: application.email,
+        fullName: application.fullName,
+        locale: application.locale,
+        orgId: application.orgId,
+      }).catch((e) => console.error('Mentor application under-review email failed:', e));
       await logActivity({
         action: 'mentor_application.decided',
         actorId: session.user.id,
         actorEmail: session.user.email ?? null,
         targetType: 'mentor_application',
         targetId: id,
-        detail: `approved · invitation ${invitation.id}`,
+        detail: 'under_review',
         request,
       });
-
-      // The decision and the invitation are already committed — a failed send
-      // must not undo either; the admin can still share the link manually via
-      // the existing "Recent Invitations" list.
-      try {
-        await sendInvitationEmail({ to: application.email, token, role: 'MENTOR', orgId: resolveOrgId(session) });
-      } catch (e) {
-        console.error('Mentor application approval email failed (invitation still valid):', e);
-      }
-
-      return NextResponse.json({ ok: true, invitationId: invitation.id });
+      return NextResponse.json({ ok: true, status: 'UNDER_REVIEW' });
     }
 
-    const reason = rejectReason!.trim();
-    const claimed = await prisma.mentorApplication.updateMany({
-      where: { id, status: 'PENDING' },
-      data: { status: 'REJECTED', decidedAt: now, decidedById: session.user.id, rejectReason: reason },
+    if (action === 'reject') {
+      const updated = await prisma.mentorApplication.updateMany({
+        where: { id, status: { in: [...DECIDABLE] } },
+        data: { status: 'REJECTED', decidedAt: new Date(), decidedById: session.user.id, rejectReason: reason },
+      });
+      if (updated.count === 0) {
+        return NextResponse.json({ error: 'Already decided', code: 'already_decided' }, { status: 409 });
+      }
+      void sendMentorApplicationRejectedEmail({
+        to: application.email,
+        fullName: application.fullName,
+        locale: application.locale,
+        orgId: application.orgId,
+      }).catch((e) => console.error('Mentor application rejection email failed:', e));
+      await logActivity({
+        action: 'mentor_application.decided',
+        actorId: session.user.id,
+        actorEmail: session.user.email ?? null,
+        targetType: 'mentor_application',
+        targetId: id,
+        detail: 'rejected',
+        request,
+      });
+      return NextResponse.json({ ok: true, status: 'REJECTED' });
+    }
+
+    // action === 'approve' — the status flip and the account-side write must
+    // succeed or fail together: an application is only ever left APPROVED if
+    // the account operation actually worked.
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.mentorApplication.updateMany({
+        where: { id, status: { in: [...DECIDABLE] } },
+        data: { status: 'APPROVED', decidedAt: new Date(), decidedById: session.user.id },
+      });
+      if (updated.count === 0) return { outcome: 'already_decided' as const };
+
+      const existingUser = await tx.user.findUnique({
+        where: { email: application.email },
+        select: {
+          id: true,
+          role: true,
+          email: true,
+          fullName: true,
+          orgId: true,
+          emailNotifications: true,
+          notificationPrefs: true,
+          skills: true,
+          mentorCapacity: true,
+        },
+      });
+
+      if (existingUser) {
+        // Never silently repurpose an ADMIN/COMPANY/SOURCE account's role —
+        // only a MENTEE (or an already-MENTOR account) is safe to touch.
+        if (existingUser.role !== 'MENTEE' && existingUser.role !== 'MENTOR') {
+          throw new RoleConflictError();
+        }
+        const user = existingUser.role === 'MENTOR'
+          ? existingUser
+          : await tx.user.update({
+              where: { id: existingUser.id },
+              data: {
+                role: 'MENTOR',
+                mentorCapacity: existingUser.mentorCapacity ?? application.capacity ?? undefined,
+                // Only fill in skills if the account has none yet — never
+                // overwrite what the person already curated on their profile.
+                skills: Array.isArray(existingUser.skills) && existingUser.skills.length > 0
+                  ? undefined
+                  : ((application.expertise ?? []) as Prisma.InputJsonValue),
+              },
+              select: {
+                id: true, role: true, email: true, fullName: true, orgId: true,
+                emailNotifications: true, notificationPrefs: true, skills: true, mentorCapacity: true,
+              },
+            });
+        return { outcome: 'promoted' as const, user };
+      }
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const invitation = await tx.invitationToken.create({
+        data: { token, email: application.email, role: 'MENTOR', expiresAt, invitedById: session.user.id },
+      });
+      return { outcome: 'invited' as const, invitation };
+    }).catch((e) => {
+      if (e instanceof RoleConflictError) return { outcome: 'role_conflict' as const };
+      throw e;
     });
-    if (claimed.count === 0) {
-      return NextResponse.json({ error: 'Application already decided', code: 'already_decided' }, { status: 409 });
+
+    if (result.outcome === 'already_decided') {
+      return NextResponse.json({ error: 'Already decided', code: 'already_decided' }, { status: 409 });
+    }
+    if (result.outcome === 'role_conflict') {
+      return NextResponse.json(
+        { error: 'An account with a different role already exists for this email', code: 'role_conflict' },
+        { status: 409 }
+      );
+    }
+
+    if (result.outcome === 'promoted') {
+      const user = result.user;
+      if (user.email && emailAllowed(user, 'mentorship')) {
+        void sendMentorApplicationApprovedEmail({
+          to: user.email,
+          fullName: user.fullName,
+          locale: application.locale,
+          orgId: user.orgId,
+        }).catch((e) => console.error('Mentor application approval email failed:', e));
+      }
+      await notify(user.id, 'mentor_application', 'Your mentor application was approved — welcome aboard!', '/mentor');
+    } else {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      void sendMentorApplicationApprovedEmail({
+        to: application.email,
+        fullName: application.fullName,
+        locale: application.locale,
+        orgId: application.orgId,
+        registerUrl: `${appUrl}/auth/register?token=${result.invitation.token}`,
+      }).catch((e) => console.error('Mentor application approval email failed:', e));
     }
 
     await logActivity({
@@ -118,20 +242,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       actorEmail: session.user.email ?? null,
       targetType: 'mentor_application',
       targetId: id,
-      detail: `rejected · ${reason.slice(0, 200)}`,
+      detail: `approved · ${result.outcome}`,
       request,
     });
 
-    try {
-      await sendMentorApplicationRejectionEmail({
-        to: application.email,
-        fullName: application.fullName,
-        orgId: resolveOrgId(session),
-      });
-    } catch (e) {
-      console.error('Mentor application rejection email failed:', e);
-    }
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, status: 'APPROVED', accountAction: result.outcome });
   });
 }

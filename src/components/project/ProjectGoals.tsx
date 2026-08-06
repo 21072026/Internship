@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Check, Circle, Hand, Trash2, Send, Plus, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
@@ -15,8 +16,12 @@ import type { TeamMember } from '@/lib/projectTeam';
 // a goal can belong to someone (the mentor hands it over, or a member claims an
 // unassigned one), and the person it belongs to can tick it off.
 //
-// The template pool is the other half: every goal ever written here is kept, so
-// the standard starter set can be handed to whoever joins next in one click.
+// The template pool is the other half: the shortlist a lead hands to whoever
+// joins next. It holds what someone put there on purpose — this project's own
+// templates plus the admin-managed shared ones — and nothing else. It used to
+// absorb every goal written on the project, which meant the goals just handed out
+// came straight back as templates, once per language, and the same wording piled
+// up round after round (#1113).
 
 interface Task {
   id: string;
@@ -24,6 +29,9 @@ interface Task {
   done: boolean;
   assigneeId: string | null;
   assignee?: { id: string; fullName: string } | null;
+  // Set when the goal came from the pool: the wording is read from here, in the
+  // viewer's language, so a reworded template reaches everyone who has it.
+  template?: { id: string; title: string; translations: Partial<Record<Locale, string>> } | null;
 }
 
 interface Template {
@@ -61,7 +69,10 @@ export function ProjectGoals({
   const [picked, setPicked] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [pendingDeleteTemplate, setPendingDeleteTemplate] = useState<{ id: string; title: string } | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
+  const [templateNew, setTemplateNew] = useState('');
   const [templateDraft, setTemplateDraft] = useState<Partial<Record<Locale, string>>>({});
 
   const load = useCallback(async () => {
@@ -116,9 +127,16 @@ export function ProjectGoals({
     call(`/api/project-tasks/${task.id}`, 'PATCH', { assigneeId: myId }, task.id);
   const release = (task: Task) =>
     call(`/api/project-tasks/${task.id}`, 'PATCH', { assigneeId: null }, task.id);
-  const remove = (task: Task) => {
-    if (!window.confirm(t.projects.confirmDeleteTask.replace('{title}', task.title))) return;
-    return call(`/api/project-tasks/${task.id}`, 'DELETE', undefined, task.id);
+  // A goal from the pool reads its wording from the template, in this viewer's
+  // language; a hand-written one is its own text.
+  const taskTitle = (task: Task) => (task.template ? resolveTemplateTitle(task.template, locale) : task.title);
+
+  const remove = (task: Task) => setPendingDelete({ id: task.id, title: taskTitle(task) });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || busy === pendingDelete.id) return;
+    await call(`/api/project-tasks/${pendingDelete.id}`, 'DELETE', undefined, pendingDelete.id);
+    setPendingDelete(null);
   };
 
   const addGoal = async () => {
@@ -145,9 +163,30 @@ export function ProjectGoals({
     }
   };
 
-  const removeTemplate = (tpl: Template) => {
-    if (!window.confirm(t.goalTemplateAdmin.confirmDelete.replace('{title}', resolveTemplateTitle(tpl, locale)))) return;
-    return call(`/api/projects/${projectId}/task-templates`, 'DELETE', { id: tpl.id }, tpl.id);
+  // Add a wording to this project's own pool, in the language the lead is using;
+  // the edit form below fills in the other two.
+  const addTemplate = async () => {
+    const text = templateNew.trim();
+    if (!text) return;
+    if (
+      await call(
+        `/api/projects/${projectId}/task-templates`,
+        'POST',
+        { translations: { [locale]: text } },
+        'new-template'
+      )
+    ) {
+      setTemplateNew('');
+    }
+  };
+
+  const removeTemplate = (tpl: Template) =>
+    setPendingDeleteTemplate({ id: tpl.id, title: resolveTemplateTitle(tpl, locale) });
+
+  const confirmRemoveTemplate = async () => {
+    if (!pendingDeleteTemplate || busy === pendingDeleteTemplate.id) return;
+    await call(`/api/projects/${projectId}/task-templates`, 'DELETE', { id: pendingDeleteTemplate.id }, pendingDeleteTemplate.id);
+    setPendingDeleteTemplate(null);
   };
 
   const sendTemplates = async () => {
@@ -175,7 +214,17 @@ export function ProjectGoals({
       ) : (
         <Circle className="h-4 w-4 shrink-0 text-gray-300" />
       )}
-      <span className={`min-w-0 break-words ${task.done ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-200'}`}>{task.title}</span>
+      <span className={`min-w-0 break-words ${task.done ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-200'}`}>
+        {taskTitle(task)}
+      </span>
+      {task.template && (
+        <span
+          className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase text-gray-500 dark:bg-gray-800"
+          title={t.todos.sharedHint}
+        >
+          {t.todos.sharedBadge}
+        </span>
+      )}
       {task.assignee && task.assigneeId !== myId && (
         <span className="text-xs text-gray-400">· {task.assignee.fullName}</span>
       )}
@@ -203,6 +252,7 @@ export function ProjectGoals({
   const pct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
 
   return (
+    <>
     <div className="space-y-4" data-testid="project-goals">
       <div>
         <div className="mb-1 flex justify-between text-xs text-gray-500">
@@ -278,6 +328,21 @@ export function ProjectGoals({
             {showTemplates && (
               <div className="mt-2 space-y-2 rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                 <p className="text-xs text-gray-500">{t.projects.goalTemplatesHint}</p>
+                {/* The pool is filled on purpose now, so it needs its own input:
+                    writing a goal for someone no longer puts it here by itself. */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    value={templateNew}
+                    onChange={(e) => setTemplateNew(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTemplate(); } }}
+                    placeholder={t.projects.addTemplate}
+                    data-testid="new-project-template"
+                    className="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-1"
+                  />
+                  <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" loading={busy === 'new-template'} onClick={addTemplate} data-testid="add-project-template">
+                    <Plus className="mr-1 h-3.5 w-3.5" /> {t.projects.add}
+                  </Button>
+                </div>
                 {templates.length === 0 ? (
                   <p className="text-xs text-gray-400">{t.projects.noTemplates}</p>
                 ) : (
@@ -368,6 +433,7 @@ export function ProjectGoals({
                     )}
                   </ul>
                 )}
+                <p className="text-xs text-gray-400">{t.projects.templateRetired}</p>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                   <select
                     value={templateTarget}
@@ -404,5 +470,26 @@ export function ProjectGoals({
 
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.projects.confirmDeleteTask.replace('{title}', pendingDelete.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDelete ? busy === pendingDelete.id : false}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    <ConfirmDialog
+      open={pendingDeleteTemplate !== null}
+      message={pendingDeleteTemplate ? t.goalTemplateAdmin.confirmDelete.replace('{title}', pendingDeleteTemplate.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDeleteTemplate ? busy === pendingDeleteTemplate.id : false}
+      onConfirm={confirmRemoveTemplate}
+      onCancel={() => setPendingDeleteTemplate(null)}
+    />
+    </>
   );
 }

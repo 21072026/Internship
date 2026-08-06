@@ -17,7 +17,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('a mentee member sees the roster on their project and their goals on their profile', { tag: '@smoke' }, async ({ page }) => {
+test('a mentee member sees the roster on their project and their goals on their to-do list', { tag: '@smoke' }, async ({ page }) => {
   // Two sign-ins plus five navigations: ~50s on an idle machine, over the 60s
   // default when the suite is loaded. Nothing here is waiting on a timeout.
   test.slow();
@@ -71,12 +71,13 @@ test('a mentee member sees the roster on their project and their goals on their 
     await expect(page.locator('[data-testid="open-group-chat"]')).toBeVisible();
     await expect(page.locator('[data-testid="message-owner"]')).toBeVisible();
 
-    // Their own profile is where the goal lives, and where they tick it off.
+    // Their own to-do list is where the goal lives, and where they tick it off
+    // (#1113 — it used to be buried on the profile page).
     const task = await prisma.projectTask.findFirst({ where: { projectId: project.id } });
-    await gotoSettled(page, '/portal/profile');
-    const goalRow = page.locator(`[data-testid="project-goal-${task!.id}"]`);
+    await gotoSettled(page, '/todos');
+    const goalRow = page.locator(`[data-testid="todo-${task!.id}"]`);
     await expect(goalRow).toContainText('Read the project and understand it');
-    await goalRow.locator('button').first().click();
+    await page.getByTestId(`todo-check-${task!.id}`).click();
     await expect
       .poll(async () => (await prisma.projectTask.findUnique({ where: { id: task!.id } }))?.done, { timeout: 10_000 })
       .toBe(true);

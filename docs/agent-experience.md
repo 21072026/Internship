@@ -2530,3 +2530,88 @@ Prisma'ya doğrudan bağlandığı için `DATABASE_URL` yoksa P1012 ile düşerl
 sırasında alınan görüntüde takvim tamamen boş çıktı ve bir an gerçek bir hata sanıldı; DOM'u
 `innerHTML` ile yazdırmak 30 saniyede doğruyu söyledi. Görsel doğrulamada önce DOM'a sor,
 sonra piksele.
+
+## 2026-08-06 — Yapılacaklar listesi: kopya değil referans (0.46.0-beta)
+
+**"Aynı madde listede defalarca" şikâyetinin kaynağı iki *örtük* yakalamaydı.** `POST
+/api/projects/[id]/tasks` elle yazılan her görevi şablon havuzuna `upsert` ediyordu, `GET
+.../task-templates` ise okuma anında projenin mevcut görevlerinden havuzu backfill ediyordu. Ortak
+havuzdan gönderilen bir madde ise *atanan kişinin diline çevrilerek* saklandığı için backfill o
+çeviriyi projeye ait yeni bir şablon olarak benimsiyordu: aynı hedef, gönderildiği her dil için bir
+kez havuza dönüyordu ve her turda büyüyordu. Ders: bir listeyi "kullanıcı ne yazdıysa onu hatırla"
+diye otomatik beslemek, o listenin aynı zamanda *kaynak* olduğu her yerde çift sayıma dönüşür.
+İki yakalama da kaldırıldı; havuza ekleme artık kendi input'u olan bilinçli bir eylem.
+
+**Çok dilli bir metni satıra kopyalamak, dinamikliği daha o anda kaybetmek demek.** Eskiden şablon
+görev satırına düz string olarak yazılıyordu; sonradan metni düzeltmek kimseye ulaşmıyordu ve kişi
+dilini değiştirdiğinde eski dildeki metinle kalıyordu. `ProjectTask.templateId` ile satır artık
+şablona *referans*: metin her render'da okuyucunun dilinde çözülüyor (`resolveTaskTitle`), tek
+düzenleme herkese ulaşıyor. `title` kolonu snapshot olarak kalıyor — bildirim metni, arama ve
+şablon satırı yokolduğu gün için.
+
+**Referans varsa "sil" artık silme değildir.** Şablonu gerçekten silmek, onu almış herkesin
+metnini boşaltır. `archivedAt` (soft delete) + "aynı metni yeniden eklemek arşivdeki satırı
+canlandırır" kuralı, `@@unique([projectId, title])` ile de doğal olarak uyuşuyor. Karşılığında:
+arşivli satır unique anahtarı tuttuğu için PATCH'teki çakışma kontrolü arşivlileri de *görmek*
+zorunda, yoksa DB seviyesinde patlar.
+
+**Kişiye ait bir kaydı `projectId`'yi nullable yaparak aynı modelde tutmak (yeni model açmak
+yerine) tek listeyi ucuza getirdi**, ama izin mantığında "lead" tanımını ikiye ayırmayı gerektirdi:
+projesi olan satırda proje sahibi, projesi olmayan satırda *yazan kişi*. Atanan kişiyi lead saymak,
+"mentorun verdiği ortak maddeyi silemez" kuralını sessizce deliyordu.
+
+**Testlerden biri kırmızıysa önce `git stash` ile temiz ağaçta çalıştır.** `pipeline.spec.ts` ve
+`smoke.spec.ts:53` bu değişiklikle birlikte kırmızı geldi; stash'leyip tekrar koşmak ikisinin de
+değişiklikten önce de kırmızı olduğunu 1 dakikada gösterdi (yerelde tohumlanmış admin/dev sunucusu
+kaynaklı). Suçlu aramaya girişmeden önce taban çizgisini ölç.
+
+## 2026-08-06 — "Mentee projesini göremiyor": yetki değil, bağlantı eksikliği (0.49.0-beta)
+
+**Bir "göremiyorum" şikâyetinde önce yetki katmanını değil, oraya giden bağlantıyı ara.** Bu
+oturumun tamamı `authzScope.ts`'de bir hata aramakla geçebilirdi; oysa `MENTEE` scope'u projeyi
+zaten döndürüyordu ve `/projects/[id]` üye olan mentee'ye zaten içeriden görünümü veriyordu. Eksik
+olan tek şey **linkti**: `PortalNav`'da girdi yok, panelin ilişki sorgusunda `project` seçilmiyor,
+ve tek liste sayfası olan `/projects` `isPublic: true` vitrini. Üç ayrı yerde "yok", tek bir yerde
+"yasak" değil. Teşhis sırası işe yaradı: (1) veri modeli, (2) API scope'u, (3) sayfanın gating'i,
+(4) *sayfaya giden link*. Dördüncüsü en sık atlanan ve bu sefer tek suçlu olan basamaktı.
+
+**Üyelik iki kaynaktan geliyorsa, yeni yazdığın her sorgu ikisini de okumak zorunda.** `mergeTeam`
+zaten `ProjectMember` ∪ `MentorshipRelation.projectId` birleşimini yapıyordu, ama yeni bir liste
+yazarken yalnızca birine bakmak çok kolay — pre-#617 atamalarını görünmez yapan hata tam olarak bu.
+Bu yüzden `lib/menteeProjects.ts` tek bir yardımcı olarak yazıldı ve hem sayfa hem panel onu
+kullanıyor; e2e testi de iki kaynağı ayrı ayrı tohumluyor.
+
+**Panel kartını `activeRelation` bloğunun içine koymak, düzelttiğin hatayı tekrar üretmek olurdu.**
+Bir mentee ilişkisi olmadan da `ProjectMember` olabiliyor; kartı o dalın içine koymak "mentoru
+olmayan mentee projesini görmez" diye yeni bir kör nokta açacaktı. Koşulu yazarken "bu veriyi
+görebilecek en dar durum hangisi?" diye sormak gerekti.
+
+**Geri linki de bir görünürlük yüzeyi.** Detay sayfasındaki geri linki mentee'yi `/projects`'e,
+yani projesinin *bulunmadığı* vitrine gönderiyordu. Sayfayı erişilebilir yapmak yeterli değil;
+oradan çıkış yolunun da aynı kapsamı bilmesi gerekiyor.
+
+**Repo'nun içine yerleşmiş bir git worktree'de `npm run lint` çalışmıyor.** Worktree
+`<repo>/.claude/worktrees/...` altında olduğu için ESLint yukarı yürüyüp *iki* `.eslintrc.json`
+buluyor ve `@next/next` eklentisini tekil olarak çözemediği için hata veriyor — hiç
+dokunulmamış dosyada da aynı şekilde patlıyor, yani diff'le ilgisi yok. Taban çizgisini ölçmek
+(`npx eslint src/lib/version.ts`) 30 saniyede ayırt etti. Değişen dosyaları gerçekten denetlemek
+için: `npx eslint --no-eslintrc -c .eslintrc.json --resolve-plugins-relative-to . <dosyalar>`.
+CI düz bir checkout'ta lint'lediği için orada sorun yok — nitekim "Lint · Typecheck · Build" yeşil
+geçti.
+
+**Playwright ve `node <script>.mjs`, `.env`'i kendiliğinden okumaz.** `playwright.config.ts`
+dotenv yüklemiyor (CI'da değişken gerçek env olarak geliyor), bu yüzden yerelde
+`DATABASE_URL=... npx playwright test ...` diye vermek gerekiyor; tek dosyalık script'ler için
+`node --env-file=.env ...` iş görüyor. Ayrıca ESM çözümlemesi *dosyanın* konumuna baktığı için
+scratchpad'e yazılan bir `.mjs` worktree'nin `node_modules`'ünü göremiyor — script'i worktree
+içine koyup sonra silmek gerekti.
+
+**Browser panelinin viewport'u 0×0 gelirse `read_page`/screenshot boş döner ama sayfa aslında
+yüklüdür** (`javascript_tool` ile `document.body.innerText.length` bunu hemen gösteriyor).
+`resize_window` düzeltmedi; doğrulamayı Playwright'a taşımak hem daha hızlı hem daha güçlü kanıt
+oldu — zaten yazılması gereken e2e testi görsel kontrolün yerini fazlasıyla aldı.
+
+**Karanlık modda `bg-*-50` kutu + `text-gray-900` metni varsayarak "kırık" demeyin, ölçün.**
+`globals.css`'teki mevcut override'lar `text-gray-900`'ü kutu içinde `rgb(243,244,246)`'ya
+çeviriyor; hesaplanan değeri mevcut mentor kutusuyla karşılaştırmak yeni bir compound kurala
+gerek olmadığını kanıtladı. Kontrast tahmininde `getComputedStyle` gözden hızlıdır.

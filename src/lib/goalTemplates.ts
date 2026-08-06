@@ -58,3 +58,37 @@ export function resolveTemplateTitle(
   if (isLocale(language) && translations[language]) return translations[language] as string;
   return translations[defaultLocale] ?? template.title;
 }
+
+// A to-do as the UI needs it: `title` is the wording for a hand-written one, and
+// `template` is present when the to-do came from the shared pool — in which case
+// the text is read from the template every time, so rewording it in one place
+// reaches everyone who was given it, in each of their own languages (#1113).
+export interface TaskTitleSource {
+  title: string;
+  template?: { title: string; translations?: unknown } | null;
+}
+
+/** The wording a to-do shows to one reader — dynamic when it is a shared one. */
+export function resolveTaskTitle(task: TaskTitleSource, language: string | null | undefined): string {
+  return task.template ? resolveTemplateTitle(task.template, language) : task.title;
+}
+
+// What a to-do's shared half needs from the DB. Used by every endpoint that
+// returns to-dos so the client can resolve the wording in the reader's language.
+export const taskTemplateSelect = {
+  select: { id: true, title: true, translations: true, archivedAt: true },
+} as const;
+
+/** The client-facing shape of a to-do's template half (null when hand-written). */
+export function serializeTaskTemplate(
+  template: { id: string; title: string; translations: unknown; archivedAt: Date | null } | null | undefined
+) {
+  if (!template) return null;
+  return {
+    id: template.id,
+    title: template.title,
+    translations: readTranslations(template.translations),
+    // Retired from the pool but still assigned — the wording keeps working.
+    archived: template.archivedAt !== null,
+  };
+}

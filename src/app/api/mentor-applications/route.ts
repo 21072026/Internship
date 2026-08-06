@@ -7,14 +7,15 @@ import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
 import { notify } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { sendMentorApplicationReceivedEmail } from '@/services/emailService';
 import type { Prisma } from '@prisma/client';
 
 // Public "become a mentor" applications (#904): anyone can apply without an
-// account; an admin reviews the queue. Deliberately does NOT create a User —
-// turning an approved application into an account is a later task.
+// account; an admin reviews the queue (#905/#933). Deliberately does NOT
+// create a User — that only happens once an admin approves.
 
 const PAGE_SIZE = 50;
-const STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
+const STATUSES = ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'] as const;
 
 const applySchema = z.object({
   fullName: z.string().min(1).max(191),
@@ -26,6 +27,12 @@ const applySchema = z.object({
   capacity: z.number().int().min(1).optional(),
   linkedinUrl: z.string().url().max(500).optional().or(z.literal('')),
   locale: z.enum(['en', 'tr', 'de']).optional(),
+  // Anti-spam (mirrors the public-contact form, src/app/api/public-contact/[userId]/route.ts):
+  // a hidden honeypot field bots fill in, and a client-stamped render time to
+  // reject implausibly fast submits. Accept any value so a filled trap still
+  // passes validation — a 400 here would tip bots off.
+  website: z.string().max(500).optional(),
+  renderedAt: z.number().int().optional(),
 });
 
 // POST — public application to become a mentor.
@@ -37,10 +44,15 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   }
-  const { fullName, phone, expertise, experience, motivation, capacity, linkedinUrl, locale } = parsed.data;
+  const { fullName, phone, expertise, experience, motivation, capacity, linkedinUrl, locale, website, renderedAt } = parsed.data;
   // Normalize (trim + lowercase) so a casing/whitespace difference can't dodge
   // the duplicate-pending and existing-account checks below.
   const email = parsed.data.email.trim().toLowerCase();
+
+  // Honeypot filled, or submitted implausibly fast (<3s) → silently accept so
+  // bots get no signal, but nothing is created.
+  const tooFast = typeof renderedAt === 'number' && Date.now() - renderedAt < 3000;
+  if (website || tooFast) return NextResponse.json({ ok: true });
 
   // Per-email limit in addition to the per-IP one above: an attacker rotating
   // IPs must not be able to hammer one address (mirrors the login brute-force
@@ -93,6 +105,16 @@ export async function POST(request: Request) {
       notify(a.id, 'mentor_application', `${fullName} applied to become a mentor.`, '/admin/mentor-applications')
     )
   );
+
+  // Best-effort confirmation to the applicant. Not awaited: a slow or
+  // misconfigured SMTP connection must not hold this public, unauthenticated
+  // endpoint open — a delivery failure (or a delay) must not affect the
+  // response at all, unlike the awaited-but-caught admin-invite email
+  // (src/app/api/invite/route.ts), which trades responsiveness for reporting
+  // send success back to an admin who is watching a spinner.
+  void sendMentorApplicationReceivedEmail({ to: email, fullName, locale }).catch((e) => {
+    console.error('Mentor application received email failed:', e);
+  });
 
   return NextResponse.json({ ok: true });
 }

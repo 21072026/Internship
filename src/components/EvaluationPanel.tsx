@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Textarea';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EVAL_CRITERIA, MENTOR_CRITERIA } from '@/lib/evaluation';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
@@ -40,6 +41,8 @@ export function EvaluationPanel({
   const [type, setType] = useState<'INTERIM' | 'FINAL'>('INTERIM');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const formCriteria = audience === 'MENTOR' ? MENTOR_CRITERIA : EVAL_CRITERIA;
 
@@ -71,18 +74,27 @@ export function EvaluationPanel({
 
   // Removing an evaluation recorded by mistake. The server re-checks that the
   // caller is its author (or an admin); this only hides the button.
-  const remove = async (id: string) => {
-    if (!window.confirm(t.evaluation.confirmDelete)) return;
+  const remove = (id: string) => setDeleteId(id);
+
+  const confirmRemove = async () => {
+    if (!deleteId || deleting) return;
+    setDeleting(true);
     setError(null);
-    const res = await fetch(`/api/evaluations/${id}`, { method: 'DELETE' });
-    if (res.ok) await load();
-    else setError(t.common.error);
+    try {
+      const res = await fetch(`/api/evaluations/${deleteId}`, { method: 'DELETE' });
+      if (res.ok) await load();
+      else setError(t.common.error);
+    } finally {
+      setDeleting(false);
+      setDeleteId(null);
+    }
   };
 
   const label = (c: string) => (t.evaluation.criteria as Record<string, string>)[c] ?? c;
   const typeLabel = (ty: string) => (ty === 'FINAL' ? t.evaluation.final : t.evaluation.interim);
 
   return (
+    <>
     <Card>
       <CardHeader><CardTitle>{audience === 'MENTOR' ? t.evaluation.titleMentor : t.evaluation.title}</CardTitle></CardHeader>
 
@@ -190,5 +202,16 @@ export function EvaluationPanel({
         </div>
       )}
     </Card>
+    <ConfirmDialog
+      open={deleteId !== null}
+      message={t.evaluation.confirmDelete}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.evaluation.delete}
+      variant="danger"
+      loading={deleting}
+      onConfirm={confirmRemove}
+      onCancel={() => setDeleteId(null)}
+    />
+    </>
   );
 }

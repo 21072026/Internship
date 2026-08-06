@@ -13,17 +13,98 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.46.0-beta',
+    version: '0.49.1-beta',
     date: '2026-08-06',
     highlights: {
       en: [
-        'Admins can now decide on mentor applications: a new Admin → Mentor Applications screen lists who applied, with a badge showing how many are waiting. Approve sends the applicant an email invitation to join as a mentor; reject asks for a short reason (kept internal — the applicant only sees a polite decline).',
+        'Maintenance only: delete (and "stop meeting") confirmations across the app now use a proper dialog instead of the browser\'s plain confirm popup — same question, same buttons, just easier to read and consistent everywhere. Nothing you can do has changed.',
       ],
       tr: [
-        'Adminler artık mentor başvuruları hakkında karar verebiliyor: yeni Admin → Mentor Başvuruları ekranı kimlerin başvurduğunu listeler, bekleyen sayısını gösteren bir rozetle. Onaylamak başvurana mentor olarak katılması için bir davet e-postası gönderir; reddetmek kısa bir sebep ister (yalnızca dahili — başvuran nazik bir red mesajı görür).',
+        'Yalnızca bakım: uygulamadaki silme (ve "toplantıyı durdur") onayları artık tarayıcının düz onay kutusu yerine düzgün bir pencere kullanıyor — aynı soru, aynı butonlar, sadece daha okunaklı ve her yerde tutarlı. Yapabildiklerinde bir değişiklik yok.',
       ],
       de: [
-        'Admins können jetzt über Mentor-Bewerbungen entscheiden: Ein neuer Bereich Admin → Mentor-Bewerbungen listet alle Bewerbungen, mit einem Badge, das die Anzahl der wartenden anzeigt. Genehmigen sendet der bewerbenden Person eine Einladungs-E-Mail als Mentor; Ablehnen verlangt eine kurze Begründung (nur intern — die Person sieht lediglich eine höfliche Absage).',
+        'Nur Wartung: Lösch- (und „Treffen beenden“-)Bestätigungen verwenden jetzt in der ganzen App einen richtigen Dialog statt des einfachen Browser-Bestätigungsfensters — gleiche Frage, gleiche Buttons, nur besser lesbar und überall einheitlich. An deinen Möglichkeiten ändert sich nichts.',
+      ],
+    },
+  },
+  {
+    version: '0.49.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'If you are on a project, you can now find it. "My projects" is in your sidebar, and your project also appears on your dashboard — before this, the only project list in the app was the public showcase, so a project that was not published simply did not show up anywhere for you.',
+        'Your project list shows what you need at a glance: who runs it, whether it is still running, the technologies, how many interns are on it, and links straight to the repository, the demo and the board.',
+        'Not on a project yet? The page points you to the showcase, where you can ask to join one.',
+      ],
+      tr: [
+        'Bir projede yer alıyorsan artık onu bulabiliyorsun. “Projelerim” kenar çubuğunda; projen ayrıca panelinde de görünüyor. Bundan önce uygulamadaki tek proje listesi herkese açık vitrindi — yayınlanmamış bir proje sana hiçbir yerde görünmüyordu.',
+        'Proje listen bir bakışta gerekeni gösteriyor: projeyi kim yürütüyor, hâlâ devam ediyor mu, hangi teknolojiler, kaç stajyer var — ve doğrudan repo, demo ve pano bağlantıları.',
+        'Henüz bir projede değilsen sayfa seni vitrine yönlendiriyor; oradan bir projeye katılmak isteyebilirsin.',
+      ],
+      de: [
+        'Wenn du in einem Projekt bist, findest du es jetzt auch. „Meine Projekte“ steht in deiner Seitenleiste, und dein Projekt erscheint zusätzlich auf deinem Dashboard — bisher war die einzige Projektliste in der App das öffentliche Schaufenster, ein nicht veröffentlichtes Projekt tauchte für dich also nirgends auf.',
+        'Deine Projektliste zeigt auf einen Blick, was zählt: wer es leitet, ob es noch läuft, die Technologien, wie viele Praktikantinnen und Praktikanten dabei sind — und direkte Links zu Repository, Demo und Board.',
+        'Noch in keinem Projekt? Die Seite führt dich zum Schaufenster, wo du um Aufnahme bitten kannst.',
+      ],
+    },
+  },
+  {
+    version: '0.48.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Your to-dos have a page of their own. Everything is in one place now: what your mentor asked for, what your projects need, the open project goals you can take, and anything you write for yourself — with an archive for the ones you have finished.',
+        'A to-do that comes from the shared list is kept up to date centrally. Whoever maintains it can reword it once and it changes for everyone who has it, in each person’s own language — and if you switch your language, it follows you. You tick it off; you do not have to edit it.',
+        'Removing a to-do from the shared list only means it will not be handed out again. The people who already have it keep it, exactly as it was given.',
+        'The quick-pick list under a project stopped filling up with the to-dos you had just handed out. It now holds only what you put there on purpose, plus the shared list — the same wording no longer appears again and again, once per language.',
+        'A mentor can now give someone a to-do without a project in between, by hand or from the shared list. What you write for yourself stays yours: it is not shown on your mentor’s view of your list.',
+      ],
+      tr: [
+        'Yapılacaklar artık kendi sayfasında. Her şey tek yerde: mentorunun istedikleri, projelerinden gelenler, üstlenebileceğin sahipsiz proje hedefleri ve kendine yazdıkların — bitirdiklerin için de bir arşiv.',
+        'Ortak listeden gelen bir madde tek yerden güncel tutuluyor. Metnini bir kez düzenlemek, o maddeyi alan herkeste — hem de her birinin kendi dilinde — güncelliyor; dilini değiştirdiğinde de seninle birlikte değişiyor. Sen yalnızca işaretliyorsun, düzenlemek zorunda değilsin.',
+        'Ortak listeden bir maddeyi kaldırmak yalnızca “bundan sonra verilmeyecek” demek. Onu hâlihazırda almış olanlarda, verildiği gibi kalmaya devam ediyor.',
+        'Projenin altındaki hızlı seçim listesi, az önce dağıttığın maddelerle dolmayı bıraktı. Artık yalnızca bilerek eklediklerin ve ortak liste var — aynı metin her dil için bir kez, üst üste gelmiyor.',
+        'Mentor artık araya proje girmeden de birine yapılacak verebiliyor: elle ya da ortak listeden. Kendine yazdıkların sana ait kalıyor — mentorunun gördüğü listede görünmüyor.',
+      ],
+      de: [
+        'Deine Aufgaben haben eine eigene Seite. Alles an einem Ort: was deine Mentorin oder dein Mentor erwartet, was deine Projekte brauchen, offene Projektziele, die du übernehmen kannst, und was du dir selbst notierst — mit einem Archiv für alles Erledigte.',
+        'Eine Aufgabe aus der gemeinsamen Liste wird zentral gepflegt. Wer sie betreut, formuliert sie einmal neu, und sie ändert sich für alle, die sie haben — jeweils in deren Sprache; wechselst du die Sprache, kommt sie mit. Du hakst ab, du musst nichts bearbeiten.',
+        'Eine Aufgabe aus der gemeinsamen Liste zu entfernen heißt nur: sie wird nicht mehr vergeben. Wer sie schon hat, behält sie genau so, wie sie gegeben wurde.',
+        'Die Schnellauswahl unter einem Projekt füllt sich nicht mehr mit den Aufgaben, die du gerade verteilt hast. Dort steht jetzt nur, was du bewusst hinzugefügt hast, plus die gemeinsame Liste — derselbe Text erscheint nicht mehr immer wieder, einmal pro Sprache.',
+        'Mentorinnen und Mentoren können eine Aufgabe jetzt auch ohne Projekt dazwischen vergeben: selbst geschrieben oder aus der gemeinsamen Liste. Was du dir selbst notierst, bleibt deins — es erscheint nicht in der Ansicht deines Mentors.',
+      ],
+    },
+  },
+  {
+    version: '0.47.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Mentor applications now go all the way: admins get a new "Mentor Applications" section to review, put on hold, approve or reject each one, and approving automatically sets up the mentor’s account (or upgrades their existing one) — no manual account creation needed. Applicants get an email at every step.',
+        'A "Become a mentor" link is now on the homepage and sign-in page, so applying no longer requires knowing the direct link.',
+      ],
+      tr: [
+        'Mentor başvuruları artık uçtan uca işliyor: adminler her başvuruyu incelemek, incelemeye almak, onaylamak veya reddetmek için yeni bir "Mentor Başvuruları" bölümü kazandı; onaylandığında mentörün hesabı otomatik kuruluyor (ya da mevcut hesabı yükseltiliyor) — elle hesap açmaya gerek kalmıyor. Başvuranlar her adımda e-posta alıyor.',
+        'Ana sayfada ve giriş sayfasında artık bir "Mentör Ol" bağlantısı var — başvurmak için doğrudan linki bilmek gerekmiyor.',
+      ],
+      de: [
+        'Mentor-Bewerbungen laufen jetzt durchgängig: Admins haben einen neuen Bereich „Mentor-Bewerbungen“, um jede Bewerbung zu prüfen, in Prüfung zu setzen, anzunehmen oder abzulehnen — bei Annahme wird das Mentor-Konto automatisch eingerichtet (oder ein bestehendes hochgestuft), ganz ohne manuelle Kontoerstellung. Bewerbende erhalten bei jedem Schritt eine E-Mail.',
+        'Auf der Startseite und der Anmeldeseite gibt es jetzt einen Link „Mentor werden“ — man muss den direkten Link nicht mehr kennen, um sich zu bewerben.',
+      ],
+    },
+  },
+  {
+    version: '0.46.0-beta',
+    date: '2026-08-04',
+    highlights: {
+      en: [
+        'You can now apply to become a mentor without an account: fill in the new "Apply as mentor" form and an admin reviews it. No account is created until it’s approved.',
+      ],
+      tr: [
+        'Artık hesap açmadan mentör olmak için başvurabilirsin: yeni "Mentör olarak başvur" formunu doldur, bir yönetici inceleyecek. Onaylanana kadar hesap oluşturulmuyor.',
+      ],
+      de: [
+        'Du kannst dich jetzt ohne Konto als Mentor bewerben: Fülle das neue Formular „Als Mentor bewerben“ aus, ein Admin prüft es. Ein Konto wird erst bei Genehmigung angelegt.',
       ],
     },
   },

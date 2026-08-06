@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2, Inbox } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
@@ -67,6 +68,8 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const [ownerType, setOwnerType] = useState('ADMIN');
   const [ownerUserId, setOwnerUserId] = useState('');
   const [ownerCompanyId, setOwnerCompanyId] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/projects');
@@ -158,10 +161,18 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const remove = async (p: Project) => {
-    if (!window.confirm(t.projects.confirmDelete.replace('{name}', p.name))) return;
-    await fetch(`/api/projects/${p.id}`, { method: 'DELETE' });
-    await load();
+  const remove = (p: Project) => setPendingDelete({ id: p.id, name: p.name });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/projects/${pendingDelete.id}`, { method: 'DELETE' });
+      await load();
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+    }
   };
 
   const ownerLabel = (p: Project) =>
@@ -187,6 +198,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const [editingOwner, setEditingOwner] = useState(true);
 
   return (
+    <>
     <div>
       <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -364,5 +376,16 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
     </div>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.projects.confirmDelete.replace('{name}', pendingDelete.name) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={deleting}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    </>
   );
 }

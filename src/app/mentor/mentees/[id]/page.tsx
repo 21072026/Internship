@@ -15,13 +15,14 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
-import { PersonProjectGoals } from '@/components/PersonProjectGoals';
+import { PersonTodos } from '@/components/todos/PersonTodos';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
@@ -91,6 +92,8 @@ export default function MenteeDetailPage() {
   const [formError, setFormError] = useState('');
   const [savingStage, setSavingStage] = useState(false);
   const [stageError, setStageError] = useState('');
+  const [deleteInteractionId, setDeleteInteractionId] = useState<string | null>(null);
+  const [deletingInteraction, setDeletingInteraction] = useState(false);
 
   const fetchRelation = useCallback(async () => {
     const res = await fetch(`/api/mentorship/${id}`);
@@ -131,11 +134,19 @@ export default function MenteeDetailPage() {
     }
   };
 
-  const handleDeleteInteraction = async (interactionId: string) => {
-    if (!window.confirm(t.common.confirmDelete)) return;
-    await fetch(`/api/interactions/${interactionId}`, { method: 'DELETE' });
-    await fetchRelation();
-    toast(t.mentor.interactionDeleted);
+  const handleDeleteInteraction = (interactionId: string) => setDeleteInteractionId(interactionId);
+
+  const confirmDeleteInteraction = async () => {
+    if (!deleteInteractionId || deletingInteraction) return;
+    setDeletingInteraction(true);
+    try {
+      await fetch(`/api/interactions/${deleteInteractionId}`, { method: 'DELETE' });
+      await fetchRelation();
+      toast(t.mentor.interactionDeleted);
+    } finally {
+      setDeletingInteraction(false);
+      setDeleteInteractionId(null);
+    }
   };
 
   const handlePipelineChange = async (pipelineStatus: string) => {
@@ -164,6 +175,7 @@ export default function MenteeDetailPage() {
   if (!relation) return <div className="text-center py-12 text-gray-400">{t.mentor.relationNotFound}</div>;
 
   return (
+    <>
     <div>
       <div className="mb-6">
         <Link href="/mentor/mentees" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4">
@@ -434,10 +446,10 @@ export default function MenteeDetailPage() {
           <GoalsPanel relationId={id} />
         </div>
 
-        {/* Goals handed to this mentee inside a project live here now, not on the
-            project page in front of the whole team. */}
+        {/* Everything on this mentee's list — what came from a project and what a
+            mentor handed them directly — plus the box to add to it (#1113). */}
         <div className="lg:col-span-2">
-          <PersonProjectGoals userId={relation.mentee.id} />
+          <PersonTodos userId={relation.mentee.id} fullName={relation.mentee.fullName} />
         </div>
 
         <div className="lg:col-span-2">
@@ -463,5 +475,16 @@ export default function MenteeDetailPage() {
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      open={deleteInteractionId !== null}
+      message={t.common.confirmDelete}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={deletingInteraction}
+      onConfirm={confirmDeleteInteraction}
+      onCancel={() => setDeleteInteractionId(null)}
+    />
+    </>
   );
 }

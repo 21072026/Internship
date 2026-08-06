@@ -119,12 +119,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <div className="px-3 py-6 sm:px-4 sm:py-12">
       <div className="max-w-2xl mx-auto">
         {/* Back link: internal viewers return to their own project list (where
-            they came from); public visitors get the showcase header link. */}
+            they came from); public visitors get the showcase header link. A
+            mentee member used to be sent to /projects — the public showcase,
+            which does not contain their own private project (#1114). */}
         <Link
-          href={role === 'ADMIN' ? '/admin/projects' : role === 'MENTOR' ? '/mentor/projects' : '/projects'}
+          href={
+            role === 'ADMIN' ? '/admin/projects'
+              : role === 'MENTOR' ? '/mentor/projects'
+              : role === 'MENTEE' && isMember ? '/portal/projects'
+              : '/projects'
+          }
           className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6"
         >
-          {isLead
+          {isLead || (role === 'MENTEE' && isMember)
             ? <><ArrowLeft className="h-4 w-4" /> {t.projects.allProjects}</>
             : <><GraduationCap className="h-4 w-4 text-blue-600" /> {t.projects.showcaseTitle}</>}
         </Link>
