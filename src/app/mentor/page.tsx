@@ -66,6 +66,27 @@ export default async function MentorDashboard() {
   // (e.g. "sign out of all devices") between that check and this render, in
   // which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
+
+  // First-run redirect to the mentor onboarding wizard (#911). Stamped
+  // before the redirect fires, so a mentor who skips or abandons the wizard
+  // is never sent back here automatically — only the very first dashboard
+  // visit after becoming a mentor triggers it. Scoped to an actual MENTOR
+  // (not an ADMIN using the mentor-mode switch, who never has this field
+  // meaningfully set and must never be bounced into the mentor wizard).
+  if (session.user.role === 'MENTOR') {
+    const seen = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { mentorOnboardingSeenAt: true },
+    });
+    if (!seen?.mentorOnboardingSeenAt) {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { mentorOnboardingSeenAt: new Date() },
+      });
+      redirect('/onboarding');
+    }
+  }
+
   const { t, locale } = await getServerDictionary();
   const { relations, recentInteractions } = await getMentorData(session.user.id);
   const attentionItems = await getAttentionItems(session.user.id);

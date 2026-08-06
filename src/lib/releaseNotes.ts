@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.45.1-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Mentors now get a short setup wizard the first time they open their dashboard: profile, expertise, capacity and availability, in four quick steps. Skip it any time — it only ever asks once.',
+      ],
+      tr: [
+        'Mentorlar artık panellerini ilk açtıklarında kısa bir kurulum sihirbazı görüyor: profil, uzmanlık, kapasite ve müsaitlik, dört hızlı adımda. İstediğin an atlayabilirsin — yalnızca bir kez sorulur.',
+      ],
+      de: [
+        'Mentoren sehen jetzt beim ersten Öffnen ihres Dashboards einen kurzen Einrichtungsassistenten: Profil, Expertise, Kapazität und Verfügbarkeit in vier schnellen Schritten. Jederzeit überspringbar — er fragt nur einmal.',
+      ],
+    },
+  },
+  {
     version: '0.45.0-beta',
     date: '2026-08-06',
     highlights: {

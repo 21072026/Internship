@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.45.1-beta] - 2026-08-06
+
+### Added
+- **Mentor onboarding wizard** (#911): a MENTOR's very first visit to `/mentor` now redirects once
+  to a 4-step wizard at `/onboarding` — Profile (name, bio), Expertise (skills, interests),
+  Capacity (mentee capacity) and Availability (weekly slots, via the existing
+  `/api/availability`) — reusing the mentee `OnboardingForm`'s progress/step-card shell and
+  `PUT /api/profile` for the saved fields. The redirect is stamped server-side on `User`
+  (`mentorOnboardingSeenAt`) before it fires, so it never loops and never repeats, whether the
+  mentor finishes, skips, or abandons the wizard; both Finish and Skip return to `/mentor`. The
+  MENTEE onboarding flow and the dashboard "Get started" checklist (`/api/onboarding`) are
+  untouched. EN/TR/DE translations.
+
 ## [0.45.0-beta] - 2026-08-06
 
 ### Fixed

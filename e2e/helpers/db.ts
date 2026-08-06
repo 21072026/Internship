@@ -28,7 +28,18 @@ export async function seedUser(
 ) {
   const hash = await bcrypt.hash(password, 10);
   return prisma.user.create({
-    data: { email, password: hash, role, fullName, skills: [] },
+    data: {
+      email,
+      password: hash,
+      role,
+      fullName,
+      skills: [],
+      // Every other spec seeding a MENTOR expects to land straight on the
+      // dashboard, not the first-run onboarding wizard (#911) — only specs
+      // testing that wizard itself want a "fresh" mentor, and they clear
+      // this field back to null after seeding.
+      ...(role === 'MENTOR' ? { mentorOnboardingSeenAt: new Date() } : {}),
+    },
   });
 }
 
