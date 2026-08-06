@@ -8,6 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
+import { isPendingActivation } from '@/lib/menteeAccount';
 
 const updateRelationSchema = z.object({
   status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
@@ -40,6 +41,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
               id: true,
               fullName: true,
               email: true,
+              // Only to derive `pendingActivation` below — destructured out
+              // before the response so the column never reaches a client.
+              password: true,
               university: true,
               graduationYear: true,
               skills: true,
@@ -81,7 +85,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           })
         : null;
 
-      return NextResponse.json({ relation: { ...relation, companyInterest } });
+      // A mentee the mentor typed in has a sentinel where the hash goes and can
+      // never sign in; the detail page offers to fix the address and send the
+      // activation link (#1123). The sentinel itself stays server-side.
+      const { password: menteePassword, ...mentee } = relation.mentee;
+
+      return NextResponse.json({
+        relation: {
+          ...relation,
+          mentee: { ...mentee, pendingActivation: isPendingActivation({ password: menteePassword }) },
+          companyInterest,
+        },
+      });
     });
   } catch (error) {
     console.error('Get mentorship error:', error);

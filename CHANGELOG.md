@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.49.2-beta] - 2026-08-06
+## [0.49.3-beta] - 2026-08-06
 
 ### Added
 - **Pending-count badge on the admin nav's "Mentor Applications" entry** (`AdminNav`) — a red
@@ -20,6 +20,44 @@ version is shown in the sidebar footer of every page (links to the
   backs its `title`/`aria-label`; e2e coverage in `e2e/mentor-application-review.spec.ts`.
   Salvaged from #1076, which was otherwise superseded by the mentor-application review flow
   already on `main` (#1048, #1072) and closed as a duplicate of #906.
+
+## [0.49.2-beta] - 2026-08-06
+
+Closes #1123.
+
+### Fixed
+- **A mentee added by a mentor can now become a real account.** A mentee created without an
+  e-mail got a generated `mentee.<name>.<hex>@import.local` address and the sentinel
+  `!created-no-login` in the password column — never a bcrypt hash, so `bcrypt.compare` could
+  never match and the record could not sign in. Every recovery path was a dead end:
+  `/api/auth/forgot` and `/api/admin/users/[id]/reset-password` only *mail* a link, and that
+  mail went to a domain that does not exist; no endpoint could change the address
+  (`/api/users/[id]` PATCH never accepted `email`, and `/api/account` PATCH requires the
+  account's own session plus `currentPassword`); and registering with the real address created
+  a second, unrelated user, orphaning the interaction log and stage history. The only way out
+  was deleting the record or editing the DB by hand.
+
+### Added
+- **`PATCH /api/mentor/mentees/[id]`** — sets the real e-mail on a mentee record and issues a
+  `SET_INITIAL` password token, mailing the activation link (and returning it, like
+  `POST /api/mentor/mentees` already does, so the mentor can pass it on when SMTP is down).
+  Allowed for the assigned mentor or an admin. Guards: target must be a `MENTEE`; the record
+  must still carry a no-login sentinel (`!created-no-login` / `!imported-no-login`) — once
+  someone has set a password the address is theirs and only they can change it, via
+  `/api/account`; `@import.local` / `@erased.local` are rejected as new addresses; erased or
+  deactivated records are refused; e-mail uniqueness is enforced (409); rate-limited to 20 per
+  15 min; every call writes a `mentee.activation_link_sent` activity row at warning level.
+  Sending with the address unchanged doubles as "resend the activation link".
+- **`MenteeActivationPanel`** (`src/components/MenteeActivationPanel.tsx`) — shown on the
+  mentor's mentee detail page and the admin candidate page whenever the record has no password
+  yet, driven by a new `pendingActivation` flag on `GET /api/mentorship/[id]` and
+  `GET /api/users/[id]` (derived server-side; the password column is destructured out before
+  the response). New `menteeActivation` i18n block (EN/TR/DE).
+- **`src/lib/menteeAccount.ts`** — single home for the no-login sentinels and the placeholder /
+  erased e-mail domains, previously inline string literals in the create route.
+- **`e2e/mentee-activation.spec.ts`** — the full path (create without e-mail → activate → the
+  mentee sets a password and signs in, on the same row with its relation intact) plus the
+  refusals: already has a password (409), placeholder domain (400), foreign mentor (403).
 
 ## [0.49.1-beta] - 2026-08-06
 
@@ -249,6 +287,17 @@ Closes #1113.
   `camera=()`; it now checks that camera/microphone/display-capture are delegated to
   `self "https://meet.jit.si"` only, that `geolocation=()` stays denied and that no directive
   opens up to `*`. No version bump — tests only.
+
+## [0.42.2-beta] - 2026-08-05
+
+### Added
+- **Mentor onboarding checklist** (#912): the existing first-run `OnboardingChecklist` (already
+  role-aware and shared with the mentee/admin dashboards) now drives a mentor-specific step set
+  from `GET /api/onboarding` — bio filled, interests or skills filled, mentee capacity set, and
+  at least one availability slot — linking to `/mentor/profile` (the mentor profile-editing page
+  itself is #908, a dependency of this issue) and to the existing `/mentor/availability`. Hides
+  once every step is done, or when dismissed, same as the other roles. Replaces the previous
+  mentee-count/interaction/meeting-based mentor steps. EN/TR/DE translations.
 
 ## [0.42.1-beta] - 2026-08-05
 
