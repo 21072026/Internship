@@ -10,6 +10,69 @@ Newest entries on top.
 
 ---
 
+## 2026-08-06 — `origin/main` merge'ünde smoke false-positive'leri: `npm run dev` vs prod build
+
+**`npm run test:e2e:smoke`'u yerelde çalıştırmak `npm run dev`'i başlatır, CI ise
+`npm run start`'la prod build'e karşı koşar** (`playwright.config.ts`: `command:
+process.env.CI ? 'npm run start' : 'npm run dev'`). Bu fark üç sahte kırmızıya yol açtı:
+`auth.spec.ts`'teki `button[aria-haspopup="menu"]` locator'ı dev modunda enjekte edilen
+"Next.js Dev Tools" düğmesiyle de eşleşip strict-mode ihlali veriyor (prod'da o düğme yok);
+`pipeline.spec.ts` dev sunucusunun Fast Refresh rebuild'i tam da PUT isteği uçuşurken
+tetiklenince isteği düşürüyor; `smoke.spec.ts`'teki `/admin/candidates` navigasyonu
+on-demand derleme yüzünden 30s'yi aşıyor. Üçü de `CI=true npm run build && npm run
+test:e2e:smoke` ile (prod build'e karşı) tekrar koşulunca temiz geçti — **merge'ün veya PR'ın
+kendisiyle ilgisi yoktu.**
+
+**Yerel `.env`'deki gerçek ama bu sandbox'tan erişilemeyen `SMTP_HOST`, e-posta gönderen her
+akışı TCP timeout'una kadar (~20-30s) bloke ediyor.** `.github/workflows/e2e.yml`'de SMTP
+secret'ları hiç tanımlı değil — `nodemailer.createTransport({host: undefined, ...})` orada
+hızlı başarısız oluyor, yerelde ise `crm.ersah.in:465`'e gerçek bir bağlantı denemesi ETIMEDOUT
+ile bitene kadar isteği bloke ediyor ve bu da `signInAndSettle`'daki `waitForLoadState
+('networkidle')`'ı 30s timeout'a düşürüyor (`invite.spec.ts`, `mentee-signup.spec.ts`). Tanı
+için `.env`'deki `SMTP_*` satırlarını geçici olarak yorum satırına aldım (dosya
+`.gitignore`'da, commit'e girmiyor), koştum, sonra geri açtım.
+
+**Ama hepsi bu değildi: `instant-meeting`, `pii-access-lifecycle`, `project-team-and-goals`,
+`upcoming-meeting` (×2) SMTP kapalıyken de aynı 30-33s `networkidle` timeout'unda kırmızı
+kaldı.** Trace ağ günlüğü giriş sonrası ~150ms içinde biten 80'den fazla istek gösteriyor,
+sonra timeout'a kadar **hiçbir yeni istek yok** — yani tekrarlayan bir poll değil, muhtemelen
+Playwright'ın `networkidle` sezgisiyle çakışan bir keep-alive/service-worker bağlantısı
+(`/sw.js` her girişte kayıtlı). Bu 4-5 spec merge'ün dokunmadığı dosyalar ve merge'ün
+dokunmadığı sayfaları test ediyor — üç ayrı koşuda tutarlı biçimde aynı testler kırmızı kaldı,
+bu yüzden makine/ortam kaynaklı, PR'a özgü olmayan bir flake olarak işaretledim (CLAUDE.md'nin
+"bilinen flake" listesine ikisi zaten kayıtlı; bu dördü/beşi de aynı kategoriye giriyor gibi
+duruyor, ayrı bir issue'yu hak ediyor).
+
+**Ders: bir smoke kırmızısını "PR'la ilgili mi" diye sınıflandırmadan önce, dosyanın merge/diff
+kapsamında olup olmadığına bak, sonra prod build'e karşı tekrar koştur.** `npm run dev`'in
+kendine özgü davranışları (HMR, Dev Tools düğmesi, on-demand derleme) CI'da hiç olmayan
+kırmızılar üretebiliyor; gerçek sinyal her zaman prod build'e karşı koşan sonuç.
+
+---
+
+## 2026-08-03 — Yaklaşan toplantı banner'ı + "Katıl" pili (#51 devamı, 0.41.0-beta)
+
+**`ResponsiveShell` header bileşenlerini İKİ kez render eder** — mobil üst bar ve
+masaüstü şeridi. Yani oraya koyduğun her `data-testid` DOM'da iki düğüme çözülür ve
+`getByTestId(...)` strict-mode ihlali verir; biri o viewport'ta `lg:hidden` ile
+gizli olduğu için `.first()` de yetmez. Repodaki yerleşik çözüm:
+`page.locator('[data-testid="x"]:visible').first()` (bkz. `messages-inbox.spec.ts`
+mesaj ikonunu tam böyle buluyor). Kabuk header'ına yeni bir şey eklerken testi
+baştan böyle yaz.
+
+**Aynı cevabı isteyen iki bileşen tek poll paylaşmalı.** Banner (panelde) ve pil
+(header'da) aynı anda mount oluyor; her biri kendi `setInterval`'ını kursa dakikada
+iki istek olurdu. `src/hooks/useUpcomingMeeting.ts`'teki modül seviyesi store
+(abone kümesi + tek timer) hem isteği tekilleştiriyor hem de sonradan mount olan
+bileşene mevcut cevabı anında veriyor.
+
+**Şemada bitiş saati yoksa "devam ediyor"u sen tanımlarsın.** `Meeting`'in süresi
+yok; "hâlâ sürüyor" başlangıçtan sonra sabit bir pencere (`MEETING_DURATION_MINUTES`,
+maintainer'ın onayıyla 60 dk) olarak tanımlandı. Böyle bir varsayımı sabit olarak
+dışa aç ve yorumda kimin onayladığını yaz — sonraki oturum bunu tahmin etmesin.
+
+---
+
 ## 2026-08-02 — #51'in kullanıcı geri bildirim turları (0.40.1/0.40.2-beta)
 
 Aynı oturumda özellik canlıya gitmeden önce üç tur geri bildirim geldi; hepsi

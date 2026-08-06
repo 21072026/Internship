@@ -28,6 +28,7 @@ import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
+import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 
 interface InteractionLog {
   id: string;
@@ -56,6 +57,8 @@ interface RelationDetail {
     birthDate?: string;
     referralSource?: string;
     cvUrl?: string;
+    // No password set yet → the mentee cannot sign in (#1123).
+    pendingActivation?: boolean;
   };
   company: { name: string; industry?: string } | null;
   companyInterest?: { status: 'INTERESTED' | 'SHORTLISTED' | 'PASS'; note?: string | null } | null;
@@ -206,6 +209,14 @@ export default function MenteeDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* A mentee typed in by hand has no login yet — offer the way in (#1123). */}
+      <MenteeActivationPanel
+        menteeId={relation.mentee.id}
+        email={relation.mentee.email}
+        pending={!!relation.mentee.pendingActivation}
+        onUpdated={fetchRelation}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Mentee info */}

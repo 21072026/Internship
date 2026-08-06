@@ -34,6 +34,30 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
+    version: '0.49.2-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'A mentee you added by hand can now get a real account. Until now, adding someone without an e-mail address gave them a stand-in one and there was no way back: they could never sign in, no reset mail could reach them, and nobody could correct the address afterwards.',
+        'On the mentee\'s page you now enter their real address and send them an activation link. It stays the same record — the interaction log, the stage history and the company link are all kept.',
+        'The same button resends the link if the e-mail did not arrive, and shows you the link so you can pass it on yourself.',
+        'Someone who has already set a password keeps control of their own address: only they can change it, from their account settings.',
+      ],
+      tr: [
+        'Elle eklediğin bir mentee artık gerçek bir hesaba kavuşabiliyor. Şimdiye kadar e-posta adresi girmeden eklediğin kişiye geçici bir adres veriliyordu ve geri dönüşü yoktu: hiç giriş yapamıyor, sıfırlama e-postası kendisine ulaşamıyor ve adresi sonradan kimse düzeltemiyordu.',
+        'Mentee sayfasında artık gerçek adresini yazıp ona aktivasyon bağlantısı gönderiyorsun. Kayıt aynı kayıt olarak kalıyor — etkileşim geçmişi, aşama geçmişi ve şirket bağlantısı korunuyor.',
+        'E-posta ulaşmadıysa aynı buton bağlantıyı yeniden gönderiyor; bağlantıyı ekranda da gösteriyor, istersen kendin iletebiliyorsun.',
+        'Parolasını çoktan belirlemiş biri kendi adresinin sahibi olmayı sürdürüyor: adresini yalnızca kendisi, hesap ayarlarından değiştirebiliyor.',
+      ],
+      de: [
+        'Ein von Hand angelegter Mentee kann jetzt ein echtes Konto bekommen. Bisher erhielt jemand ohne E-Mail-Adresse eine Platzhalteradresse und es gab keinen Weg zurück: Anmelden war unmöglich, keine Zurücksetzen-Mail kam an, und die Adresse ließ sich nachträglich von niemandem korrigieren.',
+        'Auf der Mentee-Seite trägst du nun die echte Adresse ein und schickst einen Aktivierungslink. Es bleibt derselbe Datensatz — Interaktionsprotokoll, Phasenhistorie und Firmenzuordnung bleiben erhalten.',
+        'Derselbe Button schickt den Link erneut, falls die E-Mail nicht ankam, und zeigt ihn dir an, damit du ihn selbst weitergeben kannst.',
+        'Wer bereits ein Passwort gesetzt hat, behält die Hoheit über die eigene Adresse: ändern kann sie nur die Person selbst, in den Kontoeinstellungen.',
+      ],
+    },
+  },
+  {
     version: '0.49.1-beta',
     date: '2026-08-06',
     highlights: {
@@ -192,6 +216,21 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Eine Registrierung bringt dich jetzt wirklich hinein. Anmelden, den Link in der Bestätigungsmail anklicken — dein Konto ist offen, ganz ohne auf eine Freigabe zu warten.',
         'Falls du vorher festhingst: Die Anmeldeseite sagt nicht mehr „Konto deaktiviert“, wenn es lediglich auf eine Prüfung wartet — sie sagt es nur, wenn es wirklich so ist.',
         'Admins, die jede Anmeldung zuerst ansehen möchten, stellen die offene Registrierung in den Einstellungen auf „geprüft“ um.',
+      ],
+    },
+  },
+  {
+    version: '0.42.2-beta',
+    date: '2026-08-05',
+    highlights: {
+      en: [
+        'Mentors now get a "Get started" checklist on their dashboard: fill in your bio, add your interests or skills, set how many mentees you can take on, and add an availability slot — each links straight to the right page, and the checklist disappears once you\'re done.',
+      ],
+      tr: [
+        'Mentorlar artık kendi panelinde bir "Başlayalım" kontrol listesi görüyor: biyografini yaz, ilgi alanlarını veya yeteneklerini ekle, kaç mentee alabileceğini belirle ve bir müsaitlik aralığı ekle — her biri doğru sayfaya götürür, tamamlandığında liste kayboluyor.',
+      ],
+      de: [
+        'Mentoren sehen jetzt eine "Loslegen"-Checkliste auf ihrem Dashboard: Bio ausfüllen, Interessen oder Skills hinzufügen, die Mentee-Kapazität festlegen und einen Verfügbarkeitszeitraum hinzufügen — jeder Punkt führt direkt zur richtigen Seite, und die Checkliste verschwindet, sobald alles erledigt ist.',
       ],
     },
   },

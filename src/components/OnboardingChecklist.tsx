@@ -60,6 +60,7 @@ export function OnboardingChecklist() {
           <li key={s.key}>
             <Link
               href={s.href}
+              data-testid={`onboarding-step-${s.key}`}
               className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-white dark:hover:bg-gray-800 ${
                 s.done ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
               }`}

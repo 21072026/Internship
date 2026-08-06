@@ -30,18 +30,22 @@ export async function GET() {
     }
 
     if (role === 'MENTOR') {
-      const [mentees, interactions, meetings] = await Promise.all([
-        prisma.mentorshipRelation.count({ where: { mentorId: id } }),
-        prisma.interactionLog.count({ where: { relation: { mentorId: id } } }),
-        prisma.meeting.count({ where: { relation: { mentorId: id } } }),
+      const [user, availabilitySlots] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id },
+          select: { bio: true, interests: true, skills: true, mentorCapacity: true },
+        }),
+        prisma.availabilitySlot.count({ where: { mentorId: id } }),
       ]);
+      const skills = Array.isArray(user?.skills) ? (user!.skills as unknown[]) : [];
       return NextResponse.json({
         role,
         steps: [
-          { key: 'addMentee', done: mentees > 0, href: '/mentor/mentees/new' },
-          { key: 'logInteraction', done: interactions > 0, href: '/mentor/mentees' },
-          { key: 'scheduleMeeting', done: meetings > 0, href: '/mentor/meetings', optional: true },
-        ].slice(0, mentees > 0 ? 3 : 2),
+          { key: 'bio', done: !!user?.bio?.trim(), href: '/mentor/profile' },
+          { key: 'interestsOrSkills', done: !!user?.interests?.trim() || skills.length > 0, href: '/mentor/profile' },
+          { key: 'mentorCapacity', done: user?.mentorCapacity != null, href: '/mentor/profile' },
+          { key: 'availability', done: availabilitySlots > 0, href: '/mentor/availability' },
+        ],
       });
     }
 
