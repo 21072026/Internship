@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.48.1-beta] - 2026-08-06
+## [0.49.1-beta] - 2026-08-06
 
 ### Changed
 - **Added a reusable `ConfirmDialog` component** (`src/components/ui/ConfirmDialog.tsx`) and
@@ -19,10 +19,36 @@ version is shown in the sidebar footer of every page (links to the
   admin cohorts page, the mentor availability page, the mentee detail page, and
   `ProjectsManager`. Each delete (or stop, for the weekly-meeting series) now opens an
   accessible modal (`role="dialog"`/`aria-modal`, Escape/overlay-to-cancel, focus starts on
-  Cancel) instead of the browser's blocking
-  `confirm()` prompt, with a `loading` state that disables the buttons during the request to
-  prevent double-submits. Existing i18n confirm messages, API calls and delete behavior are
-  unchanged.
+  Cancel) instead of the browser's blocking `confirm()` prompt, with a `loading` state that
+  disables the buttons during the request to prevent double-submits. Existing i18n confirm
+  messages, API calls and delete behavior are unchanged.
+
+## [0.49.0-beta] - 2026-08-06
+
+Closes #1116.
+
+### Fixed
+- **A mentee can see the project they are on.** Not an authorization bug — `scopeForRole`
+  already returned the mentee's own projects and `/projects/[id]` already gave a member the
+  internal view. The portal simply never linked there: `PortalNav` had no entry, the
+  dashboard's relation query selected `mentor`/`company`/`interactions` but not the project,
+  and the only list page (`/projects`) is the `isPublic: true` showcase, which by definition
+  excludes a private project. The project was reachable only by typing its URL.
+
+### Added
+- **`/portal/projects`** — the mentee's own project list (name, owner, status, technologies,
+  intern count, repo/demo/board links), with an empty state pointing at the public showcase,
+  where a mentee can still ask to join a project.
+- **Project card on the portal dashboard**, above the announcements, linking to the full list.
+- `lib/menteeProjects.ts` — one helper for "which projects is this person on?", unioning both
+  membership sources the way `mergeTeam` does (a `ProjectMember` row *and* a legacy
+  `MentorshipRelation.projectId`); reading only one of them is what made pre-#617 assignments
+  invisible. It deliberately does **not** include the showcase scope: it answers "mine", not
+  "browsable".
+
+### Changed
+- The project detail page's back link sends a mentee member to `/portal/projects` instead of
+  `/projects` — the showcase that does not contain their own project.
 
 ## [0.48.0-beta] - 2026-08-06
 

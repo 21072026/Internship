@@ -18,12 +18,13 @@ import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
-import { User, Building2, BookOpen, ExternalLink, MessageCircle, Github, Linkedin } from 'lucide-react';
+import { User, Building2, BookOpen, ExternalLink, MessageCircle, Github, Linkedin, FolderKanban, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
+import { loadMenteeProjects } from '@/lib/menteeProjects';
 
 async function getMenteeData(menteeId: string) {
-  const [user, activeRelation, visibilityConsent] = await Promise.all([
+  const [user, activeRelation, visibilityConsent, projects] = await Promise.all([
     prisma.user.findUnique({
       where: { id: menteeId },
       select: {
@@ -63,9 +64,13 @@ async function getMenteeData(menteeId: string) {
       where: { userId_type: { userId: menteeId, type: 'TALENT_POOL_VISIBILITY' } },
       select: { id: true },
     }),
+    // The projects this mentee is on (#1114). Loaded separately rather than as
+    // `activeRelation.project`, because membership can also come from a
+    // ProjectMember row with no relation behind it — see lib/menteeProjects.ts.
+    loadMenteeProjects(menteeId, 3),
   ]);
 
-  return { user, activeRelation, visibilityDecided: !!visibilityConsent };
+  return { user, activeRelation, visibilityDecided: !!visibilityConsent, projects };
 }
 
 export default async function PortalDashboard() {
@@ -75,7 +80,7 @@ export default async function PortalDashboard() {
   // in which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const { user, activeRelation, visibilityDecided } = await getMenteeData(session.user.id);
+  const { user, activeRelation, visibilityDecided, projects } = await getMenteeData(session.user.id);
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
 
@@ -329,6 +334,45 @@ export default async function PortalDashboard() {
           )}
         </Card>
       </div>
+
+      {/* Projects (#1114). Outside the mentorship card on purpose: a mentee can
+          be a project member without an active relation, and hiding the card in
+          that branch would reproduce the invisibility this fixes. */}
+      {projects.length > 0 && (
+        <div className="mt-6">
+          <Card data-testid="portal-projects-card">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FolderKanban className="h-5 w-5 text-blue-600" />
+                {t.portal.projects.title}
+              </CardTitle>
+              <Link href="/portal/projects" className="text-sm text-blue-600 hover:underline">
+                {t.portal.projects.viewAll}
+              </Link>
+            </CardHeader>
+            <div className="space-y-2">
+              {projects.map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/projects/${p.id}`}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors"
+                  data-testid={`portal-dashboard-project-${p.id}`}
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">{p.name}</p>
+                    {p.owner && (
+                      <p className="text-xs text-gray-500">
+                        {t.projects.by} {p.owner}
+                      </p>
+                    )}
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-blue-600 ml-auto flex-shrink-0" />
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
 
       <div className="mt-6">
         <AnnouncementsCard />
