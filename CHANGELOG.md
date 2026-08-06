@@ -237,6 +237,17 @@ Closes #1113.
   `self "https://meet.jit.si"` only, that `geolocation=()` stays denied and that no directive
   opens up to `*`. No version bump — tests only.
 
+## [0.42.2-beta] - 2026-08-05
+
+### Added
+- **Mentor onboarding checklist** (#912): the existing first-run `OnboardingChecklist` (already
+  role-aware and shared with the mentee/admin dashboards) now drives a mentor-specific step set
+  from `GET /api/onboarding` — bio filled, interests or skills filled, mentee capacity set, and
+  at least one availability slot — linking to `/mentor/profile` (the mentor profile-editing page
+  itself is #908, a dependency of this issue) and to the existing `/mentor/availability`. Hides
+  once every step is done, or when dismissed, same as the other roles. Replaces the previous
+  mentee-count/interaction/meeting-based mentor steps. EN/TR/DE translations.
+
 ## [0.42.1-beta] - 2026-08-05
 
 ### Changed
