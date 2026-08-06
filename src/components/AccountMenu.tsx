@@ -94,6 +94,7 @@ export function AccountMenu({
 
       <button
         type="button"
+        data-testid="account-menu-button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
