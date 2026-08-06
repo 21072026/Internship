@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks } from 'lucide-react';
+import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks, FolderKanban } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 // Mentee portal sidebar navigation with active-route highlighting (mirrors the
@@ -14,6 +14,8 @@ export function PortalNav() {
   const links = [
     { href: '/portal', label: t.nav.dashboard, Icon: LayoutDashboard },
     { href: '/portal/profile', label: t.nav.myProfile, Icon: User },
+    // Their own projects, not the public showcase at /projects (#1114).
+    { href: '/portal/projects', label: t.nav.projects, Icon: FolderKanban },
     { href: '/todos', label: t.nav.todos, Icon: ListChecks },
     { href: '/portal/messages', label: t.nav.messages, Icon: MessageSquare },
     { href: '/portal/interactions', label: t.nav.interactionLogs, Icon: BookOpen },
