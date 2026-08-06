@@ -8,6 +8,15 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.50.1-beta] - 2026-08-06
+
+### Changed
+- **The register form no longer reads as "invitation required".** The invitation-token field was
+  the first thing on the form, which contradicted the open sign-up the landing page invites
+  everyone into. It is now folded behind an "I have an invitation code" link and unfolds
+  automatically for anyone who arrived through an invitation link (`?token=`). Subtitle and hint
+  reworded in EN/TR/DE: signing up as a mentee needs no invitation.
+
 ## [0.49.1-beta] - 2026-08-06
 
 ### Changed
