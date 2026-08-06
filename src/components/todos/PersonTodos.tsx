@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Plus, Send } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
 import type { Locale } from '@/i18n/config';
@@ -46,6 +47,7 @@ export function PersonTodos({
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const name = fullName ?? '';
 
   const load = useCallback(async () => {
@@ -93,9 +95,12 @@ export function PersonTodos({
   };
 
   const toggle = (todo: Todo) => call(`/api/project-tasks/${todo.id}`, 'PATCH', { done: !todo.done }, todo.id);
-  const remove = (todo: Todo) => {
-    if (!window.confirm(t.todos.confirmDelete.replace('{title}', todo.title))) return;
-    return call(`/api/project-tasks/${todo.id}`, 'DELETE', undefined, todo.id);
+  const remove = (todo: Todo) => setPendingDelete({ id: todo.id, title: todo.title });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || busy === pendingDelete.id) return;
+    await call(`/api/project-tasks/${pendingDelete.id}`, 'DELETE', undefined, pendingDelete.id);
+    setPendingDelete(null);
   };
 
   if (!loaded) return null;
@@ -103,6 +108,7 @@ export function PersonTodos({
   const doneCount = todos.filter((x) => x.done).length;
 
   return (
+    <>
     <Card className={className} data-testid="person-todos">
       <CardHeader>
         <CardTitle>{t.todos.personTitle}</CardTitle>
@@ -183,5 +189,16 @@ export function PersonTodos({
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
     </Card>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.todos.confirmDelete.replace('{title}', pendingDelete.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDelete ? busy === pendingDelete.id : false}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    </>
   );
 }

@@ -21,6 +21,19 @@ version is shown in the sidebar footer of every page (links to the
   MENTEE onboarding flow and the dashboard "Get started" checklist (`/api/onboarding`) are
   untouched. EN/TR/DE translations.
 
+### Changed
+- **Added a reusable `ConfirmDialog` component** (`src/components/ui/ConfirmDialog.tsx`) and
+  replaced all native `window.confirm(...)` calls under `src/` with it — across
+  `RelationNotesPanel`, `GoalsPanel`, `NotesPanel`, `DocumentsManager`, `EvaluationPanel`,
+  `MessageThreadView`, `ProjectGoals` (including the goal-template pool's delete), the admin
+  goal-templates page, `MyTodos` and `PersonTodos` (added since), `ProjectWeeklyMeeting`, the
+  admin cohorts page, the mentor availability page, the mentee detail page, and
+  `ProjectsManager`. Each delete (or stop, for the weekly-meeting series) now opens an
+  accessible modal (`role="dialog"`/`aria-modal`, Escape/overlay-to-cancel, focus starts on
+  Cancel) instead of the browser's blocking `confirm()` prompt, with a `loading` state that
+  disables the buttons during the request to prevent double-submits. Existing i18n confirm
+  messages, API calls and delete behavior are unchanged.
+
 ## [0.49.0-beta] - 2026-08-06
 
 Closes #1116.
@@ -389,6 +402,7 @@ Closes #1113.
   by education, city and skills. The seven existing filters stay unchanged but are collapsed
   behind a visible Filters control on small screens. The existing desktop candidate grid and
   its actions remain unchanged.
+
 ## [0.40.9-beta] - 2026-08-03
 
 ### Added

@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 
@@ -37,6 +38,8 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
   const [editTitle, setEditTitle] = useState('');
   const [editDueDate, setEditDueDate] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/goals?relationId=${relationId}`);
@@ -68,10 +71,18 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
     await load();
   };
 
-  const remove = async (g: Goal) => {
-    if (!window.confirm(t.goals.confirmDelete.replace('{title}', g.title))) return;
-    await fetch(`/api/goals/${g.id}`, { method: 'DELETE' });
-    await load();
+  const remove = (g: Goal) => setPendingDelete({ id: g.id, title: g.title });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/goals/${pendingDelete.id}`, { method: 'DELETE' });
+      await load();
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+    }
   };
 
   const startEdit = (g: Goal) => {
@@ -179,6 +190,7 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
   );
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -258,5 +270,16 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
         </section>
       )}
     </Card>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.goals.confirmDelete.replace('{title}', pendingDelete.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={deleting}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    </>
   );
 }

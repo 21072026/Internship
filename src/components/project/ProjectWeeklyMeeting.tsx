@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, Video, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 
@@ -50,6 +51,8 @@ export function ProjectWeeklyMeeting({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ title: '', days: [1] as number[], timeOfDay: '09:00', meetLink: '' });
+  const [stopId, setStopId] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/meeting-series?projectId=${projectId}`);
@@ -132,14 +135,22 @@ export function ProjectWeeklyMeeting({
     }
   };
 
-  const stop = async (id: string) => {
-    if (!window.confirm(t.projects.confirmStopMeeting)) return;
-    await fetch('/api/meeting-series', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-    await load();
+  const stop = (id: string) => setStopId(id);
+
+  const confirmStop = async () => {
+    if (!stopId || stopping) return;
+    setStopping(true);
+    try {
+      await fetch('/api/meeting-series', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: stopId }),
+      });
+      await load();
+    } finally {
+      setStopping(false);
+      setStopId(null);
+    }
   };
 
   if (loading) return null;
@@ -148,6 +159,7 @@ export function ProjectWeeklyMeeting({
   if (series.length === 0 && !canManage && !canStartInstant) return null;
 
   return (
+    <>
     <div data-testid="weekly-meeting">
       <h2 className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
         <CalendarClock className="h-4 w-4 text-gray-400" /> {t.projects.weeklyMeeting}
@@ -260,5 +272,16 @@ export function ProjectWeeklyMeeting({
         </div>
       )}
     </div>
+    <ConfirmDialog
+      open={stopId !== null}
+      message={t.projects.confirmStopMeeting}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.projects.stopMeeting}
+      variant="danger"
+      loading={stopping}
+      onConfirm={confirmStop}
+      onCancel={() => setStopId(null)}
+    />
+    </>
   );
 }

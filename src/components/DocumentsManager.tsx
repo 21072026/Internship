@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DOCUMENT_TYPES } from '@/lib/documentAccess';
 import { useT } from '@/i18n/client';
 
@@ -39,6 +40,8 @@ export function DocumentsManager({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const query = templates ? 'templates=1' : `userId=${targetUserId ?? ''}`;
   const load = useCallback(async () => {
@@ -70,16 +73,25 @@ export function DocumentsManager({
     }
   };
 
-  const remove = async (d: Doc) => {
-    if (!window.confirm(t.documents.confirmDelete.replace('{title}', d.title))) return;
-    await fetch(`/api/documents/${d.id}`, { method: 'DELETE' });
-    await load();
+  const remove = (d: Doc) => setPendingDelete({ id: d.id, title: d.title });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/documents/${pendingDelete.id}`, { method: 'DELETE' });
+      await load();
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
+    }
   };
 
   const kb = (n: number) => `${Math.max(1, Math.round(n / 1024))} KB`;
   const typeLabel = (ty: string) => (t.documents.types as Record<string, string>)[ty] ?? ty;
 
   return (
+    <>
     <Card>
       <CardHeader><CardTitle>{templates ? t.documents.uploadedTitle : t.documents.title}</CardTitle></CardHeader>
 
@@ -119,5 +131,16 @@ export function DocumentsManager({
         </form>
       )}
     </Card>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.documents.confirmDelete.replace('{title}', pendingDelete.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={deleting}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    </>
   );
 }

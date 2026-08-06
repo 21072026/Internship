@@ -5,6 +5,7 @@ import { Hand, Plus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { TodoRow, todoText, type Todo } from '@/components/todos/TodoRow';
 
@@ -28,6 +29,7 @@ export function MyTodos({ myId }: { myId: string }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
     const [active, past] = await Promise.all([fetch('/api/todos'), fetch('/api/todos?archived=1')]);
@@ -71,9 +73,12 @@ export function MyTodos({ myId }: { myId: string }) {
   const setArchived = (todo: Todo, archived: boolean) =>
     call(`/api/project-tasks/${todo.id}`, 'PATCH', { archived }, todo.id);
   const rename = (todo: Todo, title: string) => call(`/api/project-tasks/${todo.id}`, 'PATCH', { title }, todo.id);
-  const remove = (todo: Todo) => {
-    if (!window.confirm(t.todos.confirmDelete.replace('{title}', todoText(todo, locale)))) return;
-    return call(`/api/project-tasks/${todo.id}`, 'DELETE', undefined, todo.id);
+  const remove = (todo: Todo) => setPendingDelete({ id: todo.id, title: todoText(todo, locale) });
+
+  const confirmRemove = async () => {
+    if (!pendingDelete || busy === pendingDelete.id) return;
+    await call(`/api/project-tasks/${pendingDelete.id}`, 'DELETE', undefined, pendingDelete.id);
+    setPendingDelete(null);
   };
   const claim = (todo: Todo) => call(`/api/project-tasks/${todo.id}`, 'PATCH', { assigneeId: myId }, todo.id);
 
@@ -88,6 +93,7 @@ export function MyTodos({ myId }: { myId: string }) {
   }
 
   return (
+    <>
     <div className="space-y-6" data-testid="my-todos">
       <Card>
         <CardHeader>
@@ -173,5 +179,16 @@ export function MyTodos({ myId }: { myId: string }) {
         </Card>
       )}
     </div>
+    <ConfirmDialog
+      open={pendingDelete !== null}
+      message={pendingDelete ? t.todos.confirmDelete.replace('{title}', pendingDelete.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDelete ? busy === pendingDelete.id : false}
+      onConfirm={confirmRemove}
+      onCancel={() => setPendingDelete(null)}
+    />
+    </>
   );
 }
