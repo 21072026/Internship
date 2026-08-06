@@ -26,16 +26,15 @@ export default async function HomePage() {
   const { locale, t } = await getServerDictionary();
   const L = t.landing;
 
-  // The mentor and company doors are still hand-run (the public mentor
-  // application form is #905, the company page #1102). Rather than send those
-  // visitors to /auth/register — which would sign a mentor up as a mentee —
-  // the CTA is an email to whoever runs the program, and simply does not
-  // render when no address is configured. A missing button beats a wrong one.
+  // Mentors now have a real door: the public application form (#905) reviewed
+  // in /admin/mentor-applications — no mailto anywhere. The company door is
+  // still hand-run (#1102), so that CTA remains an email to whoever runs the
+  // program and simply does not render when no address is configured. A
+  // missing button beats a wrong one.
   const contactEmail = (await getSetting('supportEmail')).trim();
-  const mailto = (subject: string) =>
-    contactEmail ? `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}` : null;
-  const mentorHref = mailto(L.ctaMentor);
-  const companyHref = mailto(L.ctaCompany);
+  const companyHref = contactEmail
+    ? `mailto:${contactEmail}?subject=${encodeURIComponent(L.ctaCompany)}`
+    : null;
 
   // Fed from the single-source catalogue (#584/#588): the landing shows the
   // featured subset; /features shows everything.
@@ -326,13 +325,11 @@ export default async function HomePage() {
           {audienceList(mentorItems)}
           <p className="mt-8 text-sm text-gray-700 text-center">{L.audMentorTrust}</p>
           <p className="mt-6 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl p-5 leading-relaxed">{L.audMentorProof}</p>
-          {mentorHref && (
-            <div className="mt-8 flex justify-center">
-              <a href={mentorHref} className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors">
-                {L.audMentorCta} <ArrowRight className="h-5 w-5 flex-shrink-0" />
-              </a>
-            </div>
-          )}
+          <div className="mt-8 flex justify-center">
+            <Link href="/apply-as-mentor" className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors">
+              {L.audMentorCta} <ArrowRight className="h-5 w-5 flex-shrink-0" />
+            </Link>
+          </div>
           <p className="mt-3 text-center text-xs text-gray-500 max-w-xl mx-auto">{L.audMentorCtaNote}</p>
         </div>
       </section>
@@ -540,12 +537,12 @@ export default async function HomePage() {
             <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors dark:!bg-white dark:!text-blue-700 dark:hover:!bg-blue-100">
               {L.ctaMentee} <ArrowRight className="h-5 w-5" />
             </Link>
-            <a
-              href={mentorHref ?? '#mentor'}
+            <Link
+              href="/apply-as-mentor"
               className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"
             >
               <Users className="h-5 w-5" /> {L.ctaMentor}
-            </a>
+            </Link>
             <a
               href={companyHref ?? '#company'}
               className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"

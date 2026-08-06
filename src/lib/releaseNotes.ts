@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.49.2-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Becoming a mentor is one route now: the application form. The two buttons on the home page that used to open your email client instead go to the same short form as the "Apply here" link at the top — no more writing an email and waiting to hear back. They also always show up, even when no support address is configured.',
+      ],
+      tr: [
+        'Mentor olmanın tek bir yolu var artık: başvuru formu. Ana sayfada e-posta programını açan iki buton, en üstteki “Buradan başvur” bağlantısıyla aynı kısa forma gidiyor — e-posta yazıp cevap beklemek yok. Ayrıca destek adresi tanımlı olmasa da bu butonlar her zaman görünüyor.',
+      ],
+      de: [
+        'Mentor wirst du jetzt nur noch über einen Weg: das Bewerbungsformular. Die beiden Buttons auf der Startseite, die bisher dein E-Mail-Programm geöffnet haben, führen zum selben kurzen Formular wie der Link „Hier bewerben“ ganz oben — keine E-Mail mehr schreiben und auf Antwort warten. Außerdem sind sie immer sichtbar, auch ohne hinterlegte Support-Adresse.',
+      ],
+    },
+  },
+  {
     version: '0.49.1-beta',
     date: '2026-08-06',
     highlights: {

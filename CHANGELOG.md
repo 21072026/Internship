@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.49.2-beta] - 2026-08-06
+
+### Changed
+- **The landing page no longer offers an email address for mentor applications.** Both mentor
+  CTAs on `/` — the button at the end of the mentor section (`audMentorCta`) and the "Apply as
+  a mentor" button in the closing CTA band (`ctaMentor`) — were `mailto:` links built from the
+  `supportEmail` setting; they now link to the public application form at `/apply-as-mentor`,
+  the same destination as the hero's "Want to become a mentor?" link. The mentor-section button
+  used to disappear entirely when no support address was configured (`{mentorHref && …}`) and
+  the CTA-band button fell back to the `#mentor` anchor — both now always render and always go
+  to the form. The company CTA keeps its `mailto:` (that door is still hand-run, #1102), so
+  `supportEmail` is still read on the page.
+
 ## [0.49.1-beta] - 2026-08-06
 
 ### Changed
