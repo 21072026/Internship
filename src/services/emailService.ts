@@ -10,7 +10,10 @@ import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone } from '@/lib/timezone';
+import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { loadProjectTeam } from '@/lib/projectTeam';
+import { getDictionary } from '@/i18n/dictionaries';
+import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -282,7 +285,10 @@ export async function sendMeetingInviteEmail({
   title: string;
   scheduledAt: Date | null;
   meetLink?: string | null;
-  rsvpToken: string;
+  // Omitted for announcements that have no Meeting row behind them — a
+  // recurring series occurrence is computed from the rule, so there is nothing
+  // to RSVP against and the buttons are left out.
+  rsvpToken?: string | null;
   // The recipient's saved IANA zone; falls back to the deployment default.
   timeZone?: string | null;
 }) {
@@ -292,6 +298,7 @@ export async function sendMeetingInviteEmail({
   // A meeting with no set time is just a shared link — skip the "when" line and
   // the RSVP ask entirely.
   const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
+  const askRsvp = Boolean(when && rsvpToken);
 
   await sendEmail({
     to,
@@ -303,7 +310,7 @@ export async function sendMeetingInviteEmail({
         <p>You're invited to a meeting.</p>
         ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
         ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
-        ${when ? `
+        ${askRsvp ? `
         <p style="margin-top: 20px;">Can you make it?</p>
         <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
@@ -451,6 +458,131 @@ export async function sendMentorshipRequestEmail({
         <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
         ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
         ${ctaBlock(brand, `${appUrl()}/admin/mentorship`, 'Review the request')}
+      </div>
+    `,
+  });
+}
+
+// --- Mentor applications (#904/#905/#933) -----------------------------------
+// The only transactional emails in this file localized to the recipient: the
+// applicant is never a signed-in User with an account-level language, so the
+// `locale` captured on submit (src/app/apply-as-mentor/page.tsx) is all we have.
+function resolveLocale(locale?: string | null): Locale {
+  return isLocale(locale ?? undefined) ? (locale as Locale) : defaultLocale;
+}
+
+export async function sendMentorApplicationReceivedEmail({
+  to,
+  fullName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.received.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.received.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.received.body)}</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendMentorApplicationUnderReviewEmail({
+  to,
+  fullName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.underReview.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.underReview.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.underReview.body)}</p>
+      </div>
+    `,
+  });
+}
+
+// `registerUrl` set → no account existed yet, an invitation token was created
+// (mirrors sendInvitationEmail's link). Omitted → an existing account was
+// promoted to MENTOR in place, so the CTA is just "sign in".
+export async function sendMentorApplicationApprovedEmail({
+  to,
+  fullName,
+  locale,
+  orgId,
+  registerUrl,
+}: {
+  to: string;
+  fullName: string;
+  locale?: string | null;
+  orgId?: string | null;
+  registerUrl?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
+  const isNewAccount = !!registerUrl;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.approved.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.approved.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(isNewAccount ? M.approved.bodyNewAccount : M.approved.bodyExistingAccount)}</p>
+        ${ctaBlock(brand, registerUrl || `${appUrl()}/auth/signin`, isNewAccount ? M.approved.ctaRegister : M.approved.ctaSignIn)}
+      </div>
+    `,
+  });
+}
+
+// The rejection *reason* an admin records is internal-only (never sent here) —
+// the applicant gets a generic, kind decline instead.
+export async function sendMentorApplicationRejectedEmail({
+  to,
+  fullName,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.rejected.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.rejected.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.rejected.body)}</p>
       </div>
     `,
   });
@@ -750,16 +882,33 @@ export async function checkStageDeadlineReminders() {
       deadlineReminderSentAt: null,
       pipelineStatus: { notIn: [...TERMINAL] },
     },
-    include: { mentor: true, mentee: true },
+    include: {
+      mentor: {
+        select: {
+          email: true,
+          fullName: true,
+          emailNotifications: true,
+          notificationPrefs: true,
+          preferredLanguage: true,
+        },
+      },
+      mentee: { select: { fullName: true } },
+    },
   });
 
   for (const rel of overdue) {
     await notify(rel.mentorId, 'deadline', `Stage deadline passed for ${rel.mentee.fullName}.`, `/admin/candidates/${rel.menteeId}`);
     if (emailAllowed(rel.mentor, 'deadlines')) {
+      const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
+      const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
+      const emailText = getDictionary(locale).notifications.deadlineEmail;
+      const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
+      const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
+      const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
       await sendEmail({
         to: rel.mentor.email,
-        subject: `Overdue: ${rel.mentee.fullName}'s stage deadline`,
-        html: `<p>Hi ${rel.mentor.fullName},</p><p>The stage deadline for <strong>${rel.mentee.fullName}</strong> has passed. Please review their progress.</p>`,
+        subject,
+        html: `<p>${greeting}</p><p>${body}</p>`,
       }).catch((error) => {
         console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
       });
@@ -904,22 +1053,18 @@ export async function sendMeetingReminders() {
 // hour" are different reminders: DAY_BEFORE (~24h) and HOUR_BEFORE (~1h).
 const SERIES_LOOKAHEAD_MINUTES = 25 * 60;
 
-function seriesOccurrences(daysOfWeek: number[], timeOfDay: string, from: Date, withinMinutes: number): Date[] {
-  const [hour, minute] = timeOfDay.split(':').map((v) => Number(v));
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return [];
-  const allowed = new Set(daysOfWeek);
-  const out: Date[] = [];
+// Occurrences strictly after `from` and within the lookahead. The expansion
+// itself lives in lib/meetingSeriesOccurrences so the reminder can never
+// disagree with the calendar about what time the meeting is (#1110).
+function upcomingSeriesOccurrences(
+  series: { daysOfWeek: unknown; timeOfDay: string; timeZone: string | null },
+  from: Date,
+  withinMinutes: number
+): Date[] {
   const horizon = new Date(from.getTime() + withinMinutes * 60 * 1000);
-  // Wall-clock times are stored as UTC by the series generator; stay consistent.
-  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-  for (let i = 0; i <= Math.ceil(withinMinutes / (24 * 60)) + 1; i++) {
-    const day = new Date(cursor);
-    day.setUTCDate(day.getUTCDate() + i);
-    if (!allowed.has(day.getUTCDay())) continue;
-    const when = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hour, minute, 0, 0));
-    if (when > from && when <= horizon) out.push(when);
-  }
-  return out;
+  return seriesOccurrences(series.daysOfWeek, series.timeOfDay, from, horizon, series.timeZone).filter(
+    (when) => when > from
+  );
 }
 
 function leadFor(minutesAway: number): 'DAY_BEFORE' | 'HOUR_BEFORE' | null {
@@ -937,6 +1082,7 @@ export async function sendProjectMeetingSeriesReminders() {
       title: true,
       daysOfWeek: true,
       timeOfDay: true,
+      timeZone: true,
       fixedLink: true,
       projectId: true,
       project: { select: { id: true, name: true, orgId: true } },
@@ -949,12 +1095,8 @@ export async function sendProjectMeetingSeriesReminders() {
 
   for (const series of seriesList) {
     if (!series.projectId) continue;
-    const days = Array.isArray(series.daysOfWeek)
-      ? (series.daysOfWeek as unknown[]).map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
-      : [];
-    if (days.length === 0) continue;
 
-    const occurrences = seriesOccurrences(days, series.timeOfDay, now, SERIES_LOOKAHEAD_MINUTES);
+    const occurrences = upcomingSeriesOccurrences(series, now, SERIES_LOOKAHEAD_MINUTES);
     if (occurrences.length === 0) continue;
 
     // The whole team, not just the ProjectMember rows: a mentee attached to the

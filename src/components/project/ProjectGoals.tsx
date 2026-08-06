@@ -1,10 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Circle, Hand, Trash2, Send, Plus } from 'lucide-react';
+import { CheckCircle2, Check, Circle, Hand, Trash2, Send, Plus, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { locales, type Locale } from '@/i18n/config';
+import { resolveTemplateTitle } from '@/lib/goalTemplates';
 import type { TeamMember } from '@/lib/projectTeam';
 
 // Project goals, per person (#51).
@@ -28,7 +30,12 @@ interface Task {
 interface Template {
   id: string;
   title: string;
+  // The goal in each language it has been written in; read in the viewer's.
+  translations: Partial<Record<Locale, string>>;
   useCount: number;
+  // Part of the admin-managed pool every project sees — not this project's to
+  // reword or remove.
+  shared: boolean;
 }
 
 export function ProjectGoals({
@@ -43,6 +50,7 @@ export function ProjectGoals({
   isMember: boolean;
 }) {
   const t = useT();
+  const locale = useLocale();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -55,6 +63,9 @@ export function ProjectGoals({
   const [templateTarget, setTemplateTarget] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [pendingDeleteTemplate, setPendingDeleteTemplate] = useState<{ id: string; title: string } | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
+  const [templateDraft, setTemplateDraft] = useState<Partial<Record<Locale, string>>>({});
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/projects/${projectId}`);
@@ -98,9 +109,8 @@ export function ProjectGoals({
     }
   };
 
-  const mine = useMemo(() => tasks.filter((tk) => tk.assigneeId === myId), [tasks, myId]);
   const unassigned = useMemo(() => tasks.filter((tk) => !tk.assigneeId), [tasks]);
-  const others = useMemo(() => tasks.filter((tk) => tk.assigneeId && tk.assigneeId !== myId), [tasks, myId]);
+  const assigned = useMemo(() => tasks.filter((tk) => tk.assigneeId), [tasks]);
   const assignable = useMemo(() => team.filter((m) => m.role === 'MENTEE'), [team]);
 
   const toggle = (task: Task) =>
@@ -123,6 +133,31 @@ export function ProjectGoals({
     if (await call(`/api/projects/${projectId}/tasks`, 'POST', { title, assigneeId: draftAssignee || null }, 'add')) {
       setDraft('');
     }
+  };
+
+  const startEditTemplate = (tpl: Template) => {
+    setEditingTemplate(tpl.id);
+    // A template captured before the pool was multilingual only has `title`;
+    // seed the editor with it so saving does not drop the wording.
+    setTemplateDraft(Object.keys(tpl.translations).length > 0 ? tpl.translations : { en: tpl.title });
+  };
+
+  const saveTemplate = async (tpl: Template) => {
+    if (!locales.some((l) => templateDraft[l]?.trim())) return;
+    if (
+      await call(`/api/projects/${projectId}/task-templates`, 'PATCH', { id: tpl.id, translations: templateDraft }, tpl.id)
+    ) {
+      setEditingTemplate(null);
+    }
+  };
+
+  const removeTemplate = (tpl: Template) =>
+    setPendingDeleteTemplate({ id: tpl.id, title: resolveTemplateTitle(tpl, locale) });
+
+  const confirmRemoveTemplate = async () => {
+    if (!pendingDeleteTemplate || busy === pendingDeleteTemplate.id) return;
+    await call(`/api/projects/${projectId}/task-templates`, 'DELETE', { id: pendingDeleteTemplate.id }, pendingDeleteTemplate.id);
+    setPendingDeleteTemplate(null);
   };
 
   const sendTemplates = async () => {
@@ -190,13 +225,6 @@ export function ProjectGoals({
         </div>
       </div>
 
-      {mine.length > 0 && (
-        <div>
-          <h3 className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{t.projects.myGoals}</h3>
-          <ul className="space-y-1">{mine.map((tk) => row(tk, { canTick: true, canRelease: !canLead }))}</ul>
-        </div>
-      )}
-
       {unassigned.length > 0 && (
         <div>
           <h3 className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{t.projects.openGoals}</h3>
@@ -207,17 +235,20 @@ export function ProjectGoals({
         </div>
       )}
 
-      {others.length > 0 && (
-        <div>
-          <h3 className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{t.projects.teamGoals}</h3>
-          <ul className="space-y-1">{others.map((tk) => row(tk, { canTick: canLead }))}</ul>
-        </div>
+      {/* A personal goal belongs to the person, so it is listed on their profile
+          (PersonProjectGoals) instead of here in front of the whole team. Only
+          the count stays, so a lead can see the project is not idle. */}
+      {assigned.length > 0 && (
+        <p className="text-xs text-gray-400" data-testid="assigned-goals-count">
+          {t.projects.assignedGoalsCount.replace('{n}', String(assigned.length))}
+        </p>
       )}
 
       {tasks.length === 0 && <p className="text-sm text-gray-400">{t.projects.noGoals}</p>}
 
       {canLead && (
         <div className="space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+          <p className="text-xs text-gray-400">{t.projects.assignedGoalsHint}</p>
           {/* Stacked below sm: an input sharing a row with a select and a button
               collapses to a few characters wide on a phone (#51 follow-up). */}
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -232,6 +263,7 @@ export function ProjectGoals({
             <select
               value={draftAssignee}
               onChange={(e) => setDraftAssignee(e.target.value)}
+              title={t.projects.assignedGoalsHint}
               data-testid="goal-assignee"
               className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
             >
@@ -261,22 +293,90 @@ export function ProjectGoals({
                   <p className="text-xs text-gray-400">{t.projects.noTemplates}</p>
                 ) : (
                   <ul className="space-y-1">
-                    {templates.map((tpl) => (
-                      <li key={tpl.id} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={picked.includes(tpl.id)}
-                          onChange={(e) =>
-                            setPicked((prev) => (e.target.checked ? [...prev, tpl.id] : prev.filter((id) => id !== tpl.id)))
-                          }
-                          data-testid={`template-${tpl.id}`}
-                        />
-                        <span className="text-gray-700 dark:text-gray-200">{tpl.title}</span>
-                        {tpl.useCount > 0 && (
-                          <span className="text-xs text-gray-400">· {t.projects.templateUsed.replace('{n}', String(tpl.useCount))}</span>
-                        )}
-                      </li>
-                    ))}
+                    {templates.map((tpl) =>
+                      editingTemplate === tpl.id ? (
+                        // Reword one of this project's own templates, per language.
+                        <li key={tpl.id} className="space-y-1.5 rounded-lg bg-gray-50 p-2 dark:bg-gray-800/50">
+                          {locales.map((l) => (
+                            <input
+                              key={l}
+                              value={templateDraft[l] ?? ''}
+                              onChange={(e) => setTemplateDraft((prev) => ({ ...prev, [l]: e.target.value }))}
+                              placeholder={t.goalTemplateAdmin.langLabel.replace('{lang}', l.toUpperCase())}
+                              data-testid={`edit-template-${tpl.id}-${l}`}
+                              className="w-full min-w-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900"
+                            />
+                          ))}
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingTemplate(null)}
+                              className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="h-3.5 w-3.5" /> {t.common.cancel}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => saveTemplate(tpl)}
+                              disabled={busy === tpl.id}
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                              data-testid={`save-template-${tpl.id}`}
+                            >
+                              <Check className="h-3.5 w-3.5" /> {t.common.save}
+                            </button>
+                          </div>
+                        </li>
+                      ) : (
+                        <li key={tpl.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={picked.includes(tpl.id)}
+                            onChange={(e) =>
+                              setPicked((prev) => (e.target.checked ? [...prev, tpl.id] : prev.filter((id) => id !== tpl.id)))
+                            }
+                            data-testid={`template-${tpl.id}`}
+                          />
+                          <span className="min-w-0 break-words text-gray-700 dark:text-gray-200">
+                            {resolveTemplateTitle(tpl, locale)}
+                          </span>
+                          {tpl.shared && (
+                            <span
+                              className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase text-gray-500 dark:bg-gray-800"
+                              title={t.goalTemplateAdmin.sharedHint}
+                            >
+                              {t.goalTemplateAdmin.sharedBadge}
+                            </span>
+                          )}
+                          {tpl.useCount > 0 && (
+                            <span className="shrink-0 text-xs text-gray-400">· {t.projects.templateUsed.replace('{n}', String(tpl.useCount))}</span>
+                          )}
+                          {/* Only this project's own templates are editable here. */}
+                          {!tpl.shared && (
+                            <span className="ml-auto flex shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEditTemplate(tpl)}
+                                aria-label={t.common.edit}
+                                className="text-gray-300 hover:text-blue-600"
+                                data-testid={`edit-template-${tpl.id}`}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeTemplate(tpl)}
+                                disabled={busy === tpl.id}
+                                aria-label={t.common.delete}
+                                className="text-gray-300 hover:text-red-600"
+                                data-testid={`delete-template-${tpl.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </span>
+                          )}
+                        </li>
+                      )
+                    )}
                   </ul>
                 )}
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -324,6 +424,16 @@ export function ProjectGoals({
       loading={pendingDelete ? busy === pendingDelete.id : false}
       onConfirm={confirmRemove}
       onCancel={() => setPendingDelete(null)}
+    />
+    <ConfirmDialog
+      open={pendingDeleteTemplate !== null}
+      message={pendingDeleteTemplate ? t.goalTemplateAdmin.confirmDelete.replace('{title}', pendingDeleteTemplate.title) : ''}
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.common.delete}
+      variant="danger"
+      loading={pendingDeleteTemplate ? busy === pendingDeleteTemplate.id : false}
+      onConfirm={confirmRemoveTemplate}
+      onCancel={() => setPendingDeleteTemplate(null)}
     />
     </>
   );

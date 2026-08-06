@@ -17,7 +17,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('a mentee member sees the roster and their own goals on their project', { tag: '@smoke' }, async ({ page }) => {
+test('a mentee member sees the roster on their project and their goals on their profile', { tag: '@smoke' }, async ({ page }) => {
   // Two sign-ins plus five navigations: ~50s on an idle machine, over the 60s
   // default when the suite is loaded. Nothing here is waiting on a timeout.
   test.slow();
@@ -58,21 +58,30 @@ test('a mentee member sees the roster and their own goals on their project', { t
     expect(created.ok()).toBeTruthy();
 
     // The mentee opens the project: roster visible (private project, member
-    // access), and the goal is theirs to tick off.
+    // access). A goal that belongs to a person is NOT listed here — it moved to
+    // that person's profile, so the whole team no longer reads it.
     await signInAsFreshUser(page, menteeEmail, password, '/portal');
     await gotoSettled(page, `/projects/${project.id}`);
     await expect(page.locator('[data-testid="project-team"]')).toContainText('Team Mentor');
     await expect(page.locator('[data-testid="project-team"]')).toContainText('Team Mentee');
-    await expect(page.locator('[data-testid="project-goals"]')).toContainText('Read the project and understand it');
+    await expect(page.locator('[data-testid="project-goals"]')).not.toContainText(
+      'Read the project and understand it'
+    );
     // Shortcuts to the owner and the group chat are right there.
     await expect(page.locator('[data-testid="open-group-chat"]')).toBeVisible();
     await expect(page.locator('[data-testid="message-owner"]')).toBeVisible();
 
+    // Their own profile is where the goal lives, and where they tick it off.
     const task = await prisma.projectTask.findFirst({ where: { projectId: project.id } });
-    await page.locator(`[data-testid="goal-${task!.id}"] button`).first().click();
+    await gotoSettled(page, '/portal/profile');
+    const goalRow = page.locator(`[data-testid="project-goal-${task!.id}"]`);
+    await expect(goalRow).toContainText('Read the project and understand it');
+    await goalRow.locator('button').first().click();
     await expect
       .poll(async () => (await prisma.projectTask.findUnique({ where: { id: task!.id } }))?.done, { timeout: 10_000 })
       .toBe(true);
+
+    await gotoSettled(page, `/projects/${project.id}`);
 
     // The group chat says who is in the room, with each person's project role.
     await page.locator('[data-testid="open-group-chat"]').click();
@@ -162,8 +171,8 @@ test('setting up a series announces only the next meeting, not every occurrence'
       },
     },
   });
-  // A relation bound to the project is what makes the generator produce Meeting
-  // rows (and, before this fix, one invitation email per row).
+  // A relation bound to the project is what puts a mentee on the announcement
+  // list (and, before this fix, got them one invitation email per occurrence).
   const relation = await prisma.mentorshipRelation.create({
     data: { mentorId: mentor.id, menteeId: mentee.id, projectId: project.id },
   });
@@ -174,16 +183,15 @@ test('setting up a series announces only the next meeting, not every occurrence'
       data: {
         projectId: project.id,
         title: 'Weekly sync',
-        daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // every day, to get many occurrences fast
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6], // every day, so the next one is always close
         timeOfDay: '09:00',
-        weeksAhead: 4,
       },
     });
     expect(res.status()).toBe(201);
     const body = await res.json();
 
-    // Weeks of meetings are created …
-    expect(body.createdMeetings).toBeGreaterThan(5);
+    // The series is a rule — no occurrence rows are written at all (#1110) …
+    expect(await prisma.meeting.count({ where: { seriesId: body.series.id } })).toBe(0);
     // … and exactly one invitation goes out: the next one. The rest are covered
     // by the day-before / hour-before reminders.
     expect(body.invitesSent).toBe(1);

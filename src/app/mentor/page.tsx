@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
 import { MenteeOnboardingWizard } from '@/components/MenteeOnboardingWizard';
+import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { getServerDictionary } from "@/i18n/server";
@@ -81,6 +82,8 @@ export default async function MentorDashboard() {
         <p className="text-gray-500 mt-1">{t.mentor.dashSubtitle}</p>
       </div>
 
+      <UpcomingMeetingBanner />
+
       {/* Volunteers itself while a newly joined mentee still needs onboarding (#51). */}
       <MenteeOnboardingWizard />
 
@@ -156,7 +159,12 @@ export default async function MentorDashboard() {
                 <div key={rel.id} className="border border-gray-100 rounded-xl p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="font-medium text-gray-900">{rel.mentee.fullName}</p>
+                      <Link
+                        href={`/mentor/mentees/${rel.id}`}
+                        className="font-medium text-gray-900 hover:text-blue-600 hover:underline dark:text-gray-100"
+                      >
+                        {rel.mentee.fullName}
+                      </Link>
                       <p className="text-xs text-gray-500">{rel.mentee.university}</p>
                     </div>
                     <StatusBadge status={rel.status} />
@@ -218,7 +226,14 @@ export default async function MentorDashboard() {
                   <div className="flex items-center gap-2 mb-1">
                     <InteractionTypeBadge type={interaction.type} className="text-xs" />
                     <span className="text-xs text-gray-500">
-                      with {interaction.relation.mentee.fullName}
+                      {t.mentor.interactionWith.split('{name}')[0]}
+                      <Link
+                        href={`/mentor/mentees/${interaction.relation.id}`}
+                        className="hover:text-blue-600 hover:underline"
+                      >
+                        {interaction.relation.mentee.fullName}
+                      </Link>
+                      {t.mentor.interactionWith.split('{name}')[1]}
                     </span>
                   </div>
                   <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>

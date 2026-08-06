@@ -81,6 +81,12 @@ export const authOptions: NextAuthOptions = {
           if (!user.emailVerified) {
             throw new Error('EMAIL_NOT_VERIFIED');
           }
+          // Verified but still waiting on a human (only possible while the
+          // `selfRegistration` setting is 'manual', or after an admin turned
+          // the account off). Say so instead of the dead-end "deactivated".
+          if (user.pendingApproval) {
+            throw new Error('ACCOUNT_PENDING_APPROVAL');
+          }
           throw new Error('This account has been deactivated. Please contact an administrator.');
         }
 

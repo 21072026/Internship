@@ -39,9 +39,12 @@ test('a logged "Meeting" interaction shows up on the admin calendar', async ({ p
     expect(ev.type).toBe('logged');
     expect(ev.who).toBe('Cal Mentee');
 
-    // And it renders on the calendar page (mentee name shown in the grid cell).
+    // And it renders on the calendar page. The day view rather than the month
+    // grid: a month cell caps at three chips (#1110), and on a shared DB today's
+    // cell can hold more than that.
     await page.goto('/admin/calendar');
-    await expect(page.getByText('Cal Mentee', { exact: true }).first()).toBeVisible();
+    await page.getByTestId('calendar-view-day').click();
+    await expect(page.getByTestId('calendar-day').getByText('Cal Mentee', { exact: true }).first()).toBeVisible();
   } finally {
     await prisma.interactionLog.deleteMany({ where: { relationId: relation.id } });
     await cleanupByEmail(mentorEmail);

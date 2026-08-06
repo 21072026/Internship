@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, Video, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 
 // The project's recurring meeting (#51).
@@ -20,7 +20,11 @@ interface Series {
   title: string;
   daysOfWeek: number[];
   timeOfDay: string;
+  /** IANA zone the rule's wall clock is on; null = the deployment default. */
+  timeZone: string | null;
   fixedLink: string | null;
+  /** Resolved by the server from the rule — the actual instant of the next call. */
+  nextOccurrence: string | null;
 }
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -39,6 +43,7 @@ export function ProjectWeeklyMeeting({
   projectName?: string;
 }) {
   const t = useT();
+  const locale = useLocale();
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -57,12 +62,26 @@ export function ProjectWeeklyMeeting({
       (d.series ?? []).map((s: Series & { daysOfWeek: unknown }) => ({
         ...s,
         daysOfWeek: Array.isArray(s.daysOfWeek) ? (s.daysOfWeek as number[]).map(Number) : [],
+        nextOccurrence: s.nextOccurrence ?? null,
       }))
     );
     setLoading(false);
   }, [projectId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // The rule's `timeOfDay` is on the clock of whoever set it up. Rendering the
+  // resolved occurrence instead means a reader in another zone sees the time
+  // they have to show up at, not the organizer's (#1110).
+  const localTime = (s: Series) =>
+    s.nextOccurrence
+      // `h23`: the app writes times as "18:30" everywhere (the rule itself, the
+      // time input), so the rendered occurrence must not flip to "06:30 PM".
+      ? new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(s.nextOccurrence))
+      : s.timeOfDay;
+
+  const nextLabel = (iso: string) =>
+    new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(iso));
 
   const dayLabels = (days: number[]) =>
     [...days]
@@ -91,7 +110,12 @@ export function ProjectWeeklyMeeting({
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(editing ? { id: editing } : {}),
+          // The time is picked on *this* clock. Without saying which one, the
+          // server anchored it to UTC and reminded a 09:00 call as 12:00 (#1110).
+          // Only on create, though: an existing rule keeps the zone it was set
+          // up on, so editing it from another country doesn't silently move the
+          // meeting for everyone else.
+          ...(editing ? { id: editing } : { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined }),
           projectId,
           title: form.title,
           daysOfWeek: form.days,
@@ -159,8 +183,16 @@ export function ProjectWeeklyMeeting({
             <li key={s.id} className="flex flex-wrap items-center gap-2 text-sm" data-testid={`series-${s.id}`}>
               <span className="font-medium text-gray-800 dark:text-gray-200">{s.title}</span>
               <span className="text-gray-500">
-                {dayLabels(s.daysOfWeek)} · {s.timeOfDay}
+                {dayLabels(s.daysOfWeek)} · {localTime(s)}
               </span>
+              {/* The rule reads as a puzzle on its own ("Mon, Thu · 09:00" —
+                  is that today?); the resolved next occurrence answers it, in
+                  the reader's own zone. */}
+              {s.nextOccurrence && (
+                <span className="text-gray-400" data-testid={`series-next-${s.id}`}>
+                  {t.projects.nextOccurrence.replace('{when}', nextLabel(s.nextOccurrence))}
+                </span>
+              )}
               {s.fixedLink && (
                 <a href={s.fixedLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
                   <Video className="h-3.5 w-3.5" /> {t.projects.joinMeeting}

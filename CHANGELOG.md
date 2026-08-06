@@ -8,19 +8,313 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.40.10-beta] - 2026-08-04
+## [0.47.1-beta] - 2026-08-06
 
 ### Changed
 - **Added a reusable `ConfirmDialog` component** (`src/components/ui/ConfirmDialog.tsx`) and
-  replaced all 12 native `window.confirm(...)` calls under `src/` with it — across
+  replaced all native `window.confirm(...)` calls under `src/` with it — across
   `RelationNotesPanel`, `GoalsPanel`, `NotesPanel`, `DocumentsManager`, `EvaluationPanel`,
-  `MessageThreadView`, `ProjectGoals`, `ProjectWeeklyMeeting`, the admin cohorts page, the
-  mentor availability page, the mentee detail page, and `ProjectsManager`. Each delete (or
-  stop, for the weekly-meeting series) now opens an accessible modal
-  (`role="dialog"`/`aria-modal`, Escape/overlay-to-cancel, focus starts on Cancel) instead of
-  the browser's blocking `confirm()` prompt, with a `loading` state that disables the buttons
-  during the request to prevent double-submits. Existing i18n confirm messages, API calls and
-  delete behavior are unchanged.
+  `MessageThreadView`, `ProjectGoals` (including the goal-template pool's delete, added since),
+  `ProjectWeeklyMeeting`, the admin goal-templates page, the admin cohorts page, the mentor
+  availability page, the mentee detail page, and `ProjectsManager`. Each delete (or stop, for
+  the weekly-meeting series) now opens an accessible modal (`role="dialog"`/`aria-modal`,
+  Escape/overlay-to-cancel, focus starts on Cancel) instead of the browser's blocking
+  `confirm()` prompt, with a `loading` state that disables the buttons during the request to
+  prevent double-submits. Existing i18n confirm messages, API calls and delete behavior are
+  unchanged.
+
+## [0.47.0-beta] - 2026-08-06
+
+### Added
+- **Mentor self-application review lifecycle** (#933), completing #904/#905 end to end:
+  `Mentör Ol` / `Become a Mentor` / `Mentor werden` link on the landing page and sign-in
+  page, both leading to `/apply-as-mentor`. New admin section **Mentor Applications**
+  (`/admin/mentor-applications` + `/admin/mentor-applications/[id]`, nav entry added):
+  a status-filterable queue (Pending / Under review / Approved / Rejected) and a detail
+  screen showing contact info, skills, experience, motivation, capacity, consent, and an
+  admin-only review note. Admin actions — **Take under review**, **Approve**, **Reject**
+  (rejection reason required) — hit a new `PATCH /api/mentor-applications/[id]`
+  (`GET` added too) that guards every transition with a conditional `updateMany` so a
+  double click or retry 409s (`already_decided`) instead of repeating side effects.
+  Approving is one DB transaction: an email tied to no existing account gets an
+  `InvitationToken` (same `/auth/register?token=` flow as an admin invite) and the
+  application is only left `APPROVED` if that succeeds; an email tied to an existing
+  `MENTEE` account promotes it to `MENTOR` in place (filling in capacity/skills only if
+  unset) instead of creating a duplicate; an existing `ADMIN`/`COMPANY`/`SOURCE` account is
+  never silently repurposed — the transaction rolls back with `role_conflict` for manual
+  resolution. Applicants get transactional, localized (EN/TR/DE) emails at every stage —
+  received, under review, approved, rejected — via four new `emailService.ts` functions;
+  rejection email is a generic decline, never the admin's internal reason. Both the public
+  POST and the admin PATCH send email fire-and-forget (not awaited) so a slow/unreachable
+  SMTP server can never hold up the response. The public form also gained the same
+  honeypot + minimum-render-time anti-spam guard already used by the public contact form,
+  and now sends the applicant a "received" confirmation email. Schema: added
+  `UNDER_REVIEW` to `MentorApplicationStatus`.
+
+## [0.46.0-beta] - 2026-08-04
+
+### Added
+- **Public "apply as mentor" form** (#905), at `/apply-as-mentor`, on top of the #904
+  application API. No account is required or created — the success screen says so
+  explicitly. Fields: full name, email, phone, expertise/skills, experience summary,
+  motivation, mentee capacity, LinkedIn; a consent checkbox (linking to `/privacy` and
+  `/terms`) is mandatory before submit. The API's 409 (a pending application already
+  exists for this email) and 429 (rate limited) responses each get their own message
+  instead of a generic failure banner. Localized EN/TR/DE like the rest of the public
+  application surface (`/apply/[mentorId]`, `/auth/register`).
+
+## [0.45.0-beta] - 2026-08-06
+
+### Fixed
+- **A cancelled recurring project meeting no longer haunts the calendar.** Setting one up used
+  to materialise a `Meeting` row per mentee per occurrence, weeks ahead; `DELETE
+  /api/meeting-series` only flipped `active` to false, so every generated row stayed on
+  everyone's calendar forever, and moving the meeting to another day/time left the old slots
+  sitting next to the new ones. A series is now a *rule* and nothing else — no occurrence rows
+  are written at all, and cancelling or moving one deletes every row the old generator left
+  behind (`purgeGeneratedMeetings`). Notes taken in those meetings survive
+  (`PersonalNote.meetingId` is `SetNull`).
+- **The recurring meeting is one calendar entry, not one per attendee.** Occurrences are
+  expanded from the rule in `/api/calendar-events` (`type: 'series'`) and carry the meeting's
+  own title with the project as context, where the generated rows showed each mentee's name.
+- **`timeOfDay` is on a real clock.** New `MeetingSeries.timeZone` (IANA, sent by the browser
+  on create). The wall clock used to be anchored to UTC, so a rule the UI displayed as "09:00"
+  was reminded to an Istanbul mentee as "12:00 (GMT+3)". Rules saved before this read on the
+  deployment default zone — the clock the UI was already showing them on. Editing an existing
+  rule keeps its zone, so saving the form from another country does not move the meeting.
+
+### Added
+- **Week, day and upcoming views on the calendar** (`CalendarView`), alongside the month grid.
+  A phone opens on "upcoming" — a flat chronological list — because a 30-cell month grid at
+  390px was unreadable; the choice is remembered per browser. Month cells cap at three chips
+  (dots on a phone) and a tapped day opens its full list underneath.
+- `/api/calendar-events` accepts `from`/`to` and returns only that window (max 400 days), so a
+  view fetches what it shows. Omitting both keeps the old unfiltered contract for API clients.
+- `src/lib/meetingSeriesOccurrences.ts` — the single rule-expansion used by the calendar, the
+  dashboard banner and the reminder cron, so they can't disagree about when a meeting is.
+
+### Changed
+- `POST`/`PUT /api/meeting-series` return `nextOccurrence` (the resolved instant) instead of
+  `createdMeetings`; `weeksAhead` is still accepted but no longer does anything. The project
+  page shows that next occurrence next to the rule, in the reader's own zone.
+- A series announcement email is sent on create and when the meeting *moves* — renaming it, or
+  saving the same form twice, no longer mails the whole team. It carries no RSVP buttons, as
+  there is no row to RSVP against.
+
+## [0.44.0-beta] - 2026-08-06
+
+### Changed
+- **The landing page now argues instead of listing.** Rebuilt around the three-sided loop
+  (mentee ↔ mentor ↔ company) that `docs/landing-value-proposition.md` derived from a
+  code-grounded capability audit: hero → the loop + chain of proof → "pick your side" cards →
+  one section per audience → how it works → pipeline → features → roles → transparency → FAQ →
+  a closing CTA with one button per audience. 152 new `landing.*` keys in EN/TR/DE.
+- **Every claim is one the code can back.** Dropped from the copy: "companies discover you"
+  (the interest signal reaches the mentor, not the mentee), "junior *and* senior talent"
+  (the talent-pool query filters `role: 'MENTEE'`), "reach out directly / go talent hunting"
+  (company users cannot message candidates), "manage your interns" (the company panel is
+  read-only) and "cheaper than ever" (there is no price to compare). Each is replaced by what
+  the product actually does, with its limit stated in the same sentence.
+- Hero drops its buttons: a single "Get Started" funnelled mentors and companies into the
+  mentee sign-up form. Mentor and company CTAs are an email to the program (from the
+  `supportEmail` setting) until their own entry pages land (#905, #1102) — and render only
+  when that address is configured, so the page never ships a dead button.
+- Landing header, transparency strip and footer now link the public source (AGPL-3.0), the
+  release notes and `/features`; the version count is read from `RELEASE_NOTES`, never typed in.
+
+### Added
+- FAQ section: 16 real objections with answers, grouped by audience.
+- `data-testid="role-card"` on the three audience cards, for the e2e assertions.
+
+## [0.43.0-beta] - 2026-08-05
+
+### Added
+- **`selfRegistration` setting** (`src/lib/settings.ts`, admin → Settings, `auto` by default).
+  `auto` = an open sign-up admits itself the moment its email is verified; `manual` = it waits
+  for an admin, which is the escape hatch if sign-ups ever need vetting. Invited users are
+  unaffected — an invitation already proves the address.
+- **`User.pendingApproval`** (Boolean, default false) — set only under `manual`, so the sign-in
+  page can tell "we haven't reviewed you yet" apart from "an admin switched you off"; both are
+  `isActive = false`. Cleared when an admin activates the account, set when one deactivates it.
+- `auth.verifyEmailSent` string (EN/TR/DE) and a `?verify=true` notice on the sign-in page.
+
+### Changed
+- **Open registration no longer dead-ends.** `POST /api/register` creates a self-registered
+  account inactive as before, but `POST /api/auth/verify-email` now activates it (unless it is
+  parked for an admin or was deactivated by one). Registering used to leave the visitor stuck:
+  before verifying they were told "your email is not verified", and *after* verifying they were
+  told "this account has been deactivated" — the account never became reachable without an admin.
+- The post-registration redirect now distinguishes the three cases (invited → `registered`,
+  open sign-up → `verify`, manual approval → `pending`).
+- The admin notification for a new sign-up says whether it needs action or is an FYI.
+
+## [Unreleased]
+
+### Fixed
+- **The five specs failing in the scheduled full e2e suite** (run 31051715943). Both causes were
+  test defects, not product bugs. Since #1008 gave `/admin/candidates` a separate `md:hidden`
+  mobile list, every candidate is in the DOM twice, so the unscoped `getByText('<name>')`
+  assertions in `admin-bulk-candidates`, `dashboard-links`, `export-filter` and `export` became
+  strict-mode violations — they now scope to `candidates-desktop-list` (the list the Desktop
+  Chrome viewport actually renders). `security-headers` still asserted the pre-Jitsi
+  `camera=()`; it now checks that camera/microphone/display-capture are delegated to
+  `self "https://meet.jit.si"` only, that `geolocation=()` stays denied and that no directive
+  opens up to `*`. No version bump — tests only.
+
+## [0.42.1-beta] - 2026-08-05
+
+### Changed
+- **Notification emails now respect each recipient's stored language preference** (Story #883).
+  Announcement emails use `preferredLanguage` for their EN/TR/DE subject and template text,
+  while stage-deadline cron emails use the mentor's stored preference without relying on
+  cookies or request context. Missing or unsupported language values fall back to English.
+
+## [0.42.0-beta] - 2026-08-04
+
+### Added
+- **Goal templates are managed, and multilingual.** `ProjectTaskTemplate` gains a nullable
+  `translations` Json column (`{ en?, tr?, de? }`); `title` stays the canonical wording, the
+  pool's dedupe key and the fallback. `src/lib/goalTemplates.ts` normalizes input, derives the
+  canonical title (default locale first, then any filled language) and resolves the wording one
+  person should read.
+- **New admin screen `/admin/goal-templates`** (+ `AdminNav` entry) over
+  `GET/POST/PATCH/DELETE /api/admin/goal-templates` (ADMIN only, shared pool = `projectId: null`):
+  add a goal in up to three languages, reword it, delete it, see which languages are still
+  missing and how often each has been handed out. Deleting a template leaves goals already handed
+  out alone — by then they are tasks of their own.
+- **Per-project template management** in `ProjectGoals`: the pool box now shows each entry in the
+  viewer's language, marks the admin-managed shared ones as read-only ("shared" badge), and lets
+  a project lead reword (new `PATCH /api/projects/[id]/task-templates`) or delete the project's
+  own entries. `POST` on that route accepts `translations` alongside the legacy `title`.
+
+### Changed
+- A goal handed out from the pool is created in the **assignee's** language
+  (`User.preferredLanguage`, falling back to the default locale, then `title`) — a task is a
+  single string, so the language is resolved once, at hand-over.
+- Sending a shared template no longer clones it into the project's own pool: the automatic
+  "capture what was written" upsert now skips titles that came from the pool, which would
+  otherwise copy a shared goal in under whatever language it resolved to.
+- `prisma/seed-goal-templates.mjs` seeds all 20 starter goals in EN/TR/DE and back-fills
+  translations onto rows seeded before the column existed. Still idempotent, still keyed on the
+  Turkish `title`.
+- `isLocale()` accepts `null` (it is now fed `User.preferredLanguage`).
+- Feature catalogue: the `projectTeams` entry describes the managed multilingual pool and goals
+  living on the person's profile.
+
+## [0.41.5-beta] - 2026-08-04
+
+### Fixed
+- **"View CV" downloaded the file instead of showing it** — on a phone that reads as a dead
+  link: the tab opens blank and the file lands in Downloads. `GET /api/cv/[userId]` has answered
+  `Content-Disposition: attachment` for everything since #890; it now accepts `?inline=1` and
+  honours it for `application/pdf` only (upload accepts PDF and Word, and the bytes are verified
+  against the declared type in #888, so an inline PDF here really is a PDF and renders in the
+  browser's own viewer rather than as a page on our origin). Word CVs still download — no browser
+  renders them. Every "view CV" link now goes through `cvViewHref()` (`src/lib/cvLink.ts`):
+  mentee detail, admin candidates list and detail (`CvManager`), company candidate detail. An
+  external `cvUrl` (a Drive link a mentee typed in) is untouched.
+- **A long e-mail broke the mentee detail header on mobile** (`/mentor/mentees/[id]`). Name +
+  e-mail and the stage select shared one flex row with a `min-w-[240px]` right column, so a long
+  address ran under the select and pushed the status badge off the right edge of the screen. The
+  header now stacks below `sm`, and the text column is `min-w-0 break-words` so a long address
+  wraps instead of widening the row. Same `break-words` on the admin candidate detail header,
+  which had the identical text.
+
+## [0.41.4-beta] - 2026-08-04
+
+### Changed
+- **A project goal assigned to someone now lives on that person's profile, not on the project
+  page.** `ProjectGoals` used to list "my goals" and "the team's goals" next to the unassigned
+  pool, so every member read everyone's personal checklist. The project page now keeps only the
+  unassigned goals anyone may claim, plus a count of how many are assigned; the goals themselves
+  are rendered by the new `PersonProjectGoals` panel on `/portal/profile` (your own),
+  `/mentor/mentees/[id]` and `/admin/candidates/[id]`.
+- New `GET /api/project-goals[?userId=]` — one person's assigned goals across all their projects,
+  grouped by project. Readable by the person themselves, an ADMIN, or their mentor; each goal
+  carries `canEdit` mirroring the tick rules of `PATCH /api/project-tasks/[taskId]` (your own
+  goals, or any goal if you lead the project). "Release" (hand a goal back to the open pool)
+  moved along with the goal, so nothing that was possible on the project page was lost.
+- Notifications about a new goal now link to where the goal actually is
+  (`src/lib/projectGoalLink.ts`: `/portal/profile` for a mentee, the project otherwise) instead
+  of a project page that no longer shows it.
+
+### Added
+- **A shared starter pool of 20 project-goal templates** (`prisma/seed-goal-templates.mjs`,
+  wired into `infra/deploy-prod.sh` next to `seed-templates`). Every project's template pool is
+  "its own templates + the shared ones", and the shared half was empty, so the "send the starter
+  goals" button had nothing to offer until a mentor had typed the set by hand. Idempotent: only
+  missing titles are inserted (MySQL does not enforce the `@@unique([projectId, title])` key
+  across NULL `projectId`s, so existence is checked in the script).
+
+## [0.41.3-beta] - 2026-08-04
+
+### Changed
+- **Mentee names on the mentor dashboard are links to their mentorship page.** The onboarding
+  card (`MenteeOnboardingWizard`) rendered the mentee's name as plain text inside its subtitle;
+  it now links to `/mentor/mentees/<relationId>` (plain text when the pair is only connected
+  through a shared project, where there is no relation page to open). The same applies to the
+  name in the "my mentees" card and to the mentee in the "recent interactions" list on
+  `/mentor`, which previously offered only a separate "view details" link.
+- The onboarding checklist's tick buttons now carry a `title` explaining why some of them are
+  not clickable: an auto-detected step is the app's own observation, the rest are the mentor's
+  to set (`menteeOnboarding.autoHint` / `markHint` / `unmarkHint`, EN/TR/DE).
+
+### Fixed
+- The "recent interactions" list on `/mentor` printed a hard-coded English `with <name>` on
+  every locale; it now uses `mentor.interactionWith` (EN/TR/DE).
+
+## [0.41.2-beta] - 2026-08-04
+
+### Fixed
+- **A backdated status change could drag "average days to hire" negative** (#933).
+  `GET /api/mentor/analytics` and `GET /api/admin/analytics/cohorts` compute the average
+  from `HIRED`/`EMPLOYED` transition timestamps minus the relation's `startDate`; a manually
+  corrected or imported transition dated before `startDate` produced a negative duration that
+  was averaged in as-is, pulling the whole metric down (or below zero). The mentor route now
+  drops negative durations from the average instead of counting them — matching the admin
+  cohorts route, which already excluded them (`d >= 0`, since #538) — and reports
+  `avgDaysToHired: null` when no valid duration remains. Positive durations are unaffected.
+
+## [0.41.1-beta] - 2026-08-04
+
+### Added
+- **Public "become a mentor" application API** (#904). `POST /api/mentor-applications` accepts
+  an unauthenticated submission (name, email, phone, expertise, experience, motivation,
+  capacity, LinkedIn URL, locale) without creating a `User` — turning an approved application
+  into an account is a later task. IP- and email-rate-limited (429 past the limit), rejects a
+  second submission while one is `PENDING` (409), and never reveals whether the email already
+  belongs to an account (same neutral `{ ok: true }` response either way, no row created).
+  `consentAt` is stamped server-side on every real submission. Active admins get an in-app
+  notification linking to `/admin/mentor-applications` (no admin UI yet — that and the
+  approve/reject decision endpoint are follow-up work). `GET /api/mentor-applications` is
+  ADMIN-only, filterable by `status`, and paginated like `/api/admin/activity`. New
+  `MentorApplication` model/`MentorApplicationStatus` enum in `prisma/schema.prisma`.
+
+## [0.41.0-beta] - 2026-08-04
+
+### Added
+- **"A meeting is about to start" on the dashboard, and a join link while it runs.**
+  `src/lib/upcomingMeeting.ts` answers one question for a user — the meeting in progress,
+  else the next one starting within `MEETING_LEAD_MINUTES` (30) — from *both* sources that
+  can put a meeting on someone's calendar: `Meeting` rows (either side of the relation) and
+  `MeetingSeries` rules on projects the user belongs to, so a member with no mentorship for
+  the project still sees the recurring call. A meeting has no end time in the schema, so
+  "still going" is a fixed `MEETING_DURATION_MINUTES` (60) window after the start; an
+  occurrence and the `Meeting` row generated from it are deduplicated.
+- `GET /api/meetings/upcoming` (`no-store`), `UpcomingMeetingBanner` on the three dashboards,
+  and `JoinMeetingPill` in `ResponsiveShell` — the pill shows **only while the meeting is
+  running**, so it keeps meaning something, and it follows the user across every page in the
+  shell. Both components share one poll a minute via `useUpcomingMeeting` rather than one
+  each.
+
+## [0.40.10-beta] - 2026-08-04
+
+### Changed
+- **The admin candidate list is now usable at 375px without horizontal page overflow.**
+  Mobile shows compact candidate cards with name, pipeline stage and mentor first, followed
+  by education, city and skills. The seven existing filters stay unchanged but are collapsed
+  behind a visible Filters control on small screens. The existing desktop candidate grid and
+  its actions remain unchanged.
 
 ## [0.40.9-beta] - 2026-08-03
 

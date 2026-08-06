@@ -45,6 +45,7 @@ export default function SignInPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('pending')) setNotice(t.auth.pendingApproval);
+    else if (params.get('verify')) setNotice(t.auth.verifyEmailSent);
     else if (params.get('registered')) setNotice(t.auth.registeredNotice);
   }, [t]);
 
@@ -90,6 +91,9 @@ export default function SignInPage() {
       if (result.error === '2FA_REQUIRED') {
         setShow2fa(true);
         setError(t.auth.twoFactorPrompt);
+      } else if (result.error === 'ACCOUNT_PENDING_APPROVAL') {
+        // Waiting on a human, not on the user — don't offer the resend link.
+        setError(t.auth.pendingApproval);
       } else if (result.error === 'EMAIL_NOT_VERIFIED') {
         // Offer to resend the verification link rather than a dead-end error.
         setNeedsVerify(true);
@@ -200,6 +204,12 @@ export default function SignInPage() {
             {t.auth.haveInvite}{' '}
             <Link href="/auth/register" className="text-blue-600 hover:underline font-medium">
               {t.auth.registerHere}
+            </Link>
+          </p>
+          <p className="text-center text-sm text-gray-500 mt-3">
+            {t.auth.becomeMentorPrompt}{' '}
+            <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="become-mentor-link">
+              {t.auth.becomeMentorLink}
             </Link>
           </p>
         </div>
