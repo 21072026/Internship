@@ -2678,3 +2678,24 @@ oldu — zaten yazılması gereken e2e testi görsel kontrolün yerini fazlasıy
 `globals.css`'teki mevcut override'lar `text-gray-900`'ü kutu içinde `rgb(243,244,246)`'ya
 çeviriyor; hesaplanan değeri mevcut mentor kutusuyla karşılaştırmak yeni bir compound kurala
 gerek olmadığını kanıtladı. Kontrast tahmininde `getComputedStyle` gözden hızlıdır.
+
+## 2026-08-06 — Form geldiğinde eski kapıyı kapatmak (#1124, 0.49.2-beta)
+
+**Bir özellik shipleyince onun *yerini aldığı* geçici çözüm kendiliğinden kaybolmuyor.** Public
+mentör başvuru formu (#905) haftalar önce canlıya çıkmıştı; ana sayfada hero linki forma
+gidiyordu ama mentör bölümündeki ve kapanış CTA bandındaki iki buton hâlâ
+`mailto:<supportEmail>` idi. Sonuç: ziyaretçinin gördüğü üç mentör CTA'sından ikisi başvuruyu
+inceleme kuyruğuna hiç düşürmüyordu. Yeni bir giriş yüzeyi eklerken "aynı işi yapan eski
+yüzeyler nerede?" diye `grep -rn "mailto"` çekmek 30 saniyelik iş — PR'ın kendisinde yapılmalıydı.
+
+**Kaldırmadan önce "bu koşullu render neden var?" diye sor.** Buton `{mentorHref && …}` ile
+sarılıydı; gerekçe koddaki yorumda yazıyordu ("adres tanımlı değilse buton hiç çıkmasın, yanlış
+butondan iyidir"). Hedef `/apply-as-mentor` olunca bu koşul anlamsızlaşıyor — koşulu da
+kaldırmak, sadece `href`'i değiştirmekten daha doğru sonuç verdi (destek adresi boş olan bir
+kurulumda mentör butonu artık kayıp değil). Yorumu da güncellemek gerekti; eskisi "mentör kapısı
+elle yürüyor" diyordu ve artık yanlış.
+
+**`data-testid` tekilliği, CTA'yı çoğaltırken hatırlanacak şey.** `become-mentor-link`
+hero'daki linkte ve `/auth/signin`'de duruyor, smoke testi ona bakıyor. Aynı testid'i "tutarlılık
+olsun" diye yeni butona da eklemek strict-mode ihlali üretirdi; testid'i tek yerde bırakıp yeni
+butonu testid'siz geçmek doğrusuydu.
