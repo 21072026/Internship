@@ -10,6 +10,7 @@ import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone } from '@/lib/timezone';
+import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -284,7 +285,10 @@ export async function sendMeetingInviteEmail({
   title: string;
   scheduledAt: Date | null;
   meetLink?: string | null;
-  rsvpToken: string;
+  // Omitted for announcements that have no Meeting row behind them — a
+  // recurring series occurrence is computed from the rule, so there is nothing
+  // to RSVP against and the buttons are left out.
+  rsvpToken?: string | null;
   // The recipient's saved IANA zone; falls back to the deployment default.
   timeZone?: string | null;
 }) {
@@ -294,6 +298,7 @@ export async function sendMeetingInviteEmail({
   // A meeting with no set time is just a shared link — skip the "when" line and
   // the RSVP ask entirely.
   const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
+  const askRsvp = Boolean(when && rsvpToken);
 
   await sendEmail({
     to,
@@ -305,7 +310,7 @@ export async function sendMeetingInviteEmail({
         <p>You're invited to a meeting.</p>
         ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
         ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
-        ${when ? `
+        ${askRsvp ? `
         <p style="margin-top: 20px;">Can you make it?</p>
         <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
@@ -955,22 +960,18 @@ export async function sendMeetingReminders() {
 // hour" are different reminders: DAY_BEFORE (~24h) and HOUR_BEFORE (~1h).
 const SERIES_LOOKAHEAD_MINUTES = 25 * 60;
 
-function seriesOccurrences(daysOfWeek: number[], timeOfDay: string, from: Date, withinMinutes: number): Date[] {
-  const [hour, minute] = timeOfDay.split(':').map((v) => Number(v));
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return [];
-  const allowed = new Set(daysOfWeek);
-  const out: Date[] = [];
+// Occurrences strictly after `from` and within the lookahead. The expansion
+// itself lives in lib/meetingSeriesOccurrences so the reminder can never
+// disagree with the calendar about what time the meeting is (#1110).
+function upcomingSeriesOccurrences(
+  series: { daysOfWeek: unknown; timeOfDay: string; timeZone: string | null },
+  from: Date,
+  withinMinutes: number
+): Date[] {
   const horizon = new Date(from.getTime() + withinMinutes * 60 * 1000);
-  // Wall-clock times are stored as UTC by the series generator; stay consistent.
-  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-  for (let i = 0; i <= Math.ceil(withinMinutes / (24 * 60)) + 1; i++) {
-    const day = new Date(cursor);
-    day.setUTCDate(day.getUTCDate() + i);
-    if (!allowed.has(day.getUTCDay())) continue;
-    const when = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hour, minute, 0, 0));
-    if (when > from && when <= horizon) out.push(when);
-  }
-  return out;
+  return seriesOccurrences(series.daysOfWeek, series.timeOfDay, from, horizon, series.timeZone).filter(
+    (when) => when > from
+  );
 }
 
 function leadFor(minutesAway: number): 'DAY_BEFORE' | 'HOUR_BEFORE' | null {
@@ -988,6 +989,7 @@ export async function sendProjectMeetingSeriesReminders() {
       title: true,
       daysOfWeek: true,
       timeOfDay: true,
+      timeZone: true,
       fixedLink: true,
       projectId: true,
       project: { select: { id: true, name: true, orgId: true } },
@@ -1000,12 +1002,8 @@ export async function sendProjectMeetingSeriesReminders() {
 
   for (const series of seriesList) {
     if (!series.projectId) continue;
-    const days = Array.isArray(series.daysOfWeek)
-      ? (series.daysOfWeek as unknown[]).map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
-      : [];
-    if (days.length === 0) continue;
 
-    const occurrences = seriesOccurrences(days, series.timeOfDay, now, SERIES_LOOKAHEAD_MINUTES);
+    const occurrences = upcomingSeriesOccurrences(series, now, SERIES_LOOKAHEAD_MINUTES);
     if (occurrences.length === 0) continue;
 
     // The whole team, not just the ProjectMember rows: a mentee attached to the

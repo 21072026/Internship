@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.43.0-beta',
-    date: '2026-08-05',
+    version: '0.46.0-beta',
+    date: '2026-08-06',
     highlights: {
       en: [
         'Admins can now decide on mentor applications: a new Admin → Mentor Applications screen lists who applied, with a badge showing how many are waiting. Approve sends the applicant an email invitation to join as a mentor; reject asks for a short reason (kept internal — the applicant only sees a polite decline).',
@@ -24,6 +24,72 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Admins können jetzt über Mentor-Bewerbungen entscheiden: Ein neuer Bereich Admin → Mentor-Bewerbungen listet alle Bewerbungen, mit einem Badge, das die Anzahl der wartenden anzeigt. Genehmigen sendet der bewerbenden Person eine Einladungs-E-Mail als Mentor; Ablehnen verlangt eine kurze Begründung (nur intern — die Person sieht lediglich eine höfliche Absage).',
+      ],
+    },
+  },
+  {
+    version: '0.45.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Stopping a project’s recurring meeting now really stops it. It used to leave weeks of copies sitting on everyone’s calendar, and moving it to another day left the old times behind — the meeting is now kept as a single rule, so it appears exactly where you set it and disappears the moment you cancel it.',
+        'The recurring meeting shows up once, under its own name. It used to be listed once per team member, each entry carrying a person’s name instead of the meeting’s title.',
+        'The time you pick is the time everyone sees. The recurring meeting is now saved together with your time zone, so a 09:00 call is no longer announced as 12:00 in the reminder email.',
+        'The calendar is no longer month-only: switch between month, week, day and a plain “upcoming” list. On a phone it opens on the upcoming list, and tapping a day in the month view opens everything on it.',
+      ],
+      tr: [
+        'Projenin düzenli toplantısını durdurmak artık gerçekten durduruyor. Eskiden haftalarca kopya herkesin takviminde kalıyordu, başka bir güne almak da eski saatleri geride bırakıyordu — toplantı artık tek bir kural olarak tutuluyor: tam ayarladığın yerde görünüyor, iptal ettiğin anda kayboluyor.',
+        'Düzenli toplantı takvimde bir kez, kendi adıyla görünüyor. Eskiden her ekip üyesi için ayrı ayrı listeleniyor ve her kayıtta toplantının başlığı yerine bir kişinin adı yazıyordu.',
+        'Seçtiğin saat, herkesin gördüğü saat. Düzenli toplantı artık senin saat diliminle birlikte kaydediliyor; 09:00’daki bir toplantı hatırlatma e-postasında 12:00 diye duyurulmuyor.',
+        'Takvim artık sadece aylık değil: aylık, haftalık, günlük ve sade bir “yaklaşan” listesi arasında geçiş yapabiliyorsun. Telefonda yaklaşan listesiyle açılıyor, aylık görünümde bir güne dokununca o günün tamamı açılıyor.',
+      ],
+      de: [
+        'Ein wiederkehrendes Projekt-Meeting zu beenden, beendet es jetzt wirklich. Früher blieben wochenlang Kopien in allen Kalendern stehen, und ein Verschieben ließ die alten Zeiten zurück — das Meeting wird nun als einzelne Regel geführt: Es erscheint genau dort, wo du es eingestellt hast, und verschwindet, sobald du es absagst.',
+        'Das wiederkehrende Meeting erscheint einmal, unter seinem eigenen Namen. Früher stand es einmal pro Teammitglied da — jeweils mit dem Namen einer Person statt dem Titel des Meetings.',
+        'Die Uhrzeit, die du wählst, ist die Uhrzeit, die alle sehen. Das wiederkehrende Meeting wird jetzt mit deiner Zeitzone gespeichert; ein Termin um 09:00 wird in der Erinnerungs-E-Mail nicht mehr als 12:00 angekündigt.',
+        'Der Kalender ist nicht mehr nur monatlich: Wechsle zwischen Monat, Woche, Tag und einer schlichten „Demnächst“-Liste. Auf dem Handy öffnet er mit der Demnächst-Liste, und ein Tippen auf einen Tag in der Monatsansicht zeigt alles, was an ihm ansteht.',
+      ],
+    },
+  },
+  {
+    version: '0.44.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'The home page has been rewritten. It now explains, in one place, why the three sides need each other: the mentee puts in the work, the mentor writes down what they saw, and the company decides by reading that record.',
+        'There is a section for each of you — mentee, mentor and company — with what you actually get, what is still missing, and the answers to the questions people really ask.',
+        'Nothing on the page promises something the product cannot do yet, and where a feature has a limit, the limit is written next to it.',
+      ],
+      tr: [
+        'Ana sayfa baştan yazıldı. Üç tarafın birbirine neden ihtiyacı olduğunu tek yerde anlatıyor: mentee emeğini koyuyor, mentor gördüğünü yazıyor, firma da o kayda bakarak karar veriyor.',
+        'Her biriniz için ayrı bir bölüm var — mentee, mentor ve firma — gerçekte ne aldığınız, neyin henüz eksik olduğu ve insanların gerçekten sorduğu soruların cevaplarıyla.',
+        'Sayfada ürünün henüz yapamadığı hiçbir şey vaat edilmiyor; bir özelliğin sınırı varsa o sınır da yanında yazıyor.',
+      ],
+      de: [
+        'Die Startseite wurde neu geschrieben. Sie erklärt an einer Stelle, warum die drei Seiten einander brauchen: der Mentee bringt die Arbeit ein, der Mentor schreibt auf, was er gesehen hat, und das Unternehmen entscheidet anhand dieser Aufzeichnung.',
+        'Für jede Seite gibt es einen eigenen Abschnitt — Mentee, Mentor und Unternehmen — mit dem, was man wirklich bekommt, was noch fehlt und Antworten auf die Fragen, die tatsächlich gestellt werden.',
+        'Nichts auf der Seite verspricht etwas, das das Produkt noch nicht kann; wo eine Funktion eine Grenze hat, steht die Grenze daneben.',
+      ],
+    },
+  },
+  {
+    version: '0.43.0-beta',
+    date: '2026-08-05',
+    highlights: {
+      en: [
+        'Registering actually gets you in now. Sign up, click the link in the confirmation email, and your account is open — no waiting for someone to approve you.',
+        'If you did get stuck before, the sign-in page no longer tells you your account was “deactivated” when it is simply waiting for a review — and it says so only when that is really the case.',
+        'Admins who prefer to look at every sign-up first can switch open registration to “reviewed” under Settings.',
+      ],
+      tr: [
+        'Kaydolmak artık gerçekten içeri alıyor. Kaydol, e-postandaki bağlantıya tıkla, hesabın açılıyor — kimsenin onaylamasını beklemiyorsun.',
+        'Daha önce takıldıysan: giriş ekranı, aslında inceleme bekleyen bir hesap için artık “hesabın kapatıldı” demiyor; bunu yalnızca gerçekten öyleyse söylüyor.',
+        'Her kaydı önce görmek isteyen yöneticiler, Ayarlar’dan açık kaydı “incelemeli”ye çevirebiliyor.',
+      ],
+      de: [
+        'Eine Registrierung bringt dich jetzt wirklich hinein. Anmelden, den Link in der Bestätigungsmail anklicken — dein Konto ist offen, ganz ohne auf eine Freigabe zu warten.',
+        'Falls du vorher festhingst: Die Anmeldeseite sagt nicht mehr „Konto deaktiviert“, wenn es lediglich auf eine Prüfung wartet — sie sagt es nur, wenn es wirklich so ist.',
+        'Admins, die jede Anmeldung zuerst ansehen möchten, stellen die offene Registrierung in den Einstellungen auf „geprüft“ um.',
       ],
     },
   },

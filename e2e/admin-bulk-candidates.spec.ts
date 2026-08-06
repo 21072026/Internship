@@ -21,7 +21,10 @@ test('admin can bulk-deactivate and bulk-reactivate selected candidates', async 
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
     await page.goto('/admin/candidates');
-    await expect(page.getByText('Bulk Candidate A')).toBeVisible({ timeout: 10_000 });
+    // Every candidate is rendered twice — md:hidden mobile list + desktop grid —
+    // so name locators have to be scoped to one list to stay strict-mode safe.
+    const desktopList = page.getByTestId('candidates-desktop-list');
+    await expect(desktopList.getByText('Bulk Candidate A')).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId(`candidate-card-${menteeA.id}`).getByRole('checkbox').check();
     await page.getByTestId(`candidate-card-${menteeB.id}`).getByRole('checkbox').check();
@@ -38,7 +41,7 @@ test('admin can bulk-deactivate and bulk-reactivate selected candidates', async 
 
     // Deactivated candidates leave the default (active) view and move to the
     // Archive tab.
-    await expect(page.getByText('Bulk Candidate A')).toHaveCount(0);
+    await expect(desktopList.getByText('Bulk Candidate A')).toHaveCount(0);
     await page.getByTestId('candidates-tab-archived').click();
     await expect(page.getByTestId(`candidate-card-${menteeA.id}`)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Inactive').first()).toBeVisible();
