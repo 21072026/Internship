@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.44.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'The home page has been rewritten. It now explains, in one place, why the three sides need each other: the mentee puts in the work, the mentor writes down what they saw, and the company decides by reading that record.',
+        'There is a section for each of you — mentee, mentor and company — with what you actually get, what is still missing, and the answers to the questions people really ask.',
+        'Nothing on the page promises something the product cannot do yet, and where a feature has a limit, the limit is written next to it.',
+      ],
+      tr: [
+        'Ana sayfa baştan yazıldı. Üç tarafın birbirine neden ihtiyacı olduğunu tek yerde anlatıyor: mentee emeğini koyuyor, mentor gördüğünü yazıyor, firma da o kayda bakarak karar veriyor.',
+        'Her biriniz için ayrı bir bölüm var — mentee, mentor ve firma — gerçekte ne aldığınız, neyin henüz eksik olduğu ve insanların gerçekten sorduğu soruların cevaplarıyla.',
+        'Sayfada ürünün henüz yapamadığı hiçbir şey vaat edilmiyor; bir özelliğin sınırı varsa o sınır da yanında yazıyor.',
+      ],
+      de: [
+        'Die Startseite wurde neu geschrieben. Sie erklärt an einer Stelle, warum die drei Seiten einander brauchen: der Mentee bringt die Arbeit ein, der Mentor schreibt auf, was er gesehen hat, und das Unternehmen entscheidet anhand dieser Aufzeichnung.',
+        'Für jede Seite gibt es einen eigenen Abschnitt — Mentee, Mentor und Unternehmen — mit dem, was man wirklich bekommt, was noch fehlt und Antworten auf die Fragen, die tatsächlich gestellt werden.',
+        'Nichts auf der Seite verspricht etwas, das das Produkt noch nicht kann; wo eine Funktion eine Grenze hat, steht die Grenze daneben.',
+      ],
+    },
+  },
+  {
     version: '0.43.0-beta',
     date: '2026-08-05',
     highlights: {

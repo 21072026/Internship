@@ -25,6 +25,6 @@ test('home page still renders without console errors under CSP', async ({ page }
   const errors: string[] = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Connect Talent with/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Companies that want experience/i })).toBeVisible();
   expect(errors).toEqual([]);
 });
