@@ -396,12 +396,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     highlights: {
       en: [
         'Announcement emails and overdue stage-deadline reminders now arrive in the recipient\'s selected language (English, Turkish or German). If no supported language is saved, the email falls back to English.',
+        'Want to become a mentor? Look for the new "Apply here" prompt on the landing page, the sign-in page and the registration page — it takes you straight to the mentor application, no invitation needed.',
       ],
       tr: [
         'Duyuru e-postaları ve gecikmiş aşama son tarihi hatırlatmaları artık alıcının seçtiği dilde (İngilizce, Türkçe veya Almanca) geliyor. Desteklenen bir dil kaydedilmemişse e-posta İngilizce olarak gönderiliyor.',
+        'Mentor olmak mı istiyorsun? Ana sayfada, giriş sayfasında ve kayıt sayfasında yeni bir "Buradan başvur" bağlantısı seni davete gerek kalmadan doğrudan mentor başvurusuna götürüyor.',
       ],
       de: [
         'Ankündigungs-E-Mails und Erinnerungen an überfällige Phasenfristen kommen jetzt in der ausgewählten Sprache der empfangenden Person an (Englisch, Türkisch oder Deutsch). Ist keine unterstützte Sprache gespeichert, wird die E-Mail auf Englisch gesendet.',
+        'Möchtest du Mentor werden? Auf der Startseite, der Anmeldeseite und der Registrierungsseite findest du jetzt den Hinweis "Hier bewerben" — er führt dich ohne Einladung direkt zur Mentor-Bewerbung.',
       ],
     },
   },

@@ -193,7 +193,7 @@ test('landing and sign-in pages link to the public mentor application form', { t
   await expect(page.getByRole('heading', { name: 'Apply to become a mentor' })).toBeVisible();
 
   await page.goto('/auth/signin');
-  await expect(page.getByTestId('become-mentor-link')).toBeVisible();
+  await expect(page.getByTestId('apply-as-mentor-link')).toBeVisible();
 });
 
 test('the public apply form and its landing link stay usable on a phone-sized viewport', { tag: '@smoke' }, async ({ page }) => {

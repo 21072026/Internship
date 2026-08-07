@@ -553,7 +553,13 @@ export default async function HomePage() {
               <Briefcase className="h-5 w-5" /> {L.ctaCompany}
             </Link>
           </div>
-          <p className="mt-6 text-xs text-blue-100">{L.ctaFootnote}</p>
+          <p className="mt-6 text-sm text-blue-100">
+            {t.auth.wantMentor}{' '}
+            <Link href="/apply-as-mentor" className="text-white underline hover:text-blue-50 font-medium" data-testid="apply-as-mentor-link">
+              {t.auth.applyMentorLink}
+            </Link>
+          </p>
+          <p className="mt-2 text-xs text-blue-100">{L.ctaFootnote}</p>
         </div>
       </section>
 

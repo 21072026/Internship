@@ -488,6 +488,15 @@ Closes #1113.
 
 ## [0.42.1-beta] - 2026-08-05
 
+### Added
+- **Entry links to the "become a mentor" application page** (#907, depends on #905's
+  `/apply-as-mentor` page): a "Want to become a mentor?" prompt now points there from three
+  places without an invitation — a secondary CTA on the landing page's closing section, a link
+  on sign-in, and the same prompt next to the invitation-token field on register (whose hint
+  text now also points here). All copy is EN/TR/DE via `src/i18n/dictionaries.ts` (new
+  `auth.wantMentor` / `auth.applyMentorLink` keys, updated `auth.tokenHint`); no existing
+  landing copy changed.
+
 ### Changed
 - **Notification emails now respect each recipient's stored language preference** (Story #883).
   Announcement emails use `preferredLanguage` for their EN/TR/DE subject and template text,
