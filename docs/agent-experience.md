@@ -2966,3 +2966,55 @@ spec'i koşun — iki dakikalık baseline, yarım saatlik yanlış iz kovalamay�
 `test:e2e:smoke`'un ilk koşumunda 7 düşen spec'in 5'i sadece `npx prisma db seed`
 çalıştırılmamış olmasındandı (`SEED_ADMIN_*` ile giriş yapan spec'ler); DB'yi kurar kurmaz
 seed'i de çalıştırın.
+
+## 2026-08-07 — Kırmızı bir Dependabot PR'ında suçlu genelde paket değil, `npm ci` (#1143, 0.55.1-beta)
+
+**Job 30 saniyede düştüyse hiçbir proje kodu çalışmamıştır.** #1129'un (`nodemailer`
+7.0.13 → 9.0.1) üç job'ı da 13–34 sn'de kırmızıydı ve ilk refleks "majör yükseltme bizi
+bozdu" olacaktı. Gerçek sebep kurulum aşamasıydı: `next-auth@4.24.15`,
+`peerOptional nodemailer@"^7.0.7"` ilan ediyor, Dependabot ise yalnız kök aralığı
+bumpluyor → `npm ci` ERESOLVE. Süre tek başına bir teşhis aracı: derleme/test süresinin
+çok altındaki bir kırmızı, neredeyse her zaman bağımlılık çözümü ya da checkout'tur.
+`gh run view --job <id> --log-failed | grep -A25 ERESOLVE` doğrudan cevabı veriyor.
+
+**Peer'i ezmeden önce o peer'in gerçekten yüklenip yüklenmediğini sor.**
+`overrides: { "next-auth": { "nodemailer": "$nodemailer" } }` burada güvenli, çünkü
+`src/lib/auth.ts` yalnız `CredentialsProvider` kaydediyor — `EmailProvider` yok, yani
+next-auth nodemailer'ı runtime'da hiç `require` etmiyor. Bu iki dakikalık kontrol
+(`grep -n "next-auth/providers" src/lib/auth.ts`) "peer'i ezmek riskli mi?" sorusunu
+tahminden çıkarıp olguya çeviriyor. `$paket` sözdizimi kökteki aralığa bağlıyor, sürümü
+iki yere yazmak gerekmiyor.
+
+**Majör changelog'unu okurken "breaking" değil, "bizim çağırdığımız yol" diye ara.**
+nodemailer 9.0.0'ın tek kırıcı değişikliği *uzak içerik çekerken* TLS doğrulaması
+(attachment `path`/`href` URL'leri, OAuth2 token endpoint'i, proxy CONNECT). Bizim
+transport düz SMTP host/port/parola ve attachment'lar yalnız `Buffer` — kesişim boş.
+`grep -rn "path:\|href:\|rejectUnauthorized" ` ile attachment şekillerini taramak, changelog'u
+baştan sona okumaktan hem hızlı hem daha kesin.
+
+**`tsc` temiz geçmesi kütüphanenin çalıştığı anlamına gelmiyor.** `@types/nodemailer`
+ayrı paket ve 6.4.x'te donmuş; 9.x runtime'ı bozsa bile tip katmanı sessiz kalırdı.
+`streamTransport: true, buffer: true` ile gerçek bir mesaj üretip (`multipart`, `cid`
+attachment, UTF-8 subject) içeriğini kontrol etmek 10 satır ve şüpheyi kapatıyor.
+
+**`npm audit` sayısını bayat bir `node_modules` üzerinden okumayın.** Önce 5 bulgu (2 high)
+gördüm, temiz `npm ci`'dan sonra baseline 6 (3 high) çıktı — aradaki fark, ağaçtaki
+`nanoid`'in lock'takiyle aynı olmamasıydı. Öncesi/sonrası rakamı verecekseniz **iki tarafı da**
+`git stash` + `npm ci` ile ölçün; ben CHANGELOG'a önce yanlış sayıyı yazmıştım.
+
+**Aynı koşuda alakasız bir bulgu çıkarsa PR'ı büyütmeyin, issue açın.** Temiz kurulum
+`nanoid` için (postcss üzerinden) bir high daha gösterdi ve `docs/security-exceptions.md`'de
+hiç listelenmemişti. Kendi sömürülebilirlik analizini istediği için #1144 olarak ayrıldı —
+ama PR gövdesinde ve CHANGELOG'da açıkça anıldı, yoksa "audit 4'e düştü" cümlesi eksik
+kalırdı.
+
+**Güvenlik-only sürümde `releaseNotes.ts` girdisi yok.** Üçlü checklist (version + CHANGELOG
++ releaseNotes) "kullanıcıya görünen" PR'lar için; bağımlılık yükseltmesinde kullanıcı hiçbir
+şey görmüyor. Emin olmak için emsale bakın: 0.33.2-beta (#882, önceki güvenlik sürümü) de
+girdisiz. Bunu PR gövdesinde gerekçesiyle yazmak, gözden geçirenin checklist ihlali sanmasını
+önlüyor.
+
+**Worktree'de `npm run lint` yalancı kırmızı veriyor.** Ana checkout ile worktree'nin
+`.eslintrc.json`'ları çakışıyor (`Plugin "@next/next" was conflicted`) ve lint 1 dönüyor —
+`main`'de de aynısı oluyor. Bir kontrolü "bozuldu" diye raporlamadan önce `git stash` + aynı
+komut ile baseline alın; CI düz checkout'ta koştuğu için bu hiç görünmüyor.
