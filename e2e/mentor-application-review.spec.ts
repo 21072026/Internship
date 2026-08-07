@@ -209,3 +209,24 @@ test('the public apply form and its landing link stay usable on a phone-sized vi
   await submit.scrollIntoViewIfNeeded();
   await expect(submit).toBeInViewport();
 });
+
+// #906 (salvaged from the superseded PR #1076): the admin sidebar carries the
+// pending-application count so the queue is visible from any admin page.
+// The DB is shared across specs, so the exact number is not assertable —
+// seeding one PENDING row only guarantees the badge is non-zero.
+test('the admin nav shows a badge with the pending application count', async ({ page }) => {
+  const adminEmail = uniqueEmail('mentor-app-badge-admin');
+  const pw = 'BadgeAdmin123';
+  await seedUser(adminEmail, pw, 'ADMIN', 'Badge Admin');
+  const app = await seedApplication({ fullName: 'Badge Count Mentor' });
+
+  try {
+    await signInAsFreshUser(page, adminEmail, pw, '/admin');
+    const badge = page.getByTestId('mentor-applications-badge');
+    await expect(badge).toBeVisible();
+    await expect(badge).toHaveText(/^(\d|9\+)$/);
+  } finally {
+    await prisma.mentorApplication.deleteMany({ where: { id: app.id } });
+    await cleanupByEmail(adminEmail);
+  }
+});

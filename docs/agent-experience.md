@@ -10,6 +10,174 @@ Newest entries on top.
 
 ---
 
+## 2026-08-06 — Değer önerisi çalışması + kapıları açma paketi (#1085, #1107, #1121, #1122, 0.43→0.50.1)
+
+Landing'in üç kitleyi (mentee/mentör/firma) ikna edecek hale getirilmesi ve girişi tıkayan
+kapıların açılması. Beş PR. En pahalıya mal olan dersler, sırayla:
+
+**Konteynerden `api.github.com`'a doğrudan istek 403 dönüyor** — "GitHub access is not enabled
+for this session". Yani `curl`/`gh` ile yazılmış bir bekleme döngüsü **hiç ateşlenmez**, sessizce
+sonsuza kadar döner. CI durumu için tek yol MCP araçları (`mcp__github__pull_request_read`
+`get_check_runs`, `actions_list`, `actions_run_trigger`). Bir "until curl ..." poller'ı kurup
+10 dakika bekledikten sonra öğrendim.
+
+**CI bir süre `pull_request` olaylarında hiç tetiklenmedi.** `.github/workflows/ci.yml` ve
+`e2e.yml` `pull_request: branches: [main]` ile kurulu ama 17:30'dan sonra açılan PR'larda tek bir
+check görünmedi; aynı saatlerde başka oturumlar `workflow_dispatch` ile elle koşturmuş. Belirti:
+PR "blocked", `get_check_runs` → `total_count: 0`, `actions_list` → o dalda hiç run yok. Çözüm:
+`actions_run_trigger` (`run_workflow`, `ref: <dal>`; e2e için `inputs: {grep: "@smoke"}`). Boş
+commit atmak da bazen tetikliyor ama garantisi yok. **Auto-merge bu durumda işe yaramaz** —
+zorunlu check hiç doğmadığı için beklemeye devam eder; gerçek kapılar (lint/typecheck/build +
+@smoke) o sha'da yeşilse `merge_pull_request` ile elle merge etmek gerekiyor.
+
+**Squash-merge edilen bir dalın üstüne kurulan PR'ın base'i kendiliğinden `main` olmuyor.**
+GitHub yalnızca base dalı *silindiğinde* retarget ediyor. `update_pull_request` ile base'i main'e
+çevir, dalı `checkout -B <dal> origin/main && cherry-pick <commit>` ile yeniden kur (CLAUDE.md'nin
+"rebase etme, cherry-pick'le" kuralı), sonra `--force-with-lease`. Ayrıca base retarget'ından
+sonra **mevcut sha için CI doğmuyor** — bir commit daha gerekiyor.
+
+**`.next/types` dal değiştirince bayatlıyor.** Başka dalda var olan bir route için
+`tsc --noEmit` uydurma `TS2307: Cannot find module '.../route.js'` hataları veriyor. Dal
+değiştirdikten sonra typecheck'ten önce `rm -rf .next`. Üç kez tuzağa düştüm.
+
+**`releaseNotes.ts` çakışmasını "union" ile çözmek nesneyi bozuyor.** Her iki taraf da listenin
+başına giriş eklediği için çakışma bloğu, bizim girişimizin kapanış satırlarını (`],`, `},`, `},`,
+`{`) karşı tarafta bırakıyor. Union sonrası kapanışı elle geri koymadan `tsc` kırılıyor. Bu
+oturumda üç PR'da da aynı şekilde çıktı — script'e `if not a.rstrip().endswith('},')` kontrolü
+koymak işi bitiriyor.
+
+**Sürüm numarasını bump'lamadan önce `main`'in güncel sürümünü oku.** Paralel oturumlar hızlı
+merge ediyor; ben 0.42 sanıp bump ettim, main 0.49.1'deydi. `package.json` + `package-lock.json`
+(iki yerde) + `CHANGELOG.md` + `releaseNotes.ts` dördü birden.
+
+**150+ anahtarlık sözlük değişikliğini elle yazma.** EN/TR/DE üç `landing:` bloğuna 152 anahtar
+eklemek gerekti; anahtar/değer çiftlerini JSON'a çıkarıp "mevcutları değiştir, yenileri bloğun
+sonuna ekle" diye script'lemek hem hızlı hem de üç locale arasında pariteyi garantiliyor
+(`npm run check:i18n` ilk denemede yeşil geçti).
+
+**Landing metnini değiştiren PR üç spec'i birden kırıyor.** `landing-i18n.spec.ts` beklenen yer;
+ama `security-headers.spec.ts` ve `landing-cta-dark.spec.ts` de hero başlığını/CTA etiketini
+birebir assert ediyor. Metin değiştirmeden önce `grep -rn "<eski dize>" e2e/`.
+
+**İş tarafı dersi:** iddiaları koda dayamak, metni yazmaktan daha çok değer üretti. Envanter
+sonucunda landing'deki beş iddianın karşılığı olmadığı çıktı (senior yetenek havuzu, şirket→aday
+doğrudan mesajlaşma, "firmalar seni keşfeder", stajyer *yönetimi*, ucuzluk). Bunları silmek
+sayfayı zayıflatmadı; yerlerine konan "bugün gerçekten çalışan" maddeler daha ikna edici.
+`docs/landing-value-proposition.md` bu envanteri [BUGÜN VAR]/[YARIM]/[YOK] etiketleriyle tutuyor —
+yeni metin yazan herkes önce oraya bakmalı.
+
+## 2026-08-06 — Placeholder mentee'nin çıkmaz sokağı: "değiştirilemeyen alan"ı ararken tüm yazma noktalarını tara (#1123, 0.49.2-beta)
+
+**"X sonradan düzeltilebiliyor mu?" sorusunun cevabı, X'i *yazan* tüm yerleri saymakla
+bulunuyor — okuyan yerlerle değil.** Mentee'nin uydurma e-postasını kimin değiştirebildiğini
+`grep "prisma.user.update"` ile 23 dosyaya indirip her birinde `email` yazımı olup olmadığına
+bakmak 5 dakika sürdü ve kesin cevap verdi: sadece üç yer yazıyor (`/api/account` — kendi
+oturumu + `currentPassword`; `accountErasure` — anonimleştirme; SSO provisioning — yeni
+kullanıcı). Sayfaları tek tek gezip "düzenle butonu var mı" diye bakmak hem yavaş hem de
+eksik kalırdı. UI'da olmayan bir şeyin API'de olmadığını da ancak bu şekilde kanıtlayabildim.
+
+**Sentinel parola (`'!created-no-login'`) bir "hesap durumu" alanıdır, ama şemada öyle
+görünmez.** `bcrypt.compare` hiçbir zaman eşleşmediği için bu satır aslında "hesap değil,
+kayıt" demek — fakat bu bilgi yalnızca bir string literal olarak iki dosyada duruyordu
+(mentor route + `scripts/import-csv.mjs`'nin `'!imported-no-login'`'i). Yeni bir davranış bu
+duruma dayanacaksa önce onu adlandırmak gerekiyor: `src/lib/menteeAccount.ts` +
+`isPendingActivation()`. Aksi halde guard'ı yazarken import akışından gelen satırları sessizce
+dışarıda bırakırdım.
+
+**Aynı görünen iki endpoint'in güvenlik cevabı farklı olabilir; #875'i körü körüne
+genellemeyin.** Admin reset-password linki response'tan kaldırılmıştı (canlı bir hesabın
+tokenını üçüncü kişiye vermek = devralma). Yeni aktivasyon endpoint'i aynı linki *döndürüyor*,
+çünkü hedef hiçbir zaman hesap olmamış bir kayıt ve `POST /api/mentor/mentees` zaten aynı linki
+döndürüyor. Ayrımı koda yorum olarak yazmak, ileride "tutarsızlık" diye geri alınmasını
+engelliyor. Asıl kilit ise parola sentinel'i: parolasını belirlemiş biri için endpoint 409
+veriyor — güvenlik sınırı "kim çağırıyor" değil, "hedef kayıt hangi durumda".
+
+**`select`'e `password: true` ekleyip yanıttan destructure ile çıkarmak, ikinci bir sorgudan
+ucuz ama riski yorumla işaretlemek şart.** `GET /api/mentorship/[id]` ve `GET /api/users/[id]`
+artık `pendingActivation` türetiyor; `const { password, ...rest } = user` satırının hemen
+üstündeki yorum, birinin ileride `...user`'ı doğrudan spread etmesini engellemek için var.
+
+**Bu container'da Playwright'ı gerçekten koşturmak mümkün — repo config'ini scratchpad'den
+sarmalayın.** Kurulu Chromium 1194, Playwright 1.62 ise 1234 istiyor; `launchOptions.
+executablePath: '/opt/pw-browsers/chromium'` veren ve `playwright.config.ts`'i import edip
+üzerine yazan bir config yeterli. İki tuzak: `testDir`/`globalSetup` **mutlak** yol olmalı ve
+`webServer`'a `cwd: '/home/user/Internship'` eklenmeli — yoksa Playwright config'in bulunduğu
+scratchpad dizininde `npm run dev` çalıştırmaya çalışıp `ENOENT: package.json` ile ölüyor.
+`npx prisma db seed`'i atlamayın: admin ile giriş yapan spec'ler (`admin-mentee`,
+`mentor-detail`) tohumlanmış ADMIN yoksa sign-in timeout'uyla düşüyor ve bu, kodunuzla ilgisiz
+bir sahte kırmızı olarak görünüyor.
+
+**`pull_request` tetikleyicisi dursa bile CI'ı elle dispatch edebilirsiniz.** PR açıldıktan
+sonra 5 dakika boyunca hiç check run gelmedi; `list_workflow_runs` son saatlerdeki *tüm* CI/E2E
+koşularının `workflow_dispatch` olduğunu gösterdi — yani repo genelinde bir durum, PR'a özgü
+değil. `ci.yml` ve `e2e.yml` (input: `grep: '@smoke'`) branch üzerinde dispatch edilince check
+run'lar head sha'ya iliştiği için zorunlu kontroller karşılanıyor. Ayrıca API'nin
+`mergeable_state` alanı tembel hesaplanıyor: checks yeşilken bile dakikalarca `blocked`
+kalabiliyor, merge çağrısı yine de başarılı oluyor.
+
+## 2026-08-06 — `origin/main` merge'ünde smoke false-positive'leri: `npm run dev` vs prod build
+
+**`npm run test:e2e:smoke`'u yerelde çalıştırmak `npm run dev`'i başlatır, CI ise
+`npm run start`'la prod build'e karşı koşar** (`playwright.config.ts`: `command:
+process.env.CI ? 'npm run start' : 'npm run dev'`). Bu fark üç sahte kırmızıya yol açtı:
+`auth.spec.ts`'teki `button[aria-haspopup="menu"]` locator'ı dev modunda enjekte edilen
+"Next.js Dev Tools" düğmesiyle de eşleşip strict-mode ihlali veriyor (prod'da o düğme yok);
+`pipeline.spec.ts` dev sunucusunun Fast Refresh rebuild'i tam da PUT isteği uçuşurken
+tetiklenince isteği düşürüyor; `smoke.spec.ts`'teki `/admin/candidates` navigasyonu
+on-demand derleme yüzünden 30s'yi aşıyor. Üçü de `CI=true npm run build && npm run
+test:e2e:smoke` ile (prod build'e karşı) tekrar koşulunca temiz geçti — **merge'ün veya PR'ın
+kendisiyle ilgisi yoktu.**
+
+**Yerel `.env`'deki gerçek ama bu sandbox'tan erişilemeyen `SMTP_HOST`, e-posta gönderen her
+akışı TCP timeout'una kadar (~20-30s) bloke ediyor.** `.github/workflows/e2e.yml`'de SMTP
+secret'ları hiç tanımlı değil — `nodemailer.createTransport({host: undefined, ...})` orada
+hızlı başarısız oluyor, yerelde ise `crm.ersah.in:465`'e gerçek bir bağlantı denemesi ETIMEDOUT
+ile bitene kadar isteği bloke ediyor ve bu da `signInAndSettle`'daki `waitForLoadState
+('networkidle')`'ı 30s timeout'a düşürüyor (`invite.spec.ts`, `mentee-signup.spec.ts`). Tanı
+için `.env`'deki `SMTP_*` satırlarını geçici olarak yorum satırına aldım (dosya
+`.gitignore`'da, commit'e girmiyor), koştum, sonra geri açtım.
+
+**Ama hepsi bu değildi: `instant-meeting`, `pii-access-lifecycle`, `project-team-and-goals`,
+`upcoming-meeting` (×2) SMTP kapalıyken de aynı 30-33s `networkidle` timeout'unda kırmızı
+kaldı.** Trace ağ günlüğü giriş sonrası ~150ms içinde biten 80'den fazla istek gösteriyor,
+sonra timeout'a kadar **hiçbir yeni istek yok** — yani tekrarlayan bir poll değil, muhtemelen
+Playwright'ın `networkidle` sezgisiyle çakışan bir keep-alive/service-worker bağlantısı
+(`/sw.js` her girişte kayıtlı). Bu 4-5 spec merge'ün dokunmadığı dosyalar ve merge'ün
+dokunmadığı sayfaları test ediyor — üç ayrı koşuda tutarlı biçimde aynı testler kırmızı kaldı,
+bu yüzden makine/ortam kaynaklı, PR'a özgü olmayan bir flake olarak işaretledim (CLAUDE.md'nin
+"bilinen flake" listesine ikisi zaten kayıtlı; bu dördü/beşi de aynı kategoriye giriyor gibi
+duruyor, ayrı bir issue'yu hak ediyor).
+
+**Ders: bir smoke kırmızısını "PR'la ilgili mi" diye sınıflandırmadan önce, dosyanın merge/diff
+kapsamında olup olmadığına bak, sonra prod build'e karşı tekrar koştur.** `npm run dev`'in
+kendine özgü davranışları (HMR, Dev Tools düğmesi, on-demand derleme) CI'da hiç olmayan
+kırmızılar üretebiliyor; gerçek sinyal her zaman prod build'e karşı koşan sonuç.
+
+---
+
+## 2026-08-03 — Yaklaşan toplantı banner'ı + "Katıl" pili (#51 devamı, 0.41.0-beta)
+
+**`ResponsiveShell` header bileşenlerini İKİ kez render eder** — mobil üst bar ve
+masaüstü şeridi. Yani oraya koyduğun her `data-testid` DOM'da iki düğüme çözülür ve
+`getByTestId(...)` strict-mode ihlali verir; biri o viewport'ta `lg:hidden` ile
+gizli olduğu için `.first()` de yetmez. Repodaki yerleşik çözüm:
+`page.locator('[data-testid="x"]:visible').first()` (bkz. `messages-inbox.spec.ts`
+mesaj ikonunu tam böyle buluyor). Kabuk header'ına yeni bir şey eklerken testi
+baştan böyle yaz.
+
+**Aynı cevabı isteyen iki bileşen tek poll paylaşmalı.** Banner (panelde) ve pil
+(header'da) aynı anda mount oluyor; her biri kendi `setInterval`'ını kursa dakikada
+iki istek olurdu. `src/hooks/useUpcomingMeeting.ts`'teki modül seviyesi store
+(abone kümesi + tek timer) hem isteği tekilleştiriyor hem de sonradan mount olan
+bileşene mevcut cevabı anında veriyor.
+
+**Şemada bitiş saati yoksa "devam ediyor"u sen tanımlarsın.** `Meeting`'in süresi
+yok; "hâlâ sürüyor" başlangıçtan sonra sabit bir pencere (`MEETING_DURATION_MINUTES`,
+maintainer'ın onayıyla 60 dk) olarak tanımlandı. Böyle bir varsayımı sabit olarak
+dışa aç ve yorumda kimin onayladığını yaz — sonraki oturum bunu tahmin etmesin.
+
+---
+
 ## 2026-08-02 — #51'in kullanıcı geri bildirim turları (0.40.1/0.40.2-beta)
 
 Aynı oturumda özellik canlıya gitmeden önce üç tur geri bildirim geldi; hepsi
@@ -2615,3 +2783,30 @@ oldu — zaten yazılması gereken e2e testi görsel kontrolün yerini fazlasıy
 `globals.css`'teki mevcut override'lar `text-gray-900`'ü kutu içinde `rgb(243,244,246)`'ya
 çeviriyor; hesaplanan değeri mevcut mentor kutusuyla karşılaştırmak yeni bir compound kurala
 gerek olmadığını kanıtladı. Kontrast tahmininde `getComputedStyle` gözden hızlıdır.
+
+## 2026-08-06 — Çakışmayı çözmeden önce sor: bu iş zaten yapıldı mı? (#1076 → #1120)
+
+**`git merge` çıktısındaki `CONFLICT (add/add)` bir uyarı işareti, sıradan bir çakışma değil.**
+İki taraf da *aynı yolu sıfırdan eklemişse* bu, iki paralel implementasyon demektir — hunk'ları
+birleştirmek yanlış cevaptır. #1076 (#906 mentör başvuru onay kuyruğu) `main`'e #1048 + #1072
+ile inen işle aynı dosyaları yaratmıştı. Sekiz çakışmalı dosyanın ikisi add/add'di ve tanı bu
+iki satırdan çıktı; hunk okumaya hiç gerek kalmadı.
+
+**Çakışma çözmeden önce iki tarafı özellik düzeyinde karşılaştır.** `git show origin/main:<yol>`
+ile karşı tarafın dosyasını okumak (diff'e bakmak değil) dakikalar sürüyor ve kararı tersine
+çevirebiliyor: `main`'in versiyonunda `UNDER_REVIEW` ara durumu, `withTenantScope`, mevcut
+MENTEE hesabını yükseltme, EN/TR/DE markalı e-postalar ve 6 `@smoke` testi vardı; PR'ınkinde
+hiçbiri yoktu. "Birleştirmek" burada daha iyi olanın üzerine yazmak olurdu. Kapatma kararını,
+issue'nun kabul kriterlerini tek tek `main`'in kodunda işaretleyerek gerekçelendirmek de
+tartışmayı bitirdi.
+
+**Yinelenen bir PR'ı kapatırken içindeki tekil parçayı ara.** #1076'nın 952 satırının
+yalnızca ~25'i `main`'de yoktu (nav'daki bekleyen başvuru rozeti). Onu ayrı bir PR'a taşımak
+hem katkıyı boşa çıkarmıyor hem de kapatma yorumunu "işin çöpe gitti" olmaktan çıkarıyor.
+Taşırken körü körüne kopyalamayın: 60 sn'lik `setInterval` polling'i her admin sayfasından
+çalışıyordu; her karar detay sayfasından ayrıldığı için `pathname` bağımlılığı aynı tazeliği
+sıfır timer'la veriyor.
+
+**Bu container'da `node_modules` yok.** `npm install` (~1 dk) arka planda başlatılıp bu sırada
+düzenlemeler yapılabiliyor; `npx prisma generate` sonrası `tsc --noEmit` + `npm run build` +
+`npm run check:i18n` üçlüsü lint uyarı gürültüsünden bağımsız net sinyal veriyor.

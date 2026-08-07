@@ -141,7 +141,6 @@ export async function GET(request: Request) {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * PAGE_SIZE,
         take: PAGE_SIZE,
-        include: { decidedBy: { select: { id: true, fullName: true } } },
       }),
       prisma.mentorApplication.count({ where }),
     ]);

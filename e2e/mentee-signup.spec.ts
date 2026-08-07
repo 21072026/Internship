@@ -107,3 +107,19 @@ test('manual mode parks a self-registration for an admin', async ({ page }) => {
     });
   }
 });
+
+// #1095: the form must not read as "invitation required". The token field is
+// folded away for a visitor arriving without one, and unfolded for a visitor
+// who arrived through an invitation link.
+test('the register form hides the invitation field unless you arrived with one', async ({ page }) => {
+  await page.goto('/auth/register');
+  await expect(page.locator('input[name="token"]')).toHaveCount(0);
+  const toggle = page.getByTestId('have-invite-toggle');
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(page.locator('input[name="token"]')).toBeVisible();
+
+  // Arriving through an invitation link unfolds it without a click.
+  await page.goto('/auth/register?token=e2e-not-a-real-token');
+  await expect(page.locator('input[name="token"]')).toBeVisible();
+});

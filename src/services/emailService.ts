@@ -373,38 +373,6 @@ export async function sendMentorshipDecisionEmail({
   });
 }
 
-// --- Mentor application decisions (#906) ------------------------------------
-// Approval reuses sendInvitationEmail (same InvitationToken flow as an admin
-// invite) — no dedicated "approved" template needed. Rejection gets its own,
-// deliberately generic: the admin's internal rejectReason is never shown to
-// the applicant, mirroring sendMentorshipDecisionEmail's rejected copy.
-
-export async function sendMentorApplicationRejectionEmail({
-  to,
-  fullName,
-  orgId,
-}: {
-  to: string;
-  fullName?: string | null;
-  orgId?: string | null;
-}) {
-  const brand = await emailBrand(orgId);
-  await sendEmail({
-    to,
-    fromName: brand.name,
-    subject: 'Update on your mentor application',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, 'Update on your mentor application')}
-        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
-        <p>Thank you for your interest in becoming a mentor at ${esc(brand.name)}. We reviewed
-        your application, but we are not able to move forward with it at this time.</p>
-        <p>You are welcome to apply again in the future.</p>
-      </div>
-    `,
-  });
-}
-
 export async function sendMenteeAssignedEmail({
   to,
   mentorName,
@@ -734,6 +702,53 @@ export async function sendPublicContactEmail({
         <p><strong>${esc(fromName)}</strong> (${esc(fromEmail)}) sent you a message through your public profile:</p>
         <blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>
         <p style="color:#6b7280;font-size:14px;">Reply to this email to answer them directly.</p>
+      </div>
+    `,
+  });
+}
+
+// A company enquiry from the public /for-companies page, mailed to every admin.
+// Reply-To is the company's address, so answering is one click — this is the
+// most time-sensitive thing the public site produces.
+export async function sendCompanyInquiryEmail({
+  to,
+  adminName,
+  companyName,
+  contactName,
+  fromEmail,
+  phone,
+  openRoles,
+  message,
+  locale,
+  orgId,
+}: {
+  to: string;
+  adminName?: string | null;
+  companyName: string;
+  contactName: string;
+  fromEmail: string;
+  phone?: string | null;
+  openRoles?: string | null;
+  message?: string | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).companyInquiryEmail;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    replyTo: fromEmail,
+    subject: `${M.subject}: ${companyName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.heading)}
+        ${adminName ? `<p>${esc(M.greeting.replace('{name}', adminName))}</p>` : ''}
+        <p><strong>${esc(companyName)}</strong> — ${esc(contactName)} (${esc(fromEmail)})</p>
+        ${phone ? `<p>${esc(M.phone)}: ${esc(phone)}</p>` : ''}
+        ${openRoles ? `<p>${esc(M.openRoles)}: ${esc(openRoles)}</p>` : ''}
+        ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>` : ''}
+        <p style="color:#6b7280;font-size:14px;">${esc(M.replyHint)}</p>
       </div>
     `,
   });

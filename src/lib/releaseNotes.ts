@@ -13,6 +13,81 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.50.2-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Admins: the sidebar now shows how many mentor applications are waiting for review, right next to "Mentor Applications" — no need to open the page to find out whether the queue has anything in it.',
+      ],
+      tr: [
+        'Adminler: kenar çubuğu artık kaç mentor başvurusunun inceleme beklediğini “Mentor Başvuruları” yanında gösteriyor — kuyrukta bir şey var mı diye sayfayı açmaya gerek yok.',
+      ],
+      de: [
+        'Für Admins: In der Seitenleiste steht jetzt direkt neben „Mentor-Bewerbungen“, wie viele Bewerbungen auf Prüfung warten — du musst die Seite nicht mehr öffnen, um zu sehen, ob etwas in der Warteschlange liegt.',
+      ],
+    },
+  },
+  {
+    version: '0.50.1-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Signing up no longer looks like it needs an invitation: the invitation-code box is tucked away, and only opens for people who actually arrived with a code.',
+      ],
+      tr: [
+        'Kaydolmak artık davetiye gerektiriyormuş gibi görünmüyor: davet kodu kutusu katlandı ve yalnızca gerçekten kodla gelenler için açılıyor.',
+      ],
+      de: [
+        'Die Registrierung sieht nicht mehr so aus, als bräuchte sie eine Einladung: Das Feld für den Einladungscode ist eingeklappt und öffnet sich nur für alle, die tatsächlich mit einem Code kommen.',
+      ],
+    },
+  },
+  {
+    version: '0.50.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Companies now have a page of their own at /for-companies: what they get, what the pilot means, and a short form to ask for a look. No account needed to ask.',
+        'Every enquiry is kept, not just emailed — admins get it in their inbox and in a new “Company enquiries” list, where it can be marked as contacted or closed so nothing sits unanswered.',
+        'The buttons on the home page now go where they say: mentors to the mentor application, companies to the company page.',
+      ],
+      tr: [
+        'Firmaların artık kendi sayfası var: /for-companies. Ne aldıklarını, pilot dönemin ne demek olduğunu ve kısa bir talep formunu orada bulacaklar. Sormak için hesap gerekmiyor.',
+        'Gelen her talep yalnızca e-postayla gitmiyor, kaydediliyor da — yöneticiler hem gelen kutusunda hem de yeni “Firma talepleri” listesinde görüyor; iletişime geçildi ya da kapatıldı diye işaretlenebiliyor, böylece hiçbir talep cevapsız kalmıyor.',
+        'Ana sayfadaki düğmeler artık söyledikleri yere gidiyor: mentorlar mentor başvurusuna, firmalar firma sayfasına.',
+      ],
+      de: [
+        'Unternehmen haben jetzt eine eigene Seite: /for-companies — was sie bekommen, was die Pilotphase bedeutet, und ein kurzes Formular für eine Anfrage. Dafür braucht es kein Konto.',
+        'Jede Anfrage wird gespeichert und nicht nur gemailt — Admins sehen sie im Postfach und in der neuen Liste „Unternehmensanfragen“, wo sie als kontaktiert oder geschlossen markiert werden kann. So bleibt nichts unbeantwortet.',
+        'Die Schaltflächen auf der Startseite führen jetzt dorthin, wo sie hinführen sollen: Mentoren zur Mentor-Bewerbung, Unternehmen zur Unternehmensseite.',
+      ],
+    },
+  },
+  {
+    version: '0.49.2-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'A mentee you added by hand can now get a real account. Until now, adding someone without an e-mail address gave them a stand-in one and there was no way back: they could never sign in, no reset mail could reach them, and nobody could correct the address afterwards.',
+        'On the mentee\'s page you now enter their real address and send them an activation link. It stays the same record — the interaction log, the stage history and the company link are all kept.',
+        'The same button resends the link if the e-mail did not arrive, and shows you the link so you can pass it on yourself.',
+        'Someone who has already set a password keeps control of their own address: only they can change it, from their account settings.',
+      ],
+      tr: [
+        'Elle eklediğin bir mentee artık gerçek bir hesaba kavuşabiliyor. Şimdiye kadar e-posta adresi girmeden eklediğin kişiye geçici bir adres veriliyordu ve geri dönüşü yoktu: hiç giriş yapamıyor, sıfırlama e-postası kendisine ulaşamıyor ve adresi sonradan kimse düzeltemiyordu.',
+        'Mentee sayfasında artık gerçek adresini yazıp ona aktivasyon bağlantısı gönderiyorsun. Kayıt aynı kayıt olarak kalıyor — etkileşim geçmişi, aşama geçmişi ve şirket bağlantısı korunuyor.',
+        'E-posta ulaşmadıysa aynı buton bağlantıyı yeniden gönderiyor; bağlantıyı ekranda da gösteriyor, istersen kendin iletebiliyorsun.',
+        'Parolasını çoktan belirlemiş biri kendi adresinin sahibi olmayı sürdürüyor: adresini yalnızca kendisi, hesap ayarlarından değiştirebiliyor.',
+      ],
+      de: [
+        'Ein von Hand angelegter Mentee kann jetzt ein echtes Konto bekommen. Bisher erhielt jemand ohne E-Mail-Adresse eine Platzhalteradresse und es gab keinen Weg zurück: Anmelden war unmöglich, keine Zurücksetzen-Mail kam an, und die Adresse ließ sich nachträglich von niemandem korrigieren.',
+        'Auf der Mentee-Seite trägst du nun die echte Adresse ein und schickst einen Aktivierungslink. Es bleibt derselbe Datensatz — Interaktionsprotokoll, Phasenhistorie und Firmenzuordnung bleiben erhalten.',
+        'Derselbe Button schickt den Link erneut, falls die E-Mail nicht ankam, und zeigt ihn dir an, damit du ihn selbst weitergeben kannst.',
+        'Wer bereits ein Passwort gesetzt hat, behält die Hoheit über die eigene Adresse: ändern kann sie nur die Person selbst, in den Kontoeinstellungen.',
+      ],
+    },
+  },
+  {
     version: '0.49.1-beta',
     date: '2026-08-06',
     highlights: {
@@ -171,6 +246,21 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Eine Registrierung bringt dich jetzt wirklich hinein. Anmelden, den Link in der Bestätigungsmail anklicken — dein Konto ist offen, ganz ohne auf eine Freigabe zu warten.',
         'Falls du vorher festhingst: Die Anmeldeseite sagt nicht mehr „Konto deaktiviert“, wenn es lediglich auf eine Prüfung wartet — sie sagt es nur, wenn es wirklich so ist.',
         'Admins, die jede Anmeldung zuerst ansehen möchten, stellen die offene Registrierung in den Einstellungen auf „geprüft“ um.',
+      ],
+    },
+  },
+  {
+    version: '0.42.2-beta',
+    date: '2026-08-05',
+    highlights: {
+      en: [
+        'Mentors now get a "Get started" checklist on their dashboard: fill in your bio, add your interests or skills, set how many mentees you can take on, and add an availability slot — each links straight to the right page, and the checklist disappears once you\'re done.',
+      ],
+      tr: [
+        'Mentorlar artık kendi panelinde bir "Başlayalım" kontrol listesi görüyor: biyografini yaz, ilgi alanlarını veya yeteneklerini ekle, kaç mentee alabileceğini belirle ve bir müsaitlik aralığı ekle — her biri doğru sayfaya götürür, tamamlandığında liste kayboluyor.',
+      ],
+      de: [
+        'Mentoren sehen jetzt eine "Loslegen"-Checkliste auf ihrem Dashboard: Bio ausfüllen, Interessen oder Skills hinzufügen, die Mentee-Kapazität festlegen und einen Verfügbarkeitszeitraum hinzufügen — jeder Punkt führt direkt zur richtigen Seite, und die Checkliste verschwindet, sobald alles erledigt ist.',
       ],
     },
   },

@@ -15,7 +15,6 @@ import { VersionFooter } from '@/components/VersionFooter';
 import { BetaBadge } from '@/components/BetaBadge';
 import { APP_VERSION } from '@/lib/version';
 import { RELEASE_NOTES } from '@/lib/releaseNotes';
-import { getSetting } from '@/lib/settings';
 
 const GITHUB_URL = 'https://github.com/21072026/Internship';
 
@@ -26,16 +25,12 @@ export default async function HomePage() {
   const { locale, t } = await getServerDictionary();
   const L = t.landing;
 
-  // The mentor and company doors are still hand-run (the public mentor
-  // application form is #905, the company page #1102). Rather than send those
-  // visitors to /auth/register — which would sign a mentor up as a mentee —
-  // the CTA is an email to whoever runs the program, and simply does not
-  // render when no address is configured. A missing button beats a wrong one.
-  const contactEmail = (await getSetting('supportEmail')).trim();
-  const mailto = (subject: string) =>
-    contactEmail ? `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}` : null;
-  const mentorHref = mailto(L.ctaMentor);
-  const companyHref = mailto(L.ctaCompany);
+  // Each audience now has a door of its own: mentors apply at /apply-as-mentor
+  // (#1072), companies ask for a look at /for-companies (#1102/#1104). Neither
+  // may point at /auth/register — token-less sign-up always creates a MENTEE,
+  // so a mentor landing there would silently become a mentee.
+  const mentorHref = '/apply-as-mentor';
+  const companyHref = '/for-companies';
 
   // Fed from the single-source catalogue (#584/#588): the landing shows the
   // featured subset; /features shows everything.
@@ -172,6 +167,9 @@ export default async function HomePage() {
             <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
               <Link href="/features" className="hidden sm:inline text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
                 {t.featureCatalog.allFeatures}
+              </Link>
+              <Link href="/for-companies" className="hidden md:inline text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
+                {t.forCompanies.nav}
               </Link>
               <a
                 href={GITHUB_URL}
@@ -326,13 +324,14 @@ export default async function HomePage() {
           {audienceList(mentorItems)}
           <p className="mt-8 text-sm text-gray-700 text-center">{L.audMentorTrust}</p>
           <p className="mt-6 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl p-5 leading-relaxed">{L.audMentorProof}</p>
-          {mentorHref && (
-            <div className="mt-8 flex justify-center">
-              <a href={mentorHref} className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors">
-                {L.audMentorCta} <ArrowRight className="h-5 w-5 flex-shrink-0" />
-              </a>
-            </div>
-          )}
+          <div className="mt-8 flex justify-center">
+            <Link
+              href={mentorHref}
+              className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+            >
+              {L.audMentorCta} <ArrowRight className="h-5 w-5 flex-shrink-0" />
+            </Link>
+          </div>
           <p className="mt-3 text-center text-xs text-gray-500 max-w-xl mx-auto">{L.audMentorCtaNote}</p>
         </div>
       </section>
@@ -350,13 +349,14 @@ export default async function HomePage() {
             <li className="inline-flex items-center gap-1.5"><Code2 className="h-4 w-4 text-gray-400" />{L.audCompanyProof1}</li>
             <li className="inline-flex items-center gap-1.5"><ScrollText className="h-4 w-4 text-gray-400" />{L.audCompanyProof2.replace('{n}', String(releaseCount))}</li>
           </ul>
-          {companyHref && (
-            <div className="mt-8 flex justify-center">
-              <a href={companyHref} className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors">
-                {L.audCompanyCta} <ArrowRight className="h-5 w-5 flex-shrink-0" />
-              </a>
-            </div>
-          )}
+          <div className="mt-8 flex justify-center">
+            <Link
+              href={companyHref}
+              className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              {L.audCompanyCta} <ArrowRight className="h-5 w-5 flex-shrink-0" />
+            </Link>
+          </div>
           <p className="mt-3 text-center text-xs text-gray-500 max-w-xl mx-auto">{L.audCompanyCtaNote}</p>
         </div>
       </section>
@@ -540,18 +540,18 @@ export default async function HomePage() {
             <Link href="/auth/register" className="inline-flex items-center justify-center gap-2 bg-white text-blue-700 px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-50 transition-colors dark:!bg-white dark:!text-blue-700 dark:hover:!bg-blue-100">
               {L.ctaMentee} <ArrowRight className="h-5 w-5" />
             </Link>
-            <a
-              href={mentorHref ?? '#mentor'}
+            <Link
+              href={mentorHref}
               className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"
             >
               <Users className="h-5 w-5" /> {L.ctaMentor}
-            </a>
-            <a
-              href={companyHref ?? '#company'}
+            </Link>
+            <Link
+              href={companyHref}
               className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"
             >
               <Briefcase className="h-5 w-5" /> {L.ctaCompany}
-            </a>
+            </Link>
           </div>
           <p className="mt-6 text-sm text-blue-100">
             {t.auth.wantMentor}{' '}
