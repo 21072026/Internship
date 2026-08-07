@@ -8,6 +8,38 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.55.1-beta] - 2026-08-07
+
+### Security
+- **`nodemailer` 7.0.13 → 9.0.5** (#1143) — closes the open **high** finding
+  ([GHSA-p6gq-j5cr-w38f](https://github.com/advisories/GHSA-p6gq-j5cr-w38f): the
+  message-level `raw` option bypasses `disableFileAccess`/`disableUrlAccess`, giving
+  arbitrary file read and full-response SSRF, range `<=9.0.0`) plus three moderates that
+  cover `<=8.0.8`. On a clean `npm ci`, `npm audit` goes from 6 findings (3 high, 3
+  moderate) to 4 (2 high, 2 moderate): `next-auth`'s moderate was transitive through
+  nodemailer and cleared with it, and both rows moved out of
+  `docs/security-exceptions.md`. What remains is untouched by this change — `xlsx` and
+  `node-cron`/`uuid` are written up there, and `nanoid` (high, via `postcss`) is a
+  pre-existing finding that is in neither — filed as #1144.
+- **Bumping the root range alone does not install.** `next-auth@4.24.15` declares
+  `peerOptional nodemailer@"^7.0.7"`, so `npm ci` fails with ERESOLVE — which is exactly
+  where Dependabot's #1129 (7.0.13 → 9.0.1) died, in under 30s, before any of the three
+  jobs ran a line of project code. The fix is one `overrides` entry pinning next-auth's
+  peer to the root's: `"next-auth": { "nodemailer": "$nodemailer" }`. Safe because
+  `src/lib/auth.ts` only registers `CredentialsProvider` — there is no `EmailProvider`, so
+  next-auth never loads nodemailer at runtime and the peer is unused as well as optional.
+- **The 7 → 9 breaking change does not reach this app.** 9.0.0 made HTTPS requests
+  validate the server's TLS certificate *when fetching remote content* — attachment
+  `path`/`href` URLs, OAuth2 token endpoints, proxy CONNECT. Our transport is plain SMTP
+  host/port/password (`src/services/emailService.ts:41`) and every attachment is an
+  in-memory `Buffer` (`emailService.ts:93`, and the message/announcement senders that feed
+  it); nothing fetches remote content. Verified beyond the type level: `tsc --noEmit` is
+  clean against `@types/nodemailer` 6.4.23, and a message built with our exact shape
+  (multipart, `cid` attachment, UTF-8 subject) renders correctly on 9.0.5.
+- Taken deliberately rather than as an automated PR, which is what `.github/dependabot.yml`
+  intends by ignoring `semver-major` — #1129 is a security update, so Dependabot opened it
+  past that rule anyway. Closed in favour of this one.
+
 ## [0.55.0-beta] - 2026-08-07
 
 ### Added
