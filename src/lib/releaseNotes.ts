@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.54.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors: the sidebar now highlights the page you are on, so it is obvious where you are without reading the address bar.',
+      ],
+      tr: [
+        'Mentorlar: kenar çubuğu artık bulunduğunuz sayfayı vurguluyor; adres çubuğuna bakmadan nerede olduğunuz belli oluyor.',
+      ],
+      de: [
+        'Für Mentor:innen: Die Seitenleiste hebt jetzt die Seite hervor, auf der du gerade bist — ein Blick genügt, die Adresszeile brauchst du nicht.',
+      ],
+    },
+  },
+  {
     version: '0.53.0-beta',
     date: '2026-08-07',
     highlights: {

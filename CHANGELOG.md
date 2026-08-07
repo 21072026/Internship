@@ -8,6 +8,23 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.54.0-beta] - 2026-08-07
+
+### Changed
+- **The mentor sidebar is a component now** (`src/components/MentorNav.tsx`, salvaged from #1080)
+  — twelve hand-written `<Link>` blocks in `src/app/mentor/layout.tsx` became one array, and the
+  entry for the page you are on is highlighted and carries `aria-current="page"`. `/mentor` is
+  matched exactly rather than by prefix, so the dashboard entry does not light up on every mentor
+  route. `/todos` is included: #1080 was branched before it landed and its nav list would have
+  silently dropped it, so `e2e/mentor-profile-navigation.spec.ts` now asserts the entry exists.
+
+### Not taken from #1080
+- Its `MentorProfileCompletionBanner` (a dashboard nag when bio / interests / `mentorCapacity`
+  are empty) is left out: `OnboardingChecklist` already checks those same three fields for
+  mentors and already links to `/mentor/profile` (`GET /api/onboarding`), so the banner would
+  have stacked a second blue box saying the same thing on a dashboard that #1136 had just made
+  more compact.
+
 ## [0.53.0-beta] - 2026-08-07
 
 ### Added
