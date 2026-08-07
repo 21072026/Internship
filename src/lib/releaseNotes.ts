@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.53.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors can now have a public profile page, but only if they switch it on themselves: it shows expertise, languages, how many mentees they currently have and their capacity — never their phone number, and never the names of their mentees.',
+        'Mentees see a "view profile" link next to their mentor — only when that mentor has actually made their profile public.',
+      ],
+      tr: [
+        'Mentorların artık herkese açık bir profil sayfası olabiliyor, ama yalnızca kendileri açarsa: uzmanlık alanları, diller, şu anki mentee sayısı ve kapasite görünüyor — telefon numarası ve mentee isimleri asla görünmüyor.',
+        'Menteeler, mentorlarının yanında “profili gör” bağlantısını görüyor — yalnızca o mentor profilini herkese açık yaptıysa.',
+      ],
+      de: [
+        'Mentor:innen können jetzt eine öffentliche Profilseite haben, aber nur wenn sie sie selbst freischalten: Sie zeigt Fachgebiete, Sprachen, die aktuelle Zahl der Mentees und die Kapazität — nie die Telefonnummer und nie die Namen der Mentees.',
+        'Mentees sehen neben ihrem Mentor einen Link „Profil ansehen“ — nur wenn dieser Mentor sein Profil tatsächlich öffentlich gemacht hat.',
+      ],
+    },
+  },
+  {
     version: '0.52.0-beta',
     date: '2026-08-07',
     highlights: {

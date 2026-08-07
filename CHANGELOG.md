@@ -8,6 +8,21 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.53.0-beta] - 2026-08-07
+
+### Added
+- **Consent-based public mentor profiles** (`/p/<userId>`, salvaged from #1079) — the public
+  profile page already existed for mentees; it now renders a mentor variant when the account is
+  a MENTOR and `publicProfile` is on. Mentors show areas of expertise, spoken languages, active
+  mentee *count* and capacity (`data-testid="public-profile-active-mentees"` / `-capacity`);
+  the mentee-shaped rows (university, department, graduation year, target position) are hidden
+  for them. The query is additionally narrowed to `role in (MENTEE, MENTOR)`, so an ADMIN or
+  COMPANY account that happens to carry `publicProfile` can no longer be rendered.
+- **Link to the mentor's public profile from the mentee portal** (`/portal`) — shown only when
+  that mentor has actually opted in (`publicProfile === true`), next to "message mentor".
+- `e2e/public-profile.spec.ts` gained a mentor case asserting the mentor fields are visible and
+  that phone, WhatsApp, the mentee-only rows **and the linked mentee's name** are not.
+
 ## [0.52.0-beta] - 2026-08-07
 
 ### Added
