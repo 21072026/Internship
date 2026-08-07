@@ -31,6 +31,21 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
+    version: '0.51.1-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'The home page said the product was written by a single person. That is no longer true — a small team works on it now, and the honesty note and the mentor FAQ say so.',
+      ],
+      tr: [
+        'Ana sayfada ürünü tek kişinin yazdığı yazıyordu. Artık doğru değil — üzerinde küçük bir ekip çalışıyor; dürüstlük notu ve mentor SSS’i de böyle diyor.',
+      ],
+      de: [
+        'Auf der Startseite stand, das Produkt werde von einer einzelnen Person geschrieben. Das stimmt nicht mehr — daran arbeitet jetzt ein kleines Team, und der Ehrlichkeits-Hinweis sowie die Mentor-FAQ sagen das auch.',
+      ],
+    },
+  },
+  {
     version: '0.51.0-beta',
     date: '2026-08-07',
     highlights: {

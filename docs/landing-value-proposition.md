@@ -177,7 +177,7 @@ Yani bu bir ilan sitesi ya da CV havuzu değil; **kanıt üreten bir döngü**. 
 |---|---|
 | "Vaktim yok, bir sistem daha öğrenemem." | "İlk kurulum 10 dakika: kişilerinin adını gir. Sonrası haftada yaklaşık 10 dakika — panoyu aç, işaretlenmiş iki kişiyle ilgilen, kapat. Not yazmak istemezsen yazma; sistem yine de kimle ne zaman temas ettiğini tutar." |
 | "Ne kadar bağlanıyorum, çıkabilir miyim?" | "Kaç kişiye açık olduğuna sen karar veriyorsun; ara vermek istersen kontenjanını sıfırlarsın." *(Önce kapasite kontrolü shiplenmeli.)* |
-| "Bu bir yıl sonra duruyor olacak mı?" | "Bunu tek kişi yazıyor ve kodu tamamen açık (AGPL-3.0). Kapanma riskine karşı verdiğimiz tek somut söz şu: girdiğin her kaydı tek tıkla dışa aktarabilirsin." |
+| "Bu bir yıl sonra duruyor olacak mı?" | "Bunu küçük bir ekip yazıyor ve kodu tamamen açık (AGPL-3.0). Kapanma riskine karşı verdiğimiz tek somut söz şu: girdiğin her kaydı tek tıkla dışa aktarabilirsin." |
 | "Mentör olduğum dışarıda görünecek mi?" | "Bugün hayır. Mentör profili ve dizini yol haritasında — vaat etmeden önce yapacağız." *(Tarihsiz "yol haritası" bu kitlede "yok" demektir; bir çeyrek ver.)* |
 | "Karşılığında ben ne alıyorum?" | "Üç şey: hatırlama yükünden kurtulmak, aynı emekle bir kişi yerine bir ekibe yol göstermek, ve yarın kendi ekibine alacağın insanı altı aydır tanıyor olmak." |
 
