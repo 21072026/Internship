@@ -15,7 +15,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   const { locale, t } = await getServerDictionary();
 
   const user = await prisma.user.findFirst({
-    where: { id: userId, publicProfile: true },
+    where: { id: userId, publicProfile: true, role: { in: ['MENTEE', 'MENTOR'] } },
     select: {
       fullName: true,
       role: true,
@@ -32,12 +32,22 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       linkedinUrl: true,
       githubUrl: true,
       portfolioUrl: true,
+      interests: true,
+      languages: true,
+      mentorCapacity: true,
+      _count: {
+        select: {
+          mentorRelations: { where: { status: 'ACTIVE' } },
+        },
+      },
     },
   });
 
   if (!user) notFound();
 
   const skills = Array.isArray(user.skills) ? (user.skills as string[]) : [];
+  const languages = Array.isArray(user.languages) ? (user.languages as string[]) : [];
+  const isMentor = user.role === 'MENTOR';
   const headline = user.displayName || user.fullName;
   const location = [user.city, user.country].filter(Boolean).join(', ');
   const links = [
@@ -72,7 +82,11 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
             )}
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{headline}</h1>
-              {user.targetPosition && <p className="text-blue-600 text-sm font-medium">{user.targetPosition}</p>}
+              {isMentor ? (
+                <p className="text-blue-600 text-sm font-medium">{t.publicProfile.mentor}</p>
+              ) : (
+                user.targetPosition && <p className="text-blue-600 text-sm font-medium">{user.targetPosition}</p>
+              )}
               {location && <p className="text-gray-500">{location}</p>}
             </div>
           </div>
@@ -80,19 +94,19 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
           {user.bio && <p className="text-sm text-gray-700 mb-6 whitespace-pre-line">{user.bio}</p>}
 
           <dl className="space-y-3 text-sm">
-            {user.university && (
+            {!isMentor && user.university && (
               <div>
                 <dt className="text-gray-500">{t.publicProfile.university}</dt>
                 <dd className="text-gray-900">{user.university}</dd>
               </div>
             )}
-            {user.department && (
+            {!isMentor && user.department && (
               <div>
                 <dt className="text-gray-500">{t.publicProfile.department}</dt>
                 <dd className="text-gray-900">{user.department}</dd>
               </div>
             )}
-            {user.graduationYear && (
+            {!isMentor && user.graduationYear && (
               <div>
                 <dt className="text-gray-500">{t.publicProfile.graduationYear}</dt>
                 <dd className="text-gray-900">{user.graduationYear}</dd>
@@ -108,6 +122,38 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                     </span>
                   ))}
                 </dd>
+              </div>
+            )}
+            {isMentor && user.interests && (
+              <div>
+                <dt className="text-gray-500">{t.publicProfile.expertise}</dt>
+                <dd className="text-gray-900 whitespace-pre-line">{user.interests}</dd>
+              </div>
+            )}
+            {isMentor && languages.length > 0 && (
+              <div>
+                <dt className="text-gray-500 mb-1">{t.publicProfile.languages}</dt>
+                <dd className="flex flex-wrap gap-1">
+                  {languages.map((language) => (
+                    <span key={language} className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs">
+                      {language}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            )}
+            {isMentor && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <dt className="text-gray-500">{t.publicProfile.activeMentees}</dt>
+                  <dd className="text-gray-900" data-testid="public-profile-active-mentees">{user._count.mentorRelations}</dd>
+                </div>
+                {user.mentorCapacity != null && (
+                  <div>
+                    <dt className="text-gray-500">{t.publicProfile.capacity}</dt>
+                    <dd className="text-gray-900" data-testid="public-profile-capacity">{user.mentorCapacity}</dd>
+                  </div>
+                )}
               </div>
             )}
           </dl>

@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.52.0-beta',
+    version: '0.55.0-beta',
     date: '2026-08-07',
     highlights: {
       en: [
@@ -30,6 +30,57 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Ein Mentor kann jetzt auch Mentee sein. Wer andere unterstützt, braucht manchmal selbst Unterstützung — bekommt ein Mentor eine eigene Mentorin oder einen eigenen Mentor, steht ihm neben den Mentoren-Seiten auch das Mentee-Portal offen.',
         'Der Schalter „Ansicht" unten in der Seitenleiste trägt die dritte Ansicht mit: Admin, Mentor, Mentee — je nachdem, welche für dich gelten. Für alle mit nur einer Ansicht ändert sich nichts.',
         'Admins können beide Seiten einer Mentorschaft frei besetzen. Beide Listen zeigen jetzt Mentor:innen, Mentees und Admins, die jeweils erwartete Rolle zuerst und bei den übrigen ein kleines Rollen-Label. Niemand lässt sich mit sich selbst verknüpfen.',
+      ],
+    },
+  },
+  {
+    version: '0.54.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors: the sidebar now highlights the page you are on, so it is obvious where you are without reading the address bar.',
+      ],
+      tr: [
+        'Mentorlar: kenar çubuğu artık bulunduğunuz sayfayı vurguluyor; adres çubuğuna bakmadan nerede olduğunuz belli oluyor.',
+      ],
+      de: [
+        'Für Mentor:innen: Die Seitenleiste hebt jetzt die Seite hervor, auf der du gerade bist — ein Blick genügt, die Adresszeile brauchst du nicht.',
+      ],
+    },
+  },
+  {
+    version: '0.53.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors can now have a public profile page, but only if they switch it on themselves: it shows expertise, languages, how many mentees they currently have and their capacity — never their phone number, and never the names of their mentees.',
+        'Mentees see a "view profile" link next to their mentor — only when that mentor has actually made their profile public.',
+      ],
+      tr: [
+        'Mentorların artık herkese açık bir profil sayfası olabiliyor, ama yalnızca kendileri açarsa: uzmanlık alanları, diller, şu anki mentee sayısı ve kapasite görünüyor — telefon numarası ve mentee isimleri asla görünmüyor.',
+        'Menteeler, mentorlarının yanında “profili gör” bağlantısını görüyor — yalnızca o mentor profilini herkese açık yaptıysa.',
+      ],
+      de: [
+        'Mentor:innen können jetzt eine öffentliche Profilseite haben, aber nur wenn sie sie selbst freischalten: Sie zeigt Fachgebiete, Sprachen, die aktuelle Zahl der Mentees und die Kapazität — nie die Telefonnummer und nie die Namen der Mentees.',
+        'Mentees sehen neben ihrem Mentor einen Link „Profil ansehen“ — nur wenn dieser Mentor sein Profil tatsächlich öffentlich gemacht hat.',
+      ],
+    },
+  },
+  {
+    version: '0.52.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors now have their own profile page: "My profile" in the sidebar lets you edit your name, photo, bio, city, links, skills, areas of expertise, how many mentees you can take on, and the languages you speak.',
+        'The mentor profile only shows what applies to a mentor — no university, graduation year or CV upload, which belong to mentees.',
+      ],
+      tr: [
+        'Mentorların artık kendi profil sayfası var: kenar çubuğundaki “Profilim” ile adınızı, fotoğrafınızı, biyografinizi, şehrinizi, bağlantılarınızı, yetkinliklerinizi, uzmanlık alanlarınızı, kaç mentee alabileceğinizi ve konuştuğunuz dilleri düzenleyebilirsiniz.',
+        'Mentor profilinde yalnızca mentora uygun alanlar görünüyor — üniversite, mezuniyet yılı ve CV yükleme gibi menteeye ait alanlar yok.',
+      ],
+      de: [
+        'Mentor:innen haben jetzt eine eigene Profilseite: Über „Mein Profil“ in der Seitenleiste lassen sich Name, Foto, Kurzprofil, Stadt, Links, Fähigkeiten, Fachgebiete, die Zahl möglicher Mentees und die gesprochenen Sprachen bearbeiten.',
+        'Im Mentor-Profil erscheint nur, was zu einem Mentor passt — Universität, Abschlussjahr oder CV-Upload gehören zu Mentees und fehlen dort.',
       ],
     },
   },

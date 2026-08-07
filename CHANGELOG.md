@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.52.0-beta] - 2026-08-07
+## [0.55.0-beta] - 2026-08-07
 
 ### Added
 - **A mentor can also be a mentee** (#1141) — someone who helps another person can need help
@@ -47,6 +47,59 @@ version is shown in the sidebar footer of every page (links to the
   the portal can't become a way around it for a role in scope for the policy. `MentorLayout`
   admits a MENTEE who has someone to mentor; the mentor onboarding wizard redirect stays
   scoped to `role === 'MENTOR'`, so a dual-role mentee is never bounced into it.
+## [0.54.0-beta] - 2026-08-07
+
+### Changed
+- **The mentor sidebar is a component now** (`src/components/MentorNav.tsx`, salvaged from #1080)
+  — twelve hand-written `<Link>` blocks in `src/app/mentor/layout.tsx` became one array, and the
+  entry for the page you are on is highlighted and carries `aria-current="page"`. `/mentor` is
+  matched exactly rather than by prefix, so the dashboard entry does not light up on every mentor
+  route. `/todos` is included: #1080 was branched before it landed and its nav list would have
+  silently dropped it, so `e2e/mentor-profile-navigation.spec.ts` now asserts the entry exists.
+
+### Not taken from #1080
+- Its `MentorProfileCompletionBanner` (a dashboard nag when bio / interests / `mentorCapacity`
+  are empty) is left out: `OnboardingChecklist` already checks those same three fields for
+  mentors and already links to `/mentor/profile` (`GET /api/onboarding`), so the banner would
+  have stacked a second blue box saying the same thing on a dashboard that #1136 had just made
+  more compact.
+
+## [0.53.0-beta] - 2026-08-07
+
+### Added
+- **Consent-based public mentor profiles** (`/p/<userId>`, salvaged from #1079) — the public
+  profile page already existed for mentees; it now renders a mentor variant when the account is
+  a MENTOR and `publicProfile` is on. Mentors show areas of expertise, spoken languages, active
+  mentee *count* and capacity (`data-testid="public-profile-active-mentees"` / `-capacity`);
+  the mentee-shaped rows (university, department, graduation year, target position) are hidden
+  for them. The query is additionally narrowed to `role in (MENTEE, MENTOR)`, so an ADMIN or
+  COMPANY account that happens to carry `publicProfile` can no longer be rendered.
+- **Link to the mentor's public profile from the mentee portal** (`/portal`) — shown only when
+  that mentor has actually opted in (`publicProfile === true`), next to "message mentor".
+- `e2e/public-profile.spec.ts` gained a mentor case asserting the mentor fields are visible and
+  that phone, WhatsApp, the mentee-only rows **and the linked mentee's name** are not.
+
+## [0.52.0-beta] - 2026-08-07
+
+### Added
+- **Mentors can edit their own profile** (`/mentor/profile`, salvaged from #1078) — the mentee
+  profile form was extracted into a shared `ProfileForm` component that takes a `role` prop, so
+  `/portal/profile` (MENTEE) and the new `/mentor/profile` (MENTOR) are the same form with
+  different fields. Mentors get name, bio, city, avatar, LinkedIn/GitHub/portfolio, skills +
+  skill levels, areas of expertise, `mentorCapacity`, spoken languages and the `publicProfile`
+  toggle; the mentee-only blocks (university, department, graduation year, target position, CV
+  manager/feedback/suggestions, documents, templates) do not render for them. New "My profile"
+  entry in the mentor sidebar.
+- **`User.languages`** (`Json`, default `[]`) — the languages a mentor speaks, distinct from
+  `preferredLanguage` (the UI locale). Edited as a comma-separated list, stored as an array.
+
+### Changed
+- **`PUT /api/profile` rejects fields the caller may not set** instead of silently ignoring them:
+  unknown keys, and role-owned keys sent by the wrong role, now return `403` with
+  `{ code: 'protected_fields', fields: [...] }`. `mentorCapacity` and `languages` are
+  MENTOR-only; `university`, `department`, `graduationYear`, `targetPosition` and `cvUrl` are
+  MENTEE-only; `interests` stays open to both (a mentee's interests, a mentor's expertise).
+  `role`, `isActive` and `userId` were never writable here and are now rejected loudly.
 
 ## [0.51.2-beta] - 2026-08-07
 
