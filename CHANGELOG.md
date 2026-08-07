@@ -8,6 +8,46 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.51.0-beta] - 2026-08-07
+
+### Added
+- **Offer management** (#809) — a full workflow for extending, sending and deciding job offers
+  within a mentorship. New `Offer` model (`orgId`, `relationId`, `requisitionId?`, `companyId?`,
+  `status` — free `String`, not an enum, per the existing pipeline-status convention —
+  `position`, `startDate?`, `compensationNote?`, `expiresAt?`, `sentAt?`, `decidedAt?`,
+  `declineReasonCode?`, `declineNote?`, `createdById`, `decidedById?`), indexed on
+  `[orgId, status]` and `[relationId]`. A single server-side state machine
+  (`src/lib/offers.ts`) is the only place that decides legal transitions
+  (`DRAFT -> SENT -> ACCEPTED|DECLINED|EXPIRED|WITHDRAWN`) and who may run them — ADMIN does
+  everything; a MENTEE may only accept/decline their own `SENT` offer; COMPANY is read-only on
+  its own `companyId`'s offers. `GET/POST /api/offers` and `GET/PATCH /api/offers/[id]` validate
+  `status`/`declineReasonCode` as `z.string()` against that central whitelist (never
+  `z.enum`), and never `select` `compensationNote` for any caller except ADMIN or the offer's own
+  MENTEE — verified by e2e response-body assertions, not just UI hiding.
+  Admin UX: a 3-step "Offer bilgileri → Tarih & ücret → Önizleme ve gönder" wizard on the
+  candidate's Mentorship card (`OfferManagementPanel`/`OfferWizardModal`), with send/withdraw
+  actions gated to the current status and a history timeline read from `AuditLog`
+  (`offer.create/send/accept/decline/withdraw/expire`).
+  Mentee UX: an `/portal` offer card (`OfferCard`) showing position, company, start date, a
+  "N days left / due tomorrow / due today" decision countdown, and — only for this offer's own
+  mentee — the compensation note; accept goes through a confirmation dialog, decline requires a
+  reason (`COMPENSATION | POSITION | LOCATION | OTHER_OFFER | START_DATE | OTHER`, free text
+  optional); after a decision the card shows a persistent accepted/declined state (not just a
+  toast) with a "what's next" note.
+  SENT and ACCEPTED/DECLINED transitions email + in-app notify through the existing
+  `emailService`/`notify` infrastructure, EN/TR/DE. A new cron step (`expireOffers`,
+  `src/lib/offerNotify.ts`) flips overdue `SENT` offers to `EXPIRED`, idempotently — the
+  transition is claimed with a guarded `updateMany` before any audit/notify/email, so two
+  overlapping cron ticks can never double-fire either. An ACCEPTED offer never auto-changes the
+  mentee's pipeline stage; the admin panel only *suggests* moving to the org's `HIRED_660` stage
+  when that key actually exists in the org's resolved pipeline (`resolvePipelineStages`) — a
+  tenant on a fully custom pipeline (#747) without that stage never sees the suggestion, and the
+  accept/decline flow itself has no dependency on pipeline stages at all.
+  Tests: `e2e/offers.spec.ts` (wizard create+send, mentee accept/decline with a persistent state,
+  invalid-transition 400, cross-mentee IDOR, compensationNote leak check, company-with-no-companyId
+  403, withdraw, and the two-run cron dedupe) and `e2e/offers-custom-pipeline.spec.ts`
+  (custom-pipeline org never gets the HIRED_660 suggestion; accept still works end-to-end).
+
 ## [0.50.2-beta] - 2026-08-07
 
 ### Added

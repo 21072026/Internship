@@ -588,6 +588,89 @@ export async function sendMentorApplicationRejectedEmail({
   });
 }
 
+// --- Offers (#809) -----------------------------------------------------------
+
+function formatOfferDate(d: Date | null | undefined, locale: Locale): string | null {
+  if (!d) return null;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(d);
+}
+
+export async function sendOfferSentEmail({
+  to,
+  fullName,
+  position,
+  companyName,
+  startDate,
+  expiresAt,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  position: string;
+  companyName?: string | null;
+  startDate?: Date | null;
+  expiresAt?: Date | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const loc = resolveLocale(locale);
+  const M = getDictionary(loc).offerEmail;
+  const start = formatOfferDate(startDate, loc);
+  const expires = formatOfferDate(expiresAt, loc);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.sent.subject.replace('{position}', position),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.sent.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.sent.body.replace('{position}', position).replace('{company}', companyName ? ` (${companyName})` : ''))}</p>
+        ${start ? `<p><strong>${esc(M.startDate)}:</strong> ${esc(start)}</p>` : ''}
+        ${expires ? `<p><strong>${esc(M.decideBy)}:</strong> ${esc(expires)}</p>` : ''}
+        ${ctaBlock(brand, `${appUrl()}/portal`, M.sent.cta)}
+      </div>
+    `,
+  });
+}
+
+export async function sendOfferDecisionEmail({
+  to,
+  fullName,
+  menteeName,
+  position,
+  outcome,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  menteeName: string;
+  position: string;
+  outcome: 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).offerEmail;
+  const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: copy.subject.replace('{mentee}', menteeName),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, copy.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(copy.body.replace('{mentee}', menteeName).replace('{position}', position))}</p>
+        ${ctaBlock(brand, `${appUrl()}/admin/candidates`, M.cta)}
+      </div>
+    `,
+  });
+}
+
 // --- Meeting requests (#668) ------------------------------------------------
 
 export async function sendMeetingRequestEmail({
