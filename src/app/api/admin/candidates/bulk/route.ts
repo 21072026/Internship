@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { nextOnPathStatus, type PipelineStatus } from '@/lib/pipeline';
 import { withTenantScope } from '@/lib/orgContext';
+import { validateDropoffReason } from '@/lib/stageChange';
 
 const bodySchema = z.object({
   candidateIds: z.array(z.string().min(1)).min(1).max(200),
@@ -49,17 +50,27 @@ export async function POST(request: Request) {
     // Find active relations for these mentees.
     const relations = await prisma.mentorshipRelation.findMany({
       where: { menteeId: { in: candidateIds }, status: 'ACTIVE' },
-      select: { id: true, menteeId: true, pipelineStatus: true },
+      select: { id: true, menteeId: true, pipelineStatus: true, orgId: true },
     });
 
     let advanced = 0;
     for (const rel of relations) {
-      // Advance along the happy path only. Off-path/terminal states
+      // Advance along the happy path only, via nextOnPathStatus — never a raw
+      // indexOf+1 on the stage list (#740). Off-path/terminal states
       // (EMPLOYED_700, INTERNSHIP_DROPPED_460, INTERNSHIP_FOUND_ELSEWHERE_800)
       // yield null and are skipped, so "advance" never bumps an in-progress
       // internship to "dropped" or an employed mentee to "found elsewhere".
       const nextStatus = nextOnPathStatus(rel.pipelineStatus);
       if (!nextStatus) continue;
+
+      // Defense in depth (#810): "advance" only ever targets the next ON_PATH
+      // key, which by construction excludes off-path/negative stages — but a
+      // tenant could in principle override that key's isOffPath flag, so this
+      // is still checked centrally rather than assumed. No reasonCode is
+      // collected here (bulk advance has no reason UI), so this only ever
+      // succeeds when the target genuinely isn't negative.
+      const reasonCheck = await validateDropoffReason({ orgId: rel.orgId, toStatus: nextStatus });
+      if (!reasonCheck.ok) continue;
 
       await prisma.$transaction([
         prisma.mentorshipRelation.update({

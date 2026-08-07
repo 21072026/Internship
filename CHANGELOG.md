@@ -8,6 +8,34 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.52.0-beta] - 2026-08-07
+
+### Added
+- **Drop-off reason tracking** (#810) — moving a mentee into a negative/off-path pipeline stage
+  (e.g. "Internship dropped") now requires picking a reason from a shared whitelist
+  (`src/lib/dropoffReasons.ts`: candidate withdrew, no response, accepted elsewhere, schedule
+  conflict, location, skill mismatch, company cancelled, performance, other — "other" additionally
+  requires a free-text note). New `StatusChange.reasonCode` / `reasonNote` columns, left `null` for
+  every pre-existing row and every move into a non-negative stage.
+  - Centralized in `validateDropoffReason()` (`src/lib/stageChange.ts`) and enforced server-side on
+    every write path that can change `pipelineStatus`: `/api/mentorship/[id]` (also what the admin
+    and mentor board drag-and-drop and the per-card stage select call), the manual history
+    correction endpoint `/api/status-changes`, and `/api/admin/candidates/bulk`'s `advanceStage`
+    action (defense in depth — that action only ever targets the next on-path stage, so it never
+    actually triggers the check, but it's still wired the same way as the others).
+  - "Negative stage" is resolved from the org's own pipeline config (`PipelineStage.isOffPath` via
+    `resolvePipelineStages`), not a hardcoded key list — a tenant's custom pipeline (#747) is
+    honored automatically.
+  - New shared `DropoffReasonDialog` gates the admin board, mentor board, and candidate-detail
+    stage-change/history UI — a reason-less request into a negative stage can't be sent from any of
+    them.
+  - Admin analytics gained a stage × reason drop-off breakdown (`GET /api/admin/analytics/aging`
+    → `dropReasons`), with legacy rows that predate this feature (`reasonCode: null`) grouped under
+    "Unspecified" rather than dropped, plus a matching sheet in the analytics Excel export.
+  - `#740`'s bulk-advance regression (stepping via `nextOnPathStatus`, never a raw `indexOf+1`) is
+    unaffected and re-covered in `e2e/dropoff-reasons.spec.ts`.
+  - New EN/TR/DE `dropoff.*` and `analytics.aging.dropReasons*` i18n strings.
+
 ## [0.51.0-beta] - 2026-08-07
 
 ### Added
