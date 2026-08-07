@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.51.1-beta] - 2026-08-07
+## [0.51.2-beta] - 2026-08-07
 
 ### Changed
 - **Compact onboarding cards on the mentor dashboard** (`MenteeOnboardingWizard`) — the
@@ -27,6 +27,18 @@ version is shown in the sidebar footer of every page (links to the
   `.next`.
 - E2E: `e2e/mentee-onboarding-collapse.spec.ts` covers the summary, the collapse toggle and its
   persistence across a reload.
+
+## [0.51.1-beta] - 2026-08-07
+
+### Changed
+- **Landing copy: the product is no longer written by one person** (`src/i18n/dictionaries.ts`,
+  EN/TR/DE) — the honesty note under "What you can check for yourself" (`transBeta`) and the
+  mentor FAQ answer to "Will this still be around in a year?" (`faqMentor3A`) both claimed a
+  single author ("tek kişi yazıyor" / "written by a single maintainer" / "von einer einzelnen
+  Person"); several people write it now, so both say "a small team" instead. The rest of each
+  string — beta, no testimonials yet, hand-opened company accounts, one-click export — is
+  unchanged, and the objection table in `docs/landing-value-proposition.md` was updated to
+  match. No bearing on the IP position: the sole rights holder is still one natural person.
 
 ## [0.51.0-beta] - 2026-08-07
 

@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.51.1-beta',
+    version: '0.51.2-beta',
     date: '2026-08-07',
     highlights: {
       en: [
@@ -27,6 +27,21 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Für Mentor:innen: Die Onboarding-Karten auf dem Dashboard sind jetzt kompakt — auf breiten Bildschirmen stehen sie nebeneinander statt untereinander, der Rest des Dashboards bleibt sichtbar.',
         'Jede Karte lässt sich über den kleinen Pfeil einklappen. Eingeklappt zeigt sie weiterhin den Namen, den Fortschritt (z. B. 2/6) und den nächsten Schritt — und bleibt so, wie du sie verlassen hast.',
+      ],
+    },
+  },
+  {
+    version: '0.51.1-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'The home page said the product was written by a single person. That is no longer true — a small team works on it now, and the honesty note and the mentor FAQ say so.',
+      ],
+      tr: [
+        'Ana sayfada ürünü tek kişinin yazdığı yazıyordu. Artık doğru değil — üzerinde küçük bir ekip çalışıyor; dürüstlük notu ve mentor SSS’i de böyle diyor.',
+      ],
+      de: [
+        'Auf der Startseite stand, das Produkt werde von einer einzelnen Person geschrieben. Das stimmt nicht mehr — daran arbeitet jetzt ein kleines Team, und der Ehrlichkeits-Hinweis sowie die Mentor-FAQ sagen das auch.',
       ],
     },
   },
