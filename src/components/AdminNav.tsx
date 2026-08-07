@@ -21,6 +21,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' },
   { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' },
+  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries' },
   { href: '/admin/projects', icon: FolderGit2, key: 'projects' },
   { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates' },
   { href: '/todos', icon: ClipboardList, key: 'todos' },

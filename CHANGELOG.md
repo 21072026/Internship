@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.49.3-beta] - 2026-08-06
+## [0.50.2-beta] - 2026-08-07
 
 ### Added
 - **Pending-count badge on the admin nav's "Mentor Applications" entry** (`AdminNav`) — a red
@@ -21,6 +21,36 @@ version is shown in the sidebar footer of every page (links to the
   Salvaged from #1076, which was otherwise superseded by the mentor-application review flow
   already on `main` (#1048, #1072) and closed as a duplicate of #906.
 
+## [0.50.1-beta] - 2026-08-06
+
+### Changed
+- **The register form no longer reads as "invitation required".** The invitation-token field was
+  the first thing on the form, which contradicted the open sign-up the landing page invites
+  everyone into. It is now folded behind an "I have an invitation code" link and unfolds
+  automatically for anyone who arrived through an invitation link (`?token=`). Subtitle and hint
+  reworded in EN/TR/DE: signing up as a mentee needs no invitation.
+## [0.50.0-beta] - 2026-08-06
+
+### Added
+- **`/for-companies`** — the first page a company can actually land on. Public, three languages,
+  and it reuses the landing's `landing.audCompany*` strings for its six benefit items so a claim
+  can never drift between the two pages. Ends in an enquiry form rather than a register button:
+  a COMPANY user is only born from an `InvitationToken`, so registration was never the right
+  bridge (`src/app/api/register/route.ts` pins token-less sign-up to `MENTEE`).
+- **`POST /api/company-inquiry`** with the proven public-form anti-spam trio — honeypot field,
+  minimum render-to-submit time, per-IP rate limit (3/hour). No external captcha; the CSP blocks
+  third-party scripts. Consent is validated server-side and stored as `consentAt`, not merely
+  ticked in the UI.
+- **`CompanyInquiry` model** + **`/admin/company-inquiries`** (`GET`/`PATCH`, `AdminNav` entry).
+  The enquiry is persisted rather than only emailed so it cannot quietly die in an inbox, and so
+  an admin can see what is still unanswered; NEW → CONTACTED → CLOSED records who picked it up.
+- `sendCompanyInquiryEmail` — every active admin is emailed with the company's address as
+  Reply-To, alongside the in-app notification.
+
+### Changed
+- **The landing's mentor and company CTAs now point at real pages** — `/apply-as-mentor` (#1072)
+  and `/for-companies` — instead of a `mailto:` that only rendered when `supportEmail` happened
+  to be configured. The landing header gains a "For companies" link.
 ## [0.49.2-beta] - 2026-08-06
 
 Closes #1123.

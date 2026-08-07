@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.49.3-beta',
-    date: '2026-08-06',
+    version: '0.50.2-beta',
+    date: '2026-08-07',
     highlights: {
       en: [
         'Admins: the sidebar now shows how many mentor applications are waiting for review, right next to "Mentor Applications" — no need to open the page to find out whether the queue has anything in it.',
@@ -24,6 +24,42 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Für Admins: In der Seitenleiste steht jetzt direkt neben „Mentor-Bewerbungen“, wie viele Bewerbungen auf Prüfung warten — du musst die Seite nicht mehr öffnen, um zu sehen, ob etwas in der Warteschlange liegt.',
+      ],
+    },
+  },
+  {
+    version: '0.50.1-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Signing up no longer looks like it needs an invitation: the invitation-code box is tucked away, and only opens for people who actually arrived with a code.',
+      ],
+      tr: [
+        'Kaydolmak artık davetiye gerektiriyormuş gibi görünmüyor: davet kodu kutusu katlandı ve yalnızca gerçekten kodla gelenler için açılıyor.',
+      ],
+      de: [
+        'Die Registrierung sieht nicht mehr so aus, als bräuchte sie eine Einladung: Das Feld für den Einladungscode ist eingeklappt und öffnet sich nur für alle, die tatsächlich mit einem Code kommen.',
+      ],
+    },
+  },
+  {
+    version: '0.50.0-beta',
+    date: '2026-08-06',
+    highlights: {
+      en: [
+        'Companies now have a page of their own at /for-companies: what they get, what the pilot means, and a short form to ask for a look. No account needed to ask.',
+        'Every enquiry is kept, not just emailed — admins get it in their inbox and in a new “Company enquiries” list, where it can be marked as contacted or closed so nothing sits unanswered.',
+        'The buttons on the home page now go where they say: mentors to the mentor application, companies to the company page.',
+      ],
+      tr: [
+        'Firmaların artık kendi sayfası var: /for-companies. Ne aldıklarını, pilot dönemin ne demek olduğunu ve kısa bir talep formunu orada bulacaklar. Sormak için hesap gerekmiyor.',
+        'Gelen her talep yalnızca e-postayla gitmiyor, kaydediliyor da — yöneticiler hem gelen kutusunda hem de yeni “Firma talepleri” listesinde görüyor; iletişime geçildi ya da kapatıldı diye işaretlenebiliyor, böylece hiçbir talep cevapsız kalmıyor.',
+        'Ana sayfadaki düğmeler artık söyledikleri yere gidiyor: mentorlar mentor başvurusuna, firmalar firma sayfasına.',
+      ],
+      de: [
+        'Unternehmen haben jetzt eine eigene Seite: /for-companies — was sie bekommen, was die Pilotphase bedeutet, und ein kurzes Formular für eine Anfrage. Dafür braucht es kein Konto.',
+        'Jede Anfrage wird gespeichert und nicht nur gemailt — Admins sehen sie im Postfach und in der neuen Liste „Unternehmensanfragen“, wo sie als kontaktiert oder geschlossen markiert werden kann. So bleibt nichts unbeantwortet.',
+        'Die Schaltflächen auf der Startseite führen jetzt dorthin, wo sie hinführen sollen: Mentoren zur Mentor-Bewerbung, Unternehmen zur Unternehmensseite.',
       ],
     },
   },

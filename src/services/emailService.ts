@@ -707,6 +707,53 @@ export async function sendPublicContactEmail({
   });
 }
 
+// A company enquiry from the public /for-companies page, mailed to every admin.
+// Reply-To is the company's address, so answering is one click — this is the
+// most time-sensitive thing the public site produces.
+export async function sendCompanyInquiryEmail({
+  to,
+  adminName,
+  companyName,
+  contactName,
+  fromEmail,
+  phone,
+  openRoles,
+  message,
+  locale,
+  orgId,
+}: {
+  to: string;
+  adminName?: string | null;
+  companyName: string;
+  contactName: string;
+  fromEmail: string;
+  phone?: string | null;
+  openRoles?: string | null;
+  message?: string | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).companyInquiryEmail;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    replyTo: fromEmail,
+    subject: `${M.subject}: ${companyName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.heading)}
+        ${adminName ? `<p>${esc(M.greeting.replace('{name}', adminName))}</p>` : ''}
+        <p><strong>${esc(companyName)}</strong> — ${esc(contactName)} (${esc(fromEmail)})</p>
+        ${phone ? `<p>${esc(M.phone)}: ${esc(phone)}</p>` : ''}
+        ${openRoles ? `<p>${esc(M.openRoles)}: ${esc(openRoles)}</p>` : ''}
+        ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message).replace(/\n/g, '<br>')}</blockquote>` : ''}
+        <p style="color:#6b7280;font-size:14px;">${esc(M.replyHint)}</p>
+      </div>
+    `,
+  });
+}
+
 // --- Project join requests (#51) --------------------------------------------
 
 export async function sendProjectJoinRequestEmail({
