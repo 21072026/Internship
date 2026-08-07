@@ -29,6 +29,10 @@ test('admin deactivates a user and that user can no longer sign in', async ({ pa
 
     const updated = await prisma.user.findUnique({ where: { id: mentor.id } });
     expect(updated!.isActive).toBe(false);
+    // Switching off a verified account is not the same as parking a sign-up for
+    // review: pendingApproval is what keeps those two apart on the sign-in page
+    // (#1085), so an admin's "off" must not borrow it.
+    expect(updated!.pendingApproval).toBe(false);
 
     // The deactivated mentor cannot sign in.
     // submitSignInForm, not signInAsFreshUser: a deactivated account is *supposed*

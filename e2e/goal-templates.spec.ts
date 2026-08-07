@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
+import { acceptConfirmDialog } from './helpers/confirm';
 
 /**
  * The shared goal-template pool and its management (#51 follow-up).
@@ -26,9 +27,6 @@ test('an admin can add, reword and retire a shared goal template', async ({ page
   const en = `Read the deploy script ${stamp}`;
   const tr = `Deploy betiğini oku ${stamp}`;
   const reworded = `Read the deploy script carefully ${stamp}`;
-
-  // The confirm() behind delete.
-  page.on('dialog', (d) => d.accept());
 
   try {
     await signInAndSettle(page, adminEmail, password, '/admin');
@@ -64,6 +62,7 @@ test('an admin can add, reword and retire a shared goal template', async ({ page
     // And retire it: the row is archived, not deleted — the to-dos handed out
     // from it read their wording here — but it leaves the pool.
     await page.getByTestId(`delete-template-${created.id}`).click();
+    await acceptConfirmDialog(page);
     await expect
       .poll(
         async () =>

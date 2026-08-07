@@ -12,8 +12,21 @@ test('unverified user is read-only until they confirm their email', async ({ pag
   const email = uniqueEmail('unverified');
   const password = 'Unverified123!';
   const hash = await bcrypt.hash(password, 10);
+  // Created by hand rather than via seedUser(), because this spec needs
+  // emailVerified: false. That means opting into seedUser's other concession
+  // explicitly: without mentorOnboardingSeenAt, a MENTOR's first /mentor visit
+  // is redirected to the first-run wizard at /onboarding (#911), so the
+  // sign-in's wait for the /mentor landing page times out.
   const user = await prisma.user.create({
-    data: { email, password: hash, role: 'MENTOR', fullName: 'Unverified Mentor', skills: [], emailVerified: false },
+    data: {
+      email,
+      password: hash,
+      role: 'MENTOR',
+      fullName: 'Unverified Mentor',
+      skills: [],
+      emailVerified: false,
+      mentorOnboardingSeenAt: new Date(),
+    },
   });
 
   try {
