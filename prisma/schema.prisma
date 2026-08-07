@@ -99,6 +99,7 @@ model Organization {
   pipelineStages     PipelineStage[]
   mentorApplications MentorApplication[]
   companyInquiries   CompanyInquiry[]
+  offers             Offer[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -264,6 +265,8 @@ model User {
   taskTemplates             ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
   mentorOnboardings         MenteeOnboarding[]        @relation("OnboardingMentor")
   menteeOnboarding          MenteeOnboarding[]        @relation("OnboardingMentee")
+  createdOffers             Offer[]                   @relation("OfferCreatedBy")
+  decidedOffers             Offer[]                   @relation("OfferDecidedBy")
 
   @@index([role])
   @@index([referredById])
@@ -628,6 +631,7 @@ model Company {
   interests    CompanyInterest[]
   entitlements CompanyEntitlement[]
   needAlerts   CompanyNeedAlert[]
+  offers       Offer[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -814,6 +818,46 @@ model MentorApplication {
   @@index([status])
   @@index([email])
   @@index([orgId])
+}
+
+// An offer extended to a mentee within a mentorship (#809). `status` is a free
+// String (not an enum) — same reasoning as MentorshipRelation.pipelineStatus —
+// validated + transitioned through the central state machine in
+// src/lib/offers.ts (DRAFT -> SENT -> ACCEPTED|DECLINED|EXPIRED|WITHDRAWN).
+// `compensationNote` is sensitive: only ADMIN and the offer's own MENTEE may
+// ever have it selected server-side (enforced in the API layer, not just hidden
+// in the UI).
+model Offer {
+  id                String             @id @default(cuid())
+  orgId             String?
+  org               Organization?      @relation(fields: [orgId], references: [id])
+  relationId        String
+  relation          MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // Optional link to the company's staffing need this offer fills. Plain id,
+  // not a FK — CompanyNeed rows aren't guaranteed to persist for the life of
+  // the offer, and the offer must remain readable even if the need is edited.
+  requisitionId     String?
+  companyId         String?
+  company           Company?           @relation(fields: [companyId], references: [id])
+  status            String             @default("DRAFT")
+  position          String
+  startDate         DateTime?
+  compensationNote  String?            @db.Text
+  expiresAt         DateTime?
+  sentAt            DateTime?
+  decidedAt         DateTime?
+  declineReasonCode String?
+  // Optional free-text elaboration on the decline reason (never required).
+  declineNote       String?            @db.Text
+  createdById       String
+  createdBy         User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
+  decidedById       String?
+  decidedBy         User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([orgId, status])
+  @@index([relationId])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -1213,6 +1257,7 @@ model MentorshipRelation {
   meetingRequests MeetingRequest[]
   questions       MentorQuestion[]
   relationNotes   RelationNote[]
+  offers          Offer[]
 
   @@index([status])
   @@index([pipelineStatus])
