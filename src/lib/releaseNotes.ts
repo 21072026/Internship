@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.51.2-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors: the onboarding cards on your dashboard are compact now — they sit side by side on a wide screen instead of one under the other, so the rest of the dashboard stays in view.',
+        'Each card folds away with the little arrow. Closed, it still shows the mentee\'s name, how far along they are (e.g. 2/6) and what to do next — and it stays the way you left it next time you come back.',
+      ],
+      tr: [
+        'Mentorlar: panonuzdaki onboarding kartları artık daha derli toplu — geniş ekranda alt alta değil yan yana duruyor, böylece panonun geri kalanı da görünür kalıyor.',
+        'Her kart küçük okla katlanıyor. Kapalıyken bile mentee’nin adını, nerede olduğunu (örneğin 2/6) ve sıradaki adımı gösteriyor — üstelik bıraktığınız gibi açılıyor.',
+      ],
+      de: [
+        'Für Mentor:innen: Die Onboarding-Karten auf dem Dashboard sind jetzt kompakt — auf breiten Bildschirmen stehen sie nebeneinander statt untereinander, der Rest des Dashboards bleibt sichtbar.',
+        'Jede Karte lässt sich über den kleinen Pfeil einklappen. Eingeklappt zeigt sie weiterhin den Namen, den Fortschritt (z. B. 2/6) und den nächsten Schritt — und bleibt so, wie du sie verlassen hast.',
+      ],
+    },
+  },
+  {
     version: '0.51.1-beta',
     date: '2026-08-07',
     highlights: {
