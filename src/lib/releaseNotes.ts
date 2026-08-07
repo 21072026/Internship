@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.52.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors now have their own profile page: "My profile" in the sidebar lets you edit your name, photo, bio, city, links, skills, areas of expertise, how many mentees you can take on, and the languages you speak.',
+        'The mentor profile only shows what applies to a mentor — no university, graduation year or CV upload, which belong to mentees.',
+      ],
+      tr: [
+        'Mentorların artık kendi profil sayfası var: kenar çubuğundaki “Profilim” ile adınızı, fotoğrafınızı, biyografinizi, şehrinizi, bağlantılarınızı, yetkinliklerinizi, uzmanlık alanlarınızı, kaç mentee alabileceğinizi ve konuştuğunuz dilleri düzenleyebilirsiniz.',
+        'Mentor profilinde yalnızca mentora uygun alanlar görünüyor — üniversite, mezuniyet yılı ve CV yükleme gibi menteeye ait alanlar yok.',
+      ],
+      de: [
+        'Mentor:innen haben jetzt eine eigene Profilseite: Über „Mein Profil“ in der Seitenleiste lassen sich Name, Foto, Kurzprofil, Stadt, Links, Fähigkeiten, Fachgebiete, die Zahl möglicher Mentees und die gesprochenen Sprachen bearbeiten.',
+        'Im Mentor-Profil erscheint nur, was zu einem Mentor passt — Universität, Abschlussjahr oder CV-Upload gehören zu Mentees und fehlen dort.',
+      ],
+    },
+  },
+  {
     version: '0.51.2-beta',
     date: '2026-08-07',
     highlights: {
