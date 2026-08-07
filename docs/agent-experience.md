@@ -3018,3 +3018,55 @@ girdisiz. Bunu PR gövdesinde gerekçesiyle yazmak, gözden geçirenin checklist
 `.eslintrc.json`'ları çakışıyor (`Plugin "@next/next" was conflicted`) ve lint 1 dönüyor —
 `main`'de de aynısı oluyor. Bir kontrolü "bozuldu" diye raporlamadan önce `git stash` + aynı
 komut ile baseline alın; CI düz checkout'ta koştuğu için bu hiç görünmüyor.
+
+## 2026-08-08 — Altı kırmızı testin arkasında üç kök neden vardı, altısı da başka yeri işaret ediyordu (#1148, 0.55.2-beta)
+
+**Hata mesajının işaret ettiği yer ile kırığın olduğu yer aynı değil.** Altı düşen testin
+dördü "sildiğim satır listede duruyor" diye şikâyet ediyordu (`toHaveCount(0)` → 1,
+`archivedAt !== null` → false). Gerçek sebep dört farklı bileşen değil, tek bir UI kararıydı:
+#1071 `window.confirm()`'i `ConfirmDialog`'a çevirdi. `page.on('dialog', …)` kuran spec artık
+hiç gelmeyecek bir event bekliyor, Delete tıkı sıradan bir DOM penceresi açıyor ve **sessizce
+yutuluyor** — assertion bir sonraki satırda, alakasız görünen bir yerde patlıyor. Ders: aynı
+koşuda birbirine benzemeyen spec'ler benzer *şekilde* düşüyorsa (hepsi "işlem olmadı"),
+spec'leri tek tek okumak yerine önce **ortak etkileşimi** arayın — `git log -S "window.confirm"`
+üç dakikada cevabı verdi.
+
+**Bir UI mekanizmasını değiştiren PR'da e2e diff'inin boş olması tek başına kırmızı bayrak.**
+#1071 16 bileşene dokunup `e2e/` altında hiçbir dosyayı değiştirmemişti; `git show <sha> --stat
+| grep e2e` boş çıkıyor. Native `confirm()` → custom modal gibi bir geçişte bu matematiksel
+olarak imkânsız. Aynı kontrolü #1085 için yaptığımda da (giriş mesajı değişti, sadece
+`mentee-signup` güncellenmiş) altıncı test oradan çıktı.
+
+**Test drift'i mi ürün regresyonu mu sorusunu commit mesajı cevaplıyor.** `admin-user-active`
+"deactivated" arıyordu, uygulama "hesabın incelemeyi bekliyor" diyordu. Testi gevşetmek kolaydı
+— ama #1085'in kendi commit mesajı `pendingApproval`'ı *"'waiting for a review' ile 'an admin
+switched you off'u ayırmak için"* eklediğini yazıyordu, sonra aynı PR bayrağı her
+pasifleştirmede set ederek o ayrımı yok etmişti. Yani test niyeti, ürün ise kazayı kodluyordu.
+İki taraf çelişince `git log -1 -S "<satır>"` + o commit'in gövdesi hangisinin doğru olduğunu
+söylüyor.
+
+**Güvenlik gerekçeli bir bayrağı geri almadan önce onu gereksiz kılan ikinci savunmayı arayın.**
+"Pasifleştirmede `pendingApproval` set edilmesin" demek riskli görünüyordu (reddedilen kayıt
+elindeki linkle geri girer). Ama `verify-email` route'u yeniden içeri almayı
+`!isActive && !emailVerified && !pendingApproval` ile kapatıyor: doğrulanmış bir hesap zaten
+`emailVerified` teriminde duruyor. Bayrak yalnızca `emailVerified === false` olan hesap için
+yük taşıyormuş — düzeltme de tam o daralma oldu, mesaj ayrımı geri geldi, delik kapalı kaldı.
+
+**`prisma.user.create` ile elle açılan bir MENTOR, `seedUser`'ın tavizlerini kaybediyor.**
+`email-verification` `emailVerified: false` gerektirdiği için kullanıcıyı elle açıyor ve
+`mentorOnboardingSeenAt`'i almıyor → ilk `/mentor` ziyareti `/onboarding`'e yönleniyor (#911),
+`waitForURL('/mentor')` 20 sn sonra düşüyor. Hata çıktısı bunu açıkça söylüyor
+(`navigated to ".../onboarding"`) ama tek bir alanı geçmemenin bedeli olduğu görünmüyor.
+`seedUser`'ı bypass eden her spec için o helper'ın gövdesini okuyun: orada yorumla korunan her
+alan bir spec'i ayakta tutuyor.
+
+**Lokal e2e için `internship_e2e` DB'si ve `e2e@127.0.0.1` kullanıcısı hazır duruyor.**
+Parolası önceki oturumlarda kaybolmuş diye not düşülmüş (bkz. yukarıdaki unix-socket notu), ama
+`e2e:e2epass` çalışıyor:
+`DATABASE_URL="mysql://e2e:e2epass@127.0.0.1:3306/internship_e2e"`. Worktree'ye bu tek satırlık
+bir `.env` (gitignore'lu) + `npx prisma db push` yeterli; ana checkout'un `.env`'i **paylaşılan
+preview DB'sine** bakıyor, ona karşı koşmak veri yazmak demek.
+
+**`| tail -N` ile arka planda koşan Playwright'ta ilerleme görünmez.** Boru tamponlandığı için
+çıktı ancak koşu bitince yazılıyor; ara durumu göremeyip koşuyu iki kez başlattım. Arka plan
+koşularında `> dosya 2>&1` yazıp dosyayı `tail`'lemek doğru şekil.

@@ -117,11 +117,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           return NextResponse.json({ error: 'You cannot deactivate your own account' }, { status: 400 });
         }
         data.isActive = body.isActive;
-        // An admin decision outranks the self-service door. Activating clears
-        // the "waiting for an admin" flag; deactivating sets it, so that a
-        // rejected sign-up cannot re-admit itself by clicking a verification
-        // link it still holds (see src/app/api/auth/verify-email/route.ts).
-        data.pendingApproval = !body.isActive;
+        // An admin decision outranks the self-service door, so activating always
+        // clears the "waiting for an admin" flag.
+        //
+        // Deactivating only *sets* it for an account that never got in. An
+        // unverified sign-up still holds a verification link, and clicking it
+        // would otherwise re-admit the account it was just rejected from
+        // (src/app/api/auth/verify-email/route.ts). A verified account is
+        // already barred there by its own `emailVerified`, so parking it too
+        // buys no safety and costs it an honest sign-in message: pendingApproval
+        // is exactly what lets /auth/signin tell "waiting for a review" apart
+        // from "an admin switched you off" (#1085). Setting it on every
+        // deactivation collapsed that distinction and told a deactivated user to
+        // wait for an email that is never coming.
+        if (body.isActive) {
+          data.pendingApproval = false;
+        } else {
+          const target = await prisma.user.findUnique({ where: { id }, select: { emailVerified: true } });
+          data.pendingApproval = target ? !target.emailVerified : false;
+        }
       }
 
       // Assign / clear the mentee's referral source.

@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.55.2-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'If an admin switches your account off, the sign-in page now says so. It had started telling you your account was "waiting for a quick review" and that an email was on its way — for an account nobody was reviewing. Accounts that really are waiting for a review still get that message.',
+      ],
+      tr: [
+        'Bir yönetici hesabınızı kapattıysa giriş sayfası artık bunu söylüyor. Bir süredir hesabınızın "kısa bir incelemeyi beklediğini" ve e-posta göndereceğimizi yazıyordu — oysa kimse o hesabı incelemiyordu. Gerçekten incelemeyi bekleyen hesaplar o mesajı görmeye devam ediyor.',
+      ],
+      de: [
+        'Wenn ein Admin dein Konto abschaltet, sagt die Anmeldeseite das jetzt auch. Zuletzt stand dort, dein Konto warte „auf eine kurze Prüfung" und eine E-Mail sei unterwegs — bei einem Konto, das niemand prüfte. Konten, die wirklich auf eine Prüfung warten, sehen diese Meldung weiterhin.',
+      ],
+    },
+  },
+  {
     version: '0.55.0-beta',
     date: '2026-08-07',
     highlights: {

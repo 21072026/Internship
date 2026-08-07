@@ -8,6 +8,43 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.55.2-beta] - 2026-08-08
+
+### Fixed
+- **Switching an account off no longer promises a review that never comes** (#1148) — since
+  #1085, `PATCH /api/users/[id]` set `pendingApproval = true` on every deactivation, so
+  `src/lib/auth.ts` answered the next sign-in with `ACCOUNT_PENDING_APPROVAL` and the page
+  showed *"Your account is waiting for a quick review. We will email you the moment it is
+  opened."* — to someone an admin had just switched off. That is the exact opposite of what
+  #1085 introduced the flag for ("tell 'waiting for a review' apart from 'an admin switched
+  you off', since both are `isActive=false`"): the same PR then set it on both paths and
+  collapsed the distinction. Deactivating now parks only an **unverified** account, which is
+  the sole case the flag was actually load-bearing for — a never-activated sign-up still
+  holding a verification link. A verified account is already barred from re-admitting itself
+  by `verify-email`'s own `!emailVerified` term, so it keeps the honest "this account has
+  been deactivated" message. Activating still clears the flag unconditionally.
+
+### Tests
+- **The four specs that still waited for a native `confirm()`** (#1148) — #1071 moved 16
+  components onto `ConfirmDialog` without touching a single spec, so
+  `page.on('dialog', d => d.accept())` sat waiting for an event that no longer fires. The
+  click opened ordinary DOM, was swallowed, and the failure surfaced one assertion later as
+  "the row I deleted is still there": `delete-confirm`, `goal-templates`,
+  `goals-archive-sort` and `todos` all went red in the scheduled full run
+  ([31220653046](https://github.com/21072026/Internship/actions/runs/31220653046)). New
+  `e2e/helpers/confirm.ts` (`acceptConfirmDialog` / `cancelConfirmDialog`) is the one place
+  the dialog's test ids live; `delete-confirm` keeps its #470 intent, now reading the
+  question out of the DOM — the click asks and sends no `DELETE`, cancelling keeps the note.
+  `impersonation-governance`, `search` and `xss-injection` also listen for dialogs and are
+  deliberately left alone: those are a `prompt()`, an `alert()` and XSS detection.
+- **`email-verification` seeded a mentor into the first-run wizard** (#1148) — it creates the
+  user by hand because it needs `emailVerified: false`, which also skipped `seedUser`'s
+  `mentorOnboardingSeenAt` concession, so the first `/mentor` visit was redirected to
+  `/onboarding` (#911) and the sign-in's landing wait timed out. Now stamped explicitly, with
+  the reason next to it.
+- `admin-user-active` additionally asserts `pendingApproval === false` after a deactivation,
+  so the message distinction above cannot disappear silently again.
+
 ## [0.55.1-beta] - 2026-08-07
 
 ### Security

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { acceptConfirmDialog } from './helpers/confirm';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -97,9 +98,9 @@ test('goals can be sorted, edited inline, archived, reopened and deleted', async
     await expect(activeCount).toContainText('2');
     await expect(completedCount).toContainText('0');
 
-    // Delete it from the active list (confirm dialog is accepted).
-    page.once('dialog', (dialog) => dialog.accept());
+    // Delete it from the active list (the in-app confirm dialog is accepted).
     await page.getByTestId(`goal-${newer.id}`).getByRole('button', { name: 'Delete' }).click();
+    await acceptConfirmDialog(page);
     await expect(page.getByTestId(`goal-${newer.id}`)).toHaveCount(0, { timeout: 10_000 });
     const deleted = await prisma.goal.findUnique({ where: { id: newer.id } });
     expect(deleted).toBeNull();
