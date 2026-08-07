@@ -2855,3 +2855,36 @@ script yazarken `chromium-1194/chrome-linux/chrome` mutlak yolu iş görüyor.)
 kodu değil, önceki Playwright koşusunun yarım bıraktığı derleme önbelleğiydi. `rm -rf
 .next` + yeniden başlatmak düzeltti. Ekran görüntüsü almadan önce sayfaya ~6 sn vermek de
 gerekti (dev derlemesi ilk isteği yavaş karşılıyor).
+
+## 2026-08-07 — "Kompakt yap" isteğinde asıl yer kaplayan şey tekrar eden bilgi (#1135, 0.51.1-beta)
+
+**Kartı küçültmeden önce kartta ne olduğunu sayın.** Mentor panosundaki onboarding kartı tam
+genişlikte + alt alta duruyordu; ilk refleks grid'e almaktı ama yüksekliğin yarısı bilgi bile
+değildi: mentee adı hem başlıkta hem cümlenin içinde geçiyordu, "Mentee'lerim / Toplantılar"
+linkleri **her** kartta tekrar ediyordu (kart başına 1 satır + 1 satır). Adı başlığa taşıyıp
+linkleri blok başlığına almak, grid'den bağımsız olarak kartı 2 satır kısalttı. Grid (`md:2`,
+`2xl:3`) + `items-start` ise kullanıcının şikâyet ettiği "sağ taraf boş duruyor" kısmını çözdü.
+
+**Katlanabilir kartta link, gövdede değil başlıkta olmalı.** `onboarding-mentee-link-<id>`
+cümlenin içindeydi; kart kapanınca kaybolacaktı ve `mentor-dashboard-name-links.spec.ts` de
+onunla birlikte kırılacaktı. Linki başlığa taşımak hem testi hem de "kapalıyken kimden
+bahsediyoruz?" sorusunu aynı anda çözdü — katlanabilirlik eklerken **her iki durumda da görünmesi
+gereken** öğeleri önce listeleyin.
+
+**Varsayılan açık/kapalı için "hepsi" ya da "hiçbiri" demeyin.** İkiden fazla mentee varsa
+ikinciden sonrakiler kapalı açılıyor: tek mentee'si olan mentor hiçbir şey kaybetmiyor, altı
+mentee'si olan da panosunu geri alıyor. Tercih `localStorage`'da mentee bazında
+(`mentee-onboarding-collapsed`), yani kullanıcının kararı varsayılanı eziyor.
+
+**Playwright köprüsü (2026-08-06 kaydının kısa yolu) yine gerekti ve tek symlink yetti:**
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell` yolunu
+yaratıp 1194'ün `chrome-linux/headless_shell` dosyasına bağlamak + `INSTALLATION_COMPLETE`
+kopyalamak yeterliydi; `chrome-linux` içeriğini tek tek bağlamaya gerek kalmadı (Chrome
+kaynakları `/proc/self/exe`'yi çözdüğü için 1194 dizininde buluyor). MariaDB + `db seed` +
+`seed:demo` playbook'taki gibi sorunsuz.
+
+**Demo seed'in tarihleri sınırdaydı.** `pendingOnboardings` 60 günlük pencere kullanıyor;
+`seed:demo` ilişkilerinin bir kısmı tam o sınırda olduğu için üç mentee'li mentorda kart sayısı
+2 çıktı ve "ikiden fazla kart" davranışını göremedim. Yerel DB'de `startDate`'i `new Date()`
+yapmak (sadece lokal!) senaryoyu görünür kıldı — görsel bir davranışı doğrularken seed'in
+tarihlerinin varsayımınıza uyduğunu ayrıca kontrol edin.
