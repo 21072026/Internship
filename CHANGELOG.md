@@ -8,6 +8,26 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.51.1-beta] - 2026-08-07
+
+### Changed
+- **Compact onboarding cards on the mentor dashboard** (`MenteeOnboardingWizard`) — the
+  per-mentee onboarding cards were full width and stacked, so two newly joined mentees pushed
+  the rest of the dashboard below the fold while the right half of the screen stayed empty.
+  They now sit in a responsive grid (1 / 2 / 3 columns at `md` / `2xl`), each card carries the
+  mentee's name as its heading (the name link, `onboarding-mentee-link-<id>`, moved into that
+  header and stays visible when collapsed), and the shared "My Mentees" / "Meetings" links moved
+  out of every card into one block header. The `{name}` placeholder is gone from
+  `menteeOnboarding.subtitle` in all three locales — the heading carries the name now.
+- **Collapsible onboarding cards** — a chevron (`onboarding-toggle-<id>`) folds a card down to
+  its summary: name, an `x/y` progress badge (`onboarding-progress-<id>`), a progress bar and
+  the next open step (`onboarding-next-<id>`). The choice is remembered per mentee in
+  `localStorage` under `mentee-onboarding-collapsed`. With more than two mentees pending, cards
+  past the second start collapsed. New i18n keys: `menteeOnboarding.expand` / `.collapse` /
+  `.next`.
+- E2E: `e2e/mentee-onboarding-collapse.spec.ts` covers the summary, the collapse toggle and its
+  persistence across a reload.
+
 ## [0.51.0-beta] - 2026-08-07
 
 ### Added
