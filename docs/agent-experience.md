@@ -2855,3 +2855,40 @@ script yazarken `chromium-1194/chrome-linux/chrome` mutlak yolu iş görüyor.)
 kodu değil, önceki Playwright koşusunun yarım bıraktığı derleme önbelleğiydi. `rm -rf
 .next` + yeniden başlatmak düzeltti. Ekran görüntüsü almadan önce sayfaya ~6 sn vermek de
 gerekti (dev derlemesi ilk isteği yavaş karşılıyor).
+
+## 2026-08-07 — "PR bozuk" görünen hata PR'da değil, paylaşılan preview DB'sinde (#1078 → #1134)
+
+**Belirti kod hatası gibi okunuyordu, ortam hatasıydı.** `crm-pr1078.ersah.in` login'de
+`The column internship_crm_preview.User.languages does not exist` veriyordu. Dalın şeması o
+kolonu ekliyor, deploy da yeşil — yani "PR'ın Prisma'sı bozuk" izlenimi. Gerçek sebep #1114:
+`topic-deploy.sh` her deploy'da **paylaşılan** preview DB'sine `prisma db push
+--accept-data-loss` basıyor, dolayısıyla `main`'e yapılan bir sonraki merge (preview'i
+yeniden deploy eder) o kolonu düşürüyor. Bir topic env'in sağlığı, o an *en son kimin*
+deploy ettiğine bağlı. Böyle bir hatada önce `git diff origin/main -- prisma/schema.prisma`
+ile "bu kolon sadece bu dalda mı var?" diye bakın; öyleyse arıza sınıfı bellidir.
+
+**#1114'teki "eski run'ı yeniden çalıştır" workaround'u dal eskidiyse yıkıcı.** Yeniden
+çalıştırılan run, dalın *o günkü* şemasını paylaşılan DB'ye basar. #1078'in dalı iki gün
+geriydi; replay `CompanyInquiry` tablosunu, `User.pendingApproval`,
+`User.mentorOnboardingSeenAt` ve `ProjectTask` kolonlarını silecekti — yani
+`crm-preview.ersah.in` dâhil her şeyi. Workaround yalnızca dal `main` ile güncelken güvenli.
+Güncel `main` üzerine merge edip push etmek ise `db push`'u tamamen additive yapıyor: hem
+PR'ı çalışır hale getirir hem kimseyi bozmaz.
+
+**Doğrulama için sahte kullanıcıyla sign-in probe'u yeterli.** `/api/health` bu sınıfı
+görmüyor (`"db":"skipped"`, `?db=1` sadece `SELECT 1`). `/api/auth/csrf` + credentials
+callback'e uydurma e-posta postalamak, `authorize()` içindeki `prisma.user.findUnique()`'i
+tetikliyor: drift varsa dönen `error=` parametresi ham Prisma mesajını taşıyor, yoksa
+`Invalid email or password`. Öncesi/sonrası tek satırda kanıtlanabiliyor.
+
+**Yan etki, teşhisi yanlış gösterebilir.** #1134 deploy olunca paylaşılan DB'ye `languages`
+geri geldi ve `crm-pr1078` de kendiliğinden çalışmaya başladı — "demek ki sorun yokmuş" gibi
+okunur. Böyle bir düzelme olduğunda PR'a kısa bir not düşün: ortam bir sonraki `main`
+merge'inde yine bozulacak.
+
+**Aynı kolonu ekleyen dört paralel PR, paylaşılan DB'de aynı anda ayakta duramaz.** #1078,
+#1079, #1080, #1082 dördü de `User.languages` ekliyordu. Bunu tek tek "neden bozuk" diye
+incelemek yerine, dört dalın şema diff'ini birlikte görmek arıza sınıfını tek bakışta
+veriyor. Aynı sırada #1082'nin işinin (#911 mentor onboarding sihirbazı) bu arada #1115 ile
+`main`'e girdiği de ortaya çıktı — rebase etmeden önce "bu iş zaten yapıldı mı?" sorusu yine
+karşılığını verdi.
