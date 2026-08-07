@@ -47,6 +47,23 @@ version is shown in the sidebar footer of every page (links to the
   invalid-transition 400, cross-mentee IDOR, compensationNote leak check, company-with-no-companyId
   403, withdraw, and the two-run cron dedupe) and `e2e/offers-custom-pipeline.spec.ts`
   (custom-pipeline org never gets the HIRED_660 suggestion; accept still works end-to-end).
+- **"Send a message" on the mentor's mentee pages** (#1130) — `/mentor/mentees/<relationId>` now
+  links straight to the mentorship thread (`/messages/<relationId>`,
+  `data-testid="mentee-message-link"`), and each card on `/mentor/mentees` carries an icon-only
+  entry (`data-testid="message-mentee-<id>"`). The thread already existed; the page you read
+  about a mentee on simply had no way into it, so writing meant a detour through the messages
+  inbox to find the right person.
+- **Suggested openers for an empty thread** (`MessageThreadView`, #1130) — with no messages yet,
+  three chips (`data-testid="message-suggestions"`) offer a starting point; clicking one *fills*
+  the composer instead of sending, so the wording stays the sender's. The mentor side of a
+  mentorship thread gets welcome-flavoured openers (welcome / intro call / ask about goals), any
+  other viewer gets neutral ones (hello / introduce myself / ask a question), and the other
+  party's first name is interpolated into the text. Group (project) chats are excluded — there is
+  no single person to greet — as are read-only threads and threads that already have history.
+  New `messages.openers.*` i18n block (EN/TR/DE); `MessageComposer` gained an optional
+  `textareaRef` so the box can be focused after a chip is used. Covered by
+  `e2e/messaging.spec.ts` ("mentor opens the thread from the mentee page and uses a suggested
+  opener").
 
 ## [0.50.2-beta] - 2026-08-07
 

@@ -71,6 +71,9 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // Set for a project group chat: which project it belongs to, so the header can
   // name the room, list who is in it and link back to the project (#51).
   const [group, setGroup] = useState<{ projectId: string | null; projectName: string | null } | null>(null);
+  // Mentorship threads only: who the mentor is, so an empty thread can suggest
+  // a *welcome* to the mentor and a neutral opener to the mentee (#1130).
+  const [mentorId, setMentorId] = useState<string | null>(null);
   const [showParties, setShowParties] = useState(false);
   const [body, setBody] = useState('');
   // Pending attachments (picked files + pasted images), each with an object URL
@@ -98,6 +101,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const [enterToSend, setEnterToSend] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   // Load the saved Enter-to-send preference once on mount.
   useEffect(() => {
@@ -144,6 +148,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     // A mentorship thread answers with mentor/mentee; a conversation with a
     // participants array. Normalize both to one list.
     setParties(d.participants ?? [d.mentor, d.mentee].filter(Boolean));
+    setMentorId(d.mentor?.id ?? null);
     setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null } : null);
     setCanPost(d.canPost !== false);
     setLoading(false);
@@ -286,6 +291,28 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     target.kind === 'conversation' ? { conversationId: target.id } : null;
   // On mobile the shell's header is the only title, so it carries the name.
   useMessagesHeaderTitle(threadTitle);
+
+  // Nothing has been said in this thread yet, so offer a way in instead of an
+  // empty box (#1130). The mentor gets welcome-flavoured openers — they are the
+  // one who reaches out first; everyone else gets neutral ones. Group chats are
+  // left alone: there is no single person to greet.
+  const openers = t.messages.openers;
+  const otherFirstName = (other?.fullName ?? '').trim().split(/\s+/)[0] ?? '';
+  const suggestions =
+    messages.length > 0 || !canPost || group || !otherFirstName
+      ? []
+      : (target.kind === 'relation' && !!myId && mentorId === myId
+          ? [openers.welcome, openers.introCall, openers.goals]
+          : [openers.hello, openers.intro, openers.question]
+        ).map((o) => ({ label: o.label, text: o.text.replace('{name}', otherFirstName) }));
+
+  // Fill the box rather than send: the sender stays in control of the wording.
+  // No explicit caret handling — writing a new `value` into a textarea puts the
+  // caret at the end by itself, which is where an unfinished opener continues.
+  const applySuggestion = (text: string) => {
+    setBody(text);
+    bodyRef.current?.focus();
+  };
 
   const partyRole = (p: Party) =>
     p.role === 'MENTEE'
@@ -542,6 +569,24 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       )}
       {canPost && (
       <>
+      {suggestions.length > 0 && (
+        <div className="mb-2" data-testid="message-suggestions">
+          <p className="mb-1.5 text-xs text-gray-400">{openers.title}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                onClick={() => applySuggestion(s.text)}
+                title={s.text}
+                className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-700 hover:bg-blue-100 dark:border-blue-900"
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <PendingAttachmentList attachments={attachments} onRemove={removeAttachment} removeLabel={t.common.delete} />
       <MessageComposer
         body={body}
@@ -558,6 +603,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         onPaste={onPaste}
         onKeyDown={onComposerKeyDown}
         inputTestId="message-attachment-input"
+        textareaRef={bodyRef}
         textareaTestId="message-input"
         sendTestId="message-send"
       />
