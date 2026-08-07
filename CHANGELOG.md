@@ -8,6 +8,45 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.55.0-beta] - 2026-08-07
+
+### Added
+- **A mentor can also be a mentee** (#1141) — someone who helps another person can need help
+  themselves, and the app now says so. `User.role` is unchanged (still one enum, still what
+  every authorization decision keys off); the second side is **derived** from the relation
+  table by `src/lib/dualRole.ts`: `mentorshipSides()` counts the relations where the user is
+  the mentor and where they are the mentee, and `availableModes()` / `canUsePortal()` /
+  `canUseMentorShell()` turn that into shell access. Derived rather than stored on purpose —
+  `MentorshipRelation` (plain `mentorId`/`menteeId` user FKs, no role constraint) already
+  permitted this, so the relation table *is* the truth and a second stored flag could only
+  disagree with it.
+- `ModeSwitcher` now takes a `modes: AppMode[]` prop (server-decided) and renders a
+  variable-width group instead of a hardcoded admin/mentor pair; it returns `null` below two
+  modes, so a plain mentor still sees no switcher. `AppMode` gains `'mentee'` (→ `/portal`),
+  `MODE_ROOT` maps each mode to its shell root, and `modeOf()` recognises `/portal`.
+  New `modeSwitch.mentee` / `modeSwitch.menteeHint` strings (EN/TR/DE).
+- `e2e/dual-role.spec.ts` — dual-role mentor reaches the portal and returns (`@smoke`), a
+  mentor with no mentorship of their own is still bounced out of `/portal`, a mentee given
+  someone to mentor reaches `/mentor`, and a plain mentee is still kept out of it.
+
+### Changed
+- `appMode.counterpartPath()` now keeps the current section only when the *target* shell owns
+  that page (`SECTIONS` per mode, `ALIASES` keyed by from→to). The portal has far fewer
+  sections than the staff shells, and the old "shared section" list would have linked to
+  `/portal` pages that don't exist.
+- `authzScope` — the `relation` scope for MENTOR and MENTEE now matches **both** sides
+  (`OR: [{ mentorId }, { menteeId }]`). Read-only widening: all three `scopeForRole()` callers
+  are GETs, and it only ever adds rows the user is personally named in.
+- `POST /api/mentorship` accepts ADMIN/MENTOR/MENTEE on **either** side (COMPANY and SOURCE
+  stay barred — they have no personal mentorship) and rejects `mentorId === menteeId`.
+  `/admin/mentorship` offers the same people in both pickers, each sorted with that picker's
+  usual role first and off-role entries carrying a role suffix; the person picked on one side
+  drops out of the other.
+- `PortalLayout` no longer bounces ADMIN/MENTOR unconditionally — it admits anyone who is
+  actually being mentored — and gained the **2FA setup gate** the staff shells already had, so
+  the portal can't become a way around it for a role in scope for the policy. `MentorLayout`
+  admits a MENTEE who has someone to mentor; the mentor onboarding wizard redirect stays
+  scoped to `role === 'MENTOR'`, so a dual-role mentee is never bounced into it.
 ## [0.54.0-beta] - 2026-08-07
 
 ### Changed

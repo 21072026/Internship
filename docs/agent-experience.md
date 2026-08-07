@@ -2925,3 +2925,44 @@ kaynakları `/proc/self/exe`'yi çözdüğü için 1194 dizininde buluyor). Mari
 2 çıktı ve "ikiden fazla kart" davranışını göremedim. Yerel DB'de `startDate`'i `new Date()`
 yapmak (sadece lokal!) senaryoyu görünür kıldı — görsel bir davranışı doğrularken seed'in
 tarihlerinin varsayımınıza uyduğunu ayrıca kontrol edin.
+
+## 2026-08-07 — "Çift rol" istendiğinde rol enum'una dokunmadan önce ilişki tablosuna bakın (#1141, 0.52.0-beta)
+
+**Sorunun "veri modeli mi, yönlendirme mi" olduğunu ilk beş dakikada ayırın.** İstek "bir mentor
+aynı zamanda mentee olabilsin" idi ve ilk refleks `User.role` → `roles[]` refactoru. Ama
+`MentorshipRelation` zaten `mentorId` + `menteeId` — role kısıtı olmayan iki düz user FK. Yani
+veri katmanı buna en baştan izin veriyordu; tıkanma yalnızca üç yerdeydi (portal layout'un
+koşulsuz redirect'i, `authzScope`'un tek taraflı kapsamı, `POST /api/mentorship`'in rol
+doğrulaması). Enum'a dokunan refactor davet akışını, NextAuth JWT'sini, 2FA politikasını ve
+~150 rol kontrolünü kapsardı — ve hiçbirini bu iş için gerektirmiyordu.
+
+**Türetilebilen şeyi saklamayın.** "Bu kişi aynı zamanda mentee" bilgisi `MentorshipRelation`
+üzerinden sayılabiliyor, o yüzden `dualRole.ts` her çağrıda sayıyor. Saklanan bir bayrak ancak
+özetlediği ilişkilerle çelişebilirdi: admin son ilişkiyi kaldırır, bayrak `true` kalır,
+kullanıcıda tıklanınca boş açılan bir sekme kalır. İlişki tablosu gerçeğin kendisi.
+
+**Yeni bir kabuğa kapı açarken o kabukta hangi güvenlik kapısının *eksik* olduğunu sorun.**
+`/admin` ve `/mentor` layout'larında 2FA kurulum kapısı var, `/portal`'da yoktu — çünkü oraya
+politika kapsamındaki bir rol hiç giremiyordu. MENTOR'u portal'a alır almaz portal, o kapının
+etrafından dolanmanın yolu oluyordu. Genel kural: bir role yeni bir shell açarken iki layout'un
+guard listesini yan yana koyup farkı taşıyın, sadece rol kontrolünü gevşetmeyin.
+
+**Rol kontrolünü gevşetirken redirect'in *fallback*'ini de sayın.** Üç ayrı rol redirect'ini tek
+bir yetenek kontrolüne indirince, kalan `else` dalı "admin ya da mentor" varsayıyordu; daha önce
+üç redirect'in de altından geçip portal'ı render eden SOURCE hesabı önce `/mentor`'a, oradan
+tekrar `/`'a savruluyordu. `if/else if` zincirini teke indirirken zincirin *altından geçen*
+rolleri listeleyin.
+
+**`scopeForRole` kapsamını genişletmeden önce çağıranların hepsinin GET olduğunu doğrulayın.**
+İlişki kapsamını iki tarafa açmak (`OR: [{mentorId}, {menteeId}]`) yalnızca üç çağıranın da
+salt-okuma olması sayesinde güvenli; biri PATCH olsaydı aynı satır kullanıcıya kendi pipeline
+aşamasını değiştirme yetkisi verirdi. `grep -rn "scopeForRole(" src` üç satır döndürüyor — bu
+kadar ucuz bir doğrulama.
+
+**Bu container'da `pipeline.spec.ts` ve `smoke.spec.ts:53` `main`'de de düşüyor.** Sırasıyla
+"aşama kalıcı olmadı" (`APPLICATION_100` dönüyor) ve next-auth `CLIENT_FETCH_ERROR
+/api/auth/session`. Değişikliğinizi suçlamadan önce `git checkout origin/main` ile aynı iki
+spec'i koşun — iki dakikalık baseline, yarım saatlik yanlış iz kovalamayı önlüyor.
+`test:e2e:smoke`'un ilk koşumunda 7 düşen spec'in 5'i sadece `npx prisma db seed`
+çalıştırılmamış olmasındandı (`SEED_ADMIN_*` ile giriş yapan spec'ler); DB'yi kurar kurmaz
+seed'i de çalıştırın.
