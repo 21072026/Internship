@@ -36,6 +36,7 @@ const updateProfileSchema = z.object({
   department: z.string().optional(),
   graduationYear: z.number().int().nullable().optional(),
   skills: z.array(z.string()).optional(),
+  languages: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
   skillLevels: z.record(z.string(), z.number().int().min(1).max(5)).optional(),
   // Full URL or an internal path (/api/cv/<id> set on CV upload).
   cvUrl: z.string().refine((v) => /^https?:\/\//.test(v) || v.startsWith('/'), 'Invalid URL').or(z.literal('')).nullable().optional(),
@@ -66,6 +67,22 @@ const updateProfileSchema = z.object({
   accentColor: z.enum(['blue', 'green', 'purple', 'rose', 'teal', 'amber']).optional(),
 });
 
+const PROFILE_FIELDS = new Set(Object.keys(updateProfileSchema.shape));
+const MENTEE_ONLY_FIELDS = new Set(['university', 'department', 'graduationYear', 'targetPosition', 'cvUrl']);
+// `interests` is deliberately absent: both roles fill it in (a mentee's areas of
+// interest, a mentor's areas of expertise), so it is not owned by either.
+const MENTOR_ONLY_FIELDS = new Set(['mentorCapacity', 'languages']);
+
+function forbiddenProfileFields(body: unknown, role: string): string[] {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
+  return Object.keys(body).filter((field) => {
+    if (!PROFILE_FIELDS.has(field)) return true;
+    if (role === 'MENTOR' && MENTEE_ONLY_FIELDS.has(field)) return true;
+    if (role === 'MENTEE' && MENTOR_ONLY_FIELDS.has(field)) return true;
+    return false;
+  });
+}
+
 // Profile fields surfaced by both GET and PUT responses.
 const PROFILE_SELECT = {
   id: true,
@@ -81,6 +98,7 @@ const PROFILE_SELECT = {
   department: true,
   graduationYear: true,
   skills: true,
+  languages: true,
   skillLevels: true,
   cvUrl: true,
   avatarUrl: true,
@@ -141,6 +159,13 @@ export async function PUT(request: Request) {
 
     return await withTenantScope(session, async () => {
       const body = await request.json();
+      const protectedFields = forbiddenProfileFields(body, session.user.role);
+      if (protectedFields.length > 0) {
+        return NextResponse.json(
+          { error: 'These profile fields cannot be changed', fields: protectedFields, code: 'protected_fields' },
+          { status: 403 }
+        );
+      }
       const parsed = updateProfileSchema.safeParse(body);
 
       if (!parsed.success) {

@@ -8,6 +8,28 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.52.0-beta] - 2026-08-07
+
+### Added
+- **Mentors can edit their own profile** (`/mentor/profile`, salvaged from #1078) — the mentee
+  profile form was extracted into a shared `ProfileForm` component that takes a `role` prop, so
+  `/portal/profile` (MENTEE) and the new `/mentor/profile` (MENTOR) are the same form with
+  different fields. Mentors get name, bio, city, avatar, LinkedIn/GitHub/portfolio, skills +
+  skill levels, areas of expertise, `mentorCapacity`, spoken languages and the `publicProfile`
+  toggle; the mentee-only blocks (university, department, graduation year, target position, CV
+  manager/feedback/suggestions, documents, templates) do not render for them. New "My profile"
+  entry in the mentor sidebar.
+- **`User.languages`** (`Json`, default `[]`) — the languages a mentor speaks, distinct from
+  `preferredLanguage` (the UI locale). Edited as a comma-separated list, stored as an array.
+
+### Changed
+- **`PUT /api/profile` rejects fields the caller may not set** instead of silently ignoring them:
+  unknown keys, and role-owned keys sent by the wrong role, now return `403` with
+  `{ code: 'protected_fields', fields: [...] }`. `mentorCapacity` and `languages` are
+  MENTOR-only; `university`, `department`, `graduationYear`, `targetPosition` and `cvUrl` are
+  MENTEE-only; `interests` stays open to both (a mentee's interests, a mentor's expertise).
+  `role`, `isActive` and `userId` were never writable here and are now rejected loudly.
+
 ## [0.51.0-beta] - 2026-08-07
 
 ### Added
