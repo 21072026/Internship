@@ -74,3 +74,47 @@ test('mentee can reply in the thread and the mentor is notified', async ({ page 
     await cleanupByEmail(mentorEmail);
   }
 });
+
+// #1130 — the mentee page used to be a dead end: you could read everything about
+// a mentee there and still have no way to write to them. Covers the new entry
+// point and the suggested opener an empty thread offers.
+test('mentor opens the thread from the mentee page and uses a suggested opener', async ({ page }) => {
+  const mentorEmail = uniqueEmail('sug-mentor');
+  const menteeEmail = uniqueEmail('sug-mentee');
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Sug Mentor');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Yagmur Kuzu');
+  const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
+
+  try {
+    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await page.goto(`/mentor/mentees/${rel.id}`);
+    await page.getByTestId('mentee-message-link').click();
+    await page.waitForURL((u) => u.pathname === `/messages/${rel.id}`, { timeout: 20_000 });
+
+    // Empty thread → openers, and the mentor side gets the welcome one first.
+    const suggestions = page.getByTestId('message-suggestions');
+    await expect(suggestions).toBeVisible({ timeout: 10_000 });
+    await suggestions.getByRole('button').first().click();
+
+    const box = page.getByTestId('message-input');
+    await expect(box).toHaveValue(/welcome aboard/i);
+    // The mentee's first name is filled in, so the text is ready to send as is.
+    await expect(box).toHaveValue(/Yagmur/);
+
+    const done = page.waitForResponse((r) => r.url().includes('/api/messages') && r.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await done;
+
+    await expect.poll(async () =>
+      prisma.message.count({ where: { relationId: rel.id, senderId: mentor.id } })
+    ).toBeGreaterThan(0);
+    // Once the thread has history the openers step aside.
+    await expect(suggestions).toHaveCount(0);
+  } finally {
+    await prisma.message.deleteMany({ where: { relationId: rel.id } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});

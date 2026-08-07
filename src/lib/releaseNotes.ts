@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.51.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors: a "Send a message" button now sits right on the mentee page — and on every mentee card — so you can write to a mentee without going hunting in the messages inbox.',
+        'Never messaged someone before? An empty chat now suggests a first message ("Hi …, welcome aboard!", an intro call, or asking about their goals). Tapping one fills the box with their name already in it, so you can edit before sending.',
+      ],
+      tr: [
+        'Mentorlar: “Mesaj gönder” butonu artık doğrudan mentee sayfasında — ve her mentee kartında — yani mesaj listesinde kişi aramadan yazabilirsiniz.',
+        'Daha önce hiç mesajlaşmadınız mı? Boş sohbet artık bir ilk mesaj öneriyor (“Merhaba …, hoş geldin!”, tanışma görüşmesi ya da hedeflerini sorma). Öneriye dokununca kutu, adı da yazılmış olarak dolar; göndermeden önce düzenleyebilirsiniz.',
+      ],
+      de: [
+        'Für Mentor:innen: Die Schaltfläche „Nachricht senden“ steht jetzt direkt auf der Mentee-Seite — und auf jeder Mentee-Karte — du musst die Person nicht mehr im Postfach suchen.',
+        'Noch nie geschrieben? Ein leerer Chat schlägt jetzt eine erste Nachricht vor („Hallo …, willkommen!“, ein Kennenlerngespräch oder die Frage nach den Zielen). Ein Tipp darauf füllt das Feld samt Name — vor dem Senden noch änderbar.',
+      ],
+    },
+  },
+  {
     version: '0.50.2-beta',
     date: '2026-08-07',
     highlights: {

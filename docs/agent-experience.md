@@ -2810,3 +2810,48 @@ sıfır timer'la veriyor.
 **Bu container'da `node_modules` yok.** `npm install` (~1 dk) arka planda başlatılıp bu sırada
 düzenlemeler yapılabiliyor; `npx prisma generate` sonrası `tsc --noEmit` + `npm run build` +
 `npm run check:i18n` üçlüsü lint uyarı gürültüsünden bağımsız net sinyal veriyor.
+
+## 2026-08-07 — "Buton yok" şikâyetinde arananın zaten var olduğunu varsay (#1130, 0.51.0-beta)
+
+**Bir ekran görüntüsünde "bu buton eksik" denince, ilk iş o özelliğin başka bir yerde
+çalışıp çalışmadığını aramak.** Mentee detay sayfasında mesaj butonu yoktu; ama sohbet
+`/messages/<relationId>` olarak zaten vardı, mentee tarafında `/portal` üzerinden linki de
+vardı — eksik olan tek şey mentor tarafındaki link. Yeni bir API, yeni bir sayfa ya da
+yeni bir izin katmanı gerekmedi. #1116'daki ders (`"göremiyorum" = link eksikliği`) bu
+sefer "yazamıyorum" biçiminde geri geldi: aynı teşhis sırası (veri → API → gating → *link*)
+yine dördüncü basamakta durdu.
+
+**"Yeni kullanıcıya öneri" isteği, öneriyi kimin gördüğüne göre değişir.** Boş sohbete
+"hoş geldin" önerisi koymak, aynı bileşeni kullanan mentee tarafında saçma olurdu (mentee
+mentoruna "hoş geldin" demez). `MessageThreadView` iki rotayı da (relation + conversation)
+paylaştığı için öneriyi role göre ayırmak gerekti: `GET /api/messages` relation cevabında
+`mentor` nesnesini zaten döndürüyordu, o yüzden ek endpoint gerekmedi — `d.mentor?.id ===
+myId` yeterli. Grup (proje) sohbetlerinde ise öneri hiç gösterilmiyor: selam verilecek tek
+bir kişi yok.
+
+**Öneri çipi göndermez, kutuyu doldurur.** Tek satırlık bir karar ama tonu belirliyor:
+mentor metni düzenleyip gönderiyor, uygulama onun adına konuşmuyor. Bunun yan etkisi
+`MessageComposer`'a opsiyonel `textareaRef` eklemek oldu — `Textarea` zaten `forwardRef`
+olduğu için tek satır.
+
+**`useSuggestion` diye bir yardımcı adı koymayın.** `use` önekli her fonksiyon ESLint'in
+rules-of-hooks kuralına hook gibi görünüyor ve `onClick` içinden çağrıldığında hata
+veriyor. `applySuggestion` ile geçti. (Kontrollü bir `textarea`'ya yeni `value` yazmak
+imleci kendiliğinden sona alıyor; `setSelectionRange` ile uğraşmak gereksizdi.)
+
+**Bu container'da Playwright'ı ayağa kaldırmanın çalışan yolu (2026-08 sürümü):**
+`/opt/pw-browsers` içinde `chromium_headless_shell-1194` var, Playwright ise
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`
+arıyor. Playbook "symlink çalışmıyor" diyor ama **dizin adı + iç dosya adı birlikte
+köprülenirse çalışıyor**: beklenen sürüm dizinini yaratıp 1194'ün `chrome-linux`
+içeriğini tek tek symlink'lemek, `headless_shell`'i de `chrome-headless-shell` adıyla
+bağlamak ve `INSTALLATION_COMPLETE`/`DEPENDENCIES_VALIDATED` dosyalarına dokunmak yeterli
+— `playwright install` gerekmedi, `executablePath` yamasına da gerek kalmadı, testler
+`npm run test:e2e` yoluyla normal şekilde koştu. (Ekran görüntüsü almak için ayrı bir
+script yazarken `chromium-1194/chrome-linux/chrome` mutlak yolu iş görüyor.)
+
+**Kendi `npm run dev`'ini Playwright'ın bıraktığı `.next` üzerine kurmayın.** Dev sunucusu
+"Invariant: Expected clientReferenceManifest to be defined" ile açıldı; sebep uygulama
+kodu değil, önceki Playwright koşusunun yarım bıraktığı derleme önbelleğiydi. `rm -rf
+.next` + yeniden başlatmak düzeltti. Ekran görüntüsü almadan önce sayfaya ~6 sn vermek de
+gerekti (dev derlemesi ilk isteği yavaş karşılıyor).

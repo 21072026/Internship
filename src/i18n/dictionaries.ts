@@ -1474,6 +1474,35 @@ const en = {
     groupChat: 'Group chat',
     participantCount: '{n} people in this chat',
     openProject: 'Open the project',
+    // Suggested openers for a thread with no messages yet (#1130): the first
+    // message is the hardest one to write, so offer a starting point.
+    openers: {
+      title: 'Suggested first message',
+      welcome: {
+        label: '👋 Welcome',
+        text: 'Hi {name}, welcome aboard! I will be your mentor from here on — you can reach me in this chat whenever something comes up.',
+      },
+      introCall: {
+        label: 'Intro call',
+        text: 'Hi {name}, shall we have a short intro call? Which days and times work for you this week?',
+      },
+      goals: {
+        label: 'Ask about goals',
+        text: 'Hi {name}, before we start I would like to hear what you want to get out of this internship and which topics you want to work on.',
+      },
+      hello: {
+        label: '👋 Say hello',
+        text: 'Hi {name}, how are you?',
+      },
+      intro: {
+        label: 'Introduce myself',
+        text: 'Hi {name}, let me introduce myself briefly: ',
+      },
+      question: {
+        label: 'Ask a question',
+        text: 'Hi {name}, I have a question: ',
+      },
+    },
   },
   logInteraction: {
     add: 'Log interaction',
@@ -3669,6 +3698,33 @@ const tr: Dict = {
     groupChat: 'Grup sohbeti',
     participantCount: 'Bu sohbette {n} kişi var',
     openProject: 'Projeye git',
+    openers: {
+      title: 'İlk mesaj önerileri',
+      welcome: {
+        label: '👋 Hoş geldin',
+        text: 'Merhaba {name}, hoş geldin! Bundan sonra mentorun olarak yanındayım — aklına takılan her şeyi bu sohbetten sorabilirsin.',
+      },
+      introCall: {
+        label: 'Tanışma görüşmesi',
+        text: 'Merhaba {name}, kısa bir tanışma görüşmesi yapalım mı? Bu hafta hangi gün ve saatler sana uygun?',
+      },
+      goals: {
+        label: 'Hedeflerini sor',
+        text: 'Merhaba {name}, başlamadan önce bu stajdan ne beklediğini ve hangi konularda ilerlemek istediğini öğrenmek isterim.',
+      },
+      hello: {
+        label: '👋 Selam ver',
+        text: 'Merhaba {name}, nasılsın?',
+      },
+      intro: {
+        label: 'Kendimi tanıtayım',
+        text: 'Merhaba {name}, kendimi kısaca tanıtmak isterim: ',
+      },
+      question: {
+        label: 'Soru sor',
+        text: 'Merhaba {name}, bir sorum olacak: ',
+      },
+    },
   },
   logInteraction: {
     add: 'Etkileşim ekle',
@@ -5862,6 +5918,33 @@ const de: Dict = {
     groupChat: 'Gruppenchat',
     participantCount: '{n} Personen in diesem Chat',
     openProject: 'Zum Projekt',
+    openers: {
+      title: 'Vorschläge für die erste Nachricht',
+      welcome: {
+        label: '👋 Willkommen',
+        text: 'Hallo {name}, willkommen! Ich begleite dich ab jetzt als Mentor:in — melde dich in diesem Chat, wann immer etwas ist.',
+      },
+      introCall: {
+        label: 'Kennenlerngespräch',
+        text: 'Hallo {name}, sollen wir ein kurzes Kennenlerngespräch führen? Welche Tage und Zeiten passen dir diese Woche?',
+      },
+      goals: {
+        label: 'Nach Zielen fragen',
+        text: 'Hallo {name}, bevor wir starten, würde ich gern hören, was du aus diesem Praktikum mitnehmen möchtest und an welchen Themen du arbeiten willst.',
+      },
+      hello: {
+        label: '👋 Hallo sagen',
+        text: 'Hallo {name}, wie geht es dir?',
+      },
+      intro: {
+        label: 'Mich vorstellen',
+        text: 'Hallo {name}, ich stelle mich kurz vor: ',
+      },
+      question: {
+        label: 'Eine Frage stellen',
+        text: 'Hallo {name}, ich habe eine Frage: ',
+      },
+    },
   },
   logInteraction: {
     add: 'Interaktion erfassen',

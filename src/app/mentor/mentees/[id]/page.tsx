@@ -9,7 +9,7 @@ import { InteractionSummary } from '@/components/InteractionSummary';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { ArrowLeft, Plus, Trash2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ExternalLink, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
@@ -193,6 +193,15 @@ export default function MenteeDetailPage() {
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{relation.mentee.fullName}</h1>
             <p className="text-gray-500 break-words">{relation.mentee.email}</p>
+            {/* The in-app thread with this mentee (#1130). It used to be reachable
+                only from the messages inbox, so the page you read about a mentee on
+                had no way to write to them. */}
+            <Link href={`/messages/${id}`} className="mt-3 inline-block" data-testid="mentee-message-link">
+              <Button size="sm">
+                <MessageSquare className="h-4 w-4" />
+                {t.messages.sendMessage}
+              </Button>
+            </Link>
           </div>
           <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:min-w-[240px] sm:items-end">
             <StatusBadge status={relation.status} />
