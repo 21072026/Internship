@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.50.2-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Admins: the sidebar now shows how many mentor applications are waiting for review, right next to "Mentor Applications" — no need to open the page to find out whether the queue has anything in it.',
+      ],
+      tr: [
+        'Adminler: kenar çubuğu artık kaç mentor başvurusunun inceleme beklediğini “Mentor Başvuruları” yanında gösteriyor — kuyrukta bir şey var mı diye sayfayı açmaya gerek yok.',
+      ],
+      de: [
+        'Für Admins: In der Seitenleiste steht jetzt direkt neben „Mentor-Bewerbungen“, wie viele Bewerbungen auf Prüfung warten — du musst die Seite nicht mehr öffnen, um zu sehen, ob etwas in der Warteschlange liegt.',
+      ],
+    },
+  },
+  {
     version: '0.50.1-beta',
     date: '2026-08-06',
     highlights: {
