@@ -62,8 +62,13 @@ const BUILDERS: {
   relation: {
     // Admins see the whole tenant by design.
     ADMIN: async () => ({}),
-    MENTOR: async (u) => ({ mentorId: u.id }),
-    MENTEE: async (u) => ({ menteeId: u.id }),
+    // Both sides, for both roles (#1141): the same person can mentor one relation
+    // and be mentored in another, and either way the relation is their own. This
+    // widens reads only — every caller of `scopeForRole` is a GET — and only ever
+    // to rows the user is personally named in, so it grants no one anybody else's
+    // mentorship.
+    MENTOR: async (u) => ({ OR: [{ mentorId: u.id }, { menteeId: u.id }] }),
+    MENTEE: async (u) => ({ OR: [{ menteeId: u.id }, { mentorId: u.id }] }),
     // Read-only: only relations linked to this company.
     COMPANY: async (u) => ({ companyId: u.companyId ?? NO_MATCH }),
     // Only the mentees this source referred.

@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.52.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'A mentor can now be a mentee too. Helping someone doesn\'t mean you never need help yourself — if a mentor is given a mentor of their own, they get the mentee portal alongside their mentor pages.',
+        'The "View as" switch at the bottom of the sidebar carries the third view: Admin, Mentor, Mentee — whichever ones apply to you. Nothing changes for anyone with only one of them.',
+        'Admins can put anyone on either side of a mentorship. Both dropdowns now list mentors, mentees and admins, with the usual role first and a small role label on the rest. Nobody can be paired with themselves.',
+      ],
+      tr: [
+        'Bir mentor artık aynı zamanda mentee olabiliyor. Birine yardım ediyor olmak, kendinizin hiç yardıma ihtiyacı olmadığı anlamına gelmiyor — bir mentöre kendi mentörü atandığında, mentor sayfalarının yanında mentee portalı da açılıyor.',
+        'Kenar çubuğunun altındaki "Görünüm" düğmesi üçüncü görünümü de taşıyor: Yönetici, Mentor, Mentee — hangileri sizde varsa. Tek görünümü olanlar için hiçbir şey değişmiyor.',
+        'Yöneticiler bir mentorluğun iki tarafına da herkesi koyabiliyor. Her iki liste de mentorları, mentee’leri ve yöneticileri gösteriyor; her listede beklenen rol başta, diğerlerinde küçük bir rol etiketi var. Kimse kendisiyle eşleştirilemiyor.',
+      ],
+      de: [
+        'Ein Mentor kann jetzt auch Mentee sein. Wer andere unterstützt, braucht manchmal selbst Unterstützung — bekommt ein Mentor eine eigene Mentorin oder einen eigenen Mentor, steht ihm neben den Mentoren-Seiten auch das Mentee-Portal offen.',
+        'Der Schalter „Ansicht" unten in der Seitenleiste trägt die dritte Ansicht mit: Admin, Mentor, Mentee — je nachdem, welche für dich gelten. Für alle mit nur einer Ansicht ändert sich nichts.',
+        'Admins können beide Seiten einer Mentorschaft frei besetzen. Beide Listen zeigen jetzt Mentor:innen, Mentees und Admins, die jeweils erwartete Rolle zuerst und bei den übrigen ein kleines Rollen-Label. Niemand lässt sich mit sich selbst verknüpfen.',
+      ],
+    },
+  },
+  {
     version: '0.51.2-beta',
     date: '2026-08-07',
     highlights: {

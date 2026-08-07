@@ -16,6 +16,7 @@ import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
+import { availableModes, canUseMentorShell } from '@/lib/dualRole';
 
 export default async function MentorLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -24,13 +25,17 @@ export default async function MentorLayout({ children }: { children: React.React
     redirect('/auth/signin');
   }
 
-  if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') {
+  // A mentee-role account gets in too, but only once someone has actually been
+  // assigned to them to mentor (#1141) — the same dual-role symmetry that lets a
+  // mentor be mentored. With nobody to mentor, this shell is empty for them.
+  if (!(await canUseMentorShell(session.user))) {
     redirect('/');
   }
 
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
   const customStages = await resolveCustomStages(session.user.orgId);
+  const modes = await availableModes(session.user);
 
   // Auth hardening: hold in-scope roles at the 2FA setup gate until enabled.
   // Skipped while impersonating (the admin behind it is already authenticated).
@@ -140,9 +145,10 @@ export default async function MentorLayout({ children }: { children: React.React
           <InstallAppButton />
         </nav>
 
-        {/* Admins reach this shell to work their own mentees; the switch is both
-            their way back and the marker that says why the layout looks different. */}
-        {session.user.role === 'ADMIN' && <ModeSwitcher />}
+        {/* Admins reach this shell to work their own mentees, and a mentor who is
+            mentored in turn reaches the portal from here; the switch is both the
+            way back and the marker that says why the layout looks different. */}
+        <ModeSwitcher modes={modes} />
 
         <AccountMenu
           name={session.user.name}
