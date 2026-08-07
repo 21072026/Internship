@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Users } from 'lucide-react';
+import { Users, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { ApplyLinkBox } from '@/components/ApplyLinkBox';
 import { EmptyState } from '@/components/EmptyState';
@@ -119,6 +119,13 @@ export default function MenteesPage() {
                     defaultTitle={t.meetings.instant.defaultWith.replace('{name}', rel.mentee.fullName)}
                     testId={`start-meeting-${rel.id}`}
                   />
+                  {/* Icon-only: the row already carries two buttons, and writing to
+                      a mentee should not cost a detour through the detail page. */}
+                  <Link href={`/messages/${rel.id}`} data-testid={`message-mentee-${rel.id}`}>
+                    <Button size="sm" variant="outline" aria-label={t.messages.sendMessage} title={t.messages.sendMessage}>
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
+                  </Link>
                   <Link href={`/mentor/mentees/${rel.id}`}>
                     <Button size="sm" variant="outline">{t.mentor.viewDetails}</Button>
                   </Link>

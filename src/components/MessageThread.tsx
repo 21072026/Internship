@@ -61,7 +61,7 @@ export function PendingAttachmentList({ attachments, onRemove, removeLabel }: {
 export function MessageComposer({
   body, onBodyChange, onSubmit, sending, hasAttachments, placeholder, sendLabel,
   attachLabel, fileInputRef, accept, onFilesSelected, onPaste, onKeyDown,
-  inputTestId, attachTestId, sendTestId, textareaTestId,
+  inputTestId, attachTestId, sendTestId, textareaTestId, textareaRef,
 }: {
   body: string;
   onBodyChange: (body: string) => void;
@@ -80,6 +80,8 @@ export function MessageComposer({
   attachTestId?: string;
   sendTestId?: string;
   textareaTestId?: string;
+  /** Lets the caller focus/caret the box — e.g. after filling it from a suggestion. */
+  textareaRef?: RefObject<HTMLTextAreaElement | null>;
 }) {
   const empty = !body.trim() && !hasAttachments;
   return (
@@ -90,7 +92,7 @@ export function MessageComposer({
       <Button type="button" variant="outline" disabled={sending} onClick={() => fileInputRef.current?.click()} aria-label={attachLabel} title={attachLabel} data-testid={attachTestId}>
         <Paperclip className="h-4 w-4" />
       </Button>
-      <Textarea value={body} onChange={(event) => onBodyChange(event.target.value)} onPaste={onPaste} onKeyDown={onKeyDown} rows={2} maxLength={TEXT_LIMITS.messageBody} showCounter placeholder={placeholder} data-testid={textareaTestId} wrapperClassName="flex-1" className="resize-none" />
+      <Textarea ref={textareaRef} value={body} onChange={(event) => onBodyChange(event.target.value)} onPaste={onPaste} onKeyDown={onKeyDown} rows={2} maxLength={TEXT_LIMITS.messageBody} showCounter placeholder={placeholder} data-testid={textareaTestId} wrapperClassName="flex-1" className="resize-none" />
       <Button type="submit" loading={sending} disabled={empty} data-testid={sendTestId}>{sendLabel}</Button>
     </form>
   );
