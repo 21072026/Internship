@@ -30,9 +30,12 @@ export default async function PortalLayout({ children }: { children: React.React
   // An admin or mentor lands here only if they are *themselves* being mentored
   // (#1141) — helping someone doesn't stop you needing help. Without a
   // mentorship of their own the portal has nothing to show them, so they go back
-  // to their own shell exactly as before.
+  // to their own shell exactly as before. Anything else (SOURCE) goes to the root
+  // router, which knows where each role belongs.
   if (!(await canUsePortal(session.user))) {
-    redirect(session.user.role === 'ADMIN' ? '/admin' : '/mentor');
+    redirect(
+      session.user.role === 'ADMIN' ? '/admin' : session.user.role === 'MENTOR' ? '/mentor' : '/'
+    );
   }
 
   const { locale, t } = await getServerDictionary();
