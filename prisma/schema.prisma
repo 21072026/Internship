@@ -166,6 +166,10 @@ model User {
   interests               String?       @db.Text
   targetPosition          String?
   mentorCapacity          Int?
+  // Set the first time a MENTOR lands on their dashboard (#911), so the
+  // one-time redirect to the mentor onboarding wizard never fires twice —
+  // stamped before the redirect, not after the wizard is finished/skipped.
+  mentorOnboardingSeenAt  DateTime?
   // Default true so existing rows stay writable after the column is added;
   // new self-registrations are created with false until they verify by email.
   emailVerified           Boolean       @default(true)

@@ -110,12 +110,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     date: '2026-08-06',
     highlights: {
       en: [
+        'Mentors now get a short setup wizard the first time they open their dashboard: profile, expertise, capacity and availability, in four quick steps. Skip it any time — it only ever asks once.',
         'Maintenance only: delete (and "stop meeting") confirmations across the app now use a proper dialog instead of the browser\'s plain confirm popup — same question, same buttons, just easier to read and consistent everywhere. Nothing you can do has changed.',
       ],
       tr: [
+        'Mentorlar artık panellerini ilk açtıklarında kısa bir kurulum sihirbazı görüyor: profil, uzmanlık, kapasite ve müsaitlik, dört hızlı adımda. İstediğin an atlayabilirsin — yalnızca bir kez sorulur.',
         'Yalnızca bakım: uygulamadaki silme (ve "toplantıyı durdur") onayları artık tarayıcının düz onay kutusu yerine düzgün bir pencere kullanıyor — aynı soru, aynı butonlar, sadece daha okunaklı ve her yerde tutarlı. Yapabildiklerinde bir değişiklik yok.',
       ],
       de: [
+        'Mentoren sehen jetzt beim ersten Öffnen ihres Dashboards einen kurzen Einrichtungsassistenten: Profil, Expertise, Kapazität und Verfügbarkeit in vier schnellen Schritten. Jederzeit überspringbar — er fragt nur einmal.',
         'Nur Wartung: Lösch- (und „Treffen beenden“-)Bestätigungen verwenden jetzt in der ganzen App einen richtigen Dialog statt des einfachen Browser-Bestätigungsfensters — gleiche Frage, gleiche Buttons, nur besser lesbar und überall einheitlich. An deinen Möglichkeiten ändert sich nichts.',
       ],
     },
