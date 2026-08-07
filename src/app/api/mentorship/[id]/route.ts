@@ -9,6 +9,7 @@ import { notify } from '@/lib/notify';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
 import { isPendingActivation } from '@/lib/menteeAccount';
+import { validateDropoffReason } from '@/lib/stageChange';
 
 const updateRelationSchema = z.object({
   status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
@@ -20,6 +21,11 @@ const updateRelationSchema = z.object({
   projectId: z.string().nullable().optional(),
   cohortId: z.string().nullable().optional(),
   stageDeadline: z.string().nullable().optional(),
+  // Drop-off reason (#810) — required by validateDropoffReason() below when
+  // pipelineStatus moves into a negative/off-path stage. z.string() + a
+  // central whitelist (src/lib/dropoffReasons.ts), never z.enum.
+  reasonCode: z.string().max(40).optional(),
+  reasonNote: z.string().max(2000).optional(),
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -139,7 +145,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         );
       }
 
-      const { stageDeadline, ...rest } = parsed.data;
+      const { stageDeadline, reasonCode, reasonNote, ...rest } = parsed.data;
+      const stageChanging = !!parsed.data.pipelineStatus && parsed.data.pipelineStatus !== relation.pipelineStatus;
+
+      // Validate the drop-off reason BEFORE writing anything — a rejected
+      // reason must never leave the relation moved with no audit trail behind it.
+      if (stageChanging) {
+        const reasonCheck = await validateDropoffReason({
+          orgId: relation.orgId,
+          toStatus: parsed.data.pipelineStatus!,
+          reasonCode,
+          reasonNote,
+        });
+        if (!reasonCheck.ok) {
+          return NextResponse.json({ error: reasonCheck.error }, { status: 400 });
+        }
+      }
+
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = { ...rest };
       // Stamp/clear the end of the relation — it anchors the post-mentorship
       // CV/document access window (#854).
@@ -163,13 +185,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       });
 
       // Record an audit entry when the pipeline stage actually changes.
-      if (parsed.data.pipelineStatus && parsed.data.pipelineStatus !== relation.pipelineStatus) {
+      if (stageChanging) {
         await prisma.statusChange.create({
           data: {
             relationId: id,
             fromStatus: relation.pipelineStatus,
-            toStatus: parsed.data.pipelineStatus,
+            toStatus: parsed.data.pipelineStatus!,
             changedById: session.user.id,
+            reasonCode: reasonCode ?? null,
+            reasonNote: reasonNote?.trim() || null,
           },
         });
         await logActivity({
