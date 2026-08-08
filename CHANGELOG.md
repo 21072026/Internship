@@ -8,6 +8,24 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.55.6-beta] - 2026-08-08
+
+### Fixed
+- **A way back out of the project showcase** (#1159). `/projects` renders outside the
+  admin/mentor/portal shell — no sidebar — and its header held a single link: the hard-coded
+  "InternshipCRM" wordmark pointing at `/`. A signed-in visitor who followed "Browse the
+  project showcase" from `/portal/projects` had no visible route back into the app (the
+  wordmark did land them on their dashboard via the `/` → `roleHome` redirect, but nothing
+  said so); on a phone, with no sidebar either, the page was a dead end.
+  - Added an `ArrowLeft` back link above the page title (`data-testid="showcase-back"`),
+    targeted at who is looking: `roleHome(session.user.role)` for a signed-in visitor,
+    `/` for an anonymous one. Same shape the project detail page already uses.
+  - The header wordmark now points at the same destination and renders `<BrandWordmark />`
+    instead of hard-coded product chrome, so the showcase honours tenant branding (#546)
+    like every other page.
+  - New dictionary keys `projects.backDashboard` / `projects.backHome` (EN/TR/DE), and an
+    e2e case in `e2e/projects-showcase.spec.ts` covering both viewers.
+
 ## [0.55.5-beta] - 2026-08-08
 
 ### Fixed
