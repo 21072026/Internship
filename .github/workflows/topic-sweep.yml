@@ -1,0 +1,129 @@
+name: Topic Sweep (reconcile leaked preview environments)
+
+# Topic environments are torn down by an event (`pull_request: closed` in
+# topic-preview.yml), and an event that never fires leaves a container running
+# forever: a teardown run stuck on `action_required` approval, a cancelled run,
+# an offline runner, a reboot. #962 found ten such orphans holding ~1.58 GB on a
+# 7.7 GB box, and on 2026-08-08 one of them held port 3392 and blocked PR #1192
+# from deploying at all — topic ports are `3300 + PR % 100`, so a leaked
+# environment silently steals the slot of every hundredth PR after it.
+#
+# So: stop trusting the event, and reconcile the state instead. List the
+# `internship-crm-pr<N>` containers actually running on the box, ask GitHub
+# which of those PRs are still open, and tear down the rest.
+#
+# Split across two runners on purpose: only the self-hosted box can see docker,
+# and only a GitHub-hosted runner is guaranteed `gh`/`jq` for the PR lookup.
+
+on:
+  schedule:
+    # 04:20 UTC daily — after the nightly traffic, before the working day.
+    - cron: '20 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: topic-sweep
+  cancel-in-progress: false
+
+env:
+  BASE_DOMAIN: ersah.in
+
+jobs:
+  # ── 1. What is actually running on the box ──────────────────────────────────
+  collect:
+    name: List topic containers
+    runs-on: self-hosted
+    outputs:
+      numbers: ${{ steps.list.outputs.numbers }}
+    steps:
+      - id: list
+        run: |
+          set -euo pipefail
+          # -a: a stopped-but-not-removed container still owns its name (and can
+          # be restarted by a restart policy), so it counts as a leak too.
+          nums=$(docker ps -a --format '{{.Names}}' \
+                 | sed -n 's/^internship-crm-pr\([0-9]\{1,\}\)$/\1/p' \
+                 | sort -n | uniq | tr '\n' ' ')
+          echo "numbers=${nums% }" >> "$GITHUB_OUTPUT"
+          echo "### Topic containers on the box" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${nums:-<none>}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          # Who holds the 33xx range right now — the question a blocked deploy
+          # actually needs answered, and it is free to record here.
+          echo "### Bound topic ports" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          docker ps --format '{{.Names}} {{.Ports}}' | grep -E '33[0-9]{2}' \
+            >> "$GITHUB_STEP_SUMMARY" || echo "(no container publishes a 33xx port)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 2. Which of them belong to a PR that is no longer open ──────────────────
+  resolve:
+    name: Resolve PR states
+    needs: collect
+    if: needs.collect.outputs.numbers != ''
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      stale: ${{ steps.check.outputs.stale }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBERS: ${{ needs.collect.outputs.numbers }}
+        run: |
+          set -euo pipefail
+          stale=""
+          for n in $NUMBERS; do
+            # A number that is not a PR at all (renamed container, manual test)
+            # is left alone: this job only removes environments it can PROVE are
+            # finished. Silence is not proof.
+            if ! state=$(gh pr view "$n" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null); then
+              echo "pr#$n: not found — leaving it alone"
+              continue
+            fi
+            echo "pr#$n: $state"
+            [ "$state" = "OPEN" ] || stale="$stale $n"
+          done
+          echo "stale=${stale# }" >> "$GITHUB_OUTPUT"
+
+  # ── 3. Tear the finished ones down ──────────────────────────────────────────
+  sweep:
+    name: Tear down leaked environments
+    needs: [collect, resolve]
+    if: needs.resolve.outputs.stale != ''
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          STALE: ${{ needs.resolve.outputs.stale }}
+          BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+        run: |
+          set -euo pipefail
+          chmod +x infra/server/topic-teardown.sh
+          echo "### Swept" >> "$GITHUB_STEP_SUMMARY"
+          for n in $STALE; do
+            echo "==> tearing down pr$n"
+            # Never let one stubborn environment abort the sweep — the next one
+            # may be the one holding a port somebody is waiting for.
+            if TOPIC="pr$n" BASE_DOMAIN="$BASE_DOMAIN" ./infra/server/topic-teardown.sh; then
+              echo "- pr$n — removed" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- pr$n — FAILED, see log" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+  # ── 4. Say so, even when there was nothing to do ────────────────────────────
+  # A sweep that only speaks up when it acts is a sweep nobody notices has
+  # stopped running — which is exactly how the leak in #962 went unseen.
+  report:
+    name: Report
+    needs: [collect, resolve, sweep]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "containers: '${{ needs.collect.outputs.numbers }}'" >> "$GITHUB_STEP_SUMMARY"
+          echo "stale: '${{ needs.resolve.outputs.stale }}'" >> "$GITHUB_STEP_SUMMARY"
+          echo "sweep result: ${{ needs.sweep.result }}" >> "$GITHUB_STEP_SUMMARY"
