@@ -3208,3 +3208,57 @@ bir python scripti ile bloğu parçalayıp yeniden yazmak tek seferde doğru son
 **Issue numarasını tahmin etmeyin.** Kod yorumlarına `#1153` yazıp issue'yu sonra açtım; numara
 `#1156` çıktı (arada başka bir PR #1153'ü kullanmıştı). Önce issue'yu açın, numarayı oradan alın
 — ya da en azından commit'ten önce tek bir `sed` ile hepsini düzeltin.
+
+## 2026-08-08 — Duyuru paketi: görünürlük, düzenleme, çok dillilik (#1161–#1165)
+
+**Aynı alandaki beş isteği tek PR'a doldurmayın; ama tek dalda da bırakmayın.** Oturum boyunca
+istekler damla damla geldi (duyuru görünürlüğü → vitrin geri linki → düzenle/sil → çok dillilik
+→ dil rozeti → tıklanabilir isimler). Her birini kendi issue'suna açıp kendi dalında shiplemek
+doğru karardı — ama bir hata yaptım: #1164'ün çalışmasına, #1161 dalının üstünde, farkında
+olmadan başladım. `git stash -u` → `checkout main` → yeni dal → `stash pop` bunu temiz kurtardı.
+Yeni bir işe başlamadan önce `git branch --show-current` çalıştırın; refleks olsun.
+
+**Sıralı PR'larda sürüm numarasını en sona bırakın.** Beş PR arka arkaya gidince her biri bir
+öncekinin `package.json` sürümünü bekliyor. İşe yarayan düzen: kod + testi commit'le, önceki
+PR'ın merge olmasını bekle, `git rebase origin/main`, *sonra* bump + CHANGELOG + releaseNotes'u
+ayrı bir commit olarak ekle. Böylece çakışma hiç oluşmuyor — geçen oturumun "çakışan bloğu
+yeniden kur" tarifine gerek kalmıyor.
+
+**Prisma şemasını değiştirdiyseniz dev sunucusunu yeniden başlatın.** `Notification.announcementId`
+eklendikten sonra üç e2e testi POST'ta 500 verdi: çalışan `next dev` süreci hâlâ eski Prisma
+client'ı bellekte tutuyordu. `prisma generate` + `db push` yetmiyor; `preview_stop` →
+`preview_start`. Hata mesajı hiçbir şey söylemiyor, sadece istek başarısız oluyor.
+
+**`db push`, üzerinde çalıştığınız dalın şemasına göre çalışır.** Henüz merge olmamış bir PR'ın
+sütununu yerel DB'ye push etmiştim; sonra `main`'den yeni dal açıp `db push` deyince Prisma o
+sütunu *düşürmek* istedi ve `--accept-data-loss` istedi. Bu bir uyarı değil, sinyal: dalınız
+bağımlı olduğu PR'ı içermiyor. Çözüm `--accept-data-loss` değil, o PR merge olana kadar
+bekleyip rebase etmek.
+
+**Çok dilli içerik için repoda zaten bir desen var — icat etmeyin.** `src/lib/goalTemplates.ts`:
+bir kanonik sütun + nullable bir `translations` JSON haritası + okuyucu başına çözümleme
+(kendi dili → varsayılan dil → kanonik). Duyurular (`announcementText.ts`) ve toplu e-posta
+(`localizedEmail.ts`) aynı şekli aldı. Tek gerçek fark e-postada: konu ve gövde **birlikte**
+çözülmeli, yoksa İngilizce konu altında Türkçe gövde çıkıyor — bu yüzden yarım doldurulmuş
+dil gönderilmiyor, düşürülüyor.
+
+**Bildirim satırı kişiye ait; çeviriyi orada bir kez çözün.** `Notification` kayıtları kullanıcı
+başına oluşuyor, dolayısıyla fan-out sırasında her satırı **kendi alıcısının** dilinde yazmak
+hem daha ucuz hem daha dürüst. Ama bunun bedeli var: düzenleme artık tek bir `updateMany`
+olamıyor — çözülen her farklı gövde için bir ifade gerekiyor (en fazla üç). Tek toplu üzerine
+yazma, herkesi kanonik metne düzleştirip çeviriyi geri alırdı.
+
+**Yeni bir `Json` sütunu her zaman nullable olsun.** `Announcement.translations` ve
+`Notification.announcementId` ikisi de nullable — #1150'nin dersi (prod MariaDB, NOT NULL `Json`
+eklenince `''` ile backfill edilip herkesi kilitliyor) hâlâ geçerli. Backfill de gerekmedi:
+`text` zaten fallback.
+
+**`ConfirmDialog` açıkken rol tabanlı locator'lar çakışır.** `getByRole('button', { name: /^Delete$/i })`
+üç öğeye çözüldü: iki satır aksiyonu + diyaloğun onay butonu. Diyalogda `confirm-dialog-confirm`
+testid'i zaten var — liste + onay diyaloğu olan her yerde testid kullanın.
+
+**Veri erişim politikası tarayıcı doğrulamasını engellemez, yönlendirir.** Ana repodaki `.env`
+paylaşılan **preview** DB'sine bakıyor; `DATA_ACCESS_POLICY` gereği dev sunucusunu oraya
+bağlamak yok. Worktree'ye kendi `.env`'ini yazıp yerel MariaDB'ye (`crm:crm@127.0.0.1`)
+bağlamak 2 dakika sürdü ve `preview_start` + `computer screenshot` ile gerçek görsel doğrulama
+verdi. Bir sonraki oturum için: worktree'de `.env` yok, ilk iş onu yazmak.
