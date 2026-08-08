@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.56.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'You can now see which language someone reads before you write to them. A small EN / TR / DE chip sits next to their name on the candidate list, in a one-to-one chat header, and in the bulk email recipient list. A greyed-out chip means that person never picked a language and will get the app default.',
+        'Sending one email to several people? The composer sums up the languages of everyone you have ticked, so you know what you are writing across before you start.',
+      ],
+      tr: [
+        'Artık birine yazmadan önce hangi dili okuduğunu görebiliyorsunuz. Adının yanında küçük bir EN / TR / DE rozeti duruyor: aday listesinde, birebir sohbet başlığında ve toplu e-posta alıcı listesinde. Soluk bir rozet, o kişinin hiç dil seçmediğini ve uygulamanın varsayılanını alacağını gösterir.',
+        'Birden çok kişiye tek e-posta mı? Besteci, işaretlediğiniz herkesin dillerini özetliyor; böylece yazmaya başlamadan önce hangi dillere hitap ettiğinizi biliyorsunuz.',
+      ],
+      de: [
+        'Sie sehen jetzt, welche Sprache jemand liest, bevor Sie schreiben. Neben dem Namen steht ein kleines EN- / TR- / DE-Kürzel: in der Kandidatenliste, im Kopf eines Einzelchats und in der Empfängerliste des Sammel-E-Mail-Editors. Ein ausgegrautes Kürzel bedeutet, dass diese Person nie eine Sprache gewählt hat und die Standardsprache der App erhält.',
+        'Eine E-Mail an mehrere Personen? Der Editor fasst die Sprachen aller Angehakten zusammen — so wissen Sie vorher, in welche Sprachen Sie hineinschreiben.',
+      ],
+    },
+  },
+  {
     version: '0.55.7-beta',
     date: '2026-08-08',
     highlights: {

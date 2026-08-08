@@ -114,7 +114,13 @@ export async function GET(request: Request) {
     // the project's team, annotated onto the participant list so the chat header
     // can show "6 people · who they are" instead of an anonymous thread.
     let group: { type: string; projectId: string | null; projectName: string | null } | null = null;
-    let participants: { id: string; fullName: string; role: string | null; functionalRole: string | null }[] = [];
+    let participants: {
+      id: string;
+      fullName: string;
+      role: string | null;
+      functionalRole: string | null;
+      preferredLanguage: string | null;
+    }[] = [];
     if (conversation) {
       const team =
         conversation.type === 'GROUP' && conversation.projectId
@@ -132,6 +138,7 @@ export async function GET(request: Request) {
           fullName: p.user.fullName,
           role: member?.role ?? null,
           functionalRole: member?.functionalRole ?? null,
+          preferredLanguage: p.user.preferredLanguage,
         };
       });
     }

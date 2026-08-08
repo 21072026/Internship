@@ -72,6 +72,9 @@ export async function GET(request: Request) {
           university: true,
           graduationYear: true,
           skills: true,
+          // So the screens that write TO a mentee — the bulk email composer
+          // above all — can show which language they read (#1164).
+          preferredLanguage: true,
         },
       },
       company: { select: { id: true, name: true, industry: true } },

@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { LanguageBadge, languageBreakdown } from '@/components/LanguageBadge';
 
 interface Relation {
   id: string;
-  mentee: { fullName: string; email: string };
+  mentee: { fullName: string; email: string; preferredLanguage?: string | null };
 }
 
 // Targeted email composer shared by the mentor (/mentor/email) and admin
@@ -35,8 +36,12 @@ export function TargetedEmailComposer() {
     load();
   }, [load]);
 
-  const chosen = relations.filter((r) => selected[r.id]).map((r) => r.id);
+  const chosenRelations = relations.filter((r) => selected[r.id]);
+  const chosen = chosenRelations.map((r) => r.id);
   const allChecked = relations.length > 0 && chosen.length === relations.length;
+  // One body goes to everyone selected, so the sender should see the languages
+  // they are about to write across before they start typing (#1164).
+  const breakdown = languageBreakdown(chosenRelations.map((r) => r.mentee.preferredLanguage));
 
   const send = async () => {
     setSending(true);
@@ -99,7 +104,22 @@ export function TargetedEmailComposer() {
                     onChange={(e) => setSelected((p) => ({ ...p, [r.id]: e.target.checked }))}
                   />
                   <span className="truncate">{r.mentee.fullName}</span>
+                  <LanguageBadge language={r.mentee.preferredLanguage} className="ml-auto" />
                 </label>
+              ))}
+            </div>
+          )}
+          {breakdown.length > 0 && (
+            <div
+              data-testid="recipient-languages"
+              className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 text-xs text-gray-500"
+            >
+              <span>{t.languageBadge.recipients}</span>
+              {breakdown.map(({ locale, count }) => (
+                <span key={locale} className="inline-flex items-center gap-1">
+                  <LanguageBadge language={locale} />
+                  <span>×{count}</span>
+                </span>
               ))}
             </div>
           )}

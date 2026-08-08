@@ -18,6 +18,7 @@ import {
 import { useMessagesHeaderTitle } from '@/components/MessagesShell';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
+import { LanguageBadge } from '@/components/LanguageBadge';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 
 interface Attachment {
@@ -44,6 +45,8 @@ const REACTIONS = ['👍', '❤️', '😂', '😮', '🎉'] as const;
 interface Party {
   id: string;
   fullName: string;
+  // Which language they read, so the header can say so before you type (#1164).
+  preferredLanguage?: string | null;
   // Group (project) chats also carry who each person is on the project (#51).
   role?: 'OWNER' | 'MENTOR' | 'MENTEE' | null;
   functionalRole?: 'DEVELOPER' | 'TESTER' | 'MARKETING' | null;
@@ -340,7 +343,11 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         <div className="mb-6 flex items-start gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 mb-1">{t.messages.title}</h1>
-            <p className="text-gray-500">{threadTitle}</p>
+            <p className="flex items-center gap-2 text-gray-500">
+              <span className="truncate">{threadTitle}</span>
+              {/* 1:1 only — a group room has no single language to name. */}
+              {!group && other && <LanguageBadge language={other.preferredLanguage} />}
+            </p>
           </div>
           {startMeetingTarget && (
             <StartMeetingButton

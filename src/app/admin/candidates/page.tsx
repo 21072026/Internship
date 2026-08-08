@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Users, ExternalLink, Search, Filter, Download } from 'lucide-react';
+import { LanguageBadge } from '@/components/LanguageBadge';
 
 interface Candidate {
   id: string;
@@ -31,6 +32,7 @@ interface Candidate {
   city?: string;
   createdAt: string;
   isActive: boolean;
+  preferredLanguage?: string | null;
   menteeRelations: {
     pipelineStatus?: string;
     mentor: { id: string; fullName: string };
@@ -451,12 +453,15 @@ export default function CandidatesPage() {
                     aria-label={t.candidates.selectOne}
                   />
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/admin/candidates/${candidate.id}`}
-                      className="block break-words font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
-                    >
-                      {candidate.fullName}
-                    </Link>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <Link
+                        href={`/admin/candidates/${candidate.id}`}
+                        className="block break-words font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
+                      >
+                        {candidate.fullName}
+                      </Link>
+                      <LanguageBadge language={candidate.preferredLanguage} />
+                    </div>
                     <p className="mt-1 min-w-0 break-words text-sm text-gray-600 dark:text-gray-300">
                       {t.candidates.mentor}: {activeRelation?.mentor.fullName ?? t.candidates.unassigned}
                     </p>
@@ -521,7 +526,11 @@ export default function CandidatesPage() {
                       >
                         {candidate.fullName}
                       </Link>
-                      <p className="text-sm text-gray-500">{candidate.email}</p>
+                      <p className="flex items-center gap-1.5 text-sm text-gray-500">
+                        <span className="truncate">{candidate.email}</span>
+                        {/* Which language to write to them in (#1164). */}
+                        <LanguageBadge language={candidate.preferredLanguage} />
+                      </p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
