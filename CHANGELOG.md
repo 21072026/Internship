@@ -846,6 +846,19 @@ Closes #1113.
 
 ## [Unreleased]
 
+### Added
+- **Topic-environment sweep** (`.github/workflows/topic-sweep.yml`, #962). Teardown is driven by a
+  `pull_request: closed` event, and an event that never fires (approval-gated run, cancelled run,
+  offline runner, reboot) leaks a container forever. On 2026-08-08 one such orphan held port 3392
+  and stopped PR #1192 from deploying at all — topic ports are `3300 + PR % 100`, so a leak
+  silently steals the slot of every hundredth PR after it. The sweep reconciles instead of
+  trusting the event: list the `internship-crm-pr<N>` containers actually on the box, ask GitHub
+  which of those PRs are still open, tear down the rest. Split across runners because only the box
+  sees docker and only a hosted runner is guaranteed `gh`. A number that is not a PR at all is left
+  alone — the job only removes what it can prove is finished. It reports on every run, including
+  "nothing to do" (a silent janitor is how the ten orphans in #962 went unnoticed), and records
+  which container holds each 33xx port.
+
 ### Fixed
 - **The five specs failing in the scheduled full e2e suite** (run 31051715943). Both causes were
   test defects, not product bugs. Since #1008 gave `/admin/candidates` a separate `md:hidden`
