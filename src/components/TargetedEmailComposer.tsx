@@ -5,8 +5,22 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { LanguageBadge, languageBreakdown } from '@/components/LanguageBadge';
+import { locales, type Locale } from '@/i18n/config';
+import { getDictionary } from '@/i18n/dictionaries';
+
+interface EmailDraft {
+  subject: string;
+  body: string;
+}
+
+const TEMPLATE_KEYS = ['welcome', 'checkin', 'interview', 'followup'] as const;
+
+const emptyDraft = (): EmailDraft => ({ subject: '', body: '' });
+const blankDrafts = () =>
+  Object.fromEntries(locales.map((l) => [l, emptyDraft()])) as Record<Locale, EmailDraft>;
+const isWritten = (draft: EmailDraft) => !!draft.subject.trim() && !!draft.body.trim();
 
 interface Relation {
   id: string;
@@ -19,10 +33,15 @@ interface Relation {
 // already authorizes ADMIN and respects each recipient's email opt-out.
 export function TargetedEmailComposer() {
   const t = useT();
+  const locale = useLocale();
   const [relations, setRelations] = useState<Relation[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  // One message, up to three languages (#1165). The ready-made templates already
+  // exist in EN/TR/DE, but only the sender's locale was ever used — so a group of
+  // mentees who do not all read the same language got whichever one the sender's
+  // UI happened to be in.
+  const [drafts, setDrafts] = useState<Record<Locale, EmailDraft>>(blankDrafts);
+  const [tab, setTab] = useState<Locale>(locale);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -43,20 +62,41 @@ export function TargetedEmailComposer() {
   // they are about to write across before they start typing (#1164).
   const breakdown = languageBreakdown(chosenRelations.map((r) => r.mentee.preferredLanguage));
 
+  // Only complete languages travel: a subject with no body (or the reverse)
+  // would go out as a broken email, so it is left out and those recipients fall
+  // back to a language that was finished.
+  const written = locales.filter((l) => isWritten(drafts[l]));
+
+  // Picking a template fills EVERY language at once, not just the one on screen
+  // — the whole point is that the sender does not hand-translate.
+  const applyTemplate = (key: string) => {
+    setDrafts((prev) => {
+      const next = { ...prev };
+      for (const l of locales) {
+        const tpl = (getDictionary(l).emailTemplates as Record<string, EmailDraft>)[key];
+        if (tpl) next[l] = { subject: tpl.subject, body: tpl.body };
+      }
+      return next;
+    });
+  };
+
+  const patchDraft = (patch: Partial<EmailDraft>) =>
+    setDrafts((prev) => ({ ...prev, [tab]: { ...prev[tab], ...patch } }));
+
   const send = async () => {
     setSending(true);
     setResult(null);
     try {
+      const translations = Object.fromEntries(written.map((l) => [l, drafts[l]]));
       const res = await fetch('/api/mentor/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationIds: chosen, subject, body }),
+        body: JSON.stringify({ relationIds: chosen, translations }),
       });
       const data = await res.json();
       if (res.ok) {
         setResult(t.mentorEmail.sentCount.replace('{n}', String(data.sent)));
-        setSubject('');
-        setBody('');
+        setDrafts(blankDrafts());
         setSelected({});
       } else {
         setResult(data.error || 'Failed');
@@ -135,32 +175,79 @@ export function TargetedEmailComposer() {
               <select
                 id="email-template"
                 defaultValue=""
+                data-testid="email-template-select"
                 onChange={(e) => {
-                  const tpl = (t.emailTemplates as Record<string, { subject: string; body: string }>)[e.target.value];
-                  if (tpl) { setSubject(tpl.subject); setBody(tpl.body); }
+                  if (e.target.value) applyTemplate(e.target.value);
                   e.target.value = '';
                 }}
                 className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 focus:outline-none"
               >
                 <option value="">{t.mentorEmail.templatePlaceholder}</option>
-                {['welcome', 'checkin', 'interview', 'followup'].map((k) => (
+                {TEMPLATE_KEYS.map((k) => (
                   <option key={k} value={k}>{(t.emailTemplates as Record<string, { label: string }>)[k]?.label ?? k}</option>
                 ))}
               </select>
             </div>
-            <Input label={t.mentorEmail.subject} value={subject} onChange={(e) => setSubject(e.target.value)} />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-medium text-gray-700">{t.mentorEmail.languages}</span>
+              <div className="flex gap-1" role="tablist">
+                {locales.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === l}
+                    data-testid={`email-tab-${l}`}
+                    data-filled={isWritten(drafts[l]) ? 'true' : 'false'}
+                    onClick={() => setTab(l)}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold uppercase ${
+                      tab === l
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:!bg-gray-800 dark:!text-gray-300'
+                    }`}
+                  >
+                    {l}
+                    <span
+                      aria-hidden
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        isWritten(drafts[l])
+                          ? tab === l ? 'bg-white' : 'bg-green-500'
+                          : 'bg-transparent border border-current opacity-40'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Input
+              label={t.mentorEmail.subject}
+              data-testid="email-subject"
+              value={drafts[tab].subject}
+              onChange={(e) => patchDraft({ subject: e.target.value })}
+            />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t.mentorEmail.message}</label>
               <Textarea
                 rows={8}
                 aria-label={t.mentorEmail.message}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
+                data-testid="email-body"
+                value={drafts[tab].body}
+                onChange={(e) => patchDraft({ body: e.target.value })}
                 maxLength={10000}
                 showCounter
               />
             </div>
-            <Button onClick={send} loading={sending} disabled={chosen.length === 0 || !subject || !body}>
+            {/* Which of the ticked recipients this actually covers, and who
+                falls back — the sender should not have to cross-reference the
+                recipient list against the tabs by hand. */}
+            {written.length > 0 && (
+              <p data-testid="email-language-coverage" className="text-xs text-gray-500">
+                {t.mentorEmail.writtenIn.replace('{langs}', written.map((l) => l.toUpperCase()).join(', '))}
+                {breakdown.some(({ locale: l }) => !written.includes(l)) &&
+                  ` ${t.mentorEmail.fallbackTo.replace('{lang}', (written[0] ?? '').toUpperCase())}`}
+              </p>
+            )}
+            <Button onClick={send} loading={sending} disabled={chosen.length === 0 || written.length === 0}>
               {t.mentorEmail.send}
             </Button>
           </div>

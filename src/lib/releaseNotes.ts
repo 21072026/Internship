@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.58.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Bulk emails to mentees can be written in several languages. Pick a ready-made template and all three languages are filled in at once — no more translating by hand before every send.',
+        'Each mentee then receives the version in the language they chose. Anyone whose language you did not write gets the one you did, and the composer tells you upfront which languages you have covered.',
+      ],
+      tr: [
+        'Mentee’lere toplu e-postalar birden çok dilde yazılabiliyor. Hazır bir şablon seçtiğinizde üç dil birden doluyor — her gönderimden önce elle çeviri yapmak yok.',
+        'Her mentee e-postayı kendi seçtiği dilde alıyor. Dilini yazmadığınız kişiler yazdığınız sürümü alıyor ve besteci hangi dilleri kapsadığınızı baştan söylüyor.',
+      ],
+      de: [
+        'Sammel-E-Mails an Mentees lassen sich in mehreren Sprachen verfassen. Wählen Sie eine fertige Vorlage, und alle drei Sprachen werden auf einmal ausgefüllt — kein Handübersetzen mehr vor jedem Versand.',
+        'Jede Mentee erhält dann die Fassung in der selbst gewählten Sprache. Wessen Sprache Sie nicht geschrieben haben, bekommt die, die Sie geschrieben haben — und der Editor sagt Ihnen vorab, welche Sprachen Sie abgedeckt haben.',
+      ],
+    },
+  },
+  {
     version: '0.57.0-beta',
     date: '2026-08-08',
     highlights: {
