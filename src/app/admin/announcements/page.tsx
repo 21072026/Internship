@@ -16,10 +16,19 @@ import {
   ANNOUNCEMENT_IMAGE_MAX_BYTES,
   validateAnnouncementImage,
 } from '@/lib/announcementImage';
+import { locales, type Locale } from '@/i18n/config';
+
+type Bodies = Partial<Record<Locale, string>>;
+
+/** The languages a draft has actually been written in. */
+const filledLocales = (bodies: Bodies) => locales.filter((l) => !!bodies[l]?.trim());
 
 interface AnnouncementRecord {
   id: string;
   text: string;
+  // { en?, tr?, de? } — the languages this announcement was written in (#1163).
+  // Empty for a single-language one sent before (or without) translations.
+  translations: Bodies;
   link: string | null;
   imageUrl: string | null;
   sentByName: string | null;
@@ -31,7 +40,11 @@ interface AnnouncementRecord {
 export default function AdminAnnouncementsPage() {
   const t = useT();
   const locale = useLocale();
-  const [text, setText] = useState('');
+  // One announcement, up to three languages (#1163). The composer keeps a body
+  // per language and a tab for the one being typed; each reader is served their
+  // own, falling back to whichever was written.
+  const [bodies, setBodies] = useState<Bodies>({});
+  const [tab, setTab] = useState<Locale>(locale);
   const [link, setLink] = useState('');
   const [email, setEmail] = useState(false);
   const [image, setImage] = useState<{ file: File; url: string } | null>(null);
@@ -44,7 +57,8 @@ export default function AdminAnnouncementsPage() {
   // Editing a published announcement (#1162): which row is open, and the draft
   // being typed into it. An edit corrects the record — it never re-broadcasts.
   const [editId, setEditId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
+  const [editBodies, setEditBodies] = useState<Bodies>({});
+  const [editTab, setEditTab] = useState<Locale>(locale);
   const [editLink, setEditLink] = useState('');
   const [editDropImage, setEditDropImage] = useState(false);
   const [rowBusy, setRowBusy] = useState(false);
@@ -110,7 +124,8 @@ export default function AdminAnnouncementsPage() {
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    // At least one language must carry a message; the rest may stay empty.
+    if (filledLocales(bodies).length === 0) return;
     setSending(true);
     setResult(null);
     setError(null);
@@ -118,7 +133,7 @@ export default function AdminAnnouncementsPage() {
       // multipart for every submit (the API also still accepts JSON) — one code
       // path whether or not an image is attached.
       const body = new FormData();
-      body.append('text', text);
+      body.append('translations', JSON.stringify(bodies));
       if (link) body.append('link', link);
       body.append('email', String(email));
       if (image) body.append('image', image.file);
@@ -126,7 +141,7 @@ export default function AdminAnnouncementsPage() {
       const res = await fetch('/api/admin/announcements', { method: 'POST', body });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? t.common.error);
-      setText(''); setLink(''); setEmail(false); clearImage();
+      setBodies({}); setLink(''); setEmail(false); clearImage();
       setResult(t.announcements.sent.replace('{n}', String(data.recipients)));
       await fetchHistory();
     } catch (err) {
@@ -140,7 +155,12 @@ export default function AdminAnnouncementsPage() {
     setError(null);
     setResult(null);
     setEditId(a.id);
-    setEditText(a.text);
+    // A row sent before translations existed has only the canonical `text` —
+    // seed it under the reader's current language so an edit does not silently
+    // drop the original wording.
+    const existing = filledLocales(a.translations).length > 0 ? a.translations : { [locale]: a.text };
+    setEditBodies(existing);
+    setEditTab(filledLocales(existing)[0] ?? locale);
     setEditLink(a.link ?? '');
     setEditDropImage(false);
   };
@@ -151,7 +171,7 @@ export default function AdminAnnouncementsPage() {
   };
 
   const saveEdit = async () => {
-    if (!editId || !editText.trim()) return;
+    if (!editId || filledLocales(editBodies).length === 0) return;
     setRowBusy(true);
     setError(null);
     try {
@@ -159,7 +179,7 @@ export default function AdminAnnouncementsPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: editText,
+          translations: editBodies,
           ...(editLink ? { link: editLink } : {}),
           ...(editDropImage ? { imageAction: 'remove' } : {}),
         }),
@@ -197,6 +217,43 @@ export default function AdminAnnouncementsPage() {
     }
   };
 
+  // A row of language tabs with a dot on the ones already written. Long-form
+  // bodies do not fit side by side the way the goal-template titles do
+  // (src/app/admin/goal-templates/page.tsx), so the languages take turns in one
+  // box instead — and the dots keep "which have I filled in?" answerable at a
+  // glance.
+  const languageTabs = (bodies: Bodies, active: Locale, onPick: (l: Locale) => void, idPrefix: string) => (
+    <div className="flex gap-1" role="tablist">
+      {locales.map((l) => {
+        const filled = !!bodies[l]?.trim();
+        return (
+          <button
+            key={l}
+            type="button"
+            role="tab"
+            aria-selected={active === l}
+            data-testid={`${idPrefix}-tab-${l}`}
+            data-filled={filled ? 'true' : 'false'}
+            onClick={() => onPick(l)}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold uppercase ${
+              active === l
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:!bg-gray-800 dark:!text-gray-300'
+            }`}
+          >
+            {l}
+            <span
+              aria-hidden
+              className={`h-1.5 w-1.5 rounded-full ${
+                filled ? (active === l ? 'bg-white' : 'bg-green-500') : 'bg-transparent border border-current opacity-40'
+              }`}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div>
       <div className="mb-6">
@@ -212,18 +269,30 @@ export default function AdminAnnouncementsPage() {
           <CardHeader><CardTitle>{t.announcements.newAnnouncement}</CardTitle></CardHeader>
           <form onSubmit={send} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.announcements.message}</label>
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <label className="block text-sm font-medium text-gray-700">{t.announcements.message}</label>
+                {languageTabs(bodies, tab, setTab, 'announcement')}
+              </div>
               <Textarea
                 data-testid="announcement-text"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
+                value={bodies[tab] ?? ''}
+                onChange={(e) => setBodies((prev) => ({ ...prev, [tab]: e.target.value }))}
                 onPaste={onPaste}
                 rows={4}
-                required
                 maxLength={TEXT_LIMITS.announcementText}
                 showCounter
                 placeholder={t.announcements.messagePlaceholder}
               />
+              {/* Everyone gets a message either way; this says which language
+                  the ones you skipped will read. */}
+              <p className="mt-1.5 text-xs text-gray-400">
+                {filledLocales(bodies).length === 0
+                  ? t.announcements.langHint
+                  : t.announcements.langFallback.replace(
+                      '{lang}',
+                      (filledLocales(bodies)[0] ?? '').toUpperCase()
+                    )}
+              </p>
             </div>
             <Input label={t.announcements.link} type="url" placeholder="https://..." maxLength={TEXT_LIMITS.announcementLink} value={link} onChange={(e) => setLink(e.target.value)} />
 
@@ -295,10 +364,11 @@ export default function AdminAnnouncementsPage() {
                 <div key={a.id} data-testid={`announcement-${a.id}`} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
                   {editId === a.id ? (
                     <div className="space-y-2">
+                      {languageTabs(editBodies, editTab, setEditTab, 'announcement-edit')}
                       <Textarea
                         data-testid="announcement-edit-text"
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
+                        value={editBodies[editTab] ?? ''}
+                        onChange={(e) => setEditBodies((prev) => ({ ...prev, [editTab]: e.target.value }))}
                         rows={4}
                         maxLength={TEXT_LIMITS.announcementText}
                         showCounter

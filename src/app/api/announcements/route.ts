@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { announcementImageUrl } from '@/lib/announcementImage';
+import { resolveAnnouncementText, isAnnouncementFallback } from '@/lib/announcementText';
 
 // GET — paginated announcement history for the signed-in user. Admin
 // broadcasts (POST /api/admin/announcements) always target every active user
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
   // be a trivial way to read back the whole archive.
   const me = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { createdAt: true },
+    select: { createdAt: true, preferredLanguage: true },
   });
   // A session pointing at a user row that no longer exists gets an empty feed
   // rather than the entire history.
@@ -47,13 +48,28 @@ export async function GET(request: Request) {
       take: pageSize,
       // The attached image is referenced by URL, never inlined — selecting
       // `image: { id: true }` keeps the blob out of the JSON payload.
-      select: { id: true, text: true, link: true, createdAt: true, image: { select: { id: true } } },
+      select: {
+        id: true,
+        text: true,
+        translations: true,
+        link: true,
+        createdAt: true,
+        image: { select: { id: true } },
+      },
     }),
   ]);
 
   return NextResponse.json({
-    announcements: announcements.map(({ image, ...a }) => ({
+    // `text` is resolved server-side into this reader's language (#1163), so
+    // every client — the card, the archive — stays a plain string renderer and
+    // the per-locale bodies never travel to a browser that cannot use them.
+    announcements: announcements.map(({ image, translations, ...a }) => ({
       ...a,
+      text: resolveAnnouncementText({ text: a.text, translations }, me.preferredLanguage),
+      // True when this announcement was written in other languages but not the
+      // reader's — the UI says so instead of silently presenting a foreign
+      // message as if it had been meant for them.
+      languageFallback: isAnnouncementFallback({ translations }, me.preferredLanguage),
       imageUrl: image ? announcementImageUrl(a.id) : null,
     })),
     total,
