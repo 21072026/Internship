@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.55.3-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Fixed a sign-in failure that showed "Unexpected end of JSON input" and let no password through. Signing in now reads only what it needs from your account, so a stray value in a profile field can never cost you access again.',
+        'If something does go wrong while signing in, you now get a plain "something went wrong, please try again" instead of an internal error message.',
+      ],
+      tr: [
+        '"Unexpected end of JSON input" hatası veren ve hiçbir şifreyi kabul etmeyen giriş sorunu düzeltildi. Giriş artık hesabınızdan yalnızca ihtiyaç duyduğu alanları okuyor; profil alanlarınızdaki hatalı bir değer bir daha hesabınıza erişiminizi engellemeyecek.',
+        'Girişte yine de bir şeyler ters giderse, iç hata mesajı yerine anlaşılır bir "bir şeyler ters gitti, lütfen tekrar dene" mesajı görüyorsunuz.',
+      ],
+      de: [
+        'Ein Anmeldefehler ist behoben, der ‚Unexpected end of JSON input‘ anzeigte und kein Passwort mehr akzeptierte. Die Anmeldung liest jetzt nur noch, was sie wirklich braucht — ein fehlerhafter Wert in einem Profilfeld kann dich nie wieder aussperren.',
+        'Geht bei der Anmeldung doch etwas schief, erscheint jetzt ein verständliches ‚Etwas ist schiefgelaufen, bitte versuche es erneut‘ statt einer internen Fehlermeldung.',
+      ],
+    },
+  },
+  {
     version: '0.55.2-beta',
     date: '2026-08-08',
     highlights: {
@@ -533,7 +551,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     date: '2026-08-04',
     highlights: {
       en: [
-        'Half an hour before a meeting, your dashboard says so — with the join link right there. It covers both kinds: a meeting booked with you, and your project\u2019s recurring call (you see that one even if you have no mentorship attached to the project).',
+        'Half an hour before a meeting, your dashboard says so — with the join link right there. It covers both kinds: a meeting booked with you, and your project’s recurring call (you see that one even if you have no mentorship attached to the project).',
         'While a meeting is running, a green "Join" appears in the top right of every page, so you can get in from wherever you happen to be. It disappears an hour after the start.',
       ],
       tr: [

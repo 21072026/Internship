@@ -34,4 +34,6 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      - name: auth path reads only the columns it needs (#1150)
+        run: npm run check:auth-reads
       - run: npm run build
