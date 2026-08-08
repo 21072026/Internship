@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.57.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Announcements can be written in several languages at once. The composer has an EN / TR / DE tab with a dot showing which ones you have filled in — write one or write all three.',
+        'Everyone then reads the announcement in their own language: on the dashboard, in the announcements archive, in the notification bell, and in the email (the message itself, not just the subject around it). If you did not write their language, they get the version you did write and are told so, instead of a message that looks like it was meant for someone else.',
+      ],
+      tr: [
+        'Duyurular artık birden çok dilde yazılabiliyor. Yazma alanında EN / TR / DE sekmeleri var ve her sekmedeki nokta hangilerini doldurduğunuzu gösteriyor — bir dil de yazabilirsiniz, üçü de.',
+        'Herkes duyuruyu kendi dilinde okuyor: panelde, duyuru arşivinde, bildirim zilinde ve e-postada (yalnızca konu değil, mesajın kendisi). Bir kişinin dilini yazmadıysanız yazdığınız sürümü görüyor ve bunun böyle olduğu kendisine söyleniyor — başkasına yazılmış gibi duran bir mesajla baş başa kalmıyor.',
+      ],
+      de: [
+        'Ankündigungen lassen sich jetzt in mehreren Sprachen zugleich verfassen. Der Editor hat EN- / TR- / DE-Reiter, und ein Punkt zeigt, welche Sie schon ausgefüllt haben — schreiben Sie eine oder alle drei.',
+        'Jede Person liest die Ankündigung dann in ihrer eigenen Sprache: im Dashboard, im Ankündigungsarchiv, in der Benachrichtigungsglocke und in der E-Mail (die Nachricht selbst, nicht nur der Betreff darum herum). Haben Sie ihre Sprache nicht geschrieben, bekommt sie die verfasste Fassung — mit einem Hinweis, statt einer Nachricht, die wirkt, als sei sie für jemand anderen gedacht.',
+      ],
+    },
+  },
+  {
     version: '0.56.1-beta',
     date: '2026-08-08',
     highlights: {

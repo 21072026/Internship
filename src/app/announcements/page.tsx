@@ -9,7 +9,12 @@ import { formatDateTime } from '@/lib/relativeTime';
 
 interface AnnouncementItem {
   id: string;
+  // Already resolved into this reader's language by the API (#1163) — the
+  // per-locale bodies never travel to the browser.
   text: string;
+  // True when the announcement was written in other languages but not this
+  // reader's, so what they are looking at is a fallback.
+  languageFallback?: boolean;
   link: string | null;
   imageUrl: string | null;
   createdAt: string;
@@ -69,6 +74,15 @@ export default function AnnouncementsPage() {
             {items.map((a) => (
               <div key={a.id} className="px-4 py-4 border-b border-gray-50 dark:border-gray-800 last:border-0">
                 <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{a.text}</p>
+                {/* Saying so beats silently presenting a foreign-language
+                    message as though it had been written for this reader. The
+                    dashboard card stays clean — it is a two-line digest, and
+                    the full text is one click away, here. */}
+                {a.languageFallback && (
+                  <p data-testid="announcement-language-fallback" className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                    {t.announcements.languageFallbackNotice}
+                  </p>
+                )}
                 {a.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

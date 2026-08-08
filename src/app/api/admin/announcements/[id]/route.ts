@@ -12,6 +12,11 @@ import {
   ANNOUNCEMENT_IMAGE_MAX_BYTES,
   CONTENT_MISMATCH_ERROR,
 } from '@/lib/announcementImage';
+import {
+  normalizeAnnouncementTranslations,
+  canonicalAnnouncementText,
+  resolveAnnouncementText,
+} from '@/lib/announcementText';
 
 // Editing and deleting a published announcement (#1162). Until this existed a
 // typo in a broadcast was permanent and a superseded one stayed on everyone's
@@ -29,12 +34,26 @@ const IMAGE_ERROR: Record<string, string> = {
 };
 
 const schema = z.object({
-  text: z.string().min(1).max(TEXT_LIMITS.announcementText),
+  // Optional since #1163 — see the POST route: a body may arrive as `text`, as
+  // `translations`, or both, and the canonical `text` is derived from whichever
+  // is present.
+  text: z.string().max(TEXT_LIMITS.announcementText).optional(),
+  translations: z.record(z.string(), z.string()).optional(),
   link: z.string().max(TEXT_LIMITS.announcementLink).optional(),
   // 'keep' (default) leaves the attached image alone, 'remove' detaches it; a
   // new file on the multipart path replaces it.
   imageAction: z.enum(['keep', 'remove']).optional(),
 });
+
+/** A multipart field carrying JSON; an unparseable one is dropped, not thrown. */
+function safeJson(value: FormDataEntryValue | null): unknown {
+  if (typeof value !== 'string') return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
 
 // Same two body shapes POST accepts: JSON when there is no file, multipart when
 // the admin swaps the image.
@@ -47,7 +66,8 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
     const image = form.get('image');
     return {
       fields: {
-        text: form.get('text'),
+        ...(form.get('text') ? { text: form.get('text') } : {}),
+        ...(form.get('translations') ? { translations: safeJson(form.get('translations')) } : {}),
         ...(form.get('link') ? { link: form.get('link') } : {}),
         ...(form.get('imageAction') ? { imageAction: form.get('imageAction') } : {}),
       },
@@ -72,7 +92,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
-    const { text, link, imageAction } = parsed.data;
+    const { link, imageAction } = parsed.data;
+    const translations = normalizeAnnouncementTranslations(parsed.data.translations);
+    const text = canonicalAnnouncementText(translations, parsed.data.text);
+    if (!text) {
+      return NextResponse.json({ error: 'Validation failed', details: { formErrors: ['text required'] } }, { status: 400 });
+    }
 
     // Validated before anything is written, exactly as on POST: a rejected image
     // must not leave the text half-updated.
@@ -87,6 +112,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       where: { id },
       data: {
         text,
+        translations,
         link: link || null,
         ...(imageData && image
           ? {
@@ -107,10 +133,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // Rewrite the copy already delivered to everyone's bell, so the notification
     // and the announcement can never disagree.
-    await prisma.notification.updateMany({
+    //
+    // Each row holds the body in ITS OWN reader's language (#1163), so this is
+    // one statement per distinct resolved body — at most three — rather than a
+    // single blanket overwrite, which would flatten every recipient back to the
+    // canonical wording and undo the translation for two thirds of them.
+    const delivered = await prisma.notification.findMany({
       where: { announcementId: id },
-      data: { text, link: link || null },
+      select: { id: true, user: { select: { preferredLanguage: true } } },
     });
+    const byBody = new Map<string, string[]>();
+    for (const row of delivered) {
+      const body = resolveAnnouncementText({ text, translations }, row.user.preferredLanguage);
+      byBody.set(body, [...(byBody.get(body) ?? []), row.id]);
+    }
+    for (const [body, ids] of byBody) {
+      await prisma.notification.updateMany({
+        where: { id: { in: ids } },
+        data: { text: body, link: link || null },
+      });
+    }
 
     const withImage = await prisma.announcement.findUnique({
       where: { id },

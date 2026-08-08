@@ -532,6 +532,12 @@ model Announcement {
   // Broadcast body — TEXT, not the default VARCHAR(191), so admins can publish
   // long-form announcements (release notes, articles) without hitting a limit.
   text           String   @db.Text
+  // { en?, tr?, de? } — the announcement in each language it was written in
+  // (#1163). `text` above stays the canonical wording and the fallback for a
+  // reader whose language has no entry here, so every row written before this
+  // column existed keeps working untouched. Nullable for the same reason.
+  // Resolved per reader in src/lib/announcementText.ts.
+  translations   Json?
   // VarChar(500) to match the API's 500-char cap — see Notification.link.
   link           String?  @db.VarChar(500)
   sentById       String

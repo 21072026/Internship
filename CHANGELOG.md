@@ -8,6 +8,38 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.57.0-beta] - 2026-08-08
+
+### Added
+- **Multilingual announcements** (#1163). An announcement was a single body sent to everyone,
+  even though every `User` has a `preferredLanguage` and the app speaks EN/TR/DE — the email
+  translated only its *shell* (subject, link label) while the message itself went out in one
+  language.
+  - `Announcement.translations` (nullable `Json`, `{ en?, tr?, de? }`). `text` stays the
+    canonical wording — the default locale's version, or the first language filled in — so every
+    row written before this column existed keeps working untouched.
+  - `src/lib/announcementText.ts` resolves per reader: their language, then the default locale,
+    then `text`. Deliberately the same shape as `src/lib/goalTemplates.ts`, which solved this
+    first for goal templates — one canonical column plus a nullable JSON map — so there is one
+    mental model, not two.
+  - The admin composer takes language tabs with a written/not-written dot per language (one box
+    at a time: long-form bodies do not fit side by side the way goal-template titles do). At
+    least one language is required; the rest may stay empty.
+  - Resolution reaches every surface: `GET /api/announcements` returns `text` already in the
+    reader's language (the per-locale bodies never travel to a browser that cannot use them),
+    each `Notification` row is written in **its own** recipient's language at fan-out, and the
+    announcement email's **body** now follows the recipient too, not just the subject around it.
+  - `languageFallback` marks a reader who is seeing a language they did not choose, and the
+    archive says so rather than presenting a foreign-language message as if it were meant for
+    them. The dashboard card stays clean — it is a two-line digest and the full text is one
+    click away.
+
+### Changed
+- `PATCH /api/admin/announcements/[id]` accepts `translations` too, and re-resolves the already
+  delivered notifications **per language** — one statement per distinct resolved body rather
+  than a single blanket overwrite, which would have flattened every recipient back to the
+  canonical wording and undone the translation for two thirds of them.
+
 ## [0.56.1-beta] - 2026-08-08
 
 ### Added
