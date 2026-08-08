@@ -13,6 +13,7 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { VersionFooter } from '@/components/VersionFooter';
 import { BetaBadge } from '@/components/BetaBadge';
+import { TawkChat } from '@/components/TawkChat';
 import { APP_VERSION } from '@/lib/version';
 import { RELEASE_NOTES } from '@/lib/releaseNotes';
 
@@ -581,6 +582,10 @@ export default async function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Live chat for visitors who would rather ask than read (#1174). Landing
+          page only, and only once marketing cookies are accepted. */}
+      <TawkChat />
     </div>
   );
 }

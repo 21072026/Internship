@@ -1,9 +1,12 @@
 import { writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
+import { COOKIE_CONSENT_KEY, COOKIE_CONSENT_VERSION } from '../src/lib/cookieConsent';
 
 // Pre-seed the cookie-consent choice so the consent banner doesn't overlap
 // bottom-of-page actions during tests (a returning visitor wouldn't see it).
 // The dedicated legal-consent spec overrides storageState to get a clean slate.
+// Read straight from the app so bumping COOKIE_CONSENT_VERSION doesn't silently
+// put the banner back in front of every test in the suite.
 export default async function globalSetup() {
   const origin = process.env.BASE_URL || 'http://localhost:3000';
   const state = {
@@ -12,7 +15,7 @@ export default async function globalSetup() {
       {
         origin,
         localStorage: [
-          { name: 'cookie_consent', value: JSON.stringify({ version: 2, necessary: true, analytics: false, marketing: false, ts: '2026-01-01T00:00:00.000Z' }) },
+          { name: COOKIE_CONSENT_KEY, value: JSON.stringify({ version: COOKIE_CONSENT_VERSION, necessary: true, analytics: false, marketing: false, ts: '2026-01-01T00:00:00.000Z' }) },
         ],
       },
     ],

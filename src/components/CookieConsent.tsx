@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useT } from '@/i18n/client';
 import { useFixedBottomInset } from '@/hooks/useFixedBottomInset';
 import {
+  COOKIE_CONSENT_EVENT,
   COOKIE_CONSENT_KEY,
   COOKIE_CONSENT_VERSION,
   readCookieConsent,
@@ -42,6 +43,9 @@ export function CookieConsent() {
     });
     try { localStorage.setItem(COOKIE_CONSENT_KEY, value); } catch { /* ignore */ }
     document.cookie = `${COOKIE_CONSENT_KEY}=${encodeURIComponent(value)}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+    // Let consent-gated scripts (the tawk.to chat, #1174) react to the choice
+    // immediately instead of only on the next page load.
+    window.dispatchEvent(new Event(COOKIE_CONSENT_EVENT));
     setShow(false);
   };
 
