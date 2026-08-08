@@ -3262,3 +3262,27 @@ paylaşılan **preview** DB'sine bakıyor; `DATA_ACCESS_POLICY` gereği dev sunu
 bağlamak yok. Worktree'ye kendi `.env`'ini yazıp yerel MariaDB'ye (`crm:crm@127.0.0.1`)
 bağlamak 2 dakika sürdü ve `preview_start` + `computer screenshot` ile gerçek görsel doğrulama
 verdi. Bir sonraki oturum için: worktree'de `.env` yok, ilk iş onu yazmak.
+
+**`tsc --noEmit` temiz olması derlemenin geçeceği anlamına gelmiyor.** `next build` içinde
+ESLint de koşuyor, ve `@typescript-eslint/no-unused-vars` bir *hata* (uyarı değil). #1166'da
+tanımlanıp hiç okunmayan bir prop üç işi birden düşürdü: `Lint · Typecheck · Build`,
+`Build image` ve `Playwright smoke` — sonuncusu testler yüzünden değil, uygulamayı derleyemediği
+için. Push etmeden önce `npx tsc --noEmit` yetmez; ekranda bir React bileşeni değiştiyse
+`npm run build` koşun. (Düzeltme prop'u silmek değil kullanmaktı: çağıran zaten kişinin rolünü
+biliyor, o yüzden profil linki fetch'i beklemeden ilk boyamada doğru çözülüyor.)
+
+**Hover kartında iki hata, ikisi de "gerçek tıklama" ile ortaya çıktı.** (1) Gerçek bir işaretçi
+tıklaması önce tetikleyiciyi **odaklıyor**; `onFocus` kartı açtığı için `onClick`'teki toggle
+onu her masaüstü tıklamasında geri kapatıyordu — tetikleyici açmalı, asla toggle etmemeli;
+kapatma işaretçi-çıkışı/Escape/dışarı-tıklama işi. (2) Konumu olay anında `getBoundingClientRect`
+ile ölçmek, istemci tarafında dolan listelerde henüz oturmamış düzeni yakalayıp kartı ekranın
+köşesine park ediyordu — ölçüm `useLayoutEffect` içinde, açılış render'ından sonra yapılmalı.
+Her ikisi de `javascript_tool` ile atılan **sentetik** click'te görünmez: sentetik olay odak
+sırasını ve gerçek düzeni taklit etmiyor, hatta beni yanlış yöne sürükledi. Konumlandırmayı
+Playwright'ta `boundingBox()` ile ölçün — davranışı gerçek tıklamayla doğrulayan tek yol.
+
+**Aynı dosyaya dokunan iki dalınız varsa stash + rebase'e güvenmeyin.** #1166 dalı
+`TargetedEmailComposer.tsx`'i #1171 (çok dilli şablonlar) merge olmadan önce düzenlemişti.
+`git stash pop` sadece import satırını çakışma olarak işaretledi, ama stash'teki sürüm dosyanın
+*eski* gövdesini taşıyordu — sessizce #1171'i geri alabilirdi. Doğrusu: çakışan dosyayı
+`git checkout HEAD -- <dosya>` ile upstream'e sıfırlayıp küçük değişikliği yeniden uygulamak.
