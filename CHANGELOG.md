@@ -8,6 +8,25 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.55.7-beta] - 2026-08-08
+
+### Changed
+- **Announcements start the day you join** (#1161). The dashboard card and the
+  `/announcements` archive both read `GET /api/announcements`, which returned the whole
+  `Announcement` table to every signed-in user — so a brand-new account's first screen was
+  filled with other people's history ("the meeting has started", "re-point your git remote
+  today"), messages written for whoever was in the room at the time and, read weeks later,
+  misleading.
+  - The feed is now cut at the reader's own `User.createdAt` (`where: { createdAt: { gte } }`,
+    applied to the `count` as well, so pagination cannot walk back past it).
+  - The per-user notification bell already behaved this way for free — `Notification` rows are
+    created during the broadcast fan-out, so an account created later simply has none. This
+    brings the two remaining surfaces in line with it.
+  - The complete record is untouched at `/admin/announcements`, which is the sending log.
+  - The cutoff is read from the database, never from the session: a JWT minted before this
+    shipped carries no such claim, and a client-supplied date would be a trivial way to read
+    the archive back. A session pointing at a deleted user row gets an empty feed.
+
 ## [0.55.6-beta] - 2026-08-08
 
 ### Fixed

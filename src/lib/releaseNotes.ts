@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.55.7-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Announcements now start the day you join. A new account used to open onto everyone else\'s back catalogue — "the meeting has started", "re-point your git remote today" — messages written for the people who were there, which are confusing to read weeks later. You now see what was announced from your first day onward, on the dashboard card and in the announcements archive alike.',
+      ],
+      tr: [
+        'Duyurular artık katıldığınız günden başlıyor. Yeni bir hesap, açıldığında herkesin geçmiş duyurularını görüyordu — "toplantı başladı", "bugün git remote adresinizi değiştirin" gibi, o an orada olanlara yazılmış ve haftalar sonra okununca kafa karıştıran mesajlar. Artık ilk gününüzden itibaren duyurulanları görüyorsunuz; hem panel kartında hem duyuru arşivinde.',
+      ],
+      de: [
+        'Ankündigungen beginnen jetzt an dem Tag, an dem Sie dazukommen. Ein neues Konto öffnete sich bisher auf dem Archiv aller anderen — "das Meeting hat begonnen", "richtet heute euer Git-Remote neu aus" — Nachrichten für die, die damals dabei waren, und Wochen später verwirrend. Sie sehen nun, was ab Ihrem ersten Tag angekündigt wurde, auf der Dashboard-Karte wie im Ankündigungsarchiv.',
+      ],
+    },
+  },
+  {
     version: '0.55.6-beta',
     date: '2026-08-08',
     highlights: {

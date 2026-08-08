@@ -7,7 +7,17 @@ import { announcementImageUrl } from '@/lib/announcementImage';
 // GET — paginated announcement history for the signed-in user. Admin
 // broadcasts (POST /api/admin/announcements) always target every active user
 // and the Announcement model carries no per-role/org/user targeting fields,
-// so any authenticated user reads the same shared history here.
+// so the only thing that varies per reader is *when they joined*.
+//
+// A user sees nothing that was broadcast before their account existed (#1161).
+// An announcement is a message to the people who were there — "the meeting has
+// started", "re-point your git remote today" — not a history lesson for
+// whoever signs up next month; read weeks late it is noise at best and
+// actively misleading at worst. This covers both surfaces that read this route:
+// the dashboard card and the /announcements archive. The per-user notification
+// bell already behaves this way for free (rows are created at broadcast time,
+// so a later account simply has none). The full record stays available to
+// admins at /admin/announcements, which is the sending log.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -16,9 +26,22 @@ export async function GET(request: Request) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '10', 10) || 10));
 
+  // The cutoff is read from the DB, never from the session/JWT: a token minted
+  // before this shipped has no joinedAt claim, and a client-supplied date would
+  // be a trivial way to read back the whole archive.
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { createdAt: true },
+  });
+  // A session pointing at a user row that no longer exists gets an empty feed
+  // rather than the entire history.
+  if (!me) return NextResponse.json({ announcements: [], total: 0, page, pageSize });
+  const where = { createdAt: { gte: me.createdAt } };
+
   const [total, announcements] = await Promise.all([
-    prisma.announcement.count(),
+    prisma.announcement.count({ where }),
     prisma.announcement.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
