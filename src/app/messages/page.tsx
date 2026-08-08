@@ -2,7 +2,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { MessageSquare, LifeBuoy } from 'lucide-react';
+import { MessageSquare, LifeBuoy, UserRound } from 'lucide-react';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
@@ -82,6 +83,9 @@ export default async function MessagesInboxPage() {
       otherName: c.type === 'GROUP'
         ? t.messages.projectGroup.replace('{name}', c.project?.name ?? '—')
         : c.participants.find((p) => p.userId !== me)?.user.fullName ?? '—',
+      // Who the row is about, so the name can carry a person card (#1166).
+      // Null for a group room — it is named after its project, not a person.
+      otherId: c.type === 'GROUP' ? null : c.participants.find((p) => p.userId !== me)?.userId ?? null,
       last: c.messages[0] ?? null,
       unread: c._count.messages,
     }))
@@ -158,8 +162,16 @@ export default async function MessagesInboxPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm truncate ${th.unread > 0 ? 'font-bold text-gray-900' : 'font-medium text-gray-900'}`}>
-                        {th.otherName}
+                      <span className={`flex min-w-0 items-center gap-1.5 text-sm truncate ${th.unread > 0 ? 'font-bold text-gray-900' : 'font-medium text-gray-900'}`}>
+                        <span className="truncate">{th.otherName}</span>
+                        {/* The whole row is a link into the thread, so the name
+                            itself cannot be the card's trigger — it gets its own
+                            icon, same as the email composer's checkbox rows. */}
+                        {th.otherId && (
+                          <PersonHoverCard personId={th.otherId} className="no-underline">
+                            <UserRound className="h-3.5 w-3.5 text-gray-400 hover:text-blue-600" aria-hidden />
+                          </PersonHoverCard>
+                        )}
                       </span>
                       {th.last && (
                         <span className="text-xs text-gray-400 shrink-0">{relativeTime(th.last.createdAt, locale)}</span>

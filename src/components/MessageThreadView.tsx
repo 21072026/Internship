@@ -19,6 +19,7 @@ import { useMessagesHeaderTitle } from '@/components/MessagesShell';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { LanguageBadge } from '@/components/LanguageBadge';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 
 interface Attachment {
@@ -344,7 +345,13 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 mb-1">{t.messages.title}</h1>
             <p className="flex items-center gap-2 text-gray-500">
-              <span className="truncate">{threadTitle}</span>
+              {/* A 1:1 thread is named after a person, so the name is a way to
+                  reach them (#1166); a group room is named after its project. */}
+              {!group && other ? (
+                <PersonHoverCard personId={other.id} name={other.fullName} className="truncate" />
+              ) : (
+                <span className="truncate">{threadTitle}</span>
+              )}
               {/* 1:1 only — a group room has no single language to name. */}
               {!group && other && <LanguageBadge language={other.preferredLanguage} />}
             </p>
