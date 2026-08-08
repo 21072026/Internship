@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.55.6-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'A way back out of the project showcase. The page had no sidebar and no back link, so once you opened it the only way out was the browser\'s back button. There is now a back link above the title — it returns you to your own dashboard when you are signed in, and to the home page otherwise.',
+      ],
+      tr: [
+        'Proje vitrininden geri dönüş. Sayfada ne kenar çubuğu ne de geri linki vardı; bir kez açtığınızda çıkmanın tek yolu tarayıcının geri tuşuydu. Artık başlığın üstünde bir geri linki var — oturum açtıysanız sizi kendi panelinize, açmadıysanız ana sayfaya götürüyor.',
+      ],
+      de: [
+        'Ein Weg zurück aus dem Projekt-Showcase. Die Seite hatte weder Seitenleiste noch Zurück-Link — einmal geöffnet, blieb nur der Zurück-Button des Browsers. Über dem Titel steht jetzt ein Zurück-Link: angemeldet zurück zum eigenen Dashboard, sonst zur Startseite.',
+      ],
+    },
+  },
+  {
     version: '0.55.5-beta',
     date: '2026-08-08',
     highlights: {

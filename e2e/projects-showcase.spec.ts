@@ -33,3 +33,38 @@ test('public project showcase shows public projects only', async ({ page }) => {
     await cleanupByEmail(ownerEmail);
   }
 });
+
+// #1159: /projects lives outside the role shell — no sidebar, and the header
+// wordmark was the only link on the page. A signed-in visitor who followed
+// "Browse the project showcase" from /portal/projects had no way back into the
+// app short of the browser's back button (and on mobile, no chrome at all).
+test('project showcase has a back link, targeted at who is looking', async ({ page }) => {
+  const menteeEmail = uniqueEmail('show-back-mentee');
+  const pw = 'ShowBack123';
+  await seedUser(menteeEmail, pw, 'MENTEE', 'Showcase Back Mentee');
+
+  try {
+    // Anonymous visitor: back to the landing page.
+    await page.goto('/projects');
+    const anonBack = page.getByTestId('showcase-back');
+    await expect(anonBack).toBeVisible({ timeout: 10_000 });
+    await expect(anonBack).toHaveText('Back to home');
+    await anonBack.click();
+    await page.waitForURL((u) => u.pathname === '/', { timeout: 20_000 });
+
+    // Signed-in mentee: back to their own dashboard, not the landing page.
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', menteeEmail);
+    await page.fill('input[type="password"]', pw);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    await page.goto('/projects');
+    const back = page.getByTestId('showcase-back');
+    await expect(back).toHaveText('Back to dashboard', { timeout: 10_000 });
+    await back.click();
+    await page.waitForURL((u) => u.pathname === '/portal', { timeout: 20_000 });
+  } finally {
+    await cleanupByEmail(menteeEmail);
+  }
+});
