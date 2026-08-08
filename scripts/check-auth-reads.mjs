@@ -13,22 +13,31 @@
 
 import { readFileSync } from 'node:fs';
 
+// Every file on the way in: sign-in itself, plus the two routes a locked-out
+// user reaches for. `forgot` matters as much as `auth.ts` — it answers a generic
+// "ok: true" whether or not the mail went out, so a throw in there is invisible
+// and the reset link simply never arrives.
 // Overridable so the guard itself can be exercised against a fixture.
-const FILE = process.argv[2] || 'src/lib/auth.ts';
-// Reads/writes on User in this module must all be column-scoped. Grant lookups
+const FILES =
+  process.argv.length > 2
+    ? process.argv.slice(2)
+    : [
+        'src/lib/auth.ts',
+        'src/app/api/auth/forgot/route.ts',
+        'src/app/api/auth/verify-email/resend/route.ts',
+      ];
+// Reads/writes on User in these modules must all be column-scoped. Grant lookups
 // (impersonationGrant, ssoLoginGrant) carry no Json columns and are exempt.
 const GUARDED = ['prisma.user.findUnique(', 'prisma.user.findFirst(', 'prisma.user.update('];
-// Never widen the auth select to a Json column: that would re-open the hole.
+// Never widen one of these selects to a Json column: that would re-open the hole.
 const JSON_COLUMNS = ['skills', 'languages', 'skillLevels', 'notificationPrefs'];
 
-const source = readFileSync(FILE, 'utf8');
 const problems = [];
-
-const lineOf = (index) => source.slice(0, index).split('\n').length;
+let checked = 0;
 
 // Walk from the call's opening paren to its match so nested objects/arrays in
 // the argument can't confuse the check.
-function callArguments(from) {
+function callArguments(source, from) {
   let depth = 0;
   for (let i = from; i < source.length; i++) {
     const c = source[i];
@@ -41,33 +50,41 @@ function callArguments(from) {
   return source.slice(from);
 }
 
-for (const call of GUARDED) {
-  let at = source.indexOf(call);
-  while (at !== -1) {
-    const args = callArguments(at + call.length - 1);
-    if (!/\bselect\s*:/.test(args)) {
-      problems.push(
-        `${FILE}:${lineOf(at)}  ${call.replace('prisma.user.', 'prisma.user.').replace('(', '')} has no \`select:\` — ` +
-          'it hydrates every User column, including the Json ones. Use AUTH_USER_SELECT (or a narrower select).'
-      );
-    }
-    for (const column of JSON_COLUMNS) {
-      if (new RegExp(`\\b${column}\\s*:\\s*true\\b`).test(args)) {
+for (const file of FILES) {
+  const source = readFileSync(file, 'utf8');
+  const lineOf = (index) => source.slice(0, index).split('\n').length;
+
+  for (const call of GUARDED) {
+    let at = source.indexOf(call);
+    while (at !== -1) {
+      checked++;
+      const args = callArguments(source, at + call.length - 1);
+      if (!/\bselect\s*:/.test(args)) {
         problems.push(
-          `${FILE}:${lineOf(at)}  selects the Json column \`${column}\` — the auth path must not read Json columns.`
+          `${file}:${lineOf(at)}  ${call.replace('(', '')} has no \`select:\` — it hydrates every ` +
+            'User column, including the Json ones. Use AUTH_USER_SELECT (or a narrower select).'
         );
       }
+      for (const column of JSON_COLUMNS) {
+        if (new RegExp(`\\b${column}\\s*:\\s*true\\b`).test(args)) {
+          problems.push(
+            `${file}:${lineOf(at)}  selects the Json column \`${column}\` — the way in must not read Json columns.`
+          );
+        }
+      }
+      at = source.indexOf(call, at + 1);
     }
-    at = source.indexOf(call, at + 1);
   }
 }
 
 if (problems.length > 0) {
-  console.error('auth reads FAILED — authentication must not depend on columns it does not use:\n');
+  console.error('auth reads FAILED — getting in must not depend on columns it does not use:\n');
   for (const problem of problems) console.error(`  • ${problem}`);
-  console.error(`\nSee the AUTH_USER_SELECT comment in ${FILE}.`);
+  console.error('\nSee the AUTH_USER_SELECT comment in src/lib/auth.ts.');
   process.exit(1);
 }
 
-const guarded = GUARDED.reduce((n, call) => n + source.split(call).length - 1, 0);
-console.log(`auth reads OK — ${guarded} User query/queries in ${FILE}, all column-scoped, no Json columns.`);
+console.log(
+  `auth reads OK — ${checked} User query/queries across ${FILES.length} file(s), ` +
+    'all column-scoped, no Json columns.'
+);

@@ -228,6 +228,20 @@ run_tool() { # run a one-off tool container against the DB (network per $NETWORK
 log "prisma db push"
 run_tool npx prisma db push --accept-data-loss
 
+# Immediately after the push, because the push itself is what breaks these
+# (#1150). Prisma DROPS `@default` when it emits DDL for a `Json` field, so a
+# new one becomes a bare `ALTER TABLE ... ADD COLUMN x JSON NOT NULL`; on
+# MariaDB — which prod is, and where `JSON` is only an alias for
+# `LONGTEXT utf8mb4_bin` — that backfills every PRE-EXISTING row with the empty
+# string, silently, even under STRICT_TRANS_TABLES. Prisma then JSON.parse()s
+# the column on read, so every one of those rows becomes unreadable: adding
+# `User.languages` (#1078) locked every account that predated the deploy out of
+# sign-in with "Unexpected end of JSON input". This resets values that are
+# already unreadable to the schema default — inert garbage in, valid JSON out,
+# never a value the app could have used. Converges to a no-op.
+log "repair invalid Json column values (idempotent)"
+run_tool node prisma/backfill-json-columns.mjs --repair || true
+
 # ── 4. Idempotent seeds / backfills ──────────────────────────────────────────
 log "seed-templates + project-member backfill (idempotent)"
 run_tool node prisma/seed-templates.mjs || true

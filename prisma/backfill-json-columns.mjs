@@ -12,8 +12,8 @@
 // #1150: the admin's `User` row could not be read at all, so no password would
 // ever get them in.
 //
-//   node scripts/check-json-columns.mjs            # report only (safe, read-only)
-//   node scripts/check-json-columns.mjs --repair   # reset bad values to the column default
+//   node prisma/backfill-json-columns.mjs            # report only (safe, read-only)
+//   node prisma/backfill-json-columns.mjs --repair   # reset bad values to the column default
 //
 // Reads DATABASE_URL from the environment. Reports ids and value lengths only —
 // never the value itself, which may contain personal data.
