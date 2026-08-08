@@ -2,7 +2,14 @@
 // categories or their meaning change — the banner re-prompts when the stored
 // version is older, so consent stays current (GDPR/TTDSG demonstrability).
 export const COOKIE_CONSENT_KEY = 'cookie_consent';
-export const COOKIE_CONSENT_VERSION = 2;
+// v3 (#1174): "marketing" now actually loads something — the tawk.to live chat
+// on the landing page — so a choice made when the category was purely
+// hypothetical no longer covers it. Everyone is asked once more.
+export const COOKIE_CONSENT_VERSION = 3;
+
+// Fired on `window` right after a choice is saved, so consent-gated scripts can
+// start (or stay away) without waiting for a full page load.
+export const COOKIE_CONSENT_EVENT = 'cookieconsentchange';
 
 export interface CookieConsentValue {
   version: number;

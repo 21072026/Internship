@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.60.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'There is now a live chat on the home page. If you are looking around and have a question, ask it there instead of writing an email and waiting.',
+        'It only appears once you accept marketing cookies — until then nothing is loaded from the chat provider at all. Because that choice now means something new, the cookie banner asks everyone once more.',
+      ],
+      tr: [
+        'Ana sayfada artık canlı sohbet var. Sayfaya göz atarken bir sorunuz olursa e-posta yazıp beklemek yerine oradan sorabilirsiniz.',
+        'Sohbet yalnızca pazarlama çerezlerini kabul ettiğinizde çıkıyor; o ana kadar sohbet sağlayıcısından hiçbir şey yüklenmiyor. Bu tercih artık yeni bir anlam taşıdığı için çerez bildirimi herkese bir kez daha soruyor.',
+      ],
+      de: [
+        'Auf der Startseite gibt es jetzt einen Live-Chat. Wenn Sie sich umsehen und eine Frage haben, stellen Sie sie dort — statt eine E-Mail zu schreiben und zu warten.',
+        'Er erscheint erst, wenn Sie Marketing-Cookies akzeptieren; bis dahin wird vom Chat-Anbieter überhaupt nichts geladen. Weil diese Entscheidung nun etwas Neues bedeutet, fragt der Cookie-Hinweis alle noch einmal.',
+      ],
+    },
+  },
+  {
     version: '0.59.0-beta',
     date: '2026-08-08',
     highlights: {

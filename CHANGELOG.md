@@ -8,6 +8,46 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.60.0-beta] - 2026-08-08
+
+### Added
+- **Live chat on the landing page** (#1174). A visitor who is not signed in can now ask a
+  question from `/` instead of composing an email — the tawk.to widget, mounted on the
+  landing page and nowhere else.
+  - `src/components/TawkChat.tsx` injects the embed **only** when
+    `hasConsent('marketing')` is true. This is the first script to use the gate the consent
+    banner was built for (EPIC K, #424) — before opt-in, nothing is requested from tawk.to
+    at all. The widget id is public by design (it ships in the page HTML), so it is a
+    constant in the component rather than an env var.
+  - The embed attaches itself to `document`, not to the React tree, so it survives a
+    client-side navigation off `/`. The component hides it on unmount, and sets
+    `Tawk_API.onLoad` to hide it on arrival for the case where the visitor already left
+    while the script was still loading.
+  - `CookieConsent` now dispatches a `cookieconsentchange` event on `window` after saving
+    (`COOKIE_CONSENT_EVENT` in `src/lib/cookieConsent.ts`), so accepting brings the chat up
+    on the spot instead of on the next page load.
+- Cookie-banner copy for the "Marketing" category names the live chat and tawk.to in EN/TR/DE.
+
+### Changed
+- `COOKIE_CONSENT_VERSION` 2 → 3. "Marketing" now actually loads a third-party script that
+  sees the visitor's IP; a choice made while the category was purely hypothetical does not
+  cover that, so the banner asks once more.
+- CSP (`next.config.js`) allows `https://*.tawk.to` for `script-src`, `style-src`, `img-src`,
+  `font-src`, `frame-src`, plus `wss://*.tawk.to` in `connect-src` and a new `media-src`
+  (notification sound — it previously fell back to `default-src 'self'`). The widget also
+  pulls its emoji picker from jsdelivr, allowed as `https://cdn.jsdelivr.net/emojione/` —
+  a path-scoped source, because allowing all of cdn.jsdelivr.net would mean allowing
+  anything ever published to npm. Headers are per-request, so this is app-wide even though
+  the widget is landing-page-only; the consent gate, not the CSP, is what keeps it from
+  loading elsewhere.
+- `e2e/global-setup.ts` reads `COOKIE_CONSENT_KEY`/`COOKIE_CONSENT_VERSION` from the app
+  instead of hard-coding them, so a future version bump can't silently put the banner back
+  in front of every test in the suite.
+
+### Notes
+- The privacy notice does not name tawk.to as a recipient yet (#1177) — that means bumping
+  `PRIVACY_POLICY_VERSION`, which is the maintainer's call.
+
 ## [0.59.0-beta] - 2026-08-08
 
 ### Added
