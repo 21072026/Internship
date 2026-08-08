@@ -45,7 +45,7 @@ version is shown in the sidebar footer of every page (links to the
   in front of every test in the suite.
 
 ### Notes
-- The privacy notice does not name tawk.to as a recipient yet (#1175) — that means bumping
+- The privacy notice does not name tawk.to as a recipient yet (#1177) — that means bumping
   `PRIVACY_POLICY_VERSION`, which is the maintainer's call.
 
 ## [0.58.0-beta] - 2026-08-08
