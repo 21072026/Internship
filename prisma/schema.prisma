@@ -500,21 +500,28 @@ model MessageAttachment {
 
 // In-app notification for a user.
 model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String
+  id             String   @id @default(cuid())
+  userId         String
+  type           String
   // Long-form text (e.g. a broadcast announcement fanned out to every user) —
   // TEXT, not the default VARCHAR(191), so long messages aren't truncated/rejected.
-  text      String   @db.Text
+  text           String   @db.Text
   // VarChar(500) to match the 500-char cap the announcement API validates; the
   // VARCHAR(191) default rejected long tracking URLs with an unhandled 500.
-  link      String?  @db.VarChar(500)
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  link           String?  @db.VarChar(500)
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  // Set on the rows a broadcast fanned out, so editing the announcement can
+  // correct the copy sitting in everyone's bell and deleting it can take those
+  // rows with it (#1162). Nullable: every other notification type has no
+  // announcement behind it, and an existing row predates this column — a
+  // NOT NULL addition here would need a backfill on a live table.
+  announcementId String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([announcementId])
 }
 
 // One row per broadcast admin announcement (distinct from the per-recipient

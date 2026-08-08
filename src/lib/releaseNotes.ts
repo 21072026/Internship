@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.56.1-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Announcements can now be corrected or taken back. Editing one fixes it everywhere it landed — including the notification already sitting in each person\u2019s bell — and it is not sent again, so a typo fix does not ping everyone a second time. Deleting one removes it from the announcements page and from those notifications too.',
+      ],
+      tr: [
+        'Duyurular artık düzeltilebiliyor ve geri alınabiliyor. Bir duyuruyu düzenlemek onu ulaştığı her yerde düzeltir — herkesin bildirim zilinde duran bildirim dâhil — ve yeniden gönderilmez, yani bir yazım hatasını düzeltmek kimseye ikinci kez bildirim çıkarmaz. Silmek ise duyuruyu hem duyurular sayfasından hem o bildirimlerden kaldırır.',
+      ],
+      de: [
+        'Ankündigungen lassen sich jetzt korrigieren oder zurücknehmen. Eine Bearbeitung berichtigt sie überall dort, wo sie angekommen ist — auch in der Benachrichtigung, die bereits in der Glocke jeder Person liegt — und sie wird nicht erneut versendet, eine Tippfehler-Korrektur benachrichtigt also niemanden ein zweites Mal. Beim Löschen verschwindet sie von der Ankündigungsseite und aus diesen Benachrichtigungen.',
+      ],
+    },
+  },
+  {
     version: '0.56.0-beta',
     date: '2026-08-08',
     highlights: {
