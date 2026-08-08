@@ -3154,3 +3154,57 @@ verirken aynı worktree'de çalıştım: benim `auth.ts` düzenlemelerim onun de
 hot-reload oldu ve ajan iki koşum arasında bozduğum satırı onardı — "temiz baseline" ölçümüm
 bozuk satıra denk geldi. Durum değiştiren ajanlara `isolation: 'worktree'` verin; kendi
 doğrulamanızı da paylaşılan bir kayıt yerine **kendi açtığınız** fixture satırında yapın.
+
+## 2026-08-08 — "Aynı kişiyle iki sohbet" bir tekillik hatası değil, iki katmanlı bir tarih (#1156, 0.55.5-beta)
+
+**Bir "duplicate" raporunda önce tekillik kısıtına bakmayın — kaç tane *yazma yolu* olduğuna
+bakın.** Ekran görüntüsündeki iki satır, `Conversation.directKey` unique olduğu halde oradaydı:
+çünkü ikinci satır hiç `Conversation` değildi. 1:1 sohbetin iki evi vardı — eski mentorluk
+kanalı (`Message.relationId`) ve konuşma katmanı (`Message.conversationId`) — ve `directKey`
+yalnızca ikincinin *kendi içinde* tekilliğini sağlıyordu. Kısıt doğruydu, kapsamı yanlıştı.
+
+**Hangi satırın hangi katmandan geldiğini metinden okuyabilirsiniz.** İki önizleme farklı
+"opener" şablonlarıydı: `MessageThreadView` welcome-önerisini yalnızca `target.kind === 'relation'`
+iken gösteriyordu. Yani "welcome aboard" satırı ilişki kanalı, "EN: Hello…" satırı konuşma —
+tek bir ekran görüntüsü, DB'ye bakmadan kök nedeni veriyor. Rapordaki metnin hangi kod dalından
+üretilebileceğini sormak, tekrar üretmekten hızlı.
+
+**İki katmanı birleştirirken taşıyıcı sütunu *silmeyin*, ikisini birden yazın.** `relationId`
+mentorluğa bağlı yarım düzine özelliğin girişi: e-postayla yanıt jetonu (`replyAddress`
+ilişki kapsamlı), okunmamış özeti, onboarding kontrol listesi, birkaç e2e sayımı. Yeni mesajlara
+hem `conversationId` hem `relationId` damgalayınca birleştirme bu özelliklerin hiçbirine
+dokunmadı — tek sütuna indirgemek hepsini teker teker taşımak demekti.
+
+**Tembel devralma, deploy zamanlı migration'dan ucuz.** `conversationForRelation()` ilişkinin
+mesajlarını tek indeksli `UPDATE … WHERE relationId = ? AND conversationId IS NULL` ile alıyor:
+idempotent, şema değişikliği yok, `db push` gerekmiyor, paylaşılan preview DB'sine dokunmuyor.
+Sohbete dokunan yollarda (gelen kutusu, yönlendirme, POST) çalışıyor — yani veri, kullanıcı ona
+ilk baktığında zaten taşınmış oluyor.
+
+**Eski URL'yi silmeyin, teslim edin.** `/messages/<relationId>` mentee kartından, portaldan,
+bildirimlerden ve özet e-postalarından linkli. Sunucu bileşenine çevirip `redirect()` etmek,
+o çağıranların hiçbirine dokunmadan hepsini tek sohbete indirdi — ve yetkilendirme aynı
+`getThreadIfAllowed` ile kaldı.
+
+**e2e gerçek bir gerilemeyi yakaladı, tam da "sadece yönlendirme" sandığım yerde.** Mentor
+ilişki kanalından konuşmaya taşınınca `target.kind === 'relation'` koşulu sessizce yanlışa
+düştü ve mentor boş sohbette "hoş geldin" önerisini kaybetti. Çözüm: sunucunun DIRECT
+konuşmalarda da `mentorId` döndürmesi. Bir davranış `target.kind`'a bakıyorsa, o kind'ı
+değiştiren her yönlendirme o davranışı da değiştirir — yönlendirmeden önce `kind`'a bakan tüm
+dalları arayın.
+
+**Yerel MariaDB + `.env` ile tarayıcı doğrulaması bu repoda 10 dakikalık iş.** `crm:crm@127.0.0.1`
+üzerinde `internship_crm`, `prisma db push`, küçük bir tohumlama scripti ve `preview_start`
+yetiyor. Ancak `node script.mjs` scratchpad'den çalışmıyor (`@prisma/client` çözülmüyor) ve
+`.env`'i kendisi okumuyor — scripti repo kökünden, `DATABASE_URL=... node ...` ile çalıştırın.
+Playwright'a da aynısı gerekiyor: `DATABASE_URL=... BASE_URL=http://localhost:3000 npx playwright test`.
+
+**Sürüm numarası çakışması artık normal karşılanmalı.** Ben `0.55.4-beta`'ya bumplarken `main`
+aynı numarayı başka bir PR'la aldı; rebase `CHANGELOG.md` + `releaseNotes.ts` çakışmasıyla geldi.
+Doğru çözüm çakışan bloğu "benimki üstte, upstream altta, benim numaram bir artmış" şeklinde
+**yeniden kurmak** — elle marker temizlemeye çalışmak iki bölümü birbirine karıştırıyor, küçük
+bir python scripti ile bloğu parçalayıp yeniden yazmak tek seferde doğru sonucu veriyor.
+
+**Issue numarasını tahmin etmeyin.** Kod yorumlarına `#1153` yazıp issue'yu sonra açtım; numara
+`#1156` çıktı (arada başka bir PR #1153'ü kullanmıştı). Önce issue'yu açın, numarayı oradan alın
+— ya da en azından commit'ten önce tek bir `sed` ile hepsini düzeltin.
