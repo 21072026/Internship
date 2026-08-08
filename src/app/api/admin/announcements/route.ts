@@ -137,9 +137,32 @@ export async function POST(request: Request) {
     select: { id: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
 
+  // The Announcement row is written BEFORE the fan-out, so every notification it
+  // produces can carry its id (#1162) — that link is what lets a later edit
+  // correct the copy already sitting in everyone's bell, and a delete take those
+  // rows with it. `emailedCount` is the one thing not knowable yet; it is filled
+  // in once the sending below settles.
+  const announcement = await prisma.announcement.create({
+    data: {
+      text,
+      link: link || null,
+      sentById: session.user.id,
+      recipientCount: users.length,
+      ...(imageData && image
+        ? { image: { create: { contentType: image.type, size: image.size, data: imageData } } }
+        : {}),
+    },
+  });
+
   // Bulk-create the in-app notifications in one statement.
   await prisma.notification.createMany({
-    data: users.map((u) => ({ userId: u.id, type: 'announcement', text, link: link || null })),
+    data: users.map((u) => ({
+      userId: u.id,
+      type: 'announcement',
+      text,
+      link: link || null,
+      announcementId: announcement.id,
+    })),
   });
 
   let emailed = 0;
@@ -168,18 +191,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const announcement = await prisma.announcement.create({
-    data: {
-      text,
-      link: link || null,
-      sentById: session.user.id,
-      recipientCount: users.length,
-      emailedCount: emailed,
-      ...(imageData && image
-        ? { image: { create: { contentType: image.type, size: image.size, data: imageData } } }
-        : {}),
-    },
-  });
+  if (emailed > 0) {
+    await prisma.announcement.update({ where: { id: announcement.id }, data: { emailedCount: emailed } });
+  }
 
   await logActivity({ action: 'announcement.broadcast', actorId: session.user.id, actorEmail: session.user.email ?? null });
   return NextResponse.json(

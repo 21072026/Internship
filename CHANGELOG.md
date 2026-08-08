@@ -8,6 +8,31 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.56.1-beta] - 2026-08-08
+
+### Added
+- **Announcements can be edited and deleted** (#1162). `POST` was the resource's only verb, so
+  a typo in a broadcast was permanent and a superseded announcement stayed on everyone's screen
+  forever.
+  - New `PATCH` / `DELETE /api/admin/announcements/[id]` (ADMIN only, both `logActivity`-audited
+    as `announcement.update` / `announcement.delete`). `PATCH` takes text, link and the image
+    (JSON to edit copy, multipart to swap the file, `imageAction: 'remove'` to detach it) and
+    validates the image *before* writing anything, so a rejected file cannot leave the text
+    half-updated. The `AnnouncementImage` write is an `upsert` — a plain `create` would violate
+    the unique `announcementId` when replacing an existing image.
+  - Edit/delete controls on each row of the admin history panel; deleting goes through a
+    `ConfirmDialog`.
+  - **An edit does not re-broadcast** — no second notification, no second email. It corrects a
+    record people were already handed.
+
+### Changed
+- `Notification.announcementId` (nullable, indexed) links a bell row back to the broadcast that
+  created it. The `Announcement` row is now written *before* the fan-out so its id can be
+  stamped on every notification (`emailedCount` is filled in afterwards, being the one value not
+  knowable up front). This link is what lets an edit rewrite the copy already sitting in
+  everyone's bell, and a delete take those rows with it instead of leaving them pointing at an
+  announcement that no longer exists.
+
 ## [0.56.0-beta] - 2026-08-08
 
 ### Added

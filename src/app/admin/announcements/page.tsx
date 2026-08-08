@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ImagePlus, X } from 'lucide-react';
+import { ImagePlus, X, Pencil, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
@@ -40,6 +41,14 @@ export default function AdminAnnouncementsPage() {
   const [history, setHistory] = useState<AnnouncementRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Editing a published announcement (#1162): which row is open, and the draft
+  // being typed into it. An edit corrects the record — it never re-broadcasts.
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [editLink, setEditLink] = useState('');
+  const [editDropImage, setEditDropImage] = useState(false);
+  const [rowBusy, setRowBusy] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -124,6 +133,67 @@ export default function AdminAnnouncementsPage() {
       setError(err instanceof Error ? err.message : t.common.error);
     } finally {
       setSending(false);
+    }
+  };
+
+  const startEdit = (a: AnnouncementRecord) => {
+    setError(null);
+    setResult(null);
+    setEditId(a.id);
+    setEditText(a.text);
+    setEditLink(a.link ?? '');
+    setEditDropImage(false);
+  };
+
+  const cancelEdit = () => {
+    setEditId(null);
+    setEditDropImage(false);
+  };
+
+  const saveEdit = async () => {
+    if (!editId || !editText.trim()) return;
+    setRowBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/announcements/${editId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: editText,
+          ...(editLink ? { link: editLink } : {}),
+          ...(editDropImage ? { imageAction: 'remove' } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? t.common.error);
+      cancelEdit();
+      setResult(t.announcements.updated);
+      await fetchHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    } finally {
+      setRowBusy(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    setRowBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/announcements/${deleteId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? t.common.error);
+      }
+      if (editId === deleteId) cancelEdit();
+      setDeleteId(null);
+      setResult(t.announcements.deleted);
+      await fetchHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.common.error);
+    } finally {
+      setRowBusy(false);
     }
   };
 
@@ -223,8 +293,52 @@ export default function AdminAnnouncementsPage() {
             <div className="space-y-3 max-h-[32rem] overflow-y-auto">
               {history.map((a) => (
                 <div key={a.id} data-testid={`announcement-${a.id}`} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{a.text}</p>
-                  {a.imageUrl && (
+                  {editId === a.id ? (
+                    <div className="space-y-2">
+                      <Textarea
+                        data-testid="announcement-edit-text"
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        rows={4}
+                        maxLength={TEXT_LIMITS.announcementText}
+                        showCounter
+                      />
+                      <Input
+                        data-testid="announcement-edit-link"
+                        type="url"
+                        placeholder="https://..."
+                        maxLength={TEXT_LIMITS.announcementLink}
+                        value={editLink}
+                        onChange={(e) => setEditLink(e.target.value)}
+                      />
+                      {a.imageUrl && (
+                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                          <input
+                            type="checkbox"
+                            data-testid="announcement-edit-drop-image"
+                            checked={editDropImage}
+                            onChange={(e) => setEditDropImage(e.target.checked)}
+                          />
+                          {t.announcements.removeImage}
+                        </label>
+                      )}
+                      {/* An edit corrects the record; it does not send again.
+                          Saying so here stops "fix a typo" from feeling like it
+                          will ping everyone a second time. */}
+                      <p className="text-xs text-gray-400">{t.announcements.editNoResend}</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" data-testid="announcement-edit-save" loading={rowBusy} onClick={saveEdit}>
+                          {t.common.save}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={rowBusy}>
+                          {t.common.cancel}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-900 whitespace-pre-wrap">{a.text}</p>
+                  )}
+                  {editId !== a.id && a.imageUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={a.imageUrl}
@@ -245,6 +359,28 @@ export default function AdminAnnouncementsPage() {
                     {a.sentByName && <span>{t.announcements.sentBy.replace('{name}', a.sentByName)}</span>}
                     <span>{t.announcements.recipients.replace('{n}', String(a.recipientCount))}</span>
                     {a.emailedCount > 0 && <span>{t.announcements.emailedCount.replace('{n}', String(a.emailedCount))}</span>}
+                    {editId !== a.id && (
+                      <span className="ml-auto flex items-center gap-1">
+                        <button
+                          type="button"
+                          data-testid={`announcement-edit-${a.id}`}
+                          onClick={() => startEdit(a)}
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-gray-200 hover:text-gray-700"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          {t.common.edit}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`announcement-delete-${a.id}`}
+                          onClick={() => setDeleteId(a.id)}
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {t.common.delete}
+                        </button>
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -252,6 +388,20 @@ export default function AdminAnnouncementsPage() {
           )}
         </Card>
       </div>
+
+      {/* Deleting also removes the notification rows this broadcast created, so
+          the confirmation says so rather than implying only the log entry goes. */}
+      <ConfirmDialog
+        open={deleteId !== null}
+        title={t.announcements.deleteTitle}
+        message={t.announcements.deleteConfirm}
+        confirmLabel={t.common.delete}
+        cancelLabel={t.common.cancel}
+        variant="danger"
+        loading={rowBusy}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }
