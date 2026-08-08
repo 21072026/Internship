@@ -3286,3 +3286,54 @@ Playwright'ta `boundingBox()` ile ölçün — davranışı gerçek tıklamayla 
 `git stash pop` sadece import satırını çakışma olarak işaretledi, ama stash'teki sürüm dosyanın
 *eski* gövdesini taşıyordu — sessizce #1171'i geri alabilirdi. Doğrusu: çakışan dosyayı
 `git checkout HEAD -- <dosya>` ile upstream'e sıfırlayıp küçük değişikliği yeniden uygulamak.
+
+## 2026-08-08 — Üçüncü taraf bir embed'i eklemek: asıl iş snippet değil, etrafındaki dört şey (#1174, 0.60.0-beta)
+
+Maintainer tawk.to canlı sohbet snippet'ini yapıştırıp "siteye ekle, ana sayfa yeterli" dedi.
+Snippet'in kendisi on satır; PR'ın geri kalanı onu bu repoda çalışır ve savunulabilir kılan şey.
+
+**Yapıştırmadan önce CSP'ye bakın.** `next.config.js` `script-src 'self'` + `connect-src 'self'`
+gönderiyor: embed sessizce bloklanır, konsolda tek satır uyarı kalır ve widget hiç görünmez.
+`*.tawk.to`'yu script/style/img/font/frame'e, mesaj soketi için `wss://*.tawk.to`'yu
+`connect-src`'ye eklemek gerekti — artı **yeni bir `media-src`**: bildirim sesi bugüne kadar
+`default-src 'self'`'e düşüyordu, yani listeye ilk kez bir medya kaynağı girdiğinde direktifi
+de sıfırdan yazmanız gerekiyor.
+
+**CSP'yi tarayıcıda doğrulayın, incelemede değil.** Yukarıdakilerin hepsini ekledikten *sonra*
+widget hâlâ konsola hata basıyordu: tawk emoji seçicisini kendi CDN'inden değil
+**jsdelivr**'dan çekiyor. Bunu ne dokümantasyon ne de diff söyler; `read_console_messages`
+söyledi. `https://cdn.jsdelivr.net/emojione/` şeklinde **yol kapsamlı** kaynak yazıldı — CSP
+kaynak ifadeleri yol öneki kabul eder ve tüm `cdn.jsdelivr.net`'i açmak npm'e yüklenmiş her
+şeyi açmak demek.
+
+**Embed React ağacına değil `document`'e bağlanır.** Bileşen unmount olduğunda widget kalır:
+ana sayfadan `/features`'a client-side geçtiğinizde balon oradadır. Çözüm unmount'ta
+`Tawk_API.hideWidget()` **ve** `Tawk_API.onLoad` içinde modül seviyesinde bir "hâlâ isteniyor
+mu" bayrağı — script yüklenmeyi bitirdiğinde ziyaretçi çoktan başka sayfada olabilir, bileşen
+state'i bu soruyu cevaplayamaz.
+
+**Onay kapısı zaten vardı; ilk kullanan olmak sürüm çarpmak demek.** `lib/cookieConsent`
+`hasConsent()`'i "gelecekteki scriptler için" yazılmıştı ve bugüne kadar hiçbir şey yüklemiyordu.
+"Marketing" kategorisi artık ziyaretçinin IP'sini gören bir üçüncü tarafı yüklediği için
+`COOKIE_CONSENT_VERSION` 2 → 3 çarpıldı. Bunun **sessiz bir yan etkisi** var:
+`e2e/global-setup.ts` sürümü elle `2` yazıyordu, yani bump'tan sonra banner **tüm süitin**
+önüne geri gelirdi. Sabitleri artık uygulamadan import ediyor — bir sonraki bump'ta kimse
+bunu tekrar keşfetmesin.
+
+**Banner'a bir olay ekleyin.** Kabul edildiğinde `window`'a `cookieconsentchange`
+gönderiliyor; olmasaydı widget ancak bir sonraki tam sayfa yüklemesinde açılırdı ve
+"kabul ettim, hiçbir şey olmadı" gibi görünürdü.
+
+**Topic preview portları 100 slotta dönüyor.** `topic-preview.yml` portu `3300 + PR % 100`
+olarak türetiyor, yani **#1176 ile #1076 aynı porta düşüyor**. #1076 kapanmıştı ama container'ı
+sunucuda ayakta kalmıştı (teardown çalışmamış), bu yüzden "Deploy topic environment" —
+*zorunlu* bir check — `Bind for 0.0.0.0:3376 failed: port is already allocated` ile iki kez
+düştü. Rerun çözmez; `docker rm -f internship-crm-pr<eski>` çözer. Yüz PR'da bir tekrar eder:
+deploy adımı port çakışmasıyla düşerse önce `docker ps --filter publish=<port>` bakın.
+
+**Worktree'ye ana repodan `.env` kopyalamayın.** Geçen oturumun notu ("worktree'de `.env` yok,
+ilk iş onu yazmak") doğru ama eksik: ana repodaki `.env` **paylaşılan preview DB'sine** bakıyor
+ve `DATA_ACCESS_POLICY` dev sunucusunu oraya bağlamayı yasaklıyor. Kopyalamak yerine yerel
+MariaDB'ye (`crm:crm@127.0.0.1`) bakan yeni bir `.env` yazın. Bu oturumda kopyalandı ve
+doğrulama anonim ana sayfayla sınırlı kaldığı için gerçek veri okunmadı — ama doğru refleks
+bu değil.
