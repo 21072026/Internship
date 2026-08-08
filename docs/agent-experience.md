@@ -10,6 +10,30 @@ Newest entries on top.
 
 ---
 
+## 2026-08-08 — "Tümünü seç" (#1153, 0.55.4-beta)
+
+Küçük bir UI isteği ("buraya tümünü seç eklenmeli"), iki tanesi tekrar işe yarar ders:
+
+**"Yok" sanılan özellik çoğu zaman vardır ama yanlış koşula bağlıdır.** Ekran görüntüsünde
+görünmeyen "tümünü seç" aslında `ProjectGoals.tsx` içinde duruyordu — ama `picked.length > 0`
+ile sarılmıştı, yani *ancak elle bir kutu işaretledikten sonra* beliriyordu; tam da en
+gereksiz olduğu an. Bir denetim eklemeden önce bileşeni okuyup arayın: "ekle" yerine
+"koşulu düzelt" olduğunda diff üç satıra iniyor ve i18n anahtarları da hazır çıkıyor.
+Aynı deseni kardeş bileşende (`PersonTodos.tsx`) kontrol edin — orada koşul zaten doğruydu,
+dokunmaya gerek yoktu.
+
+**Giriş yapılmış, veri seedlenmiş bir ekranın görüntüsünü almanın en ucuz yolu geçici bir
+spec.** Preview sunucusu ayağa kaldırıp elle seed/login yerine: `e2e/tmp-shot.spec.ts` yazıp
+`seedUser` + `signInAndSettle` + `page.screenshot()` ile before/after alın, sonra dosyayı
+silin (`SHOT_DIR` env'iyle scratchpad'e yazdırın). ~35 saniye, ve zaten kurulu olan yerel
+MariaDB + Playwright dışında hiçbir şey gerekmiyor.
+
+**Dal değiştirdikten sonra `npx prisma generate`** (CLAUDE.md'de yazıyor, yine ısırdı):
+`tsc --noEmit` bu oturumda 14 uydurma hata verdi — hepsi bayat client'tan, dokunduğum
+dosyalarla ilgisiz. Typecheck'i "kırık" diye raporlamadan önce generate'i koşturun.
+
+---
+
 ## 2026-08-06 — Değer önerisi çalışması + kapıları açma paketi (#1085, #1107, #1121, #1122, 0.43→0.50.1)
 
 Landing'in üç kitleyi (mentee/mentör/firma) ikna edecek hale getirilmesi ve girişi tıkayan
