@@ -8,6 +8,66 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.55.3-beta] - 2026-08-08
+
+### Fixed
+- **Sign-in is no longer hostage to a profile column** (#1150). Production login failed with
+  `Unexpected end of JSON input` — a 401 from `/api/auth/callback/credentials` whose body was
+  the normal `?error=<message>` redirect, so the string on the login form came from the
+  *server*. Root cause: `authorize()` read the account with an unqualified
+  `prisma.user.findUnique({ where: { email } })`, which hydrates all ~60 `User` columns
+  including its four `Json` ones. Prisma `JSON.parse()`s a `Json` column on read, so one row
+  holding an invalid value (`''` instead of `'[]'`) made the read throw **before the password
+  was ever compared** — the account was unreachable by any password, and the raw parser
+  message was shown to the user. Reproduced on a real MariaDB row: an unqualified
+  `findUnique` throws while the narrowed read of the same row succeeds and login completes.
+  - `src/lib/auth.ts` now selects only the columns sign-in uses (`AUTH_USER_SELECT`), across
+    all three providers (`credentials`, `impersonate`, `sso`) and both `jwt`-callback lookups.
+    The `user.update()` calls got `select: { id: true }` too — an unqualified `update()`
+    returns the whole row and would re-open the same hole.
+  - **Where the invalid value came from — `prisma db push` itself.** Prisma *drops*
+    `@default` when it emits DDL for a `Json` field: `languages Json @default("[]")` becomes a
+    bare `ALTER TABLE \`User\` ADD COLUMN \`languages\` JSON NOT NULL` (verified with
+    `prisma migrate diff`; a `String @db.Text @default` keeps its DEFAULT). On MariaDB — which
+    production is, and where `JSON` is only an alias for `LONGTEXT utf8mb4_bin` — that ALTER
+    backfills **every pre-existing row with the empty string**, silently, even under
+    `STRICT_TRANS_TABLES` (reproduced locally: `length=0`, `JSON_VALID=0`, no warning). So
+    every account older than the deploy that added the column was locked out at once, not just
+    the one that reported it. `User.languages` was added by #1078 and reached production on the
+    2026-08-07 deploy — the day before. The schema comment on `notificationPrefs` already
+    warned about exactly this ("nullable … avoids MariaDB `json_valid` CHECK issues"); a
+    nullable `Json` column is unaffected.
+  - Why CI stayed green: the test databases are **MySQL 8**, whose native `JSON` type rejects
+    the value at write time (ERROR 3140), so the failure is not merely untested there — it is
+    unrepresentable. The `@smoke` suite passed on every one of these commits.
+  - `infra/deploy-prod.sh` now runs the repair immediately after `db push`, where the damage is
+    created, so the next new `Json` column cannot lock anyone out. It only rewrites values that
+    are *already* unreadable, so it is inert on a healthy database.
+- **The way back in no longer shares sign-in's failure mode** (#1150). `forgot` and
+  `verify-email/resend` read the whole row too, and `forgot` answers a generic `ok: true`
+  whether or not the mail was sent — so on a corrupt row the reset link silently never arrived
+  and looked like an SMTP fault. Both now select only the fields the mail needs, and both are
+  covered by `check:auth-reads` (which caught a third unqualified read while being written).
+
+### Security
+- Sign-in no longer echoes internal exception messages to the browser (#1150). NextAuth hands
+  a thrown `authorize()` error's `.message` to the client as `?error=<message>`; every
+  provider is now wrapped once (`guardProviders`), so the errors the sign-in page is designed
+  around still pass through unchanged while anything unexpected becomes
+  `UNEXPECTED_ERROR` — rendered as a localized "something went wrong" (`auth.signInFailed`,
+  EN/TR/DE) with the real cause logged server-side.
+
+### Added
+- `npm run check:auth-reads` (`scripts/check-auth-reads.mjs`), wired into `ci.yml`: fails the
+  build if any `prisma.user` query in `src/lib/auth.ts` lacks a `select`, or if one selects a
+  `Json` column. Needs no database, so it guards the invariant on every PR.
+- `npm run db:check-json` (`prisma/backfill-json-columns.mjs`, shipped inside the runtime image so the deploy can run it): reports — and with `--repair`
+  fixes — rows whose `Json` value is not valid JSON, across all 11 `Json` columns in the
+  schema. Read-only by default, exits non-zero on unrepaired damage, and prints ids and value
+  lengths only (never the value, which may be personal data).
+- `e2e/auth-corrupt-json-column.spec.ts`: a user whose `skills` column holds invalid JSON can
+  still sign in. Skips itself on engines that reject the bad value at write time.
+
 ## [0.55.2-beta] - 2026-08-08
 
 ### Fixed

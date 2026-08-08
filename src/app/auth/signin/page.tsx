@@ -9,6 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { GraduationCap } from 'lucide-react';
+import { AUTH_UNEXPECTED_ERROR } from '@/lib/authErrors';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -98,8 +99,11 @@ export default function SignInPage() {
         // Offer to resend the verification link rather than a dead-end error.
         setNeedsVerify(true);
         setError(t.auth.emailNotVerified);
+      } else if (result.error === AUTH_UNEXPECTED_ERROR) {
+        // An internal fault. The real cause is in the server log, not here (#1150).
+        setError(t.auth.signInFailed);
       } else {
-        setError(result.error || 'Sign in failed');
+        setError(result.error || t.auth.signInFailed);
       }
       setLoading(false);
       return;

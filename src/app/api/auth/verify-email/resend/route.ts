@@ -20,7 +20,10 @@ export async function POST(request: Request) {
 
   if (session) {
     return await withTenantScope(session, async () => {
-    const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, fullName: true, orgId: true, emailVerified: true },
+    });
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     if (user.emailVerified) return NextResponse.json({ ok: true, alreadyVerified: true });
 
@@ -40,7 +43,12 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 });
-  const user = await prisma.user.findUnique({ where: { email } });
+  // Narrow for the same reason as the forgot route: a corrupt `Json` column must
+  // not be able to break the way back in (#1150).
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, fullName: true, orgId: true, emailVerified: true },
+  });
   if (user && !user.emailVerified) {
     const token = await createEmailVerificationToken(user.id);
     try {
