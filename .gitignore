@@ -146,3 +146,7 @@ vite.config.ts.timestamp-*
 
 # Playwright generated consent state
 e2e/.state/
+
+# Database dumps — real personal data, never in the repo (infra/backup-db.sh)
+*.sql.gz
+/backups/
