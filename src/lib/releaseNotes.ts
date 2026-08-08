@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.55.5-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'One chat per person. The same contact could appear twice in Messages — a chat opened from their mentee page and one opened from their profile card were two separate threads, each with half of what you had written. They are now a single conversation, with the whole history in order.',
+        'Old links still work: a message notification, a digest email or a bookmark to the previous thread opens that one conversation. Mentees reach the same inbox as everyone else, so project chats and group chats are in the list too.',
+      ],
+      tr: [
+        'Kişi başına tek sohbet. Aynı kişi Mesajlar’da iki kez görünebiliyordu — mentee sayfasından açtığınız sohbetle profil kartından açtığınız sohbet iki ayrı oturumdu ve yazdıklarınızın yarısı birinde, yarısı diğerindeydi. Artık tek bir konuşma var, tüm geçmiş sırasıyla orada.',
+        'Eski bağlantılar çalışmaya devam ediyor: mesaj bildirimi, özet e-postası ya da eski sohbete kaydettiğiniz bir yer imi hep o tek konuşmayı açıyor. Mentee’ler de herkesle aynı gelen kutusunu kullanıyor; proje ve grup sohbetleri de listede.',
+      ],
+      de: [
+        'Ein Chat pro Person. Dieselbe Person konnte zweimal in den Nachrichten auftauchen — ein über ihre Mentee-Seite geöffneter Chat und ein über ihre Profilkarte geöffneter waren zwei getrennte Verläufe, jeder mit der Hälfte des Geschriebenen. Daraus ist eine Unterhaltung geworden, mit dem vollständigen Verlauf in der richtigen Reihenfolge.',
+        'Alte Links funktionieren weiter: eine Nachrichten-Benachrichtigung, eine Zusammenfassungs-E-Mail oder ein Lesezeichen auf den früheren Verlauf öffnen diese eine Unterhaltung. Mentees nutzen denselben Posteingang wie alle anderen — Projekt- und Gruppenchats stehen dort ebenfalls.',
+      ],
+    },
+  },
+  {
     version: '0.55.4-beta',
     date: '2026-08-08',
     highlights: {

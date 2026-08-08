@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { conversationForRelation } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
 import { logger } from '@/lib/logger';
@@ -80,8 +81,14 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   }
 
   const body = stripQuoted(input.text ?? '') || '(empty message)';
+  // The reply belongs in the pair's one thread, not only on the mentorship it
+  // was addressed to (#1156) — otherwise an emailed answer never shows up in the
+  // chat the two of them are actually reading.
+  const conversation = await conversationForRelation(rel);
   try {
-    await prisma.message.create({ data: { relationId, senderId, channel: 'EMAIL', body, inboundMessageId } });
+    await prisma.message.create({
+      data: { relationId, conversationId: conversation?.id ?? null, senderId, channel: 'EMAIL', body, inboundMessageId },
+    });
   } catch (e) {
     // Unique violation on inboundMessageId — another tick won the race.
     if (inboundMessageId && (e as { code?: string }).code === 'P2002') {
@@ -91,7 +98,8 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   }
 
   const recipient = senderId === rel.mentor.id ? rel.mentee.id : rel.mentor.id;
-  await notify(recipient, 'message', 'New message (by email).', `/messages/${relationId}`);
+  const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${relationId}`;
+  await notify(recipient, 'message', 'New message (by email).', link);
 
   return { ok: true, relationId, duplicate: false };
 }

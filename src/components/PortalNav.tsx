@@ -17,7 +17,8 @@ export function PortalNav() {
     // Their own projects, not the public showcase at /projects (#1114).
     { href: '/portal/projects', label: t.nav.projects, Icon: FolderKanban },
     { href: '/todos', label: t.nav.todos, Icon: ListChecks },
-    { href: '/portal/messages', label: t.nav.messages, Icon: MessageSquare },
+    // The shared inbox, not a portal-only copy of it (#1156).
+    { href: '/messages', label: t.nav.messages, Icon: MessageSquare },
     { href: '/portal/interactions', label: t.nav.interactionLogs, Icon: BookOpen },
     { href: '/portal/notes', label: t.portal.notes.title, Icon: Lock },
   ];

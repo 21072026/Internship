@@ -89,7 +89,9 @@ test('mentor opens the thread from the mentee page and uses a suggested opener',
     await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
     await page.goto(`/mentor/mentees/${rel.id}`);
     await page.getByTestId('mentee-message-link').click();
-    await page.waitForURL((u) => u.pathname === `/messages/${rel.id}`, { timeout: 20_000 });
+    // The mentee card links to the relation URL, which hands over to the pair's
+    // single conversation (#1156).
+    await page.waitForURL((u) => u.pathname.startsWith('/messages/c/'), { timeout: 20_000 });
 
     // Empty thread → openers, and the mentor side gets the welcome one first.
     const suggestions = page.getByTestId('message-suggestions');
