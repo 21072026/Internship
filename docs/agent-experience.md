@@ -3070,3 +3070,63 @@ preview DB'sine** bakıyor, ona karşı koşmak veri yazmak demek.
 **`| tail -N` ile arka planda koşan Playwright'ta ilerleme görünmez.** Boru tamponlandığı için
 çıktı ancak koşu bitince yazılıyor; ara durumu göremeyip koşuyu iki kez başlattım. Arka plan
 koşularında `> dosya 2>&1` yazıp dosyayı `tail`'lemek doğru şekil.
+
+## 2026-08-08 — Giriş arızası: bozuk bir Json kolonu tüm hesapları kilitledi (#1150)
+
+**Kullanıcıya görünen hata metni, sunucudan gelen bir istisna mesajı olabilir.** Formda
+`Unexpected end of JSON input` yazıyordu ve ilk refleks "istemci boş bir gövdeyi `res.json()`
+ile parse ediyor" oldu — yanlış. NextAuth, `authorize()` içinde fırlatılan `Error`'un
+`.message`'ını `?error=<mesaj>` olarak geri veriyor; client (`new URL(data.url)
+.searchParams.get('error')`) onu `result.error` yapıyor, sayfa da aynen basıyor. Yani metin
+**sunucu tarafı** bir `JSON.parse` hatasıydı. Hangi katmanın konuştuğunu anlamak için, semptomu
+teorize etmek yerine istemci kütüphanesinin o üç satırını okumak yeterliydi.
+
+**Prod'da kök nedeni tek istekle, hiç kimlik bilgisi kullanmadan izole edebilirsiniz.** Var olan
+e-posta + **kasıtlı yanlış** şifre `Unexpected end of JSON input` döndü; var olmayan e-posta
+`Invalid email or password` döndü. İkisi arasındaki tek fark satırın gerçekten okunması, ve
+`bcrypt.compare` ikinci senaryoya kadar gidiyor — demek ki hata **şifre karşılaştırmasından
+önce**, `findUnique` içinde. Gerçek şifre gerekmiyor, yan etki yok, tahmin de yok.
+
+**Düzeltmeyi kanıtlamanın en temiz yolu: aynı veritabanına bakan iki konteyner.** Topic ortamı
+(`crm-pr1151`, yamalı) ile paylaşılan preview (`crm-preview`, yamasız main) **aynı DB'yi**
+kullanıyor. Aynı hesaba aynı yanlış-şifre probu: preview `Unexpected end of JSON input`, PR
+ortamı `Invalid email or password`. Tek değişken kod. Veritabanına dokunmadan, gerçek bozuk
+veriyle, canlı bir A/B.
+
+**`prisma db push`, yeni bir `Json` kolonu eklerken mevcut tüm satırları zehirliyor.** Prisma
+`Json` alanları için DDL üretirken `@default`'u **düşürüyor**:
+`languages Json @default("[]")` → `ALTER TABLE \`User\` ADD COLUMN \`languages\` JSON NOT NULL`
+(`npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script` ile
+görülüyor; `String @db.Text @default` DEFAULT'unu koruyor). MariaDB'de bu ALTER var olan her
+satırı **boş string** ile dolduruyor — `STRICT_TRANS_TABLES` açıkken bile, uyarısız. Prisma
+okurken `JSON.parse` ettiği için o satırların **hepsi** okunamaz hale geliyor. Nullable `Json?`
+etkilenmiyor; `schema.prisma`'daki `notificationPrefs` yorumu zaten bunu uyarıyordu. Yeni bir
+non-nullable `Json` kolonu eklemeden önce backfill'i planlayın.
+
+**Prod ile CI farklı motorlar kullanıyorsa, "CI yeşil" bir bug sınıfı hakkında hiçbir şey
+söylemez.** Prod/preview **MariaDB** (`JSON` = `LONGTEXT` takma adı), CI ve dev compose ise
+**MySQL 8** (native `JSON`, geçersiz metni yazma anında ERROR 3140 ile reddediyor). Yani bu
+arıza CI'da *test edilmemiş* değil, **temsil edilemez** — `@smoke` ilgili tüm commit'lerde
+yeşildi. "Neden CI yakalamadı?" sorusunun cevabı bazen "test eksik" değil, "o ortamda o durum
+oluşamaz" oluyor.
+
+**Nüksü önlemek için yazdığınız guard, yazılırken bir bug buluyor.** `check:auth-reads`'i
+`forgot` + `verify-email/resend` rotalarını da kapsayacak şekilde genişletmek, o anda üçüncü bir
+niteliksiz okuma yakaladı (kimliği doğrulanmış resend yolu). Guard'ı hem pozitif hem **negatif**
+fixture ile sınayın — geçtiğini değil, geçmediğinde kırıldığını görmek lazım.
+
+**Girişin yanındaki "geri dönüş yolu" da aynı hataya açıktı.** `forgot` rotası da tam satır
+okuyordu ve her durumda generic `ok: true` dönüyor; yani bozuk satırda sıfırlama bağlantısı
+sessizce hiç gitmiyor, SMTP arızası gibi görünüyor. Kimlik doğrulamayı düzeltirken oradan
+çıkış yollarını (`forgot`, `verify-email/resend`) aynı gözle tarayın.
+
+**Deploy anında koşan script `prisma/` altında olmak zorunda.** `deploy-prod.sh`'in `run_tool`'u
+komutu **image içinde** çalıştırıyor, Dockerfile ise `prisma/`'yı kopyalıyor ama `scripts/`'i
+kopyalamıyor. Onarım scriptini `scripts/`'e yazıp deploy'a eklemek sessiz bir
+`MODULE_NOT_FOUND` olurdu.
+
+**Worktree'yi paylaşan subagent, kendi deneyini bozar.** Lokal repro'yu bir subagent'a
+verirken aynı worktree'de çalıştım: benim `auth.ts` düzenlemelerim onun dev sunucusuna
+hot-reload oldu ve ajan iki koşum arasında bozduğum satırı onardı — "temiz baseline" ölçümüm
+bozuk satıra denk geldi. Durum değiştiren ajanlara `isolation: 'worktree'` verin; kendi
+doğrulamanızı da paylaşılan bir kayıt yerine **kendi açtığınız** fixture satırında yapın.
