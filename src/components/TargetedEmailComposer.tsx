@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { LanguageBadge, languageBreakdown } from '@/components/LanguageBadge';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { UserRound } from 'lucide-react';
 import { locales, type Locale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
 
@@ -24,7 +26,7 @@ const isWritten = (draft: EmailDraft) => !!draft.subject.trim() && !!draft.body.
 
 interface Relation {
   id: string;
-  mentee: { fullName: string; email: string; preferredLanguage?: string | null };
+  mentee: { id: string; fullName: string; email: string; preferredLanguage?: string | null };
 }
 
 // Targeted email composer shared by the mentor (/mentor/email) and admin
@@ -144,6 +146,12 @@ export function TargetedEmailComposer() {
                     onChange={(e) => setSelected((p) => ({ ...p, [r.id]: e.target.checked }))}
                   />
                   <span className="truncate">{r.mentee.fullName}</span>
+                  {/* Clicking the NAME here ticks the box, so the card hangs off
+                      its own icon instead — the selection gesture is untouched
+                      and the card still opens on hover/tap/focus (#1166). */}
+                  <PersonHoverCard personId={r.mentee.id} role="MENTEE" className="no-underline">
+                    <UserRound className="h-3.5 w-3.5 text-gray-400 hover:text-blue-600" aria-hidden />
+                  </PersonHoverCard>
                   <LanguageBadge language={r.mentee.preferredLanguage} className="ml-auto" />
                 </label>
               ))}

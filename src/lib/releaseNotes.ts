@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.59.0-beta',
+    version: '0.60.0-beta',
     date: '2026-08-08',
     highlights: {
       en: [
@@ -27,6 +27,24 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Auf der Startseite gibt es jetzt einen Live-Chat. Wenn Sie sich umsehen und eine Frage haben, stellen Sie sie dort — statt eine E-Mail zu schreiben und zu warten.',
         'Er erscheint erst, wenn Sie Marketing-Cookies akzeptieren; bis dahin wird vom Chat-Anbieter überhaupt nichts geladen. Weil diese Entscheidung nun etwas Neues bedeutet, fragt der Cookie-Hinweis alle noch einmal.',
+      ],
+    },
+  },
+  {
+    version: '0.59.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Names now lead somewhere. Hover a person\u2019s name — or tap it on a phone — and a small card appears with who they are, where they are in the pipeline, their mentor and company, and the language they read, plus buttons to open their profile, message them or email them.',
+        'Where clicking the name already does something else, such as ticking a recipient or opening a chat, the card sits on a small icon next to it instead, so nothing you were doing changes.',
+      ],
+      tr: [
+        'İsimler artık bir yere götürüyor. Bir kişinin adının üzerine gelin — telefonda dokunun — küçük bir kart açılıyor: kim olduğu, süreçte nerede olduğu, mentoru ve şirketi, okuduğu dil; ayrıca profilini açma, mesaj gönderme ve e-posta düğmeleri.',
+        'Ada tıklamanın zaten bir işi varsa (alıcı işaretlemek, sohbet açmak gibi) kart adın yanındaki küçük bir ikonda duruyor; yaptığınız hiçbir şey değişmiyor.',
+      ],
+      de: [
+        'Namen führen jetzt irgendwohin. Fahren Sie über einen Namen — oder tippen Sie ihn auf dem Handy an — und eine kleine Karte erscheint: wer die Person ist, wo sie im Prozess steht, Mentor und Unternehmen, die gelesene Sprache, dazu Schaltflächen für Profil, Nachricht und E-Mail.',
+        'Wo ein Klick auf den Namen bereits etwas anderes tut — einen Empfänger anhaken, einen Chat öffnen — sitzt die Karte stattdessen auf einem kleinen Symbol daneben; an Ihrem Ablauf ändert sich nichts.',
       ],
     },
   },

@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.59.0-beta] - 2026-08-08
+## [0.60.0-beta] - 2026-08-08
 
 ### Added
 - **Live chat on the landing page** (#1174). A visitor who is not signed in can now ask a
@@ -47,6 +47,34 @@ version is shown in the sidebar footer of every page (links to the
 ### Notes
 - The privacy notice does not name tawk.to as a recipient yet (#1177) — that means bumping
   `PRIVACY_POLICY_VERSION`, which is the maintainer's call.
+
+## [0.59.0-beta] - 2026-08-08
+
+### Added
+- **A person card behind a name** (#1166). Names were plain text nearly everywhere: you could
+  read who someone was but not reach them, and on a screen where the name sits *inside a form*
+  (the bulk email composer) following a link would have thrown away half-typed work.
+  - `<PersonHoverCard />` opens on hover, focus or tap and shows role, pipeline stage, mentor
+    and company, university, and the language they read (#1164) — plus "open profile",
+    "message" and (when the viewer may write to them) "email".
+  - Wired into the bulk email recipient list, the 1:1 message thread header, and the messages
+    inbox rows. Where clicking the *name* already does something else — ticking a recipient
+    checkbox, opening a thread — the card hangs off its own small icon so the existing gesture
+    is untouched.
+  - `src/lib/personHref.ts` centralises "where does *this* viewer read *that* person": there is
+    no single profile route (an admin reads a mentee at `/admin/candidates/<id>`, their mentor
+    at `/mentor/mentees/<id>`), which is why most call sites never linked a name at all. It
+    returns null when the viewer has no page for that person, and the name renders unlinked
+    rather than pointing at a 404.
+  - `GET /api/people/[id]/card` serves the summary. Authorization is the whole story for a
+    lookup-by-id endpoint, so the rule is narrow and stated once in `src/lib/personCard.ts`:
+    **you may look up anyone whose name the app already shows you** — a mentorship counterpart,
+    a project co-member, a conversation participant, yourself; everyone, for an admin. Any other
+    role is denied rather than inheriting a view. "Not allowed" and "no such person" both answer
+    404 so the endpoint cannot be used as an account-existence oracle, and `email` is omitted
+    from the payload for viewers who are not allowed to write to that person.
+  - Data is cached per person id for the page's lifetime (including misses), so sweeping the
+    pointer down a list of names costs at most one request each and re-hovering costs none.
 
 ## [0.58.0-beta] - 2026-08-08
 
