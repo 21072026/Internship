@@ -846,6 +846,23 @@ Closes #1113.
 
 ## [Unreleased]
 
+### Added
+- **Database backups, and a gate that refuses to destroy data** (#1181, #1182 · epic #1179).
+  Every deploy runs `prisma db push --accept-data-loss` and, until now, there was no backup
+  anywhere in the repo — a PR that renamed a column would drop it in production with no way
+  back. `infra/backup-db.sh` dumps the database (mysqldump → gzip, size + gzip-integrity +
+  `CREATE TABLE` checks, `KEEP_DAYS` rotation, `0600` files in a `0700` directory) and
+  `infra/schema-guard.sh` asks `prisma migrate diff --script` what the pending push would run,
+  stopping the deploy on `DROP TABLE` / `DROP COLUMN` / `TRUNCATE` / a `NOT NULL` conversion.
+  Both are wired into `infra/deploy-prod.sh` ahead of the push, and scale with the environment:
+  prod backs up and blocks, preview backs up and warns, topic envs do neither (disposable,
+  shared DB). Overrides: `FORCE_NO_BACKUP=1`, and `ALLOW_DESTRUCTIVE=1` — which is refused
+  unless a backup was taken in the same run. An unavailable diff is treated as unsafe, never
+  as "probably fine".
+- `docs/disaster-recovery.md` — restore runbook with a drill log whose RPO/RTO stay empty until
+  a real drill measures them, plus `infra/README.md` §5 (cron setup, overrides). Dumps are
+  git-ignored; they contain real personal data.
+
 ### Fixed
 - **The five specs failing in the scheduled full e2e suite** (run 31051715943). Both causes were
   test defects, not product bugs. Since #1008 gave `/admin/candidates` a separate `md:hidden`

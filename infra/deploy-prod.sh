@@ -13,7 +13,9 @@
 #      the deploy workflows do it since 2026-07-29 — the build runs on a
 #      GitHub-hosted runner so this server never compiles) or build it locally
 #      from source, stamping GIT_SHA
-#   3. prisma db push --accept-data-loss  (schema sync, same as CI)
+#   3. back up the database (infra/backup-db.sh), refuse a data-destroying
+#      schema diff (infra/schema-guard.sh), then prisma db push
+#      --accept-data-loss (schema sync, same as CI)
 #   4. seed-templates + seed-goal-templates + backfill-project-members (idempotent)
 #   5. swap the internship-crm container (host networking, port 3200, restart
 #      unless-stopped) — byte-for-byte the flags deploy.yml uses
@@ -37,6 +39,11 @@
 #   --pull-image  `docker pull $IMAGE` instead of building (implies --skip-build).
 #                 For a private registry set GHCR_USER + GHCR_TOKEN and this
 #                 logs in first; a public package needs neither.
+#
+# ENV OVERRIDES FOR THE DATA GATES (use knowingly)
+#   FORCE_NO_BACKUP=1    deploy without taking a backup first
+#   ALLOW_DESTRUCTIVE=1  apply a schema change that drops data (requires a backup)
+#   BACKUP_DIR=...       where dumps go (default /var/backups/internship-crm)
 #
 # ENV
 #   DEPLOY_SHA    the commit the image was built from. Only needed when the
@@ -224,7 +231,45 @@ run_tool() { # run a one-off tool container against the DB (network per $NETWORK
   docker run --rm "${TOOL_NET_ARGS[@]}" -e DATABASE_URL="$DATABASE_URL" "$IMAGE" "$@"
 }
 
-# ── 3. Schema sync ────────────────────────────────────────────────────────────
+# ── 3. Backup, then schema sync ──────────────────────────────────────────────
+# The push below runs with --accept-data-loss, so this is the last moment at
+# which the current database still exists in full. Both steps are gates, not
+# niceties: no backup → no deploy, and a data-destroying diff → no deploy
+# without an explicit operator decision (#1179).
+# This same script deploys prod, the shared preview and every topic env — the
+# caller only overrides CONTAINER. The gates scale with what is at stake:
+#   prod     → back up, and REFUSE a data-destroying diff
+#   preview  → back up, but only WARN (schema experiments belong there)
+#   topic    → neither; those envs are disposable and share the preview DB,
+#              so a dump per PR deploy is noise, not safety
+case "$CONTAINER" in
+  internship-crm) ENV_LABEL=prod ;;
+  internship-crm-preview) ENV_LABEL=preview ;;
+  *) ENV_LABEL="${CONTAINER#internship-crm-}" ;;
+esac
+
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+BACKUP_TAKEN=0
+if [ "$ENV_LABEL" != "prod" ] && [ "$ENV_LABEL" != "preview" ]; then
+  log "Disposable env ($ENV_LABEL) — skipping backup and running the schema guard in warn-only mode"
+elif [ "${FORCE_NO_BACKUP:-0}" = "1" ]; then
+  log "!! FORCE_NO_BACKUP=1 — DEPLOYING WITHOUT A BACKUP (operator override)"
+else
+  log "Backing up the database before the schema sync"
+  # Runs on the host (mysqldump), not in the image: the dump must survive even
+  # if the new image is broken, and it must never live inside a container layer.
+  BACKUP_DIR="${BACKUP_DIR:-/var/backups/internship-crm}" \
+    "$REPO_DIR/infra/backup-db.sh" --env "$ENV_LABEL" --stamp "$STAMP"
+  BACKUP_TAKEN=1
+fi
+
+log "Checking the pending schema change for data loss"
+GUARD_ARGS=()
+[ "$ENV_LABEL" = "prod" ] || GUARD_ARGS=(--warn-only)
+RUN_TOOL="docker run --rm ${TOOL_NET_ARGS[*]} -e DATABASE_URL=$DATABASE_URL $IMAGE npx" \
+  BACKUP_TAKEN="$BACKUP_TAKEN" \
+  "$REPO_DIR/infra/schema-guard.sh" "${GUARD_ARGS[@]+"${GUARD_ARGS[@]}"}"
+
 log "prisma db push"
 run_tool npx prisma db push --accept-data-loss
 
