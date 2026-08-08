@@ -82,6 +82,9 @@ export async function GET(request: Request) {
       city: true,
       createdAt: true,
       isActive: true,
+      // The candidate list is where you pick who to write to, so it says which
+      // language each of them reads (#1164).
+      preferredLanguage: true,
       source: { select: { id: true, name: true } },
       menteeRelations: {
         where: { status: 'ACTIVE' as const },

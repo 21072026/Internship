@@ -8,6 +8,27 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.56.0-beta] - 2026-08-08
+
+### Added
+- **A person's language is visible where you write to them** (#1164). Every `User` carries a
+  `preferredLanguage` and the app speaks EN/TR/DE, but that preference was shown nowhere
+  outside the person's own settings — so mentors and admins were composing to people in a
+  language those people had not chosen.
+  - New `<LanguageBadge />` (`src/components/LanguageBadge.tsx`): a two-letter chip with the
+    language name in the `title`. It distinguishes *chosen* from *unset* — an unset preference
+    renders the app default in a muted style (`data-language-set="false"`), because "chose
+    English" and "never chose" are a fact and a guess respectively.
+  - Shown on the candidate list (both the desktop and the `md:hidden` mobile card), the 1:1
+    message thread header, and the bulk email composer's recipient list.
+  - The bulk composer additionally summarises the **selected** recipients' languages
+    (`data-testid="recipient-languages"`, e.g. `DE ×2 · TR ×1`) — one body goes to everyone
+    ticked, so the sender sees the spread before they start typing. `languageBreakdown()` folds
+    unset preferences into the app default, which is what those people actually receive.
+  - `preferredLanguage` now rides along in `/api/candidates`, `/api/mentorship`, and the
+    message thread's participant payload (`getThreadIfAllowed` / `getConversationIfAllowed`).
+    Group chats get no header badge — a room has no single language to name.
+
 ## [0.55.7-beta] - 2026-08-08
 
 ### Changed

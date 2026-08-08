@@ -111,7 +111,8 @@ export async function getConversationIfAllowed(user: SessionUser, conversationId
         select: {
           userId: true,
           lastReadAt: true,
-          user: { select: { id: true, fullName: true } },
+          // See messaging.ts — the chat header shows who reads what (#1164).
+          user: { select: { id: true, fullName: true, preferredLanguage: true } },
         },
       },
     },

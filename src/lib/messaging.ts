@@ -16,8 +16,10 @@ export async function getThreadIfAllowed(user: SessionUser, relationId: string |
   const rel = await prisma.mentorshipRelation.findUnique({
     where: { id: relationId },
     include: {
-      mentor: { select: { id: true, fullName: true } },
-      mentee: { select: { id: true, fullName: true } },
+      // preferredLanguage rides along so the thread header can say which
+      // language the other side reads before you start typing (#1164).
+      mentor: { select: { id: true, fullName: true, preferredLanguage: true } },
+      mentee: { select: { id: true, fullName: true, preferredLanguage: true } },
     },
   });
   if (!rel) return null;

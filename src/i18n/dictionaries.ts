@@ -1000,6 +1000,11 @@ const en = {
       body: 'The stage deadline for {mentee} has passed. Please review their progress.',
     },
   },
+  languageBadge: {
+    prefers: 'Prefers {lang}',
+    unset: 'No language chosen — reads {lang}',
+    recipients: 'Recipient languages',
+  },
   announcementFeed: {
     cardTitle: 'Announcements',
     none: 'No announcements yet',
@@ -3262,6 +3267,11 @@ const tr: Dict = {
       body: '{mentee} için aşama son tarihi geçti. Lütfen ilerleme durumunu gözden geçirin.',
     },
   },
+  languageBadge: {
+    prefers: 'Tercih ettiği dil: {lang}',
+    unset: 'Dil seçmemiş — {lang} okuyor',
+    recipients: 'Alıcıların dilleri',
+  },
   announcementFeed: {
     cardTitle: 'Duyurular',
     none: 'Henüz duyuru yok',
@@ -5519,6 +5529,11 @@ const de: Dict = {
       greeting: 'Hallo {mentor},',
       body: 'Die Phasenfrist für {mentee} ist abgelaufen. Bitte prüfe den Fortschritt.',
     },
+  },
+  languageBadge: {
+    prefers: 'Bevorzugt {lang}',
+    unset: 'Keine Sprache gewählt — liest {lang}',
+    recipients: 'Sprachen der Empfänger',
   },
   announcementFeed: {
     cardTitle: 'Ankündigungen',
