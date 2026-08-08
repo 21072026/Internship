@@ -176,7 +176,10 @@ export function PersonHoverCard({
     };
   }, [open]);
 
-  const href = data ? personHref(session?.user?.role, { id: data.id, role: data.role }) : null;
+  // The caller's `role` hint stands in until the fetch lands, so the profile
+  // link is right from the first paint on the surfaces that already know what
+  // they are rendering; the loaded record wins once it arrives.
+  const href = personHref(session?.user?.role, { id: personId, role: data?.role ?? role });
   const label = name ?? data?.fullName ?? '';
   const roleLabel = (r: string) =>
     ({
