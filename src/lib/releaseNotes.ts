@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.55.4-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'The goal-template pool on a project now has a "Select all" box above the list. Handing your whole shortlist to a new member is one click instead of twenty; tick it again to clear the selection, and a counter shows how many goals are about to go out.',
+      ],
+      tr: [
+        'Projedeki hedef şablonları listesinin üstüne "Tümünü seç" kutusu eklendi. Kısa listenin tamamını yeni bir üyeye vermek yirmi tık yerine tek tık; tekrar tıklayınca seçim temizleniyor ve yanındaki sayaç kaç hedefin gideceğini gösteriyor.',
+      ],
+      de: [
+        'Der Zielvorlagen-Pool eines Projekts hat jetzt ein „Alle auswählen“-Kästchen über der Liste. Die ganze Auswahl an ein neues Mitglied zu übergeben ist ein Klick statt zwanzig; ein erneuter Klick setzt die Auswahl zurück, und ein Zähler zeigt, wie viele Ziele rausgehen.',
+      ],
+    },
+  },
+  {
     version: '0.55.3-beta',
     date: '2026-08-08',
     highlights: {

@@ -8,6 +8,22 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.55.4-beta] - 2026-08-08
+
+### Added
+- **"Select all" in the project goal-template pool.** Handing the whole shortlist to a new
+  member meant ticking 20 boxes one by one. The pool now has a select-all checkbox directly
+  above the list (`select-all-templates`), with a `{n} selected` counter next to it.
+  - The control already existed as a text link below the list, but it was rendered under
+    `picked.length > 0` — so it only appeared *after* something had been ticked by hand,
+    which is exactly when it is least useful. It is now always visible while the pool has
+    entries, sits next to the boxes it ticks, and doubles as **Clear** once everything is
+    selected (indeterminate on a partial selection).
+  - `src/components/project/ProjectGoals.tsx`; new `projects.clearSelection` / `projects.selected`
+    strings in EN/TR/DE.
+  - Covered by a new e2e case in `e2e/goal-templates.spec.ts` (tick all → send → every
+    template lands on the member).
+
 ## [0.55.3-beta] - 2026-08-08
 
 ### Fixed
