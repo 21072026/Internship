@@ -8,6 +8,26 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.58.0-beta] - 2026-08-08
+
+### Added
+- **Multilingual bulk email to mentees** (#1165). The ready-made templates already existed in
+  EN/TR/DE (`emailTemplates` in the dictionaries), but the composer only ever read the
+  **sender's** locale — so a group of mentees who do not all read the same language received
+  whichever one the sender's UI happened to be in, and the alternative was hand-translating
+  before every send.
+  - `src/lib/localizedEmail.ts` resolves a subject+body **pair** per recipient: their language,
+    then the default locale, then the canonical version. Same shape as
+    `src/lib/announcementText.ts` and `src/lib/goalTemplates.ts`; the difference is that subject
+    and body travel together — a Turkish body under an English subject is worse than either
+    alone — so a language with only one half filled in is dropped rather than sent.
+  - `POST /api/mentor/email` accepts `translations` ({ locale → { subject, body } }) alongside
+    the original `subject`/`body`, which stays valid for callers that never learned about it.
+    `{name}` is filled in *after* resolving, so placeholders keep working in every language.
+  - The composer gets EN/TR/DE tabs with a written/not-written dot, and choosing a template
+    fills **all three languages at once**. A coverage line names the languages written and warns
+    when some ticked recipients will fall back.
+
 ## [0.57.0-beta] - 2026-08-08
 
 ### Added

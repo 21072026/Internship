@@ -840,6 +840,9 @@ const en = {
     message: 'Message',
     send: 'Send email',
     sentCount: 'Email sent to {n} mentee(s).',
+    languages: 'Languages',
+    writtenIn: 'Written in {langs}.',
+    fallbackTo: 'Recipients in other languages get the {lang} version.',
   },
   mentorAnalytics: {
     title: 'My Analytics',
@@ -3116,6 +3119,9 @@ const tr: Dict = {
     message: 'Mesaj',
     send: 'E-posta gönder',
     sentCount: '{n} mentee’ye e-posta gönderildi.',
+    languages: 'Diller',
+    writtenIn: '{langs} dillerinde yazıldı.',
+    fallbackTo: 'Diğer dillerdeki alıcılar {lang} sürümünü alır.',
   },
   mentorAnalytics: {
     title: 'Analitiğim',
@@ -5388,6 +5394,9 @@ const de: Dict = {
     message: 'Nachricht',
     send: 'E-Mail senden',
     sentCount: 'E-Mail an {n} Mentee(s) gesendet.',
+    languages: 'Sprachen',
+    writtenIn: 'Verfasst auf {langs}.',
+    fallbackTo: 'Empfänger anderer Sprachen erhalten die {lang}-Fassung.',
   },
   mentorAnalytics: {
     title: 'Meine Analysen',
