@@ -191,6 +191,88 @@ export async function findOrCreateDirectConversation(userAId: string, userBId: s
   }
 }
 
+// ---------------------------------------------------------------------------
+// One 1:1 thread per pair (#1156).
+//
+// A 1:1 chat grew two parallel homes: the original mentorship thread
+// (Message.relationId, /messages/<relationId>) and the conversation layer
+// (Message.conversationId, /messages/c/<id>). A mentor who wrote from the mentee
+// page and again from a user card ended up with the same person twice in the
+// inbox, each row holding half the history.
+//
+// The DIRECT conversation is now the single home for a 1:1 thread. A mentorship's
+// messages are adopted into it on first touch, and new messages keep their
+// relationId as an annotation, so everything that reads a thread through the
+// mentorship — reply-by-email tokens, the unread digest, the onboarding
+// checklist — keeps working off it.
+// ---------------------------------------------------------------------------
+
+// The pair's mentorship, if any; the most recently started one when a pair has
+// several (nothing stops an admin from assigning the same mentee twice). Used to
+// stamp a new conversation message so it stays visible to the mentorship-scoped
+// features, and to tell a 1:1 thread which side of it is the mentor.
+export async function latestMentorshipFor(
+  userAId: string,
+  userBId: string,
+): Promise<{ id: string; mentorId: string } | null> {
+  if (!userAId || !userBId || userAId === userBId) return null;
+  return prisma.mentorshipRelation.findFirst({
+    where: {
+      OR: [
+        { mentorId: userAId, menteeId: userBId },
+        { mentorId: userBId, menteeId: userAId },
+      ],
+    },
+    orderBy: { startDate: 'desc' },
+    select: { id: true, mentorId: true },
+  });
+}
+
+// The other side of a 1:1 conversation, from the viewer's seat.
+export function directCounterpartId(
+  conversation: { type: string; participants: { userId: string }[] },
+  userId: string,
+): string | null {
+  if (conversation.type !== 'DIRECT') return null;
+  return conversation.participants.map((p) => p.userId).find((id) => id !== userId) ?? null;
+}
+
+// The conversation that holds a mentorship's 1:1 thread, creating it on first
+// use and pulling the relation's own messages in with it.
+//
+// No canMessage() check: a mentorship IS permission to message (see
+// hasMentorship above), so re-deriving it here would only cost queries on a page
+// that resolves one of these per mentee. The adoption is a single indexed UPDATE
+// and idempotent — messages already carrying a conversationId are left alone, so
+// this is safe to call on every page load.
+export async function conversationForRelation(relation: { id: string; mentorId: string; menteeId: string }) {
+  const key = directKeyFor(relation.mentorId, relation.menteeId);
+  let conversation = await prisma.conversation.findUnique({ where: { directKey: key }, include: CONVERSATION_INCLUDE });
+  if (!conversation) {
+    try {
+      conversation = await prisma.conversation.create({
+        data: {
+          type: 'DIRECT',
+          directKey: key,
+          participants: { create: [{ userId: relation.mentorId }, { userId: relation.menteeId }] },
+        },
+        include: CONVERSATION_INCLUDE,
+      });
+    } catch (e) {
+      // Lost the race with another request (or a second relation for the same
+      // pair, resolved in parallel) — read the winner's row.
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) throw e;
+      conversation = await prisma.conversation.findUnique({ where: { directKey: key }, include: CONVERSATION_INCLUDE });
+    }
+  }
+  if (!conversation) return null;
+  await prisma.message.updateMany({
+    where: { relationId: relation.id, conversationId: null },
+    data: { conversationId: conversation.id },
+  });
+  return conversation;
+}
+
 // Creates the project's single GROUP conversation on first use and reconciles
 // all current ProjectMember rows into its participant list. The compound unique
 // key keeps concurrent callers idempotent at database level.

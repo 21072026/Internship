@@ -8,6 +8,40 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.55.5-beta] - 2026-08-08
+
+### Fixed
+- **One 1:1 thread per pair** (#1156). The same person could show up twice in `/messages`,
+  each row holding half the history. A 1:1 chat had two homes: the mentorship thread
+  (`Message.relationId`, `/messages/<relationId>`, linked from the mentee card, the portal,
+  notifications and digest emails) and the conversation layer (`Message.conversationId`,
+  `/messages/c/<id>`, reached from user-card quick actions and the inbox's "new chat" picker).
+  The inbox listed both, so anyone reachable both ways — a mentee who is also a project
+  co-member — got two rows. `Conversation.directKey` only ever deduped *within* the second
+  layer; nothing tied the two together. Several `MentorshipRelation` rows for one pair had the
+  same effect, one thread each.
+  - The DIRECT conversation is now the single home for a 1:1 chat.
+    `conversationForRelation()` (`src/lib/conversations.ts`) create-or-gets the pair's
+    conversation and adopts the relation's messages into it with a single indexed
+    `UPDATE … WHERE relationId = ? AND conversationId IS NULL` — idempotent, so it runs
+    lazily on the paths that touch a thread rather than as a deploy-time migration.
+  - `/messages/<relationId>` is now a server component that redirects to `/messages/c/<id>`,
+    so every existing link, notification and digest email lands on the one thread. It keeps
+    the same participants-or-admin authorization and falls through to the old view (which
+    renders "not found") when the relation isn't the viewer's.
+  - The inbox resolves the viewer's mentorships first, then lists conversations only.
+    `/portal/messages` — a mentorship-only list that missed project DMs and group chats —
+    redirects to the shared inbox, and the portal nav points there.
+  - Messages carry **both** links whenever both exist: the conversation is where the thread
+    lives, `relationId` keeps them inside the mentorship-scoped features. So reply-by-email
+    (relation-scoped `replyAddress` tokens) now works in the conversation the mentorship
+    thread redirects to, and the unread digest, the inbound-mail bridge, the mentor bulk
+    email and the onboarding checklist are unaffected.
+  - `e2e/one-thread-per-person.spec.ts` seeds the split state (a mentorship message + a
+    separate DIRECT conversation for the same pair) and asserts it collapses into one inbox
+    row holding both histories; the two specs asserting the old thread URL now expect the
+    conversation URL.
+
 ## [0.55.4-beta] - 2026-08-08
 
 ### Added

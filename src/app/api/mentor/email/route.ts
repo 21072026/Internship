@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
+import { conversationForRelation } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -70,11 +71,21 @@ export async function POST(request: Request) {
       await prisma.interactionLog.create({
         data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${personalSubject} — ${personalBody}` },
       });
-      // Mirror the email into the conversation thread + notify the mentee in-app.
+      // Mirror the email into the pair's one chat thread (#1156) + notify the
+      // mentee in-app. Stamped with both links: the conversation is where it is
+      // read, the relation is what the digest and reply tokens work off.
+      const conversation = await conversationForRelation(rel);
       await prisma.message.create({
-        data: { relationId: rel.id, senderId: session.user.id, channel: 'EMAIL', body: `${personalSubject}\n\n${personalBody}` },
+        data: {
+          relationId: rel.id,
+          conversationId: conversation?.id ?? null,
+          senderId: session.user.id,
+          channel: 'EMAIL',
+          body: `${personalSubject}\n\n${personalBody}`,
+        },
       });
-      await notify(rel.menteeId, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, `/messages/${rel.id}`);
+      const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${rel.id}`;
+      await notify(rel.menteeId, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, link);
       sent++;
     }
 

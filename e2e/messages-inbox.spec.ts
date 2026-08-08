@@ -42,9 +42,9 @@ test('a mentor reaches messages from the header icon and sees their thread', asy
     await expect(page.getByText('Msg Mentee')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/quick question/i)).toBeVisible();
 
-    // Opening the thread navigates into the conversation.
+    // Opening the thread navigates into the pair's one conversation (#1156).
     await page.getByText('Msg Mentee').click();
-    await page.waitForURL((u) => u.pathname === `/messages/${relation.id}`, { timeout: 20_000 });
+    await page.waitForURL((u) => u.pathname.startsWith('/messages/c/'), { timeout: 20_000 });
   } finally {
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(menteeEmail);

@@ -71,8 +71,10 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // Set for a project group chat: which project it belongs to, so the header can
   // name the room, list who is in it and link back to the project (#51).
   const [group, setGroup] = useState<{ projectId: string | null; projectName: string | null } | null>(null);
-  // Mentorship threads only: who the mentor is, so an empty thread can suggest
-  // a *welcome* to the mentor and a neutral opener to the mentee (#1130).
+  // Who the mentor is, when a mentorship stands behind this 1:1 thread, so an
+  // empty thread can suggest a *welcome* to the mentor and a neutral opener to
+  // the mentee (#1130). Answered for conversations too since the mentorship
+  // thread hands over to one (#1156).
   const [mentorId, setMentorId] = useState<string | null>(null);
   const [showParties, setShowParties] = useState(false);
   const [body, setBody] = useState('');
@@ -148,7 +150,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     // A mentorship thread answers with mentor/mentee; a conversation with a
     // participants array. Normalize both to one list.
     setParties(d.participants ?? [d.mentor, d.mentee].filter(Boolean));
-    setMentorId(d.mentor?.id ?? null);
+    setMentorId(d.mentorId ?? d.mentor?.id ?? null);
     setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null } : null);
     setCanPost(d.canPost !== false);
     setLoading(false);
@@ -301,7 +303,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const suggestions =
     messages.length > 0 || !canPost || group || !otherFirstName
       ? []
-      : (target.kind === 'relation' && !!myId && mentorId === myId
+      : (!!myId && mentorId === myId
           ? [openers.welcome, openers.introCall, openers.goals]
           : [openers.hello, openers.intro, openers.question]
         ).map((o) => ({ label: o.label, text: o.text.replace('{name}', otherFirstName) }));
