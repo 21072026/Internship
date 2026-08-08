@@ -189,6 +189,9 @@ export function ProjectGoals({
     setPendingDeleteTemplate(null);
   };
 
+  const allPicked = templates.length > 0 && templates.every((tpl) => picked.includes(tpl.id));
+  const toggleAll = () => setPicked(allPicked ? [] : templates.map((tpl) => tpl.id));
+
   const sendTemplates = async () => {
     if (picked.length === 0 || !templateTarget) return;
     if (
@@ -346,6 +349,28 @@ export function ProjectGoals({
                 {templates.length === 0 ? (
                   <p className="text-xs text-gray-400">{t.projects.noTemplates}</p>
                 ) : (
+                  <>
+                  {/* Handing out the whole shortlist is the common case, so the
+                      select-all sits above the list, next to the boxes it ticks
+                      — it used to hide until something was already picked. */}
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <input
+                      type="checkbox"
+                      checked={allPicked}
+                      ref={(el) => { if (el) el.indeterminate = picked.length > 0 && !allPicked; }}
+                      onChange={toggleAll}
+                      aria-label={t.projects.selectAll}
+                      data-testid="select-all-templates"
+                    />
+                    <button type="button" onClick={toggleAll} className="hover:text-blue-600">
+                      {allPicked ? t.projects.clearSelection : t.projects.selectAll}
+                    </button>
+                    {picked.length > 0 && (
+                      <span className="text-gray-400" data-testid="templates-picked-count">
+                        · {t.projects.selected.replace('{n}', String(picked.length))}
+                      </span>
+                    )}
+                  </div>
                   <ul className="space-y-1">
                     {templates.map((tpl) =>
                       editingTemplate === tpl.id ? (
@@ -432,6 +457,7 @@ export function ProjectGoals({
                       )
                     )}
                   </ul>
+                  </>
                 )}
                 <p className="text-xs text-gray-400">{t.projects.templateRetired}</p>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -456,11 +482,6 @@ export function ProjectGoals({
                   >
                     <Send className="mr-1 h-3.5 w-3.5" /> {t.projects.sendGoals}
                   </Button>
-                  {picked.length > 0 && (
-                    <button type="button" onClick={() => setPicked(templates.map((x) => x.id))} className="text-xs text-blue-600 hover:underline">
-                      {t.projects.selectAll}
-                    </button>
-                  )}
                 </div>
               </div>
             )}
