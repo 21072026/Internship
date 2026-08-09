@@ -10,6 +10,7 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface Meeting {
   id: string;
@@ -60,13 +61,13 @@ export function MeetingSchedulerPanel({
 
   const copyLink = async (m: Meeting) => {
     if (!m.meetLink) return;
-    try {
-      await navigator.clipboard.writeText(m.meetLink);
-      setCopiedId(m.id);
-      setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
-    } catch {
-      window.prompt(t.meetings.copyLink, m.meetLink);
-    }
+
+    const didCopy = await copyToClipboard(m.meetLink);
+
+    if (!didCopy) return;
+
+    setCopiedId(m.id);
+    setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
   };
 
   const schedule = async () => {

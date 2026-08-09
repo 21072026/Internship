@@ -13,6 +13,7 @@ import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Send, Mail, Copy, Check, CheckCircle2, Circle } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
+import { copyToClipboard } from '@/lib/clipboard';
 
 const inviteSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -79,15 +80,14 @@ export default function InvitePage() {
     }
   };
 
-  const copyLink = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const copyLink = async (url: string) => {
+     const didCopy = await copyToClipboard(url);
+
+     if (!didCopy) return;
+
       setCopied(url);
       setTimeout(() => setCopied(null), 1500);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
+    };
 
   // Pickers for the auto-connect fields.
   const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
