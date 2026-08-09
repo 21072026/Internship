@@ -102,22 +102,68 @@ Free tiers, as of 2026-08 (verified against the providers' own pricing pages):
 **Recommendation: Brevo's free tier.** 300/day comfortably covers this
 deployment, it costs nothing, and the switch is four env vars.
 
-### Migration checklist (Brevo, ~30 minutes)
+### Migration checklist (Brevo)
 
-1. Create the account and **authenticate the domain** `crm.ersah.in` — Brevo
-   issues its own DKIM records (a `brevo._domainkey` style TXT plus a
-   verification TXT). Publish them in the DNS zone.
-2. **Add Brevo to SPF.** One TXT record only — merge, don't add a second:
-   `v=spf1 a mx ip4:212.132.111.125 include:spf.brevo.com ~all`
-3. Set the env vars in `/etc/internship-crm/prod.env`:
-   `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER=<brevo smtp login>`,
-   `SMTP_PASS=<brevo smtp key>`. Leave `SMTP_FROM=noreply@crm.ersah.in`.
-   Port 587 is STARTTLS — `secure` is derived from the port (`=== 465`), so no
-   code change is needed for either.
-4. Restart the container and confirm via **Admin → Settings → Email health**:
-   the SMTP status line goes green, and the delivery log (§2c) starts filling.
-5. Verify placement with a `mail-tester.com` address — expect 9–10/10 — and by
-   sending to a real Gmail account.
+**Order matters: DNS first, env vars second.** Steps 1–3 are DNS and were all
+verified live on 2026-08-09, so the remaining work is step 4 onwards. Re-run
+`./infra/check-mail-dns.sh` before flipping the relay on any future domain.
+
+1. **Brevo code** (proves you own the domain). A TXT record on `crm.ersah.in`:
+   `brevo-code:<your code>`.
+   ✅ *Live as of 2026-08-09.*
+
+2. **DKIM** — this is the one that actually authenticates the mail, and it is
+   **mandatory**. Brevo publishes it as a **pair of CNAMEs** on the `brevo1` and
+   `brevo2` selectors (not a TXT on `brevo._domainkey`, which is what most
+   third-party guides describe — check the selector before concluding it is
+   missing).
+   ✅ *Live as of 2026-08-09:*
+   ```
+   brevo1._domainkey → b1.crm-ersah-in.dkim.brevo.com → brevo17.dkim.brevo.com  (k=rsa;p=…)
+   brevo2._domainkey → b2.crm-ersah-in.dkim.brevo.com → brevo18.dkim.brevo.com  (k=rsa;p=…)
+   ```
+   The Plesk box keeps its own `default._domainkey` TXT — that one signs mail
+   sent directly from the server and stays in place.
+
+   Check the whole picture with `./infra/check-mail-dns.sh`, which probes every
+   selector in both record types and exits non-zero while DKIM is missing.
+
+3. **SPF — leave it alone.** `include:spf.brevo.com` is **not required** and
+   should not be added: Brevo owns the Envelope Sender (Return-Path), so SPF is
+   evaluated against *Brevo's* domain, not ours. DMARC alignment for
+   `crm.ersah.in` therefore comes from **DKIM**, which is why step 2 is the
+   blocker. An unnecessary `include:` only burns one of SPF's 10 DNS lookups.
+   The existing record stays exactly as it is, since the Plesk box still sends
+   nothing-else mail and still needs to be authorized:
+   `v=spf1 a mx ip4:212.132.111.125 ~all`
+
+> ⚠️ **Never switch `SMTP_HOST` before DKIM resolves** (satisfied here, but it
+> is the rule for any future domain). Sending `From: noreply@crm.ersah.in`
+> through a relay while the domain is only half-authenticated means the message
+> carries no signature aligned with our domain — the relay may refuse it or
+> rewrite the sender, and whatever does get out authenticates *worse* than what
+> the Plesk box sends today. `check-mail-dns.sh` exits non-zero exactly in that
+> state so it can gate the change.
+
+4. Once `dig` returns the DKIM record, set the env vars in
+   `/etc/internship-crm/prod.env`:
+   ```bash
+   SMTP_HOST=smtp-relay.brevo.com
+   SMTP_PORT=587
+   SMTP_USER=<the SMTP login from Brevo → SMTP & API>   # not the account email
+   SMTP_PASS=<the SMTP key from that same screen>       # not the account password
+   SMTP_FROM=noreply@crm.ersah.in                       # unchanged
+   ```
+   Port 587 is STARTTLS; `secure` is derived from the port (`=== 465`) in
+   `emailService.ts`, so neither port needs a code change.
+
+5. Redeploy (or restart the container so it re-reads the env file) and confirm
+   at **Admin → Settings → Email health**: the SMTP status line goes green and
+   the delivery log (§2c) starts recording `SENT`.
+
+6. Verify placement: send to a `mail-tester.com` address (expect 9–10/10) and
+   to a real Gmail account — "Show original" should read `SPF: PASS`,
+   `DKIM: PASS` with `d=crm.ersah.in`, and `DMARC: PASS`.
 
 > ⚠️ **The inbound reply bridge is unaffected.** Replies arrive over IMAP on the
 > Plesk `reply@crm.ersah.in` mailbox (§3); only *outbound* moves to the relay.
