@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { conversationForRelation } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
+import { markThreadRead } from '@/lib/threadRead';
 import { logger } from '@/lib/logger';
 
 // Routing for an inbound email reply. Shared by the HTTP endpoint
@@ -95,6 +96,19 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
       return { ok: true, relationId, duplicate: true };
     }
     throw e;
+  }
+
+  // Answering IS reading (#1204). Without this the replier's own inbox kept
+  // being told about messages they had already responded to: the reply landed
+  // in the thread but `readAt` stayed null, so the hourly unread digest picked
+  // the same conversation up again and again.
+  try {
+    const marked = await markThreadRead(senderId, { relationId, conversationId: conversation?.id ?? null });
+    if (marked > 0) logger.info('Inbound reply marked thread read', { relationId, senderId, marked });
+  } catch (e) {
+    // Never fail a delivered reply over its read bookkeeping — the message is
+    // already stored, and the worst case is one more digest line.
+    logger.error('Failed to mark thread read after inbound reply', { relationId, senderId, error: String(e) });
   }
 
   const recipient = senderId === rel.mentor.id ? rel.mentee.id : rel.mentor.id;

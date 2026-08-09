@@ -11,6 +11,30 @@ version is shown in the sidebar footer of every page (links to the
 ## [0.61.0-beta] - 2026-08-09
 
 ### Added
+- **One-click actions in notification emails** (#1204): the five composer reactions
+  (`👍 ❤️ 😂 😮 🎉`) and a "mark this conversation as read" link, in both the per-message
+  notification and the unread digest.
+  - `src/lib/emailActionToken.ts` — HMAC-signed action tokens, same construction and trust
+    argument as the Reply-To tokens (`replyToken.ts`). A reaction token is bound to a
+    **message id**, not to "the newest message in the thread", so a reply arriving between
+    send and click cannot redirect the reaction onto the wrong message. The emoji is stored
+    as an *index*, so a token can never carry an arbitrary string into the database.
+  - Links land on `/m/[token]`, which performs the action from the browser via
+    `POST /api/email-action`. Deliberately not a mutating `GET`: mail clients and corporate
+    link scanners (Outlook Safe Links, antivirus gateways) prefetch every URL in a message,
+    which would post reactions nobody clicked. Scanners do not execute scripts.
+  - Reacting also marks the thread read — you cannot react to something you have not seen.
+
+### Fixed
+- **Replying by email now marks the conversation read** (#1204). `routeInboundEmail` stored
+  the reply but left `readAt` untouched, so the hourly unread digest kept resurfacing
+  conversations that had already been answered — and the in-app badge kept counting messages
+  the user had demonstrably read. Answering the newest message now marks it and everything
+  before it, matching what opening the thread in a browser already did
+  (`src/lib/threadRead.ts`, shared by the inbound-email and email-action paths). Failures are
+  logged, never fatal: a delivered reply is not lost over its read bookkeeping.
+
+### Added
 - **Outbound mail is split into two channels by category** (#1203), so scheduled system mail
   cannot eat a relay's daily allowance. `primary` (`SMTP_*`) carries what must reach a human —
   `verification`, `invitation`, `password-reset`, `message`, `test` — and points at a reputable

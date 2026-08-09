@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
+import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
@@ -1791,7 +1792,10 @@ export async function sendUnreadMessageDigests() {
 
   // Group unread messages by recipient (the participant who is NOT the sender).
   type Recipient = NonNullable<(typeof msgs)[number]['relation']>['mentor'];
-  const byRecipient = new Map<string, { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }>();
+  const byRecipient = new Map<
+    string,
+    { recipient: Recipient; items: { messageId: string; relationId: string; from: string; preview: string }[] }
+  >();
   const allIds: string[] = [];
   for (const m of msgs) {
     const rel = m.relation;
@@ -1802,7 +1806,15 @@ export async function sendUnreadMessageDigests() {
     const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
     if (!recipient?.email) continue;
     const entry = byRecipient.get(recipient.id) ?? { recipient, items: [] };
-    entry.items.push({ relationId: rel.id, from: sender?.fullName ?? 'Someone', preview: m.body.slice(0, 120) });
+    // The message id rides along so the digest can offer the same one-click
+    // reactions as the live notification (#1204), bound to the exact message
+    // rather than to "whatever is newest when the link is clicked".
+    entry.items.push({
+      messageId: m.id,
+      relationId: rel.id,
+      from: sender?.fullName ?? 'Someone',
+      preview: m.body.slice(0, 120),
+    });
     byRecipient.set(recipient.id, entry);
   }
 
@@ -1812,9 +1824,23 @@ export async function sendUnreadMessageDigests() {
     const rows = items
       .map((it) => {
         const safe = it.preview.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
-        return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a></li>`;
+        // Each line gets the same five reactions as the app, so a one-word
+        // acknowledgement ("got it") no longer costs a round trip through the
+        // browser — and reacting also clears the thread (#1204).
+        return `<li style="margin-bottom:12px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a>${reactionLinksHtml(it.messageId, recipient.id)}</li>`;
       })
       .join('');
+    // One link that clears the whole summary. Every item here belongs to the
+    // same recipient, so marking each distinct thread read covers all of them.
+    const relationIds = [...new Set(items.map((it) => it.relationId))];
+    const markAllHtml = relationIds
+      .map(
+        (relationId, i) =>
+          `<a href="${markReadUrl(relationId, recipient.id)}" style="color:#6b7280;">${
+            relationIds.length === 1 ? 'Mark this conversation as read' : `Mark conversation ${i + 1} as read`
+          }</a>`,
+      )
+      .join(' · ');
     try {
       await sendEmail({
         to: recipient.email!,
@@ -1824,6 +1850,8 @@ export async function sendUnreadMessageDigests() {
           <h2 style="color:#2563eb;">Unread messages</h2>
           <p>Hi ${recipient.fullName}, you have ${items.length} unread message${items.length === 1 ? '' : 's'} waiting:</p>
           <ul style="padding-left:18px;">${rows}</ul>
+          <p style="font-size:13px;color:#6b7280;">${markAllHtml}</p>
+          <p style="font-size:12px;color:#9ca3af;">Replying to a message also marks it — and everything before it — as read, so an answered conversation will not appear here again.</p>
         </div>`,
       });
       sent++;

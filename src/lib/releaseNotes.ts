@@ -21,6 +21,8 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Accounts that never clicked their confirmation link now have a "Resend verification" button right in the list — you no longer have to wait for the person to come back and try signing in.',
         'When you write to someone who cannot sign in yet, the message box warns you before you type: they will not see it in the app, and if the record only has a placeholder address, no email reaches them either.',
         'Admin → Settings now shows a log of recent outgoing email, so you can tell "our mail never went out" apart from "they read it and did not reply".',
+        'If you answer a message straight from your email, it now counts as read — that conversation (and everything before it) stops showing up in your unread summary. Before this, replying by email left everything looking unread and the same reminder kept arriving.',
+        'Notification emails now carry the same five reactions as the app plus a "mark as read" link. One tap from your inbox leaves the reaction on that exact message and clears the conversation — no need to open the app at all.',
         'Email now goes out over two separate channels: the things a person is waiting for (sign-up confirmations, invitations, password resets, message notifications) travel the route optimised for reaching the inbox, while routine digests and reminders go the other way. The panel shows how much of the daily allowance each one is using, and which job is spending it.',
       ],
       tr: [
@@ -28,6 +30,8 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Doğrulama bağlantısına hiç tıklamamış hesaplar için listede artık "Doğrulamayı yeniden gönder" butonu var — kişinin geri dönüp giriş denemesini beklemeniz gerekmiyor.',
         'Henüz giriş yapamayan birine yazarken mesaj kutusu siz yazmadan önce uyarıyor: bu kişi mesajı uygulamada göremeyecek, kayıtta yalnızca yer tutucu bir adres varsa e-posta da ulaşmayacak.',
         'Yönetici → Ayarlar bölümünde artık son giden e-postaların kaydı görünüyor; böylece "mailimiz hiç gitmemiş" ile "okudu ama cevap vermedi" durumlarını ayırt edebiliyorsunuz.',
+        'Bir mesaja doğrudan e-postadan cevap verdiğinizde artık okundu sayılıyor; o sohbet (ve öncesindeki her şey) okunmamış özetinde çıkmayı bırakıyor. Önceden e-postadan cevap verseniz bile her şey okunmamış görünüyor ve aynı hatırlatma gelip duruyordu.',
+        'Bildirim e-postalarında artık uygulamadaki beş tepki emojisi ve bir "okundu işaretle" bağlantısı var. Gelen kutunuzdan tek dokunuşla tepkiniz tam o mesaja bırakılıyor ve sohbet temizleniyor — uygulamayı açmanıza hiç gerek kalmıyor.',
         'E-postalar artık iki ayrı kanaldan gidiyor: kişinin beklediği şeyler (kayıt onayı, davet, parola sıfırlama, mesaj bildirimi) gelen kutusuna ulaşmak için en iyi yoldan, rutin özet ve hatırlatmalar ise diğerinden. Panel, günlük hakkın ne kadarının kullanıldığını ve hangi işin harcadığını gösteriyor.',
       ],
       de: [
@@ -35,6 +39,8 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Konten, die den Bestätigungslink nie angeklickt haben, bekommen in der Liste einen Button "Bestätigung erneut senden" — du musst nicht mehr warten, bis die Person selbst einen Anmeldeversuch macht.',
         'Wenn du jemandem schreibst, der sich noch nicht anmelden kann, warnt das Nachrichtenfeld schon vor dem Tippen: Die Person sieht die Nachricht nicht in der App, und bei einer Platzhalter-Adresse erreicht sie auch keine E-Mail.',
         'Unter Administration → Einstellungen siehst du jetzt ein Protokoll der zuletzt versendeten E-Mails — so lässt sich "unsere Mail ging nie raus" von "gelesen, aber nicht geantwortet" unterscheiden.',
+        'Wenn Sie direkt aus Ihrer E-Mail auf eine Nachricht antworten, gilt sie jetzt als gelesen — diese Unterhaltung (und alles davor) taucht in Ihrer Zusammenfassung nicht mehr auf. Bisher blieb beim Antworten per E-Mail alles ungelesen und dieselbe Erinnerung kam immer wieder.',
+        'Benachrichtigungs-E-Mails enthalten jetzt dieselben fünf Reaktionen wie die App sowie einen Link "Als gelesen markieren". Ein Tippen aus dem Postfach setzt die Reaktion an genau diese Nachricht und räumt die Unterhaltung auf — die App muss dafür gar nicht geöffnet werden.',
         'E-Mails laufen jetzt über zwei getrennte Kanäle: Was jemand erwartet (Registrierungsbestätigung, Einladung, Passwort-Reset, Nachrichtenbenachrichtigung) nimmt den Weg, der am zuverlässigsten im Posteingang landet; routinemäßige Zusammenfassungen und Erinnerungen den anderen. Das Panel zeigt, wie viel des Tageskontingents verbraucht ist und welcher Job es verbraucht.',
       ],
     },
