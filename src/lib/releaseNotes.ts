@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.63.1-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Links inside notification emails now stop working after 90 days. If you open an old email and the link has expired, sign in and the conversation is waiting for you.',
+        'The unread summary email is lighter: reactions now live on the individual message notification, where the emoji clearly belongs to one message. This also keeps the summary out of spam folders.',
+      ],
+      tr: [
+        'Bildirim e-postalarındaki bağlantılar artık 90 gün sonra geçerliliğini yitiriyor. Eski bir e-postayı açıp bağlantının süresi dolmuşsa, giriş yaptığınızda sohbet sizi bekliyor olacak.',
+        'Okunmamış özet e-postası sadeleşti: tepki emojileri artık tek tek mesaj bildirimlerinde — emojinin hangi mesaja ait olduğu orada net. Bu aynı zamanda özetin spam klasörüne düşmesini de engelliyor.',
+      ],
+      de: [
+        'Links in Benachrichtigungs-E-Mails verlieren nach 90 Tagen ihre Gültigkeit. Wenn du eine alte E-Mail öffnest und der Link abgelaufen ist, melde dich an — die Unterhaltung wartet dort auf dich.',
+        'Die Zusammenfassung ungelesener Nachrichten ist schlanker: Reaktionen sitzen jetzt in der einzelnen Nachrichtenbenachrichtigung, wo das Emoji eindeutig zu einer Nachricht gehört. Das hält die Zusammenfassung außerdem aus dem Spam-Ordner.',
+      ],
+    },
+  },
+  {
     version: '0.63.0-beta',
     date: '2026-08-09',
     highlights: {

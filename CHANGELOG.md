@@ -8,6 +8,31 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.63.1-beta] - 2026-08-09
+
+### Security
+- **Email action links expire after 90 days** (#1211). They previously never aged out, so a
+  forwarded notification or a leaked mailbox archive let someone mark-read/react as that user
+  indefinitely. An expired link answers `410 Gone` and the page says so, rather than showing
+  the misleading "invalid link". Both actions remain low-severity and reversible — hence 90
+  days rather than hours.
+- **`EmailLog` is now covered by erasure and retention** (#1211). The log is keyed by
+  recipient address, not by a relation, so nothing cascaded to it: an erased account's address
+  survived in it. `hardDeleteUser` and `anonymizeUser` now clear it (reading the address
+  *before* the row is deleted or rewritten), and a daily job prunes rows older than
+  `EMAIL_LOG_RETENTION_DAYS` (90).
+- **Regression test for the password column** (#1211). `accountState` has to *read*
+  `User.password` to tell a mentor-created record apart from a deactivated account, which
+  puts the hash one spread operator away from a response. A spec now asserts that no
+  `/api/users` response contains a bcrypt prefix — matching on `$2a$`/`$2b$` rather than a key
+  name, so a rename cannot silence it.
+### Changed
+- **The unread digest no longer carries per-line reaction links** (#1211). A five-item digest
+  meant 25 extra links, and a high link count is one of the strongest spam signals there is —
+  the opposite of what this change set exists to achieve. The five reactions stay on the
+  single-message notification, where "the message this email is about" is unambiguous; the
+  digest keeps its per-conversation "mark as read" link.
+
 ## [0.63.0-beta] - 2026-08-09
 
 ### Added
@@ -50,30 +75,6 @@ version is shown in the sidebar footer of every page (links to the
     and the cross-zone scheduling preview.
 
 ## [0.62.0-beta] - 2026-08-09
-
-### Security
-- **Email action links expire after 90 days** (#1211). They previously never aged out, so a
-  forwarded notification or a leaked mailbox archive let someone mark-read/react as that user
-  indefinitely. An expired link answers `410 Gone` and the page says so, rather than showing
-  the misleading "invalid link". Both actions remain low-severity and reversible — hence 90
-  days rather than hours.
-- **`EmailLog` is now covered by erasure and retention** (#1211). The log is keyed by
-  recipient address, not by a relation, so nothing cascaded to it: an erased account's address
-  survived in it. `hardDeleteUser` and `anonymizeUser` now clear it (reading the address
-  *before* the row is deleted or rewritten), and a daily job prunes rows older than
-  `EMAIL_LOG_RETENTION_DAYS` (90).
-- **Regression test for the password column** (#1211). `accountState` has to *read*
-  `User.password` to tell a mentor-created record apart from a deactivated account, which
-  puts the hash one spread operator away from a response. A spec now asserts that no
-  `/api/users` response contains a bcrypt prefix — matching on `$2a$`/`$2b$` rather than a key
-  name, so a rename cannot silence it.
-
-### Changed
-- **The unread digest no longer carries per-line reaction links** (#1211). A five-item digest
-  meant 25 extra links, and a high link count is one of the strongest spam signals there is —
-  the opposite of what this change set exists to achieve. The five reactions stay on the
-  single-message notification, where "the message this email is about" is unambiguous; the
-  digest keeps its per-conversation "mark as read" link.
 
 ### Added
 - **One-click actions in notification emails** (#1204): the five composer reactions
