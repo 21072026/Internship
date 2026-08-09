@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import cron from 'node-cron';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed } from '@/lib/notificationPrefs';
@@ -75,6 +76,31 @@ function fromHeader(brandName?: string | null): string {
   return `${name} <${addr}>`;
 }
 
+// Record the outcome of one send attempt (#1194). Never throws and never blocks
+// the caller's own error handling: a logging failure must not turn a delivered
+// mail into an exception, nor hide the real SMTP error behind a Prisma one.
+async function recordEmail(
+  to: string,
+  subject: string,
+  category: string | undefined,
+  status: 'SENT' | 'FAILED' | 'SKIPPED',
+  error?: string,
+) {
+  try {
+    await prisma.emailLog.create({
+      data: {
+        to: to.slice(0, 320),
+        subject: subject.slice(0, 512),
+        category: category?.slice(0, 64) ?? null,
+        status,
+        error: error?.slice(0, 2000) ?? null,
+      },
+    });
+  } catch (e) {
+    logger.error('Failed to write EmailLog', { to, category, status, error: String(e) });
+  }
+}
+
 export async function sendEmail({
   to,
   subject,
@@ -82,6 +108,7 @@ export async function sendEmail({
   replyTo,
   attachments,
   fromName,
+  category,
 }: {
   to: string;
   subject: string;
@@ -94,21 +121,42 @@ export async function sendEmail({
   // Overrides the From display name (e.g. a tenant's brand name, #546). Falls
   // back to MAIL_FROM_NAME / "Internship CRM" when omitted.
   fromName?: string | null;
+  // Coarse bucket for the delivery log ("verification", "message", …). Optional
+  // so the dozens of existing call sites keep compiling; the ones that matter
+  // for "did our mail get through?" pass it.
+  category?: string;
 }) {
+  // No SMTP on this environment. This used to be a bare console.log + return,
+  // which made a misconfigured or broken mail setup indistinguishable from a
+  // user who simply never replied (#1194) — the whole reason a batch of
+  // never-activated sign-ups went unexplained. Log it loudly and leave a row
+  // behind so the admin mail view can show it.
   if (!process.env.SMTP_USER) {
-    console.log(`[Email skipped - no SMTP config] To: ${to}, Subject: ${subject}`);
+    logger.error('Email not sent: SMTP is not configured', { to, subject, category });
+    await recordEmail(to, subject, category, 'SKIPPED', 'SMTP not configured (SMTP_USER unset)');
     return;
   }
 
-  await transporter.sendMail({
-    from: fromHeader(fromName),
-    to,
-    subject,
-    html,
-    text: htmlToText(html),
-    ...(replyTo ? { replyTo } : {}),
-    ...(attachments?.length ? { attachments } : {}),
-  });
+  try {
+    await transporter.sendMail({
+      from: fromHeader(fromName),
+      to,
+      subject,
+      html,
+      text: htmlToText(html),
+      ...(replyTo ? { replyTo } : {}),
+      ...(attachments?.length ? { attachments } : {}),
+    });
+  } catch (e) {
+    // Record, then rethrow unchanged: callers that already catch (and the ones
+    // that deliberately don't) keep behaving exactly as before.
+    const message = e instanceof Error ? e.message : String(e);
+    logger.error('Email send failed', { to, subject, category, error: message });
+    await recordEmail(to, subject, category, 'FAILED', message);
+    throw e;
+  }
+
+  await recordEmail(to, subject, category, 'SENT');
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
@@ -142,6 +190,7 @@ export async function sendInvitationEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'invitation',
     subject: `You have been invited to ${brand.name}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -197,6 +246,7 @@ export async function sendPasswordResetEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'password-reset',
     subject: isInitial ? `Activate your ${brand.name} account` : `Reset your ${brand.name} password`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -243,6 +293,7 @@ export async function sendVerificationEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'verification',
     subject: `Verify your ${brand.name} email`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1647,6 +1698,7 @@ export async function sendUnreadMessageDigests() {
     try {
       await sendEmail({
         to: recipient.email!,
+        category: 'unread-digest',
         subject: `You have ${items.length} unread message${items.length === 1 ? '' : 's'}`,
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
           <h2 style="color:#2563eb;">Unread messages</h2>

@@ -57,6 +57,97 @@ dig +short TXT _dmarc.crm.ersah.in     # DMARC
 dig +short -x 212.132.111.125          # PTR
 ```
 
+## 2b. When SPF/DKIM/DMARC all pass and mail *still* lands in spam
+
+Authentication is a gate, not a reputation. Passing it stops the hard
+`550-5.7.26` rejection in §1; it does **not** get you into the inbox. Those are
+two different problems with two different fixes, and it is easy to spend days on
+the first while suffering from the second.
+
+**Audit of the sending domain (2026-08-09)** — everything in §1 is already
+correct in production:
+
+| Check | Value | Verdict |
+|-------|-------|---------|
+| SPF (`crm.ersah.in` TXT) | `v=spf1 a mx ip4:212.132.111.125 ~all` | ✅ present, single record |
+| DKIM (`default._domainkey`) | RSA 2048 public key published | ✅ |
+| DMARC (`_dmarc.crm.ersah.in`) | `v=DMARC1; p=none; rua=…` | ✅ (monitoring) |
+| PTR | `212.132.111.125` → `s.ersah.in` → `212.132.111.125` | ✅ forward-confirmed |
+| Spamhaus ZEN / Barracuda | not listed | ✅ clean |
+
+So when mail from this box still lands in spam, the remaining variable is
+**sender reputation**: a single small VPS IP that sends a handful of messages a
+day has no sending history, and Gmail/Outlook treat an unknown low-volume IP
+with suspicion no matter how well it authenticates. You cannot fix that with
+DNS — reputation is earned by volume and engagement this deployment will never
+have on its own.
+
+### The fix: relay through a shared reputation pool
+
+Send through an ESP instead of straight from the Plesk box. Their pools carry
+years of accumulated reputation, and this app talks plain SMTP
+(`nodemailer`, `src/services/emailService.ts`), so it is an **env-var change
+with no code**: point `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` at
+the provider and leave `SMTP_FROM` as the `crm.ersah.in` address.
+
+Free tiers, as of 2026-08 (verified against the providers' own pricing pages):
+
+| Provider | Free tier | Daily cap | Paid entry | Notes |
+|----------|-----------|-----------|------------|-------|
+| **Brevo** | 300/day, no expiry, no card | 300/day (campaigns **+** transactional share one budget) | ~$25/mo for 40k | Best fit here: the cap is far above this app's volume |
+| Resend | 3,000/month | **100/day** | $20/mo for 50k | SMTP relay on every tier, 1 domain on free |
+| Amazon SES | 3,000/mo for the first 12 months | — | $0.10 per 1,000 | Cheapest at scale, but starts in a sandbox that needs a production-access request |
+| MailerSend | 500/month (the old 3,000 tier became a paid $7/mo plan in Dec 2025) | 100/day | $7/mo | No longer competitive on the free tier |
+
+**Recommendation: Brevo's free tier.** 300/day comfortably covers this
+deployment, it costs nothing, and the switch is four env vars.
+
+### Migration checklist (Brevo, ~30 minutes)
+
+1. Create the account and **authenticate the domain** `crm.ersah.in` — Brevo
+   issues its own DKIM records (a `brevo._domainkey` style TXT plus a
+   verification TXT). Publish them in the DNS zone.
+2. **Add Brevo to SPF.** One TXT record only — merge, don't add a second:
+   `v=spf1 a mx ip4:212.132.111.125 include:spf.brevo.com ~all`
+3. Set the env vars in `/etc/internship-crm/prod.env`:
+   `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER=<brevo smtp login>`,
+   `SMTP_PASS=<brevo smtp key>`. Leave `SMTP_FROM=noreply@crm.ersah.in`.
+   Port 587 is STARTTLS — `secure` is derived from the port (`=== 465`), so no
+   code change is needed for either.
+4. Restart the container and confirm via **Admin → Settings → Email health**:
+   the SMTP status line goes green, and the delivery log (§2c) starts filling.
+5. Verify placement with a `mail-tester.com` address — expect 9–10/10 — and by
+   sending to a real Gmail account.
+
+> ⚠️ **The inbound reply bridge is unaffected.** Replies arrive over IMAP on the
+> Plesk `reply@crm.ersah.in` mailbox (§3); only *outbound* moves to the relay.
+> Brevo forwards the `Reply-To` header unchanged, so `reply+<token>@…` keeps
+> routing replies back into Messages. Do not change `INBOUND_*`.
+
+> Keep `p=none` in DMARC until the relay has been live for a week and the `rua`
+> reports show Brevo passing alignment; only then consider `p=quarantine`.
+
+## 2c. Did the mail actually go out? (`EmailLog`)
+
+`sendEmail()` records every attempt (#1194): recipient, subject, category,
+`SENT` / `FAILED` / `SKIPPED`, and the error. Read it at **Admin → Settings →
+Email health** or `GET /api/admin/email-log`.
+
+This exists because the failure mode it covers is invisible otherwise: the
+function used to `return` silently when `SMTP_USER` was unset, and most callers
+swallow send errors, so a broken pipeline looked exactly like a batch of users
+who ignored their messages. Read the statuses as:
+
+- **A wall of `SKIPPED`** — SMTP is not configured on this environment. The mail
+  was never attempted.
+- **`FAILED` with a 5xx string** — the server rejected it. `550-5.7.26` is the
+  authentication problem in §1; other 5xx are usually reputation or content.
+- **All `SENT`, and people still do not answer** — delivery is working and the
+  problem is placement (spam folder) or genuinely no reply. `SENT` means our
+  SMTP server accepted the message, **not** that it reached an inbox.
+
+The body is deliberately not stored — metadata only.
+
 ## 3. Inbound replies → Messages
 
 The full round trip is in place:

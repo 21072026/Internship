@@ -44,6 +44,7 @@ export async function POST(request: Request) {
   try {
     await sendEmail({
       to: parsed.data.to,
+      category: 'test',
       subject: `Internship CRM deliverability test — ${stamp}`,
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color:#2563eb;">Deliverability test</h2>

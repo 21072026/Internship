@@ -8,6 +8,47 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.61.0-beta] - 2026-08-09
+
+### Added
+- **Outbound email delivery log** (#1194). `sendEmail()` now records every attempt in a new
+  `EmailLog` model — recipient, subject, category, outcome (`SENT` / `FAILED` / `SKIPPED`)
+  and the error. Metadata only: the body is never stored, so message content does not get a
+  second home that account erasure would have to chase.
+  - Visible at **Admin → Settings → Email health**, with a 7-day `SENT/FAILED/SKIPPED`
+    breakdown above the last 25 attempts (`GET /api/admin/email-log`, admin-only —
+    recipient addresses are personal data).
+  - The key call sites pass a `category`: `verification`, `invitation`, `password-reset`,
+    `message`, `unread-digest`, `test`. "Are verification mails going out at all?" is now
+    answerable without shell access to the server.
+- **Admin-side "resend verification"** (`POST /api/users/[id]/resend-verification`, #1194).
+  The self-service resend on the sign-in page only helps someone who comes back and tries
+  again; a user who never received the first mail has no reason to. The endpoint refuses
+  any account that is not actually waiting on a click (409 + the resolved state).
+- **`accountState` — one derived state instead of a bare `isActive` flag** (`src/lib/accountState.ts`,
+  #1194): `active` / `unverified` / `pending_approval` / `deactivated` / `no_login` /
+  `placeholder_email` / `erased`. `/api/users` returns it for the directory and full field
+  sets (the `password` column is read only to derive it and is stripped from every response).
+
+### Changed
+- **`sendEmail()` no longer fails silently** (#1194). An unconfigured SMTP setup used to be a
+  bare `console.log` + `return`, which made a broken mail pipeline indistinguishable from
+  users who simply never replied. It now logs at error level and records a `SKIPPED` row;
+  send failures are recorded as `FAILED` and rethrown unchanged, so existing callers behave
+  exactly as before.
+- **The admin user list explains *why* an account is inactive** (#1194). One amber "Inactive"
+  badge covered five unrelated situations; each state now has its own label, colour and a
+  one-line "what to do about it", plus a **Resend verification** button on `unverified` rows.
+- **The message composer warns when the other side cannot read it** (#1194). A 1:1 thread now
+  resolves the counterpart's `accountState` (`GET /api/messages` → `counterpartState`) and
+  shows a banner when they cannot sign in, have no login at all, or sit on a generated
+  stand-in address that discards every email.
+
+### Fixed
+- Silence from an unreachable account no longer reads as being ignored: the three states
+  behind it (never verified, no login, placeholder address) are now surfaced everywhere they
+  matter — the user list, the composer and the delivery log.
+
 ## [0.60.0-beta] - 2026-08-08
 
 ### Added

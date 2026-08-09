@@ -21,6 +21,7 @@ import { emailAllowed } from '@/lib/notificationPrefs';
 import { ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { withTenantScope } from '@/lib/orgContext';
+import { accountState, type AccountState } from '@/lib/accountState';
 
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
@@ -150,7 +151,23 @@ export async function GET(request: Request) {
     const counterpartId = conversation ? directCounterpartId(conversation, session.user.id) : null;
     const mentorId = counterpartId ? (await latestMentorshipFor(session.user.id, counterpartId))?.mentorId ?? null : null;
 
+    // Can the person on the other side of a 1:1 thread actually read this?
+    // An account that cannot sign in never sees an in-app message, and a
+    // stand-in address means the email mirror is discarded too — so the
+    // composer says so before you type instead of after days of silence
+    // (#1194). Group chats have no single counterpart, hence 1:1 only.
+    const otherId = rel ? otherParticipant(rel, session.user.id) : counterpartId;
+    let counterpartState: AccountState | null = null;
+    if (otherId) {
+      const other = await prisma.user.findUnique({
+        where: { id: otherId },
+        select: { isActive: true, emailVerified: true, pendingApproval: true, email: true, password: true },
+      });
+      if (other) counterpartState = accountState(other);
+    }
+
     return NextResponse.json({
+      counterpartState,
       ...(rel
         ? { relationId: rel.id, mentor: rel.mentor, mentee: rel.mentee }
         : {
@@ -298,6 +315,7 @@ export async function POST(request: Request) {
         const attachCount = fileBufs.length;
         sendEmail({
           to: rcpt.email,
+          category: 'message',
           subject: `New message from ${sender}`,
           html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>Reply to this email or open the conversation in the app.</p>`,
           // Project DMs with no mentorship behind them get the same notification

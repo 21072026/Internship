@@ -29,9 +29,22 @@ export default function AdminSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; sentAt?: string } | null>(null);
 
+  // The outbound delivery log (#1194) — the only place that can answer "did our
+  // mail actually go out?". Without it a broken SMTP setup is indistinguishable
+  // from users who simply never replied.
+  const [emailLog, setEmailLog] = useState<{
+    entries: { id: string; to: string; subject: string; category: string | null; status: string; error: string | null; createdAt: string }[];
+    summary: { SENT: number; FAILED: number; SKIPPED: number };
+  } | null>(null);
+
+  const loadEmailLog = useCallback(() => {
+    fetch('/api/admin/email-log?limit=25').then((r) => (r.ok ? r.json() : null)).then((d) => d && setEmailLog(d)).catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch('/api/admin/email-test').then((r) => (r.ok ? r.json() : null)).then((d) => d && setSmtpInfo(d)).catch(() => {});
-  }, []);
+    loadEmailLog();
+  }, [loadEmailLog]);
 
   const sendTest = async () => {
     if (!testTo.trim()) return;
@@ -47,6 +60,8 @@ export default function AdminSettingsPage() {
       setTestResult({ ok: false, error: t.common.error });
     } finally {
       setTesting(false);
+      // The probe just wrote a row; show it without a manual refresh.
+      loadEmailLog();
     }
   };
 
@@ -237,6 +252,64 @@ export default function AdminSettingsPage() {
           )}
 
           <p className="text-xs text-gray-400">{t.settings.emailTesters}</p>
+
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">{t.settings.emailLog}</h3>
+              <Button type="button" variant="ghost" size="sm" onClick={loadEmailLog}>{t.settings.emailLogRefresh}</Button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t.settings.emailLogHint}</p>
+
+            {emailLog && (
+              <p className="text-xs mb-2">
+                <span className="text-green-600 dark:text-green-400">{t.settings.emailLogSent.replace('{n}', String(emailLog.summary.SENT))}</span>
+                {' · '}
+                <span className={emailLog.summary.FAILED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
+                  {t.settings.emailLogFailed.replace('{n}', String(emailLog.summary.FAILED))}
+                </span>
+                {' · '}
+                <span className={emailLog.summary.SKIPPED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
+                  {t.settings.emailLogSkipped.replace('{n}', String(emailLog.summary.SKIPPED))}
+                </span>
+              </p>
+            )}
+
+            {emailLog && emailLog.entries.length === 0 && (
+              <p className="text-xs text-gray-400">{t.settings.emailLogNone}</p>
+            )}
+
+            {emailLog && emailLog.entries.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs" data-testid="email-log-table">
+                  <tbody>
+                    {emailLog.entries.map((e) => (
+                      <tr key={e.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <td className="py-1.5 pr-2 whitespace-nowrap text-gray-400">
+                          {new Date(e.createdAt).toLocaleString()}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          <span
+                            className={
+                              e.status === 'SENT'
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-600 dark:text-red-400'
+                            }
+                          >
+                            ● {e.status}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400">{e.category ?? '—'}</td>
+                        <td className="py-1.5 pr-2 truncate max-w-[16rem]" title={e.to}>{e.to}</td>
+                        <td className="py-1.5 text-gray-500 dark:text-gray-400 truncate max-w-[20rem]" title={e.error ?? e.subject}>
+                          {e.error ?? e.subject}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
     </div>

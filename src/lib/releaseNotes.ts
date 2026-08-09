@@ -13,6 +13,30 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.61.0-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'The user list now says why an account is inactive instead of just labelling it "Inactive": never confirmed their email, waiting for your approval, switched off by an admin, or a record with no sign-in at all. Each one tells you what to do about it.',
+        'Accounts that never clicked their confirmation link now have a "Resend verification" button right in the list — you no longer have to wait for the person to come back and try signing in.',
+        'When you write to someone who cannot sign in yet, the message box warns you before you type: they will not see it in the app, and if the record only has a placeholder address, no email reaches them either.',
+        'Admin → Settings now shows a log of recent outgoing email, so you can tell "our mail never went out" apart from "they read it and did not reply".',
+      ],
+      tr: [
+        'Kullanıcı listesi artık bir hesabın neden pasif olduğunu söylüyor; sadece "Pasif" demiyor: e-postasını hiç doğrulamadı, onayınızı bekliyor, bir yönetici kapattı ya da hiç girişi olmayan bir kayıt. Her biri ne yapmanız gerektiğini de belirtiyor.',
+        'Doğrulama bağlantısına hiç tıklamamış hesaplar için listede artık "Doğrulamayı yeniden gönder" butonu var — kişinin geri dönüp giriş denemesini beklemeniz gerekmiyor.',
+        'Henüz giriş yapamayan birine yazarken mesaj kutusu siz yazmadan önce uyarıyor: bu kişi mesajı uygulamada göremeyecek, kayıtta yalnızca yer tutucu bir adres varsa e-posta da ulaşmayacak.',
+        'Yönetici → Ayarlar bölümünde artık son giden e-postaların kaydı görünüyor; böylece "mailimiz hiç gitmemiş" ile "okudu ama cevap vermedi" durumlarını ayırt edebiliyorsunuz.',
+      ],
+      de: [
+        'Die Benutzerliste sagt jetzt, *warum* ein Konto inaktiv ist, statt nur "Inaktiv": E-Mail nie bestätigt, wartet auf deine Freigabe, von einem Admin deaktiviert oder ein Datensatz ganz ohne Login. Zu jedem steht dabei, was zu tun ist.',
+        'Konten, die den Bestätigungslink nie angeklickt haben, bekommen in der Liste einen Button "Bestätigung erneut senden" — du musst nicht mehr warten, bis die Person selbst einen Anmeldeversuch macht.',
+        'Wenn du jemandem schreibst, der sich noch nicht anmelden kann, warnt das Nachrichtenfeld schon vor dem Tippen: Die Person sieht die Nachricht nicht in der App, und bei einer Platzhalter-Adresse erreicht sie auch keine E-Mail.',
+        'Unter Administration → Einstellungen siehst du jetzt ein Protokoll der zuletzt versendeten E-Mails — so lässt sich "unsere Mail ging nie raus" von "gelesen, aber nicht geantwortet" unterscheiden.',
+      ],
+    },
+  },
+  {
     version: '0.60.0-beta',
     date: '2026-08-08',
     highlights: {
