@@ -13,7 +13,14 @@ const include = {
   ownerUser: { select: { id: true, fullName: true, role: true } },
   ownerCompany: { select: { id: true, name: true } },
   relations: {
-    select: { id: true, pipelineStatus: true, mentee: { select: { id: true, fullName: true } }, mentor: { select: { id: true, fullName: true } } },
+    // `timezone` (#1210): the weekly-meeting card shows the next call on every
+    // team member's clock, so the zones have to travel with the team.
+    select: {
+      id: true,
+      pipelineStatus: true,
+      mentee: { select: { id: true, fullName: true, timezone: true } },
+      mentor: { select: { id: true, fullName: true, timezone: true } },
+    },
   },
   tasks: {
     // Archived to-dos stay in the DB as a record but leave the project's list.
@@ -28,7 +35,7 @@ const include = {
   },
   members: {
     orderBy: { addedAt: 'asc' },
-    select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, role: true } } },
+    select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, role: true, timezone: true } } },
   },
 } as const;
 

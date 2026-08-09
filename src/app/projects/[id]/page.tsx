@@ -43,15 +43,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       isPublic: true, goals: true, startDate: true, endDate: true,
       ownerType: true, ownerUserId: true, ownerCompanyId: true,
       ownerUser: { select: { id: true, fullName: true } }, ownerCompany: { select: { name: true } },
+      // `timezone` (#1210): the weekly-meeting form previews the slot on every
+      // member's clock, so the zones travel with the team.
       members: {
         orderBy: { addedAt: 'asc' },
-        select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true } } },
+        select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, timezone: true } } },
       },
       relations: {
         where: { status: 'ACTIVE' },
         select: {
-          mentee: { select: { id: true, fullName: true } },
-          mentor: { select: { id: true, fullName: true } },
+          mentee: { select: { id: true, fullName: true, timezone: true } },
+          mentor: { select: { id: true, fullName: true, timezone: true } },
         },
       },
     },
@@ -198,7 +200,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
               {isLead && <ProjectJoinRequests projectId={id} />}
 
-              <ProjectWeeklyMeeting projectId={id} canManage={isLead} canStartInstant={canStartMeeting} projectName={p.name} />
+              <ProjectWeeklyMeeting projectId={id} canManage={isLead} canStartInstant={canStartMeeting} projectName={p.name} team={team} />
 
               {session && (
                 <ProjectGoals projectId={id} myId={session.user.id} canLead={isLead} isMember={isMember} />

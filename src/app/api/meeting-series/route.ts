@@ -133,6 +133,9 @@ async function announceNextOccurrence(
         scheduledAt: next,
         meetLink: series.fixedLink,
         timeZone: rel.mentee.timezone,
+        // The rule's own clock — "09:00 on Mondays" is 09:00 *somewhere*, and an
+        // invitee in another zone should see which somewhere (#1210).
+        organizerTimeZone: series.timeZone,
       });
       invited++;
     } catch (e) {

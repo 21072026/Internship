@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
+import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
+import { browserTimeZone } from '@/lib/timezone';
+import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
 
 // The project's recurring meeting (#51).
 //
@@ -29,11 +32,18 @@ interface Series {
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
+/** Just enough of a team member to put the meeting on their clock (#1210). */
+export interface MeetingTeamMember {
+  fullName: string;
+  timezone?: string | null;
+}
+
 export function ProjectWeeklyMeeting({
   projectId,
   canManage,
   canStartInstant = false,
   projectName,
+  team = [],
 }: {
   projectId: string;
   canManage: boolean;
@@ -41,6 +51,8 @@ export function ProjectWeeklyMeeting({
   // are different permissions (MENTOR members get the second, not the first).
   canStartInstant?: boolean;
   projectName?: string;
+  /** The project team, so a recurring slot can be checked against every member's clock (#1210). */
+  team?: MeetingTeamMember[];
 }) {
   const t = useT();
   const locale = useLocale();
@@ -88,6 +100,17 @@ export function ProjectWeeklyMeeting({
       .sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
       .map((d) => (t.projects.weekdaysShort as Record<string, string>)[DAY_KEYS[d] ?? 'mon'])
       .join(', ');
+
+  // A recurring slot is the case where zones actually bite: "Mondays at 09:00"
+  // is 09:00 on ONE clock, and a team spread over three of them has to agree on
+  // it before it is saved, not after the first reminder lands (#1210). Editing
+  // keeps the rule's own zone — the same reason `save()` only sends `timeZone`
+  // on create — so the preview shows what the existing rule means, not what it
+  // would mean if it were re-anchored here.
+  const editedSeries = editing ? series.find((s) => s.id === editing) : undefined;
+  const previewZone = editedSeries ? editedSeries.timeZone : browserTimeZone();
+  const previewInstant =
+    form.days.length > 0 ? nextOccurrence(form.days, form.timeOfDay, previewZone) : null;
 
   const openForm = (s?: Series) => {
     setError('');
@@ -264,6 +287,12 @@ export function ProjectWeeklyMeeting({
             />
           </div>
           <p className="text-xs text-gray-400">{t.projects.meetingLinkHint}</p>
+          {previewInstant && team.length > 0 && (
+            <AttendeeTimes
+              instantISO={previewInstant.toISOString()}
+              people={team.map((m) => ({ name: m.fullName, timezone: m.timezone }))}
+            />
+          )}
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex gap-2">
             <Button type="button" size="sm" loading={saving} onClick={save} data-testid="save-weekly-meeting">{t.projects.save}</Button>

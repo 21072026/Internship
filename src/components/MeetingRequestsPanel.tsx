@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
+import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 
 interface MReq {
   id: string;
@@ -17,7 +19,20 @@ interface MReq {
 
 // mode='request' → the mentee proposes meetings + sees status.
 // mode='manage'  → the mentor accepts/declines pending requests.
-export function MeetingRequestsPanel({ relationId, mode }: { relationId: string; mode: 'request' | 'manage' }) {
+export function MeetingRequestsPanel({
+  relationId,
+  mode,
+  counterpart,
+}: {
+  relationId: string;
+  mode: 'request' | 'manage';
+  /**
+   * The other side of the relation. A mentee proposing a slot is proposing it
+   * on their own clock to somebody who may be on another one, so the proposal
+   * form previews both before it is sent (#1210).
+   */
+  counterpart?: { name: string; timezone?: string | null };
+}) {
   const t = useT();
   const locale = useLocale();
   const [reqs, setReqs] = useState<MReq[]>([]);
@@ -58,6 +73,11 @@ export function MeetingRequestsPanel({ relationId, mode }: { relationId: string;
     }
   };
 
+  // `datetime-local` yields "2026-08-03T16:30" with no zone; read it on the
+  // browser's clock, which is the one the mentee picked it on (#1061).
+  const [proposedDate = '', proposedTime = ''] = when.split('T');
+  const proposedInstantISO = when ? wallClockToInstantISO(proposedDate, proposedTime) : '';
+
   const statusLabel = (s: string) => (t.portal.meetingRequests.status as Record<string, string>)[s] ?? s;
   const variant = (s: string) => (s === 'ACCEPTED' ? 'success' : s === 'DECLINED' ? 'danger' : 'warning');
   const pending = reqs.filter((r) => r.status === 'PENDING');
@@ -72,6 +92,17 @@ export function MeetingRequestsPanel({ relationId, mode }: { relationId: string;
           <div className="flex-1 min-w-[160px]"><Input label={t.portal.meetingRequests.topic} value={topic} onChange={(e) => setTopic(e.target.value)} /></div>
           <div className="min-w-[180px]"><Input label={t.portal.meetingRequests.when} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} /></div>
           <Button type="submit" size="sm" loading={busy} disabled={!topic.trim() || !when}>{t.portal.meetingRequests.request}</Button>
+          {when && counterpart && (
+            <div className="w-full">
+              <AttendeeTimes
+                instantISO={proposedInstantISO}
+                people={[
+                  { name: t.meetings.you, timezone: browserTimeZone() },
+                  { name: counterpart.name, timezone: counterpart.timezone },
+                ]}
+              />
+            </div>
+          )}
         </form>
       )}
 

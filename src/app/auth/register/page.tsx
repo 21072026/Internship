@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Suspense } from 'react';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
+import { browserTimeZone } from '@/lib/timezone';
 
 const registerSchema = z
   .object({
@@ -85,6 +86,10 @@ function RegisterForm() {
           fullName: data.fullName,
           consent: data.consent,
           privacyVersion: PRIVACY_POLICY_VERSION,
+          // The clock this account starts on (#1210) — so the verification mail
+          // and anything booked before they first open /account already read
+          // right. Correctable any time under Settings → Timezone.
+          timezone: browserTimeZone() ?? undefined,
         }),
       });
 

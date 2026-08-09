@@ -48,6 +48,8 @@ interface MenteeDetail {
   phone?: string;
   whatsapp?: string;
   city?: string;
+  /** IANA zone, null when the candidate never saved one (#1210). */
+  timezone?: string | null;
   birthDate?: string;
   role?: string;
   referralSource?: string;
@@ -505,7 +507,7 @@ export default function AdminMenteeDetailPage() {
             </div>
           )}
         </Card>
-        {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} />}
+        {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} menteeTimezone={user.timezone ?? null} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
         <PersonTodos userId={id} fullName={user?.fullName} />

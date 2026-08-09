@@ -7,7 +7,7 @@ import { randomBytes } from 'crypto';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
-import { hasTimeZoneDesignator, parseUserDateTime } from '@/lib/timezone';
+import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { generateMeetingLink } from '@/lib/meetingContext';
 
 const schema = z.object({
@@ -16,6 +16,11 @@ const schema = z.object({
   // Optional: omit/empty → a no-time meeting (just a link, no RSVP/reminder).
   scheduledAt: z.string().optional().or(z.literal('')),
   meetLink: z.string().url().optional().or(z.literal('')),
+  // The clock the organizer typed the time on — the browser's zone, not their
+  // saved profile zone, since the two differ exactly when someone is travelling
+  // (#1210). Stored on the meeting so the invite can name the reading that was
+  // actually agreed on. Invalid/absent falls back to the profile zone.
+  timeZone: z.string().max(80).optional(),
 });
 
 export async function GET() {
@@ -62,17 +67,19 @@ export async function POST(request: Request) {
     // reads it in the container's zone (UTC) and so shifts the meeting by the
     // organizer's offset (#1061). Anchor it to the organizer's own zone instead.
     let when: Date | null = null;
+    let organizerZone: string | null = null;
     if (scheduledAt) {
-      const organizer = hasTimeZoneDesignator(scheduledAt)
-        ? null
-        : await prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: { timezone: true },
-          });
+      const organizer = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { timezone: true },
+      });
       when = parseUserDateTime(scheduledAt, organizer?.timezone);
       if (!when) {
         return NextResponse.json({ error: 'Validation failed', details: { scheduledAt: 'Invalid date/time' } }, { status: 400 });
       }
+      const picked = parsed.data.timeZone;
+      const saved = organizer?.timezone;
+      organizerZone = isValidTimeZone(picked) ? picked : isValidTimeZone(saved) ? saved : null;
     }
 
     const where =
@@ -98,6 +105,7 @@ export async function POST(request: Request) {
           relationId: rel.id,
           title,
           scheduledAt: when,
+          timeZone: organizerZone,
           meetLink: link,
           rsvpToken,
           createdById: session.user.id,
@@ -112,6 +120,10 @@ export async function POST(request: Request) {
           meetLink: link,
           rsvpToken,
           timeZone: rel.mentee.timezone,
+          // Second reading: the clock the organizer set it on, printed only when
+          // it differs from the invitee's — see sendMeetingInviteEmail.
+          organizerTimeZone: organizerZone,
+          organizerName: session.user.name ?? null,
         });
       } catch (e) {
         console.error('Meeting invite email failed:', e);

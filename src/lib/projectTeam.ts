@@ -28,18 +28,24 @@ export interface TeamMember {
   addedAt: string | null;
   /** True when this person is only known through a legacy MentorshipRelation. */
   legacy: boolean;
+  /**
+   * The member's saved IANA zone, or null when they have none (#1210). Carried
+   * on the team so a recurring project call can be shown on every member's
+   * clock before it is agreed, not only after the reminder lands.
+   */
+  timezone: string | null;
 }
 
 interface MemberRow {
   role: StructuralRole;
   functionalRole?: FunctionalRole | null;
   addedAt?: Date | string | null;
-  user: { id: string; fullName: string };
+  user: { id: string; fullName: string; timezone?: string | null };
 }
 
 interface RelationRow {
-  mentee?: { id: string; fullName: string } | null;
-  mentor?: { id: string; fullName: string } | null;
+  mentee?: { id: string; fullName: string; timezone?: string | null } | null;
+  mentor?: { id: string; fullName: string; timezone?: string | null } | null;
 }
 
 const ROLE_ORDER: Record<StructuralRole, number> = { OWNER: 0, MENTOR: 1, MENTEE: 2 };
@@ -64,6 +70,7 @@ export function mergeTeam(members: MemberRow[] = [], relations: RelationRow[] = 
       functionalRole: m.role === 'MENTEE' ? m.functionalRole ?? null : null,
       addedAt: iso(m.addedAt),
       legacy: false,
+      timezone: m.user.timezone ?? null,
     });
   }
 
@@ -80,6 +87,7 @@ export function mergeTeam(members: MemberRow[] = [], relations: RelationRow[] = 
         functionalRole: null,
         addedAt: null,
         legacy: true,
+        timezone: person.timezone ?? null,
       });
     }
   }
@@ -104,13 +112,13 @@ export async function loadProjectTeam(projectId: string): Promise<TeamMember[]> 
     prisma.projectMember.findMany({
       where: { projectId },
       orderBy: { addedAt: 'asc' },
-      select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true } } },
+      select: { role: true, functionalRole: true, addedAt: true, user: { select: { id: true, fullName: true, timezone: true } } },
     }),
     prisma.mentorshipRelation.findMany({
       where: { projectId, status: 'ACTIVE' },
       select: {
-        mentee: { select: { id: true, fullName: true } },
-        mentor: { select: { id: true, fullName: true } },
+        mentee: { select: { id: true, fullName: true, timezone: true } },
+        mentor: { select: { id: true, fullName: true, timezone: true } },
       },
     }),
   ]);

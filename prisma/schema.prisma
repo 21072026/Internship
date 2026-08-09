@@ -1401,6 +1401,13 @@ model Meeting {
   // Optional: a meeting with a set time expects an RSVP and gets reminders; a
   // meeting with no time (null) is just a shared link — no RSVP, no reminder.
   scheduledAt    DateTime?
+  // The clock the organizer picked `scheduledAt` on (IANA zone), captured at
+  // creation (#1210). `scheduledAt` is an instant and is enough to render the
+  // time for anyone, but not to say *which* reading was the one agreed on — and
+  // the organizer's profile zone can't stand in for it, since it changes when
+  // they travel. Null for meetings created before this and for the odd caller
+  // that sends no zone; both fall back to the organizer's profile zone.
+  timeZone       String?
   meetLink       String?
   rsvp           RsvpStatus @default(PENDING)
   rsvpToken      String     @unique

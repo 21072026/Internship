@@ -75,6 +75,9 @@ export async function GET(request: Request) {
           // So the screens that write TO a mentee — the bulk email composer
           // above all — can show which language they read (#1164).
           preferredLanguage: true,
+          // Same idea for the clock they read (#1210): the scheduler previews
+          // the picked time on every selected mentee's zone before inviting.
+          timezone: true,
         },
       },
       company: { select: { id: true, name: true, industry: true } },
