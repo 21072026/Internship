@@ -270,27 +270,24 @@ else
   # if the new image is broken, and it must never live inside a container layer.
   #
   # Which is why the URL needs rewriting first (#1200). Under bridge networking
-  # $DATABASE_URL names the DB as `host.docker.internal`, and that name exists
-  # ONLY inside a container started with --add-host — on the host it does not
-  # resolve, so preview's backup died with "Unknown server host" on every
-  # deploy. The gateway address does resolve and connects.
+  # $DATABASE_URL names the DB as `host.docker.internal` — a name that exists
+  # ONLY inside a container started with --add-host. On the host it does not
+  # resolve, so preview's backup died with "Unknown server host" on every deploy.
   #
-  # It is still not sufficient, and the log line below is honest about that:
-  # MySQL sees a dump taken on the host as coming from the server's PUBLIC ip,
-  # not from the gateway, so `crm-preview` is refused with error 1045. Granting
-  # that user from the host's address (or dumping from inside a container that
-  # already has the gateway grant) is the real fix and needs a decision on the
-  # server — until then preview's backup is advisory, per the tiering above.
+  # The docker gateway (172.17.0.1) was the first attempt and it connects, but
+  # MariaDB attributes the connection to the box's PUBLIC ip, and `crm-preview`
+  # is granted from `172.17.%` only — error 1045. So use loopback and mirror what
+  # prod has always done: `crm` is granted @localhost and dumps fine that way.
+  # `crm-preview`@localhost now exists too, deliberately READ-ONLY and scoped to
+  # internship_crm_preview (the 172.17.% entry keeps the full DDL rights the app
+  # needs). Verified on the server: 60 tables, 7.5MB.
+  #
+  # Loopback rather than the public ip on purpose — it does not change when the
+  # box is renumbered, and it is the one address a local dump can always reach.
   BACKUP_DATABASE_URL="$DATABASE_URL"
   if [ "$NETWORK" != host ]; then
-    DOCKER_GW="$(docker network inspect bridge \
-      --format '{{ (index .IPAM.Config 0).Gateway }}' 2>/dev/null || true)"
-    if [ -n "$DOCKER_GW" ]; then
-      BACKUP_DATABASE_URL="${DATABASE_URL//host.docker.internal/$DOCKER_GW}"
-      log "Backup will reach the DB at the docker gateway ($DOCKER_GW)"
-    else
-      log "!! Could not resolve the docker bridge gateway — backup will use $DATABASE_URL as-is"
-    fi
+    BACKUP_DATABASE_URL="${DATABASE_URL//host.docker.internal/127.0.0.1}"
+    log "Backup reaches the DB over loopback (the container's host alias is not resolvable here)"
   fi
   # On prod a failed dump stops the deploy; on preview it is reported and the
   # deploy continues (see the tiering note above). BACKUP_TAKEN stays 0 in that
