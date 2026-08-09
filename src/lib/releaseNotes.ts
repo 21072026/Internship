@@ -13,6 +13,33 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.63.0-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'You can now set your own timezone under Settings → Timezone, whatever your role, and change it whenever you move. Everything with a time on it — meeting invitations, reminders, emails — follows that setting.',
+        'New accounts pick up the timezone of the browser they signed up in, so the very first emails already arrive on the right clock instead of the system default.',
+        'When you schedule a meeting, you now see what the time you picked reads as on every invited person’s clock before you send the invite — one line per timezone, so a call across Istanbul, Berlin and London can be confirmed at a glance instead of over chat.',
+        'The same preview appears when a mentee proposes a meeting time and when a project’s weekly slot is set, so nobody has to do the arithmetic in their head.',
+        'Every email that mentions a time now says which timezone it is written in, with a small link to change yours if it is wrong. Where the other participants are on different clocks, their times are listed too.',
+      ],
+      tr: [
+        'Artık rolünüz ne olursa olsun kendi saat diliminizi Ayarlar → Saat dilimi bölümünden seçebilir, taşındığınızda değiştirebilirsiniz. Saat içeren her şey — toplantı davetleri, hatırlatmalar, e-postalar — bu ayarı takip eder.',
+        'Yeni hesaplar, kayıt oldukları tarayıcının saat dilimini alır; böylece ilk e-postalar bile sistem varsayılanı yerine doğru saatle gelir.',
+        'Bir toplantı planlarken, seçtiğiniz saatin davet ettiğiniz her kişinin saatiyle ne anlama geldiğini daveti göndermeden önce görürsünüz — her saat dilimi için bir satır. Böylece İstanbul, Berlin ve Londra arasındaki bir görüşme sohbette değil, tek bakışta teyit edilir.',
+        'Aynı önizleme, bir menteenin toplantı saati önerdiği yerde ve projenin haftalık toplantısı ayarlanırken de çıkar; kimsenin kafadan hesap yapması gerekmez.',
+        'Saat içeren her e-posta artık hangi saat dilimine göre yazıldığını belirtiyor ve yanlışsa kendi diliminizi değiştirebileceğiniz küçük bir bağlantı veriyor. Diğer katılımcılar farklı saatlerdeyse onların saatleri de listeleniyor.',
+      ],
+      de: [
+        'Du kannst deine Zeitzone jetzt unter Einstellungen → Zeitzone selbst festlegen — unabhängig von deiner Rolle — und sie ändern, wenn du umziehst. Alles mit einer Uhrzeit (Besprechungseinladungen, Erinnerungen, E-Mails) richtet sich danach.',
+        'Neue Konten übernehmen die Zeitzone des Browsers, in dem sie angelegt wurden. So kommen schon die ersten E-Mails auf der richtigen Uhr an statt auf der Systemvorgabe.',
+        'Beim Planen einer Besprechung siehst du vor dem Absenden, was die gewählte Zeit auf der Uhr jeder eingeladenen Person bedeutet — eine Zeile pro Zeitzone. Ein Termin über Istanbul, Berlin und London lässt sich damit auf einen Blick bestätigen statt im Chat.',
+        'Dieselbe Vorschau erscheint, wenn ein Mentee eine Zeit vorschlägt und wenn der wöchentliche Projekttermin gesetzt wird — niemand muss mehr im Kopf umrechnen.',
+        'Jede E-Mail mit einer Uhrzeit nennt jetzt die Zeitzone, in der sie geschrieben ist, mit einem kleinen Link, um deine zu korrigieren. Sind die anderen Teilnehmer auf anderen Uhren, stehen deren Zeiten ebenfalls dabei.',
+      ],
+    },
+  },
+  {
     version: '0.62.0-beta',
     date: '2026-08-09',
     highlights: {

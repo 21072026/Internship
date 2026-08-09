@@ -206,6 +206,10 @@ export function readingsByZone(instant: Date, people: ZonedPerson[], locale = 'e
         month: 'short',
         hour: '2-digit',
         minute: '2-digit',
+        // `h23`: the app writes times as "16:30" everywhere — the time inputs,
+        // the series rule, the meeting list — and a reading that flips to
+        // "04:30 PM" is exactly the ambiguity this block exists to remove.
+        hourCycle: 'h23',
         timeZone,
       }).format(instant),
       names: [person.name],

@@ -8,6 +8,47 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.63.0-beta] - 2026-08-09
+
+### Added
+- **Timezones, end to end** (#1210). The render/parse helpers landed with #1030 / #1061 /
+  #1110, but the user-facing half was missing: only mentees could pick a zone, new accounts
+  had none, nothing confirmed a time across zones, and no email said which clock it was
+  written on.
+  - **Settings → Timezone**, for every role (`AccountSettings`, `/account#timezone`). Saved on
+    pick like the language and theme selectors — a zone left unsaved behind a button is
+    exactly the state that produces a wrong meeting time. The browser's zone is *offered*
+    when it differs, never forced: someone working Istanbul hours from Berlin means the zone
+    they chose. Writes go through the existing `PUT /api/profile` (`timezone` is already in
+    its schema and belongs to no role), so `POST /api/profile/timezone` stays what it is —
+    the silent, fill-if-empty path used by `TimezoneSync`.
+  - **Registration records the browser's zone** (`/api/register` accepts an optional
+    `timezone`, dropped if invalid — registration must never fail over this), so the
+    verification mail and anything booked on day one already read right.
+  - **`AttendeeTimes`** (`src/components/meeting/AttendeeTimes.tsx`) previews the picked
+    instant on every attendee's clock, one line per *distinct* clock — three people in
+    Berlin, Paris and Madrid are one reading, not three. Wired into the bulk scheduler
+    (`MeetingsManager`), the per-candidate panel (`MeetingSchedulerPanel`), the mentee's
+    meeting request (`MeetingRequestsPanel`) and the project's recurring slot
+    (`ProjectWeeklyMeeting`, which recomputes the next occurrence client-side from the
+    picked days/time). Readings sort west → east and render `h23`, matching how the app
+    writes times everywhere else.
+  - **`Meeting.timeZone`** stores the clock the organizer picked on, captured at creation.
+    `scheduledAt` is enough to render the time for anyone but not to say *which* reading was
+    agreed on, and the organizer's profile zone cannot stand in for it — that changes when
+    they travel. Null for older rows; falls back to the profile zone.
+  - **Every time-bearing email** now names the recipient's zone and links to
+    `/account#timezone` in small print, adds the other participants' clocks when they differ
+    (the project-series reminder does this for the whole team), and prints the organizer's /
+    requester's reading as a second line on invites and meeting requests. Zone comparison is
+    by *offset at that instant* (`sameWallClock`), so Berlin and Paris don't produce a
+    redundant second line and a pair that diverges across a DST change still does.
+  - New helpers in `src/lib/timezone.ts`: `zoneLabel`, `sameWallClock`, `readingsByZone`,
+    `supportedTimeZones` / `timeZoneOptions` (memoized — the IANA list is ~450 strings) and
+    `browserTimeZone`. `ProfileForm` now shares the option list instead of building its own.
+  - `e2e/timezone-settings.spec.ts` covers the `/account` picker, the registration capture
+    and the cross-zone scheduling preview.
+
 ## [0.62.0-beta] - 2026-08-09
 
 ### Added
