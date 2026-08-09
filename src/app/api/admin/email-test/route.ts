@@ -17,7 +17,7 @@ export async function GET() {
   const [smtp, bulkSmtp] = await Promise.all([verifySmtpConnection(), verifyBulkSmtpConnection()]);
   return NextResponse.json({
     smtp,
-    // The second outbound channel (#1196). `configured: false` means every
+    // The second outbound channel (#1203). `configured: false` means every
     // category rides the primary transport — a valid setup, not a fault.
     bulkSmtp,
     channels: mailChannelInfo(),

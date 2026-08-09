@@ -1629,7 +1629,7 @@ model EmailLog {
   // Which of the two outbound channels carried it: "primary" (the reputable
   // relay, for mail that must reach a human) or "bulk" (our own server, for
   // digests and reminders). Lets the admin see how much of the relay's daily
-  // quota each category is actually consuming (#1196).
+  // quota each category is actually consuming (#1203).
   transport String?     @db.VarChar(16)
   status    EmailStatus @default(SENT)
   // Rejection reason / exception message when status is FAILED or SKIPPED.

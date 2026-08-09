@@ -11,7 +11,7 @@ version is shown in the sidebar footer of every page (links to the
 ## [0.61.0-beta] - 2026-08-09
 
 ### Added
-- **Outbound mail is split into two channels by category** (#1196), so scheduled system mail
+- **Outbound mail is split into two channels by category** (#1203), so scheduled system mail
   cannot eat a relay's daily allowance. `primary` (`SMTP_*`) carries what must reach a human —
   `verification`, `invitation`, `password-reset`, `message`, `test` — and points at a reputable
   relay; `bulk` (`SMTP_BULK_*`) carries `unread-digest`, `activity-digest`, `mentor-digest`,
@@ -50,7 +50,7 @@ version is shown in the sidebar footer of every page (links to the
   sets (the `password` column is read only to derive it and is stripped from every response).
 
 ### Changed
-- **SMTP transports now have bounded timeouts** (10s connect/greeting, 20s socket, #1196). An
+- **SMTP transports now have bounded timeouts** (10s connect/greeting, 20s socket, #1203). An
   unreachable or wedged mail host used to hang the request that triggered the send — and, once
   the admin panel began verifying two channels, the panel itself.
 - **`sendEmail()` no longer fails silently** (#1194). An unconfigured SMTP setup used to be a

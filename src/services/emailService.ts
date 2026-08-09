@@ -60,7 +60,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // ---------------------------------------------------------------------------
-// Two outbound channels (#1196).
+// Two outbound channels (#1203).
 //
 // A reputable relay is what gets mail that MUST reach a human into the inbox —
 // a verification link, an invitation, a password reset, a message notification.
@@ -211,7 +211,7 @@ export async function sendEmail({
   // user who simply never replied (#1194) — the whole reason a batch of
   // never-activated sign-ups went unexplained. Log it loudly and leave a row
   // behind so the admin mail view can show it.
-  // Which channel carries this one (#1196). Resolves to 'primary' whenever the
+  // Which channel carries this one (#1203). Resolves to 'primary' whenever the
   // bulk transport is not configured, so a single-SMTP setup is unchanged.
   const transport = transportFor(category);
   const via = transport === 'bulk' ? bulkTransporter! : transporter;

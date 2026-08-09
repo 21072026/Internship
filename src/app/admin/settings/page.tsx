@@ -244,7 +244,7 @@ export default function AdminSettingsPage() {
             </div>
           )}
 
-          {/* The second outbound channel (#1196): bulk/system mail on our own
+          {/* The second outbound channel (#1203): bulk/system mail on our own
               server so digests never eat the relay's daily allowance. */}
           {smtpInfo?.bulkSmtp && (
             <div className="text-sm">

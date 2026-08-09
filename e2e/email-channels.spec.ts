@@ -5,7 +5,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// #1196: outbound mail splits into two channels by category so the scheduled
+// #1203: outbound mail splits into two channels by category so the scheduled
 // digests/reminders cannot eat a relay's daily allowance (Brevo free is 300/day
 // across everything). This asserts the wiring, not a particular deployment's
 // env: the split has to be visible to the admin and the bulk category list has
