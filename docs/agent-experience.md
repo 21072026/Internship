@@ -3337,3 +3337,59 @@ ve `DATA_ACCESS_POLICY` dev sunucusunu oraya bağlamayı yasaklıyor. Kopyalamak
 MariaDB'ye (`crm:crm@127.0.0.1`) bakan yeni bir `.env` yazın. Bu oturumda kopyalandı ve
 doğrulama anonim ana sayfayla sınırlı kaldığı için gerçek veri okunmadı — ama doğru refleks
 bu değil.
+
+## 2026-08-09 — Ortak chrome'u toplarken çıkan üç gizli kusur ve ölçülmeyen bir hız iddiası (#1197, 0.61.0-beta)
+
+**"Tutarlılık" işi aslında bir hata avıdır.** Görev "header/footer hep aynı olsun" diye
+geldi ama dokuz public sayfayı yan yana koyunca ortaya üç ayrı gerçek kusur çıktı, hiçbiri
+kozmetik değil: (1) root layout hep `href="#main-content"` render ediyor ama o çapayı
+yalnızca `ResponsiveShell` tanımlıyordu — yani **her public sayfada** skip-to-content linki
+boşluğa gidiyordu; (2) landing header'ı "Özellikler"/"Firmalar için"i `sm:`/`md:` altında
+gizliyordu ve arkasında menü yoktu, telefonda o sayfalara header'dan erişim **yoktu**;
+(3) hukuki sayfalar "ana sayfaya dön" dışında hiçbir yere bağlanmıyordu. Sayfaları tek tek
+değil, bir tabloda yan yana listelemek bunları görünür yaptı — önce envanteri çıkarın.
+
+**`landing` namespace'i client'a gitmiyor; header client bileşeni olmak zorunda.**
+`SERVER_ONLY_NAMESPACES` (`landing`, `featureCatalog`) tarayıcıya hiç gönderilmiyor (#502).
+Mobil menü state gerektirdiği için header `'use client'` olmalı, dolayısıyla `landing.signIn`
+gibi stringleri **okuyamaz**. Çözüm: chrome metinleri için ayrı, client'a giden bir
+`publicNav` bloğu. Aynı tuzak yeni bir public client bileşeni yazan herkesi bekliyor.
+
+**Footer'ı server bileşeni tutun.** `APP_VERSION`, `package.json`'ı import ediyor; footer
+client olsaydı tüm `package.json` tarayıcı paketine inline edilirdi. Footer'ın state'e
+ihtiyacı yok — server kalsın, header client olsun. Bunun bedeli: `/apply-as-mentor` gibi
+`'use client'` sayfaları server kabuğa + ayrı form bileşenine bölmek gerekti.
+
+**Hız iddiasını ölçmeden yazmayın — ölçtüm, iddia çürüdü.** "Anonim ziyaretçide
+`getServerSession()` çağrısını atlarsak sayfalar hızlanır" makul görünüyordu. İki turlu A/B
+yaptım: 1. turda kapılı hâl **yavaş**, 2. turda **hızlı** çıktı — yani gürültünün içinde.
+Sebep: JWT stratejisinde çerez yokken `getServerSession()` zaten DB'ye gitmiyor, ucuza
+dönüyor. Üstelik bu sayfaların **production TTFB'si zaten 11–27 ms**; sunucu render'ı hiç
+darboğaz değildi. Kapıyı (boşa giden işi kaldırdığı için) tuttum ama CHANGELOG'a
+"ölçülebilir bir kazanç değildir" diye yazdım. **Dev sunucuda tek turluk ölçüm hiçbir şey
+kanıtlamaz; en az iki tur, ters sırayla.**
+
+**Gerçek hız kazancı ortak chrome'un yan etkisiydi.** Sayfalar artık birbirine `next/link`
+ile bağlı olduğu için geçişler tam doküman yüklemesi değil kısmi RSC isteği:
+`/privacy → /terms → /features` üçlüsü **tek** doküman yüklemesi + 49 ms ve 20 ms fetch.
+`performance.getEntriesByType('navigation').length` ve `nav.name` ile doğrulanır — 1'de
+kalıyorsa client-side geçiş olmuştur.
+
+**Yerel smoke kırmızısının dördü de ortamdı, hiçbiri koddu değildi.** Sırasıyla:
+(1) `internship_e2e` DB'si şemadan geri kalmıştı (`Notification.announcementId` yok) →
+`prisma db push`; (2) `health`/`rate-limit`, Playwright **elle başlattığım prod sunucusunu
+reuse ettiği** için düştü — `playwright.config.ts` `webServer.env` içinde `HEALTH_TOKEN` ve
+`TRUSTED_PROXY_COUNT` enjekte ediyor, hazır sunucuda bunlar yok; (3) `auth.spec.ts:21`,
+**Next.js Dev Tools düğmesi** `button[aria-haspopup="menu"]` seçicisine takıldığı için
+sadece dev'de düşüyor; (4) `pipeline.spec.ts:8` sabit `waitForTimeout(1800)` ile derleme
+yapan dev sunucusuna yarışıyor. **Kural: smoke'u CI gibi çalıştırın** —
+`CI=1 npx playwright test --grep @smoke` prod build'e karşı koşar; bende 56/56 geçti,
+dev'de 4 kırmızıydı. Kırmızıyı koda yazmadan önce bunu deneyin.
+
+**`preview_start` ile açtığınız sunucuyu Playwright'tan önce durdurun.** Yukarıdaki (2)
+maddesinin kökü bu: `reuseExistingServer: !CI` yerel koşuda açık olan 3000 portunu
+kapıyor ve config'in env'i hiç uygulanmıyor.
+
+**Baseline'ı ölçmek için `git stash -u` + aynı specleri koşun.** "Bu kırmızı benden mi?"
+sorusunun tek dürüst cevabı bu; dört testin ikisi baseline'da da kırmızıydı, ikisi değildi
+ve fark ortam kaynaklıydı.
