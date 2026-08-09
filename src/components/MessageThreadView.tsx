@@ -93,6 +93,8 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // DM where we no longer share a project with the other person. History stays
   // visible; only the composer goes away.
   const [canPost, setCanPost] = useState(true);
+  // Account state of the other side of a 1:1 thread; null for group chats.
+  const [counterpartState, setCounterpartState] = useState<string | null>(null);
   // Per-message edit/delete state.
   const [menuId, setMenuId] = useState<string | null>(null);
   const [reactId, setReactId] = useState<string | null>(null);
@@ -157,6 +159,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     setMentorId(d.mentorId ?? d.mentor?.id ?? null);
     setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null } : null);
     setCanPost(d.canPost !== false);
+    setCounterpartState(d.counterpartState ?? null);
     setLoading(false);
   }, [target.kind, target.id]);
 
@@ -578,6 +581,22 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
 
       <div className="shrink-0" data-testid="thread-composer">
       {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
+      {/* The other side cannot read this. Posting still works (the message waits
+          for them, and the email mirror may still land), but you should know
+          before you type — silence from an unreachable account reads as being
+          ignored otherwise (#1194). */}
+      {counterpartState && counterpartState !== 'active' && (
+        <p
+          className="mb-2 rounded-lg bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+          data-testid="counterpart-unreachable"
+        >
+          {counterpartState === 'placeholder_email'
+            ? t.messages.counterpartNoEmail
+            : counterpartState === 'no_login'
+              ? t.messages.counterpartNoLogin
+              : t.messages.counterpartInactive}
+        </p>
+      )}
       {!canPost && (
         <p className="text-center py-3 text-sm text-gray-400" data-testid="thread-readonly">
           {t.messages.readOnlyNotice}

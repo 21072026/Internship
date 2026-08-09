@@ -2,7 +2,9 @@ import nodemailer from 'nodemailer';
 import cron from 'node-cron';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
+import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
@@ -37,6 +39,15 @@ function brandHeader(brand: { name: string; accent: string; logoUrl: string | nu
   return `${logo}<h2 style="color: ${brand.accent};">${heading}</h2>`;
 }
 
+// Bounded waits so an unreachable or wedged SMTP host fails fast instead of
+// hanging the request that triggered the send — without these, the admin email
+// panel (which verifies both channels) blocks until the platform's own timeout.
+const SMTP_TIMEOUTS = {
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 20_000,
+} as const;
+
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -46,7 +57,67 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  ...SMTP_TIMEOUTS,
 });
+
+// ---------------------------------------------------------------------------
+// Two outbound channels (#1203).
+//
+// A reputable relay is what gets mail that MUST reach a human into the inbox —
+// a verification link, an invitation, a password reset, a message notification.
+// Those go to people who may not be engaged with us at all, and one that lands
+// in spam costs a user. But relays meter: Brevo's free tier is 300/day across
+// everything, and this app's own scheduled mail (hourly unread digests, daily
+// reminders and activity digests, weekly digests and analytics, announcements
+// to every user) eats that budget without any of it being urgent.
+//
+// So: critical mail rides the relay, bulk/system mail keeps going out over our
+// own server, ideally under a separate From identity so the two reputations
+// stay independent (a digest marked as spam must not drag the password-reset
+// mail down with it).
+//
+// The bulk channel is OPTIONAL. With SMTP_BULK_HOST unset every category falls
+// back to the primary transport, which is exactly today's behaviour — so
+// preview and topic environments need no extra configuration.
+// ---------------------------------------------------------------------------
+const bulkSmtpPort = Number(process.env.SMTP_BULK_PORT) || 587;
+const bulkConfigured = Boolean(process.env.SMTP_BULK_HOST && process.env.SMTP_BULK_USER);
+const bulkTransporter = bulkConfigured
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_BULK_HOST,
+      port: bulkSmtpPort,
+      secure: bulkSmtpPort === 465,
+      auth: {
+        user: process.env.SMTP_BULK_USER,
+        pass: process.env.SMTP_BULK_PASS,
+      },
+      ...SMTP_TIMEOUTS,
+    })
+  : null;
+
+// Categories that ride the bulk channel. Everything else — including any call
+// site that passes no category at all — stays on the primary transport. That
+// default is deliberate: an uncategorised mail is more likely to be something
+// a person is waiting for than a digest, and quietly downgrading its
+// deliverability is the kind of regression nobody notices until it matters.
+const BULK_CATEGORIES = new Set([
+  'unread-digest',
+  'activity-digest',
+  'mentor-digest',
+  'analytics-report',
+  'meeting-reminder',
+  'interaction-reminder',
+  'stage-deadline',
+  'retention-reminder',
+  'company-need-alert',
+  'announcement',
+]);
+
+export type MailTransport = 'primary' | 'bulk';
+
+export function transportFor(category?: string): MailTransport {
+  return bulkTransporter && category && BULK_CATEGORIES.has(category) ? 'bulk' : 'primary';
+}
 
 // Best-effort HTML → plain text for the multipart alternative. A message with
 // only an HTML part scores worse with spam filters (e.g. Gmail); shipping a
@@ -68,11 +139,47 @@ function htmlToText(html: string): string {
 // A From header with a display name ("Internship CRM <noreply@…>") looks less
 // like bulk/spam than a bare address. Honor an address that already includes a
 // name; otherwise wrap the configured address.
-function fromHeader(brandName?: string | null): string {
-  const addr = process.env.SMTP_FROM || process.env.SMTP_USER || '';
+function fromHeader(brandName?: string | null, transport: MailTransport = 'primary'): string {
+  // Bulk mail may carry its own sender identity (e.g. noreply@ersah.in) so that
+  // digest complaints never touch the domain the password-reset mail is signed
+  // with. Falls back to the primary address when unset, which keeps a
+  // single-identity setup working unchanged.
+  const addr =
+    (transport === 'bulk' ? process.env.SMTP_BULK_FROM : undefined) ||
+    process.env.SMTP_FROM ||
+    (transport === 'bulk' ? process.env.SMTP_BULK_USER : undefined) ||
+    process.env.SMTP_USER ||
+    '';
   if (addr.includes('<') || !addr) return addr;
   const name = brandName || process.env.MAIL_FROM_NAME || 'Internship CRM';
   return `${name} <${addr}>`;
+}
+
+// Record the outcome of one send attempt (#1194). Never throws and never blocks
+// the caller's own error handling: a logging failure must not turn a delivered
+// mail into an exception, nor hide the real SMTP error behind a Prisma one.
+async function recordEmail(
+  to: string,
+  subject: string,
+  category: string | undefined,
+  status: 'SENT' | 'FAILED' | 'SKIPPED',
+  transport: MailTransport,
+  error?: string,
+) {
+  try {
+    await prisma.emailLog.create({
+      data: {
+        to: to.slice(0, 320),
+        subject: subject.slice(0, 512),
+        category: category?.slice(0, 64) ?? null,
+        transport,
+        status,
+        error: error?.slice(0, 2000) ?? null,
+      },
+    });
+  } catch (e) {
+    logger.error('Failed to write EmailLog', { to, category, status, error: String(e) });
+  }
 }
 
 export async function sendEmail({
@@ -82,6 +189,7 @@ export async function sendEmail({
   replyTo,
   attachments,
   fromName,
+  category,
 }: {
   to: string;
   subject: string;
@@ -94,26 +202,77 @@ export async function sendEmail({
   // Overrides the From display name (e.g. a tenant's brand name, #546). Falls
   // back to MAIL_FROM_NAME / "Internship CRM" when omitted.
   fromName?: string | null;
+  // Coarse bucket for the delivery log ("verification", "message", …). Optional
+  // so the dozens of existing call sites keep compiling; the ones that matter
+  // for "did our mail get through?" pass it.
+  category?: string;
 }) {
+  // No SMTP on this environment. This used to be a bare console.log + return,
+  // which made a misconfigured or broken mail setup indistinguishable from a
+  // user who simply never replied (#1194) — the whole reason a batch of
+  // never-activated sign-ups went unexplained. Log it loudly and leave a row
+  // behind so the admin mail view can show it.
+  // Which channel carries this one (#1203). Resolves to 'primary' whenever the
+  // bulk transport is not configured, so a single-SMTP setup is unchanged.
+  const transport = transportFor(category);
+  const via = transport === 'bulk' ? bulkTransporter! : transporter;
+
   if (!process.env.SMTP_USER) {
-    console.log(`[Email skipped - no SMTP config] To: ${to}, Subject: ${subject}`);
+    logger.error('Email not sent: SMTP is not configured', { to, subject, category });
+    await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)');
     return;
   }
 
-  await transporter.sendMail({
-    from: fromHeader(fromName),
-    to,
-    subject,
-    html,
-    text: htmlToText(html),
-    ...(replyTo ? { replyTo } : {}),
-    ...(attachments?.length ? { attachments } : {}),
-  });
+  try {
+    await via.sendMail({
+      from: fromHeader(fromName, transport),
+      to,
+      subject,
+      html,
+      text: htmlToText(html),
+      ...(replyTo ? { replyTo } : {}),
+      ...(attachments?.length ? { attachments } : {}),
+    });
+  } catch (e) {
+    // Record, then rethrow unchanged: callers that already catch (and the ones
+    // that deliberately don't) keep behaving exactly as before.
+    const message = e instanceof Error ? e.message : String(e);
+    logger.error('Email send failed', { to, subject, category, transport, error: message });
+    await recordEmail(to, subject, category, 'FAILED', transport, message);
+    throw e;
+  }
+
+  await recordEmail(to, subject, category, 'SENT', transport);
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
 // opt-in `/api/health?smtp=1` probe so SMTP outages (#483) surface as a clear
 // signal instead of only being visible per-user as "email never arrived".
+// The bulk channel's own connectivity check. `configured: false` is not a
+// failure — it means every category rides the primary transport, which is a
+// valid (and the default) setup.
+export async function verifyBulkSmtpConnection(): Promise<{ configured: boolean; ok: boolean; error?: string }> {
+  if (!bulkTransporter) return { configured: false, ok: true };
+  try {
+    await bulkTransporter.verify();
+    return { configured: true, ok: true };
+  } catch (e) {
+    return { configured: true, ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// What the two channels are set to send as — shown in the admin email panel so
+// the split is verifiable at a glance rather than by reading the env file.
+export function mailChannelInfo() {
+  return {
+    primary: { host: process.env.SMTP_HOST || null, from: fromHeader(null, 'primary') || null },
+    bulk: bulkTransporter
+      ? { host: process.env.SMTP_BULK_HOST || null, from: fromHeader(null, 'bulk') || null }
+      : null,
+    bulkCategories: [...BULK_CATEGORIES],
+  };
+}
+
 export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: string }> {
   if (!process.env.SMTP_USER) return { ok: false, error: 'SMTP not configured' };
   try {
@@ -142,6 +301,7 @@ export async function sendInvitationEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'invitation',
     subject: `You have been invited to ${brand.name}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -197,6 +357,7 @@ export async function sendPasswordResetEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'password-reset',
     subject: isInitial ? `Activate your ${brand.name} account` : `Reset your ${brand.name} password`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -243,6 +404,7 @@ export async function sendVerificationEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'verification',
     subject: `Verify your ${brand.name} email`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -878,6 +1040,7 @@ export async function checkMentorInteractionReminders() {
 
     try {
       await sendEmail({
+        category: 'interaction-reminder',
         to: mentor.email,
         subject: relations.length === 1
           ? `Reminder: Log interaction with ${relations[0].mentee.fullName}`
@@ -953,6 +1116,7 @@ export async function checkStageDeadlineReminders() {
       const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
       const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
       await sendEmail({
+        category: 'stage-deadline',
         to: rel.mentor.email,
         subject,
         html: `<p>${greeting}</p><p>${body}</p>`,
@@ -1064,6 +1228,7 @@ export async function sendMeetingReminders() {
       try {
         const brand = await emailBrand(user.orgId);
         await sendEmail({
+          category: 'meeting-reminder',
           to: user.email,
           fromName: brand.name,
           subject: `Reminder: ${m.title} starts soon`,
@@ -1197,6 +1362,7 @@ export async function sendProjectMeetingSeriesReminders() {
         try {
           const brand = await emailBrand(series.project?.orgId ?? null);
           await sendEmail({
+            category: 'meeting-reminder',
             to: user.email,
             fromName: brand.name,
             subject:
@@ -1260,6 +1426,7 @@ export async function sendWeeklyMentorDigests() {
 
     try {
       await sendEmail({
+        category: 'mentor-digest',
         to: m.email,
         subject: 'Your weekly mentoring summary',
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1336,6 +1503,7 @@ export async function sendDailyActivityDigests() {
     if (items.length === 0) continue;
     try {
       await sendEmail({
+        category: 'activity-digest',
         to: m.email,
         subject: 'Daily mentee activity',
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
@@ -1362,6 +1530,7 @@ export async function sendDailyActivityDigests() {
       if (!emailAllowed(a, 'digest')) continue;
       try {
         await sendEmail({
+          category: 'activity-digest',
           to: a.email,
           subject: 'Daily mentee activity (all mentees)',
           html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
@@ -1412,6 +1581,7 @@ export async function checkRetentionReminders() {
     // Legal/retention notice — always sent (not gated by marketing opt-out).
     try {
       await sendEmail({
+        category: 'retention-reminder',
         to: u.email,
         subject: 'Please confirm you still want us to keep your data',
         html: `
@@ -1524,6 +1694,7 @@ export async function checkCompanyNeedMatches() {
         await notify(u.id, 'need_match', text, link);
         if (emailAllowed(u, 'digest')) {
           await sendEmail({
+            category: 'company-need-alert',
             to: u.email,
             subject: 'A candidate matches your open position',
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1576,6 +1747,7 @@ export async function sendWeeklyAnalyticsReport() {
   for (const a of admins) {
     if (!emailAllowed(a, 'digest')) continue;
     await sendEmail({
+      category: 'analytics-report',
       to: a.email,
       subject: 'Weekly analytics report — Internship CRM',
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1620,7 +1792,10 @@ export async function sendUnreadMessageDigests() {
 
   // Group unread messages by recipient (the participant who is NOT the sender).
   type Recipient = NonNullable<(typeof msgs)[number]['relation']>['mentor'];
-  const byRecipient = new Map<string, { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }>();
+  const byRecipient = new Map<
+    string,
+    { recipient: Recipient; items: { messageId: string; relationId: string; from: string; preview: string }[] }
+  >();
   const allIds: string[] = [];
   for (const m of msgs) {
     const rel = m.relation;
@@ -1631,7 +1806,15 @@ export async function sendUnreadMessageDigests() {
     const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
     if (!recipient?.email) continue;
     const entry = byRecipient.get(recipient.id) ?? { recipient, items: [] };
-    entry.items.push({ relationId: rel.id, from: sender?.fullName ?? 'Someone', preview: m.body.slice(0, 120) });
+    // The message id rides along so the digest can offer the same one-click
+    // reactions as the live notification (#1204), bound to the exact message
+    // rather than to "whatever is newest when the link is clicked".
+    entry.items.push({
+      messageId: m.id,
+      relationId: rel.id,
+      from: sender?.fullName ?? 'Someone',
+      preview: m.body.slice(0, 120),
+    });
     byRecipient.set(recipient.id, entry);
   }
 
@@ -1641,17 +1824,34 @@ export async function sendUnreadMessageDigests() {
     const rows = items
       .map((it) => {
         const safe = it.preview.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
-        return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a></li>`;
+        // Each line gets the same five reactions as the app, so a one-word
+        // acknowledgement ("got it") no longer costs a round trip through the
+        // browser — and reacting also clears the thread (#1204).
+        return `<li style="margin-bottom:12px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a>${reactionLinksHtml(it.messageId, recipient.id)}</li>`;
       })
       .join('');
+    // One link that clears the whole summary. Every item here belongs to the
+    // same recipient, so marking each distinct thread read covers all of them.
+    const relationIds = [...new Set(items.map((it) => it.relationId))];
+    const markAllHtml = relationIds
+      .map(
+        (relationId, i) =>
+          `<a href="${markReadUrl(relationId, recipient.id)}" style="color:#6b7280;">${
+            relationIds.length === 1 ? 'Mark this conversation as read' : `Mark conversation ${i + 1} as read`
+          }</a>`,
+      )
+      .join(' · ');
     try {
       await sendEmail({
         to: recipient.email!,
+        category: 'unread-digest',
         subject: `You have ${items.length} unread message${items.length === 1 ? '' : 's'}`,
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
           <h2 style="color:#2563eb;">Unread messages</h2>
           <p>Hi ${recipient.fullName}, you have ${items.length} unread message${items.length === 1 ? '' : 's'} waiting:</p>
           <ul style="padding-left:18px;">${rows}</ul>
+          <p style="font-size:13px;color:#6b7280;">${markAllHtml}</p>
+          <p style="font-size:12px;color:#9ca3af;">Replying to a message also marks it — and everything before it — as read, so an answered conversation will not appear here again.</p>
         </div>`,
       });
       sent++;

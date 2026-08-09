@@ -214,9 +214,24 @@ SMTP_PORT=587
 SMTP_USER=...
 SMTP_PASS=...
 SMTP_FROM=...
+# Optional second outbound channel (docs/EMAIL_DELIVERABILITY.md § "Two channels").
+# Unset ⇒ everything goes over SMTP_* above, which is the historical behaviour.
+#SMTP_BULK_HOST=...
+#SMTP_BULK_PORT=465
+#SMTP_BULK_USER=...
+#SMTP_BULK_PASS=...
+#SMTP_BULK_FROM=...
 ENV
 sudo chmod 600 /etc/internship-crm/prod.env
 ```
+
+> **This file — not GitHub secrets — is what the running container reads.**
+> `deploy-prod.sh` builds the container's env from `ENV_FILE` (falling back to
+> the values already on the running container when it is missing). The
+> `secrets.SMTP_*` entries in `deploy-prod.yml` / `deploy-preview.yml` are used
+> only by the "Email alert on failure" job, which runs on a GitHub-hosted runner
+> and never touches the app. Changing the app's mail configuration means editing
+> this file and redeploying.
 
 ### Deploy `main` to production (builds from source — no ghcr pull needed)
 ```bash

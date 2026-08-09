@@ -24,14 +24,39 @@ export default function AdminSettingsPage() {
   const [importResult, setImportResult] = useState<string | null>(null);
   const [importRows, setImportRows] = useState<{ row: number; email: string; status: string; reason?: string }[]>([]);
 
-  const [smtpInfo, setSmtpInfo] = useState<{ smtp?: { ok: boolean; error?: string }; from?: string | null; host?: string | null } | null>(null);
+  const [smtpInfo, setSmtpInfo] = useState<{
+    smtp?: { ok: boolean; error?: string };
+    bulkSmtp?: { configured: boolean; ok: boolean; error?: string };
+    channels?: {
+      primary: { host: string | null; from: string | null };
+      bulk: { host: string | null; from: string | null } | null;
+      bulkCategories: string[];
+    };
+    from?: string | null;
+    host?: string | null;
+  } | null>(null);
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; sentAt?: string } | null>(null);
 
+  // The outbound delivery log (#1194) — the only place that can answer "did our
+  // mail actually go out?". Without it a broken SMTP setup is indistinguishable
+  // from users who simply never replied.
+  const [emailLog, setEmailLog] = useState<{
+    entries: { id: string; to: string; subject: string; category: string | null; transport: string | null; status: string; error: string | null; createdAt: string }[];
+    summary: { SENT: number; FAILED: number; SKIPPED: number };
+    last24h: { primary: number; bulk: number };
+    byCategory: { category: string; transport: string; count: number }[];
+  } | null>(null);
+
+  const loadEmailLog = useCallback(() => {
+    fetch('/api/admin/email-log?limit=25').then((r) => (r.ok ? r.json() : null)).then((d) => d && setEmailLog(d)).catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetch('/api/admin/email-test').then((r) => (r.ok ? r.json() : null)).then((d) => d && setSmtpInfo(d)).catch(() => {});
-  }, []);
+    loadEmailLog();
+  }, [loadEmailLog]);
 
   const sendTest = async () => {
     if (!testTo.trim()) return;
@@ -47,6 +72,8 @@ export default function AdminSettingsPage() {
       setTestResult({ ok: false, error: t.common.error });
     } finally {
       setTesting(false);
+      // The probe just wrote a row; show it without a manual refresh.
+      loadEmailLog();
     }
   };
 
@@ -217,6 +244,35 @@ export default function AdminSettingsPage() {
             </div>
           )}
 
+          {/* The second outbound channel (#1203): bulk/system mail on our own
+              server so digests never eat the relay's daily allowance. */}
+          {smtpInfo?.bulkSmtp && (
+            <div className="text-sm">
+              {!smtpInfo.bulkSmtp.configured ? (
+                <span className="text-gray-400">○ {t.settings.bulkChannelOff}</span>
+              ) : smtpInfo.bulkSmtp.ok ? (
+                <span className="text-green-600 dark:text-green-400">
+                  ● {t.settings.bulkChannelOn}
+                  {smtpInfo.channels?.bulk?.from && (
+                    <span className="text-gray-400"> · {t.settings.sendingFrom} {smtpInfo.channels.bulk.from}</span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-red-600 dark:text-red-400">
+                  ● {t.settings.bulkChannelFailed}{smtpInfo.bulkSmtp.error ? `: ${smtpInfo.bulkSmtp.error}` : ''}
+                </span>
+              )}
+            </div>
+          )}
+
+          {emailLog?.last24h && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {t.settings.quotaToday
+                .replace('{p}', String(emailLog.last24h.primary))
+                .replace('{b}', String(emailLog.last24h.bulk))}
+            </p>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="email"
@@ -237,6 +293,87 @@ export default function AdminSettingsPage() {
           )}
 
           <p className="text-xs text-gray-400">{t.settings.emailTesters}</p>
+
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">{t.settings.emailLog}</h3>
+              <Button type="button" variant="ghost" size="sm" onClick={loadEmailLog}>{t.settings.emailLogRefresh}</Button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t.settings.emailLogHint}</p>
+
+            {emailLog && (
+              <p className="text-xs mb-2">
+                <span className="text-green-600 dark:text-green-400">{t.settings.emailLogSent.replace('{n}', String(emailLog.summary.SENT))}</span>
+                {' · '}
+                <span className={emailLog.summary.FAILED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
+                  {t.settings.emailLogFailed.replace('{n}', String(emailLog.summary.FAILED))}
+                </span>
+                {' · '}
+                <span className={emailLog.summary.SKIPPED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
+                  {t.settings.emailLogSkipped.replace('{n}', String(emailLog.summary.SKIPPED))}
+                </span>
+              </p>
+            )}
+
+            {/* Which categories are spending the relay's allowance — so a noisy
+                job can be moved to the bulk channel instead of paying more. */}
+            {emailLog && emailLog.byCategory.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5" data-testid="email-category-usage">
+                {emailLog.byCategory.slice(0, 8).map((c) => (
+                  <span
+                    key={`${c.category}-${c.transport}`}
+                    className={`rounded px-1.5 py-0.5 text-[11px] ${
+                      c.transport === 'bulk'
+                        ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                        : 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                    }`}
+                    title={c.transport === 'bulk' ? t.settings.bulkChannelOn : t.settings.primaryChannel}
+                  >
+                    {c.category} {c.count}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {emailLog && emailLog.entries.length === 0 && (
+              <p className="text-xs text-gray-400">{t.settings.emailLogNone}</p>
+            )}
+
+            {emailLog && emailLog.entries.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs" data-testid="email-log-table">
+                  <tbody>
+                    {emailLog.entries.map((e) => (
+                      <tr key={e.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <td className="py-1.5 pr-2 whitespace-nowrap text-gray-400">
+                          {new Date(e.createdAt).toLocaleString()}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          <span
+                            className={
+                              e.status === 'SENT'
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-red-600 dark:text-red-400'
+                            }
+                          >
+                            ● {e.status}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400">
+                          {e.category ?? '—'}
+                          {e.transport === 'bulk' && <span className="text-gray-400"> ·{t.settings.bulkTag}</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 truncate max-w-[16rem]" title={e.to}>{e.to}</td>
+                        <td className="py-1.5 text-gray-500 dark:text-gray-400 truncate max-w-[20rem]" title={e.error ?? e.subject}>
+                          {e.error ?? e.subject}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
     </div>

@@ -8,6 +8,92 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.62.0-beta] - 2026-08-09
+
+### Added
+- **One-click actions in notification emails** (#1204): the five composer reactions
+  (`👍 ❤️ 😂 😮 🎉`) and a "mark this conversation as read" link, in both the per-message
+  notification and the unread digest.
+  - `src/lib/emailActionToken.ts` — HMAC-signed action tokens, same construction and trust
+    argument as the Reply-To tokens (`replyToken.ts`). A reaction token is bound to a
+    **message id**, not to "the newest message in the thread", so a reply arriving between
+    send and click cannot redirect the reaction onto the wrong message. The emoji is stored
+    as an *index*, so a token can never carry an arbitrary string into the database.
+  - Links land on `/m/[token]`, which performs the action from the browser via
+    `POST /api/email-action`. Deliberately not a mutating `GET`: mail clients and corporate
+    link scanners (Outlook Safe Links, antivirus gateways) prefetch every URL in a message,
+    which would post reactions nobody clicked. Scanners do not execute scripts.
+  - Reacting also marks the thread read — you cannot react to something you have not seen.
+
+### Fixed
+- **Replying by email now marks the conversation read** (#1204). `routeInboundEmail` stored
+  the reply but left `readAt` untouched, so the hourly unread digest kept resurfacing
+  conversations that had already been answered — and the in-app badge kept counting messages
+  the user had demonstrably read. Answering the newest message now marks it and everything
+  before it, matching what opening the thread in a browser already did
+  (`src/lib/threadRead.ts`, shared by the inbound-email and email-action paths). Failures are
+  logged, never fatal: a delivered reply is not lost over its read bookkeeping.
+
+### Added
+- **Outbound mail is split into two channels by category** (#1203), so scheduled system mail
+  cannot eat a relay's daily allowance. `primary` (`SMTP_*`) carries what must reach a human —
+  `verification`, `invitation`, `password-reset`, `message`, `test` — and points at a reputable
+  relay; `bulk` (`SMTP_BULK_*`) carries `unread-digest`, `activity-digest`, `mentor-digest`,
+  `analytics-report`, `meeting-reminder`, `interaction-reminder`, `stage-deadline`,
+  `retention-reminder`, `company-need-alert` and `announcement` over our own server.
+  - **Uncategorised mail stays on `primary`** — silently downgrading an unclassified call site
+    is the kind of regression that only surfaces when it costs a user. Bulk is opt-in.
+  - **`SMTP_BULK_HOST` unset ⇒ single channel**, exactly the previous behaviour, so preview and
+    topic environments need no new configuration.
+  - `SMTP_BULK_FROM` may use a different domain (e.g. `noreply@ersah.in`) so the two sender
+    reputations stay independent — a digest marked as spam cannot drag down the password-reset
+    mail. Verified: both identities resolve distinctly at runtime.
+  - `EmailLog.transport` records which channel carried each message; the admin panel shows both
+    channels' health, a 24-hour per-channel count ("this is what counts against the quota") and
+    a per-category breakdown so a noisy job can be moved rather than the quota raised.
+- **`infra/check-mail-dns.sh`** — read-only sender-authentication readiness check (every DKIM
+  selector in both record types, plus SPF/DMARC/PTR). Exits non-zero while DKIM is missing so it
+  can gate a relay switch.
+- **Outbound email delivery log** (#1194). `sendEmail()` now records every attempt in a new
+  `EmailLog` model — recipient, subject, category, outcome (`SENT` / `FAILED` / `SKIPPED`)
+  and the error. Metadata only: the body is never stored, so message content does not get a
+  second home that account erasure would have to chase.
+  - Visible at **Admin → Settings → Email health**, with a 7-day `SENT/FAILED/SKIPPED`
+    breakdown above the last 25 attempts (`GET /api/admin/email-log`, admin-only —
+    recipient addresses are personal data).
+  - The key call sites pass a `category`: `verification`, `invitation`, `password-reset`,
+    `message`, `unread-digest`, `test`. "Are verification mails going out at all?" is now
+    answerable without shell access to the server.
+- **Admin-side "resend verification"** (`POST /api/users/[id]/resend-verification`, #1194).
+  The self-service resend on the sign-in page only helps someone who comes back and tries
+  again; a user who never received the first mail has no reason to. The endpoint refuses
+  any account that is not actually waiting on a click (409 + the resolved state).
+- **`accountState` — one derived state instead of a bare `isActive` flag** (`src/lib/accountState.ts`,
+  #1194): `active` / `unverified` / `pending_approval` / `deactivated` / `no_login` /
+  `placeholder_email` / `erased`. `/api/users` returns it for the directory and full field
+  sets (the `password` column is read only to derive it and is stripped from every response).
+
+### Changed
+- **SMTP transports now have bounded timeouts** (10s connect/greeting, 20s socket, #1203). An
+  unreachable or wedged mail host used to hang the request that triggered the send — and, once
+  the admin panel began verifying two channels, the panel itself.
+- **`sendEmail()` no longer fails silently** (#1194). An unconfigured SMTP setup used to be a
+  bare `console.log` + `return`, which made a broken mail pipeline indistinguishable from
+  users who simply never replied. It now logs at error level and records a `SKIPPED` row;
+  send failures are recorded as `FAILED` and rethrown unchanged, so existing callers behave
+  exactly as before.
+- **The admin user list explains *why* an account is inactive** (#1194). One amber "Inactive"
+  badge covered five unrelated situations; each state now has its own label, colour and a
+  one-line "what to do about it", plus a **Resend verification** button on `unverified` rows.
+- **The message composer warns when the other side cannot read it** (#1194). A 1:1 thread now
+  resolves the counterpart's `accountState` (`GET /api/messages` → `counterpartState`) and
+  shows a banner when they cannot sign in, have no login at all, or sit on a generated
+  stand-in address that discards every email.
+
+### Fixed
+- Silence from an unreachable account no longer reads as being ignored: the three states
+  behind it (never verified, no login, placeholder address) are now surfaced everywhere they
+  matter — the user list, the composer and the delivery log.
 ## [0.61.1-beta] - 2026-08-09
 
 ### Fixed

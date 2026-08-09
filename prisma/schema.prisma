@@ -1600,6 +1600,48 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+enum EmailStatus {
+  // Handed to the SMTP server without error. NOT proof of inbox placement —
+  // the message can still bounce or be filed as spam downstream.
+  SENT
+  // The SMTP server rejected it, or the connection failed.
+  FAILED
+  // Never attempted: SMTP is not configured on this environment.
+  SKIPPED
+}
+
+// Delivery log for outgoing mail (#1194).
+//
+// Without this there is no record anywhere that a mail was (or wasn't) sent:
+// `sendEmail` used to return silently when SMTP was unconfigured and most
+// callers swallow send failures, so an outage looked exactly like "the user
+// ignored us". Deliberately metadata only — recipient, subject, category and
+// outcome. The body is never stored: it is the most sensitive part of the
+// payload and duplicating it here would put message content in a second place
+// that account erasure would have to chase.
+model EmailLog {
+  id        String      @id @default(cuid())
+  to        String      @db.VarChar(320)
+  subject   String      @db.VarChar(512)
+  // Coarse bucket ("verification", "message", "invitation", …) so the admin
+  // view can answer "are verification mails going out at all?".
+  category  String?     @db.VarChar(64)
+  // Which of the two outbound channels carried it: "primary" (the reputable
+  // relay, for mail that must reach a human) or "bulk" (our own server, for
+  // digests and reminders). Lets the admin see how much of the relay's daily
+  // quota each category is actually consuming (#1203).
+  transport String?     @db.VarChar(16)
+  status    EmailStatus @default(SENT)
+  // Rejection reason / exception message when status is FAILED or SKIPPED.
+  error     String?     @db.Text
+  createdAt DateTime    @default(now())
+
+  @@index([to])
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
+
 // Lightweight audit trail for sensitive admin actions (e.g. impersonation).
 model AuditLog {
   id        String   @id @default(cuid())

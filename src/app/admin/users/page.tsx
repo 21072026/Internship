@@ -11,6 +11,7 @@ import { roleHome } from '@/lib/roleHome';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { UserEraseForm } from '@/components/UserEraseForm';
 import { useT } from '@/i18n/client';
+import type { AccountState } from '@/lib/accountState';
 
 interface AdminUser {
   id: string;
@@ -19,7 +20,21 @@ interface AdminUser {
   role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE';
   isActive: boolean;
   emailVerified: boolean;
+  accountState?: AccountState;
 }
+
+// Which badge each account state gets. `warning` (amber) is for "waiting on
+// someone", `danger` (red) for "this person cannot be reached at all" — the
+// distinction the old single "Inactive" badge hid (#1194).
+const STATE_BADGE: Record<AccountState, 'success' | 'warning' | 'danger'> = {
+  active: 'success',
+  unverified: 'warning',
+  pending_approval: 'warning',
+  deactivated: 'warning',
+  no_login: 'danger',
+  placeholder_email: 'danger',
+  erased: 'danger',
+};
 
 type RoleLabel = 'admin' | 'mentor' | 'mentee' | 'company' | 'source';
 
@@ -39,6 +54,7 @@ export default function AdminUsersPage() {
   const [total, setTotal] = useState(0);
   const [archivedCount, setArchivedCount] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [resendResult, setResendResult] = useState<{ userId: string; ok: boolean; message?: string } | null>(null);
   const [impersonateError, setImpersonateError] = useState<{ userId: string; message: string } | null>(null);
   // Row whose erasure panel is open. Deleting an account is an admin action
   // that belongs here, not inside an impersonated session — /api/account
@@ -124,6 +140,49 @@ export default function AdminUsersPage() {
     }
   };
 
+  // Push a fresh verification link to someone who never clicked the first one.
+  // The self-service resend on the sign-in page only helps a user who comes
+  // back and tries again — someone who never received the mail has no reason
+  // to, so without this the account is stuck for good (#1194).
+  const resendVerification = async (u: AdminUser) => {
+    setBusyId(u.id);
+    setResendResult(null);
+    try {
+      const res = await fetch(`/api/users/${u.id}/resend-verification`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      setResendResult(
+        res.ok
+          ? { userId: u.id, ok: true }
+          : { userId: u.id, ok: false, message: data.error ?? 'Unknown error' },
+      );
+    } catch (e) {
+      setResendResult({ userId: u.id, ok: false, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const stateLabel = (state: AccountState): string =>
+    ({
+      active: t.usersAdmin.stateActive,
+      unverified: t.usersAdmin.stateUnverified,
+      pending_approval: t.usersAdmin.statePendingApproval,
+      deactivated: t.usersAdmin.stateDeactivated,
+      no_login: t.usersAdmin.stateNoLogin,
+      placeholder_email: t.usersAdmin.statePlaceholderEmail,
+      erased: t.usersAdmin.stateErased,
+    })[state];
+
+  // The one-line "so what do I do about it?" under the badge. Only the states
+  // that need an explanation carry one.
+  const stateHint = (state: AccountState): string | null =>
+    ({
+      unverified: t.usersAdmin.stateUnverifiedHint,
+      pending_approval: t.usersAdmin.statePendingApprovalHint,
+      no_login: t.usersAdmin.stateNoLoginHint,
+      placeholder_email: t.usersAdmin.statePlaceholderEmailHint,
+    })[state as 'unverified' | 'pending_approval' | 'no_login' | 'placeholder_email'] ?? null;
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const shown = users;
@@ -194,15 +253,43 @@ export default function AdminUsersPage() {
                     <p className="text-sm font-medium text-gray-900 truncate">{u.fullName}</p>
                   )}
                   <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                  {/* Why this account is unreachable, and what to do about it.
+                      One "Inactive" badge used to cover five situations (#1194). */}
+                  {u.accountState && stateHint(u.accountState) && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stateHint(u.accountState)}</p>
+                  )}
+                  {resendResult?.userId === u.id && (
+                    <p className={`text-xs mt-1 ${resendResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600'}`}>
+                      {resendResult.ok
+                        ? t.usersAdmin.resendSent
+                        : t.usersAdmin.resendFailed.replace('{e}', resendResult.message ?? '')}
+                    </p>
+                  )}
                   {impersonateError?.userId === u.id && (
                     <p className="text-xs text-red-600 mt-1">{impersonateError.message}</p>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <RoleBadge role={u.role} />
-                  <Badge variant={u.isActive ? 'success' : 'warning'}>
-                    {u.isActive ? t.usersAdmin.active : t.usersAdmin.inactive}
+                  <Badge variant={u.accountState ? STATE_BADGE[u.accountState] : u.isActive ? 'success' : 'warning'}>
+                    {u.accountState
+                      ? stateLabel(u.accountState)
+                      : u.isActive
+                        ? t.usersAdmin.active
+                        : t.usersAdmin.inactive}
                   </Badge>
+                  {u.accountState === 'unverified' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      loading={busyId === u.id}
+                      disabled={!!busyId}
+                      data-testid={`resend-verification-${u.id}`}
+                      onClick={() => resendVerification(u)}
+                    >
+                      {t.usersAdmin.resendVerification}
+                    </Button>
+                  )}
                   {u.id !== session?.user?.id && (
                     <Button variant="ghost" size="sm" loading={busyId === u.id} disabled={!!busyId} onClick={() => loginAs(u)}>
                       {t.usersAdmin.loginAs}

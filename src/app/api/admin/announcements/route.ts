@@ -231,7 +231,7 @@ export async function POST(request: Request) {
           // translated while the message itself went out in one language.
           const safe = escapeHtml(resolveAnnouncementText({ text, translations }, u.preferredLanguage));
           const html = `<h2>${t.announcements.emailSubject}</h2><p>${safe.replace(/\n/g, '<br>')}</p>${imageHtml}${link ? `<p><a href="${link}">${t.announcements.emailOpenLink}</a></p>` : ''}`;
-          return sendEmail({ to: u.email, subject: t.announcements.emailSubject, html, attachments }).then(
+          return sendEmail({ to: u.email, category: 'announcement', subject: t.announcements.emailSubject, html, attachments }).then(
             () => { emailed++; },
             (e) => logger.error('Failed to send announcement email', { error: String(e) })
           );

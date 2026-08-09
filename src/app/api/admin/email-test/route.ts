@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
-import { sendEmail, verifySmtpConnection } from '@/services/emailService';
+import { sendEmail, verifySmtpConnection, verifyBulkSmtpConnection, mailChannelInfo } from '@/services/emailService';
 import { logActivity } from '@/lib/activity';
 
 const schema = z.object({ to: z.string().email() });
@@ -14,9 +14,13 @@ export async function GET() {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const smtp = await verifySmtpConnection();
+  const [smtp, bulkSmtp] = await Promise.all([verifySmtpConnection(), verifyBulkSmtpConnection()]);
   return NextResponse.json({
     smtp,
+    // The second outbound channel (#1203). `configured: false` means every
+    // category rides the primary transport — a valid setup, not a fault.
+    bulkSmtp,
+    channels: mailChannelInfo(),
     from: process.env.SMTP_FROM || process.env.SMTP_USER || null,
     host: process.env.SMTP_HOST || null,
     inboundDomain: process.env.INBOUND_EMAIL_DOMAIN || 'crm.ersah.in',
@@ -44,6 +48,7 @@ export async function POST(request: Request) {
   try {
     await sendEmail({
       to: parsed.data.to,
+      category: 'test',
       subject: `Internship CRM deliverability test — ${stamp}`,
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color:#2563eb;">Deliverability test</h2>
