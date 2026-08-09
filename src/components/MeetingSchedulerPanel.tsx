@@ -13,6 +13,7 @@ import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestInviteField';
 import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface Meeting {
   id: string;
@@ -65,13 +66,13 @@ export function MeetingSchedulerPanel({
 
   const copyLink = async (m: Meeting) => {
     if (!m.meetLink) return;
-    try {
-      await navigator.clipboard.writeText(m.meetLink);
-      setCopiedId(m.id);
-      setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
-    } catch {
-      window.prompt(t.meetings.copyLink, m.meetLink);
-    }
+
+    const didCopy = await copyToClipboard(m.meetLink);
+
+    if (!didCopy) return;
+
+    setCopiedId(m.id);
+    setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
   };
 
   const schedule = async () => {
