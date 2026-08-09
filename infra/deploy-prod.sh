@@ -258,6 +258,27 @@ else
   log "Backing up the database before the schema sync"
   # Runs on the host (mysqldump), not in the image: the dump must survive even
   # if the new image is broken, and it must never live inside a container layer.
+  #
+  # Which is exactly why the URL needs rewriting first (#1200). Under bridge
+  # networking $DATABASE_URL names the DB as `host.docker.internal`, and that
+  # name exists ONLY inside a container started with --add-host — on the host it
+  # does not resolve, so preview's backup died with "Unknown server host" on
+  # every deploy. Substituting `localhost` would not help either: preview's DB
+  # user is granted from the docker gateway, not from localhost. Use the gateway
+  # address itself — reachable from the host, and traffic to it is sourced from
+  # that same interface, so it matches the grant the container relies on.
+  BACKUP_DATABASE_URL="$DATABASE_URL"
+  if [ "$NETWORK" != host ]; then
+    DOCKER_GW="$(docker network inspect bridge \
+      --format '{{ (index .IPAM.Config 0).Gateway }}' 2>/dev/null || true)"
+    if [ -n "$DOCKER_GW" ]; then
+      BACKUP_DATABASE_URL="${DATABASE_URL//host.docker.internal/$DOCKER_GW}"
+      log "Backup will reach the DB at the docker gateway ($DOCKER_GW)"
+    else
+      log "!! Could not resolve the docker bridge gateway — backup will use $DATABASE_URL as-is"
+    fi
+  fi
+  DATABASE_URL="$BACKUP_DATABASE_URL" \
   BACKUP_DIR="${BACKUP_DIR:-/var/backups/internship-crm}" \
     "$REPO_DIR/infra/backup-db.sh" --env "$ENV_LABEL" --stamp "$STAMP"
   BACKUP_TAKEN=1
