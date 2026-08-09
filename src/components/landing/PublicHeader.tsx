@@ -30,7 +30,14 @@ import { GITHUB_URL } from './links';
  * mounts the same chrome. Its strings live in the `publicNav` namespace, which
  * — unlike `landing` — is shipped to the browser.
  */
-export function PublicHeader({ showRegister = true }: { showRegister?: boolean }) {
+export function PublicHeader({
+  showRegister = true,
+  dashboardHref,
+}: {
+  showRegister?: boolean;
+  /** Set when the visitor is signed in — the route to their own dashboard. */
+  dashboardHref?: string;
+}) {
   const t = useT();
   const locale = useLocale();
   const n = t.publicNav;
@@ -114,19 +121,31 @@ export function PublicHeader({ showRegister = true }: { showRegister?: boolean }
               <LanguageSwitcher current={locale} />
               <ThemeToggle />
             </div>
-            <Link
-              href="/auth/signin"
-              className="hidden lg:inline text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white whitespace-nowrap transition-colors"
-            >
-              {n.signIn}
-            </Link>
-            {showRegister && (
+            {dashboardHref ? (
               <Link
-                href="/auth/register"
+                href={dashboardHref}
+                data-testid="public-dashboard-link"
                 className="hidden lg:inline bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 whitespace-nowrap transition-colors"
               >
-                {n.register}
+                {n.dashboard}
               </Link>
+            ) : (
+              <>
+                <Link
+                  href="/auth/signin"
+                  className="hidden lg:inline text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white whitespace-nowrap transition-colors"
+                >
+                  {n.signIn}
+                </Link>
+                {showRegister && (
+                  <Link
+                    href="/auth/register"
+                    className="hidden lg:inline bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 whitespace-nowrap transition-colors"
+                  >
+                    {n.register}
+                  </Link>
+                )}
+              </>
             )}
 
             <button
@@ -172,19 +191,31 @@ export function PublicHeader({ showRegister = true }: { showRegister?: boolean }
               {n.github}
             </a>
             <div className="mt-2 pt-3 border-t border-gray-100 dark:border-gray-800 flex flex-wrap items-center gap-3">
-              <Link
-                href="/auth/signin"
-                className="text-sm font-medium text-gray-700 dark:text-gray-200"
-              >
-                {n.signIn}
-              </Link>
-              {showRegister && (
+              {dashboardHref ? (
                 <Link
-                  href="/auth/register"
+                  href={dashboardHref}
+                  data-testid="public-dashboard-link-mobile"
                   className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
-                  {n.register}
+                  {n.dashboard}
                 </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/signin"
+                    className="text-sm font-medium text-gray-700 dark:text-gray-200"
+                  >
+                    {n.signIn}
+                  </Link>
+                  {showRegister && (
+                    <Link
+                      href="/auth/register"
+                      className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      {n.register}
+                    </Link>
+                  )}
+                </>
               )}
               <span className="ml-auto flex items-center gap-2">
                 <LanguageSwitcher current={locale} />

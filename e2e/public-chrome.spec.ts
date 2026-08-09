@@ -1,4 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle } from './helpers/auth';
+
+test.afterAll(async () => {
+  await prisma.$disconnect();
+});
 
 /**
  * #1197 — every public page wears the same header and footer.
@@ -124,6 +130,45 @@ test.describe('phone width', () => {
         () => document.documentElement.scrollWidth - window.innerWidth,
       );
       expect(overflow, `${path} at 390px`).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+// #1203 — the public chrome must not tell a signed-in user they are signed out.
+//
+// These pages are public but not only for the public: /release-notes is reached
+// from the sidebar version footer, /privacy and /terms from consent screens.
+// When they gained the shared chrome (#1197) it was hardcoded signed-out, so
+// following any of those links replaced the app nav with "Sign In / Register" —
+// which reads as having been logged out mid-session.
+test.describe('signed in', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('the public chrome shows the dashboard, not Sign In', { tag: '@smoke' }, async ({ page }) => {
+    const email = uniqueEmail('chrome-session');
+    const password = 'ChromePass123!';
+    await seedUser(email, password, 'MENTEE', 'Chrome Session Mentee');
+
+    try {
+      await signInAndSettle(page, email, password, '/portal');
+
+      for (const path of ['/release-notes', '/privacy', '/terms', '/features']) {
+        await page.goto(path);
+        const header = page.getByTestId('public-header');
+        // The tell: a signed-in visitor was being offered sign-in and sign-up.
+        await expect(header.getByRole('link', { name: /^Sign In$/ }), `${path} offers Sign In`).toHaveCount(0);
+        await expect(header.getByRole('link', { name: /^Register$/ }), `${path} offers Register`).toHaveCount(0);
+        // …and gets a way back into the app instead.
+        const dash = page.getByTestId('public-dashboard-link');
+        await expect(dash, `${path} has no dashboard link`).toBeVisible();
+        await expect(dash).toHaveAttribute('href', '/portal');
+      }
+
+      // It really goes back into the app.
+      await page.getByTestId('public-dashboard-link').click();
+      await expect(page).toHaveURL(/\/portal$/);
+    } finally {
+      await cleanupByEmail(email);
     }
   });
 });
