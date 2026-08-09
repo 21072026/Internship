@@ -11,6 +11,25 @@ version is shown in the sidebar footer of every page (links to the
 ## [0.61.0-beta] - 2026-08-09
 
 ### Added
+- **Outbound mail is split into two channels by category** (#1196), so scheduled system mail
+  cannot eat a relay's daily allowance. `primary` (`SMTP_*`) carries what must reach a human —
+  `verification`, `invitation`, `password-reset`, `message`, `test` — and points at a reputable
+  relay; `bulk` (`SMTP_BULK_*`) carries `unread-digest`, `activity-digest`, `mentor-digest`,
+  `analytics-report`, `meeting-reminder`, `interaction-reminder`, `stage-deadline`,
+  `retention-reminder`, `company-need-alert` and `announcement` over our own server.
+  - **Uncategorised mail stays on `primary`** — silently downgrading an unclassified call site
+    is the kind of regression that only surfaces when it costs a user. Bulk is opt-in.
+  - **`SMTP_BULK_HOST` unset ⇒ single channel**, exactly the previous behaviour, so preview and
+    topic environments need no new configuration.
+  - `SMTP_BULK_FROM` may use a different domain (e.g. `noreply@ersah.in`) so the two sender
+    reputations stay independent — a digest marked as spam cannot drag down the password-reset
+    mail. Verified: both identities resolve distinctly at runtime.
+  - `EmailLog.transport` records which channel carried each message; the admin panel shows both
+    channels' health, a 24-hour per-channel count ("this is what counts against the quota") and
+    a per-category breakdown so a noisy job can be moved rather than the quota raised.
+- **`infra/check-mail-dns.sh`** — read-only sender-authentication readiness check (every DKIM
+  selector in both record types, plus SPF/DMARC/PTR). Exits non-zero while DKIM is missing so it
+  can gate a relay switch.
 - **Outbound email delivery log** (#1194). `sendEmail()` now records every attempt in a new
   `EmailLog` model — recipient, subject, category, outcome (`SENT` / `FAILED` / `SKIPPED`)
   and the error. Metadata only: the body is never stored, so message content does not get a
@@ -31,6 +50,9 @@ version is shown in the sidebar footer of every page (links to the
   sets (the `password` column is read only to derive it and is stripped from every response).
 
 ### Changed
+- **SMTP transports now have bounded timeouts** (10s connect/greeting, 20s socket, #1196). An
+  unreachable or wedged mail host used to hang the request that triggered the send — and, once
+  the admin panel began verifying two channels, the panel itself.
 - **`sendEmail()` no longer fails silently** (#1194). An unconfigured SMTP setup used to be a
   bare `console.log` + `return`, which made a broken mail pipeline indistinguishable from
   users who simply never replied. It now logs at error level and records a `SKIPPED` row;

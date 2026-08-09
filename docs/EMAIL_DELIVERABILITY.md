@@ -173,6 +173,44 @@ verified live on 2026-08-09, so the remaining work is step 4 onwards. Re-run
 > Keep `p=none` in DMARC until the relay has been live for a week and the `rua`
 > reports show Brevo passing alignment; only then consider `p=quarantine`.
 
+### Two channels: don't let digests eat the relay's quota
+
+A relay's free tier meters everything, and Brevo's 300/day is **shared between
+campaigns and transactional mail**. This app's own scheduled traffic is not
+small — the hourly unread digest (`:20`), daily interaction/stage/retention
+reminders and company-need alerts (09:00), the daily activity digest (07:30),
+meeting reminders every 15 minutes, the weekly mentor digest and analytics
+report, plus an announcement that fans out to *every* user at once. None of it
+is urgent, and all of it would compete with the one mail that actually matters:
+the verification link someone is waiting on.
+
+So outbound mail is split by `category` (`src/services/emailService.ts`):
+
+| Channel | Env | Carries | Where it should point |
+|---------|-----|---------|-----------------------|
+| **primary** | `SMTP_*` | `verification`, `invitation`, `password-reset`, `message`, `test`, **and anything uncategorised** | the relay (Brevo) |
+| **bulk** | `SMTP_BULK_*` | `unread-digest`, `activity-digest`, `mentor-digest`, `analytics-report`, `meeting-reminder`, `interaction-reminder`, `stage-deadline`, `retention-reminder`, `company-need-alert`, `announcement` | our own Plesk server |
+
+Two deliberate choices:
+
+- **Uncategorised mail stays on the primary channel.** Silently downgrading the
+  deliverability of a call site nobody has classified yet is the sort of
+  regression that only surfaces when it costs a user. New bulk senders opt in
+  by passing a category; nothing opts in by accident.
+- **`SMTP_BULK_HOST` unset ⇒ one channel.** Preview and topic environments need
+  no extra configuration, and the behaviour is exactly what it was before.
+
+**Use a different From domain for bulk.** `SMTP_BULK_FROM=noreply@ersah.in`
+keeps the two reputations independent: a digest someone marks as spam then
+cannot drag down the password-reset mail signed by `crm.ersah.in`. The bulk
+domain needs its own SPF/DKIM/DMARC — `ersah.in` already has all three plus the
+shared PTR, confirmed with `./infra/check-mail-dns.sh ersah.in`.
+
+Both channels' health, and a 24-hour per-channel and per-category count, are on
+the **Admin → Settings → Email health** panel — so "are we near the 300/day
+cap?" and "which job is spending it?" are answerable without touching the
+server. `EmailLog.transport` records which channel carried each message.
+
 ## 2c. Did the mail actually go out? (`EmailLog`)
 
 `sendEmail()` records every attempt (#1194): recipient, subject, category,
