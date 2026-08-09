@@ -11,6 +11,7 @@ import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { resolveReferrer } from '@/lib/referral';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { getSetting } from '@/lib/settings';
+import { isValidTimeZone } from '@/lib/timezone';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -25,6 +26,13 @@ const registerSchema = z.object({
   // was shown (GDPR Art. 7 demonstrability).
   consent: z.boolean().optional(),
   privacyVersion: z.string().optional(),
+  // The IANA zone the browser was in when the account was created (#1210).
+  // Recorded here so the very first emails — verification, the invitation that
+  // brought them in, a meeting booked on day one — already land on the new
+  // user's own clock instead of the deployment default, which is what they got
+  // until they happened to open the app and TimezoneSync noticed. An invalid or
+  // absent value is simply dropped: registration must never fail over this.
+  timezone: z.string().max(80).optional(),
 });
 
 export async function POST(request: Request) {
@@ -106,8 +114,10 @@ export async function POST(request: Request) {
     const pending = !token && (await getSetting('selfRegistration')) === 'manual';
     const selfRegistered = !token;
 
+    const timezone = isValidTimeZone(parsed.data.timezone) ? parsed.data.timezone : null;
+
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
     });
 

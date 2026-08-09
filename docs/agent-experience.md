@@ -3393,3 +3393,40 @@ kapıyor ve config'in env'i hiç uygulanmıyor.
 **Baseline'ı ölçmek için `git stash -u` + aynı specleri koşun.** "Bu kırmızı benden mi?"
 sorusunun tek dürüst cevabı bu; dört testin ikisi baseline'da da kırmızıydı, ikisi değildi
 ve fark ortam kaynaklıydı.
+
+## 2026-08-09 — Saat dilimi işinin zor kısmı `Intl` değil, "hangi saate göre" sorusuydu (#1210, 0.63.0-beta)
+
+**Yarım kalan iş, olmayan işten daha tehlikeli.** `lib/timezone.ts` #1030/#1061/#1110 ile
+zaten doğruydu: anlar (instant) doğru saklanıyor, doğru render ediliyordu. Eksik olan
+tamamen kullanıcı tarafıydı — kim saat dilimini seçebiliyor, yeni hesap hangi saatle
+başlıyor, farklı dilimlerdeki iki kişi aynı ana mutabık olduğunu nasıl teyit ediyor. Yeni
+bir işe başlarken **önce mevcut yardımcıları okuyun**: buradaki iş, sıfırdan yazmak değil
+dört deliği kapatmaktı, ve `formatInTimeZone`/`parseUserDateTime` zaten hazırdı.
+
+**İkinci endpoint yazmadan önce mevcut şemayı okuyun.** `/account` için `PUT
+/api/profile/timezone` yazdım, sonra `updateProfileSchema` içinde `timezone`'un zaten
+bulunduğunu ve hiçbir role ait olmadığını gördüm — endpoint'i geri aldım. `POST
+/api/profile/timezone` ise "yalnızca boşsa yaz" yolu olarak kaldı; iki farklı niyet, iki
+farklı metot değil, iki farklı **rota** gerektiriyordu ve biri zaten vardı.
+
+**Aynı saati iki kez yazmak teyit değil, gürültü.** Berlin'deki organizatör ile Paris'teki
+davetli aynı saati okur. Karşılaştırmayı zon **adına** göre değil, o andaki **offset'e**
+göre yapın (`sameWallClock`): böylece Berlin/Paris tek satır olur, ama yaz saati geçişinde
+ayrışan bir çift yine iki satır üretir.
+
+**`h23`'ü unutmayın.** `readingsByZone` ilk sürümde locale'e bıraktığı için e2e `en`
+locale'inde "04:30 PM" bastı. Uygulama her yerde "16:30" yazıyor; belirsizliği kaldırmak
+için var olan bir blok 12 saatlik formata düşerse tam da o belirsizliği geri getirir.
+**Testi düzeltmeyin, formatı düzeltin.**
+
+**E-posta altbilgisini çevirmeyin — gövde çeviri değilken.** Alıcının dilinde tek satırlık
+bir dipnot, İngilizce bir gövdenin altında nezaket değil hata gibi görünür. Şablonlar
+bütün olarak yerelleştirildiğinde birlikte çevrilmeli (PR'da not düşüldü).
+
+**Yerel kırmızıların kökü yine ortamdı — ve bu dosya zaten söylüyordu.** `auth.spec.ts:21`
+(Next.js Dev Tools düğmesi) ve `pipeline.spec.ts:8` (dev sunucu yarışı) tekrar düştü;
+`pipeline` `origin/main`'de de kırmızıydı, `auth` yeniden koşuda geçti. Ayrıca
+`cron-jobs.spec.ts` `languages=''` olan demo satırları yüzünden `JSON.parse` ile patladı —
+çözümü `node prisma/backfill-json-columns.mjs --repair`. **Yeni bir kutuda ilk iş: `npx
+prisma db push` + `db:check-json`.** Baseline ölçümü için `git stash -u` + `git checkout
+origin/main` yeterli, ayrı worktree kurmaya gerek yok (node_modules paylaşılıyor).

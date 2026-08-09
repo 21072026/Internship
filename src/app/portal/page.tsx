@@ -49,7 +49,9 @@ async function getMenteeData(menteeId: string) {
       where: { menteeId, status: 'ACTIVE' },
       include: {
         mentor: {
-          select: { id: true, fullName: true, email: true, department: true, phone: true, publicProfile: true },
+          // `timezone` (#1210): the meeting-request form shows a proposed slot on
+          // the mentor's clock as well as the mentee's before it is sent.
+          select: { id: true, fullName: true, email: true, department: true, phone: true, publicProfile: true, timezone: true },
         },
         company: true,
         interactions: {
@@ -391,7 +393,11 @@ export default async function PortalDashboard() {
             <EvaluationPanel relationId={activeRelation.id} audience="MENTOR" />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            <MeetingRequestsPanel relationId={activeRelation.id} mode="request" />
+            <MeetingRequestsPanel
+              relationId={activeRelation.id}
+              mode="request"
+              counterpart={{ name: activeRelation.mentor.fullName, timezone: activeRelation.mentor.timezone }}
+            />
             <QuestionsPanel relationId={activeRelation.id} mode="ask" />
           </div>
         </>

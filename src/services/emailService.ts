@@ -11,7 +11,7 @@ import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
-import { formatInTimeZone } from '@/lib/timezone';
+import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -441,6 +441,8 @@ export async function sendMeetingInviteEmail({
   meetLink,
   rsvpToken,
   timeZone,
+  organizerTimeZone,
+  organizerName,
 }: {
   to: string;
   fullName?: string | null;
@@ -453,6 +455,11 @@ export async function sendMeetingInviteEmail({
   rsvpToken?: string | null;
   // The recipient's saved IANA zone; falls back to the deployment default.
   timeZone?: string | null;
+  // The clock the organizer picked the time on (Meeting.timeZone, #1210) and
+  // whose it is. Rendered as a second line when it differs from the invitee's,
+  // so both sides can confirm they agreed on the same instant.
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
@@ -471,12 +478,14 @@ export async function sendMeetingInviteEmail({
         ${fullName ? `<p>Hi ${fullName},</p>` : ''}
         <p>You're invited to a meeting.</p>
         ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
+        ${when && scheduledAt ? organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName) : ''}
         ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
         ${askRsvp ? `
         <p style="margin-top: 20px;">Can you make it?</p>
         <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
         ` : ''}
+        ${when ? timeZoneNote(timeZone) : ''}
       </div>
     `,
   });
@@ -495,6 +504,57 @@ function ctaBlock(brand: { accent: string }, url: string, label: string): string
 
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
+// --- Which clock is this email on? (#1210) ----------------------------------
+
+// Every emailed time is rendered on exactly one clock — the recipient's saved
+// zone, or the deployment default when they have none — and until now nothing
+// in the email said so. A reader whose zone was guessed wrong could not tell a
+// wrong time from a wrong assumption about them, and had nowhere to go with it.
+// This is the small print that closes the loop: name the zone, and link to the
+// one place it can be corrected.
+//
+// Deliberately English like the rest of these templates: a translated footer
+// under an untranslated body reads as a bug, not as a courtesy.
+function timeZoneNote(timeZone?: string | null): string {
+  const zone = resolveTimeZone(timeZone);
+  return `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+    Times in this email are shown in ${esc(zone)}. Not your timezone?
+    <a href="${appUrl()}/account#timezone" style="color:#9ca3af;text-decoration:underline;">Change it in your settings</a>.
+  </p>`;
+}
+
+// The second reading: the clock the organizer set the time on. Printed only when
+// it is a genuinely different clock — an organizer in Berlin and an invitee in
+// Paris read the identical time, and repeating it would be noise, not
+// confirmation. `sameWallClock` compares offsets *at this instant*, so two zones
+// that agree today and diverge across a DST change are handled correctly.
+function organizerTimeLine(
+  at: Date,
+  organizerTimeZone: string | null | undefined,
+  recipientTimeZone: string | null | undefined,
+  organizerName?: string | null
+): string {
+  if (!organizerTimeZone || sameWallClock(organizerTimeZone, recipientTimeZone, at)) return '';
+  const who = organizerName ? `${esc(organizerName)}’s time` : 'Organizer’s time';
+  return `<p style="color:#6b7280;font-size:14px;">${who}: ${formatInTimeZone(at, organizerTimeZone, { dateStyle: 'medium', timeStyle: 'short' })}</p>`;
+}
+
+// The same instant on everyone *else's* clock — one line per distinct clock, so
+// a five-person project meeting spanning three zones prints three lines and not
+// five. Only zones that actually differ from the reader's are listed: telling
+// someone in Istanbul that it is also 17:00 in Istanbul for two colleagues adds
+// nothing. Empty when the whole team reads the same time, which is the common
+// case and should stay silent.
+function participantClocks(at: Date, viewerTimeZone: string | null | undefined, others: ZonedPerson[]): string {
+  const elsewhere = others.filter((p) => !sameWallClock(p.timezone, viewerTimeZone, at));
+  if (elsewhere.length === 0) return '';
+  const rows = readingsByZone(at, elsewhere)
+    .map((r) => `<li>${esc(r.names.join(', '))} — ${esc(r.when)} (${esc(r.offsetLabel)})</li>`)
+    .join('');
+  return `<p style="color:#6b7280;font-size:14px;margin-bottom:4px;">For the others:</p>
+    <ul style="color:#6b7280;font-size:14px;margin-top:0;padding-left:20px;">${rows}</ul>`;
 }
 
 // --- Mentorship request lifecycle (#668) ------------------------------------
@@ -761,6 +821,7 @@ export async function sendMeetingRequestEmail({
   link,
   orgId,
   timeZone,
+  requesterTimeZone,
 }: {
   to: string;
   fullName?: string | null;
@@ -770,6 +831,9 @@ export async function sendMeetingRequestEmail({
   link: string;
   orgId?: string | null;
   timeZone?: string | null;
+  // The clock the requester proposed on. Worth naming here above all: the
+  // mentor is being asked to agree to a time somebody else picked (#1210).
+  requesterTimeZone?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const when = proposedAt ? formatInTimeZone(proposedAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
@@ -783,7 +847,9 @@ export async function sendMeetingRequestEmail({
         ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
         <p><strong>${esc(requesterName)}</strong> requested a meeting: <strong>${esc(topic)}</strong>.</p>
         ${when ? `<p><strong>Proposed time:</strong> ${when}</p>` : ''}
+        ${when && proposedAt ? organizerTimeLine(proposedAt, requesterTimeZone, timeZone, requesterName) : ''}
         ${ctaBlock(brand, `${appUrl()}${link}`, 'Accept or decline')}
+        ${when ? timeZoneNote(timeZone) : ''}
       </div>
     `,
   });
@@ -826,6 +892,7 @@ export async function sendMeetingRequestDecisionEmail({
              ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}`
           : `<p>Your meeting request <strong>${esc(topic)}</strong> could not be accepted. You can propose another time.</p>`}
         ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the conversation')}
+        ${when ? timeZoneNote(timeZone) : ''}
       </div>
     `,
   });
@@ -1236,8 +1303,14 @@ export async function sendMeetingReminders() {
             ${brandHeader(brand, 'Upcoming meeting')}
             <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(m.title)}</strong>.</p>
             <p><strong>When:</strong> ${when} (in about ${minutes} minute${minutes === 1 ? '' : 's'})</p>
+            ${participantClocks(
+              m.scheduledAt!,
+              user.timezone,
+              participants.filter((p) => p.id !== user.id).map((p) => ({ name: p.fullName, timezone: p.timezone }))
+            )}
             ${m.meetLink ? `<p><strong>Meeting link:</strong> <a href="${m.meetLink}">${esc(m.meetLink)}</a></p>` : ''}
             ${ctaBlock(brand, `${appUrl}${link}`, 'Open the app')}
+            ${timeZoneNote(user.timezone)}
           </div>`,
         });
         emailed++;
@@ -1373,8 +1446,14 @@ export async function sendProjectMeetingSeriesReminders() {
               ${brandHeader(brand, 'Recurring project meeting')}
               <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(series.title)}</strong>${projectName ? ` (${esc(projectName)})` : ''}.</p>
               <p><strong>When:</strong> ${whenLocal}</p>
+              ${participantClocks(
+                when,
+                user.timezone,
+                recipients.filter((r) => r.id !== user.id).map((r) => ({ name: r.fullName, timezone: r.timezone }))
+              )}
               ${series.fixedLink ? `<p><strong>Meeting link:</strong> <a href="${series.fixedLink}">${esc(series.fixedLink)}</a></p>` : ''}
               ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the project')}
+              ${timeZoneNote(user.timezone)}
             </div>`,
           });
           emailed++;

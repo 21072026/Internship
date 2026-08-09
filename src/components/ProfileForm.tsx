@@ -19,6 +19,7 @@ import { TemplatesLibrary } from '@/components/TemplatesLibrary';
 import { useToast } from '@/components/ui/Toast';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { FALLBACK_TIMEZONE, timeZoneOptions } from '@/lib/timezone';
 
 // Allows only +, digits, spaces, hyphens and parentheses, and requires 7-15 digits.
 function isValidPhone(v: string): boolean {
@@ -68,25 +69,11 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 
 const MIN_GRAD_YEAR = 2010;
 const MAX_GRAD_YEAR = new Date().getFullYear() + 5;
-const DEFAULT_TIMEZONE = 'Europe/Istanbul';
-const FALLBACK_TIMEZONES = [
-  'Europe/Istanbul', 'Europe/Berlin', 'Europe/London', 'Europe/Paris',
-  'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo', 'UTC',
-];
-function getTimezoneOptions(): { value: string; label: string }[] {
-  let zones: string[];
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    zones = (Intl as any).supportedValuesOf('timeZone');
-  } catch {
-    zones = FALLBACK_TIMEZONES;
-  }
-  return zones.map((tz) => ({ value: tz, label: tz }));
-}
-const timezoneOptions = getTimezoneOptions();
+// Shared with the /account picker and the scheduling previews (#1210).
+const timezoneOptions = timeZoneOptions();
 function resolveTimezone(tz: string | null | undefined): string {
-  if (!tz) return DEFAULT_TIMEZONE;
-  return timezoneOptions.some((opt) => opt.value === tz) ? tz : DEFAULT_TIMEZONE;
+  if (!tz) return FALLBACK_TIMEZONE;
+  return timezoneOptions.some((opt) => opt.value === tz) ? tz : FALLBACK_TIMEZONE;
 }
 
 export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {

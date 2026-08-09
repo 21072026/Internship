@@ -28,6 +28,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           phone: true,
           whatsapp: true,
           city: true,
+          // The candidate's own clock (#1210) — the meeting scheduler on this
+          // screen previews the picked time on it before the invite goes out.
+          timezone: true,
           birthDate: true,
           referralSource: true,
           sourceId: true,
