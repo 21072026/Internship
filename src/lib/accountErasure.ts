@@ -10,7 +10,7 @@ import { prisma } from '@/lib/prisma';
 
 // The delivery log (#1194) is keyed by recipient address, not by user id, so
 // neither erasure path reaches it through a relation — it has to be cleared
-// explicitly or an erased person's address survives in it (#1205). Read the
+// explicitly or an erased person's address survives in it (#1211). Read the
 // address BEFORE the row is deleted or rewritten, or there is nothing left to
 // match on.
 async function forgetEmailLog(userId: string): Promise<void> {

@@ -12,7 +12,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// Risk hardening for the email work (#1205): the token TTL, the delivery log's
+// Risk hardening for the email work (#1211): the token TTL, the delivery log's
 // retention window, and the guarantee that deriving `accountState` never leaks
 // the password column it has to read.
 

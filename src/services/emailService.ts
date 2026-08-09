@@ -1945,7 +1945,7 @@ export async function sendUnreadMessageDigests() {
   return { sent, considered: allIds.length };
 }
 
-// How long a delivery-log row is kept (#1205). The log exists to answer "did
+// How long a delivery-log row is kept (#1211). The log exists to answer "did
 // our mail go out?", and that question is asked within hours of a problem —
 // but every row holds a recipient address, so keeping them forever would build
 // a second, unmanaged store of personal data next to the one the retention
@@ -1976,7 +1976,7 @@ export function initCronJobs() {
       const nm = await checkCompanyNeedMatches();
       console.log(`[Cron] Company need-match alerts: ${nm.alerts}`);
       // Housekeeping, not mail: keeps the delivery log inside its retention
-      // window so recipient addresses do not accumulate indefinitely (#1205).
+      // window so recipient addresses do not accumulate indefinitely (#1211).
       const pruned = await pruneEmailLog();
       console.log(`[Cron] Email log pruned: ${pruned.deleted} row(s) older than ${EMAIL_LOG_RETENTION_DAYS} days`);
     } catch (error) {
