@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.61.0-beta',
+    version: '0.62.0-beta',
     date: '2026-08-09',
     highlights: {
       en: [
@@ -42,6 +42,48 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Wenn Sie direkt aus Ihrer E-Mail auf eine Nachricht antworten, gilt sie jetzt als gelesen — diese Unterhaltung (und alles davor) taucht in Ihrer Zusammenfassung nicht mehr auf. Bisher blieb beim Antworten per E-Mail alles ungelesen und dieselbe Erinnerung kam immer wieder.',
         'Benachrichtigungs-E-Mails enthalten jetzt dieselben fünf Reaktionen wie die App sowie einen Link "Als gelesen markieren". Ein Tippen aus dem Postfach setzt die Reaktion an genau diese Nachricht und räumt die Unterhaltung auf — die App muss dafür gar nicht geöffnet werden.',
         'E-Mails laufen jetzt über zwei getrennte Kanäle: Was jemand erwartet (Registrierungsbestätigung, Einladung, Passwort-Reset, Nachrichtenbenachrichtigung) nimmt den Weg, der am zuverlässigsten im Posteingang landet; routinemäßige Zusammenfassungen und Erinnerungen den anderen. Das Panel zeigt, wie viel des Tageskontingents verbraucht ist und welcher Job es verbraucht.',
+      ],
+    },
+  },
+  {
+    version: '0.61.1-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Opening the release notes, privacy or terms pages while signed in no longer shows a logged-out menu. You stay signed in and get a link straight back to your dashboard.',
+      ],
+      tr: [
+        'Giriş yapmışken sürüm notları, gizlilik veya kullanım şartları sayfalarını açtığınızda menü artık çıkış yapmışsınız gibi görünmüyor. Oturumunuz açık kalıyor ve doğrudan panelinize dönen bir bağlantı çıkıyor.',
+      ],
+      de: [
+        'Wenn du die Release-Notes, den Datenschutz oder die Nutzungsbedingungen im angemeldeten Zustand öffnest, erscheint kein abgemeldetes Menü mehr. Du bleibst angemeldet und bekommst einen direkten Link zurück zu deinem Bereich.',
+      ],
+    },
+  },
+  {
+    version: '0.61.0-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Every public page — the home page, features, for companies, the mentor application, the project showcase and the privacy, terms and code of conduct pages — now has the same header and footer instead of a different one on each.',
+        'The logo takes you to the home page from anywhere, including the home page itself, where it was not a link before.',
+        'The new footer links the pages to each other. If you arrive on the privacy notice from a search result you can now reach the rest of the site from it, and switch language or theme there.',
+        'On a phone the navigation is now a menu. "Features" and "For companies" used to be hidden entirely at that width, with nothing to open in their place.',
+        'Moving between these pages is quicker: they now load the part that changed instead of the whole page again.',
+      ],
+      tr: [
+        'Herkese açık sayfaların hepsi — ana sayfa, özellikler, firmalar için, mentor başvurusu, proje vitrini ve gizlilik, kullanım şartları, davranış kuralları sayfaları — artık her birinde farklı olan değil, aynı üst ve alt bölümü kullanıyor.',
+        'Logo her yerden ana sayfaya götürüyor; daha önce link olmayan ana sayfanın kendisinde de.',
+        'Yeni alt bölüm sayfaları birbirine bağlıyor. Arama sonucundan gizlilik metnine düştüyseniz artık oradan sitenin geri kalanına geçebilir, dili veya temayı da değiştirebilirsiniz.',
+        'Telefonda gezinme artık bir menü. "Özellikler" ve "Firmalar için" o genişlikte tamamen gizleniyordu ve yerine açılacak bir şey de yoktu.',
+        'Bu sayfalar arasında geçiş daha hızlı: tüm sayfa yeniden değil, yalnızca değişen kısım yükleniyor.',
+      ],
+      de: [
+        'Alle öffentlichen Seiten — Startseite, Funktionen, für Unternehmen, Mentor-Bewerbung, Projektschaufenster sowie Datenschutz, Nutzungsbedingungen und Verhaltenskodex — haben jetzt denselben Kopf- und Fußbereich statt auf jeder Seite einen anderen.',
+        'Das Logo führt von überall zur Startseite, auch auf der Startseite selbst, wo es vorher kein Link war.',
+        'Der neue Fußbereich verbindet die Seiten miteinander. Wer über eine Suchtreffer-Seite auf der Datenschutzerklärung landet, kommt von dort nun in den Rest der Website und kann Sprache oder Design wechseln.',
+        'Auf dem Telefon ist die Navigation jetzt ein Menü. „Funktionen“ und „Für Unternehmen“ waren in dieser Breite komplett ausgeblendet, ohne Ersatz.',
+        'Der Wechsel zwischen diesen Seiten geht schneller: Es wird nur noch der geänderte Teil geladen statt der ganzen Seite.',
       ],
     },
   },

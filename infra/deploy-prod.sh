@@ -239,10 +239,20 @@ run_tool() { # run a one-off tool container against the DB (network per $NETWORK
 # without an explicit operator decision (#1179).
 # This same script deploys prod, the shared preview and every topic env — the
 # caller only overrides CONTAINER. The gates scale with what is at stake:
-#   prod     → back up, and REFUSE a data-destroying diff
-#   preview  → back up, but only WARN (schema experiments belong there)
+#   prod     → back up (REQUIRED — a failed dump stops the deploy), and REFUSE
+#              a data-destroying diff
+#   preview  → try to back up but only WARN on failure, and only WARN on a
+#              destructive diff (schema experiments belong there)
 #   topic    → neither; those envs are disposable and share the preview DB,
 #              so a dump per PR deploy is noise, not safety
+#
+# Preview's backup became advisory in #1200. It is the same tiering the schema
+# guard already uses one block down, applied to the other gate: preview's DB
+# user is granted from the docker gateway only, so a dump taken on the host
+# authenticates as the server's public IP and is refused (error 1045). Until
+# that grant exists, a hard gate there blocks every preview deploy to protect a
+# database whose whole purpose is to be disposable — while prod, which is what
+# the gate was actually built for (#1179), keeps its guarantee unchanged.
 case "$CONTAINER" in
   internship-crm) ENV_LABEL=prod ;;
   internship-crm-preview) ENV_LABEL=preview ;;
@@ -259,9 +269,42 @@ else
   log "Backing up the database before the schema sync"
   # Runs on the host (mysqldump), not in the image: the dump must survive even
   # if the new image is broken, and it must never live inside a container layer.
-  BACKUP_DIR="${BACKUP_DIR:-/var/backups/internship-crm}" \
-    "$REPO_DIR/infra/backup-db.sh" --env "$ENV_LABEL" --stamp "$STAMP"
-  BACKUP_TAKEN=1
+  #
+  # Which is why the URL needs rewriting first (#1200). Under bridge networking
+  # $DATABASE_URL names the DB as `host.docker.internal` — a name that exists
+  # ONLY inside a container started with --add-host. On the host it does not
+  # resolve, so preview's backup died with "Unknown server host" on every deploy.
+  #
+  # The docker gateway (172.17.0.1) was the first attempt and it connects, but
+  # MariaDB attributes the connection to the box's PUBLIC ip, and `crm-preview`
+  # is granted from `172.17.%` only — error 1045. So use loopback and mirror what
+  # prod has always done: `crm` is granted @localhost and dumps fine that way.
+  # `crm-preview`@localhost now exists too, deliberately READ-ONLY and scoped to
+  # internship_crm_preview (the 172.17.% entry keeps the full DDL rights the app
+  # needs). Verified on the server: 60 tables, 7.5MB.
+  #
+  # Loopback rather than the public ip on purpose — it does not change when the
+  # box is renumbered, and it is the one address a local dump can always reach.
+  BACKUP_DATABASE_URL="$DATABASE_URL"
+  if [ "$NETWORK" != host ]; then
+    BACKUP_DATABASE_URL="${DATABASE_URL//host.docker.internal/127.0.0.1}"
+    log "Backup reaches the DB over loopback (the container's host alias is not resolvable here)"
+  fi
+  # On prod a failed dump stops the deploy; on preview it is reported and the
+  # deploy continues (see the tiering note above). BACKUP_TAKEN stays 0 in that
+  # case, which is what keeps ALLOW_DESTRUCTIVE unusable there — a preview whose
+  # backup failed still cannot be talked into a data-destroying schema push.
+  if DATABASE_URL="$BACKUP_DATABASE_URL" \
+     BACKUP_DIR="${BACKUP_DIR:-/var/backups/internship-crm}" \
+       "$REPO_DIR/infra/backup-db.sh" --env "$ENV_LABEL" --stamp "$STAMP"; then
+    BACKUP_TAKEN=1
+  elif [ "$ENV_LABEL" = "prod" ]; then
+    log "Backup FAILED on prod — refusing to deploy. Fix the dump, or set
+FORCE_NO_BACKUP=1 as a deliberate one-off override."
+    exit 1
+  else
+    warn "Backup FAILED on $ENV_LABEL — deploying anyway without a fresh dump (advisory on this env, see #1200)"
+  fi
 fi
 
 log "Checking the pending schema change for data loss"
