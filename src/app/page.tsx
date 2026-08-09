@@ -7,23 +7,21 @@ import { getFeatures } from '@/lib/features';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
+import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary } from '@/i18n/server';
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { VersionFooter } from '@/components/VersionFooter';
-import { BetaBadge } from '@/components/BetaBadge';
+import { PublicShell } from '@/components/landing/PublicShell';
+import { GITHUB_URL } from '@/components/landing/links';
 import { TawkChat } from '@/components/TawkChat';
-import { APP_VERSION } from '@/lib/version';
 import { RELEASE_NOTES } from '@/lib/releaseNotes';
 
-const GITHUB_URL = 'https://github.com/21072026/Internship';
-
 export default async function HomePage() {
-  const session = await getServerSession(authOptions);
+  // Only decode a session when one could exist — this is the most-hit page in
+  // the app and the overwhelming majority of its visitors are signed out (#1197).
+  const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   if (session) redirect(roleHome(session.user.role));
 
-  const { locale, t } = await getServerDictionary();
+  const { t } = await getServerDictionary();
   const L = t.landing;
 
   // Each audience now has a door of its own: mentors apply at /apply-as-mentor
@@ -155,44 +153,7 @@ export default async function HomePage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center gap-2 h-16">
-            <div className="flex items-center gap-2 min-w-0">
-              <GraduationCap className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
-              <span className="text-lg sm:text-xl font-bold text-gray-900 truncate">InternshipCRM</span>
-              <BetaBadge className="flex-shrink-0" />
-            </div>
-            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              <Link href="/features" className="hidden sm:inline text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
-                {t.featureCatalog.allFeatures}
-              </Link>
-              <Link href="/for-companies" className="hidden md:inline text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
-                {t.forCompanies.nav}
-              </Link>
-              <a
-                href={GITHUB_URL}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={L.transLinkGithub}
-                className="hidden sm:inline-flex text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <Github className="h-5 w-5" />
-              </a>
-              <LanguageSwitcher current={locale} />
-            <ThemeToggle />
-              <Link href="/auth/signin" className="text-gray-600 hover:text-gray-900 font-medium transition-colors whitespace-nowrap text-sm sm:text-base">
-                {L.signIn}
-              </Link>
-              <Link href="/auth/register" className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors whitespace-nowrap text-sm sm:text-base">
-                {L.register}
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
+    <PublicShell>
 
       {/* Hero — states the loop rather than a slogan, and carries no button: the
           visitor picks a side two sections down. A single "get started" would
@@ -564,28 +525,10 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white py-8 px-4">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-gray-500 text-sm">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-5 w-5 text-blue-600" />
-            <span className="font-semibold text-gray-700">InternshipCRM</span>
-          </div>
-          <p>© {new Date().getFullYear()} InternshipCRM. {L.footer}</p>
-          <div className="flex items-center gap-4">
-            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="hover:text-gray-700">GitHub</a>
-            <Link href="/features" className="hover:text-gray-700">{t.featureCatalog.allFeatures}</Link>
-            <Link href="/privacy" className="hover:text-gray-700">{t.privacy.title}</Link>
-            <Link href="/terms" className="hover:text-gray-700">{t.terms.title}</Link>
-            <Link href="/code-of-conduct" className="hover:text-gray-700">{t.codeOfConduct.title}</Link>
-            <VersionFooter version={APP_VERSION} />
-          </div>
-        </div>
-      </footer>
 
       {/* Live chat for visitors who would rather ask than read (#1174). Landing
           page only, and only once marketing cookies are accepted. */}
       <TawkChat />
-    </div>
+    </PublicShell>
   );
 }

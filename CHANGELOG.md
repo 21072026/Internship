@@ -8,6 +8,54 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.61.0-beta] - 2026-08-09
+
+### Added
+- **One header and one footer for every public page** (#1197). The nine pages a visitor can
+  reach from the landing — `/`, `/features`, `/for-companies`, `/apply-as-mentor`,
+  `/projects`, `/release-notes`, `/privacy`, `/terms`, `/code-of-conduct` — now render the
+  same chrome instead of four different ones (or, on the legal pages, none).
+  - `src/components/landing/PublicShell.tsx` frames them all: `PublicHeader` (client — it
+    owns the mobile menu), `<main id="main-content">`, `PublicFooter` (server, so
+    `package.json` stays out of the browser bundle via `APP_VERSION`).
+  - The wordmark is a link to `/` on every page **including `/`**, where it was an inert
+    `<div>`. `data-testid="public-home-link"`.
+  - The footer is new on eight of the nine pages. It carries Product / Community / Legal
+    columns; the legal labels are read from `t.privacy.title` / `t.terms.title` /
+    `t.codeOfConduct.title` so a link can never disagree with the heading it points at.
+  - New `publicNav` i18n namespace (EN/TR/DE) for the chrome strings. It is deliberately
+    *not* part of `landing`, which is in `SERVER_ONLY_NAMESPACES` and so is never shipped
+    to the browser — the header is a client component and needs its labels there.
+  - `/for-companies` passes `showRegister={false}`: companies have no self-service sign-up
+    (#1102/#1104), so the chrome must not offer them the mentee registration button.
+
+### Fixed
+- **The skip-to-content link now lands somewhere on public pages** (#1197). The root layout
+  has always rendered `href="#main-content"`, but only `ResponsiveShell` (the signed-in
+  chrome) defined that anchor — so for a keyboard or screen-reader user the first control on
+  every public page was a link to nothing. `PublicShell` supplies it.
+- **The phone nav reaches the whole site** (#1197). The landing header hid "Features" and
+  "For companies" behind `sm:`/`md:` with nothing behind them, so on a phone those pages
+  were unreachable from the header. They now collapse into a disclosure menu
+  (`public-nav-toggle` / `public-nav-mobile`) that also carries GitHub, sign-in, register,
+  the language switcher and the theme toggle. Moving the theme toggle in there is what stops
+  the wordmark truncating to "InternshipC…" at 375px.
+- Footer column headings were `text-gray-400 dark:text-gray-500`, which fails contrast on the
+  dark surface at that size; swapped to `text-gray-500 dark:text-gray-400`.
+
+### Changed
+- `src/app/apply-as-mentor/page.tsx` is now a server component; its form moved to
+  `src/components/forms/ApplyMentorForm.tsx` so the page can wear the shared chrome.
+- `src/lib/sessionCookie.ts` (new) gates `getServerSession()` on a session cookie actually
+  being present, in the root layout, `getLocale()`, the landing page and `/projects`. This
+  removes work that is provably useless for a signed-out visitor. **It is not a measurable
+  speed win** — an A/B over two rounds on a dev server was inside the noise, and production
+  TTFB for these pages is already 11–27 ms. The real navigation improvement comes from the
+  shared chrome: public pages now link to each other through `next/link`, so moving between
+  them is a ~20–50 ms RSC fetch rather than a full document load.
+- `/projects` no longer renders `BrandWordmark` (which resolves a session and the org
+  branding) in its header; the public header is static.
+
 ## [0.60.0-beta] - 2026-08-08
 
 ### Added

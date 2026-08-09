@@ -1,14 +1,12 @@
 import Link from 'next/link';
-import { GraduationCap, CheckCircle, Code2, ScrollText, Languages, ShieldCheck } from 'lucide-react';
+import { CheckCircle, Code2, ScrollText, Languages, ShieldCheck } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { CompanyInquiryForm } from '@/components/CompanyInquiryForm';
+import { PublicShell } from '@/components/landing/PublicShell';
+import { GITHUB_URL } from '@/components/landing/links';
 import { RELEASE_NOTES } from '@/lib/releaseNotes';
 
 export const dynamic = 'force-dynamic';
-
-const GITHUB_URL = 'https://github.com/21072026/Internship';
 
 // The first real page a company can land on (#1102). Companies have no
 // self-service sign-up, so the page ends in an enquiry form (#1104) rather than
@@ -16,7 +14,7 @@ const GITHUB_URL = 'https://github.com/21072026/Internship';
 // company section uses (landing.audCompany*) — one source of truth, so a claim
 // can never drift between the two pages.
 export default async function ForCompaniesPage() {
-  const { locale, t } = await getServerDictionary();
+  const { t } = await getServerDictionary();
   const L = t.landing;
   const c = t.forCompanies;
 
@@ -37,25 +35,11 @@ export default async function ForCompaniesPage() {
     { t: L.trans5T, d: L.trans5D, icon: ShieldCheck },
   ];
 
+  // No register button in the chrome: companies have no self-service sign-up
+  // (#1102/#1104), so the page ends in the enquiry form instead.
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
-          <Link href="/" className="flex items-center gap-2 min-w-0">
-            <GraduationCap className="h-7 w-7 text-blue-600 flex-shrink-0" />
-            <span className="font-bold text-gray-900 truncate">InternshipCRM</span>
-          </Link>
-          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-            <LanguageSwitcher current={locale} />
-            <ThemeToggle />
-            <Link href="/auth/signin" className="text-gray-600 hover:text-gray-900 font-medium text-sm sm:text-base">
-              {L.signIn}
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-12 sm:py-16">
+    <PublicShell showRegister={false}>
+      <div className="max-w-5xl mx-auto px-4 py-12 sm:py-16">
         {/* Hero */}
         <div className="text-center max-w-3xl mx-auto">
           <span className="inline-flex items-center gap-2 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -122,7 +106,7 @@ export default async function ForCompaniesPage() {
         <div className="mt-12 text-center">
           <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">{c.backHome}</Link>
         </div>
-      </main>
-    </div>
+      </div>
+    </PublicShell>
   );
 }
