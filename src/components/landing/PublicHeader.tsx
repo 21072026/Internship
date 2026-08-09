@@ -45,7 +45,13 @@ export function PublicHeader({ showRegister = true }: { showRegister?: boolean }
     const mq = window.matchMedia('(min-width: 1024px)');
     const close = () => mq.matches && setOpen(false);
     mq.addEventListener('change', close);
-    return () => mq.removeEventListener('change', close);
+    // Escape is what anyone who has met a disclosure menu will reach for.
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      mq.removeEventListener('change', close);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   const links = [

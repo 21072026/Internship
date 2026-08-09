@@ -107,6 +107,15 @@ test.describe('phone width', () => {
     await expect(page.getByTestId('public-nav-mobile')).toHaveCount(0);
   });
 
+  test('Escape closes the menu', async ({ page }) => {
+    await page.goto('/');
+    await dismissConsent(page);
+    await page.getByTestId('public-nav-toggle').click();
+    await expect(page.getByTestId('public-nav-mobile')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('public-nav-mobile')).toHaveCount(0);
+  });
+
   test('no public page scrolls sideways on a phone', async ({ page }) => {
     for (const path of PUBLIC_PAGES) {
       await page.goto(path);
