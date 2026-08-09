@@ -7,6 +7,7 @@ import { getLocale } from '@/i18n/server';
 import { getClientDictionary } from '@/i18n/dictionaries';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { hasSessionCookie } from '@/lib/sessionCookie';
 import { resolveAccent } from '@/lib/accent';
 
 export const metadata: Metadata = {
@@ -44,7 +45,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   let accent = cookieStore.get('accent')?.value;
   // No device cookie yet? Fall back to the signed-in user's saved preferences
   // so they follow them across devices (the no-flash script still handles OS default).
-  if (!theme || !fontSize || !accent) {
+  // Signed-out visitors have none, and this layout wraps every page — so gate on
+  // the session cookie rather than paying a session decode per view (#1197).
+  if ((!theme || !fontSize || !accent) && (await hasSessionCookie())) {
     try {
       const session = await getServerSession(authOptions);
       if (session?.user?.id) {

@@ -4,7 +4,8 @@ import { Github, ExternalLink, ArrowLeft } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
-import { BrandWordmark } from '@/components/BrandWordmark';
+import { PublicShell } from '@/components/landing/PublicShell';
+import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
 // Public showcase of community/company projects opted into visibility.
 export default async function PublicProjectsPage() {
   const { t } = await getServerDictionary();
-  const session = await getServerSession(authOptions);
+  const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   // Signed-in visitors arrive here from inside the app (e.g. "Browse the project
   // showcase" on /portal/projects), but this route lives outside the role shell,
   // so there is no sidebar to walk back through — send them to their own
@@ -30,15 +31,8 @@ export default async function PublicProjectsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center gap-2">
-          <Link href={backHref} className="flex min-w-0 items-center gap-2">
-            <BrandWordmark />
-          </Link>
-        </div>
-      </header>
-      <main className="max-w-5xl mx-auto px-4 py-12">
+    <PublicShell>
+      <div className="max-w-5xl mx-auto px-4 py-12">
         <Link
           href={backHref}
           data-testid="showcase-back"
@@ -72,7 +66,7 @@ export default async function PublicProjectsPage() {
             })}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </PublicShell>
   );
 }

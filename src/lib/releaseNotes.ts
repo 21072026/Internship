@@ -13,6 +13,33 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.61.0-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Every public page — the home page, features, for companies, the mentor application, the project showcase and the privacy, terms and code of conduct pages — now has the same header and footer instead of a different one on each.',
+        'The logo takes you to the home page from anywhere, including the home page itself, where it was not a link before.',
+        'The new footer links the pages to each other. If you arrive on the privacy notice from a search result you can now reach the rest of the site from it, and switch language or theme there.',
+        'On a phone the navigation is now a menu. "Features" and "For companies" used to be hidden entirely at that width, with nothing to open in their place.',
+        'Moving between these pages is quicker: they now load the part that changed instead of the whole page again.',
+      ],
+      tr: [
+        'Herkese açık sayfaların hepsi — ana sayfa, özellikler, firmalar için, mentor başvurusu, proje vitrini ve gizlilik, kullanım şartları, davranış kuralları sayfaları — artık her birinde farklı olan değil, aynı üst ve alt bölümü kullanıyor.',
+        'Logo her yerden ana sayfaya götürüyor; daha önce link olmayan ana sayfanın kendisinde de.',
+        'Yeni alt bölüm sayfaları birbirine bağlıyor. Arama sonucundan gizlilik metnine düştüyseniz artık oradan sitenin geri kalanına geçebilir, dili veya temayı da değiştirebilirsiniz.',
+        'Telefonda gezinme artık bir menü. "Özellikler" ve "Firmalar için" o genişlikte tamamen gizleniyordu ve yerine açılacak bir şey de yoktu.',
+        'Bu sayfalar arasında geçiş daha hızlı: tüm sayfa yeniden değil, yalnızca değişen kısım yükleniyor.',
+      ],
+      de: [
+        'Alle öffentlichen Seiten — Startseite, Funktionen, für Unternehmen, Mentor-Bewerbung, Projektschaufenster sowie Datenschutz, Nutzungsbedingungen und Verhaltenskodex — haben jetzt denselben Kopf- und Fußbereich statt auf jeder Seite einen anderen.',
+        'Das Logo führt von überall zur Startseite, auch auf der Startseite selbst, wo es vorher kein Link war.',
+        'Der neue Fußbereich verbindet die Seiten miteinander. Wer über eine Suchtreffer-Seite auf der Datenschutzerklärung landet, kommt von dort nun in den Rest der Website und kann Sprache oder Design wechseln.',
+        'Auf dem Telefon ist die Navigation jetzt ein Menü. „Funktionen“ und „Für Unternehmen“ waren in dieser Breite komplett ausgeblendet, ohne Ersatz.',
+        'Der Wechsel zwischen diesen Seiten geht schneller: Es wird nur noch der geänderte Teil geladen statt der ganzen Seite.',
+      ],
+    },
+  },
+  {
     version: '0.60.0-beta',
     date: '2026-08-08',
     highlights: {
