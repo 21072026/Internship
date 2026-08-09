@@ -111,7 +111,17 @@ if ! gzip -t "$tmp" 2>/dev/null; then
   rm -f "$tmp"
   exit 1
 fi
-if ! gzip -dc "$tmp" | grep -qi 'CREATE TABLE'; then
+# `grep -c`, not `grep -q`, and this is not a style choice (#1200). `grep -q`
+# exits at the FIRST match, closing the pipe while `gzip` is still writing; gzip
+# then dies of SIGPIPE (141) and `set -o pipefail` promotes that to the whole
+# pipeline, so the check reported "no CREATE TABLE" for every dump big enough
+# that gzip had not already finished — i.e. every real one. Prod's deploys had
+# been failing here since the gate landed, while a small test DB passed because
+# gzip got everything out before grep exited. `grep -c` consumes the whole
+# stream, so there is no early close and no SIGPIPE. `|| true` because grep
+# exits 1 on zero matches, which is a result here, not an error.
+tables=$(gzip -dc "$tmp" | grep -ci 'CREATE TABLE' || true)
+if [ "${tables:-0}" -eq 0 ]; then
   echo "ERROR: dump contains no CREATE TABLE — treating as failed" >&2
   rm -f "$tmp"
   exit 1
@@ -119,7 +129,7 @@ fi
 
 mv "$tmp" "$out"
 chmod 600 "$out"
-log "Backup written: $out (${size} bytes)"
+log "Backup written: $out (${size} bytes, ${tables} tables)"
 
 # Prune, but only our own files: the pattern is anchored to <env>-<stamp>.sql.gz
 # so a stray file in the directory is never touched.
