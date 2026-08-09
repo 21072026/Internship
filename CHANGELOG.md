@@ -8,6 +8,21 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.61.1-beta] - 2026-08-09
+
+### Fixed
+- **The public chrome no longer tells a signed-in user they are signed out** (#1205). A
+  regression from #1197: `/release-notes`, `/privacy`, `/terms`, `/code-of-conduct`,
+  `/features`, `/projects` and `/for-companies` gained the shared header, but it rendered
+  "Sign In / Register" unconditionally. Following the sidebar's version link mid-session
+  replaced the app nav with a logged-out one and offered no way back into the app.
+  - `PublicShell` resolves the session on the server (behind the existing `hasSessionCookie()`
+    gate) and passes a `dashboardHref` to `PublicHeader`, which then shows a link to the
+    user's own dashboard instead of the sign-in pair. Resolved server-side on purpose: a
+    client `useSession()` would paint the signed-out chrome first and swap it a beat later,
+    which looks like the very bug being fixed.
+  - `/` was never affected — it already redirects a signed-in visitor to their role home.
+
 ## [0.61.0-beta] - 2026-08-09
 
 ### Added

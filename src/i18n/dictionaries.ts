@@ -502,6 +502,7 @@ const en = {
   // from the heading of the page it points at.
   publicNav: {
     home: 'Home',
+    dashboard: 'My dashboard',
     features: 'Features',
     forCompanies: 'For companies',
     showcase: 'Project showcase',
@@ -2812,6 +2813,7 @@ const tr: Dict = {
   },
   publicNav: {
     home: 'Ana sayfa',
+    dashboard: 'Panelim',
     features: 'Özellikler',
     forCompanies: 'Firmalar için',
     showcase: 'Proje vitrini',
@@ -5118,6 +5120,7 @@ const de: Dict = {
   },
   publicNav: {
     home: 'Startseite',
+    dashboard: 'Mein Bereich',
     features: 'Funktionen',
     forCompanies: 'Für Unternehmen',
     showcase: 'Projektschaufenster',

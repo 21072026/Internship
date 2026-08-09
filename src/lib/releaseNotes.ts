@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.61.1-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Opening the release notes, privacy or terms pages while signed in no longer shows a logged-out menu. You stay signed in and get a link straight back to your dashboard.',
+      ],
+      tr: [
+        'Giriş yapmışken sürüm notları, gizlilik veya kullanım şartları sayfalarını açtığınızda menü artık çıkış yapmışsınız gibi görünmüyor. Oturumunuz açık kalıyor ve doğrudan panelinize dönen bir bağlantı çıkıyor.',
+      ],
+      de: [
+        'Wenn du die Release-Notes, den Datenschutz oder die Nutzungsbedingungen im angemeldeten Zustand öffnest, erscheint kein abgemeldetes Menü mehr. Du bleibst angemeldet und bekommst einen direkten Link zurück zu deinem Bereich.',
+      ],
+    },
+  },
+  {
     version: '0.61.0-beta',
     date: '2026-08-09',
     highlights: {
