@@ -1211,6 +1211,8 @@ model MentorshipRelation {
   // Optional deadline for the current pipeline stage; powers overdue flagging
   // and deadline reminders.
   stageDeadline           DateTime?
+  // Optional reason for why a candidate was dropped / found elsewhere.
+  dropReason              String?
   // Set when an overdue-stage reminder was last sent (avoids re-notifying daily).
   deadlineReminderSentAt  DateTime?
   // Set when a stale-mentee in-app notification was last sent; cleared once the

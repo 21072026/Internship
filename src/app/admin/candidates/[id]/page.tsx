@@ -25,6 +25,7 @@ import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
+import { dropReasonOptions } from '@/lib/dropReasons';
 
 interface Interaction { id: string; date: string; notes: string; type: string }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
@@ -34,6 +35,7 @@ interface Relation {
   pipelineStatus: string;
   startDate: string;
   stageDeadline?: string | null;
+  dropReason?: string | null;
   mentor: { fullName: string; email: string };
   company: { name: string; industry?: string } | null;
   project: { id: string; name: string } | null;
@@ -94,6 +96,7 @@ export default function AdminMenteeDetailPage() {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
   const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
+  const [dropReason, setDropReason] = useState('');
   // Every admin/mentor/mentee, so a person can be picked as the referral source.
   const [people, setPeople] = useState<{ id: string; fullName: string }[]>([]);
 
@@ -103,6 +106,28 @@ export default function AdminMenteeDetailPage() {
     setUser(data.user ?? null);
     setLoading(false);
   }, [id]);
+
+  const changeDropReason = useCallback(
+    async (relationId: string, reason: string | null) => {
+      setDropReason(reason ?? '');
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dropReason: reason }),
+        });
+        if (!res.ok) throw new Error();
+        await load();
+        toast(t.candidateDetail.saved);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [load, toast, t]
+  );
 
   // Change the pipeline stage. Any transition is allowed (incl. moving back,
   // e.g. 700 -> 220); the audit log only ever appends, so history is preserved.
@@ -201,6 +226,10 @@ export default function AdminMenteeDetailPage() {
   }, [load]);
 
   useEffect(() => {
+    setDropReason(user?.menteeRelations[0]?.dropReason ?? '');
+  }, [user]);
+
+  useEffect(() => {
     fetch('/api/projects')
       .then((r) => (r.ok ? r.json() : { projects: [] }))
       .then((d) => setProjects(d.projects ?? []))
@@ -280,6 +309,7 @@ export default function AdminMenteeDetailPage() {
   if (!user) return <div className="text-center py-12 text-gray-400">{t.common.notFound}</div>;
 
   const rel = user.menteeRelations[0];
+  const showDropReasonSelect = !!rel && ['INTERNSHIP_DROPPED_460', 'INTERNSHIP_FOUND_ELSEWHERE_800'].includes(rel.pipelineStatus);
 
   return (
     <div>
@@ -396,6 +426,16 @@ export default function AdminMenteeDetailPage() {
                   disabled={saving}
                   onChange={(e) => changeProject(rel.id, e.target.value)}
                 />
+                {showDropReasonSelect && (
+                  <Select
+                    label={t.candidateDetail.dropReason}
+                    data-testid="drop-reason-select"
+                    options={dropReasonOptions(locale)}
+                    value={dropReason}
+                    disabled={saving}
+                    onChange={(e) => changeDropReason(rel.id, e.target.value || null)}
+                  />
+                )}
                 <Select
                   label={t.candidateDetail.cohort}
                   options={[{ value: '', label: t.candidateDetail.noCohort }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]}

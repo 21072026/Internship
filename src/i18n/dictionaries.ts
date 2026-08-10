@@ -278,6 +278,7 @@ const en = {
     addEntry: 'Add entry',
     deleteEntry: 'Delete entry',
     nextAction: 'Next action',
+    dropReason: 'Drop reason',
   },
   menteeActivation: {
     title: 'No account yet',
@@ -2648,6 +2649,7 @@ const tr: Dict = {
     addEntry: 'Kayıt ekle',
     deleteEntry: 'Kaydı sil',
     nextAction: 'Sonraki aksiyon',
+    dropReason: 'Ayrılma nedeni',
   },
   menteeActivation: {
     title: 'Henüz hesabı yok',
@@ -5008,6 +5010,7 @@ const de: Dict = {
     addEntry: 'Eintrag hinzufügen',
     deleteEntry: 'Eintrag löschen',
     nextAction: 'Nächster Schritt',
+    dropReason: 'Abbruchgrund',
   },
   menteeActivation: {
     title: 'Noch kein Konto',

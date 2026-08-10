@@ -20,6 +20,7 @@ const updateRelationSchema = z.object({
   projectId: z.string().nullable().optional(),
   cohortId: z.string().nullable().optional(),
   stageDeadline: z.string().nullable().optional(),
+  dropReason: z.string().nullable().optional(),
 });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
