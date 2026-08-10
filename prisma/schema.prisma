@@ -99,6 +99,7 @@ model Organization {
   pipelineStages     PipelineStage[]
   mentorApplications MentorApplication[]
   companyInquiries   CompanyInquiry[]
+  documentRequirements DocumentRequirement[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -270,6 +271,8 @@ model User {
   taskTemplates             ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
   mentorOnboardings         MenteeOnboarding[]        @relation("OnboardingMentor")
   menteeOnboarding          MenteeOnboarding[]        @relation("OnboardingMentee")
+  missingDocumentReminderSubjects   DocumentRequirementReminder[] @relation("MissingDocumentReminderSubject")
+  missingDocumentReminderRecipients DocumentRequirementReminder[] @relation("MissingDocumentReminderRecipient")
 
   @@index([role])
   @@index([referredById])
@@ -601,6 +604,51 @@ enum DocumentType {
   OTHER
 }
 
+// Organization-defined document names and applicability. Completion is never
+// stored here: it is derived from documents carrying this requirement id.
+model DocumentRequirement {
+  id             String   @id @default(cuid())
+  orgId          String
+  key            String
+  labels         Json
+  appliesToStage String?
+  appliesToRole  String?
+  mandatory      Boolean  @default(true)
+  order          Int      @default(0)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  org       Organization                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  documents Document[]
+  reminders DocumentRequirementReminder[]
+
+  @@unique([orgId, key])
+  @@index([orgId, active, order])
+  @@index([orgId, appliesToStage])
+  @@index([orgId, appliesToRole])
+}
+
+// Delivery-only weekly idempotency marker. Missing/completed state is not
+// stored here and is always derived from DocumentRequirement + Document.
+model DocumentRequirementReminder {
+  id            String   @id @default(cuid())
+  requirementId String
+  menteeId      String
+  recipientId   String
+  weekStart     DateTime @db.Date
+  createdAt     DateTime @default(now())
+
+  requirement DocumentRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  mentee      User                @relation("MissingDocumentReminderSubject", fields: [menteeId], references: [id], onDelete: Cascade)
+  recipient   User                @relation("MissingDocumentReminderRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, menteeId, recipientId, weekStart])
+  @@index([menteeId])
+  @@index([recipientId])
+  @@index([weekStart])
+}
+
 // A stored document (DB bytes, like CvFile). Belongs to a user, or is an
 // admin-managed template (ownerId null + isTemplate) available to everyone.
 // Re-uploading the same (owner, type) keeps prior rows and bumps `version`.
@@ -616,11 +664,15 @@ model Document {
   data        Bytes
   version     Int          @default(1)
   isTemplate  Boolean      @default(false)
+  requirementId String?
   createdAt   DateTime     @default(now())
 
   owner User? @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  requirement DocumentRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
+  @@index([requirementId])
+  @@index([ownerId, requirementId, version])
   @@index([isTemplate])
 }
 

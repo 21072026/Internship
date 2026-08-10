@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.63.0-beta",
+  "version": "0.64.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -45,6 +45,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.83.0",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^2.4.0",
     "xlsx": "^0.18.5",
     "zod": "^3.23.8"
