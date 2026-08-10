@@ -26,6 +26,11 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
 
   const action = verifyEmailActionToken(parsed.data.token);
+  // 410 Gone, not 400: the link was genuine, it just aged out. The page shows
+  // "open it in the app" instead of the misleading "invalid link".
+  if (action === 'expired') {
+    return NextResponse.json({ error: 'expired', expired: true }, { status: 410 });
+  }
   if (!action) return NextResponse.json({ error: 'This link is not valid.' }, { status: 400 });
 
   // The token names a user, but it was minted long ago — confirm the account
