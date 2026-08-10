@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.64.0-beta',
+    date: '2026-08-10',
+    highlights: {
+      en: [
+        'Internship drop reasons now have one consistent set of names in English, Turkish and German, ready to be shown in the language each person uses.',
+      ],
+      tr: [
+        'Stajın yarıda kalma nedenleri artık İngilizce, Türkçe ve Almancada tek ve tutarlı bir ad kümesine sahip; herkesin kullandığı dilde gösterilmeye hazır.',
+      ],
+      de: [
+        'Gründe für einen Praktikumsabbruch haben jetzt einheitliche Bezeichnungen auf Englisch, Türkisch und Deutsch und können in der jeweils verwendeten Sprache angezeigt werden.',
+      ],
+    },
+  },
+  {
     version: '0.63.0-beta',
     date: '2026-08-09',
     highlights: {

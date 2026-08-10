@@ -8,6 +8,14 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.64.0-beta] - 2026-08-10
+
+### Added
+- **Localized internship drop reasons** (#856). Added a client-safe canonical list of
+  drop-reason codes with EN/TR/DE labels and shared label/option helpers. The `OTHER`
+  option is marked as requiring a note, ready for later UI and API integration without
+  changing existing behavior.
+
 ## [0.63.0-beta] - 2026-08-09
 
 ### Added
