@@ -10,9 +10,10 @@ import {
   checkRetentionReminders,
   checkCompanyNeedMatches,
   sendWeeklyAnalyticsReport,
+  sendWeeklyReportReminders,
 } from '@/services/emailService';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -20,7 +21,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport] = await Promise.all([
+    if (new URL(request.url).searchParams.get('job') === 'weekly-reports') {
+      return NextResponse.json({ message: 'Weekly report reminders ran', weeklyReports: await sendWeeklyReportReminders() });
+    }
+    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, weeklyReports] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
@@ -29,6 +33,7 @@ export async function GET() {
       checkRetentionReminders(),
       checkCompanyNeedMatches(),
       sendWeeklyAnalyticsReport(),
+      sendWeeklyReportReminders(),
     ]);
 
     return NextResponse.json({
@@ -41,6 +46,7 @@ export async function GET() {
       retention,
       needMatches,
       analyticsReport,
+      weeklyReports,
     });
   } catch (error) {
     console.error('Cron error:', error);

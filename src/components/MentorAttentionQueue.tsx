@@ -11,6 +11,7 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   unanswered_question: 'info',
   pending_meeting: 'purple',
   no_open_goal: 'info',
+  missing_weekly_reports: 'danger',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
@@ -24,6 +25,7 @@ export function MentorAttentionQueue({ items, t }: { items: AttentionItem[]; t: 
     unanswered_question: labels.unansweredQuestion,
     pending_meeting: labels.pendingMeeting,
     no_open_goal: labels.noOpenGoal,
+    missing_weekly_reports: t.weeklyReports.missingAttention,
   };
 
   return (

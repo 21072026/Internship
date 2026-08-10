@@ -22,6 +22,7 @@ import { User, Building2, BookOpen, ExternalLink, MessageCircle, Github, Linkedi
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
+import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 
 async function getMenteeData(menteeId: string) {
   const [user, activeRelation, visibilityConsent, projects] = await Promise.all([
@@ -148,6 +149,8 @@ export default async function PortalDashboard() {
           <JourneyTracker status={activeRelation.pipelineStatus} />
         </div>
       )}
+
+      {activeRelation && <div className="mb-6"><WeeklyReportsPanel relationId={activeRelation.id} mode="mentee" /></div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Summary */}

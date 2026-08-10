@@ -1,12 +1,13 @@
 import nodemailer from 'nodemailer';
 import cron from 'node-cron';
+import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
 import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
@@ -16,6 +17,8 @@ import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
+import { utcWeekStart } from '@/lib/week';
+import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -1197,6 +1200,48 @@ export async function checkStageDeadlineReminders() {
   return { reminded: overdue.length };
 }
 
+// Friday reminder for the current UTC week. The unique relation/week claim is
+// created before either channel is sent, so overlapping cron runs cannot send
+// the same reminder twice.
+export async function sendWeeklyReportReminders(now = new Date()) {
+  const weekStart = utcWeekStart(now);
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: {
+      status: 'ACTIVE', pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
+      weeklyReports: { none: { weekStart, status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } } },
+    },
+    select: {
+      id: true, orgId: true,
+      mentee: { select: { id: true, fullName: true, email: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } },
+    },
+  });
+  if (relations.length === 0) return { checked: 0, reminded: 0, emailed: 0 };
+  const claims = relations.map((relation) => ({ id: randomUUID(), relationId: relation.id, weekStart }));
+  await prisma.weeklyReportReminder.createMany({ data: claims, skipDuplicates: true });
+  const claimedIds = new Set((await prisma.weeklyReportReminder.findMany({ where: { id: { in: claims.map((claim) => claim.id) } }, select: { relationId: true } })).map((claim) => claim.relationId));
+  let reminded = 0;
+  let emailed = 0;
+  for (const relation of relations) {
+    if (!claimedIds.has(relation.id)) continue;
+    const preferredLanguage = relation.mentee.preferredLanguage ?? undefined;
+    const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
+    const copy = getDictionary(locale).weeklyReports;
+    const formattedWeek = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(weekStart);
+    if (notificationCategoryAllowed(relation.mentee, 'weeklyReports')) {
+      await notify(relation.mentee.id, 'weekly_report_reminder', copy.reminderNotification, '/portal');
+    }
+    reminded++;
+    if (emailAllowed(relation.mentee, 'weeklyReports')) {
+      const brand = await emailBrand(relation.orgId);
+      await sendEmail({
+        to: relation.mentee.email, fromName: brand.name, category: 'weekly-report', subject: copy.reminderSubject,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.reminderHeading)}<p>${copy.reminderGreeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${copy.reminderBody.replace('{date}', formattedWeek)}</p>${ctaBlock(brand, `${appUrl()}/portal`, copy.reminderCta)}</div>`,
+      }).then(() => { emailed++; }).catch((error) => logger.error('Weekly report reminder email failed', { relationId: relation.id, error: String(error) }));
+    }
+  }
+  return { checked: relations.length, reminded, emailed };
+}
+
 // How far ahead a meeting reminder fires. The cron ticks every 15 minutes
 // (see initCronJobs), so a meeting is reminded 45-60 minutes before it starts —
 // close enough to "one hour before" to be useful, and never late.
@@ -2026,6 +2071,16 @@ export function initCronJobs() {
     }
   });
   scheduledTasks.set('activity-digest', activityTask);
+
+  const weeklyReportTask = cron.schedule('0 15 * * 5', async () => {
+    try {
+      const result = await sendWeeklyReportReminders();
+      console.log(`[Cron] Weekly report reminders: ${result.reminded}`);
+    } catch (error) {
+      console.error('[Cron] Weekly report reminder error:', error);
+    }
+  });
+  scheduledTasks.set('weekly-report-reminders', weeklyReportTask);
 
   // Unread-message digest — hourly at :20 (offset from the other hourly jobs).
   const unreadDigestTask = cron.schedule('20 * * * *', async () => {
