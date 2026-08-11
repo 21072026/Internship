@@ -10,6 +10,16 @@ Newest entries on top.
 
 ---
 
+## 2026-08-11 — Offline fallback metni değişikliği (#1219, 0.63.2-beta)
+
+Offline fallback gibi küçük, herkese açık metin değişikliklerinde bile bu repoda sürüm disiplini
+zorunlu: `package.json` sürümü + `CHANGELOG.md` + `src/lib/releaseNotes.ts` üçlüsü birlikte
+güncellenmeden PR tamamlanmış sayılmıyor. "Küçük UI dokunuşu" olsa da kullanıcıya yansıdığı için
+release notuna tek maddelik bir özet eklemek reviewer döngüsünü kısaltıyor.
+
+`/offline` gibi statik sayfalarda en düşük maliyetli güvence, mevcut e2e spec'e görünürlük +
+`href` assertion eklemek. Bu sayede link metni görünse ama yanlış URL'ye gitse bile test kaçırmıyor.
+
 ## 2026-08-08 — "Tümünü seç" (#1153, 0.55.4-beta)
 
 Küçük bir UI isteği ("buraya tümünü seç eklenmeli"), iki tanesi tekrar işe yarar ders:

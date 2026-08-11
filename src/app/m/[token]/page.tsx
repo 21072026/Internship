@@ -39,7 +39,11 @@ export default function EmailActionPage({ params }: { params: Promise<{ token: s
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setResult({ state: 'error', message: data.error ?? t.emailAction.failed });
+          setResult(
+            data.expired
+              ? { state: 'error', message: t.emailAction.expired }
+              : { state: 'error', message: data.error ?? t.emailAction.failed },
+          );
           return;
         }
         setResult(

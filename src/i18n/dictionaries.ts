@@ -966,6 +966,7 @@ const en = {
   emailAction: {
     working: 'Working…',
     failed: 'This link did not work',
+    expired: 'This link has expired — email links stay valid for 90 days. Open the conversation in the app instead.',
     readTitle: 'Marked as read',
     readBody: '{n} message(s) in this conversation are now marked as read. They will not appear in your unread summary again.',
     readAlready: 'This conversation was already up to date — nothing left to mark.',
@@ -3346,6 +3347,7 @@ const tr: Dict = {
   emailAction: {
     working: 'İşleniyor…',
     failed: 'Bu bağlantı çalışmadı',
+    expired: 'Bu bağlantının süresi doldu — e-posta bağlantıları 90 gün geçerli. Sohbeti uygulamadan açabilirsin.',
     readTitle: 'Okundu olarak işaretlendi',
     readBody: 'Bu sohbetteki {n} mesaj artık okundu sayılıyor. Okunmamış özetinde bir daha çıkmayacak.',
     readAlready: 'Bu sohbet zaten güncelmiş — işaretlenecek bir şey kalmamış.',
@@ -5722,6 +5724,7 @@ const de: Dict = {
   emailAction: {
     working: 'Wird ausgeführt…',
     failed: 'Dieser Link hat nicht funktioniert',
+    expired: 'Dieser Link ist abgelaufen — E-Mail-Links gelten 90 Tage. Öffne die Unterhaltung stattdessen in der App.',
     readTitle: 'Als gelesen markiert',
     readBody: '{n} Nachricht(en) in dieser Unterhaltung gelten jetzt als gelesen. Sie tauchen in deiner Zusammenfassung nicht wieder auf.',
     readAlready: 'Diese Unterhaltung war bereits aktuell — es gab nichts zu markieren.',

@@ -14,8 +14,18 @@ import { requireServerSecret } from '@/lib/serverSecret';
 // ever delivered to that user's registered address, so honouring it grants
 // nothing a mailbox holder could not already get from a password reset.
 //
-// Deliberately NOT expiring: a digest someone opens a week later should still
-// work, and both actions are trivially reversible in the app.
+// Tokens expire after 90 days. Long enough that a digest opened weeks later
+// still works, short enough that the exposure window closes: a notification
+// email that gets forwarded, or an old mailbox archive that leaks, would
+// otherwise let someone act as that user forever. Both actions are low-severity
+// and reversible (a reaction, a read flag — never a message), which is why this
+// is 90 days and not 24 hours.
+export const EMAIL_ACTION_TTL_DAYS = 90;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Days since the epoch, base36 — a compact, ASCII, sortable stamp. Day
+// granularity is plenty for a 90-day window and keeps the token short.
+const today = () => Math.floor(Date.now() / DAY_MS);
 
 // Mirrors REACTION_EMOJIS in src/app/api/messages/[id]/reactions/route.ts. The
 // token stores the *index*, never the emoji itself, so a token can never carry
@@ -43,18 +53,25 @@ function sign(payload: string): string {
   return createHmac('sha256', requireServerSecret()).update(payload).digest('hex').slice(0, 32);
 }
 
-function serialize(action: EmailAction): string {
+function serialize(action: EmailAction, day: number): string {
+  const stamp = day.toString(36);
   return action.kind === 'read'
-    ? ['k', action.relationId, action.userId].join(SEP)
-    : ['r', action.messageId, action.userId, String(action.emojiIndex)].join(SEP);
+    ? ['k', action.relationId, action.userId, stamp].join(SEP)
+    : ['r', action.messageId, action.userId, String(action.emojiIndex), stamp].join(SEP);
 }
 
-export function makeEmailActionToken(action: EmailAction): string {
-  const payload = serialize(action);
+export function makeEmailActionToken(action: EmailAction, day: number = today()): string {
+  const payload = serialize(action, day);
   return `${payload}.${sign(payload)}`;
 }
 
-export function verifyEmailActionToken(token: string): EmailAction | null {
+/**
+ * `null` when the signature does not verify or the payload is malformed;
+ * `'expired'` when it verifies but is older than the TTL — the caller turns
+ * that into "this link has expired, open it in the app" rather than the
+ * misleading "invalid link".
+ */
+export function verifyEmailActionToken(token: string): EmailAction | 'expired' | null {
   const dot = token.lastIndexOf('.');
   if (dot <= 0) return null;
   const payload = token.slice(0, dot);
@@ -68,18 +85,28 @@ export function verifyEmailActionToken(token: string): EmailAction | null {
   }
 
   const parts = payload.split(SEP);
-  if (parts[0] === 'k' && parts.length === 3) {
-    const [, relationId, userId] = parts;
+
+  // The stamp is the last field of both shapes. Checked before the action is
+  // returned, so an expired token can never reach the handler.
+  const expired = (stamp: string) => {
+    const issued = parseInt(stamp, 36);
+    return !Number.isFinite(issued) || today() - issued > EMAIL_ACTION_TTL_DAYS;
+  };
+
+  if (parts[0] === 'k' && parts.length === 4) {
+    const [, relationId, userId, stamp] = parts;
     if (!relationId || !userId) return null;
+    if (expired(stamp)) return 'expired';
     return { kind: 'read', relationId, userId };
   }
-  if (parts[0] === 'r' && parts.length === 4) {
-    const [, messageId, userId, rawIndex] = parts;
+  if (parts[0] === 'r' && parts.length === 5) {
+    const [, messageId, userId, rawIndex, stamp] = parts;
     const emojiIndex = Number(rawIndex);
     // A signed payload cannot normally be malformed, but never hand back an
     // index that would read past the emoji table.
     if (!messageId || !userId) return null;
     if (!Number.isInteger(emojiIndex) || emojiIndex < 0 || emojiIndex >= EMAIL_REACTION_EMOJIS.length) return null;
+    if (expired(stamp)) return 'expired';
     return { kind: 'react', messageId, userId, emojiIndex };
   }
   return null;
