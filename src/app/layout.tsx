@@ -9,6 +9,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { resolveAccent } from '@/lib/accent';
+import { IS_DEMO_MODE } from '@/lib/demoMode';
+import { DemoModeBanner } from '@/components/DemoModeBanner';
+import { getAnalyticsScripts } from '@/lib/analytics';
 
 export const metadata: Metadata = {
   title: 'Internship CRM - Mentor-Mentee Management',
@@ -59,6 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     } catch { /* ignore */ }
   }
   const fontSizeClass = fontSize === 'sm' || fontSize === 'lg' || fontSize === 'xl' ? `font-${fontSize}` : undefined;
+  const analyticsScripts = getAnalyticsScripts();
 
   return (
     <html
@@ -69,6 +73,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
+        {analyticsScripts.ga4 && <script dangerouslySetInnerHTML={{ __html: analyticsScripts.ga4 }} />}
+        {analyticsScripts.plausible && <script dangerouslySetInnerHTML={{ __html: analyticsScripts.plausible }} />}
+        {analyticsScripts.posthog && <script dangerouslySetInnerHTML={{ __html: analyticsScripts.posthog }} />}
       </head>
       <body>
         <a
@@ -78,6 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {dict.a11y.skipToContent}
         </a>
         <Providers locale={locale} dict={dict}>
+          {IS_DEMO_MODE && <DemoModeBanner />}
           {children}
         </Providers>
       </body>

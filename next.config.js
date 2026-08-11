@@ -12,14 +12,22 @@ const TAWK = 'https://*.tawk.to';
 // mean allowing anything anyone has ever published to npm.
 const TAWK_EMOJI = 'https://cdn.jsdelivr.net/emojione/';
 
+// Analytics providers — all are opt-in via env vars; the domains are added to
+// the CSP unconditionally so the header does not change between builds
+// (Content-Security-Policy is a static string; we cannot make it env-conditional
+// without runtime header generation, which Next.js does not do in static mode).
+const GA4 = 'https://www.googletagmanager.com https://www.google-analytics.com';
+const PLAUSIBLE = 'https://plausible.io';
+const POSTHOG = 'https://app.posthog.com https://us.i.posthog.com https://eu.i.posthog.com';
+
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TAWK} ${TAWK_EMOJI}`,
+  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TAWK} ${TAWK_EMOJI} ${GA4} ${PLAUSIBLE} ${POSTHOG}`,
   `style-src 'self' 'unsafe-inline' ${TAWK} ${TAWK_EMOJI}`,
-  `img-src 'self' data: blob: ${TAWK} ${TAWK_EMOJI}`,
+  `img-src 'self' data: blob: ${TAWK} ${TAWK_EMOJI} ${GA4}`,
   `font-src 'self' ${TAWK}`,
   // wss: too — the chat holds a websocket open for incoming messages.
-  `connect-src 'self' ${TAWK} wss://*.tawk.to`,
+  `connect-src 'self' ${TAWK} wss://*.tawk.to ${GA4} ${PLAUSIBLE} ${POSTHOG}`,
   // The chat plays a notification sound; media-src has no fallback here other
   // than default-src 'self', which would block it.
   `media-src 'self' ${TAWK}`,

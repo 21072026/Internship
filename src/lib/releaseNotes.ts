@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.63.2-beta',
+    date: '2026-08-11',
+    highlights: {
+      en: [
+        'You can now try InternshipCRM without signing up — visit /demo and log in with one of the three demo accounts (admin, mentor, or mentee). The demo database resets every hour, so you can click around freely.',
+        'Public candidate and mentor profiles now generate a rich preview card when you share the link on LinkedIn, Twitter, or WhatsApp — name, role, location, and up to five skills appear in the thumbnail.',
+        'Growth analytics support added: admins can now connect Google Analytics 4, Plausible, or PostHog by setting the corresponding environment variable. All tracking is gated behind marketing cookie consent and never activates without an explicit opt-in.',
+      ],
+      tr: [
+        'Artık kayıt olmadan InternshipCRM\'yi deneyebilirsiniz — /demo adresine gidip üç demo hesabından biriyle (admin, mentor veya mentee) giriş yapın. Demo veritabanı her saat sıfırlanıyor, bu yüzden özgürce gezebilirsiniz.',
+        'Herkese açık aday ve mentor profilleri artık LinkedIn, Twitter veya WhatsApp\'ta paylaşıldığında zengin bir önizleme kartı oluşturuyor — küçük resimde isim, rol, konum ve en fazla beş yetenek görünüyor.',
+        'Büyüme analitiği desteği eklendi: adminler artık Google Analytics 4, Plausible veya PostHog\'u ilgili ortam değişkenini ayarlayarak bağlayabilir. Tüm takip, pazarlama çerezi onayının arkasında ve açık bir kabul olmadan hiçbir zaman etkinleşmiyor.',
+      ],
+      de: [
+        'Du kannst InternshipCRM jetzt ohne Registrierung ausprobieren — besuche /demo und melde dich mit einem der drei Demo-Konten an (Admin, Mentor oder Mentee). Die Demo-Datenbank wird stündlich zurückgesetzt, du kannst also frei herumklicken.',
+        'Öffentliche Kandidaten- und Mentor-Profile erzeugen jetzt eine reichhaltige Vorschaukarte, wenn du den Link auf LinkedIn, Twitter oder WhatsApp teilst — Name, Rolle, Standort und bis zu fünf Skills erscheinen im Thumbnail.',
+        'Wachstumsanalyse-Unterstützung hinzugefügt: Admins können jetzt Google Analytics 4, Plausible oder PostHog durch Setzen der entsprechenden Umgebungsvariablen verbinden. Alle Tracker sind hinter der Marketing-Cookie-Einwilligung und aktivieren sich nie ohne ausdrückliche Zustimmung.',
+      ],
+    },
+  },
+  {
     version: '0.63.1-beta',
     date: '2026-08-09',
     highlights: {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { IS_DEMO_MODE, isDemoAllowlisted } from '@/lib/demoMode';
 
 // Methods that mutate state. Unverified users are limited to reads.
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -30,6 +31,17 @@ export async function middleware(req: NextRequest) {
 
   if (!WRITE_METHODS.has(req.method) || isAllowlisted(pathname)) {
     return NextResponse.next();
+  }
+
+  // Demo mode: block write operations that are not explicitly allowlisted
+  // (sign-in and the reset endpoint must still work so visitors can explore
+  // and the scheduler can reset the data). Only write methods reach this
+  // point — reads short-circuit in the check above.
+  if (IS_DEMO_MODE && WRITE_METHODS.has(req.method) && !isDemoAllowlisted(pathname)) {
+    return NextResponse.json(
+      { error: 'This is a read-only demo. Sign up at crm.ersah.in to get your own account.' },
+      { status: 403 }
+    );
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });

@@ -8,7 +8,31 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.63.1-beta] - 2026-08-09
+## [0.63.2-beta] - 2026-08-11
+
+### Added
+- **Interactive demo mode** (#966). Set `DEMO_MODE=true` on the demo instance
+  (crm-demo.ersah.in). When active: all write operations are blocked at the
+  middleware level (HTTP 403, except sign-in and the reset endpoint); a sticky
+  amber banner reminds visitors they are in a sandbox; and `/api/demo/reset`
+  (secured by `DEMO_RESET_SECRET`) wipes and re-seeds the demo database so
+  schedulers can reset it on a cron.
+- **`/demo` discovery page** (#966). A public marketing page that explains the
+  demo, shows the three role credentials (admin / mentor / mentee), and links
+  to both the live demo instance and the production sign-up. Available
+  regardless of `DEMO_MODE` — it is the product's "try before you buy" door.
+- **OpenGraph social sharing image** for public profiles `/p/[userId]` (#966).
+  Next.js `opengraph-image.tsx` generates a 1200×630 PNG with the candidate's
+  name, headline, location, skills, and avatar — shareable on LinkedIn, Twitter
+  and WhatsApp.
+- **Multi-provider analytics framework** `src/lib/analytics.ts` (#966).
+  Zero-dependency abstraction over GA4, Plausible, and PostHog. All providers
+  are opt-in via env vars and GDPR-gated behind cookie consent — no tracker
+  code ships unless at least one provider is configured. CSP updated to allow
+  all three provider domains.
+- **E2E tests** for the demo page and OG image endpoint (`e2e/demo.spec.ts`).
+
+
 
 ### Security
 - **Email action links expire after 90 days** (#1211). They previously never aged out, so a
