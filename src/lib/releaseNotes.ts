@@ -13,6 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+<<<<<<< HEAD
     version: '0.64.0-beta',
     date: '2026-08-10',
     highlights: {
@@ -30,6 +31,31 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Angebotsverwaltung: Admins können jetzt direkt von der Mentoring-Karte eines Kandidaten ein Jobangebot erstellen, in der Vorschau prüfen und senden — mit einer klaren Historie jedes Schritts.',
         'Kandidaten sehen ihr Angebot im Portal-Dashboard — Position, Unternehmen, Starttermin, ein Countdown bis zur Entscheidungsfrist und (bei ihrem eigenen Angebot) den Vergütungshinweis — und können es mit einem Klick annehmen oder ablehnen, inklusive Ablehnungsgründen.',
         'Nicht rechtzeitig beantwortete Angebote werden automatisch als abgelaufen markiert, und alle Beteiligten werden in jedem Fall benachrichtigt — gesendet, angenommen, abgelehnt oder abgelaufen.',
+=======
+    version: '0.63.2-beta',
+    date: '2026-08-11',
+    highlights: {
+      en: ['The offline page now includes a direct link to https://crm.ersah.in so you can quickly return to the main site once your connection is back.'],
+      tr: ['Çevrimdışı sayfasında artık https://crm.ersah.in bağlantısı var; bağlantın geri geldiğinde ana siteye hızlıca dönebilirsin.'],
+      de: ['Die Offline-Seite enthält jetzt einen direkten Link zu https://crm.ersah.in, damit du nach der Wiederverbindung schnell zur Hauptseite zurückkommst.'],
+    },
+  },
+  {
+    version: '0.63.1-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Links inside notification emails now stop working after 90 days. If you open an old email and the link has expired, sign in and the conversation is waiting for you.',
+        'The unread summary email is lighter: reactions now live on the individual message notification, where the emoji clearly belongs to one message. This also keeps the summary out of spam folders.',
+      ],
+      tr: [
+        'Bildirim e-postalarındaki bağlantılar artık 90 gün sonra geçerliliğini yitiriyor. Eski bir e-postayı açıp bağlantının süresi dolmuşsa, giriş yaptığınızda sohbet sizi bekliyor olacak.',
+        'Okunmamış özet e-postası sadeleşti: tepki emojileri artık tek tek mesaj bildirimlerinde — emojinin hangi mesaja ait olduğu orada net. Bu aynı zamanda özetin spam klasörüne düşmesini de engelliyor.',
+      ],
+      de: [
+        'Links in Benachrichtigungs-E-Mails verlieren nach 90 Tagen ihre Gültigkeit. Wenn du eine alte E-Mail öffnest und der Link abgelaufen ist, melde dich an — die Unterhaltung wartet dort auf dich.',
+        'Die Zusammenfassung ungelesener Nachrichten ist schlanker: Reaktionen sitzen jetzt in der einzelnen Nachrichtenbenachrichtigung, wo das Emoji eindeutig zu einer Nachricht gehört. Das hält die Zusammenfassung außerdem aus dem Spam-Ordner.',
+>>>>>>> origin/main
       ],
     },
   },

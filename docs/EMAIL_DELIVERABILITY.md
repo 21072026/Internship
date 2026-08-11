@@ -232,6 +232,17 @@ who ignored their messages. Read the statuses as:
 
 The body is deliberately not stored — metadata only.
 
+**Retention.** Rows hold a recipient address, so the log is covered by the same
+discipline as the rest of the personal data:
+
+- a daily job prunes anything older than `EMAIL_LOG_RETENTION_DAYS` (90) —
+  `pruneEmailLog()`, registered on the 09:00 schedule;
+- account erasure clears the address explicitly (`src/lib/accountErasure.ts`).
+  The log is keyed by address rather than by a relation, so **nothing cascades
+  to it** — without that call an erased person's address outlives their account.
+
+Add both whenever a new log-like table starts holding addresses.
+
 ## 3. Inbound replies → Messages
 
 The full round trip is in place:

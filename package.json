@@ -1,6 +1,10 @@
 {
   "name": "internship-crm",
+<<<<<<< HEAD
   "version": "0.64.0-beta",
+=======
+  "version": "0.63.2-beta",
+>>>>>>> origin/main
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",

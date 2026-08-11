@@ -52,5 +52,5 @@ export async function cleanupByEmail(email: string) {
     });
     await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
   }
-  await prisma.invitationToken.deleteMany({ where: { email } });
+  await prisma.invitationToken.deleteMany({ where: { email: { equals: email } } });
 }
