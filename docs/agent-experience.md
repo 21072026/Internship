@@ -3430,3 +3430,40 @@ bütün olarak yerelleştirildiğinde birlikte çevrilmeli (PR'da not düşüld�
 çözümü `node prisma/backfill-json-columns.mjs --repair`. **Yeni bir kutuda ilk iş: `npx
 prisma db push` + `db:check-json`.** Baseline ölçümü için `git stash -u` + `git checkout
 origin/main` yeterli, ayrı worktree kurmaya gerek yok (node_modules paylaşılıyor).
+
+---
+
+## 2026-08-11 — PLG Demo Mode, OG Cards, Analytics (#966)
+
+**Demo mode is a deployment-level flag, not a code branch.** `DEMO_MODE=true` flips
+one env var on the demo instance (`crm-demo.ersah.in`); the same codebase runs on
+prod. The middleware guard is placed *after* the existing write-method check so
+reads are never blocked — the redundant `WRITE_METHODS.has(req.method)` in the
+demo guard is intentional for clarity and future-proofing.
+
+**`demoMode` is not in `SERVER_ONLY_NAMESPACES`.** The demo banner is a client
+component that calls `useT()`. Any i18n namespace used in client components must
+not be stripped. Check `SERVER_ONLY_NAMESPACES` before adding new namespaces —
+client components need their namespace in the browser payload.
+
+**Turkish strings with embedded apostrophes break single-quoted TS strings.**
+`InternshipCRM'yi` and `Pipeline'a` contain ASCII single-quotes that look like
+they end the string. Fix: switch to double-quoted strings for those values. The
+Python heredoc approach for mass i18n insertion silently passes these through;
+always verify the resulting file with `tsc --noEmit`.
+
+**OG images use `next/og` `ImageResponse` — no external font URL needed for
+simple cards.** The `runtime = 'nodejs'` export is required when the OG image
+handler imports Prisma (Edge runtime can't use Node.js APIs). Do not use Edge
+runtime for any route that touches Prisma.
+
+**Plausible rejects `null` in `props`.** Its type only accepts
+`string | number | boolean`. Always filter nulls before passing to Plausible;
+the shared `AnalyticsEvent.properties` type allows null for GA4/PostHog
+flexibility. `Object.fromEntries(Object.entries(props).filter(([,v]) => v !== null))`
+is the safe pattern.
+
+**The `check:i18n` script is fast and catches key-count mismatches early.**
+Run it (`npm run check:i18n`) after every dictionary edit — it verifies that all
+three locales have the exact same set of keys. It also outputs the count so you
+can double-check nothing was accidentally deleted.
