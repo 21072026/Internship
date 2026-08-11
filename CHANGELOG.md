@@ -8,6 +8,11 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.63.2-beta] - 2026-08-11
+
+### Changed
+- Offline fallback (`/offline`) now shows a direct link to the live site (`https://crm.ersah.in`), so users can jump back to the main CRM URL once they reconnect.
+
 ## [0.63.1-beta] - 2026-08-09
 
 ### Security

@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.63.2-beta',
+    date: '2026-08-11',
+    highlights: {
+      en: ['The offline page now includes a direct link to https://crm.ersah.in so you can quickly return to the main site once your connection is back.'],
+      tr: ['Çevrimdışı sayfasında artık https://crm.ersah.in bağlantısı var; bağlantın geri geldiğinde ana siteye hızlıca dönebilirsin.'],
+      de: ['Die Offline-Seite enthält jetzt einen direkten Link zu https://crm.ersah.in, damit du nach der Wiederverbindung schnell zur Hauptseite zurückkommst.'],
+    },
+  },
+  {
     version: '0.63.1-beta',
     date: '2026-08-09',
     highlights: {
