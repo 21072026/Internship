@@ -31,8 +31,11 @@ version is shown in the sidebar footer of every page (links to the
   code ships unless at least one provider is configured. CSP updated to allow
   all three provider domains.
 - **E2E tests** for the demo page and OG image endpoint (`e2e/demo.spec.ts`).
+- 
+### Changed
+- Offline fallback (`/offline`) now shows a direct link to the live site (`https://crm.ersah.in`), so users can jump back to the main CRM URL once they reconnect.
 
-
+## [0.63.1-beta] - 2026-08-09
 
 ### Security
 - **Email action links expire after 90 days** (#1211). They previously never aged out, so a
