@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.64.0-beta',
+    date: '2026-08-10',
+    highlights: {
+      en: [
+        'Admins and mentors can now generate an internship completion certificate or a reference letter for a mentee once their internship is done — pick English, Turkish or German, review and edit the text, then generate a PDF that carries your organization\'s name, logo and color.',
+        'The mentee can download their certificate any time from their portal, right alongside their other documents — nobody else\'s certificate is visible to them.',
+      ],
+      tr: [
+        'Yöneticiler ve mentörler artık bir mentee\'nin stajı tamamlandığında staj tamamlama belgesi veya referans mektubu oluşturabilir — İngilizce, Türkçe veya Almanca seçip metni gözden geçirip düzenleyebilir, ardından kurumunuzun adını, logosunu ve rengini taşıyan bir PDF oluşturabilirsiniz.',
+        'Mentee kendi belgesini istediği zaman portalından, diğer belgelerinin yanında indirebilir — başka birinin belgesi kendisine görünmez.',
+      ],
+      de: [
+        'Admins und Mentoren können jetzt, sobald ein Praktikum abgeschlossen ist, für die Mentee eine Praktikumsbescheinigung oder ein Referenzschreiben erstellen — Englisch, Türkisch oder Deutsch wählen, den Text prüfen und anpassen und dann ein PDF mit dem Namen, Logo und der Farbe deiner Organisation erzeugen.',
+        'Die Mentee kann ihre Bescheinigung jederzeit im Portal herunterladen, direkt neben ihren anderen Dokumenten — die Bescheinigung anderer ist für sie nicht sichtbar.',
+      ],
+    },
+  },
+  {
     version: '0.63.0-beta',
     date: '2026-08-09',
     highlights: {

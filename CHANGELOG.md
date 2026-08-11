@@ -8,6 +8,32 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.64.0-beta] - 2026-08-10
+
+### Added
+- **Internship completion certificate & reference letter** (#813). Admin/mentor can generate
+  an org-branded PDF for a completed internship, from a completed-relation action on the
+  candidate/mentee detail page (both `/admin/candidates/[id]` and `/mentor/mentees/[id]`).
+  - `CertificateGenerator` previews an auto-filled, editable EN/TR/DE draft (certificate or a
+    freely-rewritable reference letter) — start/end date, duration, and which of the mentee's
+    skills to list — before generating. Reuses `renderTemplate.templateToHtml` for the preview
+    and `orgBranding`/`branding` for the org name/logo/accent color, matching the existing
+    document-template pattern (`templates.ts` / `TemplatesLibrary`) instead of introducing a
+    new branding system.
+  - Eligibility (`certificateEligibility.ts`) does not hardcode `INTERNSHIP_COMPLETED_490`: it
+    accepts `MentorshipRelation.status === 'COMPLETED'` (works under any custom pipeline, #747)
+    or, when the canonical stage key is still present in the org's resolved stages, having
+    reached-or-passed it.
+  - The generated PDF is rendered server-side with `pdf-lib` (new dependency) — pure JS, no
+    native binaries, no headless-browser process — and stored as a normal `Document` row
+    (`type: CERTIFICATE`, `ownerId` the mentee), so the existing `documentAccess` rules (owner,
+    their mentor, or an admin — 403 otherwise) gate it with no new access-control code. The
+    mentee can download it from `/portal` (reuses `DocumentsManager`, read-only there).
+  - Deliberately did not add: public/unauthenticated verification (out of scope for #813), a
+    new PDF template engine (the renderer understands the same constrained markdown subset as
+    `renderTemplate.ts`), or a schema change (no new columns/models — the existing `Document`/
+    `DocumentType.CERTIFICATE` were already sufficient).
+
 ## [0.63.0-beta] - 2026-08-09
 
 ### Added
