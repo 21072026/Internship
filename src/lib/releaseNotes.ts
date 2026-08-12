@@ -14,7 +14,7 @@ export interface ReleaseNote {
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: '0.64.0-beta',
-    date: '2026-08-10',
+    date: '2026-08-12',
     highlights: {
       en: [
         'Internship drop reasons now have one consistent set of names in English, Turkish and German, ready to be shown in the language each person uses.',

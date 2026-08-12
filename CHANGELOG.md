@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.64.0-beta] - 2026-08-10
+## [0.64.0-beta] - 2026-08-12
 
 ### Added
 - **Localized internship drop reasons** (#856). Added a client-safe canonical list of
