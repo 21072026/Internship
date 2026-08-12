@@ -13,7 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   GitBranch, Users, Building2, CalendarClock, FileText, Target,
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
-  Search, Bot, KeyRound, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe, BriefcaseBusiness,
+  Search, Bot, KeyRound, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe, BriefcaseBusiness, CalendarCheck,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -64,5 +64,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'dualRole', category: 'collaboration', icon: Sprout, color: 'purple', title: C.dualRole.t, desc: C.dualRole.d },
     { key: 'timezones', category: 'platform', icon: Globe, color: 'sky', title: C.timezones.t, desc: C.timezones.d },
     { key: 'requisitions', category: 'companies', icon: BriefcaseBusiness, color: 'purple', title: C.requisitions.t, desc: C.requisitions.d },
+    { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', title: C.interviewRequests.t, desc: C.interviewRequests.d },
   ];
 }

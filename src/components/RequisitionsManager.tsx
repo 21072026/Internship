@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
+import Link from 'next/link';
 
 type Company = { id: string; name: string };
 type Owner = { id: string; fullName: string; companyId: string | null };
@@ -120,7 +121,7 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
         <CardHeader><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><CardTitle className="break-words">{item.title}</CardTitle><p className="text-sm text-gray-500 dark:text-gray-400">{item.company.name}</p></div><Badge variant={badgeVariant[item.status] ?? 'default'}>{statusLabel(item.status)}</Badge></div></CardHeader>
         <div className="space-y-3 text-sm"><div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-600 dark:text-gray-300"><span>{r.filled}: <strong>{item.filled}/{item.openings}</strong></span>{item.owner && <span>{r.owner}: {item.owner.fullName}</span>}{item.city && <span>{r.city}: {item.city}</span>}</div>
         {Array.isArray(item.requiredSkills) && item.requiredSkills.length > 0 && <div className="flex flex-wrap gap-1">{item.requiredSkills.map((skill) => <Badge key={String(skill)}>{String(skill)}</Badge>)}</div>}
-        <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => openEdit(item)}><Pencil className="h-4 w-4" />{r.edit}</Button>{!['CANCELLED', 'FILLED'].includes(item.status) && <Button size="sm" variant="ghost" onClick={() => void cancelItem(item)}><XCircle className="h-4 w-4" />{r.close}</Button>}</div></div>
+        <div className="flex flex-wrap gap-2">{!admin && <Link className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200" href={`/company/requisitions/${item.id}`}>{r.details}</Link>}<Button size="sm" variant="outline" onClick={() => openEdit(item)}><Pencil className="h-4 w-4" />{r.edit}</Button>{!['CANCELLED', 'FILLED'].includes(item.status) && <Button size="sm" variant="ghost" onClick={() => void cancelItem(item)}><XCircle className="h-4 w-4" />{r.close}</Button>}</div></div>
       </Card>)}</div>}
     <div className="mt-5 flex items-center justify-center gap-3"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{r.pagination.previous}</Button><span className="text-sm text-gray-500">{r.pagination.page.replace('{page}', String(page)).replace('{total}', String(totalPages))}</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{r.pagination.next}</Button></div>
     {showForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><form onSubmit={save} className="max-h-[90vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl bg-white p-6 dark:bg-gray-900">

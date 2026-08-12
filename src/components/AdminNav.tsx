@@ -18,6 +18,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/board', icon: Columns3, key: 'board' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
   { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' },
+  { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' },
   { href: '/admin/candidates', icon: Users, key: 'candidates' },
   { href: '/admin/mentors', icon: UserCheck, key: 'mentors' },
   { href: '/admin/mentorship', icon: Users, key: 'mentorships' },

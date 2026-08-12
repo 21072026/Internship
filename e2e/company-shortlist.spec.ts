@@ -14,7 +14,8 @@ test('a company can shortlist a linked candidate; the mentor is notified and see
   const outsiderEmail = uniqueEmail('co-shortlist-outsider');
   const pw = 'CompanyPass123!';
 
-  const company = await prisma.company.create({ data: { name: `Shortlist Co ${Date.now()}` } });
+  const org = await prisma.organization.create({ data: { name: `Shortlist Org ${Date.now()}`, slug: `shortlist-${Date.now()}` } });
+  const company = await prisma.company.create({ data: { name: `Shortlist Co ${Date.now()}`, orgId: org.id } });
   const companyUser = await prisma.user.create({
     data: {
       email: companyEmail,
@@ -22,6 +23,7 @@ test('a company can shortlist a linked candidate; the mentor is notified and see
       role: 'COMPANY',
       fullName: 'Shortlist Co Observer',
       companyId: company.id,
+      orgId: org.id,
       skills: [],
     },
   });
@@ -29,7 +31,7 @@ test('a company can shortlist a linked candidate; the mentor is notified and see
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Shortlist Candidate');
   const outsider = await seedUser(outsiderEmail, 'x', 'MENTEE', 'Shortlist Outsider');
   const rel = await prisma.mentorshipRelation.create({
-    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id },
+    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id, orgId: org.id },
   });
 
   try {
@@ -71,5 +73,6 @@ test('a company can shortlist a linked candidate; the mentor is notified and see
     await cleanupByEmail(outsiderEmail);
     await prisma.user.deleteMany({ where: { id: companyUser.id } });
     await prisma.company.deleteMany({ where: { id: company.id } });
+    await prisma.organization.deleteMany({ where: { id: org.id } });
   }
 });

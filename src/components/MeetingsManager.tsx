@@ -11,6 +11,7 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
+import { useSearchParams } from 'next/navigation';
 
 interface Relation {
   id: string;
@@ -37,6 +38,11 @@ const RSVP_VARIANT = { PENDING: 'warning', ACCEPTED: 'success', DECLINED: 'dange
 export function MeetingsManager() {
   const t = useT();
   const locale = useLocale();
+  const searchParams = useSearchParams();
+  const interviewRelationId = searchParams.get('relationId');
+  const interviewRequestId = searchParams.get('interviewRequestId');
+  const interviewRequisitionId = searchParams.get('requisitionId');
+  const interviewRequisitionTitle = searchParams.get('requisitionTitle');
   const [relations, setRelations] = useState<Relation[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -65,6 +71,16 @@ export function MeetingsManager() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!interviewRelationId || !relations.some((relation) => relation.id === interviewRelationId)) return;
+    setSelected((current) => ({ ...current, [interviewRelationId]: true }));
+  }, [interviewRelationId, relations]);
+
+  useEffect(() => {
+    if (!interviewRequisitionTitle) return;
+    setTitle((current) => current || `${t.interviewRequests.interviewRequest}: ${interviewRequisitionTitle}`);
+  }, [interviewRequisitionTitle, t.interviewRequests.interviewRequest]);
 
   const chosen = relations.filter((r) => selected[r.id]).map((r) => r.id);
   // The organizer is on the list too: a reading of the invitees' clocks is only
@@ -120,6 +136,16 @@ export function MeetingsManager() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.meetings.title}</h1>
         <p className="text-gray-500 mt-1">{t.meetings.subtitle}</p>
       </div>
+
+      {interviewRelationId && interviewRequestId && interviewRequisitionId && (
+        <Card className="mb-4" data-testid="interview-meeting-context">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            {t.interviewRequests.meetingContext
+              .replace('{requestId}', interviewRequestId)
+              .replace('{requisition}', interviewRequisitionTitle || interviewRequisitionId)}
+          </p>
+        </Card>
+      )}
 
       {result && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{result}</div>

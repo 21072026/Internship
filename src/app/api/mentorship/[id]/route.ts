@@ -80,8 +80,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // Surface the linked company's shortlist signal (EPIC: company shortlist)
       // to the mentor/admin viewing this relation.
       const companyInterest = relation.companyId
-        ? await prisma.companyInterest.findUnique({
-            where: { companyId_menteeId: { companyId: relation.companyId, menteeId: relation.menteeId } },
+        ? await prisma.companyInterest.findFirst({
+            where: { companyId: relation.companyId, menteeId: relation.menteeId, requisitionId: null },
           })
         : null;
 
