@@ -12,18 +12,18 @@ export const DROP_REASONS = [
   'OTHER',
 ] as const;
 
-export type DropReason = (typeof DROP_REASONS)[number];
+export type DropReasonCode = (typeof DROP_REASONS)[number];
 
-const LABELS: Record<Locale, Record<DropReason, string>> = {
+const LABELS: Record<Locale, Record<DropReasonCode, string>> = {
   tr: {
-    CANDIDATE_WITHDREW: 'Aday çekildi',
-    NO_RESPONSE: 'Yanıt alınamadı',
-    ACCEPTED_ELSEWHERE: 'Başka bir teklifi kabul etti',
+    CANDIDATE_WITHDREW: 'Aday süreçten çekildi',
+    NO_RESPONSE: 'Ulaşılamadı',
+    ACCEPTED_ELSEWHERE: 'Başka teklifi kabul etti',
     SCHEDULE_CONFLICT: 'Takvim uyuşmazlığı',
-    LOCATION: 'Konum',
-    SKILL_MISMATCH: 'Beceri uyumsuzluğu',
-    COMPANY_CANCELLED: 'Şirket iptal etti',
-    PERFORMANCE: 'Performans',
+    LOCATION: 'Lokasyon uygun değil',
+    SKILL_MISMATCH: 'Yetkinlik uyumsuzluğu',
+    COMPANY_CANCELLED: 'Şirket tarafından iptal edildi',
+    PERFORMANCE: 'Performans yetersizliği',
     OTHER: 'Diğer',
   },
   en: {
@@ -31,33 +31,33 @@ const LABELS: Record<Locale, Record<DropReason, string>> = {
     NO_RESPONSE: 'No response',
     ACCEPTED_ELSEWHERE: 'Accepted elsewhere',
     SCHEDULE_CONFLICT: 'Schedule conflict',
-    LOCATION: 'Location',
+    LOCATION: 'Location mismatch',
     SKILL_MISMATCH: 'Skill mismatch',
     COMPANY_CANCELLED: 'Company cancelled',
-    PERFORMANCE: 'Performance',
+    PERFORMANCE: 'Insufficient performance',
     OTHER: 'Other',
   },
   de: {
-    CANDIDATE_WITHDREW: 'Bewerber zurückgezogen',
+    CANDIDATE_WITHDREW: 'Bewerbung zurückgezogen',
     NO_RESPONSE: 'Keine Antwort',
     ACCEPTED_ELSEWHERE: 'Anderes Angebot angenommen',
     SCHEDULE_CONFLICT: 'Terminkonflikt',
-    LOCATION: 'Standort',
+    LOCATION: 'Standort nicht passend',
     SKILL_MISMATCH: 'Unpassende Qualifikationen',
     COMPANY_CANCELLED: 'Unternehmen hat abgesagt',
-    PERFORMANCE: 'Leistung',
+    PERFORMANCE: 'Unzureichende Leistung',
     OTHER: 'Sonstiges',
   },
 };
 
 export function dropReasonLabel(reason: string, locale: Locale = 'en'): string {
-  return LABELS[locale]?.[reason as DropReason] ?? LABELS.en[reason as DropReason] ?? reason;
+  return LABELS[locale]?.[reason as DropReasonCode] ?? LABELS.en[reason as DropReasonCode] ?? reason;
 }
 
 export function dropReasonOptions(locale: Locale = 'en') {
   return DROP_REASONS.map((value) => ({
     value,
     label: dropReasonLabel(value, locale),
-    ...(value === 'OTHER' ? { requiresNote: true as const } : {}),
+    requiresNote: value === 'OTHER',
   }));
 }
