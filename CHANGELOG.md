@@ -16,6 +16,11 @@ version is shown in the sidebar footer of every page (links to the
   option is marked as requiring a note, ready for later UI and API integration without
   changing existing behavior.
 
+## [0.63.2-beta] - 2026-08-11
+
+### Changed
+- Offline fallback (`/offline`) now shows a direct link to the live site (`https://crm.ersah.in`), so users can jump back to the main CRM URL once they reconnect.
+
 ## [0.63.1-beta] - 2026-08-09
 
 ### Security
