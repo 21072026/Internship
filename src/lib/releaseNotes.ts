@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.64.0-beta',
+    date: '2026-08-12',
+    highlights: {
+      en: ['Admins and company teams can now manage structured hiring requisitions: define the role and required skills, track openings and filled positions, assign an owner, and move each request through its lifecycle.'],
+      tr: ['Yöneticiler ve şirket ekipleri artık yapılandırılmış işe alım taleplerini yönetebilir: pozisyonu ve gerekli yetkinlikleri tanımlayabilir, kontenjan ile dolulukları izleyebilir, sorumlu atayabilir ve her talebin durumunu yönetebilir.'],
+      de: ['Admins und Unternehmensteams können jetzt strukturierte Stellenanforderungen verwalten: Rolle und erforderliche Kenntnisse festlegen, offene und besetzte Stellen verfolgen, Verantwortliche zuweisen und den Status jeder Anforderung steuern.'],
+    },
+  },
+  {
     version: '0.63.2-beta',
     date: '2026-08-11',
     highlights: {

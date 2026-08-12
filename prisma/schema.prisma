@@ -99,6 +99,7 @@ model Organization {
   pipelineStages     PipelineStage[]
   mentorApplications MentorApplication[]
   companyInquiries   CompanyInquiry[]
+  requisitions       Requisition[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -270,6 +271,7 @@ model User {
   taskTemplates             ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
   mentorOnboardings         MenteeOnboarding[]        @relation("OnboardingMentor")
   menteeOnboarding          MenteeOnboarding[]        @relation("OnboardingMentee")
+  ownedRequisitions         Requisition[]             @relation("RequisitionOwner")
 
   @@index([role])
   @@index([referredById])
@@ -647,6 +649,7 @@ model Company {
   interests    CompanyInterest[]
   entitlements CompanyEntitlement[]
   needAlerts   CompanyNeedAlert[]
+  requisitions Requisition[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -1185,6 +1188,36 @@ model CompanyNeed {
   period    String
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+// Structured hiring demand (#806). CompanyNeed remains in place during the
+// compatibility window; legacyCompanyNeedId makes the manual backfill safe to
+// rerun without coupling the two live write paths.
+model Requisition {
+  id                  String    @id @default(cuid())
+  orgId               String
+  companyId           String
+  title               String
+  description         String?   @db.Text
+  status              String    @default("DRAFT")
+  openings            Int
+  filled              Int       @default(0)
+  requiredSkills      Json      @default("[]")
+  city                String?
+  workMode            String?
+  startDate           DateTime?
+  ownerId             String?
+  legacyCompanyNeedId String?   @unique
+  createdAt           DateTime  @default(now())
+  closedAt            DateTime?
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  owner   User?        @relation("RequisitionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, companyId])
+  @@index([orgId, status])
+  @@index([ownerId])
 }
 
 model MentorshipRelation {

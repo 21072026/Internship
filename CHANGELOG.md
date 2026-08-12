@@ -8,6 +8,11 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.64.0-beta] - 2026-08-12
+
+### Added
+- **Structured requisition management** (#806). Admins and COMPANY users can create, filter, edit, assign and close tenant-scoped hiring requisitions while tracking openings, filled positions, skills and lifecycle status. A manual idempotent backfill can copy legacy `CompanyNeed` rows without changing the existing need-alert matcher or dedupe flow.
+
 ## [0.63.2-beta] - 2026-08-11
 
 ### Changed

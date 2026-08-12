@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.63.2-beta",
+  "version": "0.64.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -20,6 +20,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:stress": "node scripts/stress-test.mjs",
     "import:csv": "node scripts/import-csv.mjs",
+    "backfill:requisitions": "node scripts/backfill-requisitions.mjs",
     "postinstall": "prisma generate",
     "seed:templates": "node prisma/seed-templates.mjs",
     "seed:demo": "node prisma/seed-demo.mjs",
