@@ -22,8 +22,13 @@ let otherCompanyId = '';
 let ownCompanyId = '';
 let sourceRecordId = '';
 let privateProjectId = '';
+let orgId = '';
 
 test.beforeAll(async () => {
+  const org = await prisma.organization.create({
+    data: { name: `Scope Org ${Date.now()}`, slug: `scope-org-${Date.now()}` },
+  });
+  orgId = org.id;
   const [mentor, mentee] = await Promise.all([
     seedUser(mentorEmail, PASSWORD, 'MENTOR', 'Scope Mentor'),
     seedUser(menteeEmail, PASSWORD, 'MENTEE', 'Scope Mentee'),
@@ -31,8 +36,8 @@ test.beforeAll(async () => {
 
   // Two companies: the relation belongs to `other`, the COMPANY user to `own`.
   const [own, other] = await Promise.all([
-    prisma.company.create({ data: { name: `Scope Own ${Date.now()}` } }),
-    prisma.company.create({ data: { name: `Scope Other ${Date.now()}` } }),
+    prisma.company.create({ data: { name: `Scope Own ${Date.now()}`, orgId } }),
+    prisma.company.create({ data: { name: `Scope Other ${Date.now()}`, orgId } }),
   ]);
   ownCompanyId = own.id;
   otherCompanyId = other.id;
@@ -44,12 +49,14 @@ test.beforeAll(async () => {
   await seedUser(companyEmail, PASSWORD, 'COMPANY', 'Scope Company');
   await seedUser(sourceEmail, PASSWORD, 'SOURCE', 'Scope Source User');
   await Promise.all([
-    prisma.user.update({ where: { email: companyEmail }, data: { companyId: own.id } }),
-    prisma.user.update({ where: { email: sourceEmail }, data: { sourceId: source.id } }),
+    prisma.user.update({ where: { id: mentor.id }, data: { orgId } }),
+    prisma.user.update({ where: { id: mentee.id }, data: { orgId } }),
+    prisma.user.update({ where: { email: companyEmail }, data: { companyId: own.id, orgId } }),
+    prisma.user.update({ where: { email: sourceEmail }, data: { sourceId: source.id, orgId } }),
   ]);
 
   const relation = await prisma.mentorshipRelation.create({
-    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: other.id },
+    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: other.id, orgId },
   });
   relationId = relation.id;
   await prisma.interactionLog.create({
@@ -72,6 +79,7 @@ test.afterAll(async () => {
   }
   await prisma.company.deleteMany({ where: { id: { in: [ownCompanyId, otherCompanyId] } } });
   await prisma.source.deleteMany({ where: { id: sourceRecordId } });
+  await prisma.organization.deleteMany({ where: { id: orgId } });
   await prisma.$disconnect();
 });
 
@@ -85,7 +93,9 @@ test('COMPANY cannot read another company\'s relations or interaction logs', { t
   const targeted = await (await page.request.get(`/api/interactions?relationId=${relationId}`)).json();
   expect(targeted.interactions).toHaveLength(0);
 
-  const relations = await (await page.request.get('/api/mentorship')).json();
+  const relationsResponse = await page.request.get('/api/mentorship');
+  expect(relationsResponse.status()).toBe(200);
+  const relations = await relationsResponse.json();
   expect(relations.relations.map((r: { id: string }) => r.id)).not.toContain(relationId);
 });
 

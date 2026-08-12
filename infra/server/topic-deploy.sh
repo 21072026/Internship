@@ -92,6 +92,10 @@ CONTAINER_DB=$(echo "$DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s
 
 # Apply schema + seed (idempotent). Shared DB, so this affects all topics.
 docker run --rm --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL="$CONTAINER_DB" "$IMAGE" node prisma/push-company-interest-expand.mjs
+docker run --rm --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL="$CONTAINER_DB" "$IMAGE" node prisma/backfill-company-interest-scope.mjs
+docker run --rm --add-host=host.docker.internal:host-gateway \
   -e DATABASE_URL="$CONTAINER_DB" "$IMAGE" npx prisma db push --accept-data-loss
 docker run --rm --add-host=host.docker.internal:host-gateway \
   -e DATABASE_URL="$CONTAINER_DB" "$IMAGE" node prisma/seed-templates.mjs || true
