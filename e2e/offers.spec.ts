@@ -177,6 +177,34 @@ test('a mentee cannot read another mentee\'s offer', async ({ page }) => {
   }
 });
 
+test('a mentee cannot list a DRAFT offer by asking for it explicitly', async ({ page }) => {
+  const s = await seedScenario('draftfilter');
+  try {
+    const draft = await prisma.offer.create({
+      data: {
+        relationId: s.relation.id,
+        companyId: s.company.id,
+        status: 'DRAFT',
+        position: 'Unsent Role',
+        compensationNote: 'draft-only-compensation',
+        createdById: s.admin.id,
+      },
+    });
+
+    await signIn(page, s.menteeEmail, s.pw, '/portal');
+
+    // The role filter must win over the query string: ?status=DRAFT used to
+    // skip the not-DRAFT guard and leak the admin's unsent staging offer.
+    const res = await page.request.get('/api/offers?status=DRAFT');
+    expect(res.status()).toBe(200);
+    const body = await res.text();
+    expect((JSON.parse(body).offers as { id: string }[]).some((o) => o.id === draft.id)).toBe(false);
+    expect(body).not.toContain('draft-only-compensation');
+  } finally {
+    await s.cleanup();
+  }
+});
+
 test('an unauthorized/other role never receives compensationNote in the response body', { tag: '@smoke' }, async ({ page }) => {
   const s = await seedScenario('comp');
   const companyEmail = uniqueEmail('compuser');

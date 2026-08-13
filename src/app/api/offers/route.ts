@@ -65,8 +65,9 @@ export async function GET(request: Request) {
       where.companyId = session.user.companyId as string;
     }
     // A DRAFT hasn't been sent yet — it's an admin staging state, never
-    // visible to MENTEE/COMPANY, even indirectly through a list.
-    if (role !== 'ADMIN' && !status) where.status = { not: 'DRAFT' };
+    // visible to MENTEE/COMPANY, even indirectly through a list. Kept as a
+    // separate AND term so an explicit ?status=DRAFT cannot opt back into it.
+    if (role !== 'ADMIN') where.AND = [{ status: { not: 'DRAFT' } }];
 
     const select = canSeeCompensation({ role, isOwnMenteeOffer: role === 'MENTEE' })
       ? { ...baseSelect, compensationNote: true }
