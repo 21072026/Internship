@@ -8,7 +8,6 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-<<<<<<< HEAD
 ## [0.64.0-beta] - 2026-08-10
 
 ### Added
@@ -48,7 +47,7 @@ version is shown in the sidebar footer of every page (links to the
   invalid-transition 400, cross-mentee IDOR, compensationNote leak check, company-with-no-companyId
   403, withdraw, and the two-run cron dedupe) and `e2e/offers-custom-pipeline.spec.ts`
   (custom-pipeline org never gets the HIRED_660 suggestion; accept still works end-to-end).
-=======
+
 ## [0.63.2-beta] - 2026-08-11
 
 ### Changed
@@ -78,7 +77,6 @@ version is shown in the sidebar footer of every page (links to the
   the opposite of what this change set exists to achieve. The five reactions stay on the
   single-message notification, where "the message this email is about" is unambiguous; the
   digest keeps its per-conversation "mark as read" link.
->>>>>>> origin/main
 
 ## [0.63.0-beta] - 2026-08-09
 

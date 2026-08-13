@@ -13,7 +13,6 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-<<<<<<< HEAD
     version: '0.64.0-beta',
     date: '2026-08-10',
     highlights: {
@@ -31,7 +30,10 @@ export const RELEASE_NOTES: ReleaseNote[] = [
         'Angebotsverwaltung: Admins können jetzt direkt von der Mentoring-Karte eines Kandidaten ein Jobangebot erstellen, in der Vorschau prüfen und senden — mit einer klaren Historie jedes Schritts.',
         'Kandidaten sehen ihr Angebot im Portal-Dashboard — Position, Unternehmen, Starttermin, ein Countdown bis zur Entscheidungsfrist und (bei ihrem eigenen Angebot) den Vergütungshinweis — und können es mit einem Klick annehmen oder ablehnen, inklusive Ablehnungsgründen.',
         'Nicht rechtzeitig beantwortete Angebote werden automatisch als abgelaufen markiert, und alle Beteiligten werden in jedem Fall benachrichtigt — gesendet, angenommen, abgelehnt oder abgelaufen.',
-=======
+      ],
+    },
+  },
+  {
     version: '0.63.2-beta',
     date: '2026-08-11',
     highlights: {
@@ -55,7 +57,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Links in Benachrichtigungs-E-Mails verlieren nach 90 Tagen ihre Gültigkeit. Wenn du eine alte E-Mail öffnest und der Link abgelaufen ist, melde dich an — die Unterhaltung wartet dort auf dich.',
         'Die Zusammenfassung ungelesener Nachrichten ist schlanker: Reaktionen sitzen jetzt in der einzelnen Nachrichtenbenachrichtigung, wo das Emoji eindeutig zu einer Nachricht gehört. Das hält die Zusammenfassung außerdem aus dem Spam-Ordner.',
->>>>>>> origin/main
       ],
     },
   },
