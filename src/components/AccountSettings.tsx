@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { AvatarManager } from '@/components/AvatarManager';
 import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT } from '@/i18n/client';
@@ -72,6 +73,18 @@ export function AccountSettings() {
   const [skills, setSkills] = useState('');
   const [capacity, setCapacity] = useState('');
   const [savingExpertise, setSavingExpertise] = useState(false);
+  // #941: mentor's own "I can take a new mentee" preference. Kept as the raw
+  // tri-state from the API (true/false/null = never set) — null is never
+  // silently coerced to true/false here; only the mentor flipping the switch
+  // produces an explicit value. activeMenteeCount/availability are read-only,
+  // server-derived (getMentorAvailability) — never recomputed client-side.
+  const [acceptingMentees, setAcceptingMentees] = useState<boolean | null>(null);
+  const [activeMenteeCount, setActiveMenteeCount] = useState(0);
+  const [availability, setAvailability] = useState<{
+    status: 'available' | 'at_capacity' | 'not_accepting';
+    source: 'preference' | 'capacity';
+    capacityKnown: boolean;
+  } | null>(null);
   // Every role sets its own zone here (#1210) — before this only the mentee
   // profile form had a picker, so an admin or mentor whose zone TimezoneSync
   // guessed wrong (VPN, travelling laptop, shared machine) had no way to fix it,
@@ -117,6 +130,9 @@ export function AccountSettings() {
         setTimezone(user.timezone ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
+        setAcceptingMentees(user.acceptingMentees ?? null);
+        setActiveMenteeCount(typeof user.activeMenteeCount === 'number' ? user.activeMenteeCount : 0);
+        setAvailability(user.availability ?? null);
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt ?? null });
       });
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
@@ -225,7 +241,11 @@ export function AccountSettings() {
       const skillsArr = skills.split(',').map((x) => x.trim()).filter(Boolean);
       const res = await fetch('/api/profile', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skills: skillsArr, mentorCapacity: capacity ? Number(capacity) : null }),
+        body: JSON.stringify({
+          skills: skillsArr,
+          mentorCapacity: capacity ? Number(capacity) : null,
+          acceptingMentees,
+        }),
       });
       if (!res.ok) throw new Error();
       flash(t.account.updated);
@@ -388,6 +408,24 @@ export function AccountSettings() {
     return t.membership.inSystemFor.replace('{d}', `${count} ${noun}`);
   })();
 
+  // The switch's ON/OFF position when no explicit preference is stored yet
+  // (acceptingMentees === null): reflect the server-derived availability as a
+  // starting visual only — it is never written back until the mentor actually
+  // touches the switch, which always sets an explicit true/false from then on.
+  const visualAcceptingMentees = acceptingMentees === null
+    ? availability?.status !== 'at_capacity'
+    : acceptingMentees;
+
+  const availabilityBadge = availability && (
+    <Badge variant={availability.status === 'available' ? 'success' : availability.status === 'at_capacity' ? 'warning' : 'default'}>
+      {availability.status === 'available'
+        ? t.account.availabilityAvailable
+        : availability.status === 'at_capacity'
+          ? t.account.availabilityAtCapacity
+          : t.account.availabilityNotAccepting}
+    </Badge>
+  );
+
   return (
     <div>
       <div className="mb-8">
@@ -447,6 +485,37 @@ export function AccountSettings() {
               <Input label={t.account.expertise} hint={t.account.expertiseHint} value={skills} onChange={(e) => setSkills(e.target.value)} />
             </div>
             <Input label={t.account.capacity} type="number" min={0} hint={t.account.capacityHint} value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+
+            {availability && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-300" data-testid="mentor-availability-summary">
+                <span>
+                  {availability.capacityKnown
+                    ? t.account.activeMentees.replace('{count}', String(activeMenteeCount)).replace('{capacity}', capacity)
+                    : t.account.capacityNotSet}
+                </span>
+                {availabilityBadge}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.account.acceptingMentees}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{t.account.acceptingMenteesHint}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={visualAcceptingMentees}
+                aria-label={t.account.acceptingMentees}
+                data-testid="accepting-mentees-toggle"
+                onClick={() => setAcceptingMentees(!visualAcceptingMentees)}
+                className="relative inline-block h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <span className={`absolute inset-0 rounded-full transition-colors ${visualAcceptingMentees ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-700'}`} />
+                <span className={`absolute top-1 left-1 h-4 w-4 rounded-full bg-white transition-transform ${visualAcceptingMentees ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
             <Button type="submit" loading={savingExpertise}>{t.profileForm.save}</Button>
           </form>
         </Card>

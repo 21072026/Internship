@@ -168,6 +168,13 @@ model User {
   interests               String?       @db.Text
   targetPosition          String?
   mentorCapacity          Int?
+  // Mentor's own "I can take new mentees right now" preference (#941) —
+  // distinct from mentorCapacity (a headcount ceiling): a mentor under
+  // capacity can still switch this off (e.g. going on leave), and one at
+  // capacity could in principle switch it on. Null = no preference set yet;
+  // availability then falls back to a capacity-derived guess (see
+  // src/lib/mentorAvailability.ts).
+  acceptingMentees        Boolean?
   // Set the first time a MENTOR lands on their dashboard (#911), so the
   // one-time redirect to the mentor onboarding wizard never fires twice —
   // stamped before the redirect, not after the wizard is finished/skipped.
