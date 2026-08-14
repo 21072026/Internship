@@ -1531,6 +1531,14 @@ model StatusChange {
   toStatus    String
   changedById String
   createdAt   DateTime @default(now())
+  // Drop-off reason (#810): required by the API when `toStatus` resolves to a
+  // negative/off-path stage in the org's pipeline (PipelineStage.isOffPath —
+  // see src/lib/dropoffReasons.ts for the whitelist and src/lib/stageChange.ts
+  // for the validation). Null for every pre-existing row and for moves into a
+  // non-negative stage — never backfilled.
+  reasonCode  String?
+  // Free-text elaboration; required only when reasonCode is OTHER.
+  reasonNote  String?  @db.Text
 
   relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   changedBy User               @relation("StatusChangedBy", fields: [changedById], references: [id])

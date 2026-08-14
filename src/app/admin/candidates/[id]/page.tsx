@@ -22,6 +22,7 @@ import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
+import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { OfferManagementPanel } from '@/components/OfferManagementPanel';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
@@ -107,14 +108,17 @@ export default function AdminMenteeDetailPage() {
 
   // Change the pipeline stage. Any transition is allowed (incl. moving back,
   // e.g. 700 -> 220); the audit log only ever appends, so history is preserved.
+  // reasonCode/reasonNote (#810) are required server-side when pipelineStatus
+  // is a negative/off-path stage — the caller gates that via DropoffReasonDialog
+  // before invoking this, see requestStageChange below.
   const changeStage = useCallback(
-    async (relationId: string, pipelineStatus: string) => {
+    async (relationId: string, pipelineStatus: string, reasonCode?: string, reasonNote?: string) => {
       setSaving(true);
       try {
         const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pipelineStatus }),
+          body: JSON.stringify({ pipelineStatus, ...(reasonCode ? { reasonCode, reasonNote } : {}) }),
         });
         if (!res.ok) throw new Error();
         await load();
@@ -167,10 +171,10 @@ export default function AdminMenteeDetailPage() {
   const [histBusy, setHistBusy] = useState(false);
 
   const addHistory = useCallback(
-    async (relationId: string) => {
+    async (relationId: string, reasonCode?: string, reasonNote?: string) => {
       setHistBusy(true);
       try {
-        await fetch('/api/status-changes', {
+        const res = await fetch('/api/status-changes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -178,16 +182,53 @@ export default function AdminMenteeDetailPage() {
             fromStatus: histFrom,
             toStatus: histTo,
             ...(histDate ? { createdAt: new Date(histDate).toISOString() } : {}),
+            ...(reasonCode ? { reasonCode, reasonNote } : {}),
           }),
         });
+        if (!res.ok) {
+          toast(t.candidateDetail.saveError, 'error');
+          return;
+        }
         setHistDate('');
         await load();
       } finally {
         setHistBusy(false);
       }
     },
-    [histFrom, histTo, histDate, load]
+    [histFrom, histTo, histDate, load, toast, t]
   );
+
+  // Gate for any move into a negative/off-path stage (#810): the live stage
+  // select and the manual history-correction form both funnel through this
+  // before calling their API, so neither can silently 400 with no way to
+  // supply the reason the server now requires.
+  const [pendingMove, setPendingMove] = useState<
+    { kind: 'live'; relationId: string; toStatus: string } | { kind: 'history'; relationId: string; toStatus: string } | null
+  >(null);
+  const isNegativeStage = useCallback((key: string) => stages.find((s) => s.key === key)?.isOffPath ?? false, [stages]);
+
+  const requestStageChange = (relationId: string, toStatus: string) => {
+    if (isNegativeStage(toStatus)) {
+      setPendingMove({ kind: 'live', relationId, toStatus });
+    } else {
+      changeStage(relationId, toStatus);
+    }
+  };
+
+  const requestHistoryAdd = (relationId: string) => {
+    if (isNegativeStage(histTo)) {
+      setPendingMove({ kind: 'history', relationId, toStatus: histTo });
+    } else {
+      addHistory(relationId);
+    }
+  };
+
+  const confirmPendingMove = (reasonCode: string, reasonNote: string) => {
+    if (!pendingMove) return;
+    if (pendingMove.kind === 'live') changeStage(pendingMove.relationId, pendingMove.toStatus, reasonCode, reasonNote);
+    else addHistory(pendingMove.relationId, reasonCode, reasonNote);
+    setPendingMove(null);
+  };
 
   const deleteHistory = useCallback(
     async (changeId: string) => {
@@ -388,7 +429,7 @@ export default function AdminMenteeDetailPage() {
                   options={stages.map((s) => ({ value: s.key, label: s.label }))}
                   value={rel.pipelineStatus}
                   disabled={saving}
-                  onChange={(e) => changeStage(rel.id, e.target.value)}
+                  onChange={(e) => requestStageChange(rel.id, e.target.value)}
                 />
                 <Select
                   label={t.candidateDetail.project}
@@ -479,7 +520,7 @@ export default function AdminMenteeDetailPage() {
                       className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     />
                   </div>
-                  <Button size="sm" loading={histBusy} onClick={() => addHistory(rel.id)}>
+                  <Button size="sm" loading={histBusy} onClick={() => requestHistoryAdd(rel.id)}>
                     <Plus className="h-4 w-4 mr-1" />
                     {t.candidateDetail.addEntry}
                   </Button>
@@ -526,6 +567,14 @@ export default function AdminMenteeDetailPage() {
         <UserActivityPanel userId={id} />
         {user && <CandidateEraseDangerZone userId={id} fullName={user.fullName} onAnonymized={load} />}
       </div>
+
+      <DropoffReasonDialog
+        open={!!pendingMove}
+        stageLabel={pendingMove ? label(pendingMove.toStatus) : ''}
+        loading={saving || histBusy}
+        onConfirm={confirmPendingMove}
+        onCancel={() => setPendingMove(null)}
+      />
     </div>
   );
 }

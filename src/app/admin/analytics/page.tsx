@@ -12,6 +12,7 @@ import { CohortComparison } from '@/components/admin/CohortComparison';
 import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { useT } from '@/i18n/client';
+import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -49,11 +50,17 @@ interface AgingItem {
   daysInStage: number;
   overdue: boolean;
 }
+interface DropReason {
+  pipelineStatus: string;
+  reasonCode: string;
+  count: number;
+}
 interface Aging {
   stageAging: { pipelineStatus: string; count: number; avgDays: number; medianDays: number }[];
   oldestStuck: AgingItem[];
   overdue: AgingItem[];
   overdueCount: number;
+  dropReasons: DropReason[];
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -99,11 +106,20 @@ export default function AdminAnalyticsPage() {
 
   const maxFunnel = data ? Math.max(1, ...stages.map((s) => data.funnel[s.key] || 0)) : 1;
 
+  // Drop-off reason label (#810), falling back to the raw code for anything
+  // outside the current whitelist (defensive — should not normally happen).
+  const reasonLabel = (code: string) => (t.dropoff.reasons as Record<string, string>)[code] ?? code;
+  const dropReasonRows = (aging?.dropReasons ?? []).map((d) => [label(d.pipelineStatus), reasonLabel(d.reasonCode), d.count]);
+
   const exportExcel = async () => {
     if (!data) return;
-    const { exportXlsx } = await import('@/lib/excel');
-    const rows = stages.map((s) => [label(s.key), data.funnel[s.key] || 0]);
-    await exportXlsx(`analytics-${new Date().toISOString().slice(0, 10)}`, ['Stage', 'Count'], rows, 'Funnel');
+    const { exportXlsxSheets } = await import('@/lib/excel');
+    await exportXlsxSheets(`analytics-${new Date().toISOString().slice(0, 10)}`, [
+      { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), data.funnel[s.key] || 0]) },
+      ...(dropReasonRows.length > 0
+        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
+        : []),
+    ]);
   };
 
   // Premium full-report Excel (#540): one workbook covering funnel, trends,
@@ -129,6 +145,9 @@ export default function AdminAnalyticsPage() {
       { name: 'Mentors', columns: ['Mentor', a.active, a.hired], rows: data.mentorWorkload.map((m) => [m.fullName, m.active, m.hired]) },
       { name: 'Cohorts', columns: [a.cohortName, a.cohortTotal, a.cohortInProgress, a.cohortHired, a.cohortConversion, a.cohortAvgDays, a.cohortInteractions], rows: cohorts.map((r) => [r.term ? `${r.name} (${r.term})` : r.name, r.total, r.inProgress, r.hired, `${r.conversionToHired}%`, r.avgDaysToHired ?? '—', r.interactionsPerRelation]) },
       { name: 'Sources', columns: [a.sourceName, a.cohortTotal, a.sourceInPipeline, a.cohortHired, a.cohortConversion], rows: sources.map((r) => [r.name, r.mentees, r.inPipeline, r.hired, `${r.conversionToHired}%`]) },
+      ...(dropReasonRows.length > 0
+        ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
+        : []),
     ]);
   };
 
@@ -326,6 +345,45 @@ export default function AdminAnalyticsPage() {
           </Card>
         </div>
       )}
+
+      {/* Drop-off reasons (#810): stage × reason breakdown for every move onto a
+          negative/off-path stage. Pre-existing StatusChange rows with no
+          reasonCode are grouped under "Unspecified" rather than dropped. */}
+      {aging && (
+        <Card className="mt-6" data-testid="drop-reasons-card">
+          <CardHeader><CardTitle>{t.analytics.aging.dropReasonsTitle}</CardTitle></CardHeader>
+          {aging.dropReasons.length === 0 ? (
+            <p className="text-sm text-gray-400">{t.analytics.aging.dropReasonsEmpty}</p>
+          ) : (
+            <div className="space-y-4">
+              {Array.from(new Set(aging.dropReasons.map((d) => d.pipelineStatus))).map((stageKey) => {
+                const reasons = aging!.dropReasons
+                  .filter((d) => d.pipelineStatus === stageKey)
+                  .sort((a, b) => b.count - a.count);
+                const total = reasons.reduce((n, r) => n + r.count, 0);
+                return (
+                  <div key={stageKey}>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1.5">
+                      {label(stageKey)} <span className="text-gray-400 font-normal">({total})</span>
+                    </p>
+                    <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                      {reasons.map((r) => (
+                        <div key={r.reasonCode} className="flex items-center justify-between py-1.5 text-sm">
+                          <span className={r.reasonCode === UNSPECIFIED_REASON ? 'text-gray-400 italic' : 'text-gray-600 dark:text-gray-300'}>
+                            {reasonLabel(r.reasonCode)}
+                          </span>
+                          <span className="text-gray-500 flex-shrink-0">{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
       <CohortComparison />
 
       <ProgramBenchmark />

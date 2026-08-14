@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.65.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'Moving a mentee to a stage like "Internship dropped" now asks why — pick from a short list of reasons (or add a note for "Other"), so the team can see patterns in why people drop off.',
+        'Admin Analytics has a new "Drop-off reasons" breakdown by stage, and the Excel export now includes it too.',
+      ],
+      tr: [
+        'Bir mentee’yi “Staj bırakıldı” gibi bir aşamaya taşırken artık neden sorulur — kısa bir listeden seçim yapabilir (ya da “Diğer” için not ekleyebilirsiniz), böylece ekip kayıpların nedenlerindeki örüntüleri görebilir.',
+        'Admin Analitik sayfasına aşamaya göre yeni bir “Kayıp sebepleri” dökümü eklendi; Excel dışa aktarımı da bunu artık içeriyor.',
+      ],
+      de: [
+        'Wenn ein Mentee in eine Phase wie „Praktikum abgebrochen“ verschoben wird, wird jetzt nach dem Grund gefragt — aus einer kurzen Liste auswählen (oder bei „Sonstiges“ eine Notiz hinzufügen), damit das Team Muster bei Abbrüchen erkennen kann.',
+        'Die Admin-Analyse zeigt jetzt eine neue Aufschlüsselung „Abbruchgründe“ nach Phase, und der Excel-Export enthält sie ebenfalls.',
+      ],
+    },
+  },
+  {
     version: '0.64.0-beta',
     date: '2026-08-10',
     highlights: {
