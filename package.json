@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.68.0-beta",
+  "version": "0.69.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -24,6 +24,7 @@
     "seed:templates": "node prisma/seed-templates.mjs",
     "seed:demo": "node prisma/seed-demo.mjs",
     "db:dev:up": "docker compose -f docker-compose.dev.yml up -d",
+    "backfill:requisitions": "node scripts/backfill-requisitions.mjs",
     "db:dev:down": "docker compose -f docker-compose.dev.yml down"
   },
   "dependencies": {
