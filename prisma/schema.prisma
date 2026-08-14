@@ -90,16 +90,17 @@ model Organization {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  users              User[]
-  sources            Source[]
-  cohorts            Cohort[]
-  companies          Company[]
-  projects           Project[]
-  relations          MentorshipRelation[]
-  pipelineStages     PipelineStage[]
-  mentorApplications MentorApplication[]
-  companyInquiries   CompanyInquiry[]
+  users                User[]
+  sources              Source[]
+  cohorts              Cohort[]
+  companies            Company[]
+  projects             Project[]
+  relations            MentorshipRelation[]
+  pipelineStages       PipelineStage[]
+  mentorApplications   MentorApplication[]
+  companyInquiries     CompanyInquiry[]
   documentRequirements DocumentRequirement[]
+  offers               Offer[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -233,46 +234,48 @@ model User {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
-  mentorRelations           MentorshipRelation[]      @relation("MentorRelations")
-  menteeRelations           MentorshipRelation[]      @relation("MenteeRelations")
-  statusChanges             StatusChange[]            @relation("StatusChangedBy")
-  passwordResetTokens       PasswordResetToken[]
-  emailVerificationTokens   EmailVerificationToken[]
-  cvFile                    CvFile?
-  avatarFile                AvatarFile?
-  notifications             Notification[]
-  conversationParticipants  ConversationParticipant[]
-  ownedProjects             Project[]                 @relation("ProjectOwner")
-  projectMemberships        ProjectMember[]           @relation("ProjectMemberships")
-  availabilitySlots         AvailabilitySlot[]
-  company                   Company?                  @relation("CompanyUsers", fields: [companyId], references: [id])
-  source                    Source?                   @relation(fields: [sourceId], references: [id])
-  documents                 Document[]                @relation("DocumentOwner")
-  personalNotes             PersonalNote[]
-  consents                  UserConsent[]
-  companyInterests          CompanyInterest[]         @relation("CompanyInterestMentee")
-  companyNeedAlerts         CompanyNeedAlert[]        @relation("CompanyNeedAlertMentee")
-  mentorshipRequests        MentorshipRequest[]       @relation("MentorshipRequests")
-  decidedRequests           MentorshipRequest[]       @relation("DecidedMentorshipRequests")
-  decidedMentorApplications MentorApplication[]       @relation("DecidedMentorApplications")
-  handledCompanyInquiries   CompanyInquiry[]          @relation("HandledCompanyInquiries")
-  supportTickets            SupportTicket[]           @relation("SupportRequester")
-  assignedSupportTickets    SupportTicket[]           @relation("SupportAssignee")
-  supportMessages           SupportMessage[]          @relation("SupportMessageSender")
-  authoredRelationNotes     RelationNote[]            @relation("RelationNoteAuthor")
-  pageViews                 PageView[]
-  referredBy                User?                     @relation("UserReferrals", fields: [referredById], references: [id])
-  referredUsers             User[]                    @relation("UserReferrals")
-  sentInvitations           InvitationToken[]         @relation("InvitationInviter")
-  assignedProjectTasks      ProjectTask[]             @relation("ProjectTaskAssignee")
-  authoredProjectTasks      ProjectTask[]             @relation("ProjectTaskAuthor")
-  projectJoinRequests       ProjectJoinRequest[]      @relation("JoinRequester")
-  decidedJoinRequests       ProjectJoinRequest[]      @relation("JoinRequestDecider")
-  taskTemplates             ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
-  mentorOnboardings         MenteeOnboarding[]        @relation("OnboardingMentor")
-  menteeOnboarding          MenteeOnboarding[]        @relation("OnboardingMentee")
+  mentorRelations                   MentorshipRelation[]          @relation("MentorRelations")
+  menteeRelations                   MentorshipRelation[]          @relation("MenteeRelations")
+  statusChanges                     StatusChange[]                @relation("StatusChangedBy")
+  passwordResetTokens               PasswordResetToken[]
+  emailVerificationTokens           EmailVerificationToken[]
+  cvFile                            CvFile?
+  avatarFile                        AvatarFile?
+  notifications                     Notification[]
+  conversationParticipants          ConversationParticipant[]
+  ownedProjects                     Project[]                     @relation("ProjectOwner")
+  projectMemberships                ProjectMember[]               @relation("ProjectMemberships")
+  availabilitySlots                 AvailabilitySlot[]
+  company                           Company?                      @relation("CompanyUsers", fields: [companyId], references: [id])
+  source                            Source?                       @relation(fields: [sourceId], references: [id])
+  documents                         Document[]                    @relation("DocumentOwner")
+  personalNotes                     PersonalNote[]
+  consents                          UserConsent[]
+  companyInterests                  CompanyInterest[]             @relation("CompanyInterestMentee")
+  companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
+  mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
+  decidedRequests                   MentorshipRequest[]           @relation("DecidedMentorshipRequests")
+  decidedMentorApplications         MentorApplication[]           @relation("DecidedMentorApplications")
+  handledCompanyInquiries           CompanyInquiry[]              @relation("HandledCompanyInquiries")
+  supportTickets                    SupportTicket[]               @relation("SupportRequester")
+  assignedSupportTickets            SupportTicket[]               @relation("SupportAssignee")
+  supportMessages                   SupportMessage[]              @relation("SupportMessageSender")
+  authoredRelationNotes             RelationNote[]                @relation("RelationNoteAuthor")
+  pageViews                         PageView[]
+  referredBy                        User?                         @relation("UserReferrals", fields: [referredById], references: [id])
+  referredUsers                     User[]                        @relation("UserReferrals")
+  sentInvitations                   InvitationToken[]             @relation("InvitationInviter")
+  assignedProjectTasks              ProjectTask[]                 @relation("ProjectTaskAssignee")
+  authoredProjectTasks              ProjectTask[]                 @relation("ProjectTaskAuthor")
+  projectJoinRequests               ProjectJoinRequest[]          @relation("JoinRequester")
+  decidedJoinRequests               ProjectJoinRequest[]          @relation("JoinRequestDecider")
+  taskTemplates                     ProjectTaskTemplate[]         @relation("TaskTemplateAuthor")
+  mentorOnboardings                 MenteeOnboarding[]            @relation("OnboardingMentor")
+  menteeOnboarding                  MenteeOnboarding[]            @relation("OnboardingMentee")
   missingDocumentReminderSubjects   DocumentRequirementReminder[] @relation("MissingDocumentReminderSubject")
   missingDocumentReminderRecipients DocumentRequirementReminder[] @relation("MissingDocumentReminderRecipient")
+  createdOffers                     Offer[]                       @relation("OfferCreatedBy")
+  decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
 
   @@index([role])
   @@index([referredById])
@@ -653,21 +656,21 @@ model DocumentRequirementReminder {
 // admin-managed template (ownerId null + isTemplate) available to everyone.
 // Re-uploading the same (owner, type) keeps prior rows and bumps `version`.
 model Document {
-  id          String       @id @default(cuid())
-  ownerId     String?
-  uploaderId  String
-  type        DocumentType @default(OTHER)
-  title       String
-  filename    String
-  contentType String
-  size        Int
-  data        Bytes
-  version     Int          @default(1)
-  isTemplate  Boolean      @default(false)
+  id            String       @id @default(cuid())
+  ownerId       String?
+  uploaderId    String
+  type          DocumentType @default(OTHER)
+  title         String
+  filename      String
+  contentType   String
+  size          Int
+  data          Bytes
+  version       Int          @default(1)
+  isTemplate    Boolean      @default(false)
   requirementId String?
-  createdAt   DateTime     @default(now())
+  createdAt     DateTime     @default(now())
 
-  owner User? @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User?                @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   requirement DocumentRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
@@ -699,6 +702,7 @@ model Company {
   interests    CompanyInterest[]
   entitlements CompanyEntitlement[]
   needAlerts   CompanyNeedAlert[]
+  offers       Offer[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -885,6 +889,46 @@ model MentorApplication {
   @@index([status])
   @@index([email])
   @@index([orgId])
+}
+
+// An offer extended to a mentee within a mentorship (#809). `status` is a free
+// String (not an enum) — same reasoning as MentorshipRelation.pipelineStatus —
+// validated + transitioned through the central state machine in
+// src/lib/offers.ts (DRAFT -> SENT -> ACCEPTED|DECLINED|EXPIRED|WITHDRAWN).
+// `compensationNote` is sensitive: only ADMIN and the offer's own MENTEE may
+// ever have it selected server-side (enforced in the API layer, not just hidden
+// in the UI).
+model Offer {
+  id                String             @id @default(cuid())
+  orgId             String?
+  org               Organization?      @relation(fields: [orgId], references: [id])
+  relationId        String
+  relation          MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // Optional link to the company's staffing need this offer fills. Plain id,
+  // not a FK — CompanyNeed rows aren't guaranteed to persist for the life of
+  // the offer, and the offer must remain readable even if the need is edited.
+  requisitionId     String?
+  companyId         String?
+  company           Company?           @relation(fields: [companyId], references: [id])
+  status            String             @default("DRAFT")
+  position          String
+  startDate         DateTime?
+  compensationNote  String?            @db.Text
+  expiresAt         DateTime?
+  sentAt            DateTime?
+  decidedAt         DateTime?
+  declineReasonCode String?
+  // Optional free-text elaboration on the decline reason (never required).
+  declineNote       String?            @db.Text
+  createdById       String
+  createdBy         User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
+  decidedById       String?
+  decidedBy         User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([orgId, status])
+  @@index([relationId])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -1284,6 +1328,7 @@ model MentorshipRelation {
   meetingRequests MeetingRequest[]
   questions       MentorQuestion[]
   relationNotes   RelationNote[]
+  offers          Offer[]
 
   @@index([status])
   @@index([pipelineStatus])
@@ -1538,6 +1583,14 @@ model StatusChange {
   toStatus    String
   changedById String
   createdAt   DateTime @default(now())
+  // Drop-off reason (#810): required by the API when `toStatus` resolves to a
+  // negative/off-path stage in the org's pipeline (PipelineStage.isOffPath —
+  // see src/lib/dropoffReasons.ts for the whitelist and src/lib/stageChange.ts
+  // for the validation). Null for every pre-existing row and for moves into a
+  // non-negative stage — never backfilled.
+  reasonCode  String?
+  // Free-text elaboration; required only when reasonCode is OTHER.
+  reasonNote  String?  @db.Text
 
   relation  MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   changedBy User               @relation("StatusChangedBy", fields: [changedById], references: [id])

@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.64.0-beta] - 2026-08-10
+## [0.66.0-beta] - 2026-08-14
 
 ### Added
 - **Required-document checklist and missing-document reminders** (Story #811). Organizations
@@ -18,6 +18,102 @@ version is shown in the sidebar footer of every page (links to the
   controls, and mentees see only their own outstanding items on the portal. Weekly reminders
   use recipient language and preference settings, with a database-backed per-week dedupe key;
   organizations without requirements retain the previous document behavior.
+## [0.65.0-beta] - 2026-08-14
+
+### Added
+- **Drop-off reason tracking** (#810) — moving a mentee into a negative/off-path pipeline stage
+  (e.g. "Internship dropped") now requires picking a reason from a shared whitelist
+  (`src/lib/dropoffReasons.ts`: candidate withdrew, no response, accepted elsewhere, schedule
+  conflict, location, skill mismatch, company cancelled, performance, other — "other" additionally
+  requires a free-text note). New `StatusChange.reasonCode` / `reasonNote` columns, left `null` for
+  every pre-existing row and every move into a non-negative stage.
+  - Centralized in `validateDropoffReason()` (`src/lib/stageChange.ts`) and enforced server-side on
+    every write path that can change `pipelineStatus`: `/api/mentorship/[id]` (also what the admin
+    and mentor board drag-and-drop and the per-card stage select call), the manual history
+    correction endpoint `/api/status-changes`, and `/api/admin/candidates/bulk`'s `advanceStage`
+    action (defense in depth — that action only ever targets the next on-path stage, so it never
+    actually triggers the check, but it's still wired the same way as the others).
+  - "Negative stage" is resolved from the org's own pipeline config (`PipelineStage.isOffPath` via
+    `resolvePipelineStages`), not a hardcoded key list — a tenant's custom pipeline (#747) is
+    honored automatically.
+  - New shared `DropoffReasonDialog` gates the admin board, mentor board, and candidate-detail
+    stage-change/history UI — a reason-less request into a negative stage can't be sent from any of
+    them.
+  - Admin analytics gained a stage × reason drop-off breakdown (`GET /api/admin/analytics/aging`
+    → `dropReasons`), with legacy rows that predate this feature (`reasonCode: null`) grouped under
+    "Unspecified" rather than dropped, plus a matching sheet in the analytics Excel export.
+  - `#740`'s bulk-advance regression (stepping via `nextOnPathStatus`, never a raw `indexOf+1`) is
+    unaffected and re-covered in `e2e/dropoff-reasons.spec.ts`.
+  - New EN/TR/DE `dropoff.*` and `analytics.aging.dropReasons*` i18n strings.
+## [0.64.0-beta] - 2026-08-10
+
+### Added
+- **Offer management** (#809) — a full workflow for extending, sending and deciding job offers
+  within a mentorship. New `Offer` model (`orgId`, `relationId`, `requisitionId?`, `companyId?`,
+  `status` — free `String`, not an enum, per the existing pipeline-status convention —
+  `position`, `startDate?`, `compensationNote?`, `expiresAt?`, `sentAt?`, `decidedAt?`,
+  `declineReasonCode?`, `declineNote?`, `createdById`, `decidedById?`), indexed on
+  `[orgId, status]` and `[relationId]`. A single server-side state machine
+  (`src/lib/offers.ts`) is the only place that decides legal transitions
+  (`DRAFT -> SENT -> ACCEPTED|DECLINED|EXPIRED|WITHDRAWN`) and who may run them — ADMIN does
+  everything; a MENTEE may only accept/decline their own `SENT` offer; COMPANY is read-only on
+  its own `companyId`'s offers. `GET/POST /api/offers` and `GET/PATCH /api/offers/[id]` validate
+  `status`/`declineReasonCode` as `z.string()` against that central whitelist (never
+  `z.enum`), and never `select` `compensationNote` for any caller except ADMIN or the offer's own
+  MENTEE — verified by e2e response-body assertions, not just UI hiding.
+  Admin UX: a 3-step "Offer bilgileri → Tarih & ücret → Önizleme ve gönder" wizard on the
+  candidate's Mentorship card (`OfferManagementPanel`/`OfferWizardModal`), with send/withdraw
+  actions gated to the current status and a history timeline read from `AuditLog`
+  (`offer.create/send/accept/decline/withdraw/expire`).
+  Mentee UX: an `/portal` offer card (`OfferCard`) showing position, company, start date, a
+  "N days left / due tomorrow / due today" decision countdown, and — only for this offer's own
+  mentee — the compensation note; accept goes through a confirmation dialog, decline requires a
+  reason (`COMPENSATION | POSITION | LOCATION | OTHER_OFFER | START_DATE | OTHER`, free text
+  optional); after a decision the card shows a persistent accepted/declined state (not just a
+  toast) with a "what's next" note.
+  SENT and ACCEPTED/DECLINED transitions email + in-app notify through the existing
+  `emailService`/`notify` infrastructure, EN/TR/DE. A new cron step (`expireOffers`,
+  `src/lib/offerNotify.ts`) flips overdue `SENT` offers to `EXPIRED`, idempotently — the
+  transition is claimed with a guarded `updateMany` before any audit/notify/email, so two
+  overlapping cron ticks can never double-fire either. An ACCEPTED offer never auto-changes the
+  mentee's pipeline stage; the admin panel only *suggests* moving to the org's `HIRED_660` stage
+  when that key actually exists in the org's resolved pipeline (`resolvePipelineStages`) — a
+  tenant on a fully custom pipeline (#747) without that stage never sees the suggestion, and the
+  accept/decline flow itself has no dependency on pipeline stages at all.
+  Tests: `e2e/offers.spec.ts` (wizard create+send, mentee accept/decline with a persistent state,
+  invalid-transition 400, cross-mentee IDOR, compensationNote leak check, company-with-no-companyId
+  403, withdraw, and the two-run cron dedupe) and `e2e/offers-custom-pipeline.spec.ts`
+  (custom-pipeline org never gets the HIRED_660 suggestion; accept still works end-to-end).
+
+## [0.63.2-beta] - 2026-08-11
+
+### Changed
+- Offline fallback (`/offline`) now shows a direct link to the live site (`https://crm.ersah.in`), so users can jump back to the main CRM URL once they reconnect.
+
+## [0.63.1-beta] - 2026-08-09
+
+### Security
+- **Email action links expire after 90 days** (#1211). They previously never aged out, so a
+  forwarded notification or a leaked mailbox archive let someone mark-read/react as that user
+  indefinitely. An expired link answers `410 Gone` and the page says so, rather than showing
+  the misleading "invalid link". Both actions remain low-severity and reversible — hence 90
+  days rather than hours.
+- **`EmailLog` is now covered by erasure and retention** (#1211). The log is keyed by
+  recipient address, not by a relation, so nothing cascaded to it: an erased account's address
+  survived in it. `hardDeleteUser` and `anonymizeUser` now clear it (reading the address
+  *before* the row is deleted or rewritten), and a daily job prunes rows older than
+  `EMAIL_LOG_RETENTION_DAYS` (90).
+- **Regression test for the password column** (#1211). `accountState` has to *read*
+  `User.password` to tell a mentor-created record apart from a deactivated account, which
+  puts the hash one spread operator away from a response. A spec now asserts that no
+  `/api/users` response contains a bcrypt prefix — matching on `$2a$`/`$2b$` rather than a key
+  name, so a rename cannot silence it.
+### Changed
+- **The unread digest no longer carries per-line reaction links** (#1211). A five-item digest
+  meant 25 extra links, and a high link count is one of the strongest spam signals there is —
+  the opposite of what this change set exists to achieve. The five reactions stay on the
+  single-message notification, where "the message this email is about" is unambiguous; the
+  digest keeps its per-conversation "mark as read" link.
 
 ## [0.63.0-beta] - 2026-08-09
 
@@ -149,7 +245,7 @@ version is shown in the sidebar footer of every page (links to the
 ## [0.61.1-beta] - 2026-08-09
 
 ### Fixed
-- **The public chrome no longer tells a signed-in user they are signed out** (#1205). A
+- **The public chrome no longer tells a signed-in user they are signed out** (#1211). A
   regression from #1197: `/release-notes`, `/privacy`, `/terms`, `/code-of-conduct`,
   `/features`, `/projects` and `/for-companies` gained the shared header, but it rendered
   "Sign In / Register" unconditionally. Following the sidebar's version link mid-session

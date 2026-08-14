@@ -12,6 +12,7 @@ import {
   sendWeeklyAnalyticsReport,
   sendWeeklyMissingDocumentReminders,
 } from '@/services/emailService';
+import { expireOffers } from '@/lib/offerNotify';
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });
     }
 
-    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments] = await Promise.all([
+    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
       checkCompanyNeedMatches(),
       sendWeeklyAnalyticsReport(),
       sendWeeklyMissingDocumentReminders(),
+      expireOffers(),
     ]);
 
     return NextResponse.json({
@@ -49,6 +51,7 @@ export async function GET(request: Request) {
       needMatches,
       analyticsReport,
       missingDocuments,
+      offers,
     });
   } catch (error) {
     console.error('Cron error:', error);

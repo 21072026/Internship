@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
-import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
+import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
@@ -807,6 +807,89 @@ export async function sendMentorApplicationRejectedEmail({
         ${brandHeader(brand, M.rejected.heading)}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
         <p>${esc(M.rejected.body)}</p>
+      </div>
+    `,
+  });
+}
+
+// --- Offers (#809) -----------------------------------------------------------
+
+function formatOfferDate(d: Date | null | undefined, locale: Locale): string | null {
+  if (!d) return null;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(d);
+}
+
+export async function sendOfferSentEmail({
+  to,
+  fullName,
+  position,
+  companyName,
+  startDate,
+  expiresAt,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  position: string;
+  companyName?: string | null;
+  startDate?: Date | null;
+  expiresAt?: Date | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const loc = resolveLocale(locale);
+  const M = getDictionary(loc).offerEmail;
+  const start = formatOfferDate(startDate, loc);
+  const expires = formatOfferDate(expiresAt, loc);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.sent.subject.replace('{position}', position),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.sent.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.sent.body.replace('{position}', position).replace('{company}', companyName ? ` (${companyName})` : ''))}</p>
+        ${start ? `<p><strong>${esc(M.startDate)}:</strong> ${esc(start)}</p>` : ''}
+        ${expires ? `<p><strong>${esc(M.decideBy)}:</strong> ${esc(expires)}</p>` : ''}
+        ${ctaBlock(brand, `${appUrl()}/portal`, M.sent.cta)}
+      </div>
+    `,
+  });
+}
+
+export async function sendOfferDecisionEmail({
+  to,
+  fullName,
+  menteeName,
+  position,
+  outcome,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  menteeName: string;
+  position: string;
+  outcome: 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).offerEmail;
+  const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: copy.subject.replace('{mentee}', menteeName),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, copy.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(copy.body.replace('{mentee}', menteeName).replace('{position}', position))}</p>
+        ${ctaBlock(brand, `${appUrl()}/admin/candidates`, M.cta)}
       </div>
     `,
   });
@@ -1961,7 +2044,7 @@ export async function sendUnreadMessageDigests() {
   type Recipient = NonNullable<(typeof msgs)[number]['relation']>['mentor'];
   const byRecipient = new Map<
     string,
-    { recipient: Recipient; items: { messageId: string; relationId: string; from: string; preview: string }[] }
+    { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }
   >();
   const allIds: string[] = [];
   for (const m of msgs) {
@@ -1973,11 +2056,7 @@ export async function sendUnreadMessageDigests() {
     const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
     if (!recipient?.email) continue;
     const entry = byRecipient.get(recipient.id) ?? { recipient, items: [] };
-    // The message id rides along so the digest can offer the same one-click
-    // reactions as the live notification (#1204), bound to the exact message
-    // rather than to "whatever is newest when the link is clicked".
     entry.items.push({
-      messageId: m.id,
       relationId: rel.id,
       from: sender?.fullName ?? 'Someone',
       preview: m.body.slice(0, 120),
@@ -1991,10 +2070,12 @@ export async function sendUnreadMessageDigests() {
     const rows = items
       .map((it) => {
         const safe = it.preview.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
-        // Each line gets the same five reactions as the app, so a one-word
-        // acknowledgement ("got it") no longer costs a round trip through the
-        // browser — and reacting also clears the thread (#1204).
-        return `<li style="margin-bottom:12px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a>${reactionLinksHtml(it.messageId, recipient.id)}</li>`;
+        // Deliberately NO per-line reaction links here, unlike the live
+        // notification. A five-item digest would carry 25 extra links, and a
+        // high link count is one of the strongest spam signals there is —
+        // exactly what this whole change set exists to avoid. The digest is a
+        // "what did I miss" summary; reacting belongs on the message email.
+        return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a></li>`;
       })
       .join('');
     // One link that clears the whole summary. Every item here belongs to the
@@ -2035,6 +2116,19 @@ export async function sendUnreadMessageDigests() {
   return { sent, considered: allIds.length };
 }
 
+// How long a delivery-log row is kept (#1211). The log exists to answer "did
+// our mail go out?", and that question is asked within hours of a problem —
+// but every row holds a recipient address, so keeping them forever would build
+// a second, unmanaged store of personal data next to the one the retention
+// rules already govern.
+export const EMAIL_LOG_RETENTION_DAYS = 90;
+
+export async function pruneEmailLog(retentionDays: number = EMAIL_LOG_RETENTION_DAYS) {
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  const { count } = await prisma.emailLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  return { deleted: count, cutoff };
+}
+
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
 
 export function initCronJobs() {
@@ -2052,6 +2146,10 @@ export function initCronJobs() {
       console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
       const nm = await checkCompanyNeedMatches();
       console.log(`[Cron] Company need-match alerts: ${nm.alerts}`);
+      // Housekeeping, not mail: keeps the delivery log inside its retention
+      // window so recipient addresses do not accumulate indefinitely (#1211).
+      const pruned = await pruneEmailLog();
+      console.log(`[Cron] Email log pruned: ${pruned.deleted} row(s) older than ${EMAIL_LOG_RETENTION_DAYS} days`);
     } catch (error) {
       console.error('[Cron] Error running reminder check:', error);
     }

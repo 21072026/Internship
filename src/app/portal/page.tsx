@@ -10,6 +10,7 @@ import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
+import { OfferCard } from '@/components/OfferCard';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
 import { getServerDictionary } from "@/i18n/server";
@@ -152,6 +153,15 @@ export default async function PortalDashboard() {
       )}
 
       {!activeRelation && <MentorshipRequestPanel />}
+
+      {/* Offer card (#809) — kept above the fold like the journey tracker: an
+          offer needing a decision is the single most time-sensitive thing a
+          mentee can see here. */}
+      {activeRelation && (
+        <div className="mb-6">
+          <OfferCard />
+        </div>
+      )}
 
       {/* Journey / pipeline stage — kept above the fold so a mentee sees where
           they are as soon as the portal loads (#692), before the longer
