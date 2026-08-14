@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -13,6 +15,12 @@ const DAY = 24 * 60 * 60 * 1000;
 //   stage showing the same current-dwell number.
 // - oldestStuck / overdue: current dwell in the present stage for ACTIVE
 //   relations (how long they've been sitting where they are now).
+// - dropReasons (#810): stage × reason breakdown for every move that landed on
+//   a negative/off-path stage. "Negative" is resolved from the querying
+//   admin's own org pipeline (PipelineStage.isOffPath) — never a hardcoded key
+//   list — so a tenant's custom pipeline is honored exactly the same way the
+//   board/candidate-detail reason gate honors it. A pre-existing StatusChange
+//   with no reasonCode groups under UNSPECIFIED_REASON ("Unspecified" in the UI).
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
@@ -47,10 +55,31 @@ export async function GET(request: Request) {
       mentee: { select: { id: true, fullName: true } },
       statusChanges: {
         orderBy: { createdAt: 'asc' },
-        select: { fromStatus: true, toStatus: true, createdAt: true },
+        select: { fromStatus: true, toStatus: true, createdAt: true, reasonCode: true },
       },
     },
   });
+
+  const negativeKeys = new Set(
+    (await resolvePipelineStages((session.user as { orgId?: string | null }).orgId ?? null))
+      .filter((s) => s.isOffPath)
+      .map((s) => s.key)
+  );
+  const dropCounts = new Map<string, Map<string, number>>();
+  for (const r of relations) {
+    for (const c of r.statusChanges) {
+      if (!negativeKeys.has(c.toStatus)) continue;
+      const reasonCode = c.reasonCode ?? UNSPECIFIED_REASON;
+      if (!dropCounts.has(c.toStatus)) dropCounts.set(c.toStatus, new Map());
+      const byReason = dropCounts.get(c.toStatus)!;
+      byReason.set(reasonCode, (byReason.get(reasonCode) ?? 0) + 1);
+    }
+  }
+  const dropReasons = Array.from(dropCounts.entries())
+    .flatMap(([pipelineStatus, byReason]) =>
+      Array.from(byReason.entries()).map(([reasonCode, count]) => ({ pipelineStatus, reasonCode, count }))
+    )
+    .sort((a, b) => b.count - a.count);
 
   // Completed durations per stage, from consecutive transitions.
   const byStage = new Map<string, number[]>();
@@ -107,6 +136,6 @@ export async function GET(request: Request) {
   const oldestStuck = [...items].sort((a, b) => b.daysInStage - a.daysInStage).slice(0, 10);
   const overdue = items.filter((it) => it.overdue).sort((a, b) => b.daysInStage - a.daysInStage);
 
-  return NextResponse.json({ stageAging, oldestStuck, overdue, overdueCount: overdue.length });
+  return NextResponse.json({ stageAging, oldestStuck, overdue, overdueCount: overdue.length, dropReasons });
   });
 }

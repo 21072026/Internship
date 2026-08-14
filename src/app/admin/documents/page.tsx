@@ -3,6 +3,7 @@
 import { DocumentsManager } from '@/components/DocumentsManager';
 import { TemplatesLibrary } from '@/components/TemplatesLibrary';
 import { useT } from '@/i18n/client';
+import { DocumentRequirementsAdmin } from '@/components/DocumentRequirementsAdmin';
 
 export default function AdminDocumentsPage() {
   const t = useT();
@@ -18,6 +19,7 @@ export default function AdminDocumentsPage() {
         {/* Custom uploaded templates (admin-managed). */}
         <DocumentsManager templates canUpload canDelete />
       </div>
+      <DocumentRequirementsAdmin />
     </div>
   );
 }

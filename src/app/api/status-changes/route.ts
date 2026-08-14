@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
+import { validateDropoffReason } from '@/lib/stageChange';
 
 // Stage key is a free string now (#747) so tenant-defined stages are accepted.
 const stage = z.string().min(1).max(60);
@@ -12,6 +13,11 @@ const schema = z.object({
   fromStatus: stage,
   toStatus: stage,
   createdAt: z.string().datetime().optional(),
+  // Drop-off reason (#810) — z.string() + a central whitelist (src/lib/dropoffReasons.ts),
+  // never z.enum. Required by validateDropoffReason() when toStatus is a
+  // negative/off-path stage in the relation's org pipeline.
+  reasonCode: z.string().max(40).optional(),
+  reasonNote: z.string().max(2000).optional(),
 });
 
 // POST — admin manually adds a stage-history entry to correct the audit trail.
@@ -26,10 +32,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { relationId, fromStatus, toStatus, createdAt } = parsed.data;
+    const { relationId, fromStatus, toStatus, createdAt, reasonCode, reasonNote } = parsed.data;
     const relation = await prisma.mentorshipRelation.findUnique({ where: { id: relationId } });
     if (!relation) {
       return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
+    }
+
+    const reasonCheck = await validateDropoffReason({ orgId: relation.orgId, toStatus, reasonCode, reasonNote });
+    if (!reasonCheck.ok) {
+      return NextResponse.json({ error: reasonCheck.error }, { status: 400 });
     }
 
     const change = await prisma.statusChange.create({
@@ -38,6 +49,8 @@ export async function POST(request: Request) {
         fromStatus,
         toStatus,
         changedById: session.user.id,
+        reasonCode: reasonCode ?? null,
+        reasonNote: reasonNote?.trim() || null,
         ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
       },
     });
