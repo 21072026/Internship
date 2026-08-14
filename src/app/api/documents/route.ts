@@ -7,10 +7,12 @@ import { canAccessUserDocs, DOCUMENT_TYPES, ALLOWED_DOC_MIME, MAX_DOC_BYTES } fr
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { logActivity } from '@/lib/activity';
 import type { DocumentType } from '@prisma/client';
+import { applicableRequirementsForUser } from '@/lib/documentRequirements';
 
 const META_SELECT = {
   id: true, ownerId: true, uploaderId: true, type: true, title: true,
   filename: true, contentType: true, size: true, version: true, isTemplate: true, createdAt: true,
+  requirementId: true,
 } as const;
 
 const uploadSchema = z.object({
@@ -18,6 +20,7 @@ const uploadSchema = z.object({
   title: z.string().trim().max(200).optional(),
   targetUserId: z.string().min(1).optional(),
   isTemplate: z.boolean().optional(),
+  requirementId: z.string().min(1).optional(),
 });
 
 // GET ?userId= — a user's documents (access-controlled).
@@ -40,12 +43,15 @@ export async function GET(request: Request) {
   if (!(await canAccessUserDocs(session.user, userId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  const documents = await prisma.document.findMany({
-    where: { ownerId: userId },
-    select: META_SELECT,
-    orderBy: [{ type: 'asc' }, { version: 'desc' }],
-  });
-  return NextResponse.json({ documents });
+  const [documents, requirements] = await Promise.all([
+    prisma.document.findMany({
+      where: { ownerId: userId },
+      select: META_SELECT,
+      orderBy: [{ type: 'asc' }, { version: 'desc' }],
+    }),
+    applicableRequirementsForUser(userId, 'en'),
+  ]);
+  return NextResponse.json({ documents, requirements });
 }
 
 // POST (multipart) — upload a document. Fields: file, title?, type?, targetUserId?, isTemplate?
@@ -66,11 +72,12 @@ export async function POST(request: Request) {
     title: ((form.get('title') as string) || '').trim() || undefined,
     targetUserId: (form.get('targetUserId') as string) || undefined,
     isTemplate: form.get('isTemplate') === 'true',
+    requirementId: (form.get('requirementId') as string) || undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
-  const { type, title, isTemplate } = parsed.data;
+  const { type, title, isTemplate, requirementId } = parsed.data;
 
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
   if (!ALLOWED_DOC_MIME.has(file.type)) return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
@@ -86,10 +93,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  if (isTemplate && requirementId) return NextResponse.json({ error: 'Templates cannot satisfy a document requirement' }, { status: 400 });
+  if (ownerId && requirementId) {
+    const applicable = await applicableRequirementsForUser(ownerId, 'en');
+    if (!applicable.some((requirement) => requirement.id === requirementId)) {
+      return NextResponse.json({ error: 'Document requirement is not applicable to this user' }, { status: 400 });
+    }
+  }
+
   // Versioning: next version for this (owner, type).
   const prior = ownerId
     ? await prisma.document.findFirst({
-        where: { ownerId, type: type as DocumentType },
+        where: requirementId ? { ownerId, requirementId } : { ownerId, type: type as DocumentType },
         orderBy: { version: 'desc' },
         select: { version: true },
       })
@@ -111,6 +126,7 @@ export async function POST(request: Request) {
       size: file.size,
       version: (prior?.version ?? 0) + 1,
       isTemplate,
+      requirementId: requirementId ?? null,
       data,
     },
     select: META_SELECT,

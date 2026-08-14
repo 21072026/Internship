@@ -8,10 +8,126 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.64.0-beta] - 2026-08-12
+## [0.69.0-beta] - 2026-08-14
 
 ### Added
 - **Structured requisition management** (#806). Admins and COMPANY users can create, filter, edit, assign and close tenant-scoped hiring requisitions while tracking openings, filled positions, skills and lifecycle status. A manual idempotent backfill can copy legacy `CompanyNeed` rows without changing the existing need-alert matcher or dedupe flow.
+
+## [0.68.0-beta] - 2026-08-14
+
+### Added
+- **Internship completion certificate & reference letter** (#813). Admin/mentor can generate
+  an org-branded PDF for a completed internship, from a completed-relation action on the
+  candidate/mentee detail page (both `/admin/candidates/[id]` and `/mentor/mentees/[id]`).
+  - `CertificateGenerator` previews an auto-filled, editable EN/TR/DE draft (certificate or a
+    freely-rewritable reference letter) — start/end date, duration, and which of the mentee's
+    skills to list — before generating. Reuses `renderTemplate.templateToHtml` for the preview
+    and `orgBranding`/`branding` for the org name/logo/accent color, matching the existing
+    document-template pattern (`templates.ts` / `TemplatesLibrary`) instead of introducing a
+    new branding system.
+  - Eligibility (`certificateEligibility.ts`) does not hardcode `INTERNSHIP_COMPLETED_490`: it
+    accepts `MentorshipRelation.status === 'COMPLETED'` (works under any custom pipeline, #747)
+    or, when the canonical stage key is still present in the org's resolved stages, having
+    reached-or-passed it.
+  - The generated PDF is rendered server-side with `pdf-lib` (new dependency) — pure JS, no
+    native binaries, no headless-browser process — and stored as a normal `Document` row
+    (`type: CERTIFICATE`, `ownerId` the mentee), so the existing `documentAccess` rules (owner,
+    their mentor, or an admin — 403 otherwise) gate it with no new access-control code. The
+    mentee can download it from `/portal` (reuses `DocumentsManager`, read-only there).
+  - Deliberately did not add: public/unauthenticated verification (out of scope for #813), a
+    new PDF template engine (the renderer understands the same constrained markdown subset as
+    `renderTemplate.ts`), or a schema change (no new columns/models — the existing `Document`/
+    `DocumentType.CERTIFICATE` were already sufficient).
+
+## [0.67.0-beta] - 2026-08-14
+
+### Added
+- **Weekly internship reports, mentor approval and missing-report attention** (Story #812).
+  Mentees can save or submit one report per UTC week from the portal, review their history
+  and print an internship diary. Assigned mentors review the same reports from a dedicated
+  mentee-detail tab, approving them or requesting changes with feedback. Strict server-side
+  role and relationship checks protect every read and transition.
+- Mentors now see an attention signal after two consecutive completed internship weeks are
+  missing. A Friday cron sends a localized in-app reminder and, when the mentee's weekly-report
+  email preference permits it, an email in their stored EN/TR/DE language. A unique weekly
+  delivery claim makes overlapping or repeated runs idempotent.
+
+## [0.66.0-beta] - 2026-08-14
+
+### Added
+- **Required-document checklist and missing-document reminders** (Story #811). Organizations
+  can configure localized, role- and pipeline-stage-specific document requirements without
+  extending the fixed document-type enum. Admins can review missing mandatory documents,
+  uploads can be linked to a requirement while preserving existing versioning and access
+  controls, and mentees see only their own outstanding items on the portal. Weekly reminders
+  use recipient language and preference settings, with a database-backed per-week dedupe key;
+  organizations without requirements retain the previous document behavior.
+## [0.65.0-beta] - 2026-08-14
+
+### Added
+- **Drop-off reason tracking** (#810) — moving a mentee into a negative/off-path pipeline stage
+  (e.g. "Internship dropped") now requires picking a reason from a shared whitelist
+  (`src/lib/dropoffReasons.ts`: candidate withdrew, no response, accepted elsewhere, schedule
+  conflict, location, skill mismatch, company cancelled, performance, other — "other" additionally
+  requires a free-text note). New `StatusChange.reasonCode` / `reasonNote` columns, left `null` for
+  every pre-existing row and every move into a non-negative stage.
+  - Centralized in `validateDropoffReason()` (`src/lib/stageChange.ts`) and enforced server-side on
+    every write path that can change `pipelineStatus`: `/api/mentorship/[id]` (also what the admin
+    and mentor board drag-and-drop and the per-card stage select call), the manual history
+    correction endpoint `/api/status-changes`, and `/api/admin/candidates/bulk`'s `advanceStage`
+    action (defense in depth — that action only ever targets the next on-path stage, so it never
+    actually triggers the check, but it's still wired the same way as the others).
+  - "Negative stage" is resolved from the org's own pipeline config (`PipelineStage.isOffPath` via
+    `resolvePipelineStages`), not a hardcoded key list — a tenant's custom pipeline (#747) is
+    honored automatically.
+  - New shared `DropoffReasonDialog` gates the admin board, mentor board, and candidate-detail
+    stage-change/history UI — a reason-less request into a negative stage can't be sent from any of
+    them.
+  - Admin analytics gained a stage × reason drop-off breakdown (`GET /api/admin/analytics/aging`
+    → `dropReasons`), with legacy rows that predate this feature (`reasonCode: null`) grouped under
+    "Unspecified" rather than dropped, plus a matching sheet in the analytics Excel export.
+  - `#740`'s bulk-advance regression (stepping via `nextOnPathStatus`, never a raw `indexOf+1`) is
+    unaffected and re-covered in `e2e/dropoff-reasons.spec.ts`.
+  - New EN/TR/DE `dropoff.*` and `analytics.aging.dropReasons*` i18n strings.
+## [0.64.0-beta] - 2026-08-10
+
+### Added
+- **Offer management** (#809) — a full workflow for extending, sending and deciding job offers
+  within a mentorship. New `Offer` model (`orgId`, `relationId`, `requisitionId?`, `companyId?`,
+  `status` — free `String`, not an enum, per the existing pipeline-status convention —
+  `position`, `startDate?`, `compensationNote?`, `expiresAt?`, `sentAt?`, `decidedAt?`,
+  `declineReasonCode?`, `declineNote?`, `createdById`, `decidedById?`), indexed on
+  `[orgId, status]` and `[relationId]`. A single server-side state machine
+  (`src/lib/offers.ts`) is the only place that decides legal transitions
+  (`DRAFT -> SENT -> ACCEPTED|DECLINED|EXPIRED|WITHDRAWN`) and who may run them — ADMIN does
+  everything; a MENTEE may only accept/decline their own `SENT` offer; COMPANY is read-only on
+  its own `companyId`'s offers. `GET/POST /api/offers` and `GET/PATCH /api/offers/[id]` validate
+  `status`/`declineReasonCode` as `z.string()` against that central whitelist (never
+  `z.enum`), and never `select` `compensationNote` for any caller except ADMIN or the offer's own
+  MENTEE — verified by e2e response-body assertions, not just UI hiding.
+  Admin UX: a 3-step "Offer bilgileri → Tarih & ücret → Önizleme ve gönder" wizard on the
+  candidate's Mentorship card (`OfferManagementPanel`/`OfferWizardModal`), with send/withdraw
+  actions gated to the current status and a history timeline read from `AuditLog`
+  (`offer.create/send/accept/decline/withdraw/expire`).
+  Mentee UX: an `/portal` offer card (`OfferCard`) showing position, company, start date, a
+  "N days left / due tomorrow / due today" decision countdown, and — only for this offer's own
+  mentee — the compensation note; accept goes through a confirmation dialog, decline requires a
+  reason (`COMPENSATION | POSITION | LOCATION | OTHER_OFFER | START_DATE | OTHER`, free text
+  optional); after a decision the card shows a persistent accepted/declined state (not just a
+  toast) with a "what's next" note.
+  SENT and ACCEPTED/DECLINED transitions email + in-app notify through the existing
+  `emailService`/`notify` infrastructure, EN/TR/DE. A new cron step (`expireOffers`,
+  `src/lib/offerNotify.ts`) flips overdue `SENT` offers to `EXPIRED`, idempotently — the
+  transition is claimed with a guarded `updateMany` before any audit/notify/email, so two
+  overlapping cron ticks can never double-fire either. An ACCEPTED offer never auto-changes the
+  mentee's pipeline stage; the admin panel only *suggests* moving to the org's `HIRED_660` stage
+  when that key actually exists in the org's resolved pipeline (`resolvePipelineStages`) — a
+  tenant on a fully custom pipeline (#747) without that stage never sees the suggestion, and the
+  accept/decline flow itself has no dependency on pipeline stages at all.
+  Tests: `e2e/offers.spec.ts` (wizard create+send, mentee accept/decline with a persistent state,
+  invalid-transition 400, cross-mentee IDOR, compensationNote leak check, company-with-no-companyId
+  403, withdraw, and the two-run cron dedupe) and `e2e/offers-custom-pipeline.spec.ts`
+  (custom-pipeline org never gets the HIRED_660 suggestion; accept still works end-to-end).
 
 ## [0.63.2-beta] - 2026-08-11
 

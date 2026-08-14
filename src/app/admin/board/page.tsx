@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
+import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 
 interface Relation {
   id: string;
@@ -74,7 +75,13 @@ export default function AdminBoardPage() {
   }, [mobileStage, loading, stages, relations]);
 
   // `silent` suppresses the undo offer, so undoing a move can't offer to undo itself.
-  const moveTo = async (relationId: string, pipelineStatus: string, opts?: { silent?: boolean }) => {
+  // reasonCode/reasonNote (#810): required server-side when pipelineStatus is a
+  // negative/off-path stage — requestMove() below gates that before calling here.
+  // Undo intentionally does NOT collect a reason even when it lands back on a
+  // negative stage; the server still enforces the rule, so a reason-less undo
+  // into a negative stage fails safely (reverted + error toast) rather than
+  // silently bypassing validation.
+  const moveTo = async (relationId: string, pipelineStatus: string, opts?: { silent?: boolean; reasonCode?: string; reasonNote?: string }) => {
     const prev = relationsRef.current;
     const from = prev.find((r) => r.id === relationId)?.pipelineStatus;
     if (from === pipelineStatus) return;
@@ -83,7 +90,7 @@ export default function AdminBoardPage() {
       const res = await fetch(`/api/mentorship/${relationId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pipelineStatus }),
+        body: JSON.stringify({ pipelineStatus, ...(opts?.reasonCode ? { reasonCode: opts.reasonCode, reasonNote: opts.reasonNote } : {}) }),
       });
       if (!res.ok) throw new Error('Failed');
       if (!opts?.silent && from) {
@@ -95,6 +102,18 @@ export default function AdminBoardPage() {
     } catch {
       setRelations(prev);
       toast(t.board.stageChangeFailed, 'error');
+    }
+  };
+
+  // Gate for drag-and-drop and the per-card stage select: a move into a
+  // negative/off-path stage collects a reason first (#810); everything else
+  // goes straight to moveTo as before.
+  const [pendingMove, setPendingMove] = useState<{ relationId: string; toStatus: string } | null>(null);
+  const requestMove = (relationId: string, toStatus: string) => {
+    if (stages.find((s) => s.key === toStatus)?.isOffPath) {
+      setPendingMove({ relationId, toStatus });
+    } else {
+      moveTo(relationId, toStatus);
     }
   };
 
@@ -158,7 +177,7 @@ export default function AdminBoardPage() {
         <CardStageSelect
           stages={stages}
           value={r.pipelineStatus}
-          onChange={(next) => moveTo(r.id, next)}
+          onChange={(next) => requestMove(r.id, next)}
         />
       </div>
     );
@@ -176,7 +195,7 @@ export default function AdminBoardPage() {
           e.preventDefault();
           setDragOver(null);
           const id = e.dataTransfer.getData('relationId');
-          if (id) moveTo(id, status);
+          if (id) requestMove(id, status);
         }}
         className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${
           dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
@@ -275,6 +294,16 @@ export default function AdminBoardPage() {
         })}
       </div>
       )}
+
+      <DropoffReasonDialog
+        open={!!pendingMove}
+        stageLabel={pendingMove ? label(pendingMove.toStatus) : ''}
+        onConfirm={(reasonCode, reasonNote) => {
+          if (pendingMove) moveTo(pendingMove.relationId, pendingMove.toStatus, { reasonCode, reasonNote });
+          setPendingMove(null);
+        }}
+        onCancel={() => setPendingMove(null)}
+      />
     </div>
   );
 }
