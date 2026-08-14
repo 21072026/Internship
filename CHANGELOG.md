@@ -8,6 +8,23 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.71.0-beta] - 2026-08-14
+
+### Added
+- **Mentor availability preference** (#941). New nullable `User.acceptingMentees` — the
+  mentor's own "I can take a new mentee right now" switch, deliberately separate from
+  `mentorCapacity` (a headcount ceiling): a mentor under capacity can still switch it off
+  (e.g. going on leave). `null` means no preference was ever recorded, in which case
+  availability falls back to a capacity-derived guess.
+  - Derivation lives in one pure function, `getMentorAvailability()`
+    (`src/lib/mentorAvailability.ts`), returning `status` (`available` / `at_capacity` /
+    `not_accepting`), `source` (`preference` / `capacity`) and `capacityKnown`, so the #941
+    mentor screen and the #942 admin assignment screen can never drift apart.
+  - `GET /api/profile` returns `activeMenteeCount` + `availability` for MENTORs only; the
+    response shape is unchanged for every other role.
+  - `acceptingMentees` joins `MENTOR_ONLY_FIELDS`, so a mentee or admin cannot set it
+    through the shared profile endpoint.
+
 ## [0.70.0-beta] - 2026-08-14
 
 ### Added
