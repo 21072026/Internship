@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.70.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: ['Companies can now shortlist candidates for a specific requisition and request an interview. The program team or the candidate’s mentor reviews each request, and approved interviews can be scheduled through the existing meeting calendar.'],
+      tr: ['Şirketler artık adayları belirli bir iş talebi için kısa listeye alabilir ve mülakat talep edebilir. Her talebi program ekibi veya adayın mentoru değerlendirir; onaylanan mülakatlar mevcut toplantı takvimi üzerinden planlanabilir.'],
+      de: ['Unternehmen können Kandidaten jetzt für eine bestimmte Stellenanforderung auf die Shortlist setzen und ein Interview anfragen. Das Programmteam oder der Mentor des Kandidaten prüft die Anfrage; genehmigte Interviews lassen sich über den bestehenden Besprechungskalender planen.'],
+    },
+  },
+  {
     version: '0.69.0-beta',
     date: '2026-08-14',
     highlights: {

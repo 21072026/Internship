@@ -41,6 +41,7 @@ const otherMenteeEmail = uniqueEmail('mx-other-mentee');
 const users = {} as Record<Role, MatrixUser>;
 let ownCompanyId = '';
 let otherCompanyId = '';
+let orgId = '';
 let ownSourceId = '';
 let ownRelationId = '';
 let foreignRelationId = '';
@@ -48,6 +49,10 @@ let foreignRelationId = '';
 const sourcedMenteeIds = new Set<string>();
 
 test.beforeAll(async () => {
+  const org = await prisma.organization.create({
+    data: { name: `Matrix Org ${Date.now()}`, slug: `matrix-org-${Date.now()}` },
+  });
+  orgId = org.id;
   const [admin, mentor, mentee, company, source, otherMentor, otherMentee] = await Promise.all([
     seedUser(emails.ADMIN, PASSWORD, 'ADMIN', 'Matrix Admin'),
     seedUser(emails.MENTOR, PASSWORD, 'MENTOR', 'Matrix Mentor'),
@@ -59,8 +64,8 @@ test.beforeAll(async () => {
   ]);
 
   const [own, other] = await Promise.all([
-    prisma.company.create({ data: { name: `Matrix Own ${Date.now()}` } }),
-    prisma.company.create({ data: { name: `Matrix Other ${Date.now()}` } }),
+    prisma.company.create({ data: { name: `Matrix Own ${Date.now()}`, orgId } }),
+    prisma.company.create({ data: { name: `Matrix Other ${Date.now()}`, orgId } }),
   ]);
   ownCompanyId = own.id;
   otherCompanyId = other.id;
@@ -69,20 +74,26 @@ test.beforeAll(async () => {
   ownSourceId = src.id;
 
   await Promise.all([
-    prisma.user.update({ where: { id: company.id }, data: { companyId: own.id } }),
-    prisma.user.update({ where: { id: source.id }, data: { sourceId: src.id } }),
+    prisma.user.update({ where: { id: admin.id }, data: { orgId } }),
+    prisma.user.update({ where: { id: mentor.id }, data: { orgId } }),
+    // Story #807 contract probe: this COMPANY deliberately belongs to the
+    // tenant but has no company assignment. /api/mentorship must fail early.
+    prisma.user.update({ where: { id: company.id }, data: { orgId } }),
+    prisma.user.update({ where: { id: source.id }, data: { sourceId: src.id, orgId } }),
     // The mentee in "our" relation was referred by this source, so SOURCE has a
     // non-empty legitimate scope — an all-empty scope would make `own` vacuous.
-    prisma.user.update({ where: { id: mentee.id }, data: { sourceId: src.id } }),
+    prisma.user.update({ where: { id: mentee.id }, data: { sourceId: src.id, orgId } }),
+    prisma.user.update({ where: { id: otherMentor.id }, data: { orgId } }),
+    prisma.user.update({ where: { id: otherMentee.id }, data: { orgId } }),
   ]);
   sourcedMenteeIds.add(mentee.id);
 
   const [ours, foreign] = await Promise.all([
     prisma.mentorshipRelation.create({
-      data: { mentorId: mentor.id, menteeId: mentee.id, companyId: own.id },
+      data: { mentorId: mentor.id, menteeId: mentee.id, companyId: own.id, orgId },
     }),
     prisma.mentorshipRelation.create({
-      data: { mentorId: otherMentor.id, menteeId: otherMentee.id, companyId: other.id },
+      data: { mentorId: otherMentor.id, menteeId: otherMentee.id, companyId: other.id, orgId },
     }),
   ]);
   ownRelationId = ours.id;
@@ -98,7 +109,7 @@ test.beforeAll(async () => {
   users.ADMIN = { id: admin.id, role: 'ADMIN' };
   users.MENTOR = { id: mentor.id, role: 'MENTOR' };
   users.MENTEE = { id: mentee.id, role: 'MENTEE' };
-  users.COMPANY = { id: company.id, role: 'COMPANY', companyId: own.id };
+  users.COMPANY = { id: company.id, role: 'COMPANY', companyId: null };
   users.SOURCE = { id: source.id, role: 'SOURCE', sourceId: src.id };
 });
 
@@ -110,6 +121,7 @@ test.afterAll(async () => {
   }
   await prisma.company.deleteMany({ where: { id: { in: [ownCompanyId, otherCompanyId] } } });
   await prisma.source.deleteMany({ where: { id: ownSourceId } });
+  await prisma.organization.deleteMany({ where: { id: orgId } });
   await prisma.$disconnect();
 });
 
@@ -135,6 +147,14 @@ for (const role of Object.keys(LANDING) as Role[]) {
     for (const entry of MATRIX) {
       const expectation = entry.expect[role];
       const res = await page.request.get(entry.path);
+
+      // Story #807 intentionally tightened this one matrix cell. Keep the
+      // fixture unassigned so the general smoke suite locks the early denial.
+      if (role === 'COMPANY' && entry.path === '/api/mentorship') {
+        expect(res.status()).toBe(403);
+        expect((await res.json()).code).toBe('company_not_assigned');
+        continue;
+      }
 
       if (expectation === 'deny') {
         expect([401, 403], `${role} ${entry.path} must be refused`).toContain(res.status());

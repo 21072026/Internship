@@ -103,6 +103,7 @@ model Organization {
   weeklyReports        WeeklyReport[]
   offers               Offer[]
   requisitions         Requisition[]
+  interviewRequests    InterviewRequest[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -280,6 +281,8 @@ model User {
   decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
   reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
+  interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
+  decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
 
   @@index([role])
   @@index([referredById])
@@ -708,6 +711,7 @@ model Company {
   needAlerts   CompanyNeedAlert[]
   offers       Offer[]
   requisitions Requisition[]
+  interviewRequests InterviewRequest[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -977,20 +981,27 @@ enum InterestStatus {
 }
 
 model CompanyInterest {
-  id        String         @id @default(cuid())
-  companyId String
-  menteeId  String
-  status    InterestStatus
+  id            String         @id @default(cuid())
+  companyId     String
+  menteeId      String
+  requisitionId String?
+  // Stable application-derived discriminator: legacy:<companyId>:<menteeId>
+  // or requisition:<requisitionId>:<menteeId>. Unlike nullable compound
+  // uniques, this remains reliable on MySQL when requisitionId is null.
+  scopeKey      String?        @unique
+  status        InterestStatus
   // TEXT: the shortlist API accepts 1 000 characters, past VARCHAR(191).
-  note      String?        @db.Text
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  note          String?        @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  mentee  User    @relation("CompanyInterestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee      User         @relation("CompanyInterestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  requisition Requisition? @relation(fields: [requisitionId], references: [id], onDelete: Restrict)
 
-  @@unique([companyId, menteeId])
+  @@index([companyId, menteeId])
   @@index([menteeId])
+  @@index([requisitionId])
 }
 
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
@@ -1858,7 +1869,40 @@ model Requisition {
   company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   owner   User?        @relation("RequisitionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
+  interests         CompanyInterest[]
+  interviewRequests InterviewRequest[]
+
   @@index([orgId, companyId])
   @@index([orgId, status])
   @@index([ownerId])
+}
+
+// A company asks the program/authorized mentor to interview one shortlisted
+// mentee for one requisition (#807). Status stays String so the workflow can
+// grow without a schema enum migration.
+model InterviewRequest {
+  id            String    @id @default(cuid())
+  requisitionId String
+  menteeId      String
+  companyId     String
+  orgId         String
+  status        String    @default("PENDING")
+  note          String?   @db.Text
+  decidedById   String?
+  decidedAt     DateTime?
+  proposedSlots Json?
+  activeKey     String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  requisition Requisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User         @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  decidedBy   User?        @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([orgId, status])
+  @@index([companyId, requisitionId])
+  @@index([menteeId, status])
+  @@index([requisitionId, menteeId])
 }

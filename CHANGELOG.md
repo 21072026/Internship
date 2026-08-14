@@ -8,6 +8,11 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.70.0-beta] - 2026-08-14
+
+### Added
+- **Requisition shortlists and interview approvals** (#807). Companies can shortlist eligible candidates for their own requisitions and submit deduplicated interview requests. Tenant-scoped admins or the candidate's active mentor can approve or decline atomically; approvals notify the candidate and recommend—but never automatically apply—the interview pipeline stage. Every decision is audited, and approved requests link to the existing meeting scheduler.
+
 ## [0.69.0-beta] - 2026-08-14
 
 ### Added
