@@ -22,6 +22,7 @@ import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
+import { OfferManagementPanel } from '@/components/OfferManagementPanel';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
@@ -547,6 +548,16 @@ export default function AdminMenteeDetailPage() {
             </div>
           )}
         </Card>
+        {rel && (
+          <OfferManagementPanel
+            relationId={rel.id}
+            menteeName={user.fullName}
+            companyName={rel.company?.name}
+            pipelineStatus={rel.pipelineStatus}
+            stages={stages}
+            onMoveToStage={(stageKey) => changeStage(rel.id, stageKey)}
+          />
+        )}
         {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} menteeTimezone={user.timezone ?? null} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}

@@ -18,12 +18,21 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     highlights: {
       en: [
         'Internship drop reasons now have one consistent set of names in English, Turkish and German, ready to be shown in the language each person uses.',
+        'Offer management: admins can now create, preview and send a job offer straight from a candidate\'s Mentorship card, with a clear history of every step.',
+        'Mentees see their offer on the portal dashboard — position, company, start date, a countdown to the decision deadline, and (for their own offer) the compensation note — and can accept or decline it with one click, decline reasons included.',
+        'Offers you don\'t act on in time are automatically marked expired, and everyone involved gets notified either way — sent, accepted, declined or expired.',
       ],
       tr: [
         'Stajın yarıda kalma nedenleri artık İngilizce, Türkçe ve Almancada tek ve tutarlı bir ad kümesine sahip; herkesin kullandığı dilde gösterilmeye hazır.',
+        'Teklif yönetimi: yöneticiler artık bir adayın Mentorluk kartından doğrudan bir iş teklifi oluşturup önizleyebilir ve gönderebilir; her adım geçmişte net şekilde görünür.',
+        'Adaylar tekliflerini portal panolarında görür — pozisyon, şirket, başlangıç tarihi, karar süresine geri sayım ve (kendi teklifleriyse) ücret notu — ve tek tıkla kabul veya ret edebilir; ret nedenleri dahil.',
+        'Zamanında karar verilmeyen teklifler otomatik olarak süresi doldu olarak işaretlenir ve ilgili herkes gönderildi, kabul, ret veya süre dolumu için bilgilendirilir.',
       ],
       de: [
         'Gründe für einen Praktikumsabbruch haben jetzt einheitliche Bezeichnungen auf Englisch, Türkisch und Deutsch und können in der jeweils verwendeten Sprache angezeigt werden.',
+        'Angebotsverwaltung: Admins können jetzt direkt von der Mentoring-Karte eines Kandidaten ein Jobangebot erstellen, in der Vorschau prüfen und senden — mit einer klaren Historie jedes Schritts.',
+        'Kandidaten sehen ihr Angebot im Portal-Dashboard — Position, Unternehmen, Starttermin, ein Countdown bis zur Entscheidungsfrist und (bei ihrem eigenen Angebot) den Vergütungshinweis — und können es mit einem Klick annehmen oder ablehnen, inklusive Ablehnungsgründen.',
+        'Nicht rechtzeitig beantwortete Angebote werden automatisch als abgelaufen markiert, und alle Beteiligten werden in jedem Fall benachrichtigt — gesendet, angenommen, abgelehnt oder abgelaufen.',
       ],
     },
   },
