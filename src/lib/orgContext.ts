@@ -48,6 +48,7 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Cohort',
   'MentorshipRelation',
   'MentorApplication',
+  'DocumentRequirement',
   'WeeklyReport',
 ]);
 

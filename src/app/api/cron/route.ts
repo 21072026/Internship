@@ -11,7 +11,9 @@ import {
   checkCompanyNeedMatches,
   sendWeeklyAnalyticsReport,
   sendWeeklyReportReminders,
+  sendWeeklyMissingDocumentReminders,
 } from '@/services/emailService';
+import { expireOffers } from '@/lib/offerNotify';
 
 export async function GET(request: Request) {
   try {
@@ -21,10 +23,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (new URL(request.url).searchParams.get('job') === 'weekly-reports') {
+    const job = new URL(request.url).searchParams.get('job');
+    if (job === 'weekly-reports') {
       return NextResponse.json({ message: 'Weekly report reminders ran', weeklyReports: await sendWeeklyReportReminders() });
     }
-    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, weeklyReports] = await Promise.all([
+    if (job === 'missing-documents') {
+      const missingDocuments = await sendWeeklyMissingDocumentReminders();
+      return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });
+    }
+
+    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
@@ -33,6 +41,8 @@ export async function GET(request: Request) {
       checkRetentionReminders(),
       checkCompanyNeedMatches(),
       sendWeeklyAnalyticsReport(),
+      sendWeeklyMissingDocumentReminders(),
+      expireOffers(),
       sendWeeklyReportReminders(),
     ]);
 
@@ -46,6 +56,8 @@ export async function GET(request: Request) {
       retention,
       needMatches,
       analyticsReport,
+      missingDocuments,
+      offers,
       weeklyReports,
     });
   } catch (error) {

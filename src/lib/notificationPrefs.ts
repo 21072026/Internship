@@ -1,5 +1,5 @@
 // Email notification categories a user can individually opt out of.
-export const NOTIFICATION_CATEGORIES = ['messages', 'announcements', 'deadlines', 'digest', 'meetingReminders', 'mentorship', 'weeklyReports'] as const;
+export const NOTIFICATION_CATEGORIES = ['messages', 'announcements', 'deadlines', 'digest', 'meetingReminders', 'mentorship', 'documents', 'weeklyReports'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 interface PrefUser {
