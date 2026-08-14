@@ -8,6 +8,16 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.66.0-beta] - 2026-08-14
+
+### Added
+- **Required-document checklist and missing-document reminders** (Story #811). Organizations
+  can configure localized, role- and pipeline-stage-specific document requirements without
+  extending the fixed document-type enum. Admins can review missing mandatory documents,
+  uploads can be linked to a requirement while preserving existing versioning and access
+  controls, and mentees see only their own outstanding items on the portal. Weekly reminders
+  use recipient language and preference settings, with a database-backed per-week dedupe key;
+  organizations without requirements retain the previous document behavior.
 ## [0.65.0-beta] - 2026-08-14
 
 ### Added

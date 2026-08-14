@@ -90,16 +90,17 @@ model Organization {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  users              User[]
-  sources            Source[]
-  cohorts            Cohort[]
-  companies          Company[]
-  projects           Project[]
-  relations          MentorshipRelation[]
-  pipelineStages     PipelineStage[]
-  mentorApplications MentorApplication[]
-  companyInquiries   CompanyInquiry[]
-  offers             Offer[]
+  users                User[]
+  sources              Source[]
+  cohorts              Cohort[]
+  companies            Company[]
+  projects             Project[]
+  relations            MentorshipRelation[]
+  pipelineStages       PipelineStage[]
+  mentorApplications   MentorApplication[]
+  companyInquiries     CompanyInquiry[]
+  documentRequirements DocumentRequirement[]
+  offers               Offer[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -233,46 +234,48 @@ model User {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
-  mentorRelations           MentorshipRelation[]      @relation("MentorRelations")
-  menteeRelations           MentorshipRelation[]      @relation("MenteeRelations")
-  statusChanges             StatusChange[]            @relation("StatusChangedBy")
-  passwordResetTokens       PasswordResetToken[]
-  emailVerificationTokens   EmailVerificationToken[]
-  cvFile                    CvFile?
-  avatarFile                AvatarFile?
-  notifications             Notification[]
-  conversationParticipants  ConversationParticipant[]
-  ownedProjects             Project[]                 @relation("ProjectOwner")
-  projectMemberships        ProjectMember[]           @relation("ProjectMemberships")
-  availabilitySlots         AvailabilitySlot[]
-  company                   Company?                  @relation("CompanyUsers", fields: [companyId], references: [id])
-  source                    Source?                   @relation(fields: [sourceId], references: [id])
-  documents                 Document[]                @relation("DocumentOwner")
-  personalNotes             PersonalNote[]
-  consents                  UserConsent[]
-  companyInterests          CompanyInterest[]         @relation("CompanyInterestMentee")
-  companyNeedAlerts         CompanyNeedAlert[]        @relation("CompanyNeedAlertMentee")
-  mentorshipRequests        MentorshipRequest[]       @relation("MentorshipRequests")
-  decidedRequests           MentorshipRequest[]       @relation("DecidedMentorshipRequests")
-  decidedMentorApplications MentorApplication[]       @relation("DecidedMentorApplications")
-  handledCompanyInquiries   CompanyInquiry[]          @relation("HandledCompanyInquiries")
-  supportTickets            SupportTicket[]           @relation("SupportRequester")
-  assignedSupportTickets    SupportTicket[]           @relation("SupportAssignee")
-  supportMessages           SupportMessage[]          @relation("SupportMessageSender")
-  authoredRelationNotes     RelationNote[]            @relation("RelationNoteAuthor")
-  pageViews                 PageView[]
-  referredBy                User?                     @relation("UserReferrals", fields: [referredById], references: [id])
-  referredUsers             User[]                    @relation("UserReferrals")
-  sentInvitations           InvitationToken[]         @relation("InvitationInviter")
-  assignedProjectTasks      ProjectTask[]             @relation("ProjectTaskAssignee")
-  authoredProjectTasks      ProjectTask[]             @relation("ProjectTaskAuthor")
-  projectJoinRequests       ProjectJoinRequest[]      @relation("JoinRequester")
-  decidedJoinRequests       ProjectJoinRequest[]      @relation("JoinRequestDecider")
-  taskTemplates             ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
-  mentorOnboardings         MenteeOnboarding[]        @relation("OnboardingMentor")
-  menteeOnboarding          MenteeOnboarding[]        @relation("OnboardingMentee")
-  createdOffers             Offer[]                   @relation("OfferCreatedBy")
-  decidedOffers             Offer[]                   @relation("OfferDecidedBy")
+  mentorRelations                   MentorshipRelation[]          @relation("MentorRelations")
+  menteeRelations                   MentorshipRelation[]          @relation("MenteeRelations")
+  statusChanges                     StatusChange[]                @relation("StatusChangedBy")
+  passwordResetTokens               PasswordResetToken[]
+  emailVerificationTokens           EmailVerificationToken[]
+  cvFile                            CvFile?
+  avatarFile                        AvatarFile?
+  notifications                     Notification[]
+  conversationParticipants          ConversationParticipant[]
+  ownedProjects                     Project[]                     @relation("ProjectOwner")
+  projectMemberships                ProjectMember[]               @relation("ProjectMemberships")
+  availabilitySlots                 AvailabilitySlot[]
+  company                           Company?                      @relation("CompanyUsers", fields: [companyId], references: [id])
+  source                            Source?                       @relation(fields: [sourceId], references: [id])
+  documents                         Document[]                    @relation("DocumentOwner")
+  personalNotes                     PersonalNote[]
+  consents                          UserConsent[]
+  companyInterests                  CompanyInterest[]             @relation("CompanyInterestMentee")
+  companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
+  mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
+  decidedRequests                   MentorshipRequest[]           @relation("DecidedMentorshipRequests")
+  decidedMentorApplications         MentorApplication[]           @relation("DecidedMentorApplications")
+  handledCompanyInquiries           CompanyInquiry[]              @relation("HandledCompanyInquiries")
+  supportTickets                    SupportTicket[]               @relation("SupportRequester")
+  assignedSupportTickets            SupportTicket[]               @relation("SupportAssignee")
+  supportMessages                   SupportMessage[]              @relation("SupportMessageSender")
+  authoredRelationNotes             RelationNote[]                @relation("RelationNoteAuthor")
+  pageViews                         PageView[]
+  referredBy                        User?                         @relation("UserReferrals", fields: [referredById], references: [id])
+  referredUsers                     User[]                        @relation("UserReferrals")
+  sentInvitations                   InvitationToken[]             @relation("InvitationInviter")
+  assignedProjectTasks              ProjectTask[]                 @relation("ProjectTaskAssignee")
+  authoredProjectTasks              ProjectTask[]                 @relation("ProjectTaskAuthor")
+  projectJoinRequests               ProjectJoinRequest[]          @relation("JoinRequester")
+  decidedJoinRequests               ProjectJoinRequest[]          @relation("JoinRequestDecider")
+  taskTemplates                     ProjectTaskTemplate[]         @relation("TaskTemplateAuthor")
+  mentorOnboardings                 MenteeOnboarding[]            @relation("OnboardingMentor")
+  menteeOnboarding                  MenteeOnboarding[]            @relation("OnboardingMentee")
+  missingDocumentReminderSubjects   DocumentRequirementReminder[] @relation("MissingDocumentReminderSubject")
+  missingDocumentReminderRecipients DocumentRequirementReminder[] @relation("MissingDocumentReminderRecipient")
+  createdOffers                     Offer[]                       @relation("OfferCreatedBy")
+  decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
 
   @@index([role])
   @@index([referredById])
@@ -604,26 +607,75 @@ enum DocumentType {
   OTHER
 }
 
+// Organization-defined document names and applicability. Completion is never
+// stored here: it is derived from documents carrying this requirement id.
+model DocumentRequirement {
+  id             String   @id @default(cuid())
+  orgId          String
+  key            String
+  labels         Json
+  appliesToStage String?
+  appliesToRole  String?
+  mandatory      Boolean  @default(true)
+  order          Int      @default(0)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  org       Organization                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  documents Document[]
+  reminders DocumentRequirementReminder[]
+
+  @@unique([orgId, key])
+  @@index([orgId, active, order])
+  @@index([orgId, appliesToStage])
+  @@index([orgId, appliesToRole])
+}
+
+// Delivery-only weekly idempotency marker. Missing/completed state is not
+// stored here and is always derived from DocumentRequirement + Document.
+model DocumentRequirementReminder {
+  id            String   @id @default(cuid())
+  requirementId String
+  menteeId      String
+  recipientId   String
+  weekStart     DateTime @db.Date
+  createdAt     DateTime @default(now())
+
+  requirement DocumentRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  mentee      User                @relation("MissingDocumentReminderSubject", fields: [menteeId], references: [id], onDelete: Cascade)
+  recipient   User                @relation("MissingDocumentReminderRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, menteeId, recipientId, weekStart])
+  @@index([menteeId])
+  @@index([recipientId])
+  @@index([weekStart])
+}
+
 // A stored document (DB bytes, like CvFile). Belongs to a user, or is an
 // admin-managed template (ownerId null + isTemplate) available to everyone.
 // Re-uploading the same (owner, type) keeps prior rows and bumps `version`.
 model Document {
-  id          String       @id @default(cuid())
-  ownerId     String?
-  uploaderId  String
-  type        DocumentType @default(OTHER)
-  title       String
-  filename    String
-  contentType String
-  size        Int
-  data        Bytes
-  version     Int          @default(1)
-  isTemplate  Boolean      @default(false)
-  createdAt   DateTime     @default(now())
+  id            String       @id @default(cuid())
+  ownerId       String?
+  uploaderId    String
+  type          DocumentType @default(OTHER)
+  title         String
+  filename      String
+  contentType   String
+  size          Int
+  data          Bytes
+  version       Int          @default(1)
+  isTemplate    Boolean      @default(false)
+  requirementId String?
+  createdAt     DateTime     @default(now())
 
-  owner User? @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User?                @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  requirement DocumentRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
+  @@index([requirementId])
+  @@index([ownerId, requirementId, version])
   @@index([isTemplate])
 }
 

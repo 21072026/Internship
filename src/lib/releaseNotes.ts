@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.66.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'Organizations can now define their own required documents for each role and pipeline stage. Admins can see who is missing what, while mentees see a clear “Missing documents” card only when they have something to upload.',
+        'Document uploads can be matched to a requirement without changing the familiar upload, version history, template or access-control experience.',
+        'People with outstanding mandatory documents receive at most one reminder for each item per week, in their selected language and according to their email preferences.',
+      ],
+      tr: [
+        'Kurumlar artık her rol ve süreç aşaması için kendi zorunlu belgelerini tanımlayabilir. Yöneticiler kimin hangi belgesinin eksik olduğunu görür; menteeler ise yalnızca yüklemeleri gereken bir belge varsa açık bir “Eksik belgelerim” kartı görür.',
+        'Belge yüklemeleri, alışılmış yükleme, sürüm geçmişi, şablon ve erişim kontrolü deneyimi değişmeden bir gereksinimle eşleştirilebilir.',
+        'Zorunlu belgesi eksik olan kişiler, her belge için haftada en fazla bir kez, seçtikleri dilde ve e-posta tercihlerine uygun bir hatırlatma alır.',
+      ],
+      de: [
+        'Organisationen können jetzt eigene Pflichtdokumente je Rolle und Pipeline-Phase festlegen. Admins sehen, wem welches Dokument fehlt; Mentees sehen die Karte „Fehlende Dokumente“ nur, wenn sie tatsächlich etwas hochladen müssen.',
+        'Uploads lassen sich einer Anforderung zuordnen, ohne den vertrauten Ablauf für Uploads, Versionsverlauf, Vorlagen oder Zugriffsschutz zu verändern.',
+        'Personen mit fehlenden Pflichtdokumenten erhalten pro Dokument höchstens eine Erinnerung je Woche — in ihrer gewählten Sprache und entsprechend ihren E-Mail-Einstellungen.',
+      ],
+    },
+  },
+  {
     version: '0.65.0-beta',
     date: '2026-08-14',
     highlights: {

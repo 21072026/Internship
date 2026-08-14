@@ -23,9 +23,12 @@ import { User, Building2, BookOpen, ExternalLink, MessageCircle, Github, Linkedi
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
+import { missingRequirementsForUser } from '@/lib/documentRequirements';
+import type { Locale } from '@/i18n/config';
+import { FileWarning } from 'lucide-react';
 
-async function getMenteeData(menteeId: string) {
-  const [user, activeRelation, visibilityConsent, projects] = await Promise.all([
+async function getMenteeData(menteeId: string, locale: Locale) {
+  const [user, activeRelation, visibilityConsent, projects, missingDocuments] = await Promise.all([
     prisma.user.findUnique({
       where: { id: menteeId },
       select: {
@@ -71,9 +74,10 @@ async function getMenteeData(menteeId: string) {
     // `activeRelation.project`, because membership can also come from a
     // ProjectMember row with no relation behind it — see lib/menteeProjects.ts.
     loadMenteeProjects(menteeId, 3),
+    missingRequirementsForUser(menteeId, locale),
   ]);
 
-  return { user, activeRelation, visibilityDecided: !!visibilityConsent, projects };
+  return { user, activeRelation, visibilityDecided: !!visibilityConsent, projects, missingDocuments };
 }
 
 export default async function PortalDashboard() {
@@ -83,7 +87,7 @@ export default async function PortalDashboard() {
   // in which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const { user, activeRelation, visibilityDecided, projects } = await getMenteeData(session.user.id);
+  const { user, activeRelation, visibilityDecided, projects, missingDocuments } = await getMenteeData(session.user.id, locale);
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
 
@@ -103,6 +107,15 @@ export default async function PortalDashboard() {
       {/* "Invite your circle" (#51): anyone who signs up through this link is
           credited to this mentee as their source. */}
       <ReferralLinkCard />
+
+      {missingDocuments.length > 0 && (
+        <Card className="mb-6 border-amber-200 dark:border-amber-800" data-testid="missing-documents-card">
+          <CardHeader><div className="flex items-center gap-2"><FileWarning className="h-5 w-5 text-amber-600 dark:text-amber-400" /><CardTitle>{t.documentRequirements.portalTitle}</CardTitle></div></CardHeader>
+          <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">{t.documentRequirements.portalHint}</p>
+          <ul className="mb-4 list-disc pl-5 text-sm text-gray-800 dark:text-gray-200">{missingDocuments.map((requirement) => <li key={requirement.id}>{requirement.label}</li>)}</ul>
+          <Link href="/portal/profile#documents" className="inline-flex items-center rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700">{t.documentRequirements.uploadCta}</Link>
+        </Card>
+      )}
 
       {!profileComplete && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center justify-between">
