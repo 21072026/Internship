@@ -22,6 +22,8 @@ import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
+import { CertificateGenerator } from '@/components/CertificateGenerator';
+import { canIssueCertificate } from '@/lib/certificateEligibility';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
@@ -29,6 +31,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
+import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 
 interface InteractionLog {
   id: string;
@@ -43,6 +46,8 @@ interface RelationDetail {
   status: string;
   pipelineStatus: string;
   startDate: string;
+  completedAt: string | null;
+  mentor: { fullName: string };
   mentee: {
     id: string;
     fullName: string;
@@ -97,6 +102,7 @@ export default function MenteeDetailPage() {
   const [stageError, setStageError] = useState('');
   const [deleteInteractionId, setDeleteInteractionId] = useState<string | null>(null);
   const [deletingInteraction, setDeletingInteraction] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'reports'>('overview');
 
   const fetchRelation = useCallback(async () => {
     const res = await fetch(`/api/mentorship/${id}`);
@@ -219,6 +225,17 @@ export default function MenteeDetailPage() {
         </div>
       </div>
 
+      <div className="mb-6 flex gap-2 border-b border-gray-200 dark:border-gray-700" role="tablist">
+        {(['overview', 'reports'] as const).map((tab) => (
+          <button key={tab} role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`border-b-2 px-3 py-2 text-sm font-medium ${activeTab === tab ? 'border-blue-600 text-blue-700 dark:text-blue-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
+            {tab === 'overview' ? t.weeklyReports.overviewTab : t.weeklyReports.reportsTab}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'reports' && <WeeklyReportsPanel relationId={id} mode="mentor" />}
+
+      {activeTab === 'overview' && <>
       {/* A mentee typed in by hand has no login yet — offer the way in (#1123). */}
       <MenteeActivationPanel
         menteeId={relation.mentee.id}
@@ -480,7 +497,21 @@ export default function MenteeDetailPage() {
           <QuestionsPanel relationId={id} mode="answer" />
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 flex flex-col gap-3">
+          {canIssueCertificate(relation, stages) && (
+            <div>
+              <CertificateGenerator
+                relationId={id}
+                eligible
+                mentee={{ fullName: relation.mentee.fullName, skills: relation.mentee.skills }}
+                mentor={{ fullName: relation.mentor.fullName }}
+                companyName={relation.company?.name ?? null}
+                startDate={relation.startDate}
+                completedAt={relation.completedAt}
+                onGenerated={fetchRelation}
+              />
+            </div>
+          )}
           <DocumentsManager targetUserId={relation.mentee.id} />
         </div>
 
@@ -494,6 +525,7 @@ export default function MenteeDetailPage() {
           <UserActivityPanel userId={relation.mentee.id} flagInactive />
         </div>
       </div>
+      </>}
     </div>
     <ConfirmDialog
       open={deleteInteractionId !== null}

@@ -48,6 +48,10 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'Cohort',
   'MentorshipRelation',
   'MentorApplication',
+  'DocumentRequirement',
+  'WeeklyReport',
+  'Requisition',
+  'InterviewRequest',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

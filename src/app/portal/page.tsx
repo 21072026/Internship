@@ -10,8 +10,10 @@ import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
+import { OfferCard } from '@/components/OfferCard';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
+import { DocumentsManager } from '@/components/DocumentsManager';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -22,9 +24,13 @@ import { User, Building2, BookOpen, ExternalLink, MessageCircle, Github, Linkedi
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
+import { missingRequirementsForUser } from '@/lib/documentRequirements';
+import type { Locale } from '@/i18n/config';
+import { FileWarning } from 'lucide-react';
+import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 
-async function getMenteeData(menteeId: string) {
-  const [user, activeRelation, visibilityConsent, projects] = await Promise.all([
+async function getMenteeData(menteeId: string, locale: Locale) {
+  const [user, activeRelation, visibilityConsent, projects, missingDocuments] = await Promise.all([
     prisma.user.findUnique({
       where: { id: menteeId },
       select: {
@@ -70,9 +76,10 @@ async function getMenteeData(menteeId: string) {
     // `activeRelation.project`, because membership can also come from a
     // ProjectMember row with no relation behind it — see lib/menteeProjects.ts.
     loadMenteeProjects(menteeId, 3),
+    missingRequirementsForUser(menteeId, locale),
   ]);
 
-  return { user, activeRelation, visibilityDecided: !!visibilityConsent, projects };
+  return { user, activeRelation, visibilityDecided: !!visibilityConsent, projects, missingDocuments };
 }
 
 export default async function PortalDashboard() {
@@ -82,7 +89,7 @@ export default async function PortalDashboard() {
   // in which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const { user, activeRelation, visibilityDecided, projects } = await getMenteeData(session.user.id);
+  const { user, activeRelation, visibilityDecided, projects, missingDocuments } = await getMenteeData(session.user.id, locale);
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
 
@@ -102,6 +109,15 @@ export default async function PortalDashboard() {
       {/* "Invite your circle" (#51): anyone who signs up through this link is
           credited to this mentee as their source. */}
       <ReferralLinkCard />
+
+      {missingDocuments.length > 0 && (
+        <Card className="mb-6 border-amber-200 dark:border-amber-800" data-testid="missing-documents-card">
+          <CardHeader><div className="flex items-center gap-2"><FileWarning className="h-5 w-5 text-amber-600 dark:text-amber-400" /><CardTitle>{t.documentRequirements.portalTitle}</CardTitle></div></CardHeader>
+          <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">{t.documentRequirements.portalHint}</p>
+          <ul className="mb-4 list-disc pl-5 text-sm text-gray-800 dark:text-gray-200">{missingDocuments.map((requirement) => <li key={requirement.id}>{requirement.label}</li>)}</ul>
+          <Link href="/portal/profile#documents" className="inline-flex items-center rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700">{t.documentRequirements.uploadCta}</Link>
+        </Card>
+      )}
 
       {!profileComplete && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center justify-between">
@@ -140,6 +156,15 @@ export default async function PortalDashboard() {
 
       {!activeRelation && <MentorshipRequestPanel />}
 
+      {/* Offer card (#809) — kept above the fold like the journey tracker: an
+          offer needing a decision is the single most time-sensitive thing a
+          mentee can see here. */}
+      {activeRelation && (
+        <div className="mb-6">
+          <OfferCard />
+        </div>
+      )}
+
       {/* Journey / pipeline stage — kept above the fold so a mentee sees where
           they are as soon as the portal loads (#692), before the longer
           mentorship card. */}
@@ -148,6 +173,8 @@ export default async function PortalDashboard() {
           <JourneyTracker status={activeRelation.pipelineStatus} />
         </div>
       )}
+
+      {activeRelation && <div className="mb-6"><WeeklyReportsPanel relationId={activeRelation.id} mode="mentee" /></div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Summary */}
@@ -381,6 +408,14 @@ export default async function PortalDashboard() {
           </Card>
         </div>
       )}
+
+      {/* Own documents, including any internship completion certificate a
+          mentor/admin has generated (#813) — kept independent of
+          `activeRelation` so it still shows after the mentorship is marked
+          COMPLETED, when the mentorship card above disappears. */}
+      <div className="mt-6">
+        <DocumentsManager targetUserId={session.user.id} canUpload={false} canDelete={false} />
+      </div>
 
       <div className="mt-6">
         <AnnouncementsCard />

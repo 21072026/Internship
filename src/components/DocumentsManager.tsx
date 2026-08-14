@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DOCUMENT_TYPES } from '@/lib/documentAccess';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 
 interface Doc {
   id: string;
@@ -18,7 +18,10 @@ interface Doc {
   size: number;
   version: number;
   createdAt: string;
+  requirementId: string | null;
 }
+
+interface Requirement { id: string; key: string; labels: { en: string; tr: string; de: string } }
 
 // Generic document list + uploader. In `templates` mode it manages the shared
 // admin template library; otherwise it manages one user's documents.
@@ -34,7 +37,10 @@ export function DocumentsManager({
   canDelete?: boolean;
 }) {
   const t = useT();
+  const locale = useLocale();
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [requirementId, setRequirementId] = useState('');
   const [type, setType] = useState('OTHER');
   const [title, setTitle] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -46,7 +52,11 @@ export function DocumentsManager({
   const query = templates ? 'templates=1' : `userId=${targetUserId ?? ''}`;
   const load = useCallback(async () => {
     const res = await fetch(`/api/documents?${query}`);
-    if (res.ok) setDocs((await res.json()).documents ?? []);
+    if (res.ok) {
+      const data = await res.json();
+      setDocs(data.documents ?? []);
+      setRequirements(data.requirements ?? []);
+    }
   }, [query]);
   useEffect(() => { load(); }, [load]);
 
@@ -62,9 +72,10 @@ export function DocumentsManager({
       if (title) fd.append('title', title);
       if (templates) fd.append('isTemplate', 'true');
       else if (targetUserId) fd.append('targetUserId', targetUserId);
+      if (!templates && requirementId) fd.append('requirementId', requirementId);
       const res = await fetch('/api/documents', { method: 'POST', body: fd });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || t.common.error);
-      setTitle(''); if (fileRef.current) fileRef.current.value = '';
+      setTitle(''); setRequirementId(''); if (fileRef.current) fileRef.current.value = '';
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.common.error);
@@ -124,6 +135,12 @@ export function DocumentsManager({
           {!templates && (
             <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
               {DOCUMENT_TYPES.map((ty) => <option key={ty} value={ty}>{typeLabel(ty)}</option>)}
+            </select>
+          )}
+          {!templates && requirements.length > 0 && (
+            <select aria-label={t.documents.requirement} value={requirementId} onChange={(e) => setRequirementId(e.target.value)} className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-2 text-sm text-gray-900 dark:text-gray-100">
+              <option value="">{t.documents.noRequirement}</option>
+              {requirements.map((requirement) => <option key={requirement.id} value={requirement.id}>{requirement.labels[locale] || requirement.labels.en || requirement.key}</option>)}
             </select>
           )}
           <div className="w-40"><Input placeholder={t.documents.titlePlaceholder} value={title} onChange={(e) => setTitle(e.target.value)} /></div>
