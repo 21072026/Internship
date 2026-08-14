@@ -1,12 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { acceptConfirmDialog, cancelConfirmDialog, confirmDialog } from './helpers/confirm';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
 // #470: unconfirmed delete actions must ask for confirmation first, and
-// cancelling must not send the delete request at all.
+// cancelling must not send the delete request at all. Since #1071 the question
+// is asked by the in-app ConfirmDialog rather than the browser's confirm(), so
+// the assertions read the dialog out of the DOM instead of listening for a
+// native `dialog` event.
 test('deleting a personal note asks for confirmation; cancelling keeps the note', async ({ page }) => {
   const email = uniqueEmail('delconfirm-mentee');
   const mentee = await seedUser(email, 'MenteePass123', 'MENTEE', 'Del Confirm Mentee');
@@ -23,19 +27,23 @@ test('deleting a personal note asks for confirmation; cancelling keeps the note'
     await page.click('button[type="submit"]');
     await expect(page.getByText('Note that should survive a cancelled delete')).toBeVisible();
 
-    let dialogMessage = '';
-    page.once('dialog', async (d) => {
-      dialogMessage = d.message();
-      await d.dismiss();
-    });
-    const deleteRequest = page.waitForRequest((r) => r.method() === 'DELETE' && r.url().includes('/api/notes/'), { timeout: 2_000 }).catch(() => null);
+    // Clicking Delete only asks the question — the dialog carries a message and
+    // no request has left the page yet.
+    const deleteRequest = page
+      .waitForRequest((r) => r.method() === 'DELETE' && r.url().includes('/api/notes/'), { timeout: 2_000 })
+      .catch(() => null);
     await page.getByLabel('Delete').click();
+    await expect(confirmDialog(page)).toBeVisible();
+    expect(((await page.locator('#confirm-dialog-message').textContent()) ?? '').trim().length).toBeGreaterThan(0);
     expect(await deleteRequest).toBeNull();
-    expect(dialogMessage.length).toBeGreaterThan(0);
+
+    // Cancelling keeps the note.
+    await cancelConfirmDialog(page);
     await expect(page.getByText('Note that should survive a cancelled delete')).toBeVisible();
 
-    page.once('dialog', (d) => d.accept());
+    // Confirming deletes it.
     await page.getByLabel('Delete').click();
+    await acceptConfirmDialog(page);
     await expect(page.getByText('Note that should survive a cancelled delete')).toHaveCount(0);
   } finally {
     await prisma.personalNote.deleteMany({ where: { userId: mentee.id } });

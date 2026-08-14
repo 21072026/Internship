@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.52.0-beta',
-    date: '2026-08-07',
+    version: '0.65.0-beta',
+    date: '2026-08-14',
     highlights: {
       en: [
         'Moving a mentee to a stage like "Internship dropped" now asks why — pick from a short list of reasons (or add a note for "Other"), so the team can see patterns in why people drop off.',
@@ -27,6 +27,462 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Wenn ein Mentee in eine Phase wie „Praktikum abgebrochen“ verschoben wird, wird jetzt nach dem Grund gefragt — aus einer kurzen Liste auswählen (oder bei „Sonstiges“ eine Notiz hinzufügen), damit das Team Muster bei Abbrüchen erkennen kann.',
         'Die Admin-Analyse zeigt jetzt eine neue Aufschlüsselung „Abbruchgründe“ nach Phase, und der Excel-Export enthält sie ebenfalls.',
+      ],
+    },
+  },
+  {
+    version: '0.64.0-beta',
+    date: '2026-08-10',
+    highlights: {
+      en: [
+        'Offer management: admins can now create, preview and send a job offer straight from a candidate\'s Mentorship card, with a clear history of every step.',
+        'Mentees see their offer on the portal dashboard — position, company, start date, a countdown to the decision deadline, and (for their own offer) the compensation note — and can accept or decline it with one click, decline reasons included.',
+        'Offers you don\'t act on in time are automatically marked expired, and everyone involved gets notified either way — sent, accepted, declined or expired.',
+      ],
+      tr: [
+        'Teklif yönetimi: yöneticiler artık bir adayın Mentorluk kartından doğrudan bir iş teklifi oluşturup önizleyebilir ve gönderebilir; her adım geçmişte net şekilde görünür.',
+        'Adaylar tekliflerini portal panolarında görür — pozisyon, şirket, başlangıç tarihi, karar süresine geri sayım ve (kendi teklifleriyse) ücret notu — ve tek tıkla kabul veya ret edebilir; ret nedenleri dahil.',
+        'Zamanında karar verilmeyen teklifler otomatik olarak süresi doldu olarak işaretlenir ve ilgili herkes gönderildi, kabul, ret veya süre dolumu için bilgilendirilir.',
+      ],
+      de: [
+        'Angebotsverwaltung: Admins können jetzt direkt von der Mentoring-Karte eines Kandidaten ein Jobangebot erstellen, in der Vorschau prüfen und senden — mit einer klaren Historie jedes Schritts.',
+        'Kandidaten sehen ihr Angebot im Portal-Dashboard — Position, Unternehmen, Starttermin, ein Countdown bis zur Entscheidungsfrist und (bei ihrem eigenen Angebot) den Vergütungshinweis — und können es mit einem Klick annehmen oder ablehnen, inklusive Ablehnungsgründen.',
+        'Nicht rechtzeitig beantwortete Angebote werden automatisch als abgelaufen markiert, und alle Beteiligten werden in jedem Fall benachrichtigt — gesendet, angenommen, abgelehnt oder abgelaufen.',
+      ],
+    },
+  },
+  {
+    version: '0.63.2-beta',
+    date: '2026-08-11',
+    highlights: {
+      en: ['The offline page now includes a direct link to https://crm.ersah.in so you can quickly return to the main site once your connection is back.'],
+      tr: ['Çevrimdışı sayfasında artık https://crm.ersah.in bağlantısı var; bağlantın geri geldiğinde ana siteye hızlıca dönebilirsin.'],
+      de: ['Die Offline-Seite enthält jetzt einen direkten Link zu https://crm.ersah.in, damit du nach der Wiederverbindung schnell zur Hauptseite zurückkommst.'],
+    },
+  },
+  {
+    version: '0.63.1-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Links inside notification emails now stop working after 90 days. If you open an old email and the link has expired, sign in and the conversation is waiting for you.',
+        'The unread summary email is lighter: reactions now live on the individual message notification, where the emoji clearly belongs to one message. This also keeps the summary out of spam folders.',
+      ],
+      tr: [
+        'Bildirim e-postalarındaki bağlantılar artık 90 gün sonra geçerliliğini yitiriyor. Eski bir e-postayı açıp bağlantının süresi dolmuşsa, giriş yaptığınızda sohbet sizi bekliyor olacak.',
+        'Okunmamış özet e-postası sadeleşti: tepki emojileri artık tek tek mesaj bildirimlerinde — emojinin hangi mesaja ait olduğu orada net. Bu aynı zamanda özetin spam klasörüne düşmesini de engelliyor.',
+      ],
+      de: [
+        'Links in Benachrichtigungs-E-Mails verlieren nach 90 Tagen ihre Gültigkeit. Wenn du eine alte E-Mail öffnest und der Link abgelaufen ist, melde dich an — die Unterhaltung wartet dort auf dich.',
+        'Die Zusammenfassung ungelesener Nachrichten ist schlanker: Reaktionen sitzen jetzt in der einzelnen Nachrichtenbenachrichtigung, wo das Emoji eindeutig zu einer Nachricht gehört. Das hält die Zusammenfassung außerdem aus dem Spam-Ordner.',
+      ],
+    },
+  },
+  {
+    version: '0.63.0-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'You can now set your own timezone under Settings → Timezone, whatever your role, and change it whenever you move. Everything with a time on it — meeting invitations, reminders, emails — follows that setting.',
+        'New accounts pick up the timezone of the browser they signed up in, so the very first emails already arrive on the right clock instead of the system default.',
+        'When you schedule a meeting, you now see what the time you picked reads as on every invited person’s clock before you send the invite — one line per timezone, so a call across Istanbul, Berlin and London can be confirmed at a glance instead of over chat.',
+        'The same preview appears when a mentee proposes a meeting time and when a project’s weekly slot is set, so nobody has to do the arithmetic in their head.',
+        'Every email that mentions a time now says which timezone it is written in, with a small link to change yours if it is wrong. Where the other participants are on different clocks, their times are listed too.',
+      ],
+      tr: [
+        'Artık rolünüz ne olursa olsun kendi saat diliminizi Ayarlar → Saat dilimi bölümünden seçebilir, taşındığınızda değiştirebilirsiniz. Saat içeren her şey — toplantı davetleri, hatırlatmalar, e-postalar — bu ayarı takip eder.',
+        'Yeni hesaplar, kayıt oldukları tarayıcının saat dilimini alır; böylece ilk e-postalar bile sistem varsayılanı yerine doğru saatle gelir.',
+        'Bir toplantı planlarken, seçtiğiniz saatin davet ettiğiniz her kişinin saatiyle ne anlama geldiğini daveti göndermeden önce görürsünüz — her saat dilimi için bir satır. Böylece İstanbul, Berlin ve Londra arasındaki bir görüşme sohbette değil, tek bakışta teyit edilir.',
+        'Aynı önizleme, bir menteenin toplantı saati önerdiği yerde ve projenin haftalık toplantısı ayarlanırken de çıkar; kimsenin kafadan hesap yapması gerekmez.',
+        'Saat içeren her e-posta artık hangi saat dilimine göre yazıldığını belirtiyor ve yanlışsa kendi diliminizi değiştirebileceğiniz küçük bir bağlantı veriyor. Diğer katılımcılar farklı saatlerdeyse onların saatleri de listeleniyor.',
+      ],
+      de: [
+        'Du kannst deine Zeitzone jetzt unter Einstellungen → Zeitzone selbst festlegen — unabhängig von deiner Rolle — und sie ändern, wenn du umziehst. Alles mit einer Uhrzeit (Besprechungseinladungen, Erinnerungen, E-Mails) richtet sich danach.',
+        'Neue Konten übernehmen die Zeitzone des Browsers, in dem sie angelegt wurden. So kommen schon die ersten E-Mails auf der richtigen Uhr an statt auf der Systemvorgabe.',
+        'Beim Planen einer Besprechung siehst du vor dem Absenden, was die gewählte Zeit auf der Uhr jeder eingeladenen Person bedeutet — eine Zeile pro Zeitzone. Ein Termin über Istanbul, Berlin und London lässt sich damit auf einen Blick bestätigen statt im Chat.',
+        'Dieselbe Vorschau erscheint, wenn ein Mentee eine Zeit vorschlägt und wenn der wöchentliche Projekttermin gesetzt wird — niemand muss mehr im Kopf umrechnen.',
+        'Jede E-Mail mit einer Uhrzeit nennt jetzt die Zeitzone, in der sie geschrieben ist, mit einem kleinen Link, um deine zu korrigieren. Sind die anderen Teilnehmer auf anderen Uhren, stehen deren Zeiten ebenfalls dabei.',
+      ],
+    },
+  },
+  {
+    version: '0.62.0-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'The user list now says why an account is inactive instead of just labelling it "Inactive": never confirmed their email, waiting for your approval, switched off by an admin, or a record with no sign-in at all. Each one tells you what to do about it.',
+        'Accounts that never clicked their confirmation link now have a "Resend verification" button right in the list — you no longer have to wait for the person to come back and try signing in.',
+        'When you write to someone who cannot sign in yet, the message box warns you before you type: they will not see it in the app, and if the record only has a placeholder address, no email reaches them either.',
+        'Admin → Settings now shows a log of recent outgoing email, so you can tell "our mail never went out" apart from "they read it and did not reply".',
+        'If you answer a message straight from your email, it now counts as read — that conversation (and everything before it) stops showing up in your unread summary. Before this, replying by email left everything looking unread and the same reminder kept arriving.',
+        'Notification emails now carry the same five reactions as the app plus a "mark as read" link. One tap from your inbox leaves the reaction on that exact message and clears the conversation — no need to open the app at all.',
+        'Email now goes out over two separate channels: the things a person is waiting for (sign-up confirmations, invitations, password resets, message notifications) travel the route optimised for reaching the inbox, while routine digests and reminders go the other way. The panel shows how much of the daily allowance each one is using, and which job is spending it.',
+      ],
+      tr: [
+        'Kullanıcı listesi artık bir hesabın neden pasif olduğunu söylüyor; sadece "Pasif" demiyor: e-postasını hiç doğrulamadı, onayınızı bekliyor, bir yönetici kapattı ya da hiç girişi olmayan bir kayıt. Her biri ne yapmanız gerektiğini de belirtiyor.',
+        'Doğrulama bağlantısına hiç tıklamamış hesaplar için listede artık "Doğrulamayı yeniden gönder" butonu var — kişinin geri dönüp giriş denemesini beklemeniz gerekmiyor.',
+        'Henüz giriş yapamayan birine yazarken mesaj kutusu siz yazmadan önce uyarıyor: bu kişi mesajı uygulamada göremeyecek, kayıtta yalnızca yer tutucu bir adres varsa e-posta da ulaşmayacak.',
+        'Yönetici → Ayarlar bölümünde artık son giden e-postaların kaydı görünüyor; böylece "mailimiz hiç gitmemiş" ile "okudu ama cevap vermedi" durumlarını ayırt edebiliyorsunuz.',
+        'Bir mesaja doğrudan e-postadan cevap verdiğinizde artık okundu sayılıyor; o sohbet (ve öncesindeki her şey) okunmamış özetinde çıkmayı bırakıyor. Önceden e-postadan cevap verseniz bile her şey okunmamış görünüyor ve aynı hatırlatma gelip duruyordu.',
+        'Bildirim e-postalarında artık uygulamadaki beş tepki emojisi ve bir "okundu işaretle" bağlantısı var. Gelen kutunuzdan tek dokunuşla tepkiniz tam o mesaja bırakılıyor ve sohbet temizleniyor — uygulamayı açmanıza hiç gerek kalmıyor.',
+        'E-postalar artık iki ayrı kanaldan gidiyor: kişinin beklediği şeyler (kayıt onayı, davet, parola sıfırlama, mesaj bildirimi) gelen kutusuna ulaşmak için en iyi yoldan, rutin özet ve hatırlatmalar ise diğerinden. Panel, günlük hakkın ne kadarının kullanıldığını ve hangi işin harcadığını gösteriyor.',
+      ],
+      de: [
+        'Die Benutzerliste sagt jetzt, *warum* ein Konto inaktiv ist, statt nur "Inaktiv": E-Mail nie bestätigt, wartet auf deine Freigabe, von einem Admin deaktiviert oder ein Datensatz ganz ohne Login. Zu jedem steht dabei, was zu tun ist.',
+        'Konten, die den Bestätigungslink nie angeklickt haben, bekommen in der Liste einen Button "Bestätigung erneut senden" — du musst nicht mehr warten, bis die Person selbst einen Anmeldeversuch macht.',
+        'Wenn du jemandem schreibst, der sich noch nicht anmelden kann, warnt das Nachrichtenfeld schon vor dem Tippen: Die Person sieht die Nachricht nicht in der App, und bei einer Platzhalter-Adresse erreicht sie auch keine E-Mail.',
+        'Unter Administration → Einstellungen siehst du jetzt ein Protokoll der zuletzt versendeten E-Mails — so lässt sich "unsere Mail ging nie raus" von "gelesen, aber nicht geantwortet" unterscheiden.',
+        'Wenn Sie direkt aus Ihrer E-Mail auf eine Nachricht antworten, gilt sie jetzt als gelesen — diese Unterhaltung (und alles davor) taucht in Ihrer Zusammenfassung nicht mehr auf. Bisher blieb beim Antworten per E-Mail alles ungelesen und dieselbe Erinnerung kam immer wieder.',
+        'Benachrichtigungs-E-Mails enthalten jetzt dieselben fünf Reaktionen wie die App sowie einen Link "Als gelesen markieren". Ein Tippen aus dem Postfach setzt die Reaktion an genau diese Nachricht und räumt die Unterhaltung auf — die App muss dafür gar nicht geöffnet werden.',
+        'E-Mails laufen jetzt über zwei getrennte Kanäle: Was jemand erwartet (Registrierungsbestätigung, Einladung, Passwort-Reset, Nachrichtenbenachrichtigung) nimmt den Weg, der am zuverlässigsten im Posteingang landet; routinemäßige Zusammenfassungen und Erinnerungen den anderen. Das Panel zeigt, wie viel des Tageskontingents verbraucht ist und welcher Job es verbraucht.',
+      ],
+    },
+  },
+  {
+    version: '0.61.1-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Opening the release notes, privacy or terms pages while signed in no longer shows a logged-out menu. You stay signed in and get a link straight back to your dashboard.',
+      ],
+      tr: [
+        'Giriş yapmışken sürüm notları, gizlilik veya kullanım şartları sayfalarını açtığınızda menü artık çıkış yapmışsınız gibi görünmüyor. Oturumunuz açık kalıyor ve doğrudan panelinize dönen bir bağlantı çıkıyor.',
+      ],
+      de: [
+        'Wenn du die Release-Notes, den Datenschutz oder die Nutzungsbedingungen im angemeldeten Zustand öffnest, erscheint kein abgemeldetes Menü mehr. Du bleibst angemeldet und bekommst einen direkten Link zurück zu deinem Bereich.',
+      ],
+    },
+  },
+  {
+    version: '0.61.0-beta',
+    date: '2026-08-09',
+    highlights: {
+      en: [
+        'Every public page — the home page, features, for companies, the mentor application, the project showcase and the privacy, terms and code of conduct pages — now has the same header and footer instead of a different one on each.',
+        'The logo takes you to the home page from anywhere, including the home page itself, where it was not a link before.',
+        'The new footer links the pages to each other. If you arrive on the privacy notice from a search result you can now reach the rest of the site from it, and switch language or theme there.',
+        'On a phone the navigation is now a menu. "Features" and "For companies" used to be hidden entirely at that width, with nothing to open in their place.',
+        'Moving between these pages is quicker: they now load the part that changed instead of the whole page again.',
+      ],
+      tr: [
+        'Herkese açık sayfaların hepsi — ana sayfa, özellikler, firmalar için, mentor başvurusu, proje vitrini ve gizlilik, kullanım şartları, davranış kuralları sayfaları — artık her birinde farklı olan değil, aynı üst ve alt bölümü kullanıyor.',
+        'Logo her yerden ana sayfaya götürüyor; daha önce link olmayan ana sayfanın kendisinde de.',
+        'Yeni alt bölüm sayfaları birbirine bağlıyor. Arama sonucundan gizlilik metnine düştüyseniz artık oradan sitenin geri kalanına geçebilir, dili veya temayı da değiştirebilirsiniz.',
+        'Telefonda gezinme artık bir menü. "Özellikler" ve "Firmalar için" o genişlikte tamamen gizleniyordu ve yerine açılacak bir şey de yoktu.',
+        'Bu sayfalar arasında geçiş daha hızlı: tüm sayfa yeniden değil, yalnızca değişen kısım yükleniyor.',
+      ],
+      de: [
+        'Alle öffentlichen Seiten — Startseite, Funktionen, für Unternehmen, Mentor-Bewerbung, Projektschaufenster sowie Datenschutz, Nutzungsbedingungen und Verhaltenskodex — haben jetzt denselben Kopf- und Fußbereich statt auf jeder Seite einen anderen.',
+        'Das Logo führt von überall zur Startseite, auch auf der Startseite selbst, wo es vorher kein Link war.',
+        'Der neue Fußbereich verbindet die Seiten miteinander. Wer über eine Suchtreffer-Seite auf der Datenschutzerklärung landet, kommt von dort nun in den Rest der Website und kann Sprache oder Design wechseln.',
+        'Auf dem Telefon ist die Navigation jetzt ein Menü. „Funktionen“ und „Für Unternehmen“ waren in dieser Breite komplett ausgeblendet, ohne Ersatz.',
+        'Der Wechsel zwischen diesen Seiten geht schneller: Es wird nur noch der geänderte Teil geladen statt der ganzen Seite.',
+      ],
+    },
+  },
+  {
+    version: '0.60.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'There is now a live chat on the home page. If you are looking around and have a question, ask it there instead of writing an email and waiting.',
+        'It only appears once you accept marketing cookies — until then nothing is loaded from the chat provider at all. Because that choice now means something new, the cookie banner asks everyone once more.',
+      ],
+      tr: [
+        'Ana sayfada artık canlı sohbet var. Sayfaya göz atarken bir sorunuz olursa e-posta yazıp beklemek yerine oradan sorabilirsiniz.',
+        'Sohbet yalnızca pazarlama çerezlerini kabul ettiğinizde çıkıyor; o ana kadar sohbet sağlayıcısından hiçbir şey yüklenmiyor. Bu tercih artık yeni bir anlam taşıdığı için çerez bildirimi herkese bir kez daha soruyor.',
+      ],
+      de: [
+        'Auf der Startseite gibt es jetzt einen Live-Chat. Wenn Sie sich umsehen und eine Frage haben, stellen Sie sie dort — statt eine E-Mail zu schreiben und zu warten.',
+        'Er erscheint erst, wenn Sie Marketing-Cookies akzeptieren; bis dahin wird vom Chat-Anbieter überhaupt nichts geladen. Weil diese Entscheidung nun etwas Neues bedeutet, fragt der Cookie-Hinweis alle noch einmal.',
+      ],
+    },
+  },
+  {
+    version: '0.59.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Names now lead somewhere. Hover a person\u2019s name — or tap it on a phone — and a small card appears with who they are, where they are in the pipeline, their mentor and company, and the language they read, plus buttons to open their profile, message them or email them.',
+        'Where clicking the name already does something else, such as ticking a recipient or opening a chat, the card sits on a small icon next to it instead, so nothing you were doing changes.',
+      ],
+      tr: [
+        'İsimler artık bir yere götürüyor. Bir kişinin adının üzerine gelin — telefonda dokunun — küçük bir kart açılıyor: kim olduğu, süreçte nerede olduğu, mentoru ve şirketi, okuduğu dil; ayrıca profilini açma, mesaj gönderme ve e-posta düğmeleri.',
+        'Ada tıklamanın zaten bir işi varsa (alıcı işaretlemek, sohbet açmak gibi) kart adın yanındaki küçük bir ikonda duruyor; yaptığınız hiçbir şey değişmiyor.',
+      ],
+      de: [
+        'Namen führen jetzt irgendwohin. Fahren Sie über einen Namen — oder tippen Sie ihn auf dem Handy an — und eine kleine Karte erscheint: wer die Person ist, wo sie im Prozess steht, Mentor und Unternehmen, die gelesene Sprache, dazu Schaltflächen für Profil, Nachricht und E-Mail.',
+        'Wo ein Klick auf den Namen bereits etwas anderes tut — einen Empfänger anhaken, einen Chat öffnen — sitzt die Karte stattdessen auf einem kleinen Symbol daneben; an Ihrem Ablauf ändert sich nichts.',
+      ],
+    },
+  },
+  {
+    version: '0.58.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Bulk emails to mentees can be written in several languages. Pick a ready-made template and all three languages are filled in at once — no more translating by hand before every send.',
+        'Each mentee then receives the version in the language they chose. Anyone whose language you did not write gets the one you did, and the composer tells you upfront which languages you have covered.',
+      ],
+      tr: [
+        'Mentee’lere toplu e-postalar birden çok dilde yazılabiliyor. Hazır bir şablon seçtiğinizde üç dil birden doluyor — her gönderimden önce elle çeviri yapmak yok.',
+        'Her mentee e-postayı kendi seçtiği dilde alıyor. Dilini yazmadığınız kişiler yazdığınız sürümü alıyor ve besteci hangi dilleri kapsadığınızı baştan söylüyor.',
+      ],
+      de: [
+        'Sammel-E-Mails an Mentees lassen sich in mehreren Sprachen verfassen. Wählen Sie eine fertige Vorlage, und alle drei Sprachen werden auf einmal ausgefüllt — kein Handübersetzen mehr vor jedem Versand.',
+        'Jede Mentee erhält dann die Fassung in der selbst gewählten Sprache. Wessen Sprache Sie nicht geschrieben haben, bekommt die, die Sie geschrieben haben — und der Editor sagt Ihnen vorab, welche Sprachen Sie abgedeckt haben.',
+      ],
+    },
+  },
+  {
+    version: '0.57.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Announcements can be written in several languages at once. The composer has an EN / TR / DE tab with a dot showing which ones you have filled in — write one or write all three.',
+        'Everyone then reads the announcement in their own language: on the dashboard, in the announcements archive, in the notification bell, and in the email (the message itself, not just the subject around it). If you did not write their language, they get the version you did write and are told so, instead of a message that looks like it was meant for someone else.',
+      ],
+      tr: [
+        'Duyurular artık birden çok dilde yazılabiliyor. Yazma alanında EN / TR / DE sekmeleri var ve her sekmedeki nokta hangilerini doldurduğunuzu gösteriyor — bir dil de yazabilirsiniz, üçü de.',
+        'Herkes duyuruyu kendi dilinde okuyor: panelde, duyuru arşivinde, bildirim zilinde ve e-postada (yalnızca konu değil, mesajın kendisi). Bir kişinin dilini yazmadıysanız yazdığınız sürümü görüyor ve bunun böyle olduğu kendisine söyleniyor — başkasına yazılmış gibi duran bir mesajla baş başa kalmıyor.',
+      ],
+      de: [
+        'Ankündigungen lassen sich jetzt in mehreren Sprachen zugleich verfassen. Der Editor hat EN- / TR- / DE-Reiter, und ein Punkt zeigt, welche Sie schon ausgefüllt haben — schreiben Sie eine oder alle drei.',
+        'Jede Person liest die Ankündigung dann in ihrer eigenen Sprache: im Dashboard, im Ankündigungsarchiv, in der Benachrichtigungsglocke und in der E-Mail (die Nachricht selbst, nicht nur der Betreff darum herum). Haben Sie ihre Sprache nicht geschrieben, bekommt sie die verfasste Fassung — mit einem Hinweis, statt einer Nachricht, die wirkt, als sei sie für jemand anderen gedacht.',
+      ],
+    },
+  },
+  {
+    version: '0.56.1-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Announcements can now be corrected or taken back. Editing one fixes it everywhere it landed — including the notification already sitting in each person\u2019s bell — and it is not sent again, so a typo fix does not ping everyone a second time. Deleting one removes it from the announcements page and from those notifications too.',
+      ],
+      tr: [
+        'Duyurular artık düzeltilebiliyor ve geri alınabiliyor. Bir duyuruyu düzenlemek onu ulaştığı her yerde düzeltir — herkesin bildirim zilinde duran bildirim dâhil — ve yeniden gönderilmez, yani bir yazım hatasını düzeltmek kimseye ikinci kez bildirim çıkarmaz. Silmek ise duyuruyu hem duyurular sayfasından hem o bildirimlerden kaldırır.',
+      ],
+      de: [
+        'Ankündigungen lassen sich jetzt korrigieren oder zurücknehmen. Eine Bearbeitung berichtigt sie überall dort, wo sie angekommen ist — auch in der Benachrichtigung, die bereits in der Glocke jeder Person liegt — und sie wird nicht erneut versendet, eine Tippfehler-Korrektur benachrichtigt also niemanden ein zweites Mal. Beim Löschen verschwindet sie von der Ankündigungsseite und aus diesen Benachrichtigungen.',
+      ],
+    },
+  },
+  {
+    version: '0.56.0-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'You can now see which language someone reads before you write to them. A small EN / TR / DE chip sits next to their name on the candidate list, in a one-to-one chat header, and in the bulk email recipient list. A greyed-out chip means that person never picked a language and will get the app default.',
+        'Sending one email to several people? The composer sums up the languages of everyone you have ticked, so you know what you are writing across before you start.',
+      ],
+      tr: [
+        'Artık birine yazmadan önce hangi dili okuduğunu görebiliyorsunuz. Adının yanında küçük bir EN / TR / DE rozeti duruyor: aday listesinde, birebir sohbet başlığında ve toplu e-posta alıcı listesinde. Soluk bir rozet, o kişinin hiç dil seçmediğini ve uygulamanın varsayılanını alacağını gösterir.',
+        'Birden çok kişiye tek e-posta mı? Besteci, işaretlediğiniz herkesin dillerini özetliyor; böylece yazmaya başlamadan önce hangi dillere hitap ettiğinizi biliyorsunuz.',
+      ],
+      de: [
+        'Sie sehen jetzt, welche Sprache jemand liest, bevor Sie schreiben. Neben dem Namen steht ein kleines EN- / TR- / DE-Kürzel: in der Kandidatenliste, im Kopf eines Einzelchats und in der Empfängerliste des Sammel-E-Mail-Editors. Ein ausgegrautes Kürzel bedeutet, dass diese Person nie eine Sprache gewählt hat und die Standardsprache der App erhält.',
+        'Eine E-Mail an mehrere Personen? Der Editor fasst die Sprachen aller Angehakten zusammen — so wissen Sie vorher, in welche Sprachen Sie hineinschreiben.',
+      ],
+    },
+  },
+  {
+    version: '0.55.7-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Announcements now start the day you join. A new account used to open onto everyone else\'s back catalogue — "the meeting has started", "re-point your git remote today" — messages written for the people who were there, which are confusing to read weeks later. You now see what was announced from your first day onward, on the dashboard card and in the announcements archive alike.',
+      ],
+      tr: [
+        'Duyurular artık katıldığınız günden başlıyor. Yeni bir hesap, açıldığında herkesin geçmiş duyurularını görüyordu — "toplantı başladı", "bugün git remote adresinizi değiştirin" gibi, o an orada olanlara yazılmış ve haftalar sonra okununca kafa karıştıran mesajlar. Artık ilk gününüzden itibaren duyurulanları görüyorsunuz; hem panel kartında hem duyuru arşivinde.',
+      ],
+      de: [
+        'Ankündigungen beginnen jetzt an dem Tag, an dem Sie dazukommen. Ein neues Konto öffnete sich bisher auf dem Archiv aller anderen — "das Meeting hat begonnen", "richtet heute euer Git-Remote neu aus" — Nachrichten für die, die damals dabei waren, und Wochen später verwirrend. Sie sehen nun, was ab Ihrem ersten Tag angekündigt wurde, auf der Dashboard-Karte wie im Ankündigungsarchiv.',
+      ],
+    },
+  },
+  {
+    version: '0.55.6-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'A way back out of the project showcase. The page had no sidebar and no back link, so once you opened it the only way out was the browser\'s back button. There is now a back link above the title — it returns you to your own dashboard when you are signed in, and to the home page otherwise.',
+      ],
+      tr: [
+        'Proje vitrininden geri dönüş. Sayfada ne kenar çubuğu ne de geri linki vardı; bir kez açtığınızda çıkmanın tek yolu tarayıcının geri tuşuydu. Artık başlığın üstünde bir geri linki var — oturum açtıysanız sizi kendi panelinize, açmadıysanız ana sayfaya götürüyor.',
+      ],
+      de: [
+        'Ein Weg zurück aus dem Projekt-Showcase. Die Seite hatte weder Seitenleiste noch Zurück-Link — einmal geöffnet, blieb nur der Zurück-Button des Browsers. Über dem Titel steht jetzt ein Zurück-Link: angemeldet zurück zum eigenen Dashboard, sonst zur Startseite.',
+      ],
+    },
+  },
+  {
+    version: '0.55.5-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'One chat per person. The same contact could appear twice in Messages — a chat opened from their mentee page and one opened from their profile card were two separate threads, each with half of what you had written. They are now a single conversation, with the whole history in order.',
+        'Old links still work: a message notification, a digest email or a bookmark to the previous thread opens that one conversation. Mentees reach the same inbox as everyone else, so project chats and group chats are in the list too.',
+      ],
+      tr: [
+        'Kişi başına tek sohbet. Aynı kişi Mesajlar’da iki kez görünebiliyordu — mentee sayfasından açtığınız sohbetle profil kartından açtığınız sohbet iki ayrı oturumdu ve yazdıklarınızın yarısı birinde, yarısı diğerindeydi. Artık tek bir konuşma var, tüm geçmiş sırasıyla orada.',
+        'Eski bağlantılar çalışmaya devam ediyor: mesaj bildirimi, özet e-postası ya da eski sohbete kaydettiğiniz bir yer imi hep o tek konuşmayı açıyor. Mentee’ler de herkesle aynı gelen kutusunu kullanıyor; proje ve grup sohbetleri de listede.',
+      ],
+      de: [
+        'Ein Chat pro Person. Dieselbe Person konnte zweimal in den Nachrichten auftauchen — ein über ihre Mentee-Seite geöffneter Chat und ein über ihre Profilkarte geöffneter waren zwei getrennte Verläufe, jeder mit der Hälfte des Geschriebenen. Daraus ist eine Unterhaltung geworden, mit dem vollständigen Verlauf in der richtigen Reihenfolge.',
+        'Alte Links funktionieren weiter: eine Nachrichten-Benachrichtigung, eine Zusammenfassungs-E-Mail oder ein Lesezeichen auf den früheren Verlauf öffnen diese eine Unterhaltung. Mentees nutzen denselben Posteingang wie alle anderen — Projekt- und Gruppenchats stehen dort ebenfalls.',
+      ],
+    },
+  },
+  {
+    version: '0.55.4-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'The goal-template pool on a project now has a "Select all" box above the list. Handing your whole shortlist to a new member is one click instead of twenty; tick it again to clear the selection, and a counter shows how many goals are about to go out.',
+      ],
+      tr: [
+        'Projedeki hedef şablonları listesinin üstüne "Tümünü seç" kutusu eklendi. Kısa listenin tamamını yeni bir üyeye vermek yirmi tık yerine tek tık; tekrar tıklayınca seçim temizleniyor ve yanındaki sayaç kaç hedefin gideceğini gösteriyor.',
+      ],
+      de: [
+        'Der Zielvorlagen-Pool eines Projekts hat jetzt ein „Alle auswählen“-Kästchen über der Liste. Die ganze Auswahl an ein neues Mitglied zu übergeben ist ein Klick statt zwanzig; ein erneuter Klick setzt die Auswahl zurück, und ein Zähler zeigt, wie viele Ziele rausgehen.',
+      ],
+    },
+  },
+  {
+    version: '0.55.3-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'Fixed a sign-in failure that showed "Unexpected end of JSON input" and let no password through. Signing in now reads only what it needs from your account, so a stray value in a profile field can never cost you access again.',
+        'If something does go wrong while signing in, you now get a plain "something went wrong, please try again" instead of an internal error message.',
+      ],
+      tr: [
+        '"Unexpected end of JSON input" hatası veren ve hiçbir şifreyi kabul etmeyen giriş sorunu düzeltildi. Giriş artık hesabınızdan yalnızca ihtiyaç duyduğu alanları okuyor; profil alanlarınızdaki hatalı bir değer bir daha hesabınıza erişiminizi engellemeyecek.',
+        'Girişte yine de bir şeyler ters giderse, iç hata mesajı yerine anlaşılır bir "bir şeyler ters gitti, lütfen tekrar dene" mesajı görüyorsunuz.',
+      ],
+      de: [
+        'Ein Anmeldefehler ist behoben, der ‚Unexpected end of JSON input‘ anzeigte und kein Passwort mehr akzeptierte. Die Anmeldung liest jetzt nur noch, was sie wirklich braucht — ein fehlerhafter Wert in einem Profilfeld kann dich nie wieder aussperren.',
+        'Geht bei der Anmeldung doch etwas schief, erscheint jetzt ein verständliches ‚Etwas ist schiefgelaufen, bitte versuche es erneut‘ statt einer internen Fehlermeldung.',
+      ],
+    },
+  },
+  {
+    version: '0.55.2-beta',
+    date: '2026-08-08',
+    highlights: {
+      en: [
+        'If an admin switches your account off, the sign-in page now says so. It had started telling you your account was "waiting for a quick review" and that an email was on its way — for an account nobody was reviewing. Accounts that really are waiting for a review still get that message.',
+      ],
+      tr: [
+        'Bir yönetici hesabınızı kapattıysa giriş sayfası artık bunu söylüyor. Bir süredir hesabınızın "kısa bir incelemeyi beklediğini" ve e-posta göndereceğimizi yazıyordu — oysa kimse o hesabı incelemiyordu. Gerçekten incelemeyi bekleyen hesaplar o mesajı görmeye devam ediyor.',
+      ],
+      de: [
+        'Wenn ein Admin dein Konto abschaltet, sagt die Anmeldeseite das jetzt auch. Zuletzt stand dort, dein Konto warte „auf eine kurze Prüfung" und eine E-Mail sei unterwegs — bei einem Konto, das niemand prüfte. Konten, die wirklich auf eine Prüfung warten, sehen diese Meldung weiterhin.',
+      ],
+    },
+  },
+  {
+    version: '0.55.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'A mentor can now be a mentee too. Helping someone doesn\'t mean you never need help yourself — if a mentor is given a mentor of their own, they get the mentee portal alongside their mentor pages.',
+        'The "View as" switch at the bottom of the sidebar carries the third view: Admin, Mentor, Mentee — whichever ones apply to you. Nothing changes for anyone with only one of them.',
+        'Admins can put anyone on either side of a mentorship. Both dropdowns now list mentors, mentees and admins, with the usual role first and a small role label on the rest. Nobody can be paired with themselves.',
+      ],
+      tr: [
+        'Bir mentor artık aynı zamanda mentee olabiliyor. Birine yardım ediyor olmak, kendinizin hiç yardıma ihtiyacı olmadığı anlamına gelmiyor — bir mentöre kendi mentörü atandığında, mentor sayfalarının yanında mentee portalı da açılıyor.',
+        'Kenar çubuğunun altındaki "Görünüm" düğmesi üçüncü görünümü de taşıyor: Yönetici, Mentor, Mentee — hangileri sizde varsa. Tek görünümü olanlar için hiçbir şey değişmiyor.',
+        'Yöneticiler bir mentorluğun iki tarafına da herkesi koyabiliyor. Her iki liste de mentorları, mentee’leri ve yöneticileri gösteriyor; her listede beklenen rol başta, diğerlerinde küçük bir rol etiketi var. Kimse kendisiyle eşleştirilemiyor.',
+      ],
+      de: [
+        'Ein Mentor kann jetzt auch Mentee sein. Wer andere unterstützt, braucht manchmal selbst Unterstützung — bekommt ein Mentor eine eigene Mentorin oder einen eigenen Mentor, steht ihm neben den Mentoren-Seiten auch das Mentee-Portal offen.',
+        'Der Schalter „Ansicht" unten in der Seitenleiste trägt die dritte Ansicht mit: Admin, Mentor, Mentee — je nachdem, welche für dich gelten. Für alle mit nur einer Ansicht ändert sich nichts.',
+        'Admins können beide Seiten einer Mentorschaft frei besetzen. Beide Listen zeigen jetzt Mentor:innen, Mentees und Admins, die jeweils erwartete Rolle zuerst und bei den übrigen ein kleines Rollen-Label. Niemand lässt sich mit sich selbst verknüpfen.',
+      ],
+    },
+  },
+  {
+    version: '0.54.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors: the sidebar now highlights the page you are on, so it is obvious where you are without reading the address bar.',
+      ],
+      tr: [
+        'Mentorlar: kenar çubuğu artık bulunduğunuz sayfayı vurguluyor; adres çubuğuna bakmadan nerede olduğunuz belli oluyor.',
+      ],
+      de: [
+        'Für Mentor:innen: Die Seitenleiste hebt jetzt die Seite hervor, auf der du gerade bist — ein Blick genügt, die Adresszeile brauchst du nicht.',
+      ],
+    },
+  },
+  {
+    version: '0.53.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors can now have a public profile page, but only if they switch it on themselves: it shows expertise, languages, how many mentees they currently have and their capacity — never their phone number, and never the names of their mentees.',
+        'Mentees see a "view profile" link next to their mentor — only when that mentor has actually made their profile public.',
+      ],
+      tr: [
+        'Mentorların artık herkese açık bir profil sayfası olabiliyor, ama yalnızca kendileri açarsa: uzmanlık alanları, diller, şu anki mentee sayısı ve kapasite görünüyor — telefon numarası ve mentee isimleri asla görünmüyor.',
+        'Menteeler, mentorlarının yanında “profili gör” bağlantısını görüyor — yalnızca o mentor profilini herkese açık yaptıysa.',
+      ],
+      de: [
+        'Mentor:innen können jetzt eine öffentliche Profilseite haben, aber nur wenn sie sie selbst freischalten: Sie zeigt Fachgebiete, Sprachen, die aktuelle Zahl der Mentees und die Kapazität — nie die Telefonnummer und nie die Namen der Mentees.',
+        'Mentees sehen neben ihrem Mentor einen Link „Profil ansehen“ — nur wenn dieser Mentor sein Profil tatsächlich öffentlich gemacht hat.',
+      ],
+    },
+  },
+  {
+    version: '0.52.0-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors now have their own profile page: "My profile" in the sidebar lets you edit your name, photo, bio, city, links, skills, areas of expertise, how many mentees you can take on, and the languages you speak.',
+        'The mentor profile only shows what applies to a mentor — no university, graduation year or CV upload, which belong to mentees.',
+      ],
+      tr: [
+        'Mentorların artık kendi profil sayfası var: kenar çubuğundaki “Profilim” ile adınızı, fotoğrafınızı, biyografinizi, şehrinizi, bağlantılarınızı, yetkinliklerinizi, uzmanlık alanlarınızı, kaç mentee alabileceğinizi ve konuştuğunuz dilleri düzenleyebilirsiniz.',
+        'Mentor profilinde yalnızca mentora uygun alanlar görünüyor — üniversite, mezuniyet yılı ve CV yükleme gibi menteeye ait alanlar yok.',
+      ],
+      de: [
+        'Mentor:innen haben jetzt eine eigene Profilseite: Über „Mein Profil“ in der Seitenleiste lassen sich Name, Foto, Kurzprofil, Stadt, Links, Fähigkeiten, Fachgebiete, die Zahl möglicher Mentees und die gesprochenen Sprachen bearbeiten.',
+        'Im Mentor-Profil erscheint nur, was zu einem Mentor passt — Universität, Abschlussjahr oder CV-Upload gehören zu Mentees und fehlen dort.',
+      ],
+    },
+  },
+  {
+    version: '0.51.2-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'Mentors: the onboarding cards on your dashboard are compact now — they sit side by side on a wide screen instead of one under the other, so the rest of the dashboard stays in view.',
+        'Each card folds away with the little arrow. Closed, it still shows the mentee\'s name, how far along they are (e.g. 2/6) and what to do next — and it stays the way you left it next time you come back.',
+      ],
+      tr: [
+        'Mentorlar: panonuzdaki onboarding kartları artık daha derli toplu — geniş ekranda alt alta değil yan yana duruyor, böylece panonun geri kalanı da görünür kalıyor.',
+        'Her kart küçük okla katlanıyor. Kapalıyken bile mentee’nin adını, nerede olduğunu (örneğin 2/6) ve sıradaki adımı gösteriyor — üstelik bıraktığınız gibi açılıyor.',
+      ],
+      de: [
+        'Für Mentor:innen: Die Onboarding-Karten auf dem Dashboard sind jetzt kompakt — auf breiten Bildschirmen stehen sie nebeneinander statt untereinander, der Rest des Dashboards bleibt sichtbar.',
+        'Jede Karte lässt sich über den kleinen Pfeil einklappen. Eingeklappt zeigt sie weiterhin den Namen, den Fortschritt (z. B. 2/6) und den nächsten Schritt — und bleibt so, wie du sie verlassen hast.',
+      ],
+    },
+  },
+  {
+    version: '0.51.1-beta',
+    date: '2026-08-07',
+    highlights: {
+      en: [
+        'The home page said the product was written by a single person. That is no longer true — a small team works on it now, and the honesty note and the mentor FAQ say so.',
+      ],
+      tr: [
+        'Ana sayfada ürünü tek kişinin yazdığı yazıyordu. Artık doğru değil — üzerinde küçük bir ekip çalışıyor; dürüstlük notu ve mentor SSS’i de böyle diyor.',
+      ],
+      de: [
+        'Auf der Startseite stand, das Produkt werde von einer einzelnen Person geschrieben. Das stimmt nicht mehr — daran arbeitet jetzt ein kleines Team, und der Ehrlichkeits-Hinweis sowie die Mentor-FAQ sagen das auch.',
       ],
     },
   },
@@ -309,12 +765,15 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     highlights: {
       en: [
         'Announcement emails and overdue stage-deadline reminders now arrive in the recipient\'s selected language (English, Turkish or German). If no supported language is saved, the email falls back to English.',
+        'Want to become a mentor? Look for the new "Apply here" prompt on the landing page, the sign-in page and the registration page — it takes you straight to the mentor application, no invitation needed.',
       ],
       tr: [
         'Duyuru e-postaları ve gecikmiş aşama son tarihi hatırlatmaları artık alıcının seçtiği dilde (İngilizce, Türkçe veya Almanca) geliyor. Desteklenen bir dil kaydedilmemişse e-posta İngilizce olarak gönderiliyor.',
+        'Mentor olmak mı istiyorsun? Ana sayfada, giriş sayfasında ve kayıt sayfasında yeni bir "Buradan başvur" bağlantısı seni davete gerek kalmadan doğrudan mentor başvurusuna götürüyor.',
       ],
       de: [
         'Ankündigungs-E-Mails und Erinnerungen an überfällige Phasenfristen kommen jetzt in der ausgewählten Sprache der empfangenden Person an (Englisch, Türkisch oder Deutsch). Ist keine unterstützte Sprache gespeichert, wird die E-Mail auf Englisch gesendet.',
+        'Möchtest du Mentor werden? Auf der Startseite, der Anmeldeseite und der Registrierungsseite findest du jetzt den Hinweis "Hier bewerben" — er führt dich ohne Einladung direkt zur Mentor-Bewerbung.',
       ],
     },
   },
@@ -428,7 +887,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     date: '2026-08-04',
     highlights: {
       en: [
-        'Half an hour before a meeting, your dashboard says so — with the join link right there. It covers both kinds: a meeting booked with you, and your project\u2019s recurring call (you see that one even if you have no mentorship attached to the project).',
+        'Half an hour before a meeting, your dashboard says so — with the join link right there. It covers both kinds: a meeting booked with you, and your project’s recurring call (you see that one even if you have no mentorship attached to the project).',
         'While a meeting is running, a green "Join" appears in the top right of every page, so you can get in from wherever you happen to be. It disappears an hour after the start.',
       ],
       tr: [

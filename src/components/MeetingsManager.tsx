@@ -9,11 +9,14 @@ import { Copy, Check } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
-import { wallClockToInstantISO } from '@/lib/timezone';
+import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
+import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 
 interface Relation {
   id: string;
-  mentee: { fullName: string };
+  // `timezone` is null for anyone who never saved one; AttendeeTimes falls back
+  // to the deployment default for those, same as the emails do.
+  mentee: { fullName: string; timezone?: string | null };
 }
 interface Meeting {
   id: string;
@@ -64,6 +67,12 @@ export function MeetingsManager() {
   }, [load]);
 
   const chosen = relations.filter((r) => selected[r.id]).map((r) => r.id);
+  // The organizer is on the list too: a reading of the invitees' clocks is only
+  // a confirmation if it can be compared against the one the time was typed on.
+  const attendees = [
+    { name: t.meetings.you, timezone: browserTimeZone() },
+    ...relations.filter((r) => selected[r.id]).map((r) => ({ name: r.mentee.fullName, timezone: r.mentee.timezone })),
+  ];
 
   const copyLink = async (m: Meeting) => {
     if (!m.meetLink) return;
@@ -84,7 +93,9 @@ export function MeetingsManager() {
       const res = await fetch('/api/meetings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationIds: chosen, title, scheduledAt, meetLink }),
+        // `timeZone`: the clock the organizer typed the time on — their browser's,
+        // which is what the date/time inputs are read in (#1210).
+        body: JSON.stringify({ relationIds: chosen, title, scheduledAt, meetLink, timeZone: browserTimeZone() ?? undefined }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -187,6 +198,7 @@ export function MeetingsManager() {
                 />
               </div>
             </div>
+            {scheduledAt && chosen.length > 0 && <AttendeeTimes instantISO={scheduledAt} people={attendees} />}
             <Input
               label={t.meetings.meetLink}
               placeholder="https://meet.google.com/abc-defg-hij"

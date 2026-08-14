@@ -18,6 +18,7 @@ import { formatDate } from '@/lib/relativeTime';
 interface User {
   id: string;
   fullName: string;
+  role: string;
 }
 
 interface Company {
@@ -33,6 +34,14 @@ interface MentorshipRelation {
   mentee: { id: string; fullName: string; email: string };
   company: { id: string; name: string } | null;
   _count: { interactions: number };
+}
+
+/** The expected role for a picker first, everyone else after, names sorted. */
+function sortForPicker(users: User[], expected: string): User[] {
+  return [...users].sort((a, b) => {
+    if ((a.role === expected) !== (b.role === expected)) return a.role === expected ? -1 : 1;
+    return a.fullName.localeCompare(b.fullName);
+  });
 }
 
 export default function MentorshipPage() {
@@ -80,9 +89,14 @@ export default function MentorshipPage() {
         fetch('/api/companies'),
       ]);
       const [usersData, companiesData] = await Promise.all([usersRes.json(), companiesRes.json()]);
-      // Admins can mentor too, so include them in the mentor picker.
-      setMentors((usersData.users || []).filter((u: User & { role: string }) => u.role === 'MENTOR' || u.role === 'ADMIN'));
-      setMentees((usersData.users || []).filter((u: User & { role: string }) => u.role === 'MENTEE'));
+      // Both pickers hold the same people (#1141): admins mentor, and a mentor
+      // can be mentored in turn. `sortForPicker` keeps each list's usual role
+      // first, so the common case still reads as "pick a mentor / pick a mentee".
+      const participants = (usersData.users || []).filter((u: User) =>
+        ['ADMIN', 'MENTOR', 'MENTEE'].includes(u.role)
+      );
+      setMentors(sortForPicker(participants, 'MENTOR'));
+      setMentees(sortForPicker(participants, 'MENTEE'));
       setCompanies(companiesData.companies || []);
     } catch {
       setError(t.mentorships.loadFailed);
@@ -154,8 +168,19 @@ export default function MentorshipPage() {
     await fetchRelations();
   };
 
-  const mentorOptions = mentors.map((m) => ({ value: m.id, label: m.fullName }));
-  const menteeOptions = mentees.map((m) => ({ value: m.id, label: m.fullName }));
+  // Someone whose role isn't the one this picker is for carries a role suffix, so
+  // "assign a mentor's mentor" is a deliberate choice rather than a surprise. The
+  // person already picked on the other side drops out — nobody mentors themselves.
+  const roleSuffix = (role: string, expected: string) =>
+    role === expected
+      ? ''
+      : ` · ${role === 'ADMIN' ? t.modeSwitch.admin : role === 'MENTOR' ? t.modeSwitch.mentor : t.modeSwitch.mentee}`;
+  const mentorOptions = mentors
+    .filter((m) => m.id !== formData.menteeId)
+    .map((m) => ({ value: m.id, label: m.fullName + roleSuffix(m.role, 'MENTOR') }));
+  const menteeOptions = mentees
+    .filter((m) => m.id !== formData.mentorId)
+    .map((m) => ({ value: m.id, label: m.fullName + roleSuffix(m.role, 'MENTEE') }));
   const companyOptions = [
     { value: '', label: t.mentorships.noCompany },
     ...companies.map((c) => ({ value: c.id, label: c.name })),

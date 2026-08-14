@@ -84,9 +84,16 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           echo "topic=pr${PR}" >> "$GITHUB_OUTPUT"
-          # Deterministic port in 3300–3399 (prod=3200, preview=3201). 100 slots;
-          # PRs whose numbers collide mod 100 would clash — fine at our volume.
-          echo "port=$((3300 + PR % 100))" >> "$GITHUB_OUTPUT"
+          # Deterministic port in 3400–3499 (prod=3200, preview=3201, buch=3202).
+          # 100 slots; PRs whose numbers collide mod 100 clash — fine at our volume.
+          #
+          # NOT 3300–3399, which is where this used to live: slot 06 lands on
+          # 3306, and 3306 is MariaDB. Every PR numbered ...06 therefore tried to
+          # publish a container on the database's port and died with "address
+          # already in use" — a permanent collision, not a volume problem (#1208,
+          # hit by #1206). 3389 (RDP) sits in that block too. 3400–3499 is clear
+          # of both and, checked on the box, of everything else.
+          echo "port=$((3400 + PR % 100))" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@v7

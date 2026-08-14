@@ -2,13 +2,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { MessageSquare, LifeBuoy } from 'lucide-react';
+import { MessageSquare, LifeBuoy, UserRound } from 'lucide-react';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 import { relativeTime } from '@/lib/relativeTime';
 import { StartConversationPicker } from '@/components/StartConversationPicker';
-import { createOrGetProjectConversation } from '@/lib/conversations';
+import { conversationForRelation, createOrGetProjectConversation } from '@/lib/conversations';
 
 // Unified message inbox for every role: lists the viewer's conversation
 // threads (mentor side or mentee side) with the other participant, a preview
@@ -26,6 +27,18 @@ export default async function MessagesInboxPage() {
   const myProjectIds = (
     await prisma.projectMember.findMany({ where: { userId: me }, select: { projectId: true } })
   ).map((m) => m.projectId);
+
+  // Every mentorship the viewer is in, resolved to the pair's one conversation
+  // and taking the relation's own messages with it (#1156). This list used to
+  // render mentorship threads *alongside* conversations, so anyone reachable
+  // both ways — as a mentee and as a project co-member — appeared twice, with
+  // half of the history behind each row. Runs before the query below so the
+  // adopted messages count towards the preview and the unread badge.
+  const myRelations = await prisma.mentorshipRelation.findMany({
+    where: { OR: [{ mentorId: me }, { menteeId: me }] },
+    select: { id: true, mentorId: true, menteeId: true },
+  });
+  await Promise.all(myRelations.map(conversationForRelation));
 
   // Lazy-create chats for projects that predate #771, then list GROUP and DIRECT
   // conversations together so the project chat is reachable from the inbox.
@@ -62,46 +75,25 @@ export default async function MessagesInboxPage() {
       })
     : [];
 
-  const relations = await prisma.mentorshipRelation.findMany({
-    where: { OR: [{ mentorId: me }, { menteeId: me }] },
-    select: {
-      id: true,
-      mentorId: true,
-      mentor: { select: { fullName: true } },
-      mentee: { select: { fullName: true } },
-      messages: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: { body: true, createdAt: true, senderId: true },
-      },
-      _count: { select: { messages: { where: { readAt: null, senderId: { not: me } } } } },
-    },
-  });
-
-  // Mentorship threads and conversations share one shape, so they sort and
-  // render as a single list; `href` is what distinguishes the two routes.
-  const threads = [
-    ...relations.map((r) => ({
-      key: `rel-${r.id}`,
-      href: `/messages/${r.id}`,
-      otherName: (r.mentorId === me ? r.mentee?.fullName : r.mentor?.fullName) ?? '—',
-      last: r.messages[0] ?? null,
-      unread: r._count.messages,
-    })),
-    ...conversations.map((c) => ({
+  // One row per conversation — which, for a 1:1 chat, means one row per person.
+  const threads = conversations
+    .map((c) => ({
       key: `conv-${c.id}`,
       href: `/messages/c/${c.id}`,
       otherName: c.type === 'GROUP'
         ? t.messages.projectGroup.replace('{name}', c.project?.name ?? '—')
         : c.participants.find((p) => p.userId !== me)?.user.fullName ?? '—',
+      // Who the row is about, so the name can carry a person card (#1166).
+      // Null for a group room — it is named after its project, not a person.
+      otherId: c.type === 'GROUP' ? null : c.participants.find((p) => p.userId !== me)?.userId ?? null,
       last: c.messages[0] ?? null,
       unread: c._count.messages,
-    })),
-  ].sort((a, b) => {
-    const at = a.last?.createdAt?.getTime() ?? 0;
-    const bt = b.last?.createdAt?.getTime() ?? 0;
-    return bt - at;
-  });
+    }))
+    .sort((a, b) => {
+      const at = a.last?.createdAt?.getTime() ?? 0;
+      const bt = b.last?.createdAt?.getTime() ?? 0;
+      return bt - at;
+    });
 
   // Offer only people we don't already have a DM with — those threads are in
   // the list above. DIRECT only: every co-member is also a participant of the
@@ -170,8 +162,16 @@ export default async function MessagesInboxPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm truncate ${th.unread > 0 ? 'font-bold text-gray-900' : 'font-medium text-gray-900'}`}>
-                        {th.otherName}
+                      <span className={`flex min-w-0 items-center gap-1.5 text-sm truncate ${th.unread > 0 ? 'font-bold text-gray-900' : 'font-medium text-gray-900'}`}>
+                        <span className="truncate">{th.otherName}</span>
+                        {/* The whole row is a link into the thread, so the name
+                            itself cannot be the card's trigger — it gets its own
+                            icon, same as the email composer's checkbox rows. */}
+                        {th.otherId && (
+                          <PersonHoverCard personId={th.otherId} className="no-underline">
+                            <UserRound className="h-3.5 w-3.5 text-gray-400 hover:text-blue-600" aria-hidden />
+                          </PersonHoverCard>
+                        )}
                       </span>
                       {th.last && (
                         <span className="text-xs text-gray-400 shrink-0">{relativeTime(th.last.createdAt, locale)}</span>

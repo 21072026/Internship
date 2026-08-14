@@ -23,6 +23,7 @@ import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone'
 import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
+import { OfferManagementPanel } from '@/components/OfferManagementPanel';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
@@ -49,6 +50,8 @@ interface MenteeDetail {
   phone?: string;
   whatsapp?: string;
   city?: string;
+  /** IANA zone, null when the candidate never saved one (#1210). */
+  timezone?: string | null;
   birthDate?: string;
   role?: string;
   referralSource?: string;
@@ -546,7 +549,17 @@ export default function AdminMenteeDetailPage() {
             </div>
           )}
         </Card>
-        {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} />}
+        {rel && (
+          <OfferManagementPanel
+            relationId={rel.id}
+            menteeName={user.fullName}
+            companyName={rel.company?.name}
+            pipelineStatus={rel.pipelineStatus}
+            stages={stages}
+            onMoveToStage={(stageKey) => changeStage(rel.id, stageKey)}
+          />
+        )}
+        {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} menteeTimezone={user.timezone ?? null} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
         <PersonTodos userId={id} fullName={user?.fullName} />

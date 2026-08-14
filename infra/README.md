@@ -214,9 +214,24 @@ SMTP_PORT=587
 SMTP_USER=...
 SMTP_PASS=...
 SMTP_FROM=...
+# Optional second outbound channel (docs/EMAIL_DELIVERABILITY.md § "Two channels").
+# Unset ⇒ everything goes over SMTP_* above, which is the historical behaviour.
+#SMTP_BULK_HOST=...
+#SMTP_BULK_PORT=465
+#SMTP_BULK_USER=...
+#SMTP_BULK_PASS=...
+#SMTP_BULK_FROM=...
 ENV
 sudo chmod 600 /etc/internship-crm/prod.env
 ```
+
+> **This file — not GitHub secrets — is what the running container reads.**
+> `deploy-prod.sh` builds the container's env from `ENV_FILE` (falling back to
+> the values already on the running container when it is missing). The
+> `secrets.SMTP_*` entries in `deploy-prod.yml` / `deploy-preview.yml` are used
+> only by the "Email alert on failure" job, which runs on a GitHub-hosted runner
+> and never touches the app. Changing the app's mail configuration means editing
+> this file and redeploying.
 
 ### Deploy `main` to production (builds from source — no ghcr pull needed)
 ```bash
@@ -310,3 +325,61 @@ that exists only on this machine; anything that merely needs a Linux box with no
 and docker (builds, tests, linting) goes to `ubuntu-latest`, which is free for this
 public repo. Moving builds onto the runner in 2026-06 was a quota workaround
 (#636), and it made the production host compile on every PR push.
+
+---
+
+## 5. Database backups & the destructive-schema gate
+
+Every deploy runs `prisma db push --accept-data-loss`, so **the moment before a
+deploy is the last moment the current database exists in full**. Two gates sit
+there (#1179):
+
+| Gate | prod | preview | topic (`internship-crm-pr<N>`) |
+|---|---|---|---|
+| `infra/backup-db.sh` — dump before the schema sync | ✔ | ✔ | skipped (disposable, shares the preview DB) |
+| `infra/schema-guard.sh` — refuse a data-destroying diff | **blocks** | warns | warns |
+
+Both are wired into `infra/deploy-prod.sh` (which is also what deploys preview
+and the topic envs — only `CONTAINER` differs), so there is nothing to call by
+hand on a normal deploy.
+
+### Daily backup (cron)
+
+The deploy-time dump only covers deploys. Everything else — a bad bulk delete, a
+disk failure — needs a scheduled one. On the server:
+
+```bash
+sudo install -m 755 infra/backup-db.sh /usr/local/bin/internship-backup-db
+sudo crontab -e
+```
+
+```cron
+# 03:15 UTC daily, production
+15 3 * * * set -a; . /etc/internship-crm/prod.env; set +a; /usr/local/bin/internship-backup-db --env prod >> /var/log/internship-backup.log 2>&1
+```
+
+Dumps land in `/var/backups/internship-crm` (override with `BACKUP_DIR`), are
+kept for `KEEP_DAYS` (default 7) and are written `0600` in a `0700` directory —
+**they contain real personal data** (CVs, phone numbers, mentor notes). Never
+copy one into the repo, a preview environment or a ticket.
+
+A dump is rejected (and the deploy stops) if it is under `MIN_BYTES`, is not a
+valid gzip stream, or contains no `CREATE TABLE`. A backup that looks fine but
+restores nothing is worse than no backup at all.
+
+### Restoring
+
+See [`docs/disaster-recovery.md`](../docs/disaster-recovery.md) for the full
+runbook. The short version:
+
+```bash
+gzip -dc /var/backups/internship-crm/prod-<stamp>.sql.gz | mysql -h <host> -u <user> -p <db>
+```
+
+### Overrides (use knowingly)
+
+| Variable | Effect |
+|---|---|
+| `FORCE_NO_BACKUP=1` | deploy without taking a backup |
+| `ALLOW_DESTRUCTIVE=1` | apply a data-destroying schema change — **refused unless a backup was taken in the same run** |
+| `BACKUP_DIR`, `KEEP_DAYS`, `MIN_BYTES` | where/how long/how small |

@@ -13,7 +13,9 @@
 #      the deploy workflows do it since 2026-07-29 — the build runs on a
 #      GitHub-hosted runner so this server never compiles) or build it locally
 #      from source, stamping GIT_SHA
-#   3. prisma db push --accept-data-loss  (schema sync, same as CI)
+#   3. back up the database (infra/backup-db.sh), refuse a data-destroying
+#      schema diff (infra/schema-guard.sh), then prisma db push
+#      --accept-data-loss (schema sync, same as CI)
 #   4. seed-templates + seed-goal-templates + backfill-project-members (idempotent)
 #   5. swap the internship-crm container (host networking, port 3200, restart
 #      unless-stopped) — byte-for-byte the flags deploy.yml uses
@@ -37,6 +39,11 @@
 #   --pull-image  `docker pull $IMAGE` instead of building (implies --skip-build).
 #                 For a private registry set GHCR_USER + GHCR_TOKEN and this
 #                 logs in first; a public package needs neither.
+#
+# ENV OVERRIDES FOR THE DATA GATES (use knowingly)
+#   FORCE_NO_BACKUP=1    deploy without taking a backup first
+#   ALLOW_DESTRUCTIVE=1  apply a schema change that drops data (requires a backup)
+#   BACKUP_DIR=...       where dumps go (default /var/backups/internship-crm)
 #
 # ENV
 #   DEPLOY_SHA    the commit the image was built from. Only needed when the
@@ -79,6 +86,7 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
   mkdir -p "$(dirname "$ENV_FILE")"
   : > "$ENV_FILE"; chmod 600 "$ENV_FILE"
   for k in DATABASE_URL NEXTAUTH_SECRET NEXTAUTH_URL SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM \
+           SMTP_BULK_HOST SMTP_BULK_PORT SMTP_BULK_USER SMTP_BULK_PASS SMTP_BULK_FROM \
            INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
            INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
            CRON_SECRET CRON_ENABLED; do
@@ -224,9 +232,104 @@ run_tool() { # run a one-off tool container against the DB (network per $NETWORK
   docker run --rm "${TOOL_NET_ARGS[@]}" -e DATABASE_URL="$DATABASE_URL" "$IMAGE" "$@"
 }
 
-# ── 3. Schema sync ────────────────────────────────────────────────────────────
+# ── 3. Backup, then schema sync ──────────────────────────────────────────────
+# The push below runs with --accept-data-loss, so this is the last moment at
+# which the current database still exists in full. Both steps are gates, not
+# niceties: no backup → no deploy, and a data-destroying diff → no deploy
+# without an explicit operator decision (#1179).
+# This same script deploys prod, the shared preview and every topic env — the
+# caller only overrides CONTAINER. The gates scale with what is at stake:
+#   prod     → back up (REQUIRED — a failed dump stops the deploy), and REFUSE
+#              a data-destroying diff
+#   preview  → try to back up but only WARN on failure, and only WARN on a
+#              destructive diff (schema experiments belong there)
+#   topic    → neither; those envs are disposable and share the preview DB,
+#              so a dump per PR deploy is noise, not safety
+#
+# Preview's backup became advisory in #1200. It is the same tiering the schema
+# guard already uses one block down, applied to the other gate: preview's DB
+# user is granted from the docker gateway only, so a dump taken on the host
+# authenticates as the server's public IP and is refused (error 1045). Until
+# that grant exists, a hard gate there blocks every preview deploy to protect a
+# database whose whole purpose is to be disposable — while prod, which is what
+# the gate was actually built for (#1179), keeps its guarantee unchanged.
+case "$CONTAINER" in
+  internship-crm) ENV_LABEL=prod ;;
+  internship-crm-preview) ENV_LABEL=preview ;;
+  *) ENV_LABEL="${CONTAINER#internship-crm-}" ;;
+esac
+
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+BACKUP_TAKEN=0
+if [ "$ENV_LABEL" != "prod" ] && [ "$ENV_LABEL" != "preview" ]; then
+  log "Disposable env ($ENV_LABEL) — skipping backup and running the schema guard in warn-only mode"
+elif [ "${FORCE_NO_BACKUP:-0}" = "1" ]; then
+  log "!! FORCE_NO_BACKUP=1 — DEPLOYING WITHOUT A BACKUP (operator override)"
+else
+  log "Backing up the database before the schema sync"
+  # Runs on the host (mysqldump), not in the image: the dump must survive even
+  # if the new image is broken, and it must never live inside a container layer.
+  #
+  # Which is why the URL needs rewriting first (#1200). Under bridge networking
+  # $DATABASE_URL names the DB as `host.docker.internal` — a name that exists
+  # ONLY inside a container started with --add-host. On the host it does not
+  # resolve, so preview's backup died with "Unknown server host" on every deploy.
+  #
+  # The docker gateway (172.17.0.1) was the first attempt and it connects, but
+  # MariaDB attributes the connection to the box's PUBLIC ip, and `crm-preview`
+  # is granted from `172.17.%` only — error 1045. So use loopback and mirror what
+  # prod has always done: `crm` is granted @localhost and dumps fine that way.
+  # `crm-preview`@localhost now exists too, deliberately READ-ONLY and scoped to
+  # internship_crm_preview (the 172.17.% entry keeps the full DDL rights the app
+  # needs). Verified on the server: 60 tables, 7.5MB.
+  #
+  # Loopback rather than the public ip on purpose — it does not change when the
+  # box is renumbered, and it is the one address a local dump can always reach.
+  BACKUP_DATABASE_URL="$DATABASE_URL"
+  if [ "$NETWORK" != host ]; then
+    BACKUP_DATABASE_URL="${DATABASE_URL//host.docker.internal/127.0.0.1}"
+    log "Backup reaches the DB over loopback (the container's host alias is not resolvable here)"
+  fi
+  # On prod a failed dump stops the deploy; on preview it is reported and the
+  # deploy continues (see the tiering note above). BACKUP_TAKEN stays 0 in that
+  # case, which is what keeps ALLOW_DESTRUCTIVE unusable there — a preview whose
+  # backup failed still cannot be talked into a data-destroying schema push.
+  if DATABASE_URL="$BACKUP_DATABASE_URL" \
+     BACKUP_DIR="${BACKUP_DIR:-/var/backups/internship-crm}" \
+       "$REPO_DIR/infra/backup-db.sh" --env "$ENV_LABEL" --stamp "$STAMP"; then
+    BACKUP_TAKEN=1
+  elif [ "$ENV_LABEL" = "prod" ]; then
+    log "Backup FAILED on prod — refusing to deploy. Fix the dump, or set
+FORCE_NO_BACKUP=1 as a deliberate one-off override."
+    exit 1
+  else
+    warn "Backup FAILED on $ENV_LABEL — deploying anyway without a fresh dump (advisory on this env, see #1200)"
+  fi
+fi
+
+log "Checking the pending schema change for data loss"
+GUARD_ARGS=()
+[ "$ENV_LABEL" = "prod" ] || GUARD_ARGS=(--warn-only)
+RUN_TOOL="docker run --rm ${TOOL_NET_ARGS[*]} -e DATABASE_URL=$DATABASE_URL $IMAGE npx" \
+  BACKUP_TAKEN="$BACKUP_TAKEN" \
+  "$REPO_DIR/infra/schema-guard.sh" "${GUARD_ARGS[@]+"${GUARD_ARGS[@]}"}"
+
 log "prisma db push"
 run_tool npx prisma db push --accept-data-loss
+
+# Immediately after the push, because the push itself is what breaks these
+# (#1150). Prisma DROPS `@default` when it emits DDL for a `Json` field, so a
+# new one becomes a bare `ALTER TABLE ... ADD COLUMN x JSON NOT NULL`; on
+# MariaDB — which prod is, and where `JSON` is only an alias for
+# `LONGTEXT utf8mb4_bin` — that backfills every PRE-EXISTING row with the empty
+# string, silently, even under STRICT_TRANS_TABLES. Prisma then JSON.parse()s
+# the column on read, so every one of those rows becomes unreadable: adding
+# `User.languages` (#1078) locked every account that predated the deploy out of
+# sign-in with "Unexpected end of JSON input". This resets values that are
+# already unreadable to the schema default — inert garbage in, valid JSON out,
+# never a value the app could have used. Converges to a no-op.
+log "repair invalid Json column values (idempotent)"
+run_tool node prisma/backfill-json-columns.mjs --repair || true
 
 # ── 4. Idempotent seeds / backfills ──────────────────────────────────────────
 log "seed-templates + project-member backfill (idempotent)"
@@ -267,6 +370,11 @@ docker run -d \
   -e SMTP_USER="${SMTP_USER:-}" \
   -e SMTP_PASS="${SMTP_PASS:-}" \
   -e SMTP_FROM="${SMTP_FROM:-}" \
+  -e SMTP_BULK_HOST="${SMTP_BULK_HOST:-}" \
+  -e SMTP_BULK_PORT="${SMTP_BULK_PORT:-}" \
+  -e SMTP_BULK_USER="${SMTP_BULK_USER:-}" \
+  -e SMTP_BULK_PASS="${SMTP_BULK_PASS:-}" \
+  -e SMTP_BULK_FROM="${SMTP_BULK_FROM:-}" \
   -e INBOUND_EMAIL_DOMAIN="${INBOUND_EMAIL_DOMAIN:-}" \
   -e INBOUND_SECRET="${INBOUND_SECRET:-}" \
   -e INBOUND_IMAP_HOST="${INBOUND_IMAP_HOST:-}" \

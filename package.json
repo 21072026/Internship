@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.52.0-beta",
+  "version": "0.65.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -13,6 +13,8 @@
     "start": "next start",
     "lint": "next lint",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
+    "check:auth-reads": "node scripts/check-auth-reads.mjs",
+    "db:check-json": "node prisma/backfill-json-columns.mjs",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:headed": "playwright test --headed",
@@ -38,7 +40,7 @@
     "next": "^15.5.14",
     "next-auth": "^4.24.7",
     "node-cron": "^3.0.3",
-    "nodemailer": "^7.0.11",
+    "nodemailer": "^9.0.5",
     "pdf-parse": "^2.4.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -67,6 +69,9 @@
   },
   "overrides": {
     "postcss": "^8.5.18",
-    "sharp": "^0.35.0"
+    "sharp": "^0.35.0",
+    "next-auth": {
+      "nodemailer": "$nodemailer"
+    }
   }
 }

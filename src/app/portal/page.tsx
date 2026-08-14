@@ -10,6 +10,7 @@ import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
+import { OfferCard } from '@/components/OfferCard';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
 import { getServerDictionary } from "@/i18n/server";
@@ -49,7 +50,9 @@ async function getMenteeData(menteeId: string) {
       where: { menteeId, status: 'ACTIVE' },
       include: {
         mentor: {
-          select: { id: true, fullName: true, email: true, department: true, phone: true },
+          // `timezone` (#1210): the meeting-request form shows a proposed slot on
+          // the mentor's clock as well as the mentee's before it is sent.
+          select: { id: true, fullName: true, email: true, department: true, phone: true, publicProfile: true, timezone: true },
         },
         company: true,
         interactions: {
@@ -137,6 +140,15 @@ export default async function PortalDashboard() {
       )}
 
       {!activeRelation && <MentorshipRequestPanel />}
+
+      {/* Offer card (#809) — kept above the fold like the journey tracker: an
+          offer needing a decision is the single most time-sensitive thing a
+          mentee can see here. */}
+      {activeRelation && (
+        <div className="mb-6">
+          <OfferCard />
+        </div>
+      )}
 
       {/* Journey / pipeline stage — kept above the fold so a mentee sees where
           they are as soon as the portal loads (#692), before the longer
@@ -283,6 +295,12 @@ export default async function PortalDashboard() {
                     <MessageCircle className="h-4 w-4" />
                     {t.portal.messageMentor}
                   </Link>
+                  {activeRelation.mentor.publicProfile === true && (
+                    <Link href={`/p/${activeRelation.mentor.id}`} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
+                      <ExternalLink className="h-4 w-4" />
+                      {t.portal.viewMentorProfile}
+                    </Link>
+                  )}
                 </div>
               </div>
 
@@ -385,7 +403,11 @@ export default async function PortalDashboard() {
             <EvaluationPanel relationId={activeRelation.id} audience="MENTOR" />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            <MeetingRequestsPanel relationId={activeRelation.id} mode="request" />
+            <MeetingRequestsPanel
+              relationId={activeRelation.id}
+              mode="request"
+              counterpart={{ name: activeRelation.mentor.fullName, timezone: activeRelation.mentor.timezone }}
+            />
             <QuestionsPanel relationId={activeRelation.id} mode="ask" />
           </div>
         </>

@@ -9,16 +9,21 @@ Bir bastırma dosyası yerine düz metin: gerekçe diğer güvenlik dokümanlar�
 yanında okunabilir kalıyor ve biri okuduğunda **hâlâ geçerli mi** diye sorması
 gerektiği belli oluyor.
 
-Son gözden geçirme: **2026-07-31** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
+Son gözden geçirme: **2026-08-07** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
 
 ## Açık bulgular
 
 | Paket | Şiddet | Durum | Gerekçe |
 |---|---|---|---|
 | `xlsx` | high | **Yama yok** | Prototype pollution + ReDoS. Upstream (SheetJS) npm'deki `xlsx` paketini terk etti; düzeltme yalnız kendi CDN'lerinde yayınlanıyor. Tek kullanım yerimiz `src/lib/excel.ts`: **istemci tarafında**, dinamik `import('xlsx')` ile, yalnız `XLSX.writeFile` — hiç dosya okumuyoruz. Her iki advisory de *parse* yolunda, üstelik kod sunucuda değil tarayıcıda çalışıyor. Kalıcı çözüm paketi değiştirmek — ayrı iş. |
-| `nodemailer` | high | Majör gerekiyor (7.x → 9.x) | SMTP komut enjeksiyonu ve `disableFileAccess` atlatma sınıfı bulgular. Hepsi **saldırganın kontrol ettiği zarf/başlık alanları** gerektiriyor; bizim gönderim yolumuzda alıcı adresi ve gövde uygulama tarafından üretiliyor. Yine de gerçek — majör yükseltme ayrı task. |
-| `next-auth` | moderate | Geçişli | Kendi kodundan değil, `next` ve `nodemailer` üzerinden geliyor. Onlar kapandığında bu da kapanır. |
 | `node-cron` · `uuid` | moderate | Majör gerekiyor (3.x → 4.x) | `uuid` v3/v5/v6'da buffer sınır kontrolü eksikliği; `node-cron` üzerinden geliyor. Bu kod yolunu **hiç çağırmıyoruz** — cron yalnız zamanlama için kullanılıyor. |
+
+## Kapatılanlar (2026-08-07, #1143)
+
+| Paket | Nasıl |
+|---|---|
+| `nodemailer` | 7.0.13 → 9.0.5. Yalnız kök aralığı bumplamak yetmiyordu: `next-auth@4.24.15` `peerOptional nodemailer@"^7.0.7"` istiyor ve `npm ci` ERESOLVE ile düşüyor (Dependabot'un #1129'u tam olarak burada kırıldı). `overrides` ile `next-auth`'un peer'i köke bağlandı (`"next-auth": { "nodemailer": "$nodemailer" }`) — güvenli, çünkü `src/lib/auth.ts` yalnız `CredentialsProvider` kullanıyor, `EmailProvider` yok, yani next-auth nodemailer'ı runtime'da hiç yüklemiyor. |
+| `next-auth` | Kendi kodundan değil `nodemailer` üzerinden geliyordu; onunla birlikte kapandı. |
 
 ## Kapatılanlar (2026-07-31, #882)
 

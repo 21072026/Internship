@@ -7,7 +7,7 @@ import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMeetingRequestEmail } from '@/services/emailService';
-import { hasTimeZoneDesignator, parseUserDateTime } from '@/lib/timezone';
+import { parseUserDateTime } from '@/lib/timezone';
 
 // GET ?relationId= — meeting requests for a thread (participants/admin).
 export async function GET(request: Request) {
@@ -39,9 +39,12 @@ export async function POST(request: Request) {
 
   // The panel sends a zone-qualified instant; a bare wall clock is anchored to
   // the requester's zone rather than the container's UTC (#1061).
-  const requester = hasTimeZoneDesignator(parsed.data.proposedAt)
-    ? null
-    : await prisma.user.findUnique({ where: { id: session.user.id }, select: { timezone: true } });
+  // Loaded unconditionally since #1210: the zone is needed for the mentor's
+  // email even when the instant arrived fully qualified and needed no anchoring.
+  const requester = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { timezone: true },
+  });
   const proposedAt = parseUserDateTime(parsed.data.proposedAt, requester?.timezone);
   if (!proposedAt) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
@@ -77,6 +80,7 @@ export async function POST(request: Request) {
           link,
           orgId: rcpt.orgId,
           timeZone: rcpt.timezone,
+          requesterTimeZone: requester?.timezone ?? null,
         });
       } catch (e) {
         console.error('Meeting request email failed:', e);

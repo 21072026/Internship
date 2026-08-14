@@ -18,6 +18,8 @@ import {
 import { useMessagesHeaderTitle } from '@/components/MessagesShell';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
+import { LanguageBadge } from '@/components/LanguageBadge';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 
 interface Attachment {
@@ -44,6 +46,8 @@ const REACTIONS = ['👍', '❤️', '😂', '😮', '🎉'] as const;
 interface Party {
   id: string;
   fullName: string;
+  // Which language they read, so the header can say so before you type (#1164).
+  preferredLanguage?: string | null;
   // Group (project) chats also carry who each person is on the project (#51).
   role?: 'OWNER' | 'MENTOR' | 'MENTEE' | null;
   functionalRole?: 'DEVELOPER' | 'TESTER' | 'MARKETING' | null;
@@ -71,8 +75,10 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // Set for a project group chat: which project it belongs to, so the header can
   // name the room, list who is in it and link back to the project (#51).
   const [group, setGroup] = useState<{ projectId: string | null; projectName: string | null } | null>(null);
-  // Mentorship threads only: who the mentor is, so an empty thread can suggest
-  // a *welcome* to the mentor and a neutral opener to the mentee (#1130).
+  // Who the mentor is, when a mentorship stands behind this 1:1 thread, so an
+  // empty thread can suggest a *welcome* to the mentor and a neutral opener to
+  // the mentee (#1130). Answered for conversations too since the mentorship
+  // thread hands over to one (#1156).
   const [mentorId, setMentorId] = useState<string | null>(null);
   const [showParties, setShowParties] = useState(false);
   const [body, setBody] = useState('');
@@ -87,6 +93,8 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // DM where we no longer share a project with the other person. History stays
   // visible; only the composer goes away.
   const [canPost, setCanPost] = useState(true);
+  // Account state of the other side of a 1:1 thread; null for group chats.
+  const [counterpartState, setCounterpartState] = useState<string | null>(null);
   // Per-message edit/delete state.
   const [menuId, setMenuId] = useState<string | null>(null);
   const [reactId, setReactId] = useState<string | null>(null);
@@ -148,9 +156,10 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     // A mentorship thread answers with mentor/mentee; a conversation with a
     // participants array. Normalize both to one list.
     setParties(d.participants ?? [d.mentor, d.mentee].filter(Boolean));
-    setMentorId(d.mentor?.id ?? null);
+    setMentorId(d.mentorId ?? d.mentor?.id ?? null);
     setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null } : null);
     setCanPost(d.canPost !== false);
+    setCounterpartState(d.counterpartState ?? null);
     setLoading(false);
   }, [target.kind, target.id]);
 
@@ -301,7 +310,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const suggestions =
     messages.length > 0 || !canPost || group || !otherFirstName
       ? []
-      : (target.kind === 'relation' && !!myId && mentorId === myId
+      : (!!myId && mentorId === myId
           ? [openers.welcome, openers.introCall, openers.goals]
           : [openers.hello, openers.intro, openers.question]
         ).map((o) => ({ label: o.label, text: o.text.replace('{name}', otherFirstName) }));
@@ -338,7 +347,17 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         <div className="mb-6 flex items-start gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 mb-1">{t.messages.title}</h1>
-            <p className="text-gray-500">{threadTitle}</p>
+            <p className="flex items-center gap-2 text-gray-500">
+              {/* A 1:1 thread is named after a person, so the name is a way to
+                  reach them (#1166); a group room is named after its project. */}
+              {!group && other ? (
+                <PersonHoverCard personId={other.id} name={other.fullName} className="truncate" />
+              ) : (
+                <span className="truncate">{threadTitle}</span>
+              )}
+              {/* 1:1 only — a group room has no single language to name. */}
+              {!group && other && <LanguageBadge language={other.preferredLanguage} />}
+            </p>
           </div>
           {startMeetingTarget && (
             <StartMeetingButton
@@ -562,6 +581,22 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
 
       <div className="shrink-0" data-testid="thread-composer">
       {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
+      {/* The other side cannot read this. Posting still works (the message waits
+          for them, and the email mirror may still land), but you should know
+          before you type — silence from an unreachable account reads as being
+          ignored otherwise (#1194). */}
+      {counterpartState && counterpartState !== 'active' && (
+        <p
+          className="mb-2 rounded-lg bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+          data-testid="counterpart-unreachable"
+        >
+          {counterpartState === 'placeholder_email'
+            ? t.messages.counterpartNoEmail
+            : counterpartState === 'no_login'
+              ? t.messages.counterpartNoLogin
+              : t.messages.counterpartInactive}
+        </p>
+      )}
       {!canPost && (
         <p className="text-center py-3 text-sm text-gray-400" data-testid="thread-readonly">
           {t.messages.readOnlyNotice}

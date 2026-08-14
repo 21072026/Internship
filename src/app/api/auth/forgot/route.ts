@@ -23,7 +23,16 @@ export async function POST(request: Request) {
     // was stored at registration can't silently miss the account — which would
     // otherwise show "email sent" while no reset mail is ever dispatched.
     const email = parsed.data.email.trim().toLowerCase();
-    const user = await prisma.user.findUnique({ where: { email } });
+    // Only the four fields the reset mail needs. This route is the escape hatch
+    // when sign-in fails, so it must not share sign-in's failure modes: reading
+    // the whole row means reading its `Json` columns, and one invalid value there
+    // makes the read throw — inside a try/catch that answers a generic
+    // "ok: true", so the reset silently never arrives and looks like an SMTP
+    // problem (#1150).
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, fullName: true, orgId: true },
+    });
     if (user) {
       const token = await createPasswordResetToken(user.id, 'RESET');
       try {

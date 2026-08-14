@@ -56,11 +56,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   // Accept → create the confirmed meeting with an auto video link.
   const link = `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
+  // The wall clock behind `proposedAt` was typed by the *requester* (see
+  // POST /api/meeting-requests), so theirs is the zone this time was agreed on —
+  // not the mentor's, even though the mentor is the one confirming it (#1210).
+  const requester = await prisma.user.findUnique({
+    where: { id: req.requestedById },
+    select: { timezone: true },
+  });
   const meeting = await prisma.meeting.create({
     data: {
       relationId: rel.id,
       title: req.topic,
       scheduledAt: req.proposedAt,
+      timeZone: requester?.timezone ?? null,
       meetLink: link,
       rsvpToken: randomBytes(24).toString('hex'),
       createdById: session.user.id,

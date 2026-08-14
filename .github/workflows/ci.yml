@@ -34,4 +34,11 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      - name: auth path reads only the columns it needs (#1150)
+        run: npm run check:auth-reads
+      # The deploy scripts never run in CI, so their one piece of decision logic
+      # — "is this dump real?" — had no coverage at all until it broke prod
+      # (#1200). Cheap to run here; the alternative is finding out on the server.
+      - name: backup dump validation (#1200)
+        run: bash infra/test/backup-db.test.sh
       - run: npm run build

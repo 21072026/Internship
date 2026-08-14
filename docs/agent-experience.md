@@ -10,6 +10,40 @@ Newest entries on top.
 
 ---
 
+## 2026-08-11 — Offline fallback metni değişikliği (#1219, 0.63.2-beta)
+
+Offline fallback gibi küçük, herkese açık metin değişikliklerinde bile bu repoda sürüm disiplini
+zorunlu: `package.json` sürümü + `CHANGELOG.md` + `src/lib/releaseNotes.ts` üçlüsü birlikte
+güncellenmeden PR tamamlanmış sayılmıyor. "Küçük UI dokunuşu" olsa da kullanıcıya yansıdığı için
+release notuna tek maddelik bir özet eklemek reviewer döngüsünü kısaltıyor.
+
+`/offline` gibi statik sayfalarda en düşük maliyetli güvence, mevcut e2e spec'e görünürlük +
+`href` assertion eklemek. Bu sayede link metni görünse ama yanlış URL'ye gitse bile test kaçırmıyor.
+
+## 2026-08-08 — "Tümünü seç" (#1153, 0.55.4-beta)
+
+Küçük bir UI isteği ("buraya tümünü seç eklenmeli"), iki tanesi tekrar işe yarar ders:
+
+**"Yok" sanılan özellik çoğu zaman vardır ama yanlış koşula bağlıdır.** Ekran görüntüsünde
+görünmeyen "tümünü seç" aslında `ProjectGoals.tsx` içinde duruyordu — ama `picked.length > 0`
+ile sarılmıştı, yani *ancak elle bir kutu işaretledikten sonra* beliriyordu; tam da en
+gereksiz olduğu an. Bir denetim eklemeden önce bileşeni okuyup arayın: "ekle" yerine
+"koşulu düzelt" olduğunda diff üç satıra iniyor ve i18n anahtarları da hazır çıkıyor.
+Aynı deseni kardeş bileşende (`PersonTodos.tsx`) kontrol edin — orada koşul zaten doğruydu,
+dokunmaya gerek yoktu.
+
+**Giriş yapılmış, veri seedlenmiş bir ekranın görüntüsünü almanın en ucuz yolu geçici bir
+spec.** Preview sunucusu ayağa kaldırıp elle seed/login yerine: `e2e/tmp-shot.spec.ts` yazıp
+`seedUser` + `signInAndSettle` + `page.screenshot()` ile before/after alın, sonra dosyayı
+silin (`SHOT_DIR` env'iyle scratchpad'e yazdırın). ~35 saniye, ve zaten kurulu olan yerel
+MariaDB + Playwright dışında hiçbir şey gerekmiyor.
+
+**Dal değiştirdikten sonra `npx prisma generate`** (CLAUDE.md'de yazıyor, yine ısırdı):
+`tsc --noEmit` bu oturumda 14 uydurma hata verdi — hepsi bayat client'tan, dokunduğum
+dosyalarla ilgisiz. Typecheck'i "kırık" diye raporlamadan önce generate'i koşturun.
+
+---
+
 ## 2026-08-06 — Değer önerisi çalışması + kapıları açma paketi (#1085, #1107, #1121, #1122, 0.43→0.50.1)
 
 Landing'in üç kitleyi (mentee/mentör/firma) ikna edecek hale getirilmesi ve girişi tıkayan
@@ -2855,3 +2889,554 @@ script yazarken `chromium-1194/chrome-linux/chrome` mutlak yolu iş görüyor.)
 kodu değil, önceki Playwright koşusunun yarım bıraktığı derleme önbelleğiydi. `rm -rf
 .next` + yeniden başlatmak düzeltti. Ekran görüntüsü almadan önce sayfaya ~6 sn vermek de
 gerekti (dev derlemesi ilk isteği yavaş karşılıyor).
+
+## 2026-08-07 — "PR bozuk" görünen hata PR'da değil, paylaşılan preview DB'sinde (#1078 → #1134)
+
+**Belirti kod hatası gibi okunuyordu, ortam hatasıydı.** `crm-pr1078.ersah.in` login'de
+`The column internship_crm_preview.User.languages does not exist` veriyordu. Dalın şeması o
+kolonu ekliyor, deploy da yeşil — yani "PR'ın Prisma'sı bozuk" izlenimi. Gerçek sebep #1114:
+`topic-deploy.sh` her deploy'da **paylaşılan** preview DB'sine `prisma db push
+--accept-data-loss` basıyor, dolayısıyla `main`'e yapılan bir sonraki merge (preview'i
+yeniden deploy eder) o kolonu düşürüyor. Bir topic env'in sağlığı, o an *en son kimin*
+deploy ettiğine bağlı. Böyle bir hatada önce `git diff origin/main -- prisma/schema.prisma`
+ile "bu kolon sadece bu dalda mı var?" diye bakın; öyleyse arıza sınıfı bellidir.
+
+**#1114'teki "eski run'ı yeniden çalıştır" workaround'u dal eskidiyse yıkıcı.** Yeniden
+çalıştırılan run, dalın *o günkü* şemasını paylaşılan DB'ye basar. #1078'in dalı iki gün
+geriydi; replay `CompanyInquiry` tablosunu, `User.pendingApproval`,
+`User.mentorOnboardingSeenAt` ve `ProjectTask` kolonlarını silecekti — yani
+`crm-preview.ersah.in` dâhil her şeyi. Workaround yalnızca dal `main` ile güncelken güvenli.
+Güncel `main` üzerine merge edip push etmek ise `db push`'u tamamen additive yapıyor: hem
+PR'ı çalışır hale getirir hem kimseyi bozmaz.
+
+**Doğrulama için sahte kullanıcıyla sign-in probe'u yeterli.** `/api/health` bu sınıfı
+görmüyor (`"db":"skipped"`, `?db=1` sadece `SELECT 1`). `/api/auth/csrf` + credentials
+callback'e uydurma e-posta postalamak, `authorize()` içindeki `prisma.user.findUnique()`'i
+tetikliyor: drift varsa dönen `error=` parametresi ham Prisma mesajını taşıyor, yoksa
+`Invalid email or password`. Öncesi/sonrası tek satırda kanıtlanabiliyor.
+
+**Yan etki, teşhisi yanlış gösterebilir.** #1134 deploy olunca paylaşılan DB'ye `languages`
+geri geldi ve `crm-pr1078` de kendiliğinden çalışmaya başladı — "demek ki sorun yokmuş" gibi
+okunur. Böyle bir düzelme olduğunda PR'a kısa bir not düşün: ortam bir sonraki `main`
+merge'inde yine bozulacak.
+
+**Aynı kolonu ekleyen dört paralel PR, paylaşılan DB'de aynı anda ayakta duramaz.** #1078,
+#1079, #1080, #1082 dördü de `User.languages` ekliyordu. Bunu tek tek "neden bozuk" diye
+incelemek yerine, dört dalın şema diff'ini birlikte görmek arıza sınıfını tek bakışta
+veriyor. Aynı sırada #1082'nin işinin (#911 mentor onboarding sihirbazı) bu arada #1115 ile
+`main`'e girdiği de ortaya çıktı — rebase etmeden önce "bu iş zaten yapıldı mı?" sorusu yine
+karşılığını verdi.
+
+## 2026-08-07 — "Kompakt yap" isteğinde asıl yer kaplayan şey tekrar eden bilgi (#1135, 0.51.1-beta)
+
+**Kartı küçültmeden önce kartta ne olduğunu sayın.** Mentor panosundaki onboarding kartı tam
+genişlikte + alt alta duruyordu; ilk refleks grid'e almaktı ama yüksekliğin yarısı bilgi bile
+değildi: mentee adı hem başlıkta hem cümlenin içinde geçiyordu, "Mentee'lerim / Toplantılar"
+linkleri **her** kartta tekrar ediyordu (kart başına 1 satır + 1 satır). Adı başlığa taşıyıp
+linkleri blok başlığına almak, grid'den bağımsız olarak kartı 2 satır kısalttı. Grid (`md:2`,
+`2xl:3`) + `items-start` ise kullanıcının şikâyet ettiği "sağ taraf boş duruyor" kısmını çözdü.
+
+**Katlanabilir kartta link, gövdede değil başlıkta olmalı.** `onboarding-mentee-link-<id>`
+cümlenin içindeydi; kart kapanınca kaybolacaktı ve `mentor-dashboard-name-links.spec.ts` de
+onunla birlikte kırılacaktı. Linki başlığa taşımak hem testi hem de "kapalıyken kimden
+bahsediyoruz?" sorusunu aynı anda çözdü — katlanabilirlik eklerken **her iki durumda da görünmesi
+gereken** öğeleri önce listeleyin.
+
+**Varsayılan açık/kapalı için "hepsi" ya da "hiçbiri" demeyin.** İkiden fazla mentee varsa
+ikinciden sonrakiler kapalı açılıyor: tek mentee'si olan mentor hiçbir şey kaybetmiyor, altı
+mentee'si olan da panosunu geri alıyor. Tercih `localStorage`'da mentee bazında
+(`mentee-onboarding-collapsed`), yani kullanıcının kararı varsayılanı eziyor.
+
+**Playwright köprüsü (2026-08-06 kaydının kısa yolu) yine gerekti ve tek symlink yetti:**
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell` yolunu
+yaratıp 1194'ün `chrome-linux/headless_shell` dosyasına bağlamak + `INSTALLATION_COMPLETE`
+kopyalamak yeterliydi; `chrome-linux` içeriğini tek tek bağlamaya gerek kalmadı (Chrome
+kaynakları `/proc/self/exe`'yi çözdüğü için 1194 dizininde buluyor). MariaDB + `db seed` +
+`seed:demo` playbook'taki gibi sorunsuz.
+
+**Demo seed'in tarihleri sınırdaydı.** `pendingOnboardings` 60 günlük pencere kullanıyor;
+`seed:demo` ilişkilerinin bir kısmı tam o sınırda olduğu için üç mentee'li mentorda kart sayısı
+2 çıktı ve "ikiden fazla kart" davranışını göremedim. Yerel DB'de `startDate`'i `new Date()`
+yapmak (sadece lokal!) senaryoyu görünür kıldı — görsel bir davranışı doğrularken seed'in
+tarihlerinin varsayımınıza uyduğunu ayrıca kontrol edin.
+
+## 2026-08-07 — "Çift rol" istendiğinde rol enum'una dokunmadan önce ilişki tablosuna bakın (#1141, 0.52.0-beta)
+
+**Sorunun "veri modeli mi, yönlendirme mi" olduğunu ilk beş dakikada ayırın.** İstek "bir mentor
+aynı zamanda mentee olabilsin" idi ve ilk refleks `User.role` → `roles[]` refactoru. Ama
+`MentorshipRelation` zaten `mentorId` + `menteeId` — role kısıtı olmayan iki düz user FK. Yani
+veri katmanı buna en baştan izin veriyordu; tıkanma yalnızca üç yerdeydi (portal layout'un
+koşulsuz redirect'i, `authzScope`'un tek taraflı kapsamı, `POST /api/mentorship`'in rol
+doğrulaması). Enum'a dokunan refactor davet akışını, NextAuth JWT'sini, 2FA politikasını ve
+~150 rol kontrolünü kapsardı — ve hiçbirini bu iş için gerektirmiyordu.
+
+**Türetilebilen şeyi saklamayın.** "Bu kişi aynı zamanda mentee" bilgisi `MentorshipRelation`
+üzerinden sayılabiliyor, o yüzden `dualRole.ts` her çağrıda sayıyor. Saklanan bir bayrak ancak
+özetlediği ilişkilerle çelişebilirdi: admin son ilişkiyi kaldırır, bayrak `true` kalır,
+kullanıcıda tıklanınca boş açılan bir sekme kalır. İlişki tablosu gerçeğin kendisi.
+
+**Yeni bir kabuğa kapı açarken o kabukta hangi güvenlik kapısının *eksik* olduğunu sorun.**
+`/admin` ve `/mentor` layout'larında 2FA kurulum kapısı var, `/portal`'da yoktu — çünkü oraya
+politika kapsamındaki bir rol hiç giremiyordu. MENTOR'u portal'a alır almaz portal, o kapının
+etrafından dolanmanın yolu oluyordu. Genel kural: bir role yeni bir shell açarken iki layout'un
+guard listesini yan yana koyup farkı taşıyın, sadece rol kontrolünü gevşetmeyin.
+
+**Rol kontrolünü gevşetirken redirect'in *fallback*'ini de sayın.** Üç ayrı rol redirect'ini tek
+bir yetenek kontrolüne indirince, kalan `else` dalı "admin ya da mentor" varsayıyordu; daha önce
+üç redirect'in de altından geçip portal'ı render eden SOURCE hesabı önce `/mentor`'a, oradan
+tekrar `/`'a savruluyordu. `if/else if` zincirini teke indirirken zincirin *altından geçen*
+rolleri listeleyin.
+
+**`scopeForRole` kapsamını genişletmeden önce çağıranların hepsinin GET olduğunu doğrulayın.**
+İlişki kapsamını iki tarafa açmak (`OR: [{mentorId}, {menteeId}]`) yalnızca üç çağıranın da
+salt-okuma olması sayesinde güvenli; biri PATCH olsaydı aynı satır kullanıcıya kendi pipeline
+aşamasını değiştirme yetkisi verirdi. `grep -rn "scopeForRole(" src` üç satır döndürüyor — bu
+kadar ucuz bir doğrulama.
+
+**Bu container'da `pipeline.spec.ts` ve `smoke.spec.ts:53` `main`'de de düşüyor.** Sırasıyla
+"aşama kalıcı olmadı" (`APPLICATION_100` dönüyor) ve next-auth `CLIENT_FETCH_ERROR
+/api/auth/session`. Değişikliğinizi suçlamadan önce `git checkout origin/main` ile aynı iki
+spec'i koşun — iki dakikalık baseline, yarım saatlik yanlış iz kovalamayı önlüyor.
+`test:e2e:smoke`'un ilk koşumunda 7 düşen spec'in 5'i sadece `npx prisma db seed`
+çalıştırılmamış olmasındandı (`SEED_ADMIN_*` ile giriş yapan spec'ler); DB'yi kurar kurmaz
+seed'i de çalıştırın.
+
+## 2026-08-07 — Kırmızı bir Dependabot PR'ında suçlu genelde paket değil, `npm ci` (#1143, 0.55.1-beta)
+
+**Job 30 saniyede düştüyse hiçbir proje kodu çalışmamıştır.** #1129'un (`nodemailer`
+7.0.13 → 9.0.1) üç job'ı da 13–34 sn'de kırmızıydı ve ilk refleks "majör yükseltme bizi
+bozdu" olacaktı. Gerçek sebep kurulum aşamasıydı: `next-auth@4.24.15`,
+`peerOptional nodemailer@"^7.0.7"` ilan ediyor, Dependabot ise yalnız kök aralığı
+bumpluyor → `npm ci` ERESOLVE. Süre tek başına bir teşhis aracı: derleme/test süresinin
+çok altındaki bir kırmızı, neredeyse her zaman bağımlılık çözümü ya da checkout'tur.
+`gh run view --job <id> --log-failed | grep -A25 ERESOLVE` doğrudan cevabı veriyor.
+
+**Peer'i ezmeden önce o peer'in gerçekten yüklenip yüklenmediğini sor.**
+`overrides: { "next-auth": { "nodemailer": "$nodemailer" } }` burada güvenli, çünkü
+`src/lib/auth.ts` yalnız `CredentialsProvider` kaydediyor — `EmailProvider` yok, yani
+next-auth nodemailer'ı runtime'da hiç `require` etmiyor. Bu iki dakikalık kontrol
+(`grep -n "next-auth/providers" src/lib/auth.ts`) "peer'i ezmek riskli mi?" sorusunu
+tahminden çıkarıp olguya çeviriyor. `$paket` sözdizimi kökteki aralığa bağlıyor, sürümü
+iki yere yazmak gerekmiyor.
+
+**Majör changelog'unu okurken "breaking" değil, "bizim çağırdığımız yol" diye ara.**
+nodemailer 9.0.0'ın tek kırıcı değişikliği *uzak içerik çekerken* TLS doğrulaması
+(attachment `path`/`href` URL'leri, OAuth2 token endpoint'i, proxy CONNECT). Bizim
+transport düz SMTP host/port/parola ve attachment'lar yalnız `Buffer` — kesişim boş.
+`grep -rn "path:\|href:\|rejectUnauthorized" ` ile attachment şekillerini taramak, changelog'u
+baştan sona okumaktan hem hızlı hem daha kesin.
+
+**`tsc` temiz geçmesi kütüphanenin çalıştığı anlamına gelmiyor.** `@types/nodemailer`
+ayrı paket ve 6.4.x'te donmuş; 9.x runtime'ı bozsa bile tip katmanı sessiz kalırdı.
+`streamTransport: true, buffer: true` ile gerçek bir mesaj üretip (`multipart`, `cid`
+attachment, UTF-8 subject) içeriğini kontrol etmek 10 satır ve şüpheyi kapatıyor.
+
+**`npm audit` sayısını bayat bir `node_modules` üzerinden okumayın.** Önce 5 bulgu (2 high)
+gördüm, temiz `npm ci`'dan sonra baseline 6 (3 high) çıktı — aradaki fark, ağaçtaki
+`nanoid`'in lock'takiyle aynı olmamasıydı. Öncesi/sonrası rakamı verecekseniz **iki tarafı da**
+`git stash` + `npm ci` ile ölçün; ben CHANGELOG'a önce yanlış sayıyı yazmıştım.
+
+**Aynı koşuda alakasız bir bulgu çıkarsa PR'ı büyütmeyin, issue açın.** Temiz kurulum
+`nanoid` için (postcss üzerinden) bir high daha gösterdi ve `docs/security-exceptions.md`'de
+hiç listelenmemişti. Kendi sömürülebilirlik analizini istediği için #1144 olarak ayrıldı —
+ama PR gövdesinde ve CHANGELOG'da açıkça anıldı, yoksa "audit 4'e düştü" cümlesi eksik
+kalırdı.
+
+**Güvenlik-only sürümde `releaseNotes.ts` girdisi yok.** Üçlü checklist (version + CHANGELOG
++ releaseNotes) "kullanıcıya görünen" PR'lar için; bağımlılık yükseltmesinde kullanıcı hiçbir
+şey görmüyor. Emin olmak için emsale bakın: 0.33.2-beta (#882, önceki güvenlik sürümü) de
+girdisiz. Bunu PR gövdesinde gerekçesiyle yazmak, gözden geçirenin checklist ihlali sanmasını
+önlüyor.
+
+**Worktree'de `npm run lint` yalancı kırmızı veriyor.** Ana checkout ile worktree'nin
+`.eslintrc.json`'ları çakışıyor (`Plugin "@next/next" was conflicted`) ve lint 1 dönüyor —
+`main`'de de aynısı oluyor. Bir kontrolü "bozuldu" diye raporlamadan önce `git stash` + aynı
+komut ile baseline alın; CI düz checkout'ta koştuğu için bu hiç görünmüyor.
+
+## 2026-08-08 — Altı kırmızı testin arkasında üç kök neden vardı, altısı da başka yeri işaret ediyordu (#1148, 0.55.2-beta)
+
+**Hata mesajının işaret ettiği yer ile kırığın olduğu yer aynı değil.** Altı düşen testin
+dördü "sildiğim satır listede duruyor" diye şikâyet ediyordu (`toHaveCount(0)` → 1,
+`archivedAt !== null` → false). Gerçek sebep dört farklı bileşen değil, tek bir UI kararıydı:
+#1071 `window.confirm()`'i `ConfirmDialog`'a çevirdi. `page.on('dialog', …)` kuran spec artık
+hiç gelmeyecek bir event bekliyor, Delete tıkı sıradan bir DOM penceresi açıyor ve **sessizce
+yutuluyor** — assertion bir sonraki satırda, alakasız görünen bir yerde patlıyor. Ders: aynı
+koşuda birbirine benzemeyen spec'ler benzer *şekilde* düşüyorsa (hepsi "işlem olmadı"),
+spec'leri tek tek okumak yerine önce **ortak etkileşimi** arayın — `git log -S "window.confirm"`
+üç dakikada cevabı verdi.
+
+**Bir UI mekanizmasını değiştiren PR'da e2e diff'inin boş olması tek başına kırmızı bayrak.**
+#1071 16 bileşene dokunup `e2e/` altında hiçbir dosyayı değiştirmemişti; `git show <sha> --stat
+| grep e2e` boş çıkıyor. Native `confirm()` → custom modal gibi bir geçişte bu matematiksel
+olarak imkânsız. Aynı kontrolü #1085 için yaptığımda da (giriş mesajı değişti, sadece
+`mentee-signup` güncellenmiş) altıncı test oradan çıktı.
+
+**Test drift'i mi ürün regresyonu mu sorusunu commit mesajı cevaplıyor.** `admin-user-active`
+"deactivated" arıyordu, uygulama "hesabın incelemeyi bekliyor" diyordu. Testi gevşetmek kolaydı
+— ama #1085'in kendi commit mesajı `pendingApproval`'ı *"'waiting for a review' ile 'an admin
+switched you off'u ayırmak için"* eklediğini yazıyordu, sonra aynı PR bayrağı her
+pasifleştirmede set ederek o ayrımı yok etmişti. Yani test niyeti, ürün ise kazayı kodluyordu.
+İki taraf çelişince `git log -1 -S "<satır>"` + o commit'in gövdesi hangisinin doğru olduğunu
+söylüyor.
+
+**Güvenlik gerekçeli bir bayrağı geri almadan önce onu gereksiz kılan ikinci savunmayı arayın.**
+"Pasifleştirmede `pendingApproval` set edilmesin" demek riskli görünüyordu (reddedilen kayıt
+elindeki linkle geri girer). Ama `verify-email` route'u yeniden içeri almayı
+`!isActive && !emailVerified && !pendingApproval` ile kapatıyor: doğrulanmış bir hesap zaten
+`emailVerified` teriminde duruyor. Bayrak yalnızca `emailVerified === false` olan hesap için
+yük taşıyormuş — düzeltme de tam o daralma oldu, mesaj ayrımı geri geldi, delik kapalı kaldı.
+
+**`prisma.user.create` ile elle açılan bir MENTOR, `seedUser`'ın tavizlerini kaybediyor.**
+`email-verification` `emailVerified: false` gerektirdiği için kullanıcıyı elle açıyor ve
+`mentorOnboardingSeenAt`'i almıyor → ilk `/mentor` ziyareti `/onboarding`'e yönleniyor (#911),
+`waitForURL('/mentor')` 20 sn sonra düşüyor. Hata çıktısı bunu açıkça söylüyor
+(`navigated to ".../onboarding"`) ama tek bir alanı geçmemenin bedeli olduğu görünmüyor.
+`seedUser`'ı bypass eden her spec için o helper'ın gövdesini okuyun: orada yorumla korunan her
+alan bir spec'i ayakta tutuyor.
+
+**Lokal e2e için `internship_e2e` DB'si ve `e2e@127.0.0.1` kullanıcısı hazır duruyor.**
+Parolası önceki oturumlarda kaybolmuş diye not düşülmüş (bkz. yukarıdaki unix-socket notu), ama
+`e2e:e2epass` çalışıyor:
+`DATABASE_URL="mysql://e2e:e2epass@127.0.0.1:3306/internship_e2e"`. Worktree'ye bu tek satırlık
+bir `.env` (gitignore'lu) + `npx prisma db push` yeterli; ana checkout'un `.env`'i **paylaşılan
+preview DB'sine** bakıyor, ona karşı koşmak veri yazmak demek.
+
+**`| tail -N` ile arka planda koşan Playwright'ta ilerleme görünmez.** Boru tamponlandığı için
+çıktı ancak koşu bitince yazılıyor; ara durumu göremeyip koşuyu iki kez başlattım. Arka plan
+koşularında `> dosya 2>&1` yazıp dosyayı `tail`'lemek doğru şekil.
+
+## 2026-08-08 — Giriş arızası: bozuk bir Json kolonu tüm hesapları kilitledi (#1150)
+
+**Kullanıcıya görünen hata metni, sunucudan gelen bir istisna mesajı olabilir.** Formda
+`Unexpected end of JSON input` yazıyordu ve ilk refleks "istemci boş bir gövdeyi `res.json()`
+ile parse ediyor" oldu — yanlış. NextAuth, `authorize()` içinde fırlatılan `Error`'un
+`.message`'ını `?error=<mesaj>` olarak geri veriyor; client (`new URL(data.url)
+.searchParams.get('error')`) onu `result.error` yapıyor, sayfa da aynen basıyor. Yani metin
+**sunucu tarafı** bir `JSON.parse` hatasıydı. Hangi katmanın konuştuğunu anlamak için, semptomu
+teorize etmek yerine istemci kütüphanesinin o üç satırını okumak yeterliydi.
+
+**Prod'da kök nedeni tek istekle, hiç kimlik bilgisi kullanmadan izole edebilirsiniz.** Var olan
+e-posta + **kasıtlı yanlış** şifre `Unexpected end of JSON input` döndü; var olmayan e-posta
+`Invalid email or password` döndü. İkisi arasındaki tek fark satırın gerçekten okunması, ve
+`bcrypt.compare` ikinci senaryoya kadar gidiyor — demek ki hata **şifre karşılaştırmasından
+önce**, `findUnique` içinde. Gerçek şifre gerekmiyor, yan etki yok, tahmin de yok.
+
+**Düzeltmeyi kanıtlamanın en temiz yolu: aynı veritabanına bakan iki konteyner.** Topic ortamı
+(`crm-pr1151`, yamalı) ile paylaşılan preview (`crm-preview`, yamasız main) **aynı DB'yi**
+kullanıyor. Aynı hesaba aynı yanlış-şifre probu: preview `Unexpected end of JSON input`, PR
+ortamı `Invalid email or password`. Tek değişken kod. Veritabanına dokunmadan, gerçek bozuk
+veriyle, canlı bir A/B.
+
+**`prisma db push`, yeni bir `Json` kolonu eklerken mevcut tüm satırları zehirliyor.** Prisma
+`Json` alanları için DDL üretirken `@default`'u **düşürüyor**:
+`languages Json @default("[]")` → `ALTER TABLE \`User\` ADD COLUMN \`languages\` JSON NOT NULL`
+(`npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script` ile
+görülüyor; `String @db.Text @default` DEFAULT'unu koruyor). MariaDB'de bu ALTER var olan her
+satırı **boş string** ile dolduruyor — `STRICT_TRANS_TABLES` açıkken bile, uyarısız. Prisma
+okurken `JSON.parse` ettiği için o satırların **hepsi** okunamaz hale geliyor. Nullable `Json?`
+etkilenmiyor; `schema.prisma`'daki `notificationPrefs` yorumu zaten bunu uyarıyordu. Yeni bir
+non-nullable `Json` kolonu eklemeden önce backfill'i planlayın.
+
+**Prod ile CI farklı motorlar kullanıyorsa, "CI yeşil" bir bug sınıfı hakkında hiçbir şey
+söylemez.** Prod/preview **MariaDB** (`JSON` = `LONGTEXT` takma adı), CI ve dev compose ise
+**MySQL 8** (native `JSON`, geçersiz metni yazma anında ERROR 3140 ile reddediyor). Yani bu
+arıza CI'da *test edilmemiş* değil, **temsil edilemez** — `@smoke` ilgili tüm commit'lerde
+yeşildi. "Neden CI yakalamadı?" sorusunun cevabı bazen "test eksik" değil, "o ortamda o durum
+oluşamaz" oluyor.
+
+**Nüksü önlemek için yazdığınız guard, yazılırken bir bug buluyor.** `check:auth-reads`'i
+`forgot` + `verify-email/resend` rotalarını da kapsayacak şekilde genişletmek, o anda üçüncü bir
+niteliksiz okuma yakaladı (kimliği doğrulanmış resend yolu). Guard'ı hem pozitif hem **negatif**
+fixture ile sınayın — geçtiğini değil, geçmediğinde kırıldığını görmek lazım.
+
+**Girişin yanındaki "geri dönüş yolu" da aynı hataya açıktı.** `forgot` rotası da tam satır
+okuyordu ve her durumda generic `ok: true` dönüyor; yani bozuk satırda sıfırlama bağlantısı
+sessizce hiç gitmiyor, SMTP arızası gibi görünüyor. Kimlik doğrulamayı düzeltirken oradan
+çıkış yollarını (`forgot`, `verify-email/resend`) aynı gözle tarayın.
+
+**Deploy anında koşan script `prisma/` altında olmak zorunda.** `deploy-prod.sh`'in `run_tool`'u
+komutu **image içinde** çalıştırıyor, Dockerfile ise `prisma/`'yı kopyalıyor ama `scripts/`'i
+kopyalamıyor. Onarım scriptini `scripts/`'e yazıp deploy'a eklemek sessiz bir
+`MODULE_NOT_FOUND` olurdu.
+
+**Worktree'yi paylaşan subagent, kendi deneyini bozar.** Lokal repro'yu bir subagent'a
+verirken aynı worktree'de çalıştım: benim `auth.ts` düzenlemelerim onun dev sunucusuna
+hot-reload oldu ve ajan iki koşum arasında bozduğum satırı onardı — "temiz baseline" ölçümüm
+bozuk satıra denk geldi. Durum değiştiren ajanlara `isolation: 'worktree'` verin; kendi
+doğrulamanızı da paylaşılan bir kayıt yerine **kendi açtığınız** fixture satırında yapın.
+
+## 2026-08-08 — "Aynı kişiyle iki sohbet" bir tekillik hatası değil, iki katmanlı bir tarih (#1156, 0.55.5-beta)
+
+**Bir "duplicate" raporunda önce tekillik kısıtına bakmayın — kaç tane *yazma yolu* olduğuna
+bakın.** Ekran görüntüsündeki iki satır, `Conversation.directKey` unique olduğu halde oradaydı:
+çünkü ikinci satır hiç `Conversation` değildi. 1:1 sohbetin iki evi vardı — eski mentorluk
+kanalı (`Message.relationId`) ve konuşma katmanı (`Message.conversationId`) — ve `directKey`
+yalnızca ikincinin *kendi içinde* tekilliğini sağlıyordu. Kısıt doğruydu, kapsamı yanlıştı.
+
+**Hangi satırın hangi katmandan geldiğini metinden okuyabilirsiniz.** İki önizleme farklı
+"opener" şablonlarıydı: `MessageThreadView` welcome-önerisini yalnızca `target.kind === 'relation'`
+iken gösteriyordu. Yani "welcome aboard" satırı ilişki kanalı, "EN: Hello…" satırı konuşma —
+tek bir ekran görüntüsü, DB'ye bakmadan kök nedeni veriyor. Rapordaki metnin hangi kod dalından
+üretilebileceğini sormak, tekrar üretmekten hızlı.
+
+**İki katmanı birleştirirken taşıyıcı sütunu *silmeyin*, ikisini birden yazın.** `relationId`
+mentorluğa bağlı yarım düzine özelliğin girişi: e-postayla yanıt jetonu (`replyAddress`
+ilişki kapsamlı), okunmamış özeti, onboarding kontrol listesi, birkaç e2e sayımı. Yeni mesajlara
+hem `conversationId` hem `relationId` damgalayınca birleştirme bu özelliklerin hiçbirine
+dokunmadı — tek sütuna indirgemek hepsini teker teker taşımak demekti.
+
+**Tembel devralma, deploy zamanlı migration'dan ucuz.** `conversationForRelation()` ilişkinin
+mesajlarını tek indeksli `UPDATE … WHERE relationId = ? AND conversationId IS NULL` ile alıyor:
+idempotent, şema değişikliği yok, `db push` gerekmiyor, paylaşılan preview DB'sine dokunmuyor.
+Sohbete dokunan yollarda (gelen kutusu, yönlendirme, POST) çalışıyor — yani veri, kullanıcı ona
+ilk baktığında zaten taşınmış oluyor.
+
+**Eski URL'yi silmeyin, teslim edin.** `/messages/<relationId>` mentee kartından, portaldan,
+bildirimlerden ve özet e-postalarından linkli. Sunucu bileşenine çevirip `redirect()` etmek,
+o çağıranların hiçbirine dokunmadan hepsini tek sohbete indirdi — ve yetkilendirme aynı
+`getThreadIfAllowed` ile kaldı.
+
+**e2e gerçek bir gerilemeyi yakaladı, tam da "sadece yönlendirme" sandığım yerde.** Mentor
+ilişki kanalından konuşmaya taşınınca `target.kind === 'relation'` koşulu sessizce yanlışa
+düştü ve mentor boş sohbette "hoş geldin" önerisini kaybetti. Çözüm: sunucunun DIRECT
+konuşmalarda da `mentorId` döndürmesi. Bir davranış `target.kind`'a bakıyorsa, o kind'ı
+değiştiren her yönlendirme o davranışı da değiştirir — yönlendirmeden önce `kind`'a bakan tüm
+dalları arayın.
+
+**Yerel MariaDB + `.env` ile tarayıcı doğrulaması bu repoda 10 dakikalık iş.** `crm:crm@127.0.0.1`
+üzerinde `internship_crm`, `prisma db push`, küçük bir tohumlama scripti ve `preview_start`
+yetiyor. Ancak `node script.mjs` scratchpad'den çalışmıyor (`@prisma/client` çözülmüyor) ve
+`.env`'i kendisi okumuyor — scripti repo kökünden, `DATABASE_URL=... node ...` ile çalıştırın.
+Playwright'a da aynısı gerekiyor: `DATABASE_URL=... BASE_URL=http://localhost:3000 npx playwright test`.
+
+**Sürüm numarası çakışması artık normal karşılanmalı.** Ben `0.55.4-beta`'ya bumplarken `main`
+aynı numarayı başka bir PR'la aldı; rebase `CHANGELOG.md` + `releaseNotes.ts` çakışmasıyla geldi.
+Doğru çözüm çakışan bloğu "benimki üstte, upstream altta, benim numaram bir artmış" şeklinde
+**yeniden kurmak** — elle marker temizlemeye çalışmak iki bölümü birbirine karıştırıyor, küçük
+bir python scripti ile bloğu parçalayıp yeniden yazmak tek seferde doğru sonucu veriyor.
+
+**Issue numarasını tahmin etmeyin.** Kod yorumlarına `#1153` yazıp issue'yu sonra açtım; numara
+`#1156` çıktı (arada başka bir PR #1153'ü kullanmıştı). Önce issue'yu açın, numarayı oradan alın
+— ya da en azından commit'ten önce tek bir `sed` ile hepsini düzeltin.
+
+## 2026-08-08 — Duyuru paketi: görünürlük, düzenleme, çok dillilik (#1161–#1165)
+
+**Aynı alandaki beş isteği tek PR'a doldurmayın; ama tek dalda da bırakmayın.** Oturum boyunca
+istekler damla damla geldi (duyuru görünürlüğü → vitrin geri linki → düzenle/sil → çok dillilik
+→ dil rozeti → tıklanabilir isimler). Her birini kendi issue'suna açıp kendi dalında shiplemek
+doğru karardı — ama bir hata yaptım: #1164'ün çalışmasına, #1161 dalının üstünde, farkında
+olmadan başladım. `git stash -u` → `checkout main` → yeni dal → `stash pop` bunu temiz kurtardı.
+Yeni bir işe başlamadan önce `git branch --show-current` çalıştırın; refleks olsun.
+
+**Sıralı PR'larda sürüm numarasını en sona bırakın.** Beş PR arka arkaya gidince her biri bir
+öncekinin `package.json` sürümünü bekliyor. İşe yarayan düzen: kod + testi commit'le, önceki
+PR'ın merge olmasını bekle, `git rebase origin/main`, *sonra* bump + CHANGELOG + releaseNotes'u
+ayrı bir commit olarak ekle. Böylece çakışma hiç oluşmuyor — geçen oturumun "çakışan bloğu
+yeniden kur" tarifine gerek kalmıyor.
+
+**Prisma şemasını değiştirdiyseniz dev sunucusunu yeniden başlatın.** `Notification.announcementId`
+eklendikten sonra üç e2e testi POST'ta 500 verdi: çalışan `next dev` süreci hâlâ eski Prisma
+client'ı bellekte tutuyordu. `prisma generate` + `db push` yetmiyor; `preview_stop` →
+`preview_start`. Hata mesajı hiçbir şey söylemiyor, sadece istek başarısız oluyor.
+
+**`db push`, üzerinde çalıştığınız dalın şemasına göre çalışır.** Henüz merge olmamış bir PR'ın
+sütununu yerel DB'ye push etmiştim; sonra `main`'den yeni dal açıp `db push` deyince Prisma o
+sütunu *düşürmek* istedi ve `--accept-data-loss` istedi. Bu bir uyarı değil, sinyal: dalınız
+bağımlı olduğu PR'ı içermiyor. Çözüm `--accept-data-loss` değil, o PR merge olana kadar
+bekleyip rebase etmek.
+
+**Çok dilli içerik için repoda zaten bir desen var — icat etmeyin.** `src/lib/goalTemplates.ts`:
+bir kanonik sütun + nullable bir `translations` JSON haritası + okuyucu başına çözümleme
+(kendi dili → varsayılan dil → kanonik). Duyurular (`announcementText.ts`) ve toplu e-posta
+(`localizedEmail.ts`) aynı şekli aldı. Tek gerçek fark e-postada: konu ve gövde **birlikte**
+çözülmeli, yoksa İngilizce konu altında Türkçe gövde çıkıyor — bu yüzden yarım doldurulmuş
+dil gönderilmiyor, düşürülüyor.
+
+**Bildirim satırı kişiye ait; çeviriyi orada bir kez çözün.** `Notification` kayıtları kullanıcı
+başına oluşuyor, dolayısıyla fan-out sırasında her satırı **kendi alıcısının** dilinde yazmak
+hem daha ucuz hem daha dürüst. Ama bunun bedeli var: düzenleme artık tek bir `updateMany`
+olamıyor — çözülen her farklı gövde için bir ifade gerekiyor (en fazla üç). Tek toplu üzerine
+yazma, herkesi kanonik metne düzleştirip çeviriyi geri alırdı.
+
+**Yeni bir `Json` sütunu her zaman nullable olsun.** `Announcement.translations` ve
+`Notification.announcementId` ikisi de nullable — #1150'nin dersi (prod MariaDB, NOT NULL `Json`
+eklenince `''` ile backfill edilip herkesi kilitliyor) hâlâ geçerli. Backfill de gerekmedi:
+`text` zaten fallback.
+
+**`ConfirmDialog` açıkken rol tabanlı locator'lar çakışır.** `getByRole('button', { name: /^Delete$/i })`
+üç öğeye çözüldü: iki satır aksiyonu + diyaloğun onay butonu. Diyalogda `confirm-dialog-confirm`
+testid'i zaten var — liste + onay diyaloğu olan her yerde testid kullanın.
+
+**Veri erişim politikası tarayıcı doğrulamasını engellemez, yönlendirir.** Ana repodaki `.env`
+paylaşılan **preview** DB'sine bakıyor; `DATA_ACCESS_POLICY` gereği dev sunucusunu oraya
+bağlamak yok. Worktree'ye kendi `.env`'ini yazıp yerel MariaDB'ye (`crm:crm@127.0.0.1`)
+bağlamak 2 dakika sürdü ve `preview_start` + `computer screenshot` ile gerçek görsel doğrulama
+verdi. Bir sonraki oturum için: worktree'de `.env` yok, ilk iş onu yazmak.
+
+**`tsc --noEmit` temiz olması derlemenin geçeceği anlamına gelmiyor.** `next build` içinde
+ESLint de koşuyor, ve `@typescript-eslint/no-unused-vars` bir *hata* (uyarı değil). #1166'da
+tanımlanıp hiç okunmayan bir prop üç işi birden düşürdü: `Lint · Typecheck · Build`,
+`Build image` ve `Playwright smoke` — sonuncusu testler yüzünden değil, uygulamayı derleyemediği
+için. Push etmeden önce `npx tsc --noEmit` yetmez; ekranda bir React bileşeni değiştiyse
+`npm run build` koşun. (Düzeltme prop'u silmek değil kullanmaktı: çağıran zaten kişinin rolünü
+biliyor, o yüzden profil linki fetch'i beklemeden ilk boyamada doğru çözülüyor.)
+
+**Hover kartında iki hata, ikisi de "gerçek tıklama" ile ortaya çıktı.** (1) Gerçek bir işaretçi
+tıklaması önce tetikleyiciyi **odaklıyor**; `onFocus` kartı açtığı için `onClick`'teki toggle
+onu her masaüstü tıklamasında geri kapatıyordu — tetikleyici açmalı, asla toggle etmemeli;
+kapatma işaretçi-çıkışı/Escape/dışarı-tıklama işi. (2) Konumu olay anında `getBoundingClientRect`
+ile ölçmek, istemci tarafında dolan listelerde henüz oturmamış düzeni yakalayıp kartı ekranın
+köşesine park ediyordu — ölçüm `useLayoutEffect` içinde, açılış render'ından sonra yapılmalı.
+Her ikisi de `javascript_tool` ile atılan **sentetik** click'te görünmez: sentetik olay odak
+sırasını ve gerçek düzeni taklit etmiyor, hatta beni yanlış yöne sürükledi. Konumlandırmayı
+Playwright'ta `boundingBox()` ile ölçün — davranışı gerçek tıklamayla doğrulayan tek yol.
+
+**Aynı dosyaya dokunan iki dalınız varsa stash + rebase'e güvenmeyin.** #1166 dalı
+`TargetedEmailComposer.tsx`'i #1171 (çok dilli şablonlar) merge olmadan önce düzenlemişti.
+`git stash pop` sadece import satırını çakışma olarak işaretledi, ama stash'teki sürüm dosyanın
+*eski* gövdesini taşıyordu — sessizce #1171'i geri alabilirdi. Doğrusu: çakışan dosyayı
+`git checkout HEAD -- <dosya>` ile upstream'e sıfırlayıp küçük değişikliği yeniden uygulamak.
+
+## 2026-08-08 — Üçüncü taraf bir embed'i eklemek: asıl iş snippet değil, etrafındaki dört şey (#1174, 0.60.0-beta)
+
+Maintainer tawk.to canlı sohbet snippet'ini yapıştırıp "siteye ekle, ana sayfa yeterli" dedi.
+Snippet'in kendisi on satır; PR'ın geri kalanı onu bu repoda çalışır ve savunulabilir kılan şey.
+
+**Yapıştırmadan önce CSP'ye bakın.** `next.config.js` `script-src 'self'` + `connect-src 'self'`
+gönderiyor: embed sessizce bloklanır, konsolda tek satır uyarı kalır ve widget hiç görünmez.
+`*.tawk.to`'yu script/style/img/font/frame'e, mesaj soketi için `wss://*.tawk.to`'yu
+`connect-src`'ye eklemek gerekti — artı **yeni bir `media-src`**: bildirim sesi bugüne kadar
+`default-src 'self'`'e düşüyordu, yani listeye ilk kez bir medya kaynağı girdiğinde direktifi
+de sıfırdan yazmanız gerekiyor.
+
+**CSP'yi tarayıcıda doğrulayın, incelemede değil.** Yukarıdakilerin hepsini ekledikten *sonra*
+widget hâlâ konsola hata basıyordu: tawk emoji seçicisini kendi CDN'inden değil
+**jsdelivr**'dan çekiyor. Bunu ne dokümantasyon ne de diff söyler; `read_console_messages`
+söyledi. `https://cdn.jsdelivr.net/emojione/` şeklinde **yol kapsamlı** kaynak yazıldı — CSP
+kaynak ifadeleri yol öneki kabul eder ve tüm `cdn.jsdelivr.net`'i açmak npm'e yüklenmiş her
+şeyi açmak demek.
+
+**Embed React ağacına değil `document`'e bağlanır.** Bileşen unmount olduğunda widget kalır:
+ana sayfadan `/features`'a client-side geçtiğinizde balon oradadır. Çözüm unmount'ta
+`Tawk_API.hideWidget()` **ve** `Tawk_API.onLoad` içinde modül seviyesinde bir "hâlâ isteniyor
+mu" bayrağı — script yüklenmeyi bitirdiğinde ziyaretçi çoktan başka sayfada olabilir, bileşen
+state'i bu soruyu cevaplayamaz.
+
+**Onay kapısı zaten vardı; ilk kullanan olmak sürüm çarpmak demek.** `lib/cookieConsent`
+`hasConsent()`'i "gelecekteki scriptler için" yazılmıştı ve bugüne kadar hiçbir şey yüklemiyordu.
+"Marketing" kategorisi artık ziyaretçinin IP'sini gören bir üçüncü tarafı yüklediği için
+`COOKIE_CONSENT_VERSION` 2 → 3 çarpıldı. Bunun **sessiz bir yan etkisi** var:
+`e2e/global-setup.ts` sürümü elle `2` yazıyordu, yani bump'tan sonra banner **tüm süitin**
+önüne geri gelirdi. Sabitleri artık uygulamadan import ediyor — bir sonraki bump'ta kimse
+bunu tekrar keşfetmesin.
+
+**Banner'a bir olay ekleyin.** Kabul edildiğinde `window`'a `cookieconsentchange`
+gönderiliyor; olmasaydı widget ancak bir sonraki tam sayfa yüklemesinde açılırdı ve
+"kabul ettim, hiçbir şey olmadı" gibi görünürdü.
+
+**Topic preview portları 100 slotta dönüyor.** `topic-preview.yml` portu `3300 + PR % 100`
+olarak türetiyor, yani **#1176 ile #1076 aynı porta düşüyor**. #1076 kapanmıştı ama container'ı
+sunucuda ayakta kalmıştı (teardown çalışmamış), bu yüzden "Deploy topic environment" —
+*zorunlu* bir check — `Bind for 0.0.0.0:3376 failed: port is already allocated` ile iki kez
+düştü. Rerun çözmez; `docker rm -f internship-crm-pr<eski>` çözer. Yüz PR'da bir tekrar eder:
+deploy adımı port çakışmasıyla düşerse önce `docker ps --filter publish=<port>` bakın.
+
+**Worktree'ye ana repodan `.env` kopyalamayın.** Geçen oturumun notu ("worktree'de `.env` yok,
+ilk iş onu yazmak") doğru ama eksik: ana repodaki `.env` **paylaşılan preview DB'sine** bakıyor
+ve `DATA_ACCESS_POLICY` dev sunucusunu oraya bağlamayı yasaklıyor. Kopyalamak yerine yerel
+MariaDB'ye (`crm:crm@127.0.0.1`) bakan yeni bir `.env` yazın. Bu oturumda kopyalandı ve
+doğrulama anonim ana sayfayla sınırlı kaldığı için gerçek veri okunmadı — ama doğru refleks
+bu değil.
+
+## 2026-08-09 — Ortak chrome'u toplarken çıkan üç gizli kusur ve ölçülmeyen bir hız iddiası (#1197, 0.61.0-beta)
+
+**"Tutarlılık" işi aslında bir hata avıdır.** Görev "header/footer hep aynı olsun" diye
+geldi ama dokuz public sayfayı yan yana koyunca ortaya üç ayrı gerçek kusur çıktı, hiçbiri
+kozmetik değil: (1) root layout hep `href="#main-content"` render ediyor ama o çapayı
+yalnızca `ResponsiveShell` tanımlıyordu — yani **her public sayfada** skip-to-content linki
+boşluğa gidiyordu; (2) landing header'ı "Özellikler"/"Firmalar için"i `sm:`/`md:` altında
+gizliyordu ve arkasında menü yoktu, telefonda o sayfalara header'dan erişim **yoktu**;
+(3) hukuki sayfalar "ana sayfaya dön" dışında hiçbir yere bağlanmıyordu. Sayfaları tek tek
+değil, bir tabloda yan yana listelemek bunları görünür yaptı — önce envanteri çıkarın.
+
+**`landing` namespace'i client'a gitmiyor; header client bileşeni olmak zorunda.**
+`SERVER_ONLY_NAMESPACES` (`landing`, `featureCatalog`) tarayıcıya hiç gönderilmiyor (#502).
+Mobil menü state gerektirdiği için header `'use client'` olmalı, dolayısıyla `landing.signIn`
+gibi stringleri **okuyamaz**. Çözüm: chrome metinleri için ayrı, client'a giden bir
+`publicNav` bloğu. Aynı tuzak yeni bir public client bileşeni yazan herkesi bekliyor.
+
+**Footer'ı server bileşeni tutun.** `APP_VERSION`, `package.json`'ı import ediyor; footer
+client olsaydı tüm `package.json` tarayıcı paketine inline edilirdi. Footer'ın state'e
+ihtiyacı yok — server kalsın, header client olsun. Bunun bedeli: `/apply-as-mentor` gibi
+`'use client'` sayfaları server kabuğa + ayrı form bileşenine bölmek gerekti.
+
+**Hız iddiasını ölçmeden yazmayın — ölçtüm, iddia çürüdü.** "Anonim ziyaretçide
+`getServerSession()` çağrısını atlarsak sayfalar hızlanır" makul görünüyordu. İki turlu A/B
+yaptım: 1. turda kapılı hâl **yavaş**, 2. turda **hızlı** çıktı — yani gürültünün içinde.
+Sebep: JWT stratejisinde çerez yokken `getServerSession()` zaten DB'ye gitmiyor, ucuza
+dönüyor. Üstelik bu sayfaların **production TTFB'si zaten 11–27 ms**; sunucu render'ı hiç
+darboğaz değildi. Kapıyı (boşa giden işi kaldırdığı için) tuttum ama CHANGELOG'a
+"ölçülebilir bir kazanç değildir" diye yazdım. **Dev sunucuda tek turluk ölçüm hiçbir şey
+kanıtlamaz; en az iki tur, ters sırayla.**
+
+**Gerçek hız kazancı ortak chrome'un yan etkisiydi.** Sayfalar artık birbirine `next/link`
+ile bağlı olduğu için geçişler tam doküman yüklemesi değil kısmi RSC isteği:
+`/privacy → /terms → /features` üçlüsü **tek** doküman yüklemesi + 49 ms ve 20 ms fetch.
+`performance.getEntriesByType('navigation').length` ve `nav.name` ile doğrulanır — 1'de
+kalıyorsa client-side geçiş olmuştur.
+
+**Yerel smoke kırmızısının dördü de ortamdı, hiçbiri koddu değildi.** Sırasıyla:
+(1) `internship_e2e` DB'si şemadan geri kalmıştı (`Notification.announcementId` yok) →
+`prisma db push`; (2) `health`/`rate-limit`, Playwright **elle başlattığım prod sunucusunu
+reuse ettiği** için düştü — `playwright.config.ts` `webServer.env` içinde `HEALTH_TOKEN` ve
+`TRUSTED_PROXY_COUNT` enjekte ediyor, hazır sunucuda bunlar yok; (3) `auth.spec.ts:21`,
+**Next.js Dev Tools düğmesi** `button[aria-haspopup="menu"]` seçicisine takıldığı için
+sadece dev'de düşüyor; (4) `pipeline.spec.ts:8` sabit `waitForTimeout(1800)` ile derleme
+yapan dev sunucusuna yarışıyor. **Kural: smoke'u CI gibi çalıştırın** —
+`CI=1 npx playwright test --grep @smoke` prod build'e karşı koşar; bende 56/56 geçti,
+dev'de 4 kırmızıydı. Kırmızıyı koda yazmadan önce bunu deneyin.
+
+**`preview_start` ile açtığınız sunucuyu Playwright'tan önce durdurun.** Yukarıdaki (2)
+maddesinin kökü bu: `reuseExistingServer: !CI` yerel koşuda açık olan 3000 portunu
+kapıyor ve config'in env'i hiç uygulanmıyor.
+
+**Baseline'ı ölçmek için `git stash -u` + aynı specleri koşun.** "Bu kırmızı benden mi?"
+sorusunun tek dürüst cevabı bu; dört testin ikisi baseline'da da kırmızıydı, ikisi değildi
+ve fark ortam kaynaklıydı.
+
+## 2026-08-09 — Saat dilimi işinin zor kısmı `Intl` değil, "hangi saate göre" sorusuydu (#1210, 0.63.0-beta)
+
+**Yarım kalan iş, olmayan işten daha tehlikeli.** `lib/timezone.ts` #1030/#1061/#1110 ile
+zaten doğruydu: anlar (instant) doğru saklanıyor, doğru render ediliyordu. Eksik olan
+tamamen kullanıcı tarafıydı — kim saat dilimini seçebiliyor, yeni hesap hangi saatle
+başlıyor, farklı dilimlerdeki iki kişi aynı ana mutabık olduğunu nasıl teyit ediyor. Yeni
+bir işe başlarken **önce mevcut yardımcıları okuyun**: buradaki iş, sıfırdan yazmak değil
+dört deliği kapatmaktı, ve `formatInTimeZone`/`parseUserDateTime` zaten hazırdı.
+
+**İkinci endpoint yazmadan önce mevcut şemayı okuyun.** `/account` için `PUT
+/api/profile/timezone` yazdım, sonra `updateProfileSchema` içinde `timezone`'un zaten
+bulunduğunu ve hiçbir role ait olmadığını gördüm — endpoint'i geri aldım. `POST
+/api/profile/timezone` ise "yalnızca boşsa yaz" yolu olarak kaldı; iki farklı niyet, iki
+farklı metot değil, iki farklı **rota** gerektiriyordu ve biri zaten vardı.
+
+**Aynı saati iki kez yazmak teyit değil, gürültü.** Berlin'deki organizatör ile Paris'teki
+davetli aynı saati okur. Karşılaştırmayı zon **adına** göre değil, o andaki **offset'e**
+göre yapın (`sameWallClock`): böylece Berlin/Paris tek satır olur, ama yaz saati geçişinde
+ayrışan bir çift yine iki satır üretir.
+
+**`h23`'ü unutmayın.** `readingsByZone` ilk sürümde locale'e bıraktığı için e2e `en`
+locale'inde "04:30 PM" bastı. Uygulama her yerde "16:30" yazıyor; belirsizliği kaldırmak
+için var olan bir blok 12 saatlik formata düşerse tam da o belirsizliği geri getirir.
+**Testi düzeltmeyin, formatı düzeltin.**
+
+**E-posta altbilgisini çevirmeyin — gövde çeviri değilken.** Alıcının dilinde tek satırlık
+bir dipnot, İngilizce bir gövdenin altında nezaket değil hata gibi görünür. Şablonlar
+bütün olarak yerelleştirildiğinde birlikte çevrilmeli (PR'da not düşüldü).
+
+**Yerel kırmızıların kökü yine ortamdı — ve bu dosya zaten söylüyordu.** `auth.spec.ts:21`
+(Next.js Dev Tools düğmesi) ve `pipeline.spec.ts:8` (dev sunucu yarışı) tekrar düştü;
+`pipeline` `origin/main`'de de kırmızıydı, `auth` yeniden koşuda geçti. Ayrıca
+`cron-jobs.spec.ts` `languages=''` olan demo satırları yüzünden `JSON.parse` ile patladı —
+çözümü `node prisma/backfill-json-columns.mjs --repair`. **Yeni bir kutuda ilk iş: `npx
+prisma db push` + `db:check-json`.** Baseline ölçümü için `git stash -u` + `git checkout
+origin/main` yeterli, ayrı worktree kurmaya gerek yok (node_modules paylaşılıyor).

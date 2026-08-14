@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { accountState } from '@/lib/accountState';
 import type { Prisma } from '@prisma/client';
 
 // Field sets, narrowest first (#855). The admin list used to return every
@@ -13,7 +14,19 @@ const SELECTS = {
   // Owner/member pickers: a name and a role badge.
   picker: { id: true, fullName: true, role: true },
   // The /admin/users list: name, email, role badge, active/verified state.
-  directory: { id: true, fullName: true, email: true, role: true, isActive: true, emailVerified: true },
+  // `pendingApproval` and `password` are read only to derive `accountState`
+  // (#1194) — `password` is stripped from every response below and never
+  // reaches a client.
+  directory: {
+    id: true,
+    fullName: true,
+    email: true,
+    role: true,
+    isActive: true,
+    emailVerified: true,
+    pendingApproval: true,
+    password: true,
+  },
 } as const;
 
 // No `view` → the historical full set. Still used by the candidates and mentors
@@ -36,6 +49,36 @@ const FULL_SELECT = {
 } as const;
 
 const ROLES = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'] as const;
+
+// Replace the raw `password` column with the derived `accountState` (#1194).
+// One "Inactive" badge used to cover five unrelated situations; the admin list
+// needs to tell "never clicked the verification link" apart from "has no
+// mailbox at all". The hash is dropped here so it cannot leak to a client.
+type MaybeStateRow = {
+  password?: string;
+  email?: string;
+  isActive?: boolean;
+  emailVerified?: boolean;
+  pendingApproval?: boolean;
+};
+
+function withAccountState<T extends object>(users: T[]) {
+  return users.map((user) => {
+    const { password, ...rest } = user as T & MaybeStateRow;
+    // The `picker` field set has neither, and needs no state badge.
+    if (rest.isActive === undefined || rest.email === undefined) return rest;
+    return {
+      ...rest,
+      accountState: accountState({
+        isActive: rest.isActive,
+        emailVerified: rest.emailVerified ?? true,
+        pendingApproval: rest.pendingApproval ?? false,
+        email: rest.email,
+        password,
+      }),
+    };
+  });
+}
 
 export async function GET(request: Request) {
   try {
@@ -80,7 +123,7 @@ export async function GET(request: Request) {
       const pageParam = searchParams.get('page');
       if (!pageParam) {
         const users = await prisma.user.findMany({ where, select, orderBy: { createdAt: 'desc' } });
-        return NextResponse.json({ users });
+        return NextResponse.json({ users: withAccountState(users) });
       }
 
       const page = Math.max(1, parseInt(pageParam, 10) || 1);
@@ -99,7 +142,7 @@ export async function GET(request: Request) {
         }),
       ]);
 
-      return NextResponse.json({ users, total, page, perPage, archivedCount });
+      return NextResponse.json({ users: withAccountState(users), total, page, perPage, archivedCount });
     });
   } catch (error) {
     console.error('Get users error:', error);

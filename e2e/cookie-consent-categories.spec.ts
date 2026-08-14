@@ -22,7 +22,7 @@ test('customize lets you accept only analytics; choice is stored with version + 
   const stored = await page.evaluate(() => localStorage.getItem('cookie_consent'));
   expect(stored).toBeTruthy();
   const parsed = JSON.parse(stored!);
-  expect(parsed.version).toBe(2);
+  expect(parsed.version).toBe(3);
   expect(parsed.necessary).toBe(true);
   expect(parsed.analytics).toBe(true);
   expect(parsed.marketing).toBe(false);

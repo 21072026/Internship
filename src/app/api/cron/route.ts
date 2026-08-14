@@ -11,6 +11,7 @@ import {
   checkCompanyNeedMatches,
   sendWeeklyAnalyticsReport,
 } from '@/services/emailService';
+import { expireOffers } from '@/lib/offerNotify';
 
 export async function GET() {
   try {
@@ -20,7 +21,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport] = await Promise.all([
+    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, offers] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
@@ -29,6 +30,7 @@ export async function GET() {
       checkRetentionReminders(),
       checkCompanyNeedMatches(),
       sendWeeklyAnalyticsReport(),
+      expireOffers(),
     ]);
 
     return NextResponse.json({
@@ -41,6 +43,7 @@ export async function GET() {
       retention,
       needMatches,
       analyticsReport,
+      offers,
     });
   } catch (error) {
     console.error('Cron error:', error);

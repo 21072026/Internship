@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
+import { conversationForRelation } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
+import { markThreadRead } from '@/lib/threadRead';
 import { logger } from '@/lib/logger';
 
 // Routing for an inbound email reply. Shared by the HTTP endpoint
@@ -80,8 +82,14 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   }
 
   const body = stripQuoted(input.text ?? '') || '(empty message)';
+  // The reply belongs in the pair's one thread, not only on the mentorship it
+  // was addressed to (#1156) — otherwise an emailed answer never shows up in the
+  // chat the two of them are actually reading.
+  const conversation = await conversationForRelation(rel);
   try {
-    await prisma.message.create({ data: { relationId, senderId, channel: 'EMAIL', body, inboundMessageId } });
+    await prisma.message.create({
+      data: { relationId, conversationId: conversation?.id ?? null, senderId, channel: 'EMAIL', body, inboundMessageId },
+    });
   } catch (e) {
     // Unique violation on inboundMessageId — another tick won the race.
     if (inboundMessageId && (e as { code?: string }).code === 'P2002') {
@@ -90,8 +98,22 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
     throw e;
   }
 
+  // Answering IS reading (#1204). Without this the replier's own inbox kept
+  // being told about messages they had already responded to: the reply landed
+  // in the thread but `readAt` stayed null, so the hourly unread digest picked
+  // the same conversation up again and again.
+  try {
+    const marked = await markThreadRead(senderId, { relationId, conversationId: conversation?.id ?? null });
+    if (marked > 0) logger.info('Inbound reply marked thread read', { relationId, senderId, marked });
+  } catch (e) {
+    // Never fail a delivered reply over its read bookkeeping — the message is
+    // already stored, and the worst case is one more digest line.
+    logger.error('Failed to mark thread read after inbound reply', { relationId, senderId, error: String(e) });
+  }
+
   const recipient = senderId === rel.mentor.id ? rel.mentee.id : rel.mentor.id;
-  await notify(recipient, 'message', 'New message (by email).', `/messages/${relationId}`);
+  const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${relationId}`;
+  await notify(recipient, 'message', 'New message (by email).', link);
 
   return { ok: true, relationId, duplicate: false };
 }

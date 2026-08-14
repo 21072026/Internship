@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.52.0-beta] - 2026-08-07
+## [0.65.0-beta] - 2026-08-14
 
 ### Added
 - **Drop-off reason tracking** (#810) — moving a mentee into a negative/off-path pipeline stage
@@ -35,6 +35,772 @@ version is shown in the sidebar footer of every page (links to the
   - `#740`'s bulk-advance regression (stepping via `nextOnPathStatus`, never a raw `indexOf+1`) is
     unaffected and re-covered in `e2e/dropoff-reasons.spec.ts`.
   - New EN/TR/DE `dropoff.*` and `analytics.aging.dropReasons*` i18n strings.
+## [0.64.0-beta] - 2026-08-10
+
+### Added
+- **Offer management** (#809) — a full workflow for extending, sending and deciding job offers
+  within a mentorship. New `Offer` model (`orgId`, `relationId`, `requisitionId?`, `companyId?`,
+  `status` — free `String`, not an enum, per the existing pipeline-status convention —
+  `position`, `startDate?`, `compensationNote?`, `expiresAt?`, `sentAt?`, `decidedAt?`,
+  `declineReasonCode?`, `declineNote?`, `createdById`, `decidedById?`), indexed on
+  `[orgId, status]` and `[relationId]`. A single server-side state machine
+  (`src/lib/offers.ts`) is the only place that decides legal transitions
+  (`DRAFT -> SENT -> ACCEPTED|DECLINED|EXPIRED|WITHDRAWN`) and who may run them — ADMIN does
+  everything; a MENTEE may only accept/decline their own `SENT` offer; COMPANY is read-only on
+  its own `companyId`'s offers. `GET/POST /api/offers` and `GET/PATCH /api/offers/[id]` validate
+  `status`/`declineReasonCode` as `z.string()` against that central whitelist (never
+  `z.enum`), and never `select` `compensationNote` for any caller except ADMIN or the offer's own
+  MENTEE — verified by e2e response-body assertions, not just UI hiding.
+  Admin UX: a 3-step "Offer bilgileri → Tarih & ücret → Önizleme ve gönder" wizard on the
+  candidate's Mentorship card (`OfferManagementPanel`/`OfferWizardModal`), with send/withdraw
+  actions gated to the current status and a history timeline read from `AuditLog`
+  (`offer.create/send/accept/decline/withdraw/expire`).
+  Mentee UX: an `/portal` offer card (`OfferCard`) showing position, company, start date, a
+  "N days left / due tomorrow / due today" decision countdown, and — only for this offer's own
+  mentee — the compensation note; accept goes through a confirmation dialog, decline requires a
+  reason (`COMPENSATION | POSITION | LOCATION | OTHER_OFFER | START_DATE | OTHER`, free text
+  optional); after a decision the card shows a persistent accepted/declined state (not just a
+  toast) with a "what's next" note.
+  SENT and ACCEPTED/DECLINED transitions email + in-app notify through the existing
+  `emailService`/`notify` infrastructure, EN/TR/DE. A new cron step (`expireOffers`,
+  `src/lib/offerNotify.ts`) flips overdue `SENT` offers to `EXPIRED`, idempotently — the
+  transition is claimed with a guarded `updateMany` before any audit/notify/email, so two
+  overlapping cron ticks can never double-fire either. An ACCEPTED offer never auto-changes the
+  mentee's pipeline stage; the admin panel only *suggests* moving to the org's `HIRED_660` stage
+  when that key actually exists in the org's resolved pipeline (`resolvePipelineStages`) — a
+  tenant on a fully custom pipeline (#747) without that stage never sees the suggestion, and the
+  accept/decline flow itself has no dependency on pipeline stages at all.
+  Tests: `e2e/offers.spec.ts` (wizard create+send, mentee accept/decline with a persistent state,
+  invalid-transition 400, cross-mentee IDOR, compensationNote leak check, company-with-no-companyId
+  403, withdraw, and the two-run cron dedupe) and `e2e/offers-custom-pipeline.spec.ts`
+  (custom-pipeline org never gets the HIRED_660 suggestion; accept still works end-to-end).
+
+## [0.63.2-beta] - 2026-08-11
+
+### Changed
+- Offline fallback (`/offline`) now shows a direct link to the live site (`https://crm.ersah.in`), so users can jump back to the main CRM URL once they reconnect.
+
+## [0.63.1-beta] - 2026-08-09
+
+### Security
+- **Email action links expire after 90 days** (#1211). They previously never aged out, so a
+  forwarded notification or a leaked mailbox archive let someone mark-read/react as that user
+  indefinitely. An expired link answers `410 Gone` and the page says so, rather than showing
+  the misleading "invalid link". Both actions remain low-severity and reversible — hence 90
+  days rather than hours.
+- **`EmailLog` is now covered by erasure and retention** (#1211). The log is keyed by
+  recipient address, not by a relation, so nothing cascaded to it: an erased account's address
+  survived in it. `hardDeleteUser` and `anonymizeUser` now clear it (reading the address
+  *before* the row is deleted or rewritten), and a daily job prunes rows older than
+  `EMAIL_LOG_RETENTION_DAYS` (90).
+- **Regression test for the password column** (#1211). `accountState` has to *read*
+  `User.password` to tell a mentor-created record apart from a deactivated account, which
+  puts the hash one spread operator away from a response. A spec now asserts that no
+  `/api/users` response contains a bcrypt prefix — matching on `$2a$`/`$2b$` rather than a key
+  name, so a rename cannot silence it.
+### Changed
+- **The unread digest no longer carries per-line reaction links** (#1211). A five-item digest
+  meant 25 extra links, and a high link count is one of the strongest spam signals there is —
+  the opposite of what this change set exists to achieve. The five reactions stay on the
+  single-message notification, where "the message this email is about" is unambiguous; the
+  digest keeps its per-conversation "mark as read" link.
+
+## [0.63.0-beta] - 2026-08-09
+
+### Added
+- **Timezones, end to end** (#1210). The render/parse helpers landed with #1030 / #1061 /
+  #1110, but the user-facing half was missing: only mentees could pick a zone, new accounts
+  had none, nothing confirmed a time across zones, and no email said which clock it was
+  written on.
+  - **Settings → Timezone**, for every role (`AccountSettings`, `/account#timezone`). Saved on
+    pick like the language and theme selectors — a zone left unsaved behind a button is
+    exactly the state that produces a wrong meeting time. The browser's zone is *offered*
+    when it differs, never forced: someone working Istanbul hours from Berlin means the zone
+    they chose. Writes go through the existing `PUT /api/profile` (`timezone` is already in
+    its schema and belongs to no role), so `POST /api/profile/timezone` stays what it is —
+    the silent, fill-if-empty path used by `TimezoneSync`.
+  - **Registration records the browser's zone** (`/api/register` accepts an optional
+    `timezone`, dropped if invalid — registration must never fail over this), so the
+    verification mail and anything booked on day one already read right.
+  - **`AttendeeTimes`** (`src/components/meeting/AttendeeTimes.tsx`) previews the picked
+    instant on every attendee's clock, one line per *distinct* clock — three people in
+    Berlin, Paris and Madrid are one reading, not three. Wired into the bulk scheduler
+    (`MeetingsManager`), the per-candidate panel (`MeetingSchedulerPanel`), the mentee's
+    meeting request (`MeetingRequestsPanel`) and the project's recurring slot
+    (`ProjectWeeklyMeeting`, which recomputes the next occurrence client-side from the
+    picked days/time). Readings sort west → east and render `h23`, matching how the app
+    writes times everywhere else.
+  - **`Meeting.timeZone`** stores the clock the organizer picked on, captured at creation.
+    `scheduledAt` is enough to render the time for anyone but not to say *which* reading was
+    agreed on, and the organizer's profile zone cannot stand in for it — that changes when
+    they travel. Null for older rows; falls back to the profile zone.
+  - **Every time-bearing email** now names the recipient's zone and links to
+    `/account#timezone` in small print, adds the other participants' clocks when they differ
+    (the project-series reminder does this for the whole team), and prints the organizer's /
+    requester's reading as a second line on invites and meeting requests. Zone comparison is
+    by *offset at that instant* (`sameWallClock`), so Berlin and Paris don't produce a
+    redundant second line and a pair that diverges across a DST change still does.
+  - New helpers in `src/lib/timezone.ts`: `zoneLabel`, `sameWallClock`, `readingsByZone`,
+    `supportedTimeZones` / `timeZoneOptions` (memoized — the IANA list is ~450 strings) and
+    `browserTimeZone`. `ProfileForm` now shares the option list instead of building its own.
+  - `e2e/timezone-settings.spec.ts` covers the `/account` picker, the registration capture
+    and the cross-zone scheduling preview.
+
+## [0.62.0-beta] - 2026-08-09
+
+### Added
+- **One-click actions in notification emails** (#1204): the five composer reactions
+  (`👍 ❤️ 😂 😮 🎉`) and a "mark this conversation as read" link, in both the per-message
+  notification and the unread digest.
+  - `src/lib/emailActionToken.ts` — HMAC-signed action tokens, same construction and trust
+    argument as the Reply-To tokens (`replyToken.ts`). A reaction token is bound to a
+    **message id**, not to "the newest message in the thread", so a reply arriving between
+    send and click cannot redirect the reaction onto the wrong message. The emoji is stored
+    as an *index*, so a token can never carry an arbitrary string into the database.
+  - Links land on `/m/[token]`, which performs the action from the browser via
+    `POST /api/email-action`. Deliberately not a mutating `GET`: mail clients and corporate
+    link scanners (Outlook Safe Links, antivirus gateways) prefetch every URL in a message,
+    which would post reactions nobody clicked. Scanners do not execute scripts.
+  - Reacting also marks the thread read — you cannot react to something you have not seen.
+
+### Fixed
+- **Replying by email now marks the conversation read** (#1204). `routeInboundEmail` stored
+  the reply but left `readAt` untouched, so the hourly unread digest kept resurfacing
+  conversations that had already been answered — and the in-app badge kept counting messages
+  the user had demonstrably read. Answering the newest message now marks it and everything
+  before it, matching what opening the thread in a browser already did
+  (`src/lib/threadRead.ts`, shared by the inbound-email and email-action paths). Failures are
+  logged, never fatal: a delivered reply is not lost over its read bookkeeping.
+
+### Added
+- **Outbound mail is split into two channels by category** (#1203), so scheduled system mail
+  cannot eat a relay's daily allowance. `primary` (`SMTP_*`) carries what must reach a human —
+  `verification`, `invitation`, `password-reset`, `message`, `test` — and points at a reputable
+  relay; `bulk` (`SMTP_BULK_*`) carries `unread-digest`, `activity-digest`, `mentor-digest`,
+  `analytics-report`, `meeting-reminder`, `interaction-reminder`, `stage-deadline`,
+  `retention-reminder`, `company-need-alert` and `announcement` over our own server.
+  - **Uncategorised mail stays on `primary`** — silently downgrading an unclassified call site
+    is the kind of regression that only surfaces when it costs a user. Bulk is opt-in.
+  - **`SMTP_BULK_HOST` unset ⇒ single channel**, exactly the previous behaviour, so preview and
+    topic environments need no new configuration.
+  - `SMTP_BULK_FROM` may use a different domain (e.g. `noreply@ersah.in`) so the two sender
+    reputations stay independent — a digest marked as spam cannot drag down the password-reset
+    mail. Verified: both identities resolve distinctly at runtime.
+  - `EmailLog.transport` records which channel carried each message; the admin panel shows both
+    channels' health, a 24-hour per-channel count ("this is what counts against the quota") and
+    a per-category breakdown so a noisy job can be moved rather than the quota raised.
+- **`infra/check-mail-dns.sh`** — read-only sender-authentication readiness check (every DKIM
+  selector in both record types, plus SPF/DMARC/PTR). Exits non-zero while DKIM is missing so it
+  can gate a relay switch.
+- **Outbound email delivery log** (#1194). `sendEmail()` now records every attempt in a new
+  `EmailLog` model — recipient, subject, category, outcome (`SENT` / `FAILED` / `SKIPPED`)
+  and the error. Metadata only: the body is never stored, so message content does not get a
+  second home that account erasure would have to chase.
+  - Visible at **Admin → Settings → Email health**, with a 7-day `SENT/FAILED/SKIPPED`
+    breakdown above the last 25 attempts (`GET /api/admin/email-log`, admin-only —
+    recipient addresses are personal data).
+  - The key call sites pass a `category`: `verification`, `invitation`, `password-reset`,
+    `message`, `unread-digest`, `test`. "Are verification mails going out at all?" is now
+    answerable without shell access to the server.
+- **Admin-side "resend verification"** (`POST /api/users/[id]/resend-verification`, #1194).
+  The self-service resend on the sign-in page only helps someone who comes back and tries
+  again; a user who never received the first mail has no reason to. The endpoint refuses
+  any account that is not actually waiting on a click (409 + the resolved state).
+- **`accountState` — one derived state instead of a bare `isActive` flag** (`src/lib/accountState.ts`,
+  #1194): `active` / `unverified` / `pending_approval` / `deactivated` / `no_login` /
+  `placeholder_email` / `erased`. `/api/users` returns it for the directory and full field
+  sets (the `password` column is read only to derive it and is stripped from every response).
+
+### Changed
+- **SMTP transports now have bounded timeouts** (10s connect/greeting, 20s socket, #1203). An
+  unreachable or wedged mail host used to hang the request that triggered the send — and, once
+  the admin panel began verifying two channels, the panel itself.
+- **`sendEmail()` no longer fails silently** (#1194). An unconfigured SMTP setup used to be a
+  bare `console.log` + `return`, which made a broken mail pipeline indistinguishable from
+  users who simply never replied. It now logs at error level and records a `SKIPPED` row;
+  send failures are recorded as `FAILED` and rethrown unchanged, so existing callers behave
+  exactly as before.
+- **The admin user list explains *why* an account is inactive** (#1194). One amber "Inactive"
+  badge covered five unrelated situations; each state now has its own label, colour and a
+  one-line "what to do about it", plus a **Resend verification** button on `unverified` rows.
+- **The message composer warns when the other side cannot read it** (#1194). A 1:1 thread now
+  resolves the counterpart's `accountState` (`GET /api/messages` → `counterpartState`) and
+  shows a banner when they cannot sign in, have no login at all, or sit on a generated
+  stand-in address that discards every email.
+
+### Fixed
+- Silence from an unreachable account no longer reads as being ignored: the three states
+  behind it (never verified, no login, placeholder address) are now surfaced everywhere they
+  matter — the user list, the composer and the delivery log.
+## [0.61.1-beta] - 2026-08-09
+
+### Fixed
+- **The public chrome no longer tells a signed-in user they are signed out** (#1211). A
+  regression from #1197: `/release-notes`, `/privacy`, `/terms`, `/code-of-conduct`,
+  `/features`, `/projects` and `/for-companies` gained the shared header, but it rendered
+  "Sign In / Register" unconditionally. Following the sidebar's version link mid-session
+  replaced the app nav with a logged-out one and offered no way back into the app.
+  - `PublicShell` resolves the session on the server (behind the existing `hasSessionCookie()`
+    gate) and passes a `dashboardHref` to `PublicHeader`, which then shows a link to the
+    user's own dashboard instead of the sign-in pair. Resolved server-side on purpose: a
+    client `useSession()` would paint the signed-out chrome first and swap it a beat later,
+    which looks like the very bug being fixed.
+  - `/` was never affected — it already redirects a signed-in visitor to their role home.
+
+## [0.61.0-beta] - 2026-08-09
+
+### Added
+- **One header and one footer for every public page** (#1197). The nine pages a visitor can
+  reach from the landing — `/`, `/features`, `/for-companies`, `/apply-as-mentor`,
+  `/projects`, `/release-notes`, `/privacy`, `/terms`, `/code-of-conduct` — now render the
+  same chrome instead of four different ones (or, on the legal pages, none).
+  - `src/components/landing/PublicShell.tsx` frames them all: `PublicHeader` (client — it
+    owns the mobile menu), `<main id="main-content">`, `PublicFooter` (server, so
+    `package.json` stays out of the browser bundle via `APP_VERSION`).
+  - The wordmark is a link to `/` on every page **including `/`**, where it was an inert
+    `<div>`. `data-testid="public-home-link"`.
+  - The footer is new on eight of the nine pages. It carries Product / Community / Legal
+    columns; the legal labels are read from `t.privacy.title` / `t.terms.title` /
+    `t.codeOfConduct.title` so a link can never disagree with the heading it points at.
+  - New `publicNav` i18n namespace (EN/TR/DE) for the chrome strings. It is deliberately
+    *not* part of `landing`, which is in `SERVER_ONLY_NAMESPACES` and so is never shipped
+    to the browser — the header is a client component and needs its labels there.
+  - `/for-companies` passes `showRegister={false}`: companies have no self-service sign-up
+    (#1102/#1104), so the chrome must not offer them the mentee registration button.
+
+### Fixed
+- **The skip-to-content link now lands somewhere on public pages** (#1197). The root layout
+  has always rendered `href="#main-content"`, but only `ResponsiveShell` (the signed-in
+  chrome) defined that anchor — so for a keyboard or screen-reader user the first control on
+  every public page was a link to nothing. `PublicShell` supplies it.
+- **The phone nav reaches the whole site** (#1197). The landing header hid "Features" and
+  "For companies" behind `sm:`/`md:` with nothing behind them, so on a phone those pages
+  were unreachable from the header. They now collapse into a disclosure menu
+  (`public-nav-toggle` / `public-nav-mobile`) that also carries GitHub, sign-in, register,
+  the language switcher and the theme toggle. Moving the theme toggle in there is what stops
+  the wordmark truncating to "InternshipC…" at 375px.
+- Footer column headings were `text-gray-400 dark:text-gray-500`, which fails contrast on the
+  dark surface at that size; swapped to `text-gray-500 dark:text-gray-400`.
+
+### Changed
+- `src/app/apply-as-mentor/page.tsx` is now a server component; its form moved to
+  `src/components/forms/ApplyMentorForm.tsx` so the page can wear the shared chrome.
+- `src/lib/sessionCookie.ts` (new) gates `getServerSession()` on a session cookie actually
+  being present, in the root layout, `getLocale()`, the landing page and `/projects`. This
+  removes work that is provably useless for a signed-out visitor. **It is not a measurable
+  speed win** — an A/B over two rounds on a dev server was inside the noise, and production
+  TTFB for these pages is already 11–27 ms. The real navigation improvement comes from the
+  shared chrome: public pages now link to each other through `next/link`, so moving between
+  them is a ~20–50 ms RSC fetch rather than a full document load.
+- `/projects` no longer renders `BrandWordmark` (which resolves a session and the org
+  branding) in its header; the public header is static.
+
+## [0.60.0-beta] - 2026-08-08
+
+### Added
+- **Live chat on the landing page** (#1174). A visitor who is not signed in can now ask a
+  question from `/` instead of composing an email — the tawk.to widget, mounted on the
+  landing page and nowhere else.
+  - `src/components/TawkChat.tsx` injects the embed **only** when
+    `hasConsent('marketing')` is true. This is the first script to use the gate the consent
+    banner was built for (EPIC K, #424) — before opt-in, nothing is requested from tawk.to
+    at all. The widget id is public by design (it ships in the page HTML), so it is a
+    constant in the component rather than an env var.
+  - The embed attaches itself to `document`, not to the React tree, so it survives a
+    client-side navigation off `/`. The component hides it on unmount, and sets
+    `Tawk_API.onLoad` to hide it on arrival for the case where the visitor already left
+    while the script was still loading.
+  - `CookieConsent` now dispatches a `cookieconsentchange` event on `window` after saving
+    (`COOKIE_CONSENT_EVENT` in `src/lib/cookieConsent.ts`), so accepting brings the chat up
+    on the spot instead of on the next page load.
+- Cookie-banner copy for the "Marketing" category names the live chat and tawk.to in EN/TR/DE.
+
+### Changed
+- `COOKIE_CONSENT_VERSION` 2 → 3. "Marketing" now actually loads a third-party script that
+  sees the visitor's IP; a choice made while the category was purely hypothetical does not
+  cover that, so the banner asks once more.
+- CSP (`next.config.js`) allows `https://*.tawk.to` for `script-src`, `style-src`, `img-src`,
+  `font-src`, `frame-src`, plus `wss://*.tawk.to` in `connect-src` and a new `media-src`
+  (notification sound — it previously fell back to `default-src 'self'`). The widget also
+  pulls its emoji picker from jsdelivr, allowed as `https://cdn.jsdelivr.net/emojione/` —
+  a path-scoped source, because allowing all of cdn.jsdelivr.net would mean allowing
+  anything ever published to npm. Headers are per-request, so this is app-wide even though
+  the widget is landing-page-only; the consent gate, not the CSP, is what keeps it from
+  loading elsewhere.
+- `e2e/global-setup.ts` reads `COOKIE_CONSENT_KEY`/`COOKIE_CONSENT_VERSION` from the app
+  instead of hard-coding them, so a future version bump can't silently put the banner back
+  in front of every test in the suite.
+
+### Notes
+- The privacy notice does not name tawk.to as a recipient yet (#1177) — that means bumping
+  `PRIVACY_POLICY_VERSION`, which is the maintainer's call.
+
+## [0.59.0-beta] - 2026-08-08
+
+### Added
+- **A person card behind a name** (#1166). Names were plain text nearly everywhere: you could
+  read who someone was but not reach them, and on a screen where the name sits *inside a form*
+  (the bulk email composer) following a link would have thrown away half-typed work.
+  - `<PersonHoverCard />` opens on hover, focus or tap and shows role, pipeline stage, mentor
+    and company, university, and the language they read (#1164) — plus "open profile",
+    "message" and (when the viewer may write to them) "email".
+  - Wired into the bulk email recipient list, the 1:1 message thread header, and the messages
+    inbox rows. Where clicking the *name* already does something else — ticking a recipient
+    checkbox, opening a thread — the card hangs off its own small icon so the existing gesture
+    is untouched.
+  - `src/lib/personHref.ts` centralises "where does *this* viewer read *that* person": there is
+    no single profile route (an admin reads a mentee at `/admin/candidates/<id>`, their mentor
+    at `/mentor/mentees/<id>`), which is why most call sites never linked a name at all. It
+    returns null when the viewer has no page for that person, and the name renders unlinked
+    rather than pointing at a 404.
+  - `GET /api/people/[id]/card` serves the summary. Authorization is the whole story for a
+    lookup-by-id endpoint, so the rule is narrow and stated once in `src/lib/personCard.ts`:
+    **you may look up anyone whose name the app already shows you** — a mentorship counterpart,
+    a project co-member, a conversation participant, yourself; everyone, for an admin. Any other
+    role is denied rather than inheriting a view. "Not allowed" and "no such person" both answer
+    404 so the endpoint cannot be used as an account-existence oracle, and `email` is omitted
+    from the payload for viewers who are not allowed to write to that person.
+  - Data is cached per person id for the page's lifetime (including misses), so sweeping the
+    pointer down a list of names costs at most one request each and re-hovering costs none.
+
+## [0.58.0-beta] - 2026-08-08
+
+### Added
+- **Multilingual bulk email to mentees** (#1165). The ready-made templates already existed in
+  EN/TR/DE (`emailTemplates` in the dictionaries), but the composer only ever read the
+  **sender's** locale — so a group of mentees who do not all read the same language received
+  whichever one the sender's UI happened to be in, and the alternative was hand-translating
+  before every send.
+  - `src/lib/localizedEmail.ts` resolves a subject+body **pair** per recipient: their language,
+    then the default locale, then the canonical version. Same shape as
+    `src/lib/announcementText.ts` and `src/lib/goalTemplates.ts`; the difference is that subject
+    and body travel together — a Turkish body under an English subject is worse than either
+    alone — so a language with only one half filled in is dropped rather than sent.
+  - `POST /api/mentor/email` accepts `translations` ({ locale → { subject, body } }) alongside
+    the original `subject`/`body`, which stays valid for callers that never learned about it.
+    `{name}` is filled in *after* resolving, so placeholders keep working in every language.
+  - The composer gets EN/TR/DE tabs with a written/not-written dot, and choosing a template
+    fills **all three languages at once**. A coverage line names the languages written and warns
+    when some ticked recipients will fall back.
+
+## [0.57.0-beta] - 2026-08-08
+
+### Added
+- **Multilingual announcements** (#1163). An announcement was a single body sent to everyone,
+  even though every `User` has a `preferredLanguage` and the app speaks EN/TR/DE — the email
+  translated only its *shell* (subject, link label) while the message itself went out in one
+  language.
+  - `Announcement.translations` (nullable `Json`, `{ en?, tr?, de? }`). `text` stays the
+    canonical wording — the default locale's version, or the first language filled in — so every
+    row written before this column existed keeps working untouched.
+  - `src/lib/announcementText.ts` resolves per reader: their language, then the default locale,
+    then `text`. Deliberately the same shape as `src/lib/goalTemplates.ts`, which solved this
+    first for goal templates — one canonical column plus a nullable JSON map — so there is one
+    mental model, not two.
+  - The admin composer takes language tabs with a written/not-written dot per language (one box
+    at a time: long-form bodies do not fit side by side the way goal-template titles do). At
+    least one language is required; the rest may stay empty.
+  - Resolution reaches every surface: `GET /api/announcements` returns `text` already in the
+    reader's language (the per-locale bodies never travel to a browser that cannot use them),
+    each `Notification` row is written in **its own** recipient's language at fan-out, and the
+    announcement email's **body** now follows the recipient too, not just the subject around it.
+  - `languageFallback` marks a reader who is seeing a language they did not choose, and the
+    archive says so rather than presenting a foreign-language message as if it were meant for
+    them. The dashboard card stays clean — it is a two-line digest and the full text is one
+    click away.
+
+### Changed
+- `PATCH /api/admin/announcements/[id]` accepts `translations` too, and re-resolves the already
+  delivered notifications **per language** — one statement per distinct resolved body rather
+  than a single blanket overwrite, which would have flattened every recipient back to the
+  canonical wording and undone the translation for two thirds of them.
+
+## [0.56.1-beta] - 2026-08-08
+
+### Added
+- **Announcements can be edited and deleted** (#1162). `POST` was the resource's only verb, so
+  a typo in a broadcast was permanent and a superseded announcement stayed on everyone's screen
+  forever.
+  - New `PATCH` / `DELETE /api/admin/announcements/[id]` (ADMIN only, both `logActivity`-audited
+    as `announcement.update` / `announcement.delete`). `PATCH` takes text, link and the image
+    (JSON to edit copy, multipart to swap the file, `imageAction: 'remove'` to detach it) and
+    validates the image *before* writing anything, so a rejected file cannot leave the text
+    half-updated. The `AnnouncementImage` write is an `upsert` — a plain `create` would violate
+    the unique `announcementId` when replacing an existing image.
+  - Edit/delete controls on each row of the admin history panel; deleting goes through a
+    `ConfirmDialog`.
+  - **An edit does not re-broadcast** — no second notification, no second email. It corrects a
+    record people were already handed.
+
+### Changed
+- `Notification.announcementId` (nullable, indexed) links a bell row back to the broadcast that
+  created it. The `Announcement` row is now written *before* the fan-out so its id can be
+  stamped on every notification (`emailedCount` is filled in afterwards, being the one value not
+  knowable up front). This link is what lets an edit rewrite the copy already sitting in
+  everyone's bell, and a delete take those rows with it instead of leaving them pointing at an
+  announcement that no longer exists.
+
+## [0.56.0-beta] - 2026-08-08
+
+### Added
+- **A person's language is visible where you write to them** (#1164). Every `User` carries a
+  `preferredLanguage` and the app speaks EN/TR/DE, but that preference was shown nowhere
+  outside the person's own settings — so mentors and admins were composing to people in a
+  language those people had not chosen.
+  - New `<LanguageBadge />` (`src/components/LanguageBadge.tsx`): a two-letter chip with the
+    language name in the `title`. It distinguishes *chosen* from *unset* — an unset preference
+    renders the app default in a muted style (`data-language-set="false"`), because "chose
+    English" and "never chose" are a fact and a guess respectively.
+  - Shown on the candidate list (both the desktop and the `md:hidden` mobile card), the 1:1
+    message thread header, and the bulk email composer's recipient list.
+  - The bulk composer additionally summarises the **selected** recipients' languages
+    (`data-testid="recipient-languages"`, e.g. `DE ×2 · TR ×1`) — one body goes to everyone
+    ticked, so the sender sees the spread before they start typing. `languageBreakdown()` folds
+    unset preferences into the app default, which is what those people actually receive.
+  - `preferredLanguage` now rides along in `/api/candidates`, `/api/mentorship`, and the
+    message thread's participant payload (`getThreadIfAllowed` / `getConversationIfAllowed`).
+    Group chats get no header badge — a room has no single language to name.
+
+## [0.55.7-beta] - 2026-08-08
+
+### Changed
+- **Announcements start the day you join** (#1161). The dashboard card and the
+  `/announcements` archive both read `GET /api/announcements`, which returned the whole
+  `Announcement` table to every signed-in user — so a brand-new account's first screen was
+  filled with other people's history ("the meeting has started", "re-point your git remote
+  today"), messages written for whoever was in the room at the time and, read weeks later,
+  misleading.
+  - The feed is now cut at the reader's own `User.createdAt` (`where: { createdAt: { gte } }`,
+    applied to the `count` as well, so pagination cannot walk back past it).
+  - The per-user notification bell already behaved this way for free — `Notification` rows are
+    created during the broadcast fan-out, so an account created later simply has none. This
+    brings the two remaining surfaces in line with it.
+  - The complete record is untouched at `/admin/announcements`, which is the sending log.
+  - The cutoff is read from the database, never from the session: a JWT minted before this
+    shipped carries no such claim, and a client-supplied date would be a trivial way to read
+    the archive back. A session pointing at a deleted user row gets an empty feed.
+
+## [0.55.6-beta] - 2026-08-08
+
+### Fixed
+- **A way back out of the project showcase** (#1159). `/projects` renders outside the
+  admin/mentor/portal shell — no sidebar — and its header held a single link: the hard-coded
+  "InternshipCRM" wordmark pointing at `/`. A signed-in visitor who followed "Browse the
+  project showcase" from `/portal/projects` had no visible route back into the app (the
+  wordmark did land them on their dashboard via the `/` → `roleHome` redirect, but nothing
+  said so); on a phone, with no sidebar either, the page was a dead end.
+  - Added an `ArrowLeft` back link above the page title (`data-testid="showcase-back"`),
+    targeted at who is looking: `roleHome(session.user.role)` for a signed-in visitor,
+    `/` for an anonymous one. Same shape the project detail page already uses.
+  - The header wordmark now points at the same destination and renders `<BrandWordmark />`
+    instead of hard-coded product chrome, so the showcase honours tenant branding (#546)
+    like every other page.
+  - New dictionary keys `projects.backDashboard` / `projects.backHome` (EN/TR/DE), and an
+    e2e case in `e2e/projects-showcase.spec.ts` covering both viewers.
+
+## [0.55.5-beta] - 2026-08-08
+
+### Fixed
+- **One 1:1 thread per pair** (#1156). The same person could show up twice in `/messages`,
+  each row holding half the history. A 1:1 chat had two homes: the mentorship thread
+  (`Message.relationId`, `/messages/<relationId>`, linked from the mentee card, the portal,
+  notifications and digest emails) and the conversation layer (`Message.conversationId`,
+  `/messages/c/<id>`, reached from user-card quick actions and the inbox's "new chat" picker).
+  The inbox listed both, so anyone reachable both ways — a mentee who is also a project
+  co-member — got two rows. `Conversation.directKey` only ever deduped *within* the second
+  layer; nothing tied the two together. Several `MentorshipRelation` rows for one pair had the
+  same effect, one thread each.
+  - The DIRECT conversation is now the single home for a 1:1 chat.
+    `conversationForRelation()` (`src/lib/conversations.ts`) create-or-gets the pair's
+    conversation and adopts the relation's messages into it with a single indexed
+    `UPDATE … WHERE relationId = ? AND conversationId IS NULL` — idempotent, so it runs
+    lazily on the paths that touch a thread rather than as a deploy-time migration.
+  - `/messages/<relationId>` is now a server component that redirects to `/messages/c/<id>`,
+    so every existing link, notification and digest email lands on the one thread. It keeps
+    the same participants-or-admin authorization and falls through to the old view (which
+    renders "not found") when the relation isn't the viewer's.
+  - The inbox resolves the viewer's mentorships first, then lists conversations only.
+    `/portal/messages` — a mentorship-only list that missed project DMs and group chats —
+    redirects to the shared inbox, and the portal nav points there.
+  - Messages carry **both** links whenever both exist: the conversation is where the thread
+    lives, `relationId` keeps them inside the mentorship-scoped features. So reply-by-email
+    (relation-scoped `replyAddress` tokens) now works in the conversation the mentorship
+    thread redirects to, and the unread digest, the inbound-mail bridge, the mentor bulk
+    email and the onboarding checklist are unaffected.
+  - `e2e/one-thread-per-person.spec.ts` seeds the split state (a mentorship message + a
+    separate DIRECT conversation for the same pair) and asserts it collapses into one inbox
+    row holding both histories; the two specs asserting the old thread URL now expect the
+    conversation URL.
+
+## [0.55.4-beta] - 2026-08-08
+
+### Added
+- **"Select all" in the project goal-template pool.** Handing the whole shortlist to a new
+  member meant ticking 20 boxes one by one. The pool now has a select-all checkbox directly
+  above the list (`select-all-templates`), with a `{n} selected` counter next to it.
+  - The control already existed as a text link below the list, but it was rendered under
+    `picked.length > 0` — so it only appeared *after* something had been ticked by hand,
+    which is exactly when it is least useful. It is now always visible while the pool has
+    entries, sits next to the boxes it ticks, and doubles as **Clear** once everything is
+    selected (indeterminate on a partial selection).
+  - `src/components/project/ProjectGoals.tsx`; new `projects.clearSelection` / `projects.selected`
+    strings in EN/TR/DE.
+  - Covered by a new e2e case in `e2e/goal-templates.spec.ts` (tick all → send → every
+    template lands on the member).
+
+## [0.55.3-beta] - 2026-08-08
+
+### Fixed
+- **Sign-in is no longer hostage to a profile column** (#1150). Production login failed with
+  `Unexpected end of JSON input` — a 401 from `/api/auth/callback/credentials` whose body was
+  the normal `?error=<message>` redirect, so the string on the login form came from the
+  *server*. Root cause: `authorize()` read the account with an unqualified
+  `prisma.user.findUnique({ where: { email } })`, which hydrates all ~60 `User` columns
+  including its four `Json` ones. Prisma `JSON.parse()`s a `Json` column on read, so one row
+  holding an invalid value (`''` instead of `'[]'`) made the read throw **before the password
+  was ever compared** — the account was unreachable by any password, and the raw parser
+  message was shown to the user. Reproduced on a real MariaDB row: an unqualified
+  `findUnique` throws while the narrowed read of the same row succeeds and login completes.
+  - `src/lib/auth.ts` now selects only the columns sign-in uses (`AUTH_USER_SELECT`), across
+    all three providers (`credentials`, `impersonate`, `sso`) and both `jwt`-callback lookups.
+    The `user.update()` calls got `select: { id: true }` too — an unqualified `update()`
+    returns the whole row and would re-open the same hole.
+  - **Where the invalid value came from — `prisma db push` itself.** Prisma *drops*
+    `@default` when it emits DDL for a `Json` field: `languages Json @default("[]")` becomes a
+    bare `ALTER TABLE \`User\` ADD COLUMN \`languages\` JSON NOT NULL` (verified with
+    `prisma migrate diff`; a `String @db.Text @default` keeps its DEFAULT). On MariaDB — which
+    production is, and where `JSON` is only an alias for `LONGTEXT utf8mb4_bin` — that ALTER
+    backfills **every pre-existing row with the empty string**, silently, even under
+    `STRICT_TRANS_TABLES` (reproduced locally: `length=0`, `JSON_VALID=0`, no warning). So
+    every account older than the deploy that added the column was locked out at once, not just
+    the one that reported it. `User.languages` was added by #1078 and reached production on the
+    2026-08-07 deploy — the day before. The schema comment on `notificationPrefs` already
+    warned about exactly this ("nullable … avoids MariaDB `json_valid` CHECK issues"); a
+    nullable `Json` column is unaffected.
+  - Why CI stayed green: the test databases are **MySQL 8**, whose native `JSON` type rejects
+    the value at write time (ERROR 3140), so the failure is not merely untested there — it is
+    unrepresentable. The `@smoke` suite passed on every one of these commits.
+  - `infra/deploy-prod.sh` now runs the repair immediately after `db push`, where the damage is
+    created, so the next new `Json` column cannot lock anyone out. It only rewrites values that
+    are *already* unreadable, so it is inert on a healthy database.
+- **The way back in no longer shares sign-in's failure mode** (#1150). `forgot` and
+  `verify-email/resend` read the whole row too, and `forgot` answers a generic `ok: true`
+  whether or not the mail was sent — so on a corrupt row the reset link silently never arrived
+  and looked like an SMTP fault. Both now select only the fields the mail needs, and both are
+  covered by `check:auth-reads` (which caught a third unqualified read while being written).
+
+### Security
+- Sign-in no longer echoes internal exception messages to the browser (#1150). NextAuth hands
+  a thrown `authorize()` error's `.message` to the client as `?error=<message>`; every
+  provider is now wrapped once (`guardProviders`), so the errors the sign-in page is designed
+  around still pass through unchanged while anything unexpected becomes
+  `UNEXPECTED_ERROR` — rendered as a localized "something went wrong" (`auth.signInFailed`,
+  EN/TR/DE) with the real cause logged server-side.
+
+### Added
+- `npm run check:auth-reads` (`scripts/check-auth-reads.mjs`), wired into `ci.yml`: fails the
+  build if any `prisma.user` query in `src/lib/auth.ts` lacks a `select`, or if one selects a
+  `Json` column. Needs no database, so it guards the invariant on every PR.
+- `npm run db:check-json` (`prisma/backfill-json-columns.mjs`, shipped inside the runtime image so the deploy can run it): reports — and with `--repair`
+  fixes — rows whose `Json` value is not valid JSON, across all 11 `Json` columns in the
+  schema. Read-only by default, exits non-zero on unrepaired damage, and prints ids and value
+  lengths only (never the value, which may be personal data).
+- `e2e/auth-corrupt-json-column.spec.ts`: a user whose `skills` column holds invalid JSON can
+  still sign in. Skips itself on engines that reject the bad value at write time.
+
+## [0.55.2-beta] - 2026-08-08
+
+### Fixed
+- **Switching an account off no longer promises a review that never comes** (#1148) — since
+  #1085, `PATCH /api/users/[id]` set `pendingApproval = true` on every deactivation, so
+  `src/lib/auth.ts` answered the next sign-in with `ACCOUNT_PENDING_APPROVAL` and the page
+  showed *"Your account is waiting for a quick review. We will email you the moment it is
+  opened."* — to someone an admin had just switched off. That is the exact opposite of what
+  #1085 introduced the flag for ("tell 'waiting for a review' apart from 'an admin switched
+  you off', since both are `isActive=false`"): the same PR then set it on both paths and
+  collapsed the distinction. Deactivating now parks only an **unverified** account, which is
+  the sole case the flag was actually load-bearing for — a never-activated sign-up still
+  holding a verification link. A verified account is already barred from re-admitting itself
+  by `verify-email`'s own `!emailVerified` term, so it keeps the honest "this account has
+  been deactivated" message. Activating still clears the flag unconditionally.
+
+### Tests
+- **The four specs that still waited for a native `confirm()`** (#1148) — #1071 moved 16
+  components onto `ConfirmDialog` without touching a single spec, so
+  `page.on('dialog', d => d.accept())` sat waiting for an event that no longer fires. The
+  click opened ordinary DOM, was swallowed, and the failure surfaced one assertion later as
+  "the row I deleted is still there": `delete-confirm`, `goal-templates`,
+  `goals-archive-sort` and `todos` all went red in the scheduled full run
+  ([31220653046](https://github.com/21072026/Internship/actions/runs/31220653046)). New
+  `e2e/helpers/confirm.ts` (`acceptConfirmDialog` / `cancelConfirmDialog`) is the one place
+  the dialog's test ids live; `delete-confirm` keeps its #470 intent, now reading the
+  question out of the DOM — the click asks and sends no `DELETE`, cancelling keeps the note.
+  `impersonation-governance`, `search` and `xss-injection` also listen for dialogs and are
+  deliberately left alone: those are a `prompt()`, an `alert()` and XSS detection.
+- **`email-verification` seeded a mentor into the first-run wizard** (#1148) — it creates the
+  user by hand because it needs `emailVerified: false`, which also skipped `seedUser`'s
+  `mentorOnboardingSeenAt` concession, so the first `/mentor` visit was redirected to
+  `/onboarding` (#911) and the sign-in's landing wait timed out. Now stamped explicitly, with
+  the reason next to it.
+- `admin-user-active` additionally asserts `pendingApproval === false` after a deactivation,
+  so the message distinction above cannot disappear silently again.
+
+## [0.55.1-beta] - 2026-08-07
+
+### Security
+- **`nodemailer` 7.0.13 → 9.0.5** (#1143) — closes the open **high** finding
+  ([GHSA-p6gq-j5cr-w38f](https://github.com/advisories/GHSA-p6gq-j5cr-w38f): the
+  message-level `raw` option bypasses `disableFileAccess`/`disableUrlAccess`, giving
+  arbitrary file read and full-response SSRF, range `<=9.0.0`) plus three moderates that
+  cover `<=8.0.8`. On a clean `npm ci`, `npm audit` goes from 6 findings (3 high, 3
+  moderate) to 4 (2 high, 2 moderate): `next-auth`'s moderate was transitive through
+  nodemailer and cleared with it, and both rows moved out of
+  `docs/security-exceptions.md`. What remains is untouched by this change — `xlsx` and
+  `node-cron`/`uuid` are written up there, and `nanoid` (high, via `postcss`) is a
+  pre-existing finding that is in neither — filed as #1144.
+- **Bumping the root range alone does not install.** `next-auth@4.24.15` declares
+  `peerOptional nodemailer@"^7.0.7"`, so `npm ci` fails with ERESOLVE — which is exactly
+  where Dependabot's #1129 (7.0.13 → 9.0.1) died, in under 30s, before any of the three
+  jobs ran a line of project code. The fix is one `overrides` entry pinning next-auth's
+  peer to the root's: `"next-auth": { "nodemailer": "$nodemailer" }`. Safe because
+  `src/lib/auth.ts` only registers `CredentialsProvider` — there is no `EmailProvider`, so
+  next-auth never loads nodemailer at runtime and the peer is unused as well as optional.
+- **The 7 → 9 breaking change does not reach this app.** 9.0.0 made HTTPS requests
+  validate the server's TLS certificate *when fetching remote content* — attachment
+  `path`/`href` URLs, OAuth2 token endpoints, proxy CONNECT. Our transport is plain SMTP
+  host/port/password (`src/services/emailService.ts:41`) and every attachment is an
+  in-memory `Buffer` (`emailService.ts:93`, and the message/announcement senders that feed
+  it); nothing fetches remote content. Verified beyond the type level: `tsc --noEmit` is
+  clean against `@types/nodemailer` 6.4.23, and a message built with our exact shape
+  (multipart, `cid` attachment, UTF-8 subject) renders correctly on 9.0.5.
+- Taken deliberately rather than as an automated PR, which is what `.github/dependabot.yml`
+  intends by ignoring `semver-major` — #1129 is a security update, so Dependabot opened it
+  past that rule anyway. Closed in favour of this one.
+
+## [0.55.0-beta] - 2026-08-07
+
+### Added
+- **A mentor can also be a mentee** (#1141) — someone who helps another person can need help
+  themselves, and the app now says so. `User.role` is unchanged (still one enum, still what
+  every authorization decision keys off); the second side is **derived** from the relation
+  table by `src/lib/dualRole.ts`: `mentorshipSides()` counts the relations where the user is
+  the mentor and where they are the mentee, and `availableModes()` / `canUsePortal()` /
+  `canUseMentorShell()` turn that into shell access. Derived rather than stored on purpose —
+  `MentorshipRelation` (plain `mentorId`/`menteeId` user FKs, no role constraint) already
+  permitted this, so the relation table *is* the truth and a second stored flag could only
+  disagree with it.
+- `ModeSwitcher` now takes a `modes: AppMode[]` prop (server-decided) and renders a
+  variable-width group instead of a hardcoded admin/mentor pair; it returns `null` below two
+  modes, so a plain mentor still sees no switcher. `AppMode` gains `'mentee'` (→ `/portal`),
+  `MODE_ROOT` maps each mode to its shell root, and `modeOf()` recognises `/portal`.
+  New `modeSwitch.mentee` / `modeSwitch.menteeHint` strings (EN/TR/DE).
+- `e2e/dual-role.spec.ts` — dual-role mentor reaches the portal and returns (`@smoke`), a
+  mentor with no mentorship of their own is still bounced out of `/portal`, a mentee given
+  someone to mentor reaches `/mentor`, and a plain mentee is still kept out of it.
+
+### Changed
+- `appMode.counterpartPath()` now keeps the current section only when the *target* shell owns
+  that page (`SECTIONS` per mode, `ALIASES` keyed by from→to). The portal has far fewer
+  sections than the staff shells, and the old "shared section" list would have linked to
+  `/portal` pages that don't exist.
+- `authzScope` — the `relation` scope for MENTOR and MENTEE now matches **both** sides
+  (`OR: [{ mentorId }, { menteeId }]`). Read-only widening: all three `scopeForRole()` callers
+  are GETs, and it only ever adds rows the user is personally named in.
+- `POST /api/mentorship` accepts ADMIN/MENTOR/MENTEE on **either** side (COMPANY and SOURCE
+  stay barred — they have no personal mentorship) and rejects `mentorId === menteeId`.
+  `/admin/mentorship` offers the same people in both pickers, each sorted with that picker's
+  usual role first and off-role entries carrying a role suffix; the person picked on one side
+  drops out of the other.
+- `PortalLayout` no longer bounces ADMIN/MENTOR unconditionally — it admits anyone who is
+  actually being mentored — and gained the **2FA setup gate** the staff shells already had, so
+  the portal can't become a way around it for a role in scope for the policy. `MentorLayout`
+  admits a MENTEE who has someone to mentor; the mentor onboarding wizard redirect stays
+  scoped to `role === 'MENTOR'`, so a dual-role mentee is never bounced into it.
+## [0.54.0-beta] - 2026-08-07
+
+### Changed
+- **The mentor sidebar is a component now** (`src/components/MentorNav.tsx`, salvaged from #1080)
+  — twelve hand-written `<Link>` blocks in `src/app/mentor/layout.tsx` became one array, and the
+  entry for the page you are on is highlighted and carries `aria-current="page"`. `/mentor` is
+  matched exactly rather than by prefix, so the dashboard entry does not light up on every mentor
+  route. `/todos` is included: #1080 was branched before it landed and its nav list would have
+  silently dropped it, so `e2e/mentor-profile-navigation.spec.ts` now asserts the entry exists.
+
+### Not taken from #1080
+- Its `MentorProfileCompletionBanner` (a dashboard nag when bio / interests / `mentorCapacity`
+  are empty) is left out: `OnboardingChecklist` already checks those same three fields for
+  mentors and already links to `/mentor/profile` (`GET /api/onboarding`), so the banner would
+  have stacked a second blue box saying the same thing on a dashboard that #1136 had just made
+  more compact.
+
+## [0.53.0-beta] - 2026-08-07
+
+### Added
+- **Consent-based public mentor profiles** (`/p/<userId>`, salvaged from #1079) — the public
+  profile page already existed for mentees; it now renders a mentor variant when the account is
+  a MENTOR and `publicProfile` is on. Mentors show areas of expertise, spoken languages, active
+  mentee *count* and capacity (`data-testid="public-profile-active-mentees"` / `-capacity`);
+  the mentee-shaped rows (university, department, graduation year, target position) are hidden
+  for them. The query is additionally narrowed to `role in (MENTEE, MENTOR)`, so an ADMIN or
+  COMPANY account that happens to carry `publicProfile` can no longer be rendered.
+- **Link to the mentor's public profile from the mentee portal** (`/portal`) — shown only when
+  that mentor has actually opted in (`publicProfile === true`), next to "message mentor".
+- `e2e/public-profile.spec.ts` gained a mentor case asserting the mentor fields are visible and
+  that phone, WhatsApp, the mentee-only rows **and the linked mentee's name** are not.
+
+## [0.52.0-beta] - 2026-08-07
+
+### Added
+- **Mentors can edit their own profile** (`/mentor/profile`, salvaged from #1078) — the mentee
+  profile form was extracted into a shared `ProfileForm` component that takes a `role` prop, so
+  `/portal/profile` (MENTEE) and the new `/mentor/profile` (MENTOR) are the same form with
+  different fields. Mentors get name, bio, city, avatar, LinkedIn/GitHub/portfolio, skills +
+  skill levels, areas of expertise, `mentorCapacity`, spoken languages and the `publicProfile`
+  toggle; the mentee-only blocks (university, department, graduation year, target position, CV
+  manager/feedback/suggestions, documents, templates) do not render for them. New "My profile"
+  entry in the mentor sidebar.
+- **`User.languages`** (`Json`, default `[]`) — the languages a mentor speaks, distinct from
+  `preferredLanguage` (the UI locale). Edited as a comma-separated list, stored as an array.
+
+### Changed
+- **`PUT /api/profile` rejects fields the caller may not set** instead of silently ignoring them:
+  unknown keys, and role-owned keys sent by the wrong role, now return `403` with
+  `{ code: 'protected_fields', fields: [...] }`. `mentorCapacity` and `languages` are
+  MENTOR-only; `university`, `department`, `graduationYear`, `targetPosition` and `cvUrl` are
+  MENTEE-only; `interests` stays open to both (a mentee's interests, a mentor's expertise).
+  `role`, `isActive` and `userId` were never writable here and are now rejected loudly.
+
+## [0.51.2-beta] - 2026-08-07
+
+### Changed
+- **Compact onboarding cards on the mentor dashboard** (`MenteeOnboardingWizard`) — the
+  per-mentee onboarding cards were full width and stacked, so two newly joined mentees pushed
+  the rest of the dashboard below the fold while the right half of the screen stayed empty.
+  They now sit in a responsive grid (1 / 2 / 3 columns at `md` / `2xl`), each card carries the
+  mentee's name as its heading (the name link, `onboarding-mentee-link-<id>`, moved into that
+  header and stays visible when collapsed), and the shared "My Mentees" / "Meetings" links moved
+  out of every card into one block header. The `{name}` placeholder is gone from
+  `menteeOnboarding.subtitle` in all three locales — the heading carries the name now.
+- **Collapsible onboarding cards** — a chevron (`onboarding-toggle-<id>`) folds a card down to
+  its summary: name, an `x/y` progress badge (`onboarding-progress-<id>`), a progress bar and
+  the next open step (`onboarding-next-<id>`). The choice is remembered per mentee in
+  `localStorage` under `mentee-onboarding-collapsed`. With more than two mentees pending, cards
+  past the second start collapsed. New i18n keys: `menteeOnboarding.expand` / `.collapse` /
+  `.next`.
+- E2E: `e2e/mentee-onboarding-collapse.spec.ts` covers the summary, the collapse toggle and its
+  persistence across a reload.
+
+## [0.51.1-beta] - 2026-08-07
+
+### Changed
+- **Landing copy: the product is no longer written by one person** (`src/i18n/dictionaries.ts`,
+  EN/TR/DE) — the honesty note under "What you can check for yourself" (`transBeta`) and the
+  mentor FAQ answer to "Will this still be around in a year?" (`faqMentor3A`) both claimed a
+  single author ("tek kişi yazıyor" / "written by a single maintainer" / "von einer einzelnen
+  Person"); several people write it now, so both say "a small team" instead. The rest of each
+  string — beta, no testimonials yet, hand-opened company accounts, one-click export — is
+  unchanged, and the objection table in `docs/landing-value-proposition.md` was updated to
+  match. No bearing on the IP position: the sole rights holder is still one natural person.
 
 ## [0.51.0-beta] - 2026-08-07
 
@@ -367,6 +1133,34 @@ Closes #1113.
 
 ## [Unreleased]
 
+### Added
+- **Database backups, and a gate that refuses to destroy data** (#1181, #1182 · epic #1179).
+  Every deploy runs `prisma db push --accept-data-loss` and, until now, there was no backup
+  anywhere in the repo — a PR that renamed a column would drop it in production with no way
+  back. `infra/backup-db.sh` dumps the database (mysqldump → gzip, size + gzip-integrity +
+  `CREATE TABLE` checks, `KEEP_DAYS` rotation, `0600` files in a `0700` directory) and
+  `infra/schema-guard.sh` asks `prisma migrate diff --script` what the pending push would run,
+  stopping the deploy on `DROP TABLE` / `DROP COLUMN` / `TRUNCATE` / a `NOT NULL` conversion.
+  Both are wired into `infra/deploy-prod.sh` ahead of the push, and scale with the environment:
+  prod backs up and blocks, preview backs up and warns, topic envs do neither (disposable,
+  shared DB). Overrides: `FORCE_NO_BACKUP=1`, and `ALLOW_DESTRUCTIVE=1` — which is refused
+  unless a backup was taken in the same run. An unavailable diff is treated as unsafe, never
+  as "probably fine".
+- `docs/disaster-recovery.md` — restore runbook with a drill log whose RPO/RTO stay empty until
+  a real drill measures them, plus `infra/README.md` §5 (cron setup, overrides). Dumps are
+  git-ignored; they contain real personal data.
+- **Topic-environment sweep** (`.github/workflows/topic-sweep.yml`, #962). Teardown is driven by a
+  `pull_request: closed` event, and an event that never fires (approval-gated run, cancelled run,
+  offline runner, reboot) leaks a container forever. On 2026-08-08 one such orphan held port 3392
+  and stopped PR #1192 from deploying at all — topic ports are `3300 + PR % 100`, so a leak
+  silently steals the slot of every hundredth PR after it. The sweep reconciles instead of
+  trusting the event: list the `internship-crm-pr<N>` containers actually on the box, ask GitHub
+  which of those PRs are still open, tear down the rest. Split across runners because only the box
+  sees docker and only a hosted runner is guaranteed `gh`. A number that is not a PR at all is left
+  alone — the job only removes what it can prove is finished. It reports on every run, including
+  "nothing to do" (a silent janitor is how the ten orphans in #962 went unnoticed), and records
+  which container holds each 33xx port.
+
 ### Fixed
 - **The five specs failing in the scheduled full e2e suite** (run 31051715943). Both causes were
   test defects, not product bugs. Since #1008 gave `/admin/candidates` a separate `md:hidden`
@@ -390,6 +1184,15 @@ Closes #1113.
   mentee-count/interaction/meeting-based mentor steps. EN/TR/DE translations.
 
 ## [0.42.1-beta] - 2026-08-05
+
+### Added
+- **Entry links to the "become a mentor" application page** (#907, depends on #905's
+  `/apply-as-mentor` page): a "Want to become a mentor?" prompt now points there from three
+  places without an invitation — a secondary CTA on the landing page's closing section, a link
+  on sign-in, and the same prompt next to the invitation-token field on register (whose hint
+  text now also points here). All copy is EN/TR/DE via `src/i18n/dictionaries.ts` (new
+  `auth.wantMentor` / `auth.applyMentorLink` keys, updated `auth.tokenHint`); no existing
+  landing copy changed.
 
 ### Changed
 - **Notification emails now respect each recipient's stored language preference** (Story #883).

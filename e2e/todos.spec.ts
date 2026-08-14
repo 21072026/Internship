@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
+import { acceptConfirmDialog } from './helpers/confirm';
 
 /**
  * The to-do list, reworked (#1113).
@@ -193,8 +194,6 @@ test('one page holds what a mentor asked for and what the person wrote themselve
   const stamp = Date.now();
   const fromMentor = `Prepare for the interview ${stamp}`;
   const own = `Buy a notebook ${stamp}`;
-  // The confirm() behind delete.
-  page.on('dialog', (d) => d.accept());
 
   try {
     // The mentor writes a to-do straight onto the mentee's list, from the mentee
@@ -222,6 +221,7 @@ test('one page holds what a mentor asked for and what the person wrote themselve
     const mineRow = await prisma.projectTask.findFirstOrThrow({ where: { assigneeId: mentee.id, title: own } });
     await expect(page.getByTestId(`todo-edit-${mineRow.id}`)).toBeVisible();
     await page.getByTestId(`todo-delete-${mineRow.id}`).click();
+    await acceptConfirmDialog(page);
     await expect
       .poll(async () => prisma.projectTask.count({ where: { id: mineRow.id } }), { timeout: 10_000 })
       .toBe(0);

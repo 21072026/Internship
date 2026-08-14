@@ -9,6 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { GraduationCap } from 'lucide-react';
+import { AUTH_UNEXPECTED_ERROR } from '@/lib/authErrors';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -98,8 +99,11 @@ export default function SignInPage() {
         // Offer to resend the verification link rather than a dead-end error.
         setNeedsVerify(true);
         setError(t.auth.emailNotVerified);
+      } else if (result.error === AUTH_UNEXPECTED_ERROR) {
+        // An internal fault. The real cause is in the server log, not here (#1150).
+        setError(t.auth.signInFailed);
       } else {
-        setError(result.error || 'Sign in failed');
+        setError(result.error || t.auth.signInFailed);
       }
       setLoading(false);
       return;
@@ -206,10 +210,10 @@ export default function SignInPage() {
               {t.auth.registerHere}
             </Link>
           </p>
-          <p className="text-center text-sm text-gray-500 mt-3">
-            {t.auth.becomeMentorPrompt}{' '}
-            <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="become-mentor-link">
-              {t.auth.becomeMentorLink}
+          <p className="text-center text-sm text-gray-500 mt-2">
+            {t.auth.wantMentor}{' '}
+            <Link href="/apply-as-mentor" className="text-blue-600 hover:underline font-medium" data-testid="apply-as-mentor-link">
+              {t.auth.applyMentorLink}
             </Link>
           </p>
         </div>

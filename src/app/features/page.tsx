@@ -1,9 +1,8 @@
 import Link from 'next/link';
-import { ArrowLeft, GraduationCap } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { getFeatures, FEATURE_CATEGORIES } from '@/lib/features';
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { ThemeToggle } from '@/components/ThemeToggle';
+import { PublicShell } from '@/components/landing/PublicShell';
 
 const iconBg: Record<string, string> = {
   blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',
@@ -17,23 +16,13 @@ const iconBg: Record<string, string> = {
 // fed from the single source in src/lib/features.ts (same data as the landing
 // page's featured cards).
 export default async function FeaturesPage() {
-  const { t, locale } = await getServerDictionary();
+  const { t } = await getServerDictionary();
   const F = t.featureCatalog;
   const features = getFeatures(t);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <header className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100">
-          <GraduationCap className="h-6 w-6 text-blue-600" /> InternshipCRM
-        </Link>
-        <div className="flex items-center gap-2">
-          <LanguageSwitcher current={locale} />
-          <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-6 pb-16">
+    <PublicShell>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline mb-6">
           <ArrowLeft className="h-4 w-4" /> {F.backHome}
         </Link>
@@ -60,7 +49,7 @@ export default async function FeaturesPage() {
             </section>
           );
         })}
-      </main>
-    </div>
+      </div>
+    </PublicShell>
   );
 }

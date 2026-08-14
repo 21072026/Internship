@@ -15,6 +15,7 @@ import { durationSince } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
+import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } from '@/lib/timezone';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -71,6 +72,21 @@ export function AccountSettings() {
   const [skills, setSkills] = useState('');
   const [capacity, setCapacity] = useState('');
   const [savingExpertise, setSavingExpertise] = useState(false);
+  // Every role sets its own zone here (#1210) — before this only the mentee
+  // profile form had a picker, so an admin or mentor whose zone TimezoneSync
+  // guessed wrong (VPN, travelling laptop, shared machine) had no way to fix it,
+  // and every meeting time we emailed them stayed on the wrong clock.
+  const [timezone, setTimezone] = useState('');
+  const [savingTz, setSavingTz] = useState(false);
+  // Read after mount: `Intl…resolvedOptions()` is a browser answer, and reading
+  // it during render would differ from the server's HTML.
+  const [detectedTz, setDetectedTz] = useState<string | null>(null);
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setDetectedTz(browserTimeZone());
+    setNow(new Date());
+  }, []);
+  const timezoneChoices = timeZoneOptions();
 
   useEffect(() => {
     fetch('/api/profile')
@@ -98,6 +114,7 @@ export function AccountSettings() {
         setTheme(user.theme ?? 'system');
         setAccent(resolveAccent(user.accentColor));
         setRole(user.role ?? '');
+        setTimezone(user.timezone ?? '');
         setSkills(Array.isArray(user.skills) ? user.skills.join(', ') : '');
         setCapacity(user.mentorCapacity != null ? String(user.mentorCapacity) : '');
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt ?? null });
@@ -216,6 +233,29 @@ export function AccountSettings() {
       flash('Failed', true);
     } finally {
       setSavingExpertise(false);
+    }
+  };
+
+  // Saved immediately on pick, like the language and theme selectors: there is
+  // nothing to review before committing, and a zone left unsaved behind a button
+  // is exactly the state that produces a wrong meeting time.
+  const changeTimezone = async (next: string) => {
+    const previous = timezone;
+    setTimezone(next);
+    setSavingTz(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: next }),
+      });
+      if (!res.ok) throw new Error();
+      flash(t.account.timezoneSaved);
+    } catch {
+      setTimezone(previous);
+      flash('Failed', true);
+    } finally {
+      setSavingTz(false);
     }
   };
 
@@ -464,6 +504,55 @@ export function AccountSettings() {
           {t.account.notesAutoOpen}
         </label>
         <p className="text-xs text-gray-400 mt-1">{t.account.notesAutoOpenHint}</p>
+      </Card>
+
+      {/* `id` so the "wrong zone?" footer under every emailed meeting time can
+          link straight here (/account#timezone) instead of dropping the reader
+          at the top of a long settings page. */}
+      <Card className="mt-6 max-w-4xl" id="timezone" data-testid="timezone-card">
+        <CardHeader><CardTitle>{t.account.timezoneSection}</CardTitle></CardHeader>
+        <p className="text-sm text-gray-600 mb-4 max-w-lg">{t.account.timezoneHint}</p>
+        <div className="max-w-md">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="account-timezone">
+            {t.account.timezoneLabel}
+          </label>
+          <select
+            id="account-timezone"
+            data-testid="timezone-select"
+            value={resolveTimeZone(timezone)}
+            disabled={savingTz}
+            onChange={(e) => changeTimezone(e.target.value)}
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          >
+            {/* A zone the runtime doesn't list (an old alias, or a value seeded
+                elsewhere) still has to appear, or picking nothing would silently
+                rewrite it on the next save. */}
+            {!timezoneChoices.some((o) => o.value === resolveTimeZone(timezone)) && (
+              <option value={resolveTimeZone(timezone)}>{resolveTimeZone(timezone)}</option>
+            )}
+            {timezoneChoices.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          {now && (
+            <p className="text-xs text-gray-500 mt-2" data-testid="timezone-current">
+              {t.account.timezoneCurrent.replace('{time}', formatInTimeZone(now, timezone, undefined, language))}
+            </p>
+          )}
+          {/* The browser knows where the reader actually is; offer it rather than
+              overwriting a deliberate choice (someone who works Istanbul hours
+              from Berlin means the zone they picked). */}
+          {detectedTz && detectedTz !== resolveTimeZone(timezone) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="timezone-detected">
+              <span className="text-xs text-gray-500">
+                {t.account.timezoneDetected.replace('{zone}', detectedTz)}
+              </span>
+              <Button variant="outline" size="sm" disabled={savingTz} onClick={() => changeTimezone(detectedTz)}>
+                {t.account.timezoneUseDetected}
+              </Button>
+            </div>
+          )}
+        </div>
       </Card>
 
       <Card className="mt-6 max-w-4xl">

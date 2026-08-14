@@ -12,6 +12,9 @@ import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
+import { ModeSwitcher } from '@/components/ModeSwitcher';
+import { availableModes, canUsePortal } from '@/lib/dualRole';
+import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -20,21 +23,35 @@ export default async function PortalLayout({ children }: { children: React.React
     redirect('/auth/signin');
   }
 
-  if (session.user.role === 'ADMIN') {
-    redirect('/admin');
-  }
-
-  if (session.user.role === 'MENTOR') {
-    redirect('/mentor');
-  }
-
   if (session.user.role === 'COMPANY') {
     redirect('/company');
   }
 
+  // An admin or mentor lands here only if they are *themselves* being mentored
+  // (#1141) — helping someone doesn't stop you needing help. Without a
+  // mentorship of their own the portal has nothing to show them, so they go back
+  // to their own shell exactly as before. Anything else (SOURCE) goes to the root
+  // router, which knows where each role belongs.
+  if (!(await canUsePortal(session.user))) {
+    redirect(
+      session.user.role === 'ADMIN' ? '/admin' : session.user.role === 'MENTOR' ? '/mentor' : '/'
+    );
+  }
+
   const { locale, t } = await getServerDictionary();
-  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true } });
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { avatarUrl: true, twoFactorEnabled: true },
+  });
   const customStages = await resolveCustomStages(session.user.orgId);
+  const modes = await availableModes(session.user);
+
+  // The 2FA gate lives on each staff shell; the portal needs it too now that a
+  // role in scope for the policy can enter here — otherwise the portal would be
+  // a way around the setup gate.
+  if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role))) {
+    redirect('/security-setup');
+  }
 
   return (
     <ResponsiveShell
@@ -53,6 +70,8 @@ export default async function PortalLayout({ children }: { children: React.React
           <PortalNav />
           <InstallAppButton />
         </nav>
+
+        <ModeSwitcher modes={modes} />
 
         <AccountMenu
           name={session.user.name}

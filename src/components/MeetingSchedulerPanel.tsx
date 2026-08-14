@@ -8,7 +8,8 @@ import { Copy, Check, Video } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
-import { wallClockToInstantISO } from '@/lib/timezone';
+import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
+import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 
 interface Meeting {
   id: string;
@@ -22,7 +23,16 @@ interface Meeting {
 // detail screen (#661). Reuses the role-aware /api/meetings endpoint (admins may
 // schedule for any relation; a video link auto-generates server-side) and lists
 // this relation's meetings with a one-click copyable link.
-export function MeetingSchedulerPanel({ relationId, menteeName }: { relationId: string; menteeName?: string }) {
+export function MeetingSchedulerPanel({
+  relationId,
+  menteeName,
+  menteeTimezone,
+}: {
+  relationId: string;
+  menteeName?: string;
+  /** The mentee's saved IANA zone, so the picked time can be confirmed on their clock (#1210). */
+  menteeTimezone?: string | null;
+}) {
   const t = useT();
   const locale = useLocale();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -65,7 +75,8 @@ export function MeetingSchedulerPanel({ relationId, menteeName }: { relationId: 
       const res = await fetch('/api/meetings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationIds: [relationId], title, scheduledAt, meetLink }),
+        // `timeZone`: the clock the date/time inputs were read on (#1210).
+        body: JSON.stringify({ relationIds: [relationId], title, scheduledAt, meetLink, timeZone: browserTimeZone() ?? undefined }),
       });
       if (res.ok) {
         setTitle('');
@@ -115,6 +126,17 @@ export function MeetingSchedulerPanel({ relationId, menteeName }: { relationId: 
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t.meetings.time}</label>
           <input type="time" aria-label={t.meetings.time} value={time} onChange={(e) => setTime(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm" />
         </div>
+        {scheduledAt && (
+          <div className="sm:col-span-2">
+            <AttendeeTimes
+              instantISO={scheduledAt}
+              people={[
+                { name: t.meetings.you, timezone: browserTimeZone() },
+                { name: menteeName ?? '', timezone: menteeTimezone },
+              ].filter((p) => p.name)}
+            />
+          </div>
+        )}
         <div className="sm:col-span-2">
           <Input label={t.meetings.meetLink} placeholder="https://meet.google.com/abc-defg-hij" hint={t.meetings.meetLinkHint} value={meetLink} onChange={(e) => setMeetLink(e.target.value)} />
         </div>

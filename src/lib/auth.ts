@@ -6,6 +6,89 @@ import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
 import { verifyTotpStep } from '@/lib/totp';
 import { headerSource } from '@/lib/clientIp';
+import { logger } from '@/lib/logger';
+import { AUTH_UNEXPECTED_ERROR } from '@/lib/authErrors';
+
+// Exactly the columns the sign-in path needs — nothing else.
+//
+// This used to be an unqualified `findUnique({ where: { email } })`, which
+// hydrates all ~60 columns of User, including its four `Json` ones (skills,
+// languages, skillLevels, notificationPrefs). Prisma JSON.parse()s a Json
+// column on read, so ONE row holding an invalid value ('' instead of '[]')
+// made the read throw "Unexpected end of JSON input" *before* the password was
+// even compared — locking that account out of the product completely, with the
+// raw parser message shown on the sign-in form (#1150).
+//
+// Authentication must not depend on columns it does not use: keep this list
+// minimal, and never add a `Json` field to it.
+const AUTH_USER_SELECT = {
+  id: true,
+  email: true,
+  password: true,
+  role: true,
+  fullName: true,
+  emailVerified: true,
+  isActive: true,
+  pendingApproval: true,
+  companyId: true,
+  orgId: true,
+  twoFactorEnabled: true,
+  twoFactorSecret: true,
+  lastTotpStep: true,
+} as const;
+
+// The errors authorize() raises on purpose. Their text is contractual: the
+// sign-in page keys off it to show the 2FA field, offer a resend link, or
+// explain a pending review. Anything NOT in here is an internal fault and must
+// never reach the browser verbatim — see toClientAuthError below.
+const INTENTIONAL_AUTH_ERRORS = new Set([
+  'Email and password are required',
+  'Invalid email or password',
+  'Invalid authenticator code',
+  'Too many attempts. Please try again later.',
+  'This account has been deactivated. Please contact an administrator.',
+  'grant is required',
+  'Invalid or expired grant',
+  'Invalid or expired SSO grant',
+  'Target user not found',
+  'User not found',
+  '2FA_REQUIRED',
+  'EMAIL_NOT_VERIFIED',
+  'ACCOUNT_PENDING_APPROVAL',
+]);
+
+function toClientAuthError(error: unknown, provider: string): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (INTENTIONAL_AUTH_ERRORS.has(message)) return error instanceof Error ? error : new Error(message);
+  logger.error('Unexpected error during sign-in', {
+    detail: `provider=${provider} ${error instanceof Error ? error.stack || message : message}`,
+  });
+  return new Error(AUTH_UNEXPECTED_ERROR);
+}
+
+// NextAuth surfaces a thrown authorize() error's `.message` to the browser as
+// ?error=<message>. Wrap every provider once, here, rather than adding a
+// try/catch to each authorize(): an unexpected fault becomes a stable code and
+// the real cause is logged server-side. Applies to providers added later too.
+type AuthorizeFn = (...args: never[]) => Promise<unknown>;
+
+function guardProviders(providers: NextAuthOptions['providers']): NextAuthOptions['providers'] {
+  return providers.map((provider) => {
+    const original = (provider as { authorize?: AuthorizeFn }).authorize;
+    if (typeof original !== 'function') return provider;
+    const id = (provider as { id?: string }).id ?? 'credentials';
+    return {
+      ...provider,
+      authorize: async (...args: never[]) => {
+        try {
+          return await original(...args);
+        } catch (error) {
+          throw toClientAuthError(error, id);
+        }
+      },
+    };
+  }) as NextAuthOptions['providers'];
+}
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -19,7 +102,7 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/auth/signin',
   },
-  providers: [
+  providers: guardProviders([
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -42,6 +125,7 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email },
+          select: AUTH_USER_SELECT,
         });
 
         const isPasswordValid = user
@@ -121,7 +205,14 @@ export const authOptions: NextAuthOptions = {
 
           // Burn the step so the same code can't be used again inside the
           // ±1-step acceptance window.
-          await prisma.user.update({ where: { id: user.id }, data: { lastTotpStep: step } });
+          // `select` here is not cosmetic: an unqualified update() returns the
+          // whole row, which would re-introduce the Json-column read that
+          // AUTH_USER_SELECT exists to avoid.
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { lastTotpStep: step },
+            select: { id: true },
+          });
           clearRateLimit(totpKey);
         }
 
@@ -167,11 +258,16 @@ export const authOptions: NextAuthOptions = {
         }
         await prisma.impersonationGrant.update({ where: { id: grant.id }, data: { used: true } });
 
-        const user = await prisma.user.findUnique({ where: { id: grant.targetId } });
+        const user = await prisma.user.findUnique({
+          where: { id: grant.targetId },
+          select: AUTH_USER_SELECT,
+        });
         if (!user) throw new Error('Target user not found');
 
         const isStart = grant.kind === 'START';
-        const admin = isStart ? await prisma.user.findUnique({ where: { id: grant.adminId } }) : null;
+        const admin = isStart
+          ? await prisma.user.findUnique({ where: { id: grant.adminId }, select: { fullName: true } })
+          : null;
 
         return {
           id: user.id,
@@ -205,7 +301,10 @@ export const authOptions: NextAuthOptions = {
         }
         await prisma.ssoLoginGrant.update({ where: { id: grant.id }, data: { used: true } });
 
-        const user = await prisma.user.findUnique({ where: { id: grant.userId } });
+        const user = await prisma.user.findUnique({
+          where: { id: grant.userId },
+          select: AUTH_USER_SELECT,
+        });
         if (!user) throw new Error('User not found');
         if (!user.isActive) {
           throw new Error('This account has been deactivated. Please contact an administrator.');
@@ -222,7 +321,7 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
-  ],
+  ]),
   callbacks: {
     async jwt({ token, user, trigger }) {
       if (user) {
@@ -246,14 +345,19 @@ export const authOptions: NextAuthOptions = {
         // Stamp the last real sign-in (not impersonation) for activity reports.
         // Fire-and-forget so it never slows the login round-trip.
         if (!u.impersonatorId) {
-          prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
+          prisma.user
+            .update({ where: { id: user.id }, data: { lastLoginAt: new Date() }, select: { id: true } })
+            .catch(() => {});
         }
       }
 
       // Auto-expire impersonation: once the cap passes, rewrite the token back
       // to the original admin so elevated access can't linger indefinitely.
       if (token.impersonatorId && token.impersonationExpiresAt && Date.now() > (token.impersonationExpiresAt as number)) {
-        const admin = await prisma.user.findUnique({ where: { id: token.impersonatorId as string } });
+        const admin = await prisma.user.findUnique({
+          where: { id: token.impersonatorId as string },
+          select: AUTH_USER_SELECT,
+        });
         if (admin) {
           token.id = admin.id;
           token.role = admin.role;
@@ -271,7 +375,10 @@ export const authOptions: NextAuthOptions = {
       // re-read the user so the token — and thus the UI that reads the session,
       // like the sidebar — reflects the latest values without a re-login.
       if (trigger === 'update' && token.id) {
-        const fresh = await prisma.user.findUnique({ where: { id: token.id as string } });
+        const fresh = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: AUTH_USER_SELECT,
+        });
         if (fresh) {
           token.email = fresh.email;
           token.name = fresh.fullName;

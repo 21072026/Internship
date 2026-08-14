@@ -72,6 +72,12 @@ export async function GET(request: Request) {
           university: true,
           graduationYear: true,
           skills: true,
+          // So the screens that write TO a mentee — the bulk email composer
+          // above all — can show which language they read (#1164).
+          preferredLanguage: true,
+          // Same idea for the clock they read (#1210): the scheduler previews
+          // the picked time on every selected mentee's zone before inviting.
+          timezone: true,
         },
       },
       company: { select: { id: true, name: true, industry: true } },
@@ -128,13 +134,22 @@ export async function POST(request: Request) {
       prisma.user.findUnique({ where: { id: menteeId } }),
     ]);
 
-    // Admins can also mentor, so they're valid mentors too.
-    if (!mentor || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
+    // Either side may be an admin, a mentor or a mentee (#1141): admins mentor,
+    // and someone who mentors can still need mentoring themselves. What stays
+    // barred is the COMPANY/SOURCE observer roles — they have no personal
+    // mentorship — and pairing someone with themselves.
+    const PARTICIPANT_ROLES = ['ADMIN', 'MENTOR', 'MENTEE'];
+
+    if (!mentor || !PARTICIPANT_ROLES.includes(mentor.role)) {
       return NextResponse.json({ error: 'Invalid mentor' }, { status: 400 });
     }
 
-    if (!mentee || mentee.role !== 'MENTEE') {
+    if (!mentee || !PARTICIPANT_ROLES.includes(mentee.role)) {
       return NextResponse.json({ error: 'Invalid mentee' }, { status: 400 });
+    }
+
+    if (mentorId === menteeId) {
+      return NextResponse.json({ error: 'A user cannot mentor themselves' }, { status: 400 });
     }
 
     const existingActive = await prisma.mentorshipRelation.findFirst({

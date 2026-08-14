@@ -9,6 +9,7 @@ import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { AdminNav } from '@/components/AdminNav';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
+import { availableModes } from '@/lib/dualRole';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
@@ -29,6 +30,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
   const customStages = await resolveCustomStages(session.user.orgId);
+  const modes = await availableModes(session.user);
 
   // Auth hardening: when the org requires 2FA for this role, hold the user at a
   // setup gate until they enable it. Skipped while impersonating (the admin is
@@ -53,7 +55,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         <AdminNav />
 
-        <ModeSwitcher />
+        <ModeSwitcher modes={modes} />
 
         <AccountMenu
           name={session.user.name}

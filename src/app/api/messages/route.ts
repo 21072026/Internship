@@ -4,16 +4,25 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
-import { getConversationIfAllowed, otherConversationParticipants, canPostToConversation } from '@/lib/conversations';
+import {
+  getConversationIfAllowed,
+  otherConversationParticipants,
+  canPostToConversation,
+  conversationForRelation,
+  directCounterpartId,
+  latestMentorshipFor,
+} from '@/lib/conversations';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
+import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { withTenantScope } from '@/lib/orgContext';
+import { accountState, type AccountState } from '@/lib/accountState';
 
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
 
@@ -107,7 +116,13 @@ export async function GET(request: Request) {
     // the project's team, annotated onto the participant list so the chat header
     // can show "6 people · who they are" instead of an anonymous thread.
     let group: { type: string; projectId: string | null; projectName: string | null } | null = null;
-    let participants: { id: string; fullName: string; role: string | null; functionalRole: string | null }[] = [];
+    let participants: {
+      id: string;
+      fullName: string;
+      role: string | null;
+      functionalRole: string | null;
+      preferredLanguage: string | null;
+    }[] = [];
     if (conversation) {
       const team =
         conversation.type === 'GROUP' && conversation.projectId
@@ -125,17 +140,42 @@ export async function GET(request: Request) {
           fullName: p.user.fullName,
           role: member?.role ?? null,
           functionalRole: member?.functionalRole ?? null,
+          preferredLanguage: p.user.preferredLanguage,
         };
       });
     }
 
+    // Which side of a 1:1 chat is the mentor, when a mentorship stands behind it.
+    // The empty-thread openers differ for the two (a mentor welcomes, everyone
+    // else says hello), and since the mentorship thread hands over to the
+    // conversation (#1156) that has to be answerable here too.
+    const counterpartId = conversation ? directCounterpartId(conversation, session.user.id) : null;
+    const mentorId = counterpartId ? (await latestMentorshipFor(session.user.id, counterpartId))?.mentorId ?? null : null;
+
+    // Can the person on the other side of a 1:1 thread actually read this?
+    // An account that cannot sign in never sees an in-app message, and a
+    // stand-in address means the email mirror is discarded too — so the
+    // composer says so before you type instead of after days of silence
+    // (#1194). Group chats have no single counterpart, hence 1:1 only.
+    const otherId = rel ? otherParticipant(rel, session.user.id) : counterpartId;
+    let counterpartState: AccountState | null = null;
+    if (otherId) {
+      const other = await prisma.user.findUnique({
+        where: { id: otherId },
+        select: { isActive: true, emailVerified: true, pendingApproval: true, email: true, password: true },
+      });
+      if (other) counterpartState = accountState(other);
+    }
+
     return NextResponse.json({
+      counterpartState,
       ...(rel
         ? { relationId: rel.id, mentor: rel.mentor, mentee: rel.mentee }
         : {
             conversationId: conversation!.id,
             ...group,
             participants,
+            mentorId,
             // Lets the client render the thread read-only instead of failing on
             // send. The POST route enforces the same rule regardless (#770).
             canPost: await canPostToConversation(session.user, conversation!),
@@ -221,11 +261,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: CONTENT_MISMATCH_ERROR }, { status: 400 });
     }
 
+    // Both links are set whenever both exist (#1156): the conversation is where
+    // the thread lives, and the relationId keeps the message inside the
+    // mentorship-scoped features (reply-by-email, the unread digest, the
+    // onboarding checklist). Addressed by relation, that means resolving the
+    // pair's conversation; addressed by conversation, looking up the mentorship
+    // behind a 1:1 chat. A project DM between two people with no mentorship, and
+    // a group chat, keep a conversationId alone.
+    const relConversationId = rel ? (await conversationForRelation(rel))?.id ?? null : null;
+    const directOtherId = conversation ? directCounterpartId(conversation, session.user.id) : null;
+    const stampRelationId = directOtherId ? (await latestMentorshipFor(session.user.id, directOtherId))?.id ?? null : null;
+
     const message = await prisma.message.create({
       data: {
-        // Exactly one link is set: a conversation message leaves relationId null
-        // (and vice versa), which is what the nullable columns from #768 allow.
-        ...(rel ? { relationId: rel.id } : { conversationId: conversation!.id }),
+        ...(rel
+          ? { relationId: rel.id, ...(relConversationId ? { conversationId: relConversationId } : {}) }
+          : { conversationId: conversation!.id, ...(stampRelationId ? { relationId: stampRelationId } : {}) }),
         senderId: session.user.id,
         body,
         channel: 'IN_APP',
@@ -242,7 +293,13 @@ export async function POST(request: Request) {
     const recipients = (
       rel ? [otherParticipant(rel, session.user.id)] : await otherConversationParticipants(conversation!, session.user.id)
     ).filter((id) => id && id !== session.user.id);
-    const link = rel ? `/messages/${rel.id}` : `/messages/c/${conversation!.id}`;
+    // Always the thread the recipient will actually read it in.
+    const threadConversationId = relConversationId ?? conversation?.id ?? null;
+    const link = threadConversationId ? `/messages/c/${threadConversationId}` : `/messages/${rel!.id}`;
+    // Email replies are routed by a relation-scoped token, so reply-by-email is
+    // offered wherever a mentorship stands behind the thread — including the
+    // conversation the mentorship thread now redirects to.
+    const replyRelationId = rel?.id ?? stampRelationId;
 
     for (const recipient of recipients) {
       await notify(recipient, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, link);
@@ -257,14 +314,25 @@ export async function POST(request: Request) {
         const sender = session.user.name ?? 'Your mentor';
         const safe = body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
         const attachCount = fileBufs.length;
+        // One-click actions straight from the inbox (#1204). Someone who reads
+        // on a phone and never opens the app could previously only reply — so
+        // the thread stayed unread and the digest kept resurfacing it. The
+        // emoji row is the same five the composer offers, bound to this exact
+        // message; "mark as read" needs a mentorship to scope the thread, which
+        // is the same condition reply-by-email already has.
+        const actions = replyRelationId
+          ? `${reactionLinksHtml(message.id, recipient)}<p style="font-size:13px;color:#6b7280;">${
+              `<a href="${markReadUrl(replyRelationId, recipient)}" style="color:#6b7280;">Mark this conversation as read</a>`
+            }</p>`
+          : '';
         sendEmail({
           to: rcpt.email,
+          category: 'message',
           subject: `New message from ${sender}`,
-          html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>Reply to this email or open the conversation in the app.</p>`,
-          // Email replies are routed by a relation-scoped token, so only the
-          // mentorship path can offer reply-by-email today; conversation
-          // recipients get the same notification without a Reply-To.
-          ...(rel ? { replyTo: replyAddress(rel.id, recipient) } : {}),
+          html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>Reply to this email or open the conversation in the app.</p>${actions}`,
+          // Project DMs with no mentorship behind them get the same notification
+          // without a Reply-To (see replyRelationId above).
+          ...(replyRelationId ? { replyTo: replyAddress(replyRelationId, recipient) } : {}),
           // Mirror the attachments (incl. pasted images) into the email too.
           attachments: fileBufs.map((fb) => ({ filename: fb.filename, content: fb.data, contentType: fb.contentType })),
         }).catch((e) => logger.error('Failed to mirror message email', { error: String(e) }));

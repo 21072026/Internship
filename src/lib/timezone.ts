@@ -35,7 +35,8 @@ export function resolveTimeZone(tz?: string | null): string {
 
 // "GMT+3" — appended to every rendered time so a recipient in another zone can
 // see which clock the time refers to instead of guessing.
-function zoneLabel(date: Date, timeZone: string): string {
+export function zoneLabel(date: Date, tz?: string | null): string {
+  const timeZone = resolveTimeZone(tz);
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone, timeZoneName: 'shortOffset' }).formatToParts(date);
   return parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
 }
@@ -47,10 +48,11 @@ function zoneLabel(date: Date, timeZone: string): string {
 export function formatInTimeZone(
   date: Date,
   tz?: string | null,
-  options?: Intl.DateTimeFormatOptions
+  options?: Intl.DateTimeFormatOptions,
+  locale = 'en-GB'
 ): string {
   const timeZone = resolveTimeZone(tz);
-  const formatted = new Intl.DateTimeFormat('en-GB', {
+  const formatted = new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',
     timeStyle: 'short',
     ...options,
@@ -58,6 +60,16 @@ export function formatInTimeZone(
   }).format(date);
   const label = zoneLabel(date, timeZone);
   return label ? `${formatted} (${label})` : formatted;
+}
+
+// Do two zones put the same clock on the wall right now? Compared by offset, not
+// by name: an organizer on "Europe/Berlin" and an attendee on "Europe/Paris"
+// read the identical time, and repeating it as if it were a second reading is
+// noise. Both sides go through resolveTimeZone first, so an unset zone compares
+// as the deployment default rather than as "different".
+export function sameWallClock(a: string | null | undefined, b: string | null | undefined, at: Date): boolean {
+  const [za, zb] = [resolveTimeZone(a), resolveTimeZone(b)];
+  return za === zb || offsetAt(at, za) === offsetAt(at, zb);
 }
 
 // ---------------------------------------------------------------------------
@@ -147,4 +159,106 @@ export function wallClockToInstantISO(date: string, time: string): string {
   const [, year, month, day, hour, minute, second] = m;
   const local = new Date(+year, +month - 1, +day, hour ? +hour : 0, minute ? +minute : 0, second ? +second : 0, 0);
   return Number.isNaN(local.getTime()) ? '' : local.toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Who reads this instant as what? (#1210)
+// ---------------------------------------------------------------------------
+
+// One instant is one instant, but the people in a meeting each see a different
+// clock. Before an invite goes out the organizer should be able to *confirm*
+// the time on every attendee's clock rather than assume everyone is on theirs —
+// which is the whole ask behind #1210. Attendees on the same offset collapse
+// into one row: three people in Berlin, Paris and Madrid are one reading.
+export interface ZonedPerson {
+  name: string;
+  timezone?: string | null;
+}
+
+export interface ZoneReading {
+  /** The resolved IANA zone of the first person in the group. */
+  timeZone: string;
+  /** "GMT+2" at this instant. */
+  offsetLabel: string;
+  /** The instant on this group's clock, e.g. "Sun 3 Aug, 16:30". */
+  when: string;
+  names: string[];
+}
+
+// Sorted west → east so the readings run in a stable, scannable order rather
+// than in whatever order the attendee list happened to arrive in.
+export function readingsByZone(instant: Date, people: ZonedPerson[], locale = 'en-GB'): ZoneReading[] {
+  const groups = new Map<number, ZoneReading>();
+  for (const person of people) {
+    const timeZone = resolveTimeZone(person.timezone);
+    const offset = offsetAt(instant, timeZone);
+    const existing = groups.get(offset);
+    if (existing) {
+      if (!existing.names.includes(person.name)) existing.names.push(person.name);
+      continue;
+    }
+    groups.set(offset, {
+      timeZone,
+      offsetLabel: zoneLabel(instant, timeZone),
+      when: new Intl.DateTimeFormat(locale, {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        // `h23`: the app writes times as "16:30" everywhere — the time inputs,
+        // the series rule, the meeting list — and a reading that flips to
+        // "04:30 PM" is exactly the ambiguity this block exists to remove.
+        hourCycle: 'h23',
+        timeZone,
+      }).format(instant),
+      names: [person.name],
+    });
+  }
+  return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([, reading]) => reading);
+}
+
+// ---------------------------------------------------------------------------
+// The picker
+// ---------------------------------------------------------------------------
+
+// Enough of a spread to cover the people this app actually has when the runtime
+// has no zone list of its own (very old ICU builds) — never the only path in a
+// modern browser or Node.
+const FALLBACK_ZONE_LIST = [
+  'Europe/Istanbul', 'Europe/Berlin', 'Europe/London', 'Europe/Paris', 'Europe/Amsterdam',
+  'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Asia/Dubai', 'Asia/Tokyo', 'UTC',
+];
+
+let cachedZones: string[] | null = null;
+
+/** Every IANA zone the runtime knows, memoized — the list is ~450 strings. */
+export function supportedTimeZones(): string[] {
+  if (cachedZones) return cachedZones;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const zones = (Intl as any).supportedValuesOf?.('timeZone') as string[] | undefined;
+    cachedZones = zones && zones.length > 0 ? zones : FALLBACK_ZONE_LIST;
+  } catch {
+    cachedZones = FALLBACK_ZONE_LIST;
+  }
+  return cachedZones;
+}
+
+/** `<Select>` options for the zone picker. */
+export function timeZoneOptions(): { value: string; label: string }[] {
+  return supportedTimeZones().map((tz) => ({ value: tz, label: tz }));
+}
+
+/**
+ * The zone this browser is in, or null on the server / when Intl has no data.
+ * Deliberately not a fallback to the deployment default: callers need to tell
+ * "the browser says Europe/Berlin" apart from "nobody knows".
+ */
+export function browserTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
 }

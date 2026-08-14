@@ -99,6 +99,7 @@ model Organization {
   pipelineStages     PipelineStage[]
   mentorApplications MentorApplication[]
   companyInquiries   CompanyInquiry[]
+  offers             Offer[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -138,6 +139,8 @@ model User {
   department              String?
   graduationYear          Int?
   skills                  Json          @default("[]")
+  // Languages a mentor speaks; distinct from preferredLanguage (the UI locale).
+  languages               Json          @default("[]")
   // Mentee self-assessment: { "<skill>": 1..5 }
   skillLevels             Json          @default("{}")
   cvUrl                   String?
@@ -268,6 +271,8 @@ model User {
   taskTemplates             ProjectTaskTemplate[]     @relation("TaskTemplateAuthor")
   mentorOnboardings         MenteeOnboarding[]        @relation("OnboardingMentor")
   menteeOnboarding          MenteeOnboarding[]        @relation("OnboardingMentee")
+  createdOffers             Offer[]                   @relation("OfferCreatedBy")
+  decidedOffers             Offer[]                   @relation("OfferDecidedBy")
 
   @@index([role])
   @@index([referredById])
@@ -498,21 +503,28 @@ model MessageAttachment {
 
 // In-app notification for a user.
 model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String
+  id             String   @id @default(cuid())
+  userId         String
+  type           String
   // Long-form text (e.g. a broadcast announcement fanned out to every user) —
   // TEXT, not the default VARCHAR(191), so long messages aren't truncated/rejected.
-  text      String   @db.Text
+  text           String   @db.Text
   // VarChar(500) to match the 500-char cap the announcement API validates; the
   // VARCHAR(191) default rejected long tracking URLs with an unhandled 500.
-  link      String?  @db.VarChar(500)
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  link           String?  @db.VarChar(500)
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  // Set on the rows a broadcast fanned out, so editing the announcement can
+  // correct the copy sitting in everyone's bell and deleting it can take those
+  // rows with it (#1162). Nullable: every other notification type has no
+  // announcement behind it, and an existing row predates this column — a
+  // NOT NULL addition here would need a backfill on a live table.
+  announcementId String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([announcementId])
 }
 
 // One row per broadcast admin announcement (distinct from the per-recipient
@@ -523,6 +535,12 @@ model Announcement {
   // Broadcast body — TEXT, not the default VARCHAR(191), so admins can publish
   // long-form announcements (release notes, articles) without hitting a limit.
   text           String   @db.Text
+  // { en?, tr?, de? } — the announcement in each language it was written in
+  // (#1163). `text` above stays the canonical wording and the fallback for a
+  // reader whose language has no entry here, so every row written before this
+  // column existed keeps working untouched. Nullable for the same reason.
+  // Resolved per reader in src/lib/announcementText.ts.
+  translations   Json?
   // VarChar(500) to match the API's 500-char cap — see Notification.link.
   link           String?  @db.VarChar(500)
   sentById       String
@@ -632,6 +650,7 @@ model Company {
   interests    CompanyInterest[]
   entitlements CompanyEntitlement[]
   needAlerts   CompanyNeedAlert[]
+  offers       Offer[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -818,6 +837,46 @@ model MentorApplication {
   @@index([status])
   @@index([email])
   @@index([orgId])
+}
+
+// An offer extended to a mentee within a mentorship (#809). `status` is a free
+// String (not an enum) — same reasoning as MentorshipRelation.pipelineStatus —
+// validated + transitioned through the central state machine in
+// src/lib/offers.ts (DRAFT -> SENT -> ACCEPTED|DECLINED|EXPIRED|WITHDRAWN).
+// `compensationNote` is sensitive: only ADMIN and the offer's own MENTEE may
+// ever have it selected server-side (enforced in the API layer, not just hidden
+// in the UI).
+model Offer {
+  id                String             @id @default(cuid())
+  orgId             String?
+  org               Organization?      @relation(fields: [orgId], references: [id])
+  relationId        String
+  relation          MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // Optional link to the company's staffing need this offer fills. Plain id,
+  // not a FK — CompanyNeed rows aren't guaranteed to persist for the life of
+  // the offer, and the offer must remain readable even if the need is edited.
+  requisitionId     String?
+  companyId         String?
+  company           Company?           @relation(fields: [companyId], references: [id])
+  status            String             @default("DRAFT")
+  position          String
+  startDate         DateTime?
+  compensationNote  String?            @db.Text
+  expiresAt         DateTime?
+  sentAt            DateTime?
+  decidedAt         DateTime?
+  declineReasonCode String?
+  // Optional free-text elaboration on the decline reason (never required).
+  declineNote       String?            @db.Text
+  createdById       String
+  createdBy         User               @relation("OfferCreatedBy", fields: [createdById], references: [id])
+  decidedById       String?
+  decidedBy         User?              @relation("OfferDecidedBy", fields: [decidedById], references: [id])
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([orgId, status])
+  @@index([relationId])
 }
 
 // Dedupe marker for premium CompanyNeed match alerts (Faz 1, #530). One row per
@@ -1217,6 +1276,7 @@ model MentorshipRelation {
   meetingRequests MeetingRequest[]
   questions       MentorQuestion[]
   relationNotes   RelationNote[]
+  offers          Offer[]
 
   @@index([status])
   @@index([pipelineStatus])
@@ -1386,6 +1446,13 @@ model Meeting {
   // Optional: a meeting with a set time expects an RSVP and gets reminders; a
   // meeting with no time (null) is just a shared link — no RSVP, no reminder.
   scheduledAt    DateTime?
+  // The clock the organizer picked `scheduledAt` on (IANA zone), captured at
+  // creation (#1210). `scheduledAt` is an instant and is enough to render the
+  // time for anyone, but not to say *which* reading was the one agreed on — and
+  // the organizer's profile zone can't stand in for it, since it changes when
+  // they travel. Null for meetings created before this and for the odd caller
+  // that sends no zone; both fall back to the organizer's profile zone.
+  timeZone       String?
   meetLink       String?
   rsvp           RsvpStatus @default(PENDING)
   rsvpToken      String     @unique
@@ -1590,6 +1657,48 @@ model ActivityLog {
 
   @@index([actorId])
   @@index([action])
+  @@index([createdAt])
+}
+
+enum EmailStatus {
+  // Handed to the SMTP server without error. NOT proof of inbox placement —
+  // the message can still bounce or be filed as spam downstream.
+  SENT
+  // The SMTP server rejected it, or the connection failed.
+  FAILED
+  // Never attempted: SMTP is not configured on this environment.
+  SKIPPED
+}
+
+// Delivery log for outgoing mail (#1194).
+//
+// Without this there is no record anywhere that a mail was (or wasn't) sent:
+// `sendEmail` used to return silently when SMTP was unconfigured and most
+// callers swallow send failures, so an outage looked exactly like "the user
+// ignored us". Deliberately metadata only — recipient, subject, category and
+// outcome. The body is never stored: it is the most sensitive part of the
+// payload and duplicating it here would put message content in a second place
+// that account erasure would have to chase.
+model EmailLog {
+  id        String      @id @default(cuid())
+  to        String      @db.VarChar(320)
+  subject   String      @db.VarChar(512)
+  // Coarse bucket ("verification", "message", "invitation", …) so the admin
+  // view can answer "are verification mails going out at all?".
+  category  String?     @db.VarChar(64)
+  // Which of the two outbound channels carried it: "primary" (the reputable
+  // relay, for mail that must reach a human) or "bulk" (our own server, for
+  // digests and reminders). Lets the admin see how much of the relay's daily
+  // quota each category is actually consuming (#1203).
+  transport String?     @db.VarChar(16)
+  status    EmailStatus @default(SENT)
+  // Rejection reason / exception message when status is FAILED or SKIPPED.
+  error     String?     @db.Text
+  createdAt DateTime    @default(now())
+
+  @@index([to])
+  @@index([status])
+  @@index([category])
   @@index([createdAt])
 }
 

@@ -2,14 +2,16 @@ import nodemailer from 'nodemailer';
 import cron from 'node-cron';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 import { notify } from '@/lib/notify';
+import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
-import { formatInTimeZone } from '@/lib/timezone';
+import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -37,6 +39,15 @@ function brandHeader(brand: { name: string; accent: string; logoUrl: string | nu
   return `${logo}<h2 style="color: ${brand.accent};">${heading}</h2>`;
 }
 
+// Bounded waits so an unreachable or wedged SMTP host fails fast instead of
+// hanging the request that triggered the send — without these, the admin email
+// panel (which verifies both channels) blocks until the platform's own timeout.
+const SMTP_TIMEOUTS = {
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 20_000,
+} as const;
+
 const smtpPort = Number(process.env.SMTP_PORT) || 587;
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -46,7 +57,67 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  ...SMTP_TIMEOUTS,
 });
+
+// ---------------------------------------------------------------------------
+// Two outbound channels (#1203).
+//
+// A reputable relay is what gets mail that MUST reach a human into the inbox —
+// a verification link, an invitation, a password reset, a message notification.
+// Those go to people who may not be engaged with us at all, and one that lands
+// in spam costs a user. But relays meter: Brevo's free tier is 300/day across
+// everything, and this app's own scheduled mail (hourly unread digests, daily
+// reminders and activity digests, weekly digests and analytics, announcements
+// to every user) eats that budget without any of it being urgent.
+//
+// So: critical mail rides the relay, bulk/system mail keeps going out over our
+// own server, ideally under a separate From identity so the two reputations
+// stay independent (a digest marked as spam must not drag the password-reset
+// mail down with it).
+//
+// The bulk channel is OPTIONAL. With SMTP_BULK_HOST unset every category falls
+// back to the primary transport, which is exactly today's behaviour — so
+// preview and topic environments need no extra configuration.
+// ---------------------------------------------------------------------------
+const bulkSmtpPort = Number(process.env.SMTP_BULK_PORT) || 587;
+const bulkConfigured = Boolean(process.env.SMTP_BULK_HOST && process.env.SMTP_BULK_USER);
+const bulkTransporter = bulkConfigured
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_BULK_HOST,
+      port: bulkSmtpPort,
+      secure: bulkSmtpPort === 465,
+      auth: {
+        user: process.env.SMTP_BULK_USER,
+        pass: process.env.SMTP_BULK_PASS,
+      },
+      ...SMTP_TIMEOUTS,
+    })
+  : null;
+
+// Categories that ride the bulk channel. Everything else — including any call
+// site that passes no category at all — stays on the primary transport. That
+// default is deliberate: an uncategorised mail is more likely to be something
+// a person is waiting for than a digest, and quietly downgrading its
+// deliverability is the kind of regression nobody notices until it matters.
+const BULK_CATEGORIES = new Set([
+  'unread-digest',
+  'activity-digest',
+  'mentor-digest',
+  'analytics-report',
+  'meeting-reminder',
+  'interaction-reminder',
+  'stage-deadline',
+  'retention-reminder',
+  'company-need-alert',
+  'announcement',
+]);
+
+export type MailTransport = 'primary' | 'bulk';
+
+export function transportFor(category?: string): MailTransport {
+  return bulkTransporter && category && BULK_CATEGORIES.has(category) ? 'bulk' : 'primary';
+}
 
 // Best-effort HTML → plain text for the multipart alternative. A message with
 // only an HTML part scores worse with spam filters (e.g. Gmail); shipping a
@@ -68,11 +139,47 @@ function htmlToText(html: string): string {
 // A From header with a display name ("Internship CRM <noreply@…>") looks less
 // like bulk/spam than a bare address. Honor an address that already includes a
 // name; otherwise wrap the configured address.
-function fromHeader(brandName?: string | null): string {
-  const addr = process.env.SMTP_FROM || process.env.SMTP_USER || '';
+function fromHeader(brandName?: string | null, transport: MailTransport = 'primary'): string {
+  // Bulk mail may carry its own sender identity (e.g. noreply@ersah.in) so that
+  // digest complaints never touch the domain the password-reset mail is signed
+  // with. Falls back to the primary address when unset, which keeps a
+  // single-identity setup working unchanged.
+  const addr =
+    (transport === 'bulk' ? process.env.SMTP_BULK_FROM : undefined) ||
+    process.env.SMTP_FROM ||
+    (transport === 'bulk' ? process.env.SMTP_BULK_USER : undefined) ||
+    process.env.SMTP_USER ||
+    '';
   if (addr.includes('<') || !addr) return addr;
   const name = brandName || process.env.MAIL_FROM_NAME || 'Internship CRM';
   return `${name} <${addr}>`;
+}
+
+// Record the outcome of one send attempt (#1194). Never throws and never blocks
+// the caller's own error handling: a logging failure must not turn a delivered
+// mail into an exception, nor hide the real SMTP error behind a Prisma one.
+async function recordEmail(
+  to: string,
+  subject: string,
+  category: string | undefined,
+  status: 'SENT' | 'FAILED' | 'SKIPPED',
+  transport: MailTransport,
+  error?: string,
+) {
+  try {
+    await prisma.emailLog.create({
+      data: {
+        to: to.slice(0, 320),
+        subject: subject.slice(0, 512),
+        category: category?.slice(0, 64) ?? null,
+        transport,
+        status,
+        error: error?.slice(0, 2000) ?? null,
+      },
+    });
+  } catch (e) {
+    logger.error('Failed to write EmailLog', { to, category, status, error: String(e) });
+  }
 }
 
 export async function sendEmail({
@@ -82,6 +189,7 @@ export async function sendEmail({
   replyTo,
   attachments,
   fromName,
+  category,
 }: {
   to: string;
   subject: string;
@@ -94,26 +202,77 @@ export async function sendEmail({
   // Overrides the From display name (e.g. a tenant's brand name, #546). Falls
   // back to MAIL_FROM_NAME / "Internship CRM" when omitted.
   fromName?: string | null;
+  // Coarse bucket for the delivery log ("verification", "message", …). Optional
+  // so the dozens of existing call sites keep compiling; the ones that matter
+  // for "did our mail get through?" pass it.
+  category?: string;
 }) {
+  // No SMTP on this environment. This used to be a bare console.log + return,
+  // which made a misconfigured or broken mail setup indistinguishable from a
+  // user who simply never replied (#1194) — the whole reason a batch of
+  // never-activated sign-ups went unexplained. Log it loudly and leave a row
+  // behind so the admin mail view can show it.
+  // Which channel carries this one (#1203). Resolves to 'primary' whenever the
+  // bulk transport is not configured, so a single-SMTP setup is unchanged.
+  const transport = transportFor(category);
+  const via = transport === 'bulk' ? bulkTransporter! : transporter;
+
   if (!process.env.SMTP_USER) {
-    console.log(`[Email skipped - no SMTP config] To: ${to}, Subject: ${subject}`);
+    logger.error('Email not sent: SMTP is not configured', { to, subject, category });
+    await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)');
     return;
   }
 
-  await transporter.sendMail({
-    from: fromHeader(fromName),
-    to,
-    subject,
-    html,
-    text: htmlToText(html),
-    ...(replyTo ? { replyTo } : {}),
-    ...(attachments?.length ? { attachments } : {}),
-  });
+  try {
+    await via.sendMail({
+      from: fromHeader(fromName, transport),
+      to,
+      subject,
+      html,
+      text: htmlToText(html),
+      ...(replyTo ? { replyTo } : {}),
+      ...(attachments?.length ? { attachments } : {}),
+    });
+  } catch (e) {
+    // Record, then rethrow unchanged: callers that already catch (and the ones
+    // that deliberately don't) keep behaving exactly as before.
+    const message = e instanceof Error ? e.message : String(e);
+    logger.error('Email send failed', { to, subject, category, transport, error: message });
+    await recordEmail(to, subject, category, 'FAILED', transport, message);
+    throw e;
+  }
+
+  await recordEmail(to, subject, category, 'SENT', transport);
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
 // opt-in `/api/health?smtp=1` probe so SMTP outages (#483) surface as a clear
 // signal instead of only being visible per-user as "email never arrived".
+// The bulk channel's own connectivity check. `configured: false` is not a
+// failure — it means every category rides the primary transport, which is a
+// valid (and the default) setup.
+export async function verifyBulkSmtpConnection(): Promise<{ configured: boolean; ok: boolean; error?: string }> {
+  if (!bulkTransporter) return { configured: false, ok: true };
+  try {
+    await bulkTransporter.verify();
+    return { configured: true, ok: true };
+  } catch (e) {
+    return { configured: true, ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// What the two channels are set to send as — shown in the admin email panel so
+// the split is verifiable at a glance rather than by reading the env file.
+export function mailChannelInfo() {
+  return {
+    primary: { host: process.env.SMTP_HOST || null, from: fromHeader(null, 'primary') || null },
+    bulk: bulkTransporter
+      ? { host: process.env.SMTP_BULK_HOST || null, from: fromHeader(null, 'bulk') || null }
+      : null,
+    bulkCategories: [...BULK_CATEGORIES],
+  };
+}
+
 export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: string }> {
   if (!process.env.SMTP_USER) return { ok: false, error: 'SMTP not configured' };
   try {
@@ -142,6 +301,7 @@ export async function sendInvitationEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'invitation',
     subject: `You have been invited to ${brand.name}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -197,6 +357,7 @@ export async function sendPasswordResetEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'password-reset',
     subject: isInitial ? `Activate your ${brand.name} account` : `Reset your ${brand.name} password`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -243,6 +404,7 @@ export async function sendVerificationEmail({
   await sendEmail({
     to,
     fromName: brand.name,
+    category: 'verification',
     subject: `Verify your ${brand.name} email`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -279,6 +441,8 @@ export async function sendMeetingInviteEmail({
   meetLink,
   rsvpToken,
   timeZone,
+  organizerTimeZone,
+  organizerName,
 }: {
   to: string;
   fullName?: string | null;
@@ -291,6 +455,11 @@ export async function sendMeetingInviteEmail({
   rsvpToken?: string | null;
   // The recipient's saved IANA zone; falls back to the deployment default.
   timeZone?: string | null;
+  // The clock the organizer picked the time on (Meeting.timeZone, #1210) and
+  // whose it is. Rendered as a second line when it differs from the invitee's,
+  // so both sides can confirm they agreed on the same instant.
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
@@ -309,12 +478,14 @@ export async function sendMeetingInviteEmail({
         ${fullName ? `<p>Hi ${fullName},</p>` : ''}
         <p>You're invited to a meeting.</p>
         ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
+        ${when && scheduledAt ? organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName) : ''}
         ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
         ${askRsvp ? `
         <p style="margin-top: 20px;">Can you make it?</p>
         <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
         ` : ''}
+        ${when ? timeZoneNote(timeZone) : ''}
       </div>
     `,
   });
@@ -333,6 +504,57 @@ function ctaBlock(brand: { accent: string }, url: string, label: string): string
 
 function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
+// --- Which clock is this email on? (#1210) ----------------------------------
+
+// Every emailed time is rendered on exactly one clock — the recipient's saved
+// zone, or the deployment default when they have none — and until now nothing
+// in the email said so. A reader whose zone was guessed wrong could not tell a
+// wrong time from a wrong assumption about them, and had nowhere to go with it.
+// This is the small print that closes the loop: name the zone, and link to the
+// one place it can be corrected.
+//
+// Deliberately English like the rest of these templates: a translated footer
+// under an untranslated body reads as a bug, not as a courtesy.
+function timeZoneNote(timeZone?: string | null): string {
+  const zone = resolveTimeZone(timeZone);
+  return `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+    Times in this email are shown in ${esc(zone)}. Not your timezone?
+    <a href="${appUrl()}/account#timezone" style="color:#9ca3af;text-decoration:underline;">Change it in your settings</a>.
+  </p>`;
+}
+
+// The second reading: the clock the organizer set the time on. Printed only when
+// it is a genuinely different clock — an organizer in Berlin and an invitee in
+// Paris read the identical time, and repeating it would be noise, not
+// confirmation. `sameWallClock` compares offsets *at this instant*, so two zones
+// that agree today and diverge across a DST change are handled correctly.
+function organizerTimeLine(
+  at: Date,
+  organizerTimeZone: string | null | undefined,
+  recipientTimeZone: string | null | undefined,
+  organizerName?: string | null
+): string {
+  if (!organizerTimeZone || sameWallClock(organizerTimeZone, recipientTimeZone, at)) return '';
+  const who = organizerName ? `${esc(organizerName)}’s time` : 'Organizer’s time';
+  return `<p style="color:#6b7280;font-size:14px;">${who}: ${formatInTimeZone(at, organizerTimeZone, { dateStyle: 'medium', timeStyle: 'short' })}</p>`;
+}
+
+// The same instant on everyone *else's* clock — one line per distinct clock, so
+// a five-person project meeting spanning three zones prints three lines and not
+// five. Only zones that actually differ from the reader's are listed: telling
+// someone in Istanbul that it is also 17:00 in Istanbul for two colleagues adds
+// nothing. Empty when the whole team reads the same time, which is the common
+// case and should stay silent.
+function participantClocks(at: Date, viewerTimeZone: string | null | undefined, others: ZonedPerson[]): string {
+  const elsewhere = others.filter((p) => !sameWallClock(p.timezone, viewerTimeZone, at));
+  if (elsewhere.length === 0) return '';
+  const rows = readingsByZone(at, elsewhere)
+    .map((r) => `<li>${esc(r.names.join(', '))} — ${esc(r.when)} (${esc(r.offsetLabel)})</li>`)
+    .join('');
+  return `<p style="color:#6b7280;font-size:14px;margin-bottom:4px;">For the others:</p>
+    <ul style="color:#6b7280;font-size:14px;margin-top:0;padding-left:20px;">${rows}</ul>`;
 }
 
 // --- Mentorship request lifecycle (#668) ------------------------------------
@@ -588,6 +810,89 @@ export async function sendMentorApplicationRejectedEmail({
   });
 }
 
+// --- Offers (#809) -----------------------------------------------------------
+
+function formatOfferDate(d: Date | null | undefined, locale: Locale): string | null {
+  if (!d) return null;
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(d);
+}
+
+export async function sendOfferSentEmail({
+  to,
+  fullName,
+  position,
+  companyName,
+  startDate,
+  expiresAt,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  position: string;
+  companyName?: string | null;
+  startDate?: Date | null;
+  expiresAt?: Date | null;
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const loc = resolveLocale(locale);
+  const M = getDictionary(loc).offerEmail;
+  const start = formatOfferDate(startDate, loc);
+  const expires = formatOfferDate(expiresAt, loc);
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: M.sent.subject.replace('{position}', position),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, M.sent.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(M.sent.body.replace('{position}', position).replace('{company}', companyName ? ` (${companyName})` : ''))}</p>
+        ${start ? `<p><strong>${esc(M.startDate)}:</strong> ${esc(start)}</p>` : ''}
+        ${expires ? `<p><strong>${esc(M.decideBy)}:</strong> ${esc(expires)}</p>` : ''}
+        ${ctaBlock(brand, `${appUrl()}/portal`, M.sent.cta)}
+      </div>
+    `,
+  });
+}
+
+export async function sendOfferDecisionEmail({
+  to,
+  fullName,
+  menteeName,
+  position,
+  outcome,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  menteeName: string;
+  position: string;
+  outcome: 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).offerEmail;
+  const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: copy.subject.replace('{mentee}', menteeName),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, copy.heading)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(copy.body.replace('{mentee}', menteeName).replace('{position}', position))}</p>
+        ${ctaBlock(brand, `${appUrl()}/admin/candidates`, M.cta)}
+      </div>
+    `,
+  });
+}
+
 // --- Meeting requests (#668) ------------------------------------------------
 
 export async function sendMeetingRequestEmail({
@@ -599,6 +904,7 @@ export async function sendMeetingRequestEmail({
   link,
   orgId,
   timeZone,
+  requesterTimeZone,
 }: {
   to: string;
   fullName?: string | null;
@@ -608,6 +914,9 @@ export async function sendMeetingRequestEmail({
   link: string;
   orgId?: string | null;
   timeZone?: string | null;
+  // The clock the requester proposed on. Worth naming here above all: the
+  // mentor is being asked to agree to a time somebody else picked (#1210).
+  requesterTimeZone?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const when = proposedAt ? formatInTimeZone(proposedAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
@@ -621,7 +930,9 @@ export async function sendMeetingRequestEmail({
         ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
         <p><strong>${esc(requesterName)}</strong> requested a meeting: <strong>${esc(topic)}</strong>.</p>
         ${when ? `<p><strong>Proposed time:</strong> ${when}</p>` : ''}
+        ${when && proposedAt ? organizerTimeLine(proposedAt, requesterTimeZone, timeZone, requesterName) : ''}
         ${ctaBlock(brand, `${appUrl()}${link}`, 'Accept or decline')}
+        ${when ? timeZoneNote(timeZone) : ''}
       </div>
     `,
   });
@@ -664,6 +975,7 @@ export async function sendMeetingRequestDecisionEmail({
              ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}`
           : `<p>Your meeting request <strong>${esc(topic)}</strong> could not be accepted. You can propose another time.</p>`}
         ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the conversation')}
+        ${when ? timeZoneNote(timeZone) : ''}
       </div>
     `,
   });
@@ -878,6 +1190,7 @@ export async function checkMentorInteractionReminders() {
 
     try {
       await sendEmail({
+        category: 'interaction-reminder',
         to: mentor.email,
         subject: relations.length === 1
           ? `Reminder: Log interaction with ${relations[0].mentee.fullName}`
@@ -953,6 +1266,7 @@ export async function checkStageDeadlineReminders() {
       const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
       const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
       await sendEmail({
+        category: 'stage-deadline',
         to: rel.mentor.email,
         subject,
         html: `<p>${greeting}</p><p>${body}</p>`,
@@ -1064,6 +1378,7 @@ export async function sendMeetingReminders() {
       try {
         const brand = await emailBrand(user.orgId);
         await sendEmail({
+          category: 'meeting-reminder',
           to: user.email,
           fromName: brand.name,
           subject: `Reminder: ${m.title} starts soon`,
@@ -1071,8 +1386,14 @@ export async function sendMeetingReminders() {
             ${brandHeader(brand, 'Upcoming meeting')}
             <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(m.title)}</strong>.</p>
             <p><strong>When:</strong> ${when} (in about ${minutes} minute${minutes === 1 ? '' : 's'})</p>
+            ${participantClocks(
+              m.scheduledAt!,
+              user.timezone,
+              participants.filter((p) => p.id !== user.id).map((p) => ({ name: p.fullName, timezone: p.timezone }))
+            )}
             ${m.meetLink ? `<p><strong>Meeting link:</strong> <a href="${m.meetLink}">${esc(m.meetLink)}</a></p>` : ''}
             ${ctaBlock(brand, `${appUrl}${link}`, 'Open the app')}
+            ${timeZoneNote(user.timezone)}
           </div>`,
         });
         emailed++;
@@ -1197,6 +1518,7 @@ export async function sendProjectMeetingSeriesReminders() {
         try {
           const brand = await emailBrand(series.project?.orgId ?? null);
           await sendEmail({
+            category: 'meeting-reminder',
             to: user.email,
             fromName: brand.name,
             subject:
@@ -1207,8 +1529,14 @@ export async function sendProjectMeetingSeriesReminders() {
               ${brandHeader(brand, 'Recurring project meeting')}
               <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(series.title)}</strong>${projectName ? ` (${esc(projectName)})` : ''}.</p>
               <p><strong>When:</strong> ${whenLocal}</p>
+              ${participantClocks(
+                when,
+                user.timezone,
+                recipients.filter((r) => r.id !== user.id).map((r) => ({ name: r.fullName, timezone: r.timezone }))
+              )}
               ${series.fixedLink ? `<p><strong>Meeting link:</strong> <a href="${series.fixedLink}">${esc(series.fixedLink)}</a></p>` : ''}
               ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the project')}
+              ${timeZoneNote(user.timezone)}
             </div>`,
           });
           emailed++;
@@ -1260,6 +1588,7 @@ export async function sendWeeklyMentorDigests() {
 
     try {
       await sendEmail({
+        category: 'mentor-digest',
         to: m.email,
         subject: 'Your weekly mentoring summary',
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1336,6 +1665,7 @@ export async function sendDailyActivityDigests() {
     if (items.length === 0) continue;
     try {
       await sendEmail({
+        category: 'activity-digest',
         to: m.email,
         subject: 'Daily mentee activity',
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
@@ -1362,6 +1692,7 @@ export async function sendDailyActivityDigests() {
       if (!emailAllowed(a, 'digest')) continue;
       try {
         await sendEmail({
+          category: 'activity-digest',
           to: a.email,
           subject: 'Daily mentee activity (all mentees)',
           html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
@@ -1412,6 +1743,7 @@ export async function checkRetentionReminders() {
     // Legal/retention notice — always sent (not gated by marketing opt-out).
     try {
       await sendEmail({
+        category: 'retention-reminder',
         to: u.email,
         subject: 'Please confirm you still want us to keep your data',
         html: `
@@ -1524,6 +1856,7 @@ export async function checkCompanyNeedMatches() {
         await notify(u.id, 'need_match', text, link);
         if (emailAllowed(u, 'digest')) {
           await sendEmail({
+            category: 'company-need-alert',
             to: u.email,
             subject: 'A candidate matches your open position',
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1576,6 +1909,7 @@ export async function sendWeeklyAnalyticsReport() {
   for (const a of admins) {
     if (!emailAllowed(a, 'digest')) continue;
     await sendEmail({
+      category: 'analytics-report',
       to: a.email,
       subject: 'Weekly analytics report — Internship CRM',
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1620,7 +1954,10 @@ export async function sendUnreadMessageDigests() {
 
   // Group unread messages by recipient (the participant who is NOT the sender).
   type Recipient = NonNullable<(typeof msgs)[number]['relation']>['mentor'];
-  const byRecipient = new Map<string, { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }>();
+  const byRecipient = new Map<
+    string,
+    { recipient: Recipient; items: { relationId: string; from: string; preview: string }[] }
+  >();
   const allIds: string[] = [];
   for (const m of msgs) {
     const rel = m.relation;
@@ -1631,7 +1968,11 @@ export async function sendUnreadMessageDigests() {
     const sender = m.senderId === rel.mentorId ? rel.mentor : rel.mentee;
     if (!recipient?.email) continue;
     const entry = byRecipient.get(recipient.id) ?? { recipient, items: [] };
-    entry.items.push({ relationId: rel.id, from: sender?.fullName ?? 'Someone', preview: m.body.slice(0, 120) });
+    entry.items.push({
+      relationId: rel.id,
+      from: sender?.fullName ?? 'Someone',
+      preview: m.body.slice(0, 120),
+    });
     byRecipient.set(recipient.id, entry);
   }
 
@@ -1641,17 +1982,36 @@ export async function sendUnreadMessageDigests() {
     const rows = items
       .map((it) => {
         const safe = it.preview.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+        // Deliberately NO per-line reaction links here, unlike the live
+        // notification. A five-item digest would carry 25 extra links, and a
+        // high link count is one of the strongest spam signals there is —
+        // exactly what this whole change set exists to avoid. The digest is a
+        // "what did I miss" summary; reacting belongs on the message email.
         return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a></li>`;
       })
       .join('');
+    // One link that clears the whole summary. Every item here belongs to the
+    // same recipient, so marking each distinct thread read covers all of them.
+    const relationIds = [...new Set(items.map((it) => it.relationId))];
+    const markAllHtml = relationIds
+      .map(
+        (relationId, i) =>
+          `<a href="${markReadUrl(relationId, recipient.id)}" style="color:#6b7280;">${
+            relationIds.length === 1 ? 'Mark this conversation as read' : `Mark conversation ${i + 1} as read`
+          }</a>`,
+      )
+      .join(' · ');
     try {
       await sendEmail({
         to: recipient.email!,
+        category: 'unread-digest',
         subject: `You have ${items.length} unread message${items.length === 1 ? '' : 's'}`,
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
           <h2 style="color:#2563eb;">Unread messages</h2>
           <p>Hi ${recipient.fullName}, you have ${items.length} unread message${items.length === 1 ? '' : 's'} waiting:</p>
           <ul style="padding-left:18px;">${rows}</ul>
+          <p style="font-size:13px;color:#6b7280;">${markAllHtml}</p>
+          <p style="font-size:12px;color:#9ca3af;">Replying to a message also marks it — and everything before it — as read, so an answered conversation will not appear here again.</p>
         </div>`,
       });
       sent++;
@@ -1666,6 +2026,19 @@ export async function sendUnreadMessageDigests() {
     await prisma.message.updateMany({ where: { id: { in: allIds } }, data: { digestedAt: now } });
   }
   return { sent, considered: allIds.length };
+}
+
+// How long a delivery-log row is kept (#1211). The log exists to answer "did
+// our mail go out?", and that question is asked within hours of a problem —
+// but every row holds a recipient address, so keeping them forever would build
+// a second, unmanaged store of personal data next to the one the retention
+// rules already govern.
+export const EMAIL_LOG_RETENTION_DAYS = 90;
+
+export async function pruneEmailLog(retentionDays: number = EMAIL_LOG_RETENTION_DAYS) {
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  const { count } = await prisma.emailLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  return { deleted: count, cutoff };
 }
 
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
@@ -1685,6 +2058,10 @@ export function initCronJobs() {
       console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
       const nm = await checkCompanyNeedMatches();
       console.log(`[Cron] Company need-match alerts: ${nm.alerts}`);
+      // Housekeeping, not mail: keeps the delivery log inside its retention
+      // window so recipient addresses do not accumulate indefinitely (#1211).
+      const pruned = await pruneEmailLog();
+      console.log(`[Cron] Email log pruned: ${pruned.deleted} row(s) older than ${EMAIL_LOG_RETENTION_DAYS} days`);
     } catch (error) {
       console.error('[Cron] Error running reminder check:', error);
     }

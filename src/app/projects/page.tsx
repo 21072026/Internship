@@ -1,13 +1,26 @@
 import Link from 'next/link';
-import { GraduationCap, Github, ExternalLink } from 'lucide-react';
+import { getServerSession } from 'next-auth';
+import { Github, ExternalLink, ArrowLeft } from 'lucide-react';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
+import { PublicShell } from '@/components/landing/PublicShell';
+import { hasSessionCookie } from '@/lib/sessionCookie';
+import { roleHome } from '@/lib/roleHome';
 
 export const dynamic = 'force-dynamic';
 
 // Public showcase of community/company projects opted into visibility.
 export default async function PublicProjectsPage() {
   const { t } = await getServerDictionary();
+  const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
+  // Signed-in visitors arrive here from inside the app (e.g. "Browse the project
+  // showcase" on /portal/projects), but this route lives outside the role shell,
+  // so there is no sidebar to walk back through — send them to their own
+  // dashboard. Anonymous visitors get the landing page. Same shape as the
+  // project detail page (#51 follow-up, #1159).
+  const backHref = session ? roleHome(session.user.role) : '/';
+  const backLabel = session ? t.projects.backDashboard : t.projects.backHome;
   const projects = await prisma.project.findMany({
     where: { isPublic: true },
     orderBy: { updatedAt: 'desc' },
@@ -18,16 +31,15 @@ export default async function PublicProjectsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2">
-            <GraduationCap className="h-7 w-7 text-blue-600" />
-            <span className="font-bold text-gray-900">InternshipCRM</span>
-          </Link>
-        </div>
-      </header>
-      <main className="max-w-5xl mx-auto px-4 py-12">
+    <PublicShell>
+      <div className="max-w-5xl mx-auto px-4 py-12">
+        <Link
+          href={backHref}
+          data-testid="showcase-back"
+          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" /> {backLabel}
+        </Link>
         <h1 className="text-3xl font-bold text-gray-900">{t.projects.showcaseTitle}</h1>
         <p className="text-gray-500 mt-2 mb-8">{t.projects.showcaseSubtitle}</p>
         {projects.length === 0 ? (
@@ -54,7 +66,7 @@ export default async function PublicProjectsPage() {
             })}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </PublicShell>
   );
 }

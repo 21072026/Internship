@@ -39,3 +39,8 @@ export async function POST(request: Request) {
     }
   });
 }
+
+// The deliberate counterpart — a zone the user *picked* rather than one the
+// browser guessed — goes through `PUT /api/profile` with a `timezone` field,
+// which every role may set (#1210). It is a normal profile edit and belongs
+// with the rest of them; this endpoint stays what it is, the silent one.
