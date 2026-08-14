@@ -3440,3 +3440,77 @@ bütün olarak yerelleştirildiğinde birlikte çevrilmeli (PR'da not düşüld�
 çözümü `node prisma/backfill-json-columns.mjs --repair`. **Yeni bir kutuda ilk iş: `npx
 prisma db push` + `db:check-json`.** Baseline ölçümü için `git stash -u` + `git checkout
 origin/main` yeterli, ayrı worktree kurmaya gerek yok (node_modules paylaşılıyor).
+
+## 2026-08-14 — 10 PR'ı eskiden yeniye merge etmek (ve prod'un sessizce geride kalması)
+
+**Paylaşılan preview DB'si, sıradaki her PR'ı bloklayan tek bir arıza noktası.** 12 açık
+PR'ın çoğu zorunlu "Deploy topic environment" check'inde şu hatayla düşüyordu:
+`Cannot drop index 'CompanyInterest_companyId_menteeId_idx': needed in a foreign key
+constraint`. Sebep: bir PR (#1227) `@@unique([companyId, menteeId])`'i plain `@@index`'e
+çevirip topic deploy'unda **paylaşılan** preview DB'sine yazmıştı. Ondan sonra `main`
+tabanlı her şema push'u bunu geri almaya çalıştı ve MySQL reddetti — çünkü `companyId`
+FK'sını karşılayan tek index oydu. **Ders: bir PR'ın şeması preview DB'sini kendi şekline
+kilitleyebilir; bunu bir PR'ın kendi hatası sanmayın, `SHOW INDEX` ile DB'nin gerçek
+durumuna bakın.** Onarım sırası önemli: **önce** unique'i yaratıp FK'yı kapsamda tutun,
+**sonra** plain index'i düşürün — Prisma'nın ters sırası tam olarak bu yüzden patlıyor.
+
+**Preview DB kullanıcısı `localhost`'tan DDL yapamıyor.** `mysql -h 127.0.0.1` ile
+bağlanınca `ERROR 1142: INDEX command denied`; grant'ler container ağı için verilmiş.
+Çözüm: `docker exec internship-crm-preview node -e '...prisma.$executeRawUnsafe...'` —
+container'ın kendi `DATABASE_URL`'i ve Prisma client'ı zaten var.
+
+**`gh pr checks --watch` bir önceki run'ın sonucunu döndürebiliyor.** Push'tan hemen sonra
+çağrıldığında anında "hepsi pass" dedi; run ID'leri çok daha eskiydi. Yeşil sandığım PR
+aslında hâlâ kırmızıydı. **Her zaman head sha'ya karşı yoklayın:**
+`gh api repos/O/R/commits/$SHA/check-runs`. Ayrıca `gh pr view --json headRefOid` push'tan
+saniyeler sonra hâlâ eski sha'yı verebiliyor — beklediğiniz sha'yı parametre olarak geçip
+eşleşene kadar bekleyin.
+
+**Sıralı merge'de her PR aynı üç dosyada çakışır** (`package.json`, `CHANGELOG.md`,
+`releaseNotes.ts`). Hunk'ları tek tek çözmeye çalışmayın: git bunları her seferinde başka
+yerden hizalıyor ve bir kez `releaseNotes.ts`'i sözdizimsel olarak bozdum. **İşleyen
+yöntem: dosyayı `origin/main`'den olduğu gibi al, kendi dalının en üst kaydını numarasını
+değiştirerek başa ekle.** Ama `package.json`'ı main'den alırken dikkat: o dalın eklediği
+**bağımlılığı** (#1225 → `pdf-lib`) veya **script'ini** (#1226 → `backfill:requisitions`)
+sessizce düşürür. Aynı şekilde şemayı hunk hunk çözmek User modelinde alan tekrarı üretti;
+**şemayı da main'den kurup yalnızca o dalın kendi eklerini uygulamak** daha güvenli.
+
+**Squash edilmiş bir bağımlı PR'da (#1226 → #1227) ters ilişkiler kaybolur.** `main`'de
+`Requisition` vardı ama #1227'nin eklediği `interests` / `interviewRequests` back-relation'
+ları yoktu; `prisma validate` bunu tek tek söyledi. Alt PR squash ile indiyse üst PR'ın
+şema farkını gözden geçirin.
+
+**Prod, guard yüzünden 6 sürüm geride kalmıştı ve kimse fark etmemişti.**
+`infra/schema-guard.sh` deseni `(MODIFY|CHANGE)[^;]*NOT NULL` — sonunda word boundary yok.
+`WeeklyReport`'un `CHANGES_REQUESTED` enum değeri `CHANGE`'i eşleştirdi, satırın kalanı
+`NOT NULL` kısmını karşıladı ve **tamamen additive bir `CREATE TABLE`** "yıkıcı" sayıldı.
+Preview etkilenmedi çünkü guard'ı `--warn-only` ile koşuyor — **yani bu sınıftaki hatalar
+yalnızca prod'u durduruyor ve sessizce.** Merge ettikten sonra `deploy-prod` run'ına ve
+`/api/health`'in `version`/`sha` alanına bakmayı alışkanlık yapın; CI'ın yeşili prod'un
+canlı olduğu anlamına gelmiyor. Guard doğru davrandı (push öncesi durdu, yedek aldı,
+container'ı swap etmedi) — sorun yanlış pozitifti (#1230, #1231).
+
+**Yalnızca sunucuda çalışan mantığın testi olmuyor.** `infra/test/backup-db.test.sh` (#1200)
+bu dersin ilk hâliydi; schema guard'ın hiç testi yoktu. Yeni testi deseni **guard'ın
+kendisinden** okuyacak şekilde yazın (`sed -n "s/^DESTRUCTIVE='\(.*\)'$/\1/p"`), yoksa
+kopya bayatlayınca test yeşil yalan söyler. Ve **iki yönü de** doğrulayın: fazla geniş bir
+desen, fazla dar bir desen kadar pahalı.
+
+**`import 'server-only'` bu repoda çalışmaz.** #1216'nın `documentRequirements.ts`'i onunla
+başlıyordu; paket bir bağımlılık değil, yalnızca Next derlemesi içinde çözülüyor.
+`emailService` bu modülü import ettiği ve `e2e/email-hardening.spec.ts` de `emailService`'i
+doğrudan import ettiği için **tüm Playwright suite'i** "Cannot find module 'server-only'"
+ile yüklenemedi. Repo konvansiyonu bunu yorumla belgelemek (`pipelineStages.ts`,
+`authErrors.ts`). Yerelde `npx playwright test --list` ile saniyeler içinde yakalanıyor —
+smoke job'ını beklemeden.
+
+**`@smoke` etiketi olmayan yeni spec'ler PR gate'inde koşmuyor.** Bir PR'da yeni e2e
+dosyası görüyorsanız "Playwright smoke yeşil" onun geçtiği anlamına gelmez; hatalı bir
+spec 03/09/15/21 UTC'deki tam suite'te patlar ve e-posta olarak döner.
+
+**İnceleme, CI'ın söylemediğini bulmak içindir.** İki bulgu tam olarak buradan çıktı:
+#1132'de `/api/offers` liste rotası not-DRAFT filtresini yalnızca `status` parametresi
+**yoksa** uyguluyordu, yani MENTEE `?status=DRAFT` ile gönderilmemiş taslakları
+(`compensationNote` dahil) okuyabiliyordu — kodun kendi yorumu "asla görünmez" diyordu.
+#1221'in `/api/demo/reset`'i ise filtresiz `prisma.user.deleteMany()` çalıştırıyor; tek bir
+env değişkeni prod'dan ayırıyor. İkisi de yeşil CI'dan geçmişti.
