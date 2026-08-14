@@ -457,7 +457,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
 
       {role === 'MENTEE' && userId && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mt-6">
-          <DocumentsManager targetUserId={userId} />
+          <div id="documents"><DocumentsManager targetUserId={userId} /></div>
           <TemplatesLibrary />
         </div>
       )}
