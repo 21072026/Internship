@@ -3514,3 +3514,36 @@ spec 03/09/15/21 UTC'deki tam suite'te patlar ve e-posta olarak döner.
 (`compensationNote` dahil) okuyabiliyordu — kodun kendi yorumu "asla görünmez" diyordu.
 #1221'in `/api/demo/reset`'i ise filtresiz `prisma.user.deleteMany()` çalıştırıyor; tek bir
 env değişkeni prod'dan ayırıyor. İkisi de yeşil CI'dan geçmişti.
+
+### Ek — aynı gün, demo modunu kurarken (#1234)
+
+**Paylaşılan bir dosyada blanket regex çalıştırmayın.** `dictionaries.ts`'e eklediğim blokta
+`\uXXXX` kaçışlarını düz karaktere çevirmek için dosyanın tamamında `re.sub` çalıştırdım ve
+alakasız 40+ satırdaki mevcut `’`/`…` kaçışlarını da değiştirdim. Diff'i
+`git diff -U0 | grep "^-"` ile denetleyince ortaya çıktı. **Ekleme yapıyorsanız diff'in saf
+ekleme olduğunu doğrulayın** (silme sayısı 0); değilse dosyayı geri alıp eklemeyi baştan,
+doğru biçimde yapın.
+
+**Bir dosyayı yazmadan önce takip ediliyor mu diye bakın.** Yerel doğrulama için
+`.claude/launch.json` "oluşturdum" — oysa repoda commit'li, iki yapılandırma içeren bir
+dosyaydı; üzerine yazıp sonra sildim ve bu silme commit'lenip push'landı. `git status`'taki
+`D` harfi yakalattı. Geri alma: `git checkout origin/main -- <path>` + `--amend`.
+**Write tool'u dosyanın var olup olmadığını söylemez; `git log -- <path>` söyler.**
+
+**Yalnızca sunucuda koşan yıkıcı bir script'in guard'ını, gerçek isimlere karşı test edin.**
+`reset-demo.mjs` verildiği veritabanını tamamen boşaltıyor; testi `internship_crm` ve
+`internship_crm_preview` adlarını *isimleriyle* reddettiğini doğruluyor. Fixture'ları
+RFC 5737 TEST-NET adresine (`192.0.2.1`) yönlendirin: bir vaka guard'ı geçerse bağlantıda
+patlar, sessizce bir şey silmez.
+
+**Statik tutarlılık kontrolü, blok listelerinin gerçek bozulma yolunu yakalar.** Bir rotanın
+yeniden adlandırılması, demo blok listesindeki deseni sessizce ölü bırakır — hiçbir test
+kırmızıya dönmez, demo yalnızca şifre değişimini yeniden kabul etmeye başlar.
+`check-demo-blocklist.mjs` her deseni canlı rotalara karşı doğruluyor ve **yazarken kendi
+listemdeki gerçek bir boşluğu yakaladı** (`[^/]` içindeki kaçışsız eğik çizgi regex literal'ini
+erken bitiriyordu).
+
+**Bir demo, yazılabilir değilse demo değildir.** İlk içgüdü her yazmayı bloklamak; ama her
+düğmenin 403 döndüğü bir sayfa ürünü değil bozuk bir uygulamayı gösterir. Doğru şekil: varsayılan
+açık + kısa ve gerekçeli bir ret listesi. E-postayı da rotalarda değil **taşımada** kesin —
+onlarca rota mail atıyor, hepsini bloklamak akışları öldürür.
