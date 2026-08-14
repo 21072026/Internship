@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.64.0-beta',
-    date: '2026-08-10',
+    version: '0.68.0-beta',
+    date: '2026-08-14',
     highlights: {
       en: [
         'Admins and mentors can now generate an internship completion certificate or a reference letter for a mentee once their internship is done — pick English, Turkish or German, review and edit the text, then generate a PDF that carries your organization\'s name, logo and color.',
@@ -27,6 +27,87 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Admins und Mentoren können jetzt, sobald ein Praktikum abgeschlossen ist, für die Mentee eine Praktikumsbescheinigung oder ein Referenzschreiben erstellen — Englisch, Türkisch oder Deutsch wählen, den Text prüfen und anpassen und dann ein PDF mit dem Namen, Logo und der Farbe deiner Organisation erzeugen.',
         'Die Mentee kann ihre Bescheinigung jederzeit im Portal herunterladen, direkt neben ihren anderen Dokumenten — die Bescheinigung anderer ist für sie nicht sichtbar.',
+      ],
+    },
+  },
+  {
+    version: '0.67.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'You can now write one internship report each week from your portal, save it as a draft, submit it when it is ready and print your report history as an internship diary.',
+        'Your mentor reviews each submitted report from your mentee page. They can approve it or request changes with a comment, and you receive the result in the app.',
+        'If reports are missed for two completed weeks, the mentor attention list highlights it. A Friday reminder also arrives in your selected language; email reminders respect your notification preference and are never repeated in the same week.',
+      ],
+      tr: [
+        'Artık portalından her hafta bir staj raporu yazabilir, taslak olarak saklayabilir, hazır olduğunda gönderebilir ve rapor geçmişini staj günlüğü olarak yazdırabilirsin.',
+        'Mentörün gönderdiğin her raporu mentee sayfandan inceler. Raporu onaylayabilir veya yorumla değişiklik isteyebilir; sonucu uygulama içinde alırsın.',
+        'Tamamlanmış iki haftanın raporu eksikse bu durum mentörün dikkat listesinde görünür. Cuma hatırlatması da seçtiğin dilde gelir; e-posta tercihin korunur ve aynı hafta ikinci kez hatırlatma gönderilmez.',
+      ],
+      de: [
+        'Du kannst jetzt jede Woche einen Praktikumsbericht in deinem Portal schreiben, als Entwurf speichern, fertig einreichen und den Berichtsverlauf als Praktikumstagebuch drucken.',
+        'Dein Mentor prüft jeden eingereichten Bericht auf deiner Mentee-Seite. Er kann ihn genehmigen oder mit einem Kommentar Änderungen anfordern; das Ergebnis erhältst du in der App.',
+        'Fehlen Berichte für zwei abgeschlossene Wochen, erscheint dies in der Aufmerksamkeit-Liste des Mentors. Die Freitags-Erinnerung kommt in deiner gewählten Sprache; E-Mail-Einstellungen werden beachtet und in derselben Woche gibt es keine zweite Erinnerung.',
+      ],
+    },
+  },
+  {
+    version: '0.66.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'Organizations can now define their own required documents for each role and pipeline stage. Admins can see who is missing what, while mentees see a clear “Missing documents” card only when they have something to upload.',
+        'Document uploads can be matched to a requirement without changing the familiar upload, version history, template or access-control experience.',
+        'People with outstanding mandatory documents receive at most one reminder for each item per week, in their selected language and according to their email preferences.',
+      ],
+      tr: [
+        'Kurumlar artık her rol ve süreç aşaması için kendi zorunlu belgelerini tanımlayabilir. Yöneticiler kimin hangi belgesinin eksik olduğunu görür; menteeler ise yalnızca yüklemeleri gereken bir belge varsa açık bir “Eksik belgelerim” kartı görür.',
+        'Belge yüklemeleri, alışılmış yükleme, sürüm geçmişi, şablon ve erişim kontrolü deneyimi değişmeden bir gereksinimle eşleştirilebilir.',
+        'Zorunlu belgesi eksik olan kişiler, her belge için haftada en fazla bir kez, seçtikleri dilde ve e-posta tercihlerine uygun bir hatırlatma alır.',
+      ],
+      de: [
+        'Organisationen können jetzt eigene Pflichtdokumente je Rolle und Pipeline-Phase festlegen. Admins sehen, wem welches Dokument fehlt; Mentees sehen die Karte „Fehlende Dokumente“ nur, wenn sie tatsächlich etwas hochladen müssen.',
+        'Uploads lassen sich einer Anforderung zuordnen, ohne den vertrauten Ablauf für Uploads, Versionsverlauf, Vorlagen oder Zugriffsschutz zu verändern.',
+        'Personen mit fehlenden Pflichtdokumenten erhalten pro Dokument höchstens eine Erinnerung je Woche — in ihrer gewählten Sprache und entsprechend ihren E-Mail-Einstellungen.',
+      ],
+    },
+  },
+  {
+    version: '0.65.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'Moving a mentee to a stage like "Internship dropped" now asks why — pick from a short list of reasons (or add a note for "Other"), so the team can see patterns in why people drop off.',
+        'Admin Analytics has a new "Drop-off reasons" breakdown by stage, and the Excel export now includes it too.',
+      ],
+      tr: [
+        'Bir mentee’yi “Staj bırakıldı” gibi bir aşamaya taşırken artık neden sorulur — kısa bir listeden seçim yapabilir (ya da “Diğer” için not ekleyebilirsiniz), böylece ekip kayıpların nedenlerindeki örüntüleri görebilir.',
+        'Admin Analitik sayfasına aşamaya göre yeni bir “Kayıp sebepleri” dökümü eklendi; Excel dışa aktarımı da bunu artık içeriyor.',
+      ],
+      de: [
+        'Wenn ein Mentee in eine Phase wie „Praktikum abgebrochen“ verschoben wird, wird jetzt nach dem Grund gefragt — aus einer kurzen Liste auswählen (oder bei „Sonstiges“ eine Notiz hinzufügen), damit das Team Muster bei Abbrüchen erkennen kann.',
+        'Die Admin-Analyse zeigt jetzt eine neue Aufschlüsselung „Abbruchgründe“ nach Phase, und der Excel-Export enthält sie ebenfalls.',
+      ],
+    },
+  },
+  {
+    version: '0.64.0-beta',
+    date: '2026-08-10',
+    highlights: {
+      en: [
+        'Offer management: admins can now create, preview and send a job offer straight from a candidate\'s Mentorship card, with a clear history of every step.',
+        'Mentees see their offer on the portal dashboard — position, company, start date, a countdown to the decision deadline, and (for their own offer) the compensation note — and can accept or decline it with one click, decline reasons included.',
+        'Offers you don\'t act on in time are automatically marked expired, and everyone involved gets notified either way — sent, accepted, declined or expired.',
+      ],
+      tr: [
+        'Teklif yönetimi: yöneticiler artık bir adayın Mentorluk kartından doğrudan bir iş teklifi oluşturup önizleyebilir ve gönderebilir; her adım geçmişte net şekilde görünür.',
+        'Adaylar tekliflerini portal panolarında görür — pozisyon, şirket, başlangıç tarihi, karar süresine geri sayım ve (kendi teklifleriyse) ücret notu — ve tek tıkla kabul veya ret edebilir; ret nedenleri dahil.',
+        'Zamanında karar verilmeyen teklifler otomatik olarak süresi doldu olarak işaretlenir ve ilgili herkes gönderildi, kabul, ret veya süre dolumu için bilgilendirilir.',
+      ],
+      de: [
+        'Angebotsverwaltung: Admins können jetzt direkt von der Mentoring-Karte eines Kandidaten ein Jobangebot erstellen, in der Vorschau prüfen und senden — mit einer klaren Historie jedes Schritts.',
+        'Kandidaten sehen ihr Angebot im Portal-Dashboard — Position, Unternehmen, Starttermin, ein Countdown bis zur Entscheidungsfrist und (bei ihrem eigenen Angebot) den Vergütungshinweis — und können es mit einem Klick annehmen oder ablehnen, inklusive Ablehnungsgründen.',
+        'Nicht rechtzeitig beantwortete Angebote werden automatisch als abgelaufen markiert, und alle Beteiligten werden in jedem Fall benachrichtigt — gesendet, angenommen, abgelehnt oder abgelaufen.',
       ],
     },
   },
