@@ -8,6 +8,42 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.72.0-beta] - 2026-08-14
+
+### Added
+- **Public demo instance** (#966). `DEMO_MODE=true` turns a deployment into a public,
+  self-serve demo: a banner on every page, a `/demo` page listing the three sign-in
+  accounts `prisma/seed-demo.mjs` creates, and a dedicated database of synthetic data.
+  Unset — which is every other environment — the feature is completely inert: no banner,
+  `/demo` answers 404, and no write is refused.
+  - **Writable on purpose.** A demo where every button 403s demonstrates nothing, so
+    writes are allowed by default and only a short, explicit list is refused
+    (`DEMO_BLOCKED_WRITES`, `src/lib/demoMode.ts`): account email/password, 2FA,
+    sign-out-all, account erase, admin password reset, webhooks (an SSRF egress from the
+    production host), API keys, the mail tester, bulk import, and every file upload. The
+    pipeline, interactions, projects, offers and reports all stay usable.
+  - **Mail is stopped at the transport, not the routes.** `sendEmail()` records a
+    `SKIPPED` row on the demo instead of delivering, so a visitor cannot point an invite
+    at a stranger, every flow stays clickable, and the admin email log shows what would
+    have been sent.
+  - **The reset is an operational job, not an endpoint.** `.github/workflows/demo-reset.yml`
+    (02:00/14:00 UTC) runs `prisma/reset-demo.mjs` on the server, then re-seeds. There is
+    no `/api/demo/reset`, so no reset secret exists to leak and no route can be aimed at
+    the wrong database.
+  - `prisma/reset-demo.mjs` truncates every table in the database it is given, so it
+    refuses unless `DEMO_MODE=true` **and** the database name ends in `_demo` — no
+    override flag. Production (`internship_crm`) and the shared preview
+    (`internship_crm_preview`) can never satisfy that check.
+  - `prisma/seed-demo.mjs` now also seeds a namespaced demo ADMIN
+    (`admin.demo@demo.example.com`) and accepts a `*_demo` database as a legitimate
+    target alongside localhost.
+  - Two new CI gates: `npm run check:demo-blocklist` fails the build when a blocked
+    pattern stops matching any real route (how the block silently breaks — a rename) or
+    when a must-block route is left uncovered, and
+    `infra/test/reset-demo-guard.test.sh` asserts the reset refusals against the real
+    production and preview database names.
+  - Setup and rationale: [`docs/DEMO.md`](docs/DEMO.md).
+
 ## [0.71.2-beta] - 2026-08-14
 
 ### Changed

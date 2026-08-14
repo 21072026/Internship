@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.72.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'There is now a public demo you can hand to anyone: they sign in with a shared account and genuinely use the app — moving candidates through the pipeline, logging interactions, creating projects — on data that is entirely made up and resets twice a day.',
+        'The demo cannot be broken by its visitors: shared passwords and emails cannot be changed, accounts cannot be erased, file uploads are off, and no email is ever delivered — you can still trigger the flows and see in the admin email log what would have been sent.',
+      ],
+      tr: [
+        'Artık herkese verebileceğiniz herkese açık bir demo var: ortak bir hesapla giriş yapıp uygulamayı gerçekten kullanıyorlar — adayları süreçte ilerletmek, görüşme kaydı girmek, proje oluşturmak — tamamen uydurma ve günde iki kez sıfırlanan verilerle.',
+        'Demoyu ziyaretçileri bozamaz: ortak şifreler ve e-postalar değiştirilemez, hesaplar silinemez, dosya yükleme kapalıdır ve hiçbir e-posta gönderilmez — akışları yine tetikleyebilir, yönetici e-posta kaydında nelerin gideceğini görebilirsiniz.',
+      ],
+      de: [
+        'Es gibt jetzt eine öffentliche Demo, die Sie jedem geben können: Man meldet sich mit einem geteilten Konto an und nutzt die App wirklich — Kandidaten durch die Pipeline bewegen, Gespräche erfassen, Projekte anlegen — mit vollständig erfundenen Daten, die zweimal täglich zurückgesetzt werden.',
+        'Besucher können die Demo nicht kaputt machen: geteilte Passwörter und E-Mail-Adressen lassen sich nicht ändern, Konten nicht löschen, Datei-Uploads sind aus, und es wird keine E-Mail zugestellt — die Abläufe lassen sich trotzdem auslösen, und das Admin-E-Mail-Protokoll zeigt, was gesendet worden wäre.',
+      ],
+    },
+  },
+  {
     version: '0.71.2-beta',
     date: '2026-08-14',
     highlights: {

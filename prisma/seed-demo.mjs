@@ -22,9 +22,16 @@ const PASSWORD = process.env.SEED_DEMO_PASSWORD || 'DemoPass123!';
 function assertSafeTarget() {
   const url = process.env.DATABASE_URL || '';
   const local = /@(localhost|127\.0\.0\.1|mysql|db)[:/]/.test(url);
-  if (!local && process.env.SEED_DEMO_FORCE !== '1') {
+  // The public demo (#966) runs against a dedicated database whose name ends in
+  // `_demo`, reached over the container network rather than localhost — so the
+  // host check alone would reject it. A `*_demo` name is as strong a signal as
+  // localhost: production is `internship_crm`, preview is
+  // `internship_crm_preview`, and neither can ever match.
+  const demoDb = /\/[^/?]*_demo(\?|$)/.test(url);
+  if (!local && !demoDb && process.env.SEED_DEMO_FORCE !== '1') {
     console.error(
       'seed-demo: DATABASE_URL does not look local. Refusing to seed demo data.\n' +
+      'Expected a localhost DATABASE_URL or a database whose name ends in _demo.\n' +
       'Set SEED_DEMO_FORCE=1 only if you are certain this is not the shared preview/prod DB.'
     );
     process.exit(1);
@@ -66,6 +73,16 @@ async function upsertUser({ email, fullName, role, extra = {} }) {
 
 async function main() {
   assertSafeTarget();
+
+  // Admin — the identity /demo hands out for the public demo (#966). Namespaced
+  // like every other demo row, so it never collides with the real first admin
+  // that prisma/seed.mjs creates from SEED_ADMIN_EMAIL.
+  await upsertUser({
+    email: `admin.demo@${DEMO_DOMAIN}`,
+    fullName: 'Admin Demo',
+    role: 'ADMIN',
+    extra: { emailVerified: true },
+  });
 
   // Mentors
   const mentors = [];
