@@ -22,6 +22,8 @@ import { RelationNotesPanel } from '@/components/RelationNotesPanel';
 import { ContactActions } from '@/components/ContactActions';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
+import { CertificateGenerator } from '@/components/CertificateGenerator';
+import { canIssueCertificate } from '@/lib/certificateEligibility';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
@@ -44,6 +46,8 @@ interface RelationDetail {
   status: string;
   pipelineStatus: string;
   startDate: string;
+  completedAt: string | null;
+  mentor: { fullName: string };
   mentee: {
     id: string;
     fullName: string;
@@ -493,7 +497,21 @@ export default function MenteeDetailPage() {
           <QuestionsPanel relationId={id} mode="answer" />
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 flex flex-col gap-3">
+          {canIssueCertificate(relation, stages) && (
+            <div>
+              <CertificateGenerator
+                relationId={id}
+                eligible
+                mentee={{ fullName: relation.mentee.fullName, skills: relation.mentee.skills }}
+                mentor={{ fullName: relation.mentor.fullName }}
+                companyName={relation.company?.name ?? null}
+                startDate={relation.startDate}
+                completedAt={relation.completedAt}
+                onGenerated={fetchRelation}
+              />
+            </div>
+          )}
           <DocumentsManager targetUserId={relation.mentee.id} />
         </div>
 

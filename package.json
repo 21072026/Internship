@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.67.0-beta",
+  "version": "0.68.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -41,6 +41,7 @@
     "next-auth": "^4.24.7",
     "node-cron": "^3.0.3",
     "nodemailer": "^9.0.5",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
