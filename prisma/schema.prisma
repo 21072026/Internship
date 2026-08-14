@@ -100,6 +100,7 @@ model Organization {
   mentorApplications   MentorApplication[]
   companyInquiries     CompanyInquiry[]
   documentRequirements DocumentRequirement[]
+  weeklyReports        WeeklyReport[]
   offers               Offer[]
 }
 
@@ -276,6 +277,7 @@ model User {
   missingDocumentReminderRecipients DocumentRequirementReminder[] @relation("MissingDocumentReminderRecipient")
   createdOffers                     Offer[]                       @relation("OfferCreatedBy")
   decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
+  reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
 
   @@index([role])
   @@index([referredById])
@@ -1314,21 +1316,23 @@ model MentorshipRelation {
   // mentor only once (#573).
   stalenessReminderSentAt DateTime?
 
-  mentor          User             @relation("MentorRelations", fields: [mentorId], references: [id])
-  mentee          User             @relation("MenteeRelations", fields: [menteeId], references: [id])
-  company         Company?         @relation(fields: [companyId], references: [id])
-  project         Project?         @relation(fields: [projectId], references: [id])
-  cohort          Cohort?          @relation(fields: [cohortId], references: [id])
-  interactions    InteractionLog[]
-  statusChanges   StatusChange[]
-  meetings        Meeting[]
-  messages        Message[]
-  evaluations     Evaluation[]
-  goals           Goal[]
-  meetingRequests MeetingRequest[]
-  questions       MentorQuestion[]
-  relationNotes   RelationNote[]
-  offers          Offer[]
+  mentor                User                   @relation("MentorRelations", fields: [mentorId], references: [id])
+  mentee                User                   @relation("MenteeRelations", fields: [menteeId], references: [id])
+  company               Company?               @relation(fields: [companyId], references: [id])
+  project               Project?               @relation(fields: [projectId], references: [id])
+  cohort                Cohort?                @relation(fields: [cohortId], references: [id])
+  interactions          InteractionLog[]
+  statusChanges         StatusChange[]
+  meetings              Meeting[]
+  messages              Message[]
+  evaluations           Evaluation[]
+  goals                 Goal[]
+  meetingRequests       MeetingRequest[]
+  questions             MentorQuestion[]
+  relationNotes         RelationNote[]
+  offers                Offer[]
+  weeklyReports         WeeklyReport[]
+  weeklyReportReminders WeeklyReportReminder[]
 
   @@index([status])
   @@index([pipelineStatus])
@@ -1778,4 +1782,50 @@ model EmailVerificationToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+enum WeeklyReportStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+// One mentee-owned internship report per relation and canonical UTC week.
+model WeeklyReport {
+  id            String             @id @default(cuid())
+  orgId         String
+  relationId    String
+  weekStart     DateTime           @db.Date
+  summary       String             @db.Text
+  hoursSpent    Int?
+  blockers      String?            @db.Text
+  status        WeeklyReportStatus @default(DRAFT)
+  mentorComment String?            @db.Text
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  org        Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  relation   MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  reviewedBy User?              @relation("WeeklyReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([relationId, weekStart])
+  @@index([orgId, weekStart])
+  @@index([relationId, status, weekStart])
+  @@index([reviewedById])
+}
+
+// Delivery-only weekly idempotency marker; contains no report/message content.
+model WeeklyReportReminder {
+  id         String   @id @default(cuid())
+  relationId String
+  weekStart  DateTime @db.Date
+  createdAt  DateTime @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  @@unique([relationId, weekStart])
+  @@index([weekStart])
 }

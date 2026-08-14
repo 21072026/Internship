@@ -13,6 +13,27 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.67.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'You can now write one internship report each week from your portal, save it as a draft, submit it when it is ready and print your report history as an internship diary.',
+        'Your mentor reviews each submitted report from your mentee page. They can approve it or request changes with a comment, and you receive the result in the app.',
+        'If reports are missed for two completed weeks, the mentor attention list highlights it. A Friday reminder also arrives in your selected language; email reminders respect your notification preference and are never repeated in the same week.',
+      ],
+      tr: [
+        'Artık portalından her hafta bir staj raporu yazabilir, taslak olarak saklayabilir, hazır olduğunda gönderebilir ve rapor geçmişini staj günlüğü olarak yazdırabilirsin.',
+        'Mentörün gönderdiğin her raporu mentee sayfandan inceler. Raporu onaylayabilir veya yorumla değişiklik isteyebilir; sonucu uygulama içinde alırsın.',
+        'Tamamlanmış iki haftanın raporu eksikse bu durum mentörün dikkat listesinde görünür. Cuma hatırlatması da seçtiğin dilde gelir; e-posta tercihin korunur ve aynı hafta ikinci kez hatırlatma gönderilmez.',
+      ],
+      de: [
+        'Du kannst jetzt jede Woche einen Praktikumsbericht in deinem Portal schreiben, als Entwurf speichern, fertig einreichen und den Berichtsverlauf als Praktikumstagebuch drucken.',
+        'Dein Mentor prüft jeden eingereichten Bericht auf deiner Mentee-Seite. Er kann ihn genehmigen oder mit einem Kommentar Änderungen anfordern; das Ergebnis erhältst du in der App.',
+        'Fehlen Berichte für zwei abgeschlossene Wochen, erscheint dies in der Aufmerksamkeit-Liste des Mentors. Die Freitags-Erinnerung kommt in deiner gewählten Sprache; E-Mail-Einstellungen werden beachtet und in derselben Woche gibt es keine zweite Erinnerung.',
+      ],
+    },
+  },
+  {
     version: '0.66.0-beta',
     date: '2026-08-14',
     highlights: {

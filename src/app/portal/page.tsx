@@ -26,6 +26,7 @@ import { loadMenteeProjects } from '@/lib/menteeProjects';
 import { missingRequirementsForUser } from '@/lib/documentRequirements';
 import type { Locale } from '@/i18n/config';
 import { FileWarning } from 'lucide-react';
+import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 
 async function getMenteeData(menteeId: string, locale: Locale) {
   const [user, activeRelation, visibilityConsent, projects, missingDocuments] = await Promise.all([
@@ -171,6 +172,8 @@ export default async function PortalDashboard() {
           <JourneyTracker status={activeRelation.pipelineStatus} />
         </div>
       )}
+
+      {activeRelation && <div className="mb-6"><WeeklyReportsPanel relationId={activeRelation.id} mode="mentee" /></div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Summary */}

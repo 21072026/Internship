@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.67.0-beta] - 2026-08-14
+
+### Added
+- **Weekly internship reports, mentor approval and missing-report attention** (Story #812).
+  Mentees can save or submit one report per UTC week from the portal, review their history
+  and print an internship diary. Assigned mentors review the same reports from a dedicated
+  mentee-detail tab, approving them or requesting changes with feedback. Strict server-side
+  role and relationship checks protect every read and transition.
+- Mentors now see an attention signal after two consecutive completed internship weeks are
+  missing. A Friday cron sends a localized in-app reminder and, when the mentee's weekly-report
+  email preference permits it, an email in their stored EN/TR/DE language. A unique weekly
+  delivery claim makes overlapping or repeated runs idempotent.
+
 ## [0.66.0-beta] - 2026-08-14
 
 ### Added

@@ -1,7 +1,9 @@
 import { prisma } from '@/lib/prisma';
 import { getSetting } from '@/lib/settings';
+import { addUtcWeeks, firstFullUtcWeek, utcWeekStart } from '@/lib/week';
+import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 
-export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal';
+export type AttentionReason = 'inactive' | 'overdue' | 'unanswered_question' | 'pending_meeting' | 'no_open_goal' | 'missing_weekly_reports';
 
 export interface AttentionItem {
   relationId: string;
@@ -24,12 +26,15 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionItem
     where: { mentorId, status: 'ACTIVE' },
     select: {
       id: true,
+      pipelineStatus: true,
+      startDate: true,
       stageDeadline: true,
       mentee: { select: { id: true, fullName: true } },
       interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
       questions: { where: { answer: null }, select: { id: true } },
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
       goals: { where: { status: 'OPEN' }, select: { id: true } },
+      weeklyReports: { where: { status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } }, select: { weekStart: true } },
     },
   });
 
@@ -44,6 +49,16 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionItem
     if (r.questions.length > 0) reasons.push('unanswered_question');
     if (r.meetingRequests.length > 0) reasons.push('pending_meeting');
     if (r.goals.length === 0) reasons.push('no_open_goal');
+    if (r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450') {
+      const currentWeek = utcWeekStart(new Date(now));
+      const firstEligibleWeek = firstFullUtcWeek(r.startDate);
+      const lastWeek = addUtcWeeks(currentWeek, -1);
+      const previousWeek = addUtcWeeks(currentWeek, -2);
+      const submitted = new Set(r.weeklyReports.map((report) => report.weekStart.getTime()));
+      if (previousWeek >= firstEligibleWeek && !submitted.has(lastWeek.getTime()) && !submitted.has(previousWeek.getTime())) {
+        reasons.push('missing_weekly_reports');
+      }
+    }
 
     if (reasons.length > 0) {
       items.push({
