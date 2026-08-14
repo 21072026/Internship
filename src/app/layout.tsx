@@ -9,6 +9,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { resolveAccent } from '@/lib/accent';
+import { IS_DEMO_MODE } from '@/lib/demoMode';
+import { DemoModeBanner } from '@/components/DemoModeBanner';
 
 export const metadata: Metadata = {
   title: 'Internship CRM - Mentor-Mentee Management',
@@ -78,6 +80,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {dict.a11y.skipToContent}
         </a>
         <Providers locale={locale} dict={dict}>
+          {/* Public demo (#966) — above everything, on every route, so a visitor
+              never mistakes the demo for their own tenant. */}
+          {IS_DEMO_MODE && <DemoModeBanner />}
           {children}
         </Providers>
       </body>

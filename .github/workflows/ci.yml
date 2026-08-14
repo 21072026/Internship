@@ -36,6 +36,10 @@ jobs:
         run: npm run check:i18n
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
+      # A renamed route would silently drop out of the demo's write blocklist,
+      # re-enabling password changes and uploads on the public demo (#966).
+      - name: demo write blocklist still matches the routes (#966)
+        run: npm run check:demo-blocklist
       # The deploy scripts never run in CI, so their one piece of decision logic
       # — "is this dump real?" — had no coverage at all until it broke prod
       # (#1200). Cheap to run here; the alternative is finding out on the server.
@@ -46,4 +50,8 @@ jobs:
       # — it silently stops prod from deploying at all (#1230).
       - name: schema guard pattern (#1230)
         run: bash infra/test/schema-guard.test.sh
+      # reset-demo.mjs truncates every table in the database it is given; the
+      # only thing keeping it off prod is the name check at the top (#966).
+      - name: demo reset guard (#966)
+        run: bash infra/test/reset-demo-guard.test.sh
       - run: npm run build

@@ -1,0 +1,76 @@
+name: Reset the public demo
+
+# Wipes and re-seeds the public demo database (#966) so each visitor starts from
+# the same synthetic dataset, and nothing one visitor typed sticks around for the
+# next one.
+#
+# WHY THIS IS A WORKFLOW AND NOT AN ENDPOINT
+#   The reset is destructive, so it stays off the public internet entirely:
+#   no /api/demo/reset, no shared secret in an env file, no route that could be
+#   aimed at the wrong database. The self-hosted runner already has the access it
+#   needs, and prisma/reset-demo.mjs refuses any database whose name does not end
+#   in `_demo` (covered by infra/test/reset-demo-guard.test.sh in CI).
+#
+# SERVER PREREQUISITES (see docs/DEMO.md)
+#   - the demo container `internship-crm-demo` is running
+#   - /etc/internship-crm/demo.env has DATABASE_URL pointing at
+#     internship_crm_demo, plus DEMO_MODE=true
+
+on:
+  schedule:
+    # 02:00 and 14:00 UTC — twice a day is enough to clear drift without
+    # yanking the data out from under someone mid-click.
+    - cron: '0 2,14 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Never let two resets interleave: the second would truncate tables the first
+  # is still re-seeding, and the demo would be left half-populated.
+  group: demo-reset
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    name: Wipe + re-seed the demo database
+    runs-on: self-hosted
+    steps:
+      - name: Reset
+        env:
+          ENV_FILE: /etc/internship-crm/demo.env
+          CONTAINER: internship-crm-demo
+        run: |
+          set -euo pipefail
+
+          [ -f "$ENV_FILE" ] || { echo "ERROR: $ENV_FILE is missing — see docs/DEMO.md" >&2; exit 1; }
+          docker inspect "$CONTAINER" >/dev/null 2>&1 || {
+            echo "ERROR: container '$CONTAINER' does not exist — the demo is not deployed" >&2; exit 1; }
+
+          # Run inside the demo container so the tools use exactly the image,
+          # Prisma client and DATABASE_URL the demo itself runs with. Nothing is
+          # passed in from the workflow — the env file on the box is the source
+          # of truth, and secrets never enter the Actions log.
+          run() { docker exec "$CONTAINER" "$@"; }
+
+          echo "==> Wiping (refuses anything not named *_demo)"
+          run node prisma/reset-demo.mjs
+
+          echo "==> Re-applying the schema"
+          run npx prisma db push --accept-data-loss --skip-generate
+
+          echo "==> Seeding the first admin"
+          run node prisma/seed.mjs
+
+          echo "==> Seeding the synthetic demo dataset"
+          run node prisma/seed-demo.mjs
+
+          echo "==> Health check"
+          # The reset does not restart the container, but a wiped-then-reseeded
+          # DB is exactly when a stale Prisma client or a failed seed shows up.
+          for i in $(seq 1 10); do
+            if curl -fsS --max-time 5 http://127.0.0.1:3203/api/health >/dev/null; then
+              echo "demo is healthy"; exit 0
+            fi
+            sleep 3
+          done
+          echo "ERROR: the demo did not answer /api/health after the reset" >&2
+          exit 1

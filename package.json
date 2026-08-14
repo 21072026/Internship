@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.71.2-beta",
+  "version": "0.72.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -12,6 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "check:demo-blocklist": "node scripts/check-demo-blocklist.mjs",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "db:check-json": "node prisma/backfill-json-columns.mjs",

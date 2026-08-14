@@ -1,0 +1,108 @@
+# Public demo instance
+
+A separate deployment that anyone can sign into and actually use, running the
+same image as production against its **own** database full of synthetic data
+(`prisma/seed-demo.mjs`). Tracking issue: **#966**.
+
+| | |
+|---|---|
+| URL | `https://crm-demo.ersah.in` |
+| Container | `internship-crm-demo` |
+| Port | 3203 |
+| Database | `internship_crm_demo` (its own — **not** the shared preview DB) |
+| Env file | `/etc/internship-crm/demo.env` |
+| Reset | `.github/workflows/demo-reset.yml` — 02:00 and 14:00 UTC, plus manual |
+
+## The design in one paragraph
+
+`DEMO_MODE=true` turns the demo on. Writes are allowed **by default** — a demo
+where every button returns 403 demonstrates nothing — and only a short, explicit
+list is refused (`DEMO_BLOCKED_WRITES` in [`src/lib/demoMode.ts`](../src/lib/demoMode.ts)).
+Email is never delivered: `sendEmail()` records a `SKIPPED` row instead, so the
+invite and reminder flows stay clickable and the admin email log even shows what
+would have gone out. Resetting is an **operational job**, not an endpoint: a
+scheduled workflow runs `prisma/reset-demo.mjs` on the server.
+
+## Why there is no `/api/demo/reset`
+
+A reset truncates every table in the database it is pointed at. Exposing that
+over HTTP means a secret in an env file, a route that can be called by anyone who
+learns it, and a path that could be aimed at the wrong database if `DEMO_MODE`
+were ever copied into the wrong env file. None of that buys anything: the
+scheduler already runs on the box. So the destructive path stays off the public
+internet entirely.
+
+`prisma/reset-demo.mjs` additionally refuses unless **both** hold:
+
+1. `DEMO_MODE=true`, and
+2. the database **name ends in `_demo`**.
+
+(2) is the guard that matters, and it has no override flag. An env flag can be
+copied into the wrong file by accident; a database name cannot be, because
+production's is `internship_crm` and the shared preview's is
+`internship_crm_preview`. Neither can ever satisfy the check, whatever
+`DEMO_MODE` says. [`infra/test/reset-demo-guard.test.sh`](../infra/test/reset-demo-guard.test.sh)
+asserts exactly that, against those two real names, and runs in CI.
+
+## What the demo refuses, and why
+
+Three categories, all in `DEMO_BLOCKED_WRITES`:
+
+1. **Account takeover / lockout** — the logins are shared, so one visitor
+   changing a password or erasing an account would end the demo for everyone
+   until the next reset. (`/api/account`, `/api/account/2fa`,
+   `/api/account/sign-out-all`, admin erase + reset-password.)
+2. **Reach outside the demo** — a webhook POSTs from the production host to any
+   URL the caller names, an API key is a real credential, and the mail tester
+   takes an arbitrary recipient. (`/api/admin/webhooks`, `/api/admin/api-keys`,
+   `/api/admin/email-test`, `/api/admin/import`.)
+3. **Arbitrary file storage** — uploads let an anonymous visitor park whatever
+   they like on the box. (`/api/cv`, `/api/avatar`, `/api/documents`,
+   `/api/support/attachments`, announcement images.)
+
+Everything else — the pipeline, interactions, projects, offers, requisitions,
+reports — is genuinely writable. That is the point of the demo.
+
+`npm run check:demo-blocklist` runs in CI and fails the build if a pattern stops
+matching any real route (i.e. a route was renamed and the demo quietly started
+accepting it again), or if one of the must-block routes is left uncovered.
+
+## Server prerequisites
+
+The app side ships with this document; the environment itself is one-time setup:
+
+```bash
+# 1. the demo's own database
+mysql -e "CREATE DATABASE internship_crm_demo CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+mysql -e "GRANT ALL ON internship_crm_demo.* TO 'crm-demo'@'%' IDENTIFIED BY '<password>'"
+
+# 2. /etc/internship-crm/demo.env  (chmod 600)
+#    DATABASE_URL=mysql://crm-demo:<password>@host.docker.internal:3306/internship_crm_demo
+#    NEXTAUTH_URL=https://crm-demo.ersah.in
+#    NEXTAUTH_SECRET=<a secret of its own — never production's>
+#    DEMO_MODE=true
+#    SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD / SEED_ADMIN_NAME
+#    NEXT_PUBLIC_APP_ENV=preview
+#    Deliberately NO SMTP_*: mail is skipped in demo mode anyway, and leaving the
+#    credentials off the box means a mistake cannot send anything.
+
+# 3. Plesk vhost for crm-demo.ersah.in -> 127.0.0.1:3203
+
+# 4. first fill
+gh workflow run demo-reset.yml
+```
+
+Once `/etc/internship-crm/demo.env` and the container exist, the scheduled
+workflow keeps the data fresh; nothing else is manual.
+
+## Not included yet
+
+- **A link from the landing page.** Deliberately left out until the environment
+  is actually up — a "Try the live demo" button pointing at a host that does not
+  resolve is worse than no button. Add it (and a `features.ts` entry) in the PR
+  that provisions the env.
+- **OpenGraph social cards and product analytics.** These arrived in the same
+  original PR (#1221) but are separate concerns with their own trade-offs (a
+  permanently widened CSP, and third-party trackers on authenticated CRM pages
+  that would need wiring into the existing `UserConsent` model). They are not
+  part of the demo and were left for their own review.

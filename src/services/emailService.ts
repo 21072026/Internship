@@ -20,6 +20,7 @@ import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { bulkMissingRequirements } from '@/lib/documentRequirements';
 import { utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
+import { IS_DEMO_MODE } from '@/lib/demoMode';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -221,6 +222,18 @@ export async function sendEmail({
   // bulk transport is not configured, so a single-SMTP setup is unchanged.
   const transport = transportFor(category);
   const via = transport === 'bulk' ? bulkTransporter! : transporter;
+
+  // Public demo (#966): never deliver. The demo accounts are synthetic
+  // @demo.example.com addresses, but a visitor can type any address into an
+  // invite or a mentor application, which would turn the demo into an open
+  // relay pointed at strangers. Skipping here rather than blocking the routes
+  // keeps every flow clickable, and the SKIPPED row means the admin email view
+  // still shows what would have gone out — which is the part worth demoing.
+  if (IS_DEMO_MODE) {
+    logger.info('Email not sent: demo mode', { to, subject, category });
+    await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled');
+    return;
+  }
 
   if (!process.env.SMTP_USER) {
     logger.error('Email not sent: SMTP is not configured', { to, subject, category });
