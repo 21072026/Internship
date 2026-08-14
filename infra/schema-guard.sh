@@ -64,7 +64,15 @@ fi
 #   TRUNCATE                     — wipes rows outright
 #   MODIFY/CHANGE ... NOT NULL   — fails or coerces existing NULL rows
 #   DROP DATABASE / DROP SCHEMA  — the obvious catastrophe
-DESTRUCTIVE='DROP TABLE|DROP COLUMN|TRUNCATE|DROP DATABASE|DROP SCHEMA|(MODIFY|CHANGE)[^;]*NOT NULL'
+#
+# MODIFY/CHANGE carry \b on both sides on purpose. Without the trailing one,
+# any identifier that merely STARTS with "change" matches, and the rest of the
+# line then satisfies `[^;]*NOT NULL` on its own — so a purely additive
+# CREATE TABLE was rejected for containing an enum value named
+# CHANGES_REQUESTED (WeeklyReport, #1218), blocking production deploys while
+# preview sailed through on --warn-only. Blunt is fine; matching a substring of
+# a column value is not.
+DESTRUCTIVE='DROP TABLE|DROP COLUMN|TRUNCATE|DROP DATABASE|DROP SCHEMA|\b(MODIFY|CHANGE)\b[^;]*NOT NULL'
 
 if ! hits=$(printf '%s\n' "$sql" | grep -Ei "$DESTRUCTIVE"); then
   log "Pending changes are additive — proceeding"
