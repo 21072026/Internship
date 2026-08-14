@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.67.1-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'When the public project showcase is empty, it now suggests asking your mentor about projects you can join.',
+      ],
+      tr: [
+        'Herkese açık proje vitrini boş olduğunda artık mentörüne katılabileceğin projeleri sorman öneriliyor.',
+      ],
+      de: [
+        'Wenn das öffentliche Projekt-Schaufenster leer ist, wird dir jetzt empfohlen, deine Mentorin oder deinen Mentor nach Projekten zu fragen, denen du beitreten kannst.',
+      ],
+    },
+  },
+  {
     version: '0.67.0-beta',
     date: '2026-08-14',
     highlights: {

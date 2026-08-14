@@ -34,6 +34,37 @@ test('public project showcase shows public projects only', async ({ page }) => {
   }
 });
 
+test('public project showcase explains what to do when it is empty', async ({ page }) => {
+  // The preview database can contain public projects from seed data. Temporarily
+  // hide exactly those rows, then restore them so this assertion is deterministic
+  // without depending on another test's fixtures.
+  const publicProjects = await prisma.project.findMany({
+    where: { isPublic: true },
+    select: { id: true },
+  });
+  const publicIds = publicProjects.map(({ id }) => id);
+
+  try {
+    if (publicIds.length > 0) {
+      await prisma.project.updateMany({
+        where: { id: { in: publicIds } },
+        data: { isPublic: false },
+      });
+    }
+
+    await page.goto('/projects');
+    await expect(page.getByText('No public projects yet.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Want to get involved? Ask your mentor about projects you can join.', { exact: true })).toBeVisible();
+  } finally {
+    if (publicIds.length > 0) {
+      await prisma.project.updateMany({
+        where: { id: { in: publicIds } },
+        data: { isPublic: true },
+      });
+    }
+  }
+});
+
 // #1159: /projects lives outside the role shell — no sidebar, and the header
 // wordmark was the only link on the page. A signed-in visitor who followed
 // "Browse the project showcase" from /portal/projects had no way back into the
