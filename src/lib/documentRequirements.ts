@@ -1,5 +1,9 @@
-import 'server-only';
-
+// Server-only: every export here touches Prisma, so this module must never be
+// pulled into a client bundle. Declared as a comment rather than
+// `import 'server-only'` to match the rest of src/lib (pipelineStages.ts,
+// pipeline.ts, authErrors.ts) — that package isn't a dependency of this
+// project, and importing it breaks the plain-Node require path the Playwright
+// specs use to reach emailService.
 import type { Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { Locale } from '@/i18n/config';
