@@ -314,7 +314,13 @@ RUN_TOOL="docker run --rm ${TOOL_NET_ARGS[*]} -e DATABASE_URL=$DATABASE_URL $IMA
   BACKUP_TAKEN="$BACKUP_TAKEN" \
   "$REPO_DIR/infra/schema-guard.sh" "${GUARD_ARGS[@]+"${GUARD_ARGS[@]}"}"
 
-log "prisma db push"
+log "prisma db push (CompanyInterest FK-index expand phase)"
+run_tool node prisma/push-company-interest-expand.mjs
+
+log "backfill CompanyInterest deterministic scope keys"
+run_tool node prisma/backfill-company-interest-scope.mjs
+
+log "prisma db push (final contract phase)"
 run_tool npx prisma db push --accept-data-loss
 
 # Immediately after the push, because the push itself is what breaks these

@@ -18,6 +18,8 @@ import { GoalsPanel } from '@/components/GoalsPanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
 import { MeetingSchedulerPanel } from '@/components/MeetingSchedulerPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
+import { CertificateGenerator } from '@/components/CertificateGenerator';
+import { canIssueCertificate } from '@/lib/certificateEligibility';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { AddInteractionForm } from '@/components/AddInteractionForm';
@@ -35,6 +37,7 @@ interface Relation {
   status: string;
   pipelineStatus: string;
   startDate: string;
+  completedAt: string | null;
   stageDeadline?: string | null;
   mentor: { fullName: string; email: string };
   company: { name: string; industry?: string } | null;
@@ -563,6 +566,21 @@ export default function AdminMenteeDetailPage() {
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
         <PersonTodos userId={id} fullName={user?.fullName} />
+        {rel && canIssueCertificate(rel, stages) && (
+          <Card>
+            <CardHeader><CardTitle>{t.certificate.title}</CardTitle></CardHeader>
+            <CertificateGenerator
+              relationId={rel.id}
+              eligible
+              mentee={{ fullName: user.fullName, skills: user.skills }}
+              mentor={{ fullName: rel.mentor.fullName }}
+              companyName={rel.company?.name ?? null}
+              startDate={rel.startDate}
+              completedAt={rel.completedAt}
+              onGenerated={load}
+            />
+          </Card>
+        )}
         <DocumentsManager targetUserId={id} />
         <UserActivityPanel userId={id} />
         {user && <CandidateEraseDangerZone userId={id} fullName={user.fullName} onAnonymized={load} />}

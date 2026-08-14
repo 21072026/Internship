@@ -8,11 +8,80 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.67.1-beta] - 2026-08-14
+## [0.71.2-beta] - 2026-08-14
 
 ### Changed
 - The public project showcase empty state now tells mentees to ask their mentor about
   projects they can join, while continuing to describe only publicly visible projects (#1106).
+
+## [0.71.1-beta] - 2026-08-14
+
+### Fixed
+- **The destructive-schema gate no longer blocks additive deploys** (#1230). The
+  `DESTRUCTIVE` pattern in `infra/schema-guard.sh` matched `MODIFY`/`CHANGE` without a
+  trailing word boundary, so any identifier or enum value merely *starting* with "change"
+  matched and the rest of the line satisfied `[^;]*NOT NULL` on its own. `WeeklyReport`'s
+  `CHANGES_REQUESTED` enum value (#1218) tripped it inside a plain `CREATE TABLE`, and
+  production stopped deploying — six releases' worth of merged work stayed off prod while
+  preview kept deploying, because preview runs the gate with `--warn-only`. Added `\b` on
+  both sides of the alternation.
+- New `infra/test/schema-guard.test.sh`, wired into the CI job next to the backup-dump
+  test: it reads the pattern out of the guard itself (so it cannot pass against a stale
+  copy) and asserts both directions — every genuinely destructive statement still matches,
+  and additive `CREATE TABLE` / `ADD COLUMN` / index statements do not.
+
+## [0.71.0-beta] - 2026-08-14
+
+### Added
+- **Mentor availability preference** (#941). New nullable `User.acceptingMentees` — the
+  mentor's own "I can take a new mentee right now" switch, deliberately separate from
+  `mentorCapacity` (a headcount ceiling): a mentor under capacity can still switch it off
+  (e.g. going on leave). `null` means no preference was ever recorded, in which case
+  availability falls back to a capacity-derived guess.
+  - Derivation lives in one pure function, `getMentorAvailability()`
+    (`src/lib/mentorAvailability.ts`), returning `status` (`available` / `at_capacity` /
+    `not_accepting`), `source` (`preference` / `capacity`) and `capacityKnown`, so the #941
+    mentor screen and the #942 admin assignment screen can never drift apart.
+  - `GET /api/profile` returns `activeMenteeCount` + `availability` for MENTORs only; the
+    response shape is unchanged for every other role.
+  - `acceptingMentees` joins `MENTOR_ONLY_FIELDS`, so a mentee or admin cannot set it
+    through the shared profile endpoint.
+
+## [0.70.0-beta] - 2026-08-14
+
+### Added
+- **Requisition shortlists and interview approvals** (#807). Companies can shortlist eligible candidates for their own requisitions and submit deduplicated interview requests. Tenant-scoped admins or the candidate's active mentor can approve or decline atomically; approvals notify the candidate and recommend—but never automatically apply—the interview pipeline stage. Every decision is audited, and approved requests link to the existing meeting scheduler.
+
+## [0.69.0-beta] - 2026-08-14
+
+### Added
+- **Structured requisition management** (#806). Admins and COMPANY users can create, filter, edit, assign and close tenant-scoped hiring requisitions while tracking openings, filled positions, skills and lifecycle status. A manual idempotent backfill can copy legacy `CompanyNeed` rows without changing the existing need-alert matcher or dedupe flow.
+
+## [0.68.0-beta] - 2026-08-14
+
+### Added
+- **Internship completion certificate & reference letter** (#813). Admin/mentor can generate
+  an org-branded PDF for a completed internship, from a completed-relation action on the
+  candidate/mentee detail page (both `/admin/candidates/[id]` and `/mentor/mentees/[id]`).
+  - `CertificateGenerator` previews an auto-filled, editable EN/TR/DE draft (certificate or a
+    freely-rewritable reference letter) — start/end date, duration, and which of the mentee's
+    skills to list — before generating. Reuses `renderTemplate.templateToHtml` for the preview
+    and `orgBranding`/`branding` for the org name/logo/accent color, matching the existing
+    document-template pattern (`templates.ts` / `TemplatesLibrary`) instead of introducing a
+    new branding system.
+  - Eligibility (`certificateEligibility.ts`) does not hardcode `INTERNSHIP_COMPLETED_490`: it
+    accepts `MentorshipRelation.status === 'COMPLETED'` (works under any custom pipeline, #747)
+    or, when the canonical stage key is still present in the org's resolved stages, having
+    reached-or-passed it.
+  - The generated PDF is rendered server-side with `pdf-lib` (new dependency) — pure JS, no
+    native binaries, no headless-browser process — and stored as a normal `Document` row
+    (`type: CERTIFICATE`, `ownerId` the mentee), so the existing `documentAccess` rules (owner,
+    their mentor, or an admin — 403 otherwise) gate it with no new access-control code. The
+    mentee can download it from `/portal` (reuses `DocumentsManager`, read-only there).
+  - Deliberately did not add: public/unauthenticated verification (out of scope for #813), a
+    new PDF template engine (the renderer understands the same constrained markdown subset as
+    `renderTemplate.ts`), or a schema change (no new columns/models — the existing `Document`/
+    `DocumentType.CERTIFICATE` were already sufficient).
 
 ## [0.67.0-beta] - 2026-08-14
 

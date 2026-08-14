@@ -14,7 +14,7 @@ import {
   GitBranch, Users, Building2, CalendarClock, FileText, Target,
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
-  Briefcase, NotebookPen,
+  Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -66,5 +66,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'timezones', category: 'platform', icon: Globe, color: 'sky', title: C.timezones.t, desc: C.timezones.d },
     { key: 'offers', category: 'tracking', icon: Briefcase, color: 'orange', title: C.offers.t, desc: C.offers.d },
     { key: 'weeklyReports', category: 'tracking', icon: NotebookPen, color: 'teal', title: C.weeklyReports.t, desc: C.weeklyReports.d },
+    { key: 'requisitions', category: 'companies', icon: BriefcaseBusiness, color: 'purple', title: C.requisitions.t, desc: C.requisitions.d },
+    { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', title: C.interviewRequests.t, desc: C.interviewRequests.d },
   ];
 }

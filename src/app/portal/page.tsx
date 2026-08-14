@@ -13,6 +13,7 @@ import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
 import { OfferCard } from '@/components/OfferCard';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
+import { DocumentsManager } from '@/components/DocumentsManager';
 import { getServerDictionary } from "@/i18n/server";
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -407,6 +408,14 @@ export default async function PortalDashboard() {
           </Card>
         </div>
       )}
+
+      {/* Own documents, including any internship completion certificate a
+          mentor/admin has generated (#813) — kept independent of
+          `activeRelation` so it still shows after the mentorship is marked
+          COMPLETED, when the mentorship card above disappears. */}
+      <div className="mt-6">
+        <DocumentsManager targetUserId={session.user.id} canUpload={false} canDelete={false} />
+      </div>
 
       <div className="mt-6">
         <AnnouncementsCard />

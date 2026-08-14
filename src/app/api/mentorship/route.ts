@@ -10,6 +10,7 @@ import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
+import { resolveOrgId } from '@/lib/orgScope';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -25,6 +26,13 @@ export async function GET(request: Request) {
 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (session.user.role === 'COMPANY' && !session.user.companyId) {
+      return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
+    }
+    const companyOrgId = session.user.role === 'COMPANY' ? resolveOrgId(session) : null;
+    if (session.user.role === 'COMPANY' && !companyOrgId) {
+      return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     }
 
     // Bind the request's tenant so every query below is auto-scoped once
@@ -49,7 +57,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const where: Record<string, unknown> = { ...scope };
+    const where: Record<string, unknown> = {
+      ...scope,
+      ...(session.user.role === 'COMPANY' ? { orgId: companyOrgId, companyId: session.user.companyId } : {}),
+    };
 
     if (status) {
       where.status = status;

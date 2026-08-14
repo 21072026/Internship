@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.67.1-beta',
+    version: '0.71.2-beta',
     date: '2026-08-14',
     highlights: {
       en: [
@@ -24,6 +24,57 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Wenn das öffentliche Projekt-Schaufenster leer ist, wird dir jetzt empfohlen, deine Mentorin oder deinen Mentor nach Projekten zu fragen, denen du beitreten kannst.',
+      ],
+    },
+  },
+  {
+    version: '0.71.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'Mentors can now say whether they are open to a new mentee right now — separate from how many they are willing to take in total, so you can pause new matches while on leave without changing your limit.',
+      ],
+      tr: [
+        'Mentorlar artık şu anda yeni bir mentee alıp almayacaklarını belirtebiliyor — toplamda kaç kişi alabileceklerinden ayrı bir ayar; böylece izinde olduğunuzda limitinizi değiştirmeden yeni eşleşmeleri durdurabilirsiniz.',
+      ],
+      de: [
+        'Mentor:innen können jetzt angeben, ob sie aktuell ein neues Mentee aufnehmen möchten — unabhängig davon, wie viele sie insgesamt begleiten wollen. So lassen sich neue Zuordnungen während einer Abwesenheit pausieren, ohne das Limit zu ändern.',
+      ],
+    },
+  },
+  {
+    version: '0.70.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: ['Companies can now shortlist candidates for a specific requisition and request an interview. The program team or the candidate’s mentor reviews each request, and approved interviews can be scheduled through the existing meeting calendar.'],
+      tr: ['Şirketler artık adayları belirli bir iş talebi için kısa listeye alabilir ve mülakat talep edebilir. Her talebi program ekibi veya adayın mentoru değerlendirir; onaylanan mülakatlar mevcut toplantı takvimi üzerinden planlanabilir.'],
+      de: ['Unternehmen können Kandidaten jetzt für eine bestimmte Stellenanforderung auf die Shortlist setzen und ein Interview anfragen. Das Programmteam oder der Mentor des Kandidaten prüft die Anfrage; genehmigte Interviews lassen sich über den bestehenden Besprechungskalender planen.'],
+    },
+  },
+  {
+    version: '0.69.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: ['Admins and company teams can now manage structured hiring requisitions: define the role and required skills, track openings and filled positions, assign an owner, and move each request through its lifecycle.'],
+      tr: ['Yöneticiler ve şirket ekipleri artık yapılandırılmış işe alım taleplerini yönetebilir: pozisyonu ve gerekli yetkinlikleri tanımlayabilir, kontenjan ile dolulukları izleyebilir, sorumlu atayabilir ve her talebin durumunu yönetebilir.'],
+      de: ['Admins und Unternehmensteams können jetzt strukturierte Stellenanforderungen verwalten: Rolle und erforderliche Kenntnisse festlegen, offene und besetzte Stellen verfolgen, Verantwortliche zuweisen und den Status jeder Anforderung steuern.'],
+    },
+  },
+  {
+    version: '0.68.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'Admins and mentors can now generate an internship completion certificate or a reference letter for a mentee once their internship is done — pick English, Turkish or German, review and edit the text, then generate a PDF that carries your organization\'s name, logo and color.',
+        'The mentee can download their certificate any time from their portal, right alongside their other documents — nobody else\'s certificate is visible to them.',
+      ],
+      tr: [
+        'Yöneticiler ve mentörler artık bir mentee\'nin stajı tamamlandığında staj tamamlama belgesi veya referans mektubu oluşturabilir — İngilizce, Türkçe veya Almanca seçip metni gözden geçirip düzenleyebilir, ardından kurumunuzun adını, logosunu ve rengini taşıyan bir PDF oluşturabilirsiniz.',
+        'Mentee kendi belgesini istediği zaman portalından, diğer belgelerinin yanında indirebilir — başka birinin belgesi kendisine görünmez.',
+      ],
+      de: [
+        'Admins und Mentoren können jetzt, sobald ein Praktikum abgeschlossen ist, für die Mentee eine Praktikumsbescheinigung oder ein Referenzschreiben erstellen — Englisch, Türkisch oder Deutsch wählen, den Text prüfen und anpassen und dann ein PDF mit dem Namen, Logo und der Farbe deiner Organisation erzeugen.',
+        'Die Mentee kann ihre Bescheinigung jederzeit im Portal herunterladen, direkt neben ihren anderen Dokumenten — die Bescheinigung anderer ist für sie nicht sichtbar.',
       ],
     },
   },

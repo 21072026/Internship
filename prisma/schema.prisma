@@ -102,6 +102,8 @@ model Organization {
   documentRequirements DocumentRequirement[]
   weeklyReports        WeeklyReport[]
   offers               Offer[]
+  requisitions         Requisition[]
+  interviewRequests    InterviewRequest[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -171,6 +173,13 @@ model User {
   interests               String?       @db.Text
   targetPosition          String?
   mentorCapacity          Int?
+  // Mentor's own "I can take new mentees right now" preference (#941) —
+  // distinct from mentorCapacity (a headcount ceiling): a mentor under
+  // capacity can still switch this off (e.g. going on leave), and one at
+  // capacity could in principle switch it on. Null = no preference set yet;
+  // availability then falls back to a capacity-derived guess (see
+  // src/lib/mentorAvailability.ts).
+  acceptingMentees        Boolean?
   // Set the first time a MENTOR lands on their dashboard (#911), so the
   // one-time redirect to the mentor onboarding wizard never fires twice —
   // stamped before the redirect, not after the wizard is finished/skipped.
@@ -278,6 +287,9 @@ model User {
   createdOffers                     Offer[]                       @relation("OfferCreatedBy")
   decidedOffers                     Offer[]                       @relation("OfferDecidedBy")
   reviewedWeeklyReports             WeeklyReport[]                @relation("WeeklyReportReviewer")
+  ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
+  interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
+  decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
 
   @@index([role])
   @@index([referredById])
@@ -705,6 +717,8 @@ model Company {
   entitlements CompanyEntitlement[]
   needAlerts   CompanyNeedAlert[]
   offers       Offer[]
+  requisitions Requisition[]
+  interviewRequests InterviewRequest[]
 }
 
 // Premium entitlement (freemium — Faz 0). One row per enabled feature per
@@ -974,20 +988,27 @@ enum InterestStatus {
 }
 
 model CompanyInterest {
-  id        String         @id @default(cuid())
-  companyId String
-  menteeId  String
-  status    InterestStatus
+  id            String         @id @default(cuid())
+  companyId     String
+  menteeId      String
+  requisitionId String?
+  // Stable application-derived discriminator: legacy:<companyId>:<menteeId>
+  // or requisition:<requisitionId>:<menteeId>. Unlike nullable compound
+  // uniques, this remains reliable on MySQL when requisitionId is null.
+  scopeKey      String?        @unique
+  status        InterestStatus
   // TEXT: the shortlist API accepts 1 000 characters, past VARCHAR(191).
-  note      String?        @db.Text
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  note          String?        @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  mentee  User    @relation("CompanyInterestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  mentee      User         @relation("CompanyInterestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  requisition Requisition? @relation(fields: [requisitionId], references: [id], onDelete: Restrict)
 
-  @@unique([companyId, menteeId])
+  @@index([companyId, menteeId])
   @@index([menteeId])
+  @@index([requisitionId])
 }
 
 // Outgoing webhook subscription (admin-managed). Events are sent as signed
@@ -1828,4 +1849,67 @@ model WeeklyReportReminder {
 
   @@unique([relationId, weekStart])
   @@index([weekStart])
+}
+
+// Structured hiring demand (#806). CompanyNeed remains in place during the
+// compatibility window; legacyCompanyNeedId makes the manual backfill safe to
+// rerun without coupling the two live write paths.
+model Requisition {
+  id                  String    @id @default(cuid())
+  orgId               String
+  companyId           String
+  title               String
+  description         String?   @db.Text
+  status              String    @default("DRAFT")
+  openings            Int
+  filled              Int       @default(0)
+  requiredSkills      Json      @default("[]")
+  city                String?
+  workMode            String?
+  startDate           DateTime?
+  ownerId             String?
+  legacyCompanyNeedId String?   @unique
+  createdAt           DateTime  @default(now())
+  closedAt            DateTime?
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  owner   User?        @relation("RequisitionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  interests         CompanyInterest[]
+  interviewRequests InterviewRequest[]
+
+  @@index([orgId, companyId])
+  @@index([orgId, status])
+  @@index([ownerId])
+}
+
+// A company asks the program/authorized mentor to interview one shortlisted
+// mentee for one requisition (#807). Status stays String so the workflow can
+// grow without a schema enum migration.
+model InterviewRequest {
+  id            String    @id @default(cuid())
+  requisitionId String
+  menteeId      String
+  companyId     String
+  orgId         String
+  status        String    @default("PENDING")
+  note          String?   @db.Text
+  decidedById   String?
+  decidedAt     DateTime?
+  proposedSlots Json?
+  activeKey     String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  requisition Requisition  @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  mentee      User         @relation("InterviewRequestMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  decidedBy   User?        @relation("InterviewRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([orgId, status])
+  @@index([companyId, requisitionId])
+  @@index([menteeId, status])
+  @@index([requisitionId, menteeId])
 }

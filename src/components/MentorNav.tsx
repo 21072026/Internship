@@ -18,6 +18,7 @@ export function MentorNav() {
     { href: '/mentor/interactions', label: t.nav.interactionLogs, Icon: BookOpen },
     { href: '/mentor/email', label: t.nav.email, Icon: Mail },
     { href: '/mentor/meetings', label: t.nav.meetings, Icon: CalendarClock },
+    { href: '/mentor/interview-requests', label: t.nav.interviewRequests, Icon: CalendarDays },
     { href: '/mentor/availability', label: t.nav.availability, Icon: CalendarRange },
     { href: '/mentor/calendar', label: t.nav.calendar, Icon: CalendarDays },
     { href: '/mentor/mentee-activity', label: t.nav.menteeActivity, Icon: Activity },

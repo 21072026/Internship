@@ -130,3 +130,26 @@ test('central middleware auto-scopes a plain (non-orgScoped) query under runWith
     await appPrisma.$disconnect();
   }
 });
+
+test('central middleware auto-scopes Requisition reads and creates', async () => {
+  const stamp = uniqueEmail('req-mw').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  const orgA = await prisma.organization.create({ data: { name: `Req MW A ${stamp}`, slug: `req-mwa-${stamp}` } });
+  const orgB = await prisma.organization.create({ data: { name: `Req MW B ${stamp}`, slug: `req-mwb-${stamp}` } });
+  const companyA = await prisma.company.create({ data: { name: `Req MW A ${stamp}`, orgId: orgA.id } });
+  const companyB = await prisma.company.create({ data: { name: `Req MW B ${stamp}`, orgId: orgB.id } });
+  const reqA = await prisma.requisition.create({ data: { orgId: orgA.id, companyId: companyA.id, title: 'A', openings: 1, requiredSkills: [] } });
+  const reqB = await prisma.requisition.create({ data: { orgId: orgB.id, companyId: companyB.id, title: 'B', openings: 1, requiredSkills: [] } });
+  const prev = process.env.MT_ENFORCE_ISOLATION;
+  try {
+    process.env.MT_ENFORCE_ISOLATION = 'true';
+    const rows = await runWithOrg(orgA.id, () => appPrisma.requisition.findMany({ where: { id: { in: [reqA.id, reqB.id] } } }));
+    expect(rows.map((row) => row.id)).toEqual([reqA.id]);
+    const created = await runWithOrg(orgA.id, () => appPrisma.requisition.create({ data: { companyId: companyA.id, title: 'Stamped', openings: 1, requiredSkills: [] } as never }));
+    expect(created.orgId).toBe(orgA.id);
+  } finally {
+    if (prev === undefined) delete process.env.MT_ENFORCE_ISOLATION; else process.env.MT_ENFORCE_ISOLATION = prev;
+    await prisma.requisition.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
+    await prisma.company.deleteMany({ where: { id: { in: [companyA.id, companyB.id] } } });
+    await prisma.organization.deleteMany({ where: { id: { in: [orgA.id, orgB.id] } } });
+  }
+});
