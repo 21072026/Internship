@@ -41,4 +41,9 @@ jobs:
       # (#1200). Cheap to run here; the alternative is finding out on the server.
       - name: backup dump validation (#1200)
         run: bash infra/test/backup-db.test.sh
+      # Same reasoning for the destructive-schema gate: it only ever runs on the
+      # server mid-deploy, and being too broad is as costly as being too narrow
+      # — it silently stops prod from deploying at all (#1230).
+      - name: schema guard pattern (#1230)
+        run: bash infra/test/schema-guard.test.sh
       - run: npm run build

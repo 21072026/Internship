@@ -8,6 +8,22 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.71.1-beta] - 2026-08-14
+
+### Fixed
+- **The destructive-schema gate no longer blocks additive deploys** (#1230). The
+  `DESTRUCTIVE` pattern in `infra/schema-guard.sh` matched `MODIFY`/`CHANGE` without a
+  trailing word boundary, so any identifier or enum value merely *starting* with "change"
+  matched and the rest of the line satisfied `[^;]*NOT NULL` on its own. `WeeklyReport`'s
+  `CHANGES_REQUESTED` enum value (#1218) tripped it inside a plain `CREATE TABLE`, and
+  production stopped deploying — six releases' worth of merged work stayed off prod while
+  preview kept deploying, because preview runs the gate with `--warn-only`. Added `\b` on
+  both sides of the alternation.
+- New `infra/test/schema-guard.test.sh`, wired into the CI job next to the backup-dump
+  test: it reads the pattern out of the guard itself (so it cannot pass against a stale
+  copy) and asserts both directions — every genuinely destructive statement still matches,
+  and additive `CREATE TABLE` / `ADD COLUMN` / index statements do not.
+
 ## [0.71.0-beta] - 2026-08-14
 
 ### Added
