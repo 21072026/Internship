@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.71.0-beta',
+    date: '2026-08-14',
+    highlights: {
+      en: [
+        'Mentors can now say whether they are open to a new mentee right now — separate from how many they are willing to take in total, so you can pause new matches while on leave without changing your limit.',
+      ],
+      tr: [
+        'Mentorlar artık şu anda yeni bir mentee alıp almayacaklarını belirtebiliyor — toplamda kaç kişi alabileceklerinden ayrı bir ayar; böylece izinde olduğunuzda limitinizi değiştirmeden yeni eşleşmeleri durdurabilirsiniz.',
+      ],
+      de: [
+        'Mentor:innen können jetzt angeben, ob sie aktuell ein neues Mentee aufnehmen möchten — unabhängig davon, wie viele sie insgesamt begleiten wollen. So lassen sich neue Zuordnungen während einer Abwesenheit pausieren, ohne das Limit zu ändern.',
+      ],
+    },
+  },
+  {
     version: '0.70.0-beta',
     date: '2026-08-14',
     highlights: {
