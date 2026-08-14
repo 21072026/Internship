@@ -8,6 +8,12 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.71.2-beta] - 2026-08-14
+
+### Changed
+- The public project showcase empty state now tells mentees to ask their mentor about
+  projects they can join, while continuing to describe only publicly visible projects (#1106).
+
 ## [0.71.1-beta] - 2026-08-14
 
 ### Fixed
