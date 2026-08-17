@@ -93,7 +93,13 @@ export async function GET(request: Request) {
       // just enough for the project owner/member picker (#618).
       if (session.user.role === 'MENTOR') {
         const users = await prisma.user.findMany({
-          where: { role: { in: ['MENTOR', 'ADMIN'] }, isActive: true },
+          where: {
+            isActive: true,
+            OR: [
+              { role: { in: ['MENTOR', 'ADMIN'] } },
+              { role: 'MENTEE', menteeRelations: { some: { mentorId: session.user.id } } },
+            ],
+          },
           select: SELECTS.picker,
           orderBy: { fullName: 'asc' },
         });
