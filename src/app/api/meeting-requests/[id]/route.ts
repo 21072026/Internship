@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMeetingRequestDecisionEmail } from '@/services/emailService';
+import { generateMeetingLink } from '@/lib/meetingRoom';
 
 const schema = z.object({ action: z.enum(['accept', 'decline']) });
 
@@ -55,7 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   // Accept → create the confirmed meeting with an auto video link.
-  const link = `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
+  const link = generateMeetingLink();
   // The wall clock behind `proposedAt` was typed by the *requester* (see
   // POST /api/meeting-requests), so theirs is the zone this time was agreed on —
   // not the mentor's, even though the mentor is the one confirming it (#1210).

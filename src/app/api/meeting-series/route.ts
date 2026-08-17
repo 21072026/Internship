@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { randomBytes } from 'crypto';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageProject, isProjectMember } from '@/lib/projectAccess';
@@ -10,6 +9,7 @@ import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
 import { nextOccurrence } from '@/lib/meetingSeriesOccurrences';
 import { isValidTimeZone } from '@/lib/timezone';
+import { generateMeetingLink } from '@/lib/meetingRoom';
 
 // A recurring project meeting is a *rule*, not a pile of rows (#1110).
 //
@@ -48,10 +48,6 @@ const recurrenceSchema = z.object({
 const updateSchema = recurrenceSchema.partial().extend({ id: z.string().min(1) });
 
 const deleteSchema = z.object({ id: z.string().min(1) });
-
-function nextJitsiLink() {
-  return `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
-}
 
 async function ensureProjectAccess(
   user: { id: string; role: string; companyId?: string | null },
@@ -212,7 +208,7 @@ export async function POST(request: Request) {
     const access = await ensureProjectAccess(session.user, projectId);
     if (access.error) return access.error;
 
-    const fixedLink = meetLink || nextJitsiLink();
+    const fixedLink = meetLink || generateMeetingLink();
     const series = await prisma.meetingSeries.create({
       data: {
         projectId,

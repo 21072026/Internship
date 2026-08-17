@@ -1,4 +1,3 @@
-import { randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 
 // A meeting hangs off exactly one context (#1051). MySQL can't express
@@ -47,11 +46,11 @@ export function countContexts(input: MeetingContextInput): number {
 
 // The shared video room. Jitsi needs no account and — unlike Meet/Zoom — allows
 // being embedded in an iframe, which is what the in-app side panel relies on.
-// Server-only (node:crypto); the embeddability check lives in @/lib/meetingLink
-// so client components can import it.
-export function generateMeetingLink(): string {
-  return `https://meet.jit.si/InternshipCRM-${randomBytes(8).toString('hex')}`;
-}
+// Re-exported here because every write path already imports it from this module;
+// the implementation (and the JaaS/public-instance choice) lives in
+// @/lib/meetingRoom, and the embeddability check in @/lib/meetingLink so client
+// components can import it.
+export { generateMeetingLink } from '@/lib/meetingRoom';
 
 const INVITEE_SELECT = {
   id: true,
