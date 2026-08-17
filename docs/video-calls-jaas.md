@@ -63,6 +63,14 @@ Where to put them:
 
 - **Production / preview / demo** — the server's env file for that container (the same
   file `HEALTH_TOKEN` and `CRON_SECRET` live in), then redeploy. Never in the repo.
+  Concretely: `/etc/internship-crm/prod.env` and `/etc/internship-crm/preview.env`
+  (`chmod 600`); the topic environments read the preview file, so one entry covers every
+  `crm-pr<N>` env too.
+  ⚠️ The env file is **sourced by the deploy script, not handed to the container** — every
+  variable also needs an `-e NAME="${NAME:-}"` line in `infra/deploy-prod.sh` (prod + shared
+  preview) and `infra/server/topic-deploy.sh` (topic envs). The `JAAS_*` lines are already
+  there; the failure mode if one is missing is silent — the file looks configured while the
+  app sees nothing and quietly keeps using the public instance.
 - **Local dev** — your own `.env`, or leave unset and keep the public rooms.
 - **CI / e2e** — leave unset on purpose. The suite asserts the *unconfigured* contract
   (`e2e/meeting-call-token.spec.ts`), and no CI job needs to talk to 8x8.

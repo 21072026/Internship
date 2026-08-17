@@ -30,7 +30,9 @@
 #       B64_SMTP_FROM   (base64, piped over SSH by the hosted workflow), or
 #   (b) ENV_FILE=/path/to/preview.env — sourced directly (self-hosted runner;
 #       same file deploy-preview uses). Provides DATABASE_URL, NEXTAUTH_SECRET,
-#       SMTP_*. NEXTAUTH_URL from the file is ignored — it's set per-topic below.
+#       SMTP_*, and JAAS_* when the video-call tenant is configured
+#       (docs/video-calls-jaas.md). NEXTAUTH_URL from the file is ignored — it's
+#       set per-topic below.
 #
 # Optional overrides (server paths / commands):
 #   NGINX_CONF_DIR    (default /etc/nginx/conf.d)
@@ -116,6 +118,9 @@ docker run -d \
   -e SMTP_USER="${SMTP_USER:-}" \
   -e SMTP_PASS="${SMTP_PASS:-}" \
   -e SMTP_FROM="${SMTP_FROM:-}" \
+  -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
+  -e JAAS_API_KEY_ID="${JAAS_API_KEY_ID:-}" \
+  -e JAAS_PRIVATE_KEY="${JAAS_PRIVATE_KEY:-}" \
   "$IMAGE"
 
 # ── Container health (local) ─────────────────────────────────────────────────
