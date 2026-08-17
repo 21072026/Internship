@@ -136,6 +136,14 @@ export function signJaasToken(
   };
 
   const signingInput = `${base64url(header)}.${base64url(payload)}`;
-  const signature = createSign('RSA-SHA256').update(signingInput).sign(config.privateKey).toString('base64url');
+  // CodeQL's `js/insufficient-password-hash` heuristic reads `apiKeyId` as a
+  // password and SHA-256 as the hash it is stored with. It is neither: this is
+  // an RS256 *signature* over a JWT — the algorithm JaaS requires — and the key
+  // id is a public identifier that travels in the token header. Nothing is
+  // hashed for storage anywhere in this file.
+  const signature = createSign('RSA-SHA256') // codeql[js/insufficient-password-hash]
+    .update(signingInput)
+    .sign(config.privateKey)
+    .toString('base64url');
   return `${signingInput}.${signature}`;
 }

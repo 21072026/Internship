@@ -10,6 +10,45 @@ Newest entries on top.
 
 ---
 
+## 2026-08-17 — Gömülü görüşme JaaS'a taşındı (#1237, 0.73.0-beta)
+
+**Üçüncü tarafın "demo" sınırını koda değil ortama bağlayın.** `meet.jit.si` gömülü çağrıyı
+5 dakikada kesiyor; çözüm JaaS ama kimse yerelde/CI'da özel anahtar tutmuyor. Anahtar üçlüsü
+(`JAAS_APP_ID`/`JAAS_API_KEY_ID`/`JAAS_PRIVATE_KEY`) **yoksa** eski davranışın aynen kalması,
+`meet.jit.si` bekleyen ~8 e2e assertion'ını hiç değiştirmeden yeşil tuttu ve prod için geri
+alma yolunu bedava verdi. "Üçünden biri eksikse kapalı" kuralı da bilinçli: yarım
+yapılandırma, 8x8'in reddettiği token üretir ve kullanıcıya "görüşme bozuk" diye görünür.
+
+**JWT için bağımlılık eklemeye gerek yok.** RS256 imzalama `node:crypto`'nun
+`createSign('RSA-SHA256')` + `base64url` ile ~10 satır; repoda doğrudan `jose`/`jsonwebtoken`
+bağımlılığı yok ve transitive olana yaslanmak daha kötü olurdu. Doğrulaması da ucuz: atılabilir
+bir RSA çifti üretip `node --experimental-strip-types` ile `src/lib/*.ts`'i doğrudan import eden
+bir scratch script yazın (`check-i18n.ts` zaten bu şekilde koşuyor) — imzayı `createVerify` ile
+teyit edin, üç anahtar biçimini (düz PEM, `\n` kaçışlı, base64) tek koşuda geçirin.
+
+**Sahte bir kiracı, gerçek anahtar olmadan akışın %90'ını doğruluyor.** `openssl genrsa` ile
+üretilmiş anahtarı `JAAS_*` env'lerine verip geçici bir spec koşmak: oda linkinin `8x8.vc`'ye
+çıktığını, token'ın 200 + `no-store` döndüğünü, `roomName`/`moderator` payload'ını ve iframe'in
+panelde tam boy kurulduğunu gösterdi. **Sürpriz:** 8x8, `external_api.js`'i *herhangi* bir
+appId yolundan servis ediyor — yani script yükleniyor, `JitsiMeetExternalAPI` tanımlı oluyor,
+iframe kuruluyor ve yalnızca içi boş kalıyor. "Script 404 verir, fallback'e düşer" varsayımıyla
+yazılan test yanlış nedenle geçer; DOM'u (`panel.innerHTML`, iframe rect'i) gerçekten okuyun.
+Bu yüzden fallback'e ikinci bir tetik eklendi: `errorOccurred` + `isFatal`.
+
+**`display:none` bir iframe'i görüşmeden çıkarmaz.** Panelin telefon dalı zaten "Katıl"
+düğmesiydi ama masaüstü iframe'i `hidden lg:block` ile DOM'da duruyordu. Public Jitsi'de prejoin
+ekranı bunu zararsız kılıyordu; JWT'li otomatik katılımda aynı yapı sessizce ikinci bir
+katılımcı (ve açık mikrofon) demek olurdu. Mevcut `useIsNarrow` hook'u ile mount'u koşullamak
+doğru çözüm — CSS bunu ifade edemiyor.
+
+**Yerel `.env` paylaşılan preview DB'sine bakıyor.** e2e'yi düşünmeden koşarsanız gerçek
+preview verisine yazarsınız. `DATABASE_URL="mysql://crm:crm@127.0.0.1:3306/internship_e2e"`
+öneki ile koşun (yerel MariaDB, kullanıcı `crm:crm`). Ayrıca bu makinede SMTP kimlik doğrulaması
+başarısız olduğu için `e2e/meeting-series.spec.ts` **değişiklikten bağımsız** olarak kırmızı:
+`POST /api/meeting-series` davet e-postasını beklerken 15 sn'de zaman aşımına uğruyor.
+Suçlamadan önce `git stash -u` + aynı spec ile `origin/main` tabanını ölçün — 40 saniyede
+cevap veriyor.
+
 ## 2026-08-11 — Offline fallback metni değişikliği (#1219, 0.63.2-beta)
 
 Offline fallback gibi küçük, herkese açık metin değişikliklerinde bile bu repoda sürüm disiplini
