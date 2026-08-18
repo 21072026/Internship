@@ -14,7 +14,7 @@ import {
   GitBranch, Users, Building2, CalendarClock, FileText, Target,
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
-  Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video,
+  Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -69,5 +69,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'requisitions', category: 'companies', icon: BriefcaseBusiness, color: 'purple', title: C.requisitions.t, desc: C.requisitions.d },
     { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', title: C.interviewRequests.t, desc: C.interviewRequests.d },
     { key: 'videoCalls', category: 'collaboration', icon: Video, color: 'green', title: C.videoCalls.t, desc: C.videoCalls.d },
+    { key: 'demo', category: 'platform', icon: FlaskConical, color: 'amber', title: C.demo.t, desc: C.demo.d },
   ];
 }

@@ -8,6 +8,23 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.75.0-beta] - 2026-08-19
+
+### Added
+- **The public demo is now reachable** (#966). The demo shipped in #1234 but nothing
+  linked to it and the environment itself had never been provisioned — the changelog
+  said "demo" while visitors had no way in. Two halves to fix that:
+  - *Server (docs/DEMO.md prerequisites, done 2026-08-19):* `internship_crm_demo` DB +
+    scoped user, `/etc/internship-crm/demo.env`, the `internship-crm-demo` container on
+    :3203 (current `preview-<sha>` image), and the `crm-demo.ersah.in` Plesk vhost with
+    the wildcard cert. First fill via the `demo-reset.yml` workflow; write blocklist
+    verified live (403 on `/api/account`).
+  - *App:* the landing page links to the demo from the hero (`hero-demo-cta`, with a
+    "synthetic data, resets twice a day" note), the bottom CTA block and the public
+    footer; new `demo` feature-catalogue entry (EN/TR/DE). All read `DEMO_URL` from
+    `src/lib/demoMode.ts` and are hidden on the demo instance itself (it has the banner).
+    E2E: `e2e/landing-demo-cta.spec.ts`.
+
 ## [0.74.0-beta] - 2026-08-18
 
 ### Added

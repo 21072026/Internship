@@ -94,6 +94,11 @@ export function demoBlockReason(pathname: string): string | null {
 export const DEMO_DOMAIN = 'demo.example.com';
 export const DEMO_PASSWORD = 'DemoPass123!';
 
+// Where the public demo lives. Linked from the landing page, the public footer
+// and the feature catalogue on every NON-demo instance (the demo itself hides
+// those links — it has the banner instead). One constant so they can't drift.
+export const DEMO_URL = 'https://crm-demo.ersah.in';
+
 export const DEMO_ACCOUNTS: readonly { role: 'admin' | 'mentor' | 'mentee'; email: string }[] = [
   { role: 'admin', email: `admin.demo@${DEMO_DOMAIN}` },
   { role: 'mentor', email: `mentor.aylin@${DEMO_DOMAIN}` },

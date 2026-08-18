@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.75.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'You can now try the product before signing up: the home page links to a public live demo with shared accounts and entirely made-up data. Click through the pipeline, log interactions, create projects — it resets twice a day.',
+      ],
+      tr: [
+        'Artık kaydolmadan ürünü deneyebilirsiniz: ana sayfa, ortak hesaplar ve tamamen uydurma verilerle çalışan herkese açık canlı demoya bağlanıyor. Süreçte gezinin, görüşme kaydı girin, proje oluşturun — günde iki kez sıfırlanır.',
+      ],
+      de: [
+        'Du kannst das Produkt jetzt vor der Registrierung ausprobieren: Die Startseite verlinkt auf eine öffentliche Live-Demo mit gemeinsamen Konten und vollständig erfundenen Daten. Klick dich durch die Pipeline, erfasse Interaktionen, lege Projekte an — zweimal täglich wird zurückgesetzt.',
+      ],
+    },
+  },
+  {
     version: '0.74.0-beta',
     date: '2026-08-18',
     highlights: {
