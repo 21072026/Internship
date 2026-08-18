@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAsFreshUser } from './helpers/auth';
+import { gotoSettled, signInAsFreshUser } from './helpers/auth';
 
 // Admin converts an account between MENTOR and MENTEE (#1243). The endpoint
 // revokes the target's sessions (role lives in the JWT until re-login), so the
@@ -13,19 +13,26 @@ test.afterAll(async () => {
 test('admin converts a mentee to a mentor; the old session is revoked', async ({ page, browser }) => {
   const adminEmail = uniqueEmail('convadmin');
   const menteeEmail = uniqueEmail('convmentee');
-  await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'Convert Admin');
-  const mentee = await seedUser(menteeEmail, 'MenteePass123!', 'MENTEE', 'Convert Mentee');
-
-  // The mentee signs in on their own browser first — this session must not
-  // survive the conversion.
-  const menteeCtx = await browser.newContext();
-  const menteePage = await menteeCtx.newPage();
+  // Created inside the try so a failure between here and the finally can't
+  // skip the cleanup — a leaked context lingers for the whole worker, and on
+  // a BASE_URL run orphaned seed rows accumulate in the shared preview DB.
+  let menteeCtx: Awaited<ReturnType<typeof browser.newContext>> | undefined;
 
   try {
+    await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'Convert Admin');
+    const mentee = await seedUser(menteeEmail, 'MenteePass123!', 'MENTEE', 'Convert Mentee');
+
+    // The mentee signs in on their own browser first — this session must not
+    // survive the conversion.
+    menteeCtx = await browser.newContext();
+    const menteePage = await menteeCtx.newPage();
     await signInAsFreshUser(menteePage, menteeEmail, 'MenteePass123!', '/portal');
 
     await signInAsFreshUser(page, adminEmail, 'AdminPass123!', '/admin');
-    await page.goto('/admin/users');
+    // gotoSettled: a deep link straight after sign-in can lose the race with
+    // the landing-page redirect ("interrupted by another navigation" — the
+    // flake class documented in helpers/auth.ts).
+    await gotoSettled(page, '/admin/users');
     const row = page.getByTestId(`user-row-${mentee.id}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
 
@@ -35,7 +42,8 @@ test('admin converts a mentee to a mentor; the old session is revoked', async ({
       (r) => r.url().includes(`/api/users/${mentee.id}`) && r.request().method() === 'PATCH'
     );
     await page.getByTestId(`convert-role-confirm-${mentee.id}`).click();
-    await patched;
+    // Surface an endpoint failure as itself, not as a downstream DB mismatch.
+    expect((await patched).ok()).toBeTruthy();
 
     const updated = await prisma.user.findUnique({ where: { id: mentee.id } });
     expect(updated!.role).toBe('MENTOR');
@@ -50,7 +58,7 @@ test('admin converts a mentee to a mentor; the old session is revoked', async ({
     await menteePage.goto('/portal');
     await expect(menteePage).toHaveURL(/\/auth\/signin/, { timeout: 15_000 });
   } finally {
-    await menteeCtx.close();
+    await menteeCtx?.close();
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(adminEmail);
   }
@@ -60,11 +68,11 @@ test('role conversion refuses ADMIN targets and ADMIN grants', async ({ page }) 
   const adminEmail = uniqueEmail('convadmin2');
   const otherAdminEmail = uniqueEmail('convtargetadmin');
   const mentorEmail = uniqueEmail('convmentor');
-  await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'Convert Admin Two');
-  const otherAdmin = await seedUser(otherAdminEmail, 'AdminPass123!', 'ADMIN', 'Target Admin');
-  const mentor = await seedUser(mentorEmail, 'MentorPass123!', 'MENTOR', 'Target Mentor');
-
   try {
+    await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'Convert Admin Two');
+    const otherAdmin = await seedUser(otherAdminEmail, 'AdminPass123!', 'ADMIN', 'Target Admin');
+    const mentor = await seedUser(mentorEmail, 'MentorPass123!', 'MENTOR', 'Target Mentor');
+
     await signInAsFreshUser(page, adminEmail, 'AdminPass123!', '/admin');
 
     // An ADMIN account cannot be converted…
