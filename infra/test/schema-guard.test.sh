@@ -74,5 +74,107 @@ expect_safe 'a column merely named changeNote' \
   '    `changeNote` TEXT NOT NULL,'
 
 echo
+echo "Enum MODIFY statements still hit the pattern (refined afterwards, #1244):"
+expect_destructive 'MODIFY ... ENUM(...) NOT NULL' \
+  "ALTER TABLE \`Project\` MODIFY \`ownerType\` ENUM('ADMIN', 'MENTOR', 'MENTEE', 'COMPANY') NOT NULL;"
+
+# ---------------------------------------------------------------------------
+# Enum-widening refinement (#1244): source the guard's helpers (no DB needed)
+# and check that the clause-level comparison only ever accepts a pure widening.
+# ---------------------------------------------------------------------------
+# shellcheck source=../schema-guard.sh
+SCHEMA_GUARD_LIB=1 . "$GUARD_SH"
+
+expect_widening() { # $1 = label, $2 = forward clause, $3 = reverse clause
+  if is_enum_widening "$2" "$3"; then ok "widening: $1"; else bad "NOT recognized as widening (would block prod): $1"; fi
+}
+expect_not_widening() { # $1 = label, $2 = forward clause, $3 = reverse clause
+  if is_enum_widening "$2" "$3"; then bad "accepted as widening (would reach prod): $1"; else ok "stays destructive: $1"; fi
+}
+
+FWD_CLAUSE="MODIFY \`ownerType\` ENUM('ADMIN', 'MENTOR', 'MENTEE', 'COMPANY') NOT NULL"
+REV_CLAUSE="MODIFY \`ownerType\` ENUM('ADMIN','MENTOR','COMPANY') NOT NULL"
+
+echo
+echo "is_enum_widening must accept only pure widenings:"
+expect_widening 'adds one value (the #1223 case; comma spacing differs by direction)' "$FWD_CLAUSE" "$REV_CLAUSE"
+expect_widening 'adds a value, with DEFAULT kept' \
+  "MODIFY \`s\` ENUM('A', 'B', 'C') NOT NULL DEFAULT 'A'" \
+  "MODIFY \`s\` ENUM('A', 'B') NOT NULL DEFAULT 'A'"
+expect_not_widening 'narrowing (reverse adds the value back)' "$REV_CLAUSE" "$FWD_CLAUSE"
+expect_not_widening 'rename disguised as add (swaps a member)' \
+  "MODIFY \`s\` ENUM('A', 'B', 'NEW') NOT NULL" \
+  "MODIFY \`s\` ENUM('A', 'B', 'OLD') NOT NULL"
+expect_not_widening 'same members (no real change)' "$FWD_CLAUSE" "$FWD_CLAUSE"
+expect_not_widening 'NULL -> NOT NULL tightening alongside the add' \
+  "MODIFY \`s\` ENUM('A', 'B', 'C') NOT NULL" \
+  "MODIFY \`s\` ENUM('A', 'B') NULL"
+expect_not_widening 'DEFAULT changes alongside the add' \
+  "MODIFY \`s\` ENUM('A', 'B', 'C') NOT NULL DEFAULT 'C'" \
+  "MODIFY \`s\` ENUM('A', 'B') NOT NULL DEFAULT 'A'"
+expect_not_widening 'forward is not a MODIFY clause' \
+  "DROP COLUMN \`s\`" \
+  "$REV_CLAUSE"
+expect_not_widening 'reverse is not an enum clause' \
+  "$FWD_CLAUSE" \
+  "MODIFY \`ownerType\` VARCHAR(191) NOT NULL"
+
+echo
+echo "normalize_sql canonicalizes both prisma diff dialects (#1244):"
+# The reverse diff really does come out multi-line, lowercase, unspaced and
+# with comment headers — this fixture is verbatim MariaDB reverse-diff output,
+# including the Json-alias longtext noise bundled into the same ALTER.
+REV_RAW='-- AlterTable
+ALTER TABLE `Project` MODIFY `technologies` longtext NOT NULL,
+    MODIFY `ownerType` enum('\''ADMIN'\'','\''MENTOR'\'','\''COMPANY'\'') NOT NULL;'
+REV_NORM=$(printf '%s\n' "$REV_RAW" | normalize_sql)
+if [ "$REV_NORM" = 'ALTER TABLE `Project` MODIFY `technologies` longtext NOT NULL, MODIFY `ownerType` ENUM('\''ADMIN'\'','\''MENTOR'\'','\''COMPANY'\'') NOT NULL;' ]; then
+  ok "flattens the multi-line lowercase reverse dialect and strips comments"
+else
+  bad "normalize_sql output unexpected: $REV_NORM"
+fi
+
+echo
+echo "alter_clauses splits bundled ALTERs at clause boundaries:"
+CLAUSES=$(alter_clauses "$REV_NORM")
+if [ "$(printf '%s\n' "$CLAUSES" | grep -c .)" = "2" ] \
+   && printf '%s\n' "$CLAUSES" | grep -qxF "MODIFY \`ownerType\` ENUM('ADMIN','MENTOR','COMPANY') NOT NULL"; then
+  ok "MariaDB longtext noise and the enum change come apart cleanly"
+else
+  bad "alter_clauses output unexpected: $CLAUSES"
+fi
+
+echo
+echo "reverse_clause_for finds exactly one clause per table+column:"
+if REV_FOUND=$(reverse_clause_for "$REV_NORM" "Project" "ownerType") \
+   && [ "$REV_FOUND" = "MODIFY \`ownerType\` ENUM('ADMIN','MENTOR','COMPANY') NOT NULL" ]; then
+  ok "finds the ownerType clause inside the bundled ALTER"
+else
+  bad "reverse_clause_for output unexpected: ${REV_FOUND:-<none>}"
+fi
+if reverse_clause_for "$REV_NORM" "Project" "missingCol" >/dev/null 2>&1; then
+  bad "reverse_clause_for invented a clause for a missing column"
+else
+  ok "missing column stays destructive"
+fi
+AMBIG="$REV_NORM
+ALTER TABLE \`Project\` MODIFY \`ownerType\` ENUM('X') NOT NULL;"
+if reverse_clause_for "$AMBIG" "Project" "ownerType" >/dev/null 2>&1; then
+  bad "reverse_clause_for accepted an ambiguous (duplicated) clause"
+else
+  ok "duplicated table+column stays destructive"
+fi
+
+echo
+echo "end to end (no DB): the #1223 forward statement vs the MariaDB reverse:"
+FWD_STMT="ALTER TABLE \`Project\` MODIFY \`ownerType\` ENUM('ADMIN', 'MENTOR', 'MENTEE', 'COMPANY') NOT NULL;"
+FWD_ONLY_CLAUSE=$(alter_clauses "$FWD_STMT")
+if REVC=$(reverse_clause_for "$REV_NORM" "Project" "ownerType") && is_enum_widening "$FWD_ONLY_CLAUSE" "$REVC"; then
+  ok "the widening is recognized through the full helper pipeline"
+else
+  bad "helper pipeline failed to recognize the #1223 widening"
+fi
+
+echo
 printf 'Total: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1
