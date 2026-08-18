@@ -10,6 +10,42 @@ Newest entries on top.
 
 ---
 
+## 2026-08-18 — Admin rol dönüşümü MENTOR ↔ MENTEE (#1243, 0.74.0-beta)
+
+**Playwright'in pinlediği browser sürümü konteynerdekiyle uyuşmayınca dizin *düzeni* de
+değişmiş olabilir.** CLAUDE.md'deki symlink tüyosu tek başına yetmedi: 1.62'nin beklediği
+yol `chromium-1234/chrome-linux64/chrome` ve `chromium_headless_shell-1234/
+chrome-headless-shell-linux64/chrome-headless-shell` — kurulu 1194 build'i ise eski
+`chrome-linux/headless_shell` düzeninde. Çözüm üç parça: dizini yeni adla symlink'le,
+binary'yi yeni adla ayrıca symlink'le, ve `DEPENDENCIES_VALIDATED` + `INSTALLATION_COMPLETE`
+marker dosyalarını yeni sürüm dizinine koy (yoksa "Playwright was just installed" hatası
+sürer). Beklenen düzen `node_modules/playwright-core/lib/coreBundle.js` içindeki
+`EXECUTABLE_PATHS`'ten okunabiliyor.
+
+**Test runner süreci `.env`'i yüklemez.** `npm run test:e2e` dev sunucusunu başlatır ve Next
+`.env`'i okur; ama spec'lerin kendi `PrismaClient`'ı (e2e/helpers/db.ts) runner sürecinde
+yaşar — `DATABASE_URL`'i kabuğa export etmeden koşarsanız her seed
+`PrismaClientInitializationError` ile düşer.
+
+**Uncommitted iş üstünde main ilerlediyse: `git stash -u` → `reset --hard origin/main` →
+`stash pop`.** Sürüm/CHANGELOG/releaseNotes üçlüsü main'de de bump'landıysa (bu kez #1238
+0.73.0'ı kaptı) çakışma garantidir; kendi girdini bir sürüm yukarı taşı. `git stash pop`
+sonrası `npm install` de gerekir — lockfile main'de değişmişse — ama install'ın
+`package-lock.json`'a eklediği alakasız `"dev": true` churn'ünü commit'lemeden önce
+`git checkout package-lock.json` + yalnızca sürüm satırlarını elle bump'la.
+
+**JWT'de yaşayan her alanı değiştiren admin eylemi, oturum düşürmeyi de düşünmeli.** `role`
+sign-in'de damgalanır ve yalnızca `update()` tetiğinde tazelenir; `sessionsValidFrom`
+damgalamak (sign-out-all makinesi) hem eski-yetki açığını kapatır hem de terfiyi 2FA setup
+kapısından geçirir. Bu kalıp gelecekte `companyId`/`orgId` değiştiren her akış için geçerli.
+
+**Paylaşılan-demo etkisi, yol-bazlı blok listesine sığmayabilir.** `PATCH /api/users/[id]`
+demo'da serbest kalmalı (activate/skills düzenlemeleri zararsız) ama yeni `role` alanı
+sign-out-all eşdeğeri — bu yüzden guard rotaya değil handler içindeki alana kondu.
+Adversarial review workflow'u bunu ben commit'lemeden yakaladı; çok-boyutlu review + refute
+turu bu PR'da 4 gerçek düzeltme çıkardı (demo guard, idempotent no-op, panel dışına taşınan
+hata, audit'e eski rol).
+
 ## 2026-08-17 — Gömülü görüşme JaaS'a taşındı (#1237, 0.73.0-beta)
 
 **Üçüncü tarafın "demo" sınırını koda değil ortama bağlayın.** `meet.jit.si` gömülü çağrıyı
