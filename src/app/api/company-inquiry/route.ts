@@ -71,7 +71,7 @@ export async function POST(request: Request) {
   });
   await Promise.all(
     admins.map((a) =>
-      notify(a.id, 'signup', `Company enquiry from ${companyName} (${contactName}).`, '/admin/company-inquiries')
+      notify(a.id, 'signup.companyInquiry', { companyName, contactName }, '/admin/company-inquiries')
     )
   );
   for (const a of admins) {

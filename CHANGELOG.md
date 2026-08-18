@@ -8,6 +8,33 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.74.0-beta] - 2026-08-18
+
+### Changed
+- **In-app notifications are now multilingual (#921, #922).** Every notification used to be
+  stored as a fixed English sentence; Turkish- and German-speaking users read their bell in
+  English. Notifications now store an event key (`Notification.type`, e.g. `message.new`)
+  plus interpolation values (`Notification.params Json?`), and the client renders them from
+  the dictionary in the viewer's locale at display time — switch your language and your
+  existing notifications switch with you.
+  - Schema: `Notification.text` is nullable, new `Notification.params Json?`. Additive
+    `db push`; legacy rows (and announcements, which stay admin-authored free text) keep
+    rendering their stored `text` verbatim.
+  - `notify()` new contract: `notify(userId, type, params?, link?)` — the old
+    string-text signature is gone, so an un-migrated call is a type error. All ~45 call
+    sites across `src/app/api` and `src/services/emailService.ts` migrated, plus the two
+    raw `prisma.notification.create` writers (`company/interests`, `public-contact`).
+  - `renderNotification()` (`src/lib/notificationText.ts`, client-safe) drives the bell,
+    the `/notifications` page, browser notifications and the GDPR account export (which
+    previously would have exported `null` for migrated rows). Unknown types fall back to a
+    neutral string; `stage.changed` resolves built-in stage keys to localized labels and
+    keeps tenant-set labels for custom stages via a `fromLabel`/`toLabel` snapshot.
+  - Stage-change notifications now say which stage → which stage instead of "was updated".
+  - ~70 event templates × EN/TR/DE in `notifications.events` (`check:i18n` enforces
+    parity); a `notification-text.unit.spec.ts` unit suite covers rendering, fallbacks and
+    custom-stage labels; affected e2e specs moved from text/exact-type assertions to
+    event-key/params assertions.
+
 ## [0.73.0-beta] - 2026-08-17
 
 ### Added

@@ -64,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     request,
   });
   // Transparency, mirroring impersonation: the account owner hears about it.
-  await notify(user.id, 'security', 'An administrator started a password reset for your account.');
+  await notify(user.id, 'security.passwordResetStarted', {});
 
   return NextResponse.json({ ok: true, emailSent });
   });

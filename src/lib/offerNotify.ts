@@ -36,7 +36,7 @@ export async function notifyOfferSent(offerId: string): Promise<void> {
   });
   if (!offer) return;
   const mentee = offer.relation.mentee;
-  await notify(mentee.id, 'offer_sent', `You have a new offer: ${offer.position}.`, '/portal');
+  await notify(mentee.id, 'offer_sent.new', { position: offer.position }, '/portal');
   if (mentee.email && emailAllowed(mentee, 'mentorship')) {
     await sendOfferSentEmail({
       to: mentee.email,
@@ -75,13 +75,7 @@ export async function notifyOfferDecided(offerId: string, outcome: 'ACCEPTED' | 
   if (!offer) return;
   const admin = offer.createdBy;
   const menteeName = offer.relation.mentee.fullName;
-  const text =
-    outcome === 'ACCEPTED'
-      ? `${menteeName} accepted the ${offer.position} offer.`
-      : outcome === 'DECLINED'
-        ? `${menteeName} declined the ${offer.position} offer.`
-        : `The ${offer.position} offer to ${menteeName} expired.`;
-  await notify(admin.id, `offer_${outcome.toLowerCase()}`, text, `/admin/candidates`);
+  await notify(admin.id, `offer_${outcome.toLowerCase()}.admin`, { menteeName, position: offer.position }, `/admin/candidates`);
   if (admin.email && emailAllowed(admin, 'mentorship')) {
     await sendOfferDecisionEmail({
       to: admin.email,

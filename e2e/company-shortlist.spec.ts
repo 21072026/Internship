@@ -58,9 +58,11 @@ test('a company can shortlist a linked candidate; the mentor is notified and see
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
-    const notes = await prisma.notification.findMany({ where: { userId: mentor.id, type: 'company_interest' } });
+    const notes = await prisma.notification.findMany({ where: { userId: mentor.id, type: 'company_interest.shortlisted' } });
     expect(notes.length).toBe(1);
-    expect(notes[0].text).toContain('Shortlist Candidate');
+    const params = notes[0].params as { company?: string; mentee?: string };
+    expect(params?.mentee).toBe('Shortlist Candidate');
+    expect(params?.company).toContain('Shortlist Co');
 
     await page.goto(`/mentor/mentees/${rel.id}`);
     await expect(page.getByText(/Shortlisted by company/i)).toBeVisible({ timeout: 10_000 });

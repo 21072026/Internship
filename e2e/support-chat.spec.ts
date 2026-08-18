@@ -101,8 +101,8 @@ test('support chat: first message opens a ticket, next one appends, admin is not
     const empty = await page.request.post('/api/support', { data: { body: '   ' } });
     expect(empty.status()).toBe(400);
 
-    // Admins were notified about the new ticket.
-    expect(await prisma.notification.count({ where: { userId: admin.id, type: 'support' } })).toBeGreaterThanOrEqual(1);
+    // Admins were notified about the new ticket (named sender → support.new).
+    expect(await prisma.notification.count({ where: { userId: admin.id, type: 'support.new' } })).toBeGreaterThanOrEqual(1);
 
     // A closed ticket means the next message opens a fresh one.
     await prisma.supportTicket.update({ where: { id: firstJson.ticketId }, data: { status: 'CLOSED', closedAt: new Date() } });

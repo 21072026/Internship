@@ -36,12 +36,13 @@ test('admin directly assigns a mentor to a mentee and both are notified in-app',
     });
     expect(relation).toBeTruthy();
 
-    // notify() calls in src/app/api/mentorship/route.ts use type 'mentorship_request'.
+    // notify() calls in src/app/api/mentorship/route.ts emit
+    // 'mentorship_request.menteeAssigned' (mentor) and 'mentorship_request.mentorAssigned' (mentee).
     await expect
-      .poll(async () => prisma.notification.count({ where: { userId: mentor.id, type: 'mentorship_request' } }), { timeout: 10_000 })
+      .poll(async () => prisma.notification.count({ where: { userId: mentor.id, type: 'mentorship_request.menteeAssigned' } }), { timeout: 10_000 })
       .toBeGreaterThan(0);
     await expect
-      .poll(async () => prisma.notification.count({ where: { userId: mentee.id, type: 'mentorship_request' } }), { timeout: 10_000 })
+      .poll(async () => prisma.notification.count({ where: { userId: mentee.id, type: 'mentorship_request.mentorAssigned' } }), { timeout: 10_000 })
       .toBeGreaterThan(0);
   } finally {
     await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });

@@ -37,8 +37,8 @@ export async function POST(request: Request) {
   });
   await notify(
     meeting.createdById,
-    'rsvp',
-    `A mentee ${response === 'yes' ? 'accepted' : 'declined'} the meeting "${meeting.title}".`,
+    response === 'yes' ? 'rsvp.accepted' : 'rsvp.declined',
+    { title: meeting.title },
     '/mentor/meetings'
   );
   return NextResponse.json({ ok: true, rsvp: response === 'yes' ? 'ACCEPTED' : 'DECLINED' });

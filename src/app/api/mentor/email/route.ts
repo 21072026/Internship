@@ -117,7 +117,8 @@ export async function POST(request: Request) {
         },
       });
       const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${rel.id}`;
-      await notify(rel.menteeId, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, link);
+      const senderName = session.user.name;
+      await notify(rel.menteeId, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
       sent++;
     }
 

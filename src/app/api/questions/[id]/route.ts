@@ -25,6 +25,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     where: { id },
     data: { answer: parsed.data.answer, answeredAt: new Date() },
   });
-  await notify(q.askedById, 'question', 'Your mentor answered your question.', '/portal');
+  await notify(q.askedById, 'question.answered', {}, '/portal');
   return NextResponse.json({ question: updated });
 }

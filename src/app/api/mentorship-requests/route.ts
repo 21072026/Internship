@@ -82,13 +82,15 @@ export async function POST(request: Request) {
       select: { id: true, status: true, createdAt: true },
     });
 
-    const menteeName = session.user.name ?? 'a mentee';
+    const menteeName = session.user.name;
     const admins = await prisma.user.findMany({
       where: { role: 'ADMIN', isActive: true },
       select: { id: true, fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true },
     });
     await Promise.all(
-      admins.map((a) => notify(a.id, 'mentorship_request', `New mentorship request from ${menteeName}.`, '/admin/mentorship'))
+      admins.map((a) =>
+        notify(a.id, menteeName ? 'mentorship_request.new' : 'mentorship_request.newGeneric', menteeName ? { from: menteeName } : {}, '/admin/mentorship')
+      )
     );
 
     // Email the admin queue too (#668): a pending request used to be visible only
@@ -99,7 +101,7 @@ export async function POST(request: Request) {
         await sendMentorshipRequestEmail({
           to: a.email,
           adminName: a.fullName,
-          menteeName,
+          menteeName: menteeName ?? 'a mentee',
           targetPosition,
           message,
           orgId: a.orgId,

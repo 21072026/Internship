@@ -202,8 +202,8 @@ test('portal warning and weekly reminders are missing-driven and deduped by UTC 
     expect((await page.request.get('/api/cron?job=missing-documents')).ok()).toBeTruthy();
     expect((await page.request.get('/api/cron?job=missing-documents')).ok()).toBeTruthy();
     expect(await prisma.documentRequirementReminder.count({ where: { requirementId: requirement.id, menteeId: mentee.id } })).toBe(3);
-    expect(await prisma.notification.count({ where: { userId: { in: [mentee.id, mentor.id, optedOutMentor.id] }, type: 'missing_document' } })).toBe(3);
-    expect(await prisma.notification.count({ where: { userId: { in: [inactiveMentor.id, completedMentor.id] }, type: 'missing_document' } })).toBe(0);
+    expect(await prisma.notification.count({ where: { userId: { in: [mentee.id, mentor.id, optedOutMentor.id] }, type: { startsWith: 'missing_document.' } } })).toBe(3);
+    expect(await prisma.notification.count({ where: { userId: { in: [inactiveMentor.id, completedMentor.id] }, type: { startsWith: 'missing_document.' } } })).toBe(0);
     expect(await prisma.emailLog.count({ where: { to: { in: [menteeEmail, mentorEmail] }, category: 'document-reminder' } })).toBe(2);
     expect(await prisma.emailLog.count({ where: { to: optedOutMentorEmail, category: 'document-reminder' } })).toBe(0);
     expect((await prisma.emailLog.findFirstOrThrow({ where: { to: menteeEmail, category: 'document-reminder' } })).subject).toContain('Erinnerung an fehlendes Dokument');
@@ -219,7 +219,7 @@ test('portal warning and weekly reminders are missing-driven and deduped by UTC 
     expect((await page.request.get('/api/cron?job=missing-documents')).ok()).toBeTruthy();
     expect(await prisma.documentRequirementReminder.count({ where: { requirementId: requirement.id, menteeId: mentee.id } })).toBe(6);
   } finally {
-    await prisma.notification.deleteMany({ where: { userId: { in: [mentee.id, mentor.id] }, type: 'missing_document' } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentee.id, mentor.id] }, type: { startsWith: 'missing_document.' } } });
     await prisma.emailLog.deleteMany({ where: { to: { in: [menteeEmail, mentorEmail, optedOutMentorEmail, inactiveMentorEmail, completedMentorEmail] }, category: 'document-reminder' } });
     await prisma.documentRequirementReminder.deleteMany({ where: { requirementId: requirement.id } });
     await prisma.document.deleteMany({ where: { ownerId: mentee.id } });

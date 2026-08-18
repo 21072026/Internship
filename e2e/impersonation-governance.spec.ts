@@ -25,9 +25,9 @@ test('impersonation records a reason and notifies the impersonated user', async 
     expect((await res.json()).grant).toBeTruthy();
 
     // The impersonated user got a transparency notification.
-    const notif = await prisma.notification.findFirst({ where: { userId: target.id, type: 'impersonation' } });
+    const notif = await prisma.notification.findFirst({ where: { userId: target.id, type: 'impersonation.accessedWithReason' } });
     expect(notif).toBeTruthy();
-    expect(notif?.text).toContain('support investigation');
+    expect((notif?.params as { reason?: string })?.reason).toBe('support investigation');
   } finally {
     await prisma.notification.deleteMany({ where: { userId: target.id } });
     await cleanupByEmail(targetEmail);

@@ -525,7 +525,13 @@ model Notification {
   type           String
   // Long-form text (e.g. a broadcast announcement fanned out to every user) —
   // TEXT, not the default VARCHAR(191), so long messages aren't truncated/rejected.
-  text           String   @db.Text
+  // Nullable since #921: rows written through the i18n contract carry `params`
+  // instead and are rendered from the dictionary in the recipient's locale;
+  // `text` remains for announcements (free-form copy) and legacy rows.
+  text           String?  @db.Text
+  // i18n payload (#921): interpolation values for the dictionary template keyed
+  // by `type` (e.g. { from: "Aylin" } for message.new). Null on legacy/announcement rows.
+  params         Json?
   // VarChar(500) to match the 500-char cap the announcement API validates; the
   // VARCHAR(191) default rejected long tracking URLs with an unhandled 500.
   link           String?  @db.VarChar(500)
@@ -709,15 +715,15 @@ model Company {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  needs        CompanyNeed[]
-  mentorships  MentorshipRelation[]
-  users        User[]               @relation("CompanyUsers")
-  projects     Project[]            @relation("CompanyProjects")
-  interests    CompanyInterest[]
-  entitlements CompanyEntitlement[]
-  needAlerts   CompanyNeedAlert[]
-  offers       Offer[]
-  requisitions Requisition[]
+  needs             CompanyNeed[]
+  mentorships       MentorshipRelation[]
+  users             User[]               @relation("CompanyUsers")
+  projects          Project[]            @relation("CompanyProjects")
+  interests         CompanyInterest[]
+  entitlements      CompanyEntitlement[]
+  needAlerts        CompanyNeedAlert[]
+  offers            Offer[]
+  requisitions      Requisition[]
   interviewRequests InterviewRequest[]
 }
 

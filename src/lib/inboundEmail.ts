@@ -113,7 +113,7 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
 
   const recipient = senderId === rel.mentor.id ? rel.mentee.id : rel.mentor.id;
   const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${relationId}`;
-  await notify(recipient, 'message', 'New message (by email).', link);
+  await notify(recipient, 'message.newByEmail', {}, link);
 
   return { ok: true, relationId, duplicate: false };
 }

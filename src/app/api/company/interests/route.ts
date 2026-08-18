@@ -7,6 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
+import { notify } from '@/lib/notify';
 
 const bodySchema = z.object({
   menteeId: z.string().min(1),
@@ -107,19 +108,18 @@ export async function POST(request: Request) {
     update: { status, note },
   });
 
-  const STATUS_TEXT: Record<string, string> = {
-    INTERESTED: 'is interested in',
-    SHORTLISTED: 'shortlisted',
-    PASS: 'passed on',
+  const STATUS_EVENT: Record<string, string> = {
+    INTERESTED: 'company_interest.interested',
+    SHORTLISTED: 'company_interest.shortlisted',
+    PASS: 'company_interest.passed',
   };
   if (statusChanged) {
-    await prisma.notification.create({
-      data: {
-        userId: relation.mentorId,
-        type: 'company_interest',
-        text: `${company?.name ?? 'A company'} ${STATUS_TEXT[status]} ${relation.mentee.fullName}.`,
-      },
-    });
+    const mentee = relation.mentee.fullName;
+    await notify(
+      relation.mentorId,
+      company?.name ? STATUS_EVENT[status] : 'company_interest.generic',
+      company?.name ? { company: company.name, mentee } : { mentee }
+    );
   }
 
   await logActivity({

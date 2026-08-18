@@ -127,13 +127,15 @@ async function inviteAll(
   meetLink: string,
   organizer: string | null
 ) {
-  // English, like every other notify() call site; notification i18n is its own
-  // epic (#857) and this text should move with the rest, not ahead of it.
-  const text = organizer ? `${organizer} started a meeting: ${title}` : `A meeting started: ${title}`;
   await Promise.all(
     invitees.map(async (inv) => {
       // In-app first — it's the channel that always works.
-      await notify(inv.userId, 'meeting.started', text, meetLink);
+      await notify(
+        inv.userId,
+        organizer ? 'meeting.started' : 'meeting.startedGeneric',
+        organizer ? { organizer, title } : { title },
+        meetLink
+      );
       if (!emailAllowed(inv, 'meetingReminders')) return;
       // For a relation invite, use that relation's own token; otherwise any row
       // works (a project/chat meeting has exactly one).

@@ -131,10 +131,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         : created[0].title;
       await notify(
         assigneeId,
-        'project',
+        created.length === 1 ? 'project.newGoal' : 'project.newGoals',
         created.length === 1
-          ? `New goal on "${project.name}": ${firstTitle}`
-          : `${created.length} new goals on "${project.name}".`,
+          ? { project: project.name, title: firstTitle }
+          : { count: created.length, project: project.name },
         await goalLinkFor(assigneeId, id)
       );
     }

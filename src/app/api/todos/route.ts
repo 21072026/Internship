@@ -234,8 +234,8 @@ export async function POST(request: Request) {
       const firstTitle = first.template ? resolveTemplateTitle(first.template, language) : first.title;
       await notify(
         assigneeId,
-        'project',
-        created.length === 1 ? `New to-do: ${firstTitle}` : `${created.length} new to-dos on your list.`,
+        created.length === 1 ? 'project.newTodo' : 'project.newTodos',
+        created.length === 1 ? { title: firstTitle } : { count: created.length },
         '/todos'
       );
     }

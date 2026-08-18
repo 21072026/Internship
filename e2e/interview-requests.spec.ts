@@ -101,10 +101,10 @@ test.describe.serial('Story #807 shortlist and interview requests', () => {
     expect(await prisma.meeting.count({ where: { relationId: relation.id } })).toBe(meetingsBefore);
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { targetId: pending.id, action: 'INTERVIEW_REQUEST_DECIDED' } });
     expect(audit.actorId).toBe(mentorA.id); expect(audit.targetId).toBe(pending.id); expect(audit.detail).toContain(reqA.id); expect(audit.detail).toContain(mentee.id); expect(audit.detail).toContain('APPROVED');
-    const notifications = await prisma.notification.findMany({ where: { userId: mentee.id, type: 'interview_request' } }); expect(notifications).toHaveLength(1); expect(notifications[0].text).toContain('onaylandı');
+    const notifications = await prisma.notification.findMany({ where: { userId: mentee.id, type: 'interview_request.approved' } }); expect(notifications).toHaveLength(1);
     expect((await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline' } })).status()).toBe(409);
     expect(await prisma.auditLog.count({ where: { targetId: pending.id, action: 'INTERVIEW_REQUEST_DECIDED' } })).toBe(1);
-    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request' } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } })).toBe(1);
     await login(page, emails.companyA);
     const next = await page.request.post('/api/interview-requests', { data: { requisitionId: reqA.id, menteeId: mentee.id } });
     expect(next.status()).toBe(201);
@@ -114,11 +114,11 @@ test.describe.serial('Story #807 shortlist and interview requests', () => {
   test('decline creates one audit and no mentee notification', async ({ page }) => {
     await prisma.companyInterest.updateMany({ where: { companyId: companyA.id, menteeId: mentee.id, requisitionId: reqA.id }, data: { status: 'SHORTLISTED' } });
     const pending = await prisma.interviewRequest.create({ data: { orgId: orgA.id, companyId: companyA.id, requisitionId: reqA.id, menteeId: mentee.id, status: 'PENDING', activeKey: `${reqA.id}:${mentee.id}:decline` } });
-    const before = await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request' } });
+    const before = await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } });
     await login(page, emails.adminA); const declined = await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline', note: 'Not now' } }); expect(declined.status()).toBe(200);
-    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request' } })).toBe(before);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } })).toBe(before);
     expect((await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline' } })).status()).toBe(409);
-    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request' } })).toBe(before);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } })).toBe(before);
     expect(await prisma.auditLog.count({ where: { targetId: pending.id } })).toBe(1);
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { targetId: pending.id } });
     expect(audit.actorId).toBe(adminA.id); expect(audit.targetId).toBe(pending.id); expect(audit.detail).toContain(reqA.id); expect(audit.detail).toContain(mentee.id); expect(audit.detail).toContain('DECLINED');
@@ -130,7 +130,7 @@ test.describe.serial('Story #807 shortlist and interview requests', () => {
     const invalid = await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'approve', status: 'SCHEDULED' } });
     expect(invalid.status()).toBe(400);
     expect((await prisma.interviewRequest.findUniqueOrThrow({ where: { id: pending.id } })).status).toBe('PENDING');
-    const notificationsBefore = await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request' } });
+    const notificationsBefore = await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } });
     const results = await Promise.all([
       page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'approve' } }),
       page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'decline' } }),
@@ -138,11 +138,11 @@ test.describe.serial('Story #807 shortlist and interview requests', () => {
     expect(results.filter((result) => result.status() === 200)).toHaveLength(1); expect(results.filter((result) => result.status() === 409)).toHaveLength(1);
     expect(await prisma.auditLog.count({ where: { targetId: pending.id } })).toBe(1);
     const decided = await prisma.interviewRequest.findUniqueOrThrow({ where: { id: pending.id } });
-    const notificationsAfter = await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request' } });
+    const notificationsAfter = await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } });
     expect(notificationsAfter - notificationsBefore).toBe(decided.status === 'APPROVED' ? 1 : 0);
     expect((await page.request.patch(`/api/interview-requests/${pending.id}`, { data: { action: 'approve' } })).status()).toBe(409);
     expect(await prisma.auditLog.count({ where: { targetId: pending.id } })).toBe(1);
-    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request' } })).toBe(notificationsAfter);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'interview_request.approved' } })).toBe(notificationsAfter);
   });
 
   test('admin cannot inspect or decide another tenant request', async ({ page }) => {

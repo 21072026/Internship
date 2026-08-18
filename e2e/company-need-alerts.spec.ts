@@ -66,7 +66,7 @@ test('need-match alerts fire once for premium companies only, on consenting cand
     await expect
       .poll(async () => prisma.companyNeedAlert.count({ where: { companyId: premiumCo.id, menteeId: mentee.id } }), { timeout: 10_000 })
       .toBe(1);
-    expect(await prisma.notification.count({ where: { userId: premiumUser.id, type: 'need_match' } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: premiumUser.id, type: 'need_match.newCandidate' } })).toBe(1);
 
     // Free company: no entitlement → no alert.
     expect(await prisma.companyNeedAlert.count({ where: { companyId: freeCo.id } })).toBe(0);
@@ -75,7 +75,7 @@ test('need-match alerts fire once for premium companies only, on consenting cand
     const run2 = await page.request.get('/api/cron');
     expect(run2.ok()).toBeTruthy();
     expect(await prisma.companyNeedAlert.count({ where: { companyId: premiumCo.id, menteeId: mentee.id } })).toBe(1);
-    expect(await prisma.notification.count({ where: { userId: premiumUser.id, type: 'need_match' } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: premiumUser.id, type: 'need_match.newCandidate' } })).toBe(1);
   } finally {
     await prisma.notification.deleteMany({ where: { userId: premiumUser.id } });
     await prisma.companyNeedAlert.deleteMany({ where: { menteeId: mentee.id } });

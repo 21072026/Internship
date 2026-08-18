@@ -224,7 +224,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           orgId: user.orgId,
         }).catch((e) => console.error('Mentor application approval email failed:', e));
       }
-      await notify(user.id, 'mentor_application', 'Your mentor application was approved — welcome aboard!', '/mentor');
+      await notify(user.id, 'mentor_application.approved', {}, '/mentor');
     } else {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
       void sendMentorApplicationApprovedEmail({

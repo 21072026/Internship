@@ -61,7 +61,13 @@ export async function POST(request: Request) {
   const recipient = otherParticipant(rel, session.user.id);
   if (recipient && recipient !== session.user.id) {
     const link = `/mentor/mentees/${rel.id}`;
-    await notify(recipient, 'meeting_request', `${session.user.name ?? 'Your mentee'} requested a meeting.`, link);
+    const requesterName = session.user.name;
+    await notify(
+      recipient,
+      requesterName ? 'meeting_request.new' : 'meeting_request.newGeneric',
+      requesterName ? { from: requesterName } : {},
+      link
+    );
 
     // Email it too (#668) — a request the mentor never sees is a request that
     // never gets answered. Opt-out respected, failures logged.

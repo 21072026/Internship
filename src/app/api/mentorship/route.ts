@@ -204,8 +204,8 @@ export async function POST(request: Request) {
     // A direct admin assignment used to be completely silent — neither side heard
     // about it until they happened to log in (#668). In-app is unconditional,
     // email honors the `mentorship` opt-out and never fails the assignment.
-    await notify(mentee.id, 'mentorship_request', `You have been assigned a mentor: ${mentor.fullName}.`, '/portal');
-    await notify(mentor.id, 'mentorship_request', `A new mentee was assigned to you: ${mentee.fullName}.`, '/mentor');
+    await notify(mentee.id, 'mentorship_request.mentorAssigned', { mentorName: mentor.fullName }, '/portal');
+    await notify(mentor.id, 'mentorship_request.menteeAssigned', { menteeName: mentee.fullName }, '/mentor');
 
     if (mentee.email && emailAllowed(mentee, 'mentorship')) {
       try {

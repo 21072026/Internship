@@ -301,8 +301,11 @@ export async function POST(request: Request) {
     // conversation the mentorship thread now redirects to.
     const replyRelationId = rel?.id ?? stampRelationId;
 
+    // Store the raw sender name (or the Generic variant when there is none) —
+    // the sentence is rendered in the recipient's locale at display time.
+    const senderName = session.user.name;
     for (const recipient of recipients) {
-      await notify(recipient, 'message', `New message from ${session.user.name ?? 'your mentor'}.`, link);
+      await notify(recipient, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
 
       // Mirror the message to the recipient's inbox (unless they opted out). The
       // Reply-To routes email replies back into this thread via /api/inbound-email.

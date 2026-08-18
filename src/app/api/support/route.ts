@@ -176,16 +176,17 @@ export async function POST(request: Request) {
       },
     });
 
-    const text = result.isNew
-      ? `New support ticket from ${session.user.name ?? 'a user'}.`
-      : `New support message from ${session.user.name ?? 'a user'}.`;
+    const from = session.user.name;
+    const eventKey = result.isNew
+      ? (from ? 'support.new' : 'support.newGeneric')
+      : (from ? 'support.newMessage' : 'support.newMessageGeneric');
 
     await Promise.all(
       admins.map((admin) =>
         notify(
           admin.id,
-          'support',
-          text,
+          eventKey,
+          from ? { from } : {},
           '/admin/support',
         ),
       ),

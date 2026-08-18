@@ -100,16 +100,16 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     await expect(mentorPage.getByTestId('weekly-reports-panel')).toBeVisible();
     expect((await mentorPage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'CHANGES_REQUESTED' } })).status()).toBe(400);
     expect((await mentorPage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'CHANGES_REQUESTED', mentorComment: 'Add the test result.' } })).status()).toBe(200);
-    await expect.poll(async () => (await prisma.notification.findFirst({ where: { userId: mentee.id, type: 'weekly_report_review' }, orderBy: { createdAt: 'desc' } }))?.text).toContain('değişiklik');
+    await expect.poll(async () => (await prisma.notification.findFirst({ where: { userId: mentee.id, type: 'weekly_report_review.changes' }, orderBy: { createdAt: 'desc' } }))?.id).toBeTruthy();
     expect((await menteePage.request.patch(`/api/weekly-reports/${report.id}`, { data: { summary: 'Built and tested the onboarding flow', status: 'SUBMITTED' } })).status()).toBe(200);
     await expect.poll(async () => prisma.weeklyReport.findUnique({ where: { id: report.id }, select: { mentorComment: true, reviewedById: true, reviewedAt: true } })).toEqual({ mentorComment: null, reviewedById: null, reviewedAt: null });
-    const notificationCount = await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_review' } });
+    const notificationCount = await prisma.notification.count({ where: { userId: mentee.id, type: { startsWith: 'weekly_report_review.' } } });
     const concurrent = await Promise.all([
       mentorPage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'APPROVED', mentorComment: 'Looks good.' } }),
       mentorPage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'APPROVED', mentorComment: 'Also looks good.' } }),
     ]);
     expect(concurrent.map((response) => response.status()).sort()).toEqual([200, 409]);
-    await expect.poll(() => prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_review' } })).toBe(notificationCount + 1);
+    await expect.poll(() => prisma.notification.count({ where: { userId: mentee.id, type: { startsWith: 'weekly_report_review.' } } })).toBe(notificationCount + 1);
     expect((await mentorPage.request.patch(`/api/weekly-reports/${report.id}`, { data: { status: 'CHANGES_REQUESTED', mentorComment: 'Too late' } })).status()).toBe(409);
     expect((await menteePage.request.patch(`/api/weekly-reports/${report.id}`, { data: { summary: 'Approved is immutable' } })).status()).toBe(409);
     const olderReport = await prisma.weeklyReport.create({ data: { orgId: org.id, relationId: relation.id, weekStart: addUtcWeeks(utcWeekStart(new Date()), -1), summary: 'Older diary entry', status: 'SUBMITTED' } });
@@ -117,9 +117,9 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect((await mentorPage.request.patch(`/api/weekly-reports/${olderReport.id}`, { data: { status: 'APPROVED' } })).status()).toBe(409);
     await prisma.mentorshipRelation.update({ where: { id: relation.id }, data: { status: 'ACTIVE', completedAt: null } });
     await prisma.user.update({ where: { id: mentee.id }, data: { notificationPrefs: { weeklyReports: false } } });
-    const reviewNotificationsBeforeOptOut = await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_review' } });
+    const reviewNotificationsBeforeOptOut = await prisma.notification.count({ where: { userId: mentee.id, type: { startsWith: 'weekly_report_review.' } } });
     expect((await mentorPage.request.patch(`/api/weekly-reports/${olderReport.id}`, { data: { status: 'APPROVED' } })).status()).toBe(200);
-    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_review' } })).toBe(reviewNotificationsBeforeOptOut);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: { startsWith: 'weekly_report_review.' } } })).toBe(reviewNotificationsBeforeOptOut);
     await prisma.user.update({ where: { id: mentee.id }, data: { notificationPrefs: { weeklyReports: true } } });
     const print = await mentorPage.request.get(`/weekly-reports/print?relationId=${relation.id}`);
     expect(print.status()).toBe(200);
@@ -161,12 +161,12 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     const friday = new Date('2026-08-14T15:00:00Z');
     await prisma.weeklyReport.deleteMany({ where: { relationId: relation.id } });
     await prisma.user.update({ where: { id: mentee.id }, data: { notificationPrefs: { weeklyReports: false }, emailNotifications: true } });
-    const remindersBeforeOptOut = await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_reminder' } });
+    const remindersBeforeOptOut = await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_reminder.due' } });
     const first = await sendWeeklyReportReminders(friday);
     const rerun = await sendWeeklyReportReminders(friday);
     expect(first.reminded).toBe(1);
     expect(first.emailed).toBe(0);
-    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_reminder' } })).toBe(remindersBeforeOptOut);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'weekly_report_reminder.due' } })).toBe(remindersBeforeOptOut);
     expect(rerun.reminded).toBe(0);
     expect(await prisma.weeklyReportReminder.count({ where: { relationId: relation.id } })).toBe(1);
 
@@ -174,7 +174,7 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     await prisma.user.update({ where: { id: mentee.id }, data: { notificationPrefs: { weeklyReports: true }, emailNotifications: false } });
     const emailOff = await sendWeeklyReportReminders(nextFriday);
     expect(emailOff).toMatchObject({ reminded: 1, emailed: 0 });
-    expect((await prisma.notification.findFirst({ where: { userId: mentee.id, type: 'weekly_report_reminder' }, orderBy: { createdAt: 'desc' } }))?.text).toContain('haftalık raporun');
+    expect((await prisma.notification.findFirst({ where: { userId: mentee.id, type: 'weekly_report_reminder.due' }, orderBy: { createdAt: 'desc' } }))?.id).toBeTruthy();
 
     const emailOnFriday = addUtcWeeks(friday, 2);
     await prisma.user.update({ where: { id: mentee.id }, data: { emailNotifications: true } });

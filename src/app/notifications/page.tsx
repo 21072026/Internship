@@ -10,11 +10,13 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
+import { renderNotification } from '@/lib/notificationText';
 
 interface NotificationItem {
   id: string;
   type: string;
-  text: string;
+  text?: string | null;
+  params?: unknown;
   link: string | null;
   read: boolean;
   createdAt: string;
@@ -87,7 +89,12 @@ export default function NotificationsPage() {
     { value: '', label: t.notifications.allTypes },
     ...types.map((type) => ({
       value: type,
-      label: (t.notifications.types as Record<string, string>)[type] ?? type,
+      // i18n event keys are dotted ("message.new"); their category label is
+      // keyed by the first segment, same as the legacy flat types.
+      label:
+        (t.notifications.types as Record<string, string>)[type] ??
+        (t.notifications.types as Record<string, string>)[type.split('.')[0]] ??
+        type,
     })),
   ];
 
@@ -190,7 +197,7 @@ export default function NotificationsPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className={`break-words text-sm ${n.read ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100 font-medium'}`}>
-                    {n.text}
+                    {renderNotification(n, t, locale)}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">{formatDateTime(n.createdAt, locale)}</p>
                 </div>

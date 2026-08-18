@@ -7,8 +7,6 @@ import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { canReadWeeklyReports } from '@/lib/weeklyReports';
 import { notify } from '@/lib/notify';
-import { defaultLocale, isLocale } from '@/i18n/config';
-import { getDictionary } from '@/i18n/dictionaries';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 
 const menteeSchema = z.object({
@@ -80,13 +78,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     });
     if (transition.count !== 1) return NextResponse.json({ error: 'This report has already been reviewed', code: 'invalid_transition' }, { status: 409 });
     const reportUpdate = await prisma.weeklyReport.findUniqueOrThrow({ where: { id: report.id } });
-    const locale = isLocale(report.relation.mentee.preferredLanguage) ? report.relation.mentee.preferredLanguage : defaultLocale;
-    const copy = getDictionary(locale).weeklyReports;
     if (notificationCategoryAllowed(report.relation.mentee, 'weeklyReports')) {
       await notify(
         report.relation.menteeId,
-        'weekly_report_review',
-        parsed.data.status === 'APPROVED' ? copy.approvedNotification : copy.changesNotification,
+        parsed.data.status === 'APPROVED' ? 'weekly_report_review.approved' : 'weekly_report_review.changes',
+        {},
         '/portal',
       );
     }
