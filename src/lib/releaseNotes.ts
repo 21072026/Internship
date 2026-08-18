@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.73.0-beta',
+    date: '2026-08-17',
+    highlights: {
+      en: [
+        'Video calls inside the app no longer cut out after five minutes: meetings now run on our own Jitsi tenant, so a call can last as long as it needs to.',
+        'You join with your name already filled in, and whoever started the meeting joins as its moderator. Guests still get the same link by email and can join from any browser, with no account and nothing to install.',
+      ],
+      tr: [
+        'Uygulama içindeki görüntülü görüşmeler artık beş dakika sonra kesilmiyor: görüşmeler kendi Jitsi kiracımızda yürüyor, yani bir görüşme gerektiği kadar sürebiliyor.',
+        'Görüşmeye adınız hazır girilmiş olarak katılıyorsunuz; görüşmeyi başlatan kişi moderatör oluyor. Davet edilenler yine aynı linki e-postayla alıyor ve hesap açmadan, hiçbir şey kurmadan her tarayıcıdan katılabiliyor.',
+      ],
+      de: [
+        'Videoanrufe in der App brechen nicht mehr nach fünf Minuten ab: Besprechungen laufen jetzt auf unserem eigenen Jitsi-Tenant und dürfen so lange dauern, wie sie brauchen.',
+        'Du nimmst mit bereits eingetragenem Namen teil, und wer die Besprechung gestartet hat, ist deren Moderator. Eingeladene erhalten weiterhin denselben Link per E-Mail und können ohne Konto und ohne Installation aus jedem Browser beitreten.',
+      ],
+    },
+  },
+  {
     version: '0.72.0-beta',
     date: '2026-08-14',
     highlights: {

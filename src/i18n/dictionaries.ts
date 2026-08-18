@@ -1000,6 +1000,7 @@ const en = {
       join: 'Join the meeting',
       openInNewTab: 'Open in a new tab',
       notEmbeddable: 'This link cannot be shown inside the app.',
+      embedFailed: 'The call could not be started here — open it in a new tab.',
     },
     notesWindow: {
       open: 'Notes window',
@@ -1823,6 +1824,7 @@ const en = {
       activityReport: { t: 'Daily activity reports', d: 'Consent-based mentee activity digests for mentors and admins: logins, time on site, pages visited and completed to-dos.' },
       talentPool: { t: 'Talent pool & alerts (Premium)', d: 'Companies search a consent-based talent pool, see verified candidate cards, and get alerts when a candidate matches an open position.' },
       requisitions: { t: 'Requisition management', d: 'Admins and company teams create structured hiring requests, track openings and filled positions, assign owners and manage status.' },
+      videoCalls: { t: 'Video calls in the app', d: 'Start a call with a mentee, a project team or a chat in one click and hold it in a side panel next to their record, on our own Jitsi tenant \u2014 no accounts, no install, and no time limit. The link is emailed to everyone invited and works in any browser.' },
       interviewRequests: { t: 'Shortlists & interview approvals', d: 'Companies shortlist candidates per requisition and request interviews; the program team or assigned mentor reviews each request before scheduling.' },
       aiPackage: { t: 'AI assistants (Premium)', d: 'CV feedback and interview prep for mentees, interaction-log summaries for mentors, AI-assisted matching — all consent- and quota-gated.' },
       security: { t: 'Two-factor auth & session control', d: 'Role-based 2FA enforcement, session timeouts and "sign out of all devices".' },
@@ -3604,6 +3606,7 @@ const tr: Dict = {
       join: 'Görüşmeye katıl',
       openInNewTab: 'Yeni sekmede aç',
       notEmbeddable: 'Bu link uygulama içinde gösterilemiyor.',
+      embedFailed: 'Görüşme burada başlatılamadı — yeni sekmede aç.',
     },
     notesWindow: {
       open: 'Not penceresi',
@@ -4424,6 +4427,7 @@ const tr: Dict = {
       activityReport: { t: 'Günlük aktivite raporları', d: 'Mentör ve adminler için rıza temelli mentee aktivite özetleri: girişler, sitede geçen süre, gezilen sayfalar ve tamamlanan görevler.' },
       talentPool: { t: 'Yetenek havuzu & bildirimler (Premium)', d: 'Şirketler rıza temelli yetenek havuzunda arama yapar, doğrulanmış aday kartlarını görür ve açık pozisyona uyan aday çıkınca bildirim alır.' },
       requisitions: { t: 'İş talebi yönetimi', d: 'Yöneticiler ve şirket ekipleri yapılandırılmış işe alım talepleri oluşturur, kontenjan ve dolulukları izler, sorumlu atar ve durumu yönetir.' },
+      videoCalls: { t: 'Uygulama içinde görüntülü görüşme', d: 'Bir mentee, proje ekibi veya sohbetle tek tıkla görüşme başlat; görüşme, kişinin kaydının yanındaki yan panelde kendi Jitsi kiracımızda açılır \u2014 hesap yok, kurulum yok, süre sınırı yok. Link davet edilen herkese e-postayla gider ve her tarayıcıda çalışır.' },
       interviewRequests: { t: 'Kısa liste ve mülakat onayları', d: 'Şirketler adayları iş talebi bazında kısa listeye alıp mülakat ister; program ekibi veya atanmış mentor her talebi planlamadan önce değerlendirir.' },
       aiPackage: { t: 'AI asistanları (Premium)', d: 'Mentee’lere CV geri bildirimi ve mülakat hazırlığı, mentörlere etkileşim özeti, AI destekli eşleştirme — hepsi rıza ve kota kapılı.' },
       security: { t: 'İki adımlı doğrulama & oturum kontrolü', d: 'Rol bazlı 2FA zorlama, oturum zaman aşımı ve "tüm cihazlardan çıkış".' },
@@ -6203,6 +6207,7 @@ const de: Dict = {
       join: 'An der Besprechung teilnehmen',
       openInNewTab: 'In neuem Tab öffnen',
       notEmbeddable: 'Dieser Link kann nicht in der App angezeigt werden.',
+      embedFailed: 'Der Anruf konnte hier nicht gestartet werden — bitte in einem neuen Tab öffnen.',
     },
     notesWindow: {
       open: 'Notizfenster',
@@ -7023,6 +7028,7 @@ const de: Dict = {
       activityReport: { t: 'Tägliche Aktivitätsberichte', d: 'Einwilligungsbasierte Mentee-Aktivitätsübersichten für Mentoren und Admins: Logins, Verweildauer, besuchte Seiten und erledigte To-dos.' },
       talentPool: { t: 'Talent-Pool & Benachrichtigungen (Premium)', d: 'Unternehmen durchsuchen einen einwilligungsbasierten Talent-Pool, sehen verifizierte Kandidatenkarten und werden bei passenden Kandidaten benachrichtigt.' },
       requisitions: { t: 'Stellenanforderungen verwalten', d: 'Admins und Unternehmensteams erstellen strukturierte Personalbedarfe, verfolgen offene und besetzte Stellen, weisen Verantwortliche zu und verwalten den Status.' },
+      videoCalls: { t: 'Videoanrufe in der App', d: 'Starte mit einem Klick einen Anruf mit einem Mentee, einem Projektteam oder einem Chat \u2014 er läuft in einem Seitenpanel neben dem Datensatz auf unserem eigenen Jitsi-Tenant: kein Konto, keine Installation, kein Zeitlimit. Der Link geht per E-Mail an alle Eingeladenen und funktioniert in jedem Browser.' },
       interviewRequests: { t: 'Shortlists & Interviewfreigaben', d: 'Unternehmen setzen Kandidaten je Stellenanforderung auf die Shortlist und fragen Interviews an; Programmteam oder zuständiger Mentor prüfen jede Anfrage vor der Planung.' },
       aiPackage: { t: 'KI-Assistenten (Premium)', d: 'Lebenslauf-Feedback und Interviewvorbereitung für Mentees, Interaktionszusammenfassungen für Mentoren, KI-gestütztes Matching — alles einwilligungs- und kontingentgesteuert.' },
       security: { t: 'Zwei-Faktor-Auth & Sitzungskontrolle', d: 'Rollenbasierte 2FA-Durchsetzung, Sitzungs-Timeouts und „Auf allen Geräten abmelden".' },

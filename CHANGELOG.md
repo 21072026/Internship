@@ -8,6 +8,46 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.73.0-beta] - 2026-08-17
+
+### Added
+- **Video calls on our own Jitsi tenant (JaaS, #1237).** The embedded meeting panel used
+  the public `meet.jit.si`, which *disconnects an embedded call after five minutes* and
+  says so in a banner — the in-app call was a demo, not a feature. With
+  `JAAS_APP_ID` + `JAAS_API_KEY_ID` + `JAAS_PRIVATE_KEY` set, new rooms are
+  `https://8x8.vc/<appId>/InternshipCRM-<hex>` and the panel loads them through 8x8's
+  `external_api.js` with a signed per-participant JWT: no cutoff, display name filled in
+  from the account, and the organizer (plus admins) joins as moderator. Setup, costs and
+  the rollback are in [docs/video-calls-jaas.md](docs/video-calls-jaas.md).
+  - `src/lib/jaas.ts` signs the token with `node:crypto` (RS256, `kid` = the API key id) —
+    no new dependency. It is scoped to **one room**, never `*`, lives two hours, is minted
+    per join and never stored. Recording/live-streaming/transcription/dial-out are off in
+    every token. `JAAS_PRIVATE_KEY` accepts a PEM with escaped newlines or a base64 PEM,
+    and all three variables are required or the feature stays off — a half-configured
+    tenant would mint tokens 8x8 rejects, which reads to the user as a broken call.
+  - `GET /api/meetings/[id]/call-token` mints it, but only for someone who was in the
+    meeting: `canAccessMeeting` (`src/lib/meetingAccess.ts`, extracted from
+    `canAttachNoteToMeeting` so notes and calls share one rule). Anyone else gets a 404,
+    the same answer as a meeting that does not exist. `Cache-Control: no-store`.
+  - **Unset, nothing changes**: rooms stay on `meet.jit.si`, the panel keeps its plain
+    iframe, and the endpoint answers `409 { code: 'not-configured' }`. That is the state of
+    local dev, CI and every e2e run — and the rollback for production.
+  - The panel falls back to "open in a new tab" whenever the room cannot be shown inside
+    the app: an old link, a rejected token, a fatal error from 8x8, or a blocked script.
+    A blank panel is worse than a working link.
+  - Rooms are only mounted on the wide layout now. The phone branch was already a Join
+    button, and `display:none` does not stop an iframe from joining a call.
+
+### Changed
+- `Permissions-Policy` and the CSP `script-src`/`frame-src` name `https://8x8.vc` (exact
+  host, no wildcard) alongside `meet.jit.si`, which stays for rooms created before the
+  switch. `e2e/security-headers.spec.ts` pins both.
+- The room-link template lived in three places (instant meetings, accepted meeting
+  requests, recurring series); it is one `generateMeetingLink()` in `src/lib/meetingRoom.ts`
+  now, so the JaaS switch applies to all three.
+- New feature-catalogue entry for in-app video calls (`src/lib/features.ts` +
+  `featureCatalog` EN/TR/DE) — the claim only became true with this change.
+
 ## [0.72.0-beta] - 2026-08-14
 
 ### Added

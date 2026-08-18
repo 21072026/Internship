@@ -26,6 +26,12 @@
 # NEXTAUTH_URL, SMTP_HOST/PORT/USER/PASS/FROM. Default path /etc/internship-crm/prod.env
 # (override with ENV_FILE=...). Create it once, chmod 600.
 #
+# Every variable the app reads at runtime has to be listed in the `docker run`
+# below — the env file is sourced here, not handed to the container. Adding a
+# value to the file and forgetting the `-e` line is a silent no-op (that is how
+# JAAS_* would have looked "configured" while video calls stayed on the public
+# instance).
+#
 # USAGE
 #   # on the server, from a checkout of the repo:
 #   sudo ENV_FILE=/etc/internship-crm/prod.env ./infra/deploy-prod.sh
@@ -89,7 +95,7 @@ if [ ! -f "$ENV_FILE" ] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
            SMTP_BULK_HOST SMTP_BULK_PORT SMTP_BULK_USER SMTP_BULK_PASS SMTP_BULK_FROM \
            INBOUND_EMAIL_DOMAIN INBOUND_SECRET INBOUND_IMAP_HOST INBOUND_IMAP_PORT INBOUND_IMAP_USER \
            INBOUND_IMAP_PASS INBOUND_IMAP_MAILBOX INBOUND_IMAP_POLL_SECONDS INBOUND_IMAP_ENABLED \
-           CRON_SECRET CRON_ENABLED; do
+           CRON_SECRET CRON_ENABLED JAAS_APP_ID JAAS_API_KEY_ID JAAS_PRIVATE_KEY; do
     v=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER" | sed -n "s/^$k=//p" | head -1)
     # Single-quote the value so `. "$ENV_FILE"` sources it verbatim — a
     # DATABASE_URL/password can contain characters ($, spaces, @, :) that the
@@ -394,6 +400,9 @@ docker run -d \
   -e CRON_ENABLED="${CRON_ENABLED:-}" \
   -e TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}" \
   -e HEALTH_TOKEN="${HEALTH_TOKEN:-}" \
+  -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
+  -e JAAS_API_KEY_ID="${JAAS_API_KEY_ID:-}" \
+  -e JAAS_PRIVATE_KEY="${JAAS_PRIVATE_KEY:-}" \
   "$IMAGE"
 
 # ── 6. Health check + prune ──────────────────────────────────────────────────

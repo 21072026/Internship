@@ -11,10 +11,17 @@ const TAWK = 'https://*.tawk.to';
 // CDN. Pinned to that one path prefix — allowing all of cdn.jsdelivr.net would
 // mean allowing anything anyone has ever published to npm.
 const TAWK_EMOJI = 'https://cdn.jsdelivr.net/emojione/';
+// Our JaaS (Jitsi as a Service) tenant, #1237. Two things need it: the meeting
+// panel loads `<appId>/external_api.js` from this host (script-src), and that
+// script then builds the call as an iframe on the same host (frame-src). Listed
+// unconditionally rather than behind the JAAS_* env: these headers are baked at
+// build time and the credentials only exist at runtime. One exact host, and the
+// same one Permissions-Policy hands camera/microphone to.
+const JAAS = 'https://8x8.vc';
 
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TAWK} ${TAWK_EMOJI}`,
+  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${JAAS} ${TAWK} ${TAWK_EMOJI}`,
   `style-src 'self' 'unsafe-inline' ${TAWK} ${TAWK_EMOJI}`,
   `img-src 'self' data: blob: ${TAWK} ${TAWK_EMOJI}`,
   `font-src 'self' ${TAWK}`,
@@ -24,11 +31,12 @@ const csp = [
   // than default-src 'self', which would block it.
   `media-src 'self' ${TAWK}`,
   // The in-app meeting side panel embeds the Jitsi room we generate (#1054) —
-  // narrow on purpose: only the host we actually create links for, and only
-  // that host is allowed camera/microphone below (keep this in sync with
-  // EMBEDDABLE_MEETING_HOSTS in src/lib/meetingLink.ts). The chat widget renders
-  // itself in an iframe, hence tawk.to here as well.
-  `frame-src 'self' https://meet.jit.si ${TAWK}`,
+  // narrow on purpose: only the hosts we actually create links for, and only
+  // those hosts are allowed camera/microphone below (keep this in sync with
+  // EMBEDDABLE_MEETING_HOSTS in src/lib/meetingLink.ts). meet.jit.si stays for
+  // rooms created before the JaaS switch. The chat widget renders itself in an
+  // iframe, hence tawk.to here as well.
+  `frame-src 'self' https://meet.jit.si ${JAAS} ${TAWK}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -41,13 +49,18 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   // camera/microphone/display-capture are granted to the app itself and to the
-  // embedded Jitsi room only — a blanket `camera=()` disables them for every
-  // frame, which would leave the meeting panel with a picture of nobody.
-  // geolocation stays fully denied.
+  // embedded Jitsi rooms only (8x8.vc is our JaaS tenant, meet.jit.si the older
+  // public rooms) — a blanket `camera=()` disables them for every frame, which
+  // would leave the meeting panel with a picture of nobody. geolocation stays
+  // fully denied.
   {
     key: 'Permissions-Policy',
-    value:
-      'camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), display-capture=(self "https://meet.jit.si"), geolocation=()',
+    value: [
+      `camera=(self "https://meet.jit.si" "${JAAS}")`,
+      `microphone=(self "https://meet.jit.si" "${JAAS}")`,
+      `display-capture=(self "https://meet.jit.si" "${JAAS}")`,
+      'geolocation=()',
+    ].join(', '),
   },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 ];

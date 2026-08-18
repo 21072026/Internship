@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
-import { isEmbeddableMeetingLink } from '@/lib/meetingLink';
+import { isEmbeddableMeetingLink, parseJaasMeetingLink } from '@/lib/meetingLink';
 import { meetingNotesAutoOpen, useFloatingNotes } from '@/components/meeting/FloatingNotes';
+import { JaasCall } from '@/components/meeting/JaasCall';
+import { useIsNarrow } from '@/hooks/useIsNarrow';
 
 // "Start a meeting now" (#1053, #1054).
 //
@@ -220,6 +222,13 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
   const t = useT();
   const [copied, setCopied] = useState(false);
   const embeddable = isEmbeddableMeetingLink(meeting.meetLink);
+  // A JaaS room (#1237) is embedded through 8x8's external API so the call can
+  // carry a signed token; anything else stays a plain iframe.
+  const jaas = parseJaasMeetingLink(meeting.meetLink);
+  // The room is mounted only on the wide layout — the phone branch below is a
+  // Join button, and building the call into a `display:none` box would join it
+  // twice. CSS alone cannot express that: the iframe would still be live.
+  const narrow = useIsNarrow();
 
   const copy = async () => {
     try {
@@ -230,6 +239,20 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
       window.prompt(t.meetings.copyLink, meeting.meetLink);
     }
   };
+
+  // Shown wherever the room cannot be put on screen here: a link we may not
+  // embed, or a JaaS call that failed to start. The link itself always works.
+  const linkFallback = (message: string) => (
+    <div className="hidden lg:flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <p className="text-sm text-gray-600 dark:text-gray-400">{message}</p>
+      <a href={meeting.meetLink} target="_blank" rel="noopener noreferrer">
+        <Button size="sm">
+          <ExternalLink className="h-4 w-4" />
+          {t.meetings.instant.openInNewTab}
+        </Button>
+      </a>
+    </div>
+  );
 
   return (
     <aside
@@ -275,25 +298,29 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
         </div>
       </header>
 
-      {/* Desktop: the room itself. */}
-      {embeddable ? (
-        <iframe
-          src={meeting.meetLink}
-          title={t.meetings.instant.panelTitle}
-          allow="camera; microphone; display-capture; fullscreen; autoplay; clipboard-write"
-          className="hidden lg:block flex-1 w-full border-0"
-        />
-      ) : (
-        <div className="hidden lg:flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-          <p className="text-sm text-gray-600 dark:text-gray-400">{t.meetings.instant.notEmbeddable}</p>
-          <a href={meeting.meetLink} target="_blank" rel="noopener noreferrer">
-            <Button size="sm">
-              <ExternalLink className="h-4 w-4" />
-              {t.meetings.instant.openInNewTab}
-            </Button>
-          </a>
-        </div>
-      )}
+      {/* Desktop: the room itself. The JaaS iframe is built by external_api.js
+          and sized by it (`height/width: 100%` inline), so its box only needs a
+          height of its own for the call to fill it. */}
+      {!narrow &&
+        (jaas ? (
+          <JaasCall
+            meetingId={meeting.meetingId}
+            meetLink={meeting.meetLink}
+            title={t.meetings.instant.panelTitle}
+            className="hidden lg:block flex-1 w-full"
+            onReadyToClose={onClose}
+            fallback={linkFallback(t.meetings.instant.embedFailed)}
+          />
+        ) : embeddable ? (
+          <iframe
+            src={meeting.meetLink}
+            title={t.meetings.instant.panelTitle}
+            allow="camera; microphone; display-capture; fullscreen; autoplay; clipboard-write"
+            className="hidden lg:block flex-1 w-full border-0"
+          />
+        ) : (
+          linkFallback(t.meetings.instant.notEmbeddable)
+        ))}
 
       {/* Phone: a strip with a Join button — a video this small helps nobody. */}
       <div className="lg:hidden p-3">
