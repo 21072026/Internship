@@ -8,6 +8,21 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.74.0-beta] - 2026-08-18
+
+### Added
+- **Admin role conversion** (#1243): an admin can convert an account between
+  MENTOR and MENTEE from the `/admin/users` row (inline confirm panel, EN/TR/DE).
+  `PATCH /api/users/[id]` accepts a `role` field — those two roles only: ADMIN is
+  not grantable through this endpoint, and COMPANY/SOURCE accounts (structural
+  links) are refused as source or target. Existing mentorships survive the flip —
+  the shells are derived from the relation table (#1141), so a converted mentor
+  still reaches their open mentees and vice versa. The conversion stamps
+  `sessionsValidFrom` (the sign-out-all cutoff): every live session of the
+  converted user is revoked, the next sign-in mints the new role — and walks a
+  promotion through the 2FA setup gate where the org policy covers mentors.
+  Audited as `user.role_changed` at warning level.
+
 ## [0.73.0-beta] - 2026-08-17
 
 ### Added

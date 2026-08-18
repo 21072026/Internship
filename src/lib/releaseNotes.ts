@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.74.0-beta',
+    date: '2026-08-18',
+    highlights: {
+      en: [
+        'Admins can now convert an account between mentor and mentee right from the Users page — a long-time mentee who starts mentoring keeps their whole history instead of needing a fresh account. Existing mentorships are untouched, and the person is signed out everywhere so the new role takes effect at their next sign-in.',
+      ],
+      tr: [
+        'Yöneticiler artık bir hesabı Kullanıcılar sayfasından mentor ile mentee arasında dönüştürebiliyor — mentorluğa başlayan eski bir mentee, yeni bir hesaba gerek kalmadan tüm geçmişini koruyor. Mevcut mentörlükler aynen kalıyor; kişi tüm cihazlardan çıkış yapıyor ve yeni rol bir sonraki girişinde devreye giriyor.',
+      ],
+      de: [
+        'Admins können ein Konto jetzt direkt auf der Benutzerseite zwischen Mentor und Mentee umwandeln — wer als langjähriges Mentee zu mentorieren beginnt, behält die gesamte Historie statt ein neues Konto zu brauchen. Bestehende Mentorschaften bleiben unberührt; die Person wird überall abgemeldet und die neue Rolle gilt ab der nächsten Anmeldung.',
+      ],
+    },
+  },
+  {
     version: '0.73.0-beta',
     date: '2026-08-17',
     highlights: {
