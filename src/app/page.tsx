@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import {
   GraduationCap, ArrowRight, ArrowDown, CheckCircle, Users, Building2, Briefcase,
-  Github, ShieldCheck, Languages, ScrollText, Code2,
+  Github, ShieldCheck, Languages, ScrollText, Code2, FlaskConical,
 } from 'lucide-react';
+import { IS_DEMO_MODE, DEMO_URL } from '@/lib/demoMode';
 import { getFeatures } from '@/lib/features';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
@@ -155,9 +156,11 @@ export default async function HomePage() {
   return (
     <PublicShell>
 
-      {/* Hero — states the loop rather than a slogan, and carries no button: the
-          visitor picks a side two sections down. A single "get started" would
-          funnel mentors and companies into the mentee sign-up form. */}
+      {/* Hero — states the loop rather than a slogan, and carries no sign-up
+          button: the visitor picks a side two sections down. A single "get
+          started" would funnel mentors and companies into the mentee sign-up
+          form. The demo button is exempt from that concern — it is role-neutral
+          (every visitor can poke the same demo) and hidden on the demo itself. */}
       <section className="py-20 sm:py-24 px-4">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-medium mb-8">
@@ -175,6 +178,18 @@ export default async function HomePage() {
               {L.becomeMentorLink}
             </Link>
           </p>
+          {!IS_DEMO_MODE && (
+            <div className="mt-8">
+              <a
+                href={DEMO_URL}
+                data-testid="hero-demo-cta"
+                className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+              >
+                <FlaskConical className="h-5 w-5" /> {L.demoCta}
+              </a>
+              <p className="mt-3 text-xs text-gray-500 max-w-md mx-auto">{L.demoCtaNote}</p>
+            </div>
+          )}
           <div className="mt-10 flex flex-wrap justify-center gap-2 sm:gap-3">
             {heroChips.map((chip) => (
               <span key={chip} className="inline-flex items-center gap-1.5 bg-white/70 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium">
@@ -521,6 +536,14 @@ export default async function HomePage() {
               {t.auth.applyMentorLink}
             </Link>
           </p>
+          {!IS_DEMO_MODE && (
+            <p className="mt-4 text-sm text-blue-100">
+              {L.demoCtaInline}{' '}
+              <a href={DEMO_URL} data-testid="cta-demo-link" className="text-white underline hover:text-blue-50 font-medium">
+                {L.demoCta}
+              </a>
+            </p>
+          )}
           <p className="mt-2 text-xs text-blue-100">{L.ctaFootnote}</p>
         </div>
       </section>
