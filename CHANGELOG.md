@@ -8,6 +8,30 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.81.0-beta] - 2026-08-19
+
+### Changed
+- **Hybrid Jitsi routing — JaaS is now 1:1-only (#1256).** JaaS bills per monthly
+  active user (25 MAU on the free dev tier) and every participant of an `8x8.vc` room
+  counts, so `generateMeetingLink()` now takes the invitee count and only mints a JaaS
+  room for one-on-one meetings (organizer + exactly one invitee: single-relation
+  instant/scheduled meetings, accepted meeting requests, two-person project/chat
+  calls). Group and bulk meetings (2+ invitees) and recurring series (audience derived
+  from membership later, so never fixed) always get a free `meet.jit.si` link, tenant
+  configured or not. All four link-generation call sites pass the count; unit-style
+  coverage in `e2e/meeting-link-hybrid.unit.spec.ts` (tagged `@smoke`) exercises the
+  JaaS branch that CI's env-less browser suite cannot.
+
+### Added
+- **Free-room fallback for failing JaaS calls.** A JaaS room name works verbatim on the
+  public instance, so `freeMeetingFallbackLink()` (`src/lib/meetingLink.ts`) derives
+  `https://meet.jit.si/<room>` from any of our own `8x8.vc` links (pasted third-party
+  URLs get none). When the embedded JaaS call fails to start — tenant down, MAU quota
+  blocked, token rejected — the meeting panel now offers "Continue in the free room"
+  next to "Open in a new tab"; everyone who switches lands in the same room. New
+  `meetings.instant.freeRoomHint` / `openFreeRoom` strings in EN/TR/DE.
+  Docs: `docs/video-calls-jaas.md` gains the hybrid-routing table and fallback section.
+
 ## [0.80.1-beta] - 2026-08-19
 
 ### Fixed

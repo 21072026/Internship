@@ -47,7 +47,9 @@ export async function POST(request: Request) {
     const ctx = await resolveMeetingContext(session.user, { relationIds, projectId, conversationId });
     if (!ctx.ok) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
-    const meetLink = generateMeetingLink();
+    // Invitee count decides the host (1:1 → JaaS, groups → free instance);
+    // resolveMeetingContext already excluded the organizer from the list.
+    const meetLink = generateMeetingLink({ inviteeCount: ctx.invitees.length });
 
     // RELATION keeps the established shape — one row (and one RSVP token) per
     // relation, all sharing the room. PROJECT/CONVERSATION are a single row: the

@@ -10,6 +10,30 @@ Newest entries on top.
 
 ---
 
+## 2026-08-19 — Hibrit Jitsi: JaaS yalnızca 1:1 + ücretsiz oda fallback'i (#1256, 0.81.0-beta)
+
+**JaaS MAU'su katılımcı başına sayılır, oda başına değil.** 25 MAU'luk ücretsiz katman ilk
+ayda 4/25'e geldi bile; `8x8.vc` odasına giren *her* kişi kotadan düşer. Bu yüzden
+yönlendirme kuralı davetli sayısına bağlandı (`generateMeetingLink({ inviteeCount })`,
+1 → JaaS, diğer her şey + `null` → meet.jit.si). Yeni bir env değişkeni **bilerek** yok:
+`JAAS_*`'ı silmek zaten kill-switch ve yeni var eklemek 4 ayrı infra dosyasına dokunmayı
+gerektirirdi (deploy-prod.sh'ta -e satırı + env-capture listesi, topic-deploy.sh, .env.example).
+
+**JaaS oda adı ücretsiz sunucuda birebir çalışır** — `8x8.vc/<appId>/<oda>` →
+`meet.jit.si/<oda>` türetmesi bedava bir kesinti sigortası (`freeMeetingFallbackLink`,
+`parseJaasMeetingLink` üstüne kurulu; yapıştırılmış Zoom/Meet linklerine asla uygulanmaz).
+
+**JaaS dalını e2e'de test etmenin yolu unit-tarzı spec:** CI'da `JAAS_*` yok, sunucu hep
+meet.jit.si üretir. `e2e/notification-text.unit.spec.ts` emsali gibi Playwright içinde
+`@/lib/...` import edip testte env kurup çözmek çalışıyor (`BASE_URL=http://localhost:9999`
+ile webServer'sız, DB'siz koşuyor — global-setup sunucu istemiyor).
+
+**Adversarial review yine kazandı:** 6 bulgudan 4'ü doğrulandı, hepsi "yardımcı metin
+yanlış yönlendiriyor" sınıfı (hint 'linki paylaş' diyor ama kopyalama yoktu; doküman eski
+fallback UI'ını anlatıyordu; panel akış diyagramındaki 409 notu panelin hiç yapmadığı bir
+istek ima ediyordu). Kod doğru olsa da *anlatı* yanlışsa review bunu buluyor — dokümana
+eklenen her cümleyi koda karşı doğrulatmak değiyor.
+
 ## 2026-08-19 — Rol dönüşümü: profil sayfaları + kişiye bildirim (#1252, 0.75.0-beta)
 
 **Bir kullanıcıya koşulsuz e-posta atan her yeni akış, sentinel adresleri düşünmeli.**
