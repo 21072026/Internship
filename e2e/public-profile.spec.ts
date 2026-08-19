@@ -171,3 +171,39 @@ test('public contact form notifies the owner; honeypot drops bots', async ({ pag
     await cleanupByEmail(email);
   }
 });
+
+test('the public profile OG image renders for public profiles and stays generic otherwise', async ({ request }) => {
+  const pubEmail = uniqueEmail('ogpub');
+  const privEmail = uniqueEmail('ogpriv');
+  const pub = await seedUser(pubEmail, 'Pass123!', 'MENTEE', 'ÖG Şahin');
+  const priv = await seedUser(privEmail, 'Pass123!', 'MENTEE', 'OG Private');
+  await prisma.user.update({
+    where: { id: pub.id },
+    data: {
+      publicProfile: true,
+      bio: 'A'.repeat(400), // exercises the JS truncation path
+      skills: ['React', 'Python', 'SQL'],
+      city: 'Köln',
+      country: 'Germany',
+    },
+  });
+
+  try {
+    // Public profile → a real PNG card.
+    const pubRes = await request.get(`/p/${pub.id}/opengraph-image`);
+    expect(pubRes.status()).toBe(200);
+    expect(pubRes.headers()['content-type']).toContain('image/png');
+    expect((await pubRes.body()).length).toBeGreaterThan(1000);
+
+    // Private and nonexistent profiles → the same generic brand card, so the
+    // image endpoint never reveals whether an id exists.
+    for (const path of [`/p/${priv.id}/opengraph-image`, '/p/nonexistent-user-id/opengraph-image']) {
+      const res = await request.get(path);
+      expect(res.status()).toBe(200);
+      expect(res.headers()['content-type']).toContain('image/png');
+    }
+  } finally {
+    await cleanupByEmail(pubEmail);
+    await cleanupByEmail(privEmail);
+  }
+});

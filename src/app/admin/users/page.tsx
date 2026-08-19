@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { roleHome } from '@/lib/roleHome';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { UserEraseForm } from '@/components/UserEraseForm';
+import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { useT } from '@/i18n/client';
 import type { AccountState } from '@/lib/accountState';
 
@@ -303,6 +304,7 @@ export default function AdminUsersPage() {
                   >
                     {u.isActive ? t.usersAdmin.deactivate : t.usersAdmin.activate}
                   </Button>
+                  <RoleConvertButton userId={u.id} fullName={u.fullName} role={u.role} onDone={load} />
                   {/* Admin accounts are out of scope (the endpoint refuses them):
                       demote first, or let the owner delete their own account. */}
                   {u.role !== 'ADMIN' && u.id !== session?.user?.id && (

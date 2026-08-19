@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.74.0-beta',
-    date: '2026-08-18',
+    version: '0.79.0-beta',
+    date: '2026-08-19',
     highlights: {
       en: [
         'Notifications now speak your language: the bell and the notifications page show every notification in English, Turkish or German — whichever you use — instead of always English.',
@@ -27,6 +27,84 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Benachrichtigungen sprechen jetzt deine Sprache: Die Glocke und die Benachrichtigungsseite zeigen jede Benachrichtigung auf Deutsch, Türkisch oder Englisch — je nachdem, was du verwendest — statt immer auf Englisch.',
         'Benachrichtigungen zu Phasenwechseln sagen jetzt, von welcher Phase in welche du gewechselt bist, statt nur „wurde aktualisiert“.',
+      ],
+    },
+  },
+  {
+    version: '0.78.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Converting an account between mentor and mentee is now available right on the person\'s profile page too, not only in the users list.',
+        'The converted person is no longer left guessing: they get an email in their own language explaining the change, and an in-app notification pointing at their new workspace greets them at their next sign-in.',
+      ],
+      tr: [
+        'Bir hesabı mentor ile mentee arasında dönüştürme artık yalnızca kullanıcı listesinde değil, kişinin profil sayfasında da yapılabiliyor.',
+        'Dönüştürülen kişi artık habersiz kalmıyor: değişikliği açıklayan bir e-postayı kendi dilinde alıyor ve bir sonraki girişinde onu yeni çalışma alanına yönlendiren bir uygulama içi bildirim karşılıyor.',
+      ],
+      de: [
+        'Ein Konto zwischen Mentor und Mentee umzuwandeln geht jetzt auch direkt auf der Profilseite der Person, nicht nur in der Benutzerliste.',
+        'Die umgewandelte Person bleibt nicht mehr im Unklaren: Sie erhält eine E-Mail in ihrer Sprache, die die Änderung erklärt, und bei der nächsten Anmeldung begrüßt sie eine In-App-Benachrichtigung, die auf ihren neuen Arbeitsbereich verweist.',
+      ],
+    },
+  },
+  {
+    version: '0.77.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Sharing your public profile link now looks great everywhere: on LinkedIn, WhatsApp, Slack or X the link unfurls into a branded card showing your name, role, location and top skills — instead of a bare URL.',
+      ],
+      tr: [
+        'Herkese açık profil linkinizi paylaşmak artık her yerde iyi görünüyor: LinkedIn, WhatsApp, Slack veya X’te link, çıplak bir URL yerine adınızı, rolünüzü, konumunuzu ve öne çıkan becerilerinizi gösteren markalı bir karta dönüşüyor.',
+      ],
+      de: [
+        'Das Teilen deines öffentlichen Profillinks sieht jetzt überall gut aus: Auf LinkedIn, WhatsApp, Slack oder X entfaltet sich der Link zu einer Karte mit Name, Rolle, Ort und Top-Skills — statt einer nackten URL.',
+      ],
+    },
+  },
+  {
+    version: '0.76.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Signing in to the live demo is now one click: the demo’s sign-in page shows the three shared accounts as buttons — pick Admin, Mentor or Mentee and you are in, no credentials to copy.',
+      ],
+      tr: [
+        'Canlı demoya giriş artık tek tık: demonun giriş sayfası üç ortak hesabı buton olarak gösteriyor — Yönetici, Mentor veya Mentee’yi seçin, içeridesiniz; kopyalanacak şifre yok.',
+      ],
+      de: [
+        'Die Anmeldung in der Live-Demo ist jetzt ein Klick: Die Anmeldeseite der Demo zeigt die drei gemeinsamen Konten als Buttons — Admin, Mentor oder Mentee wählen und du bist drin, ohne Zugangsdaten zu kopieren.',
+      ],
+    },
+  },
+  {
+    version: '0.75.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'You can now try the product before signing up: the home page links to a public live demo with shared accounts and entirely made-up data. Click through the pipeline, log interactions, create projects — it resets twice a day.',
+      ],
+      tr: [
+        'Artık kaydolmadan ürünü deneyebilirsiniz: ana sayfa, ortak hesaplar ve tamamen uydurma verilerle çalışan herkese açık canlı demoya bağlanıyor. Süreçte gezinin, görüşme kaydı girin, proje oluşturun — günde iki kez sıfırlanır.',
+      ],
+      de: [
+        'Du kannst das Produkt jetzt vor der Registrierung ausprobieren: Die Startseite verlinkt auf eine öffentliche Live-Demo mit gemeinsamen Konten und vollständig erfundenen Daten. Klick dich durch die Pipeline, erfasse Interaktionen, lege Projekte an — zweimal täglich wird zurückgesetzt.',
+      ],
+    },
+  },
+  {
+    version: '0.74.0-beta',
+    date: '2026-08-18',
+    highlights: {
+      en: [
+        'Admins can now convert an account between mentor and mentee right from the Users page — a long-time mentee who starts mentoring keeps their whole history instead of needing a fresh account. Existing mentorships are untouched, and the person is signed out everywhere so the new role takes effect at their next sign-in.',
+      ],
+      tr: [
+        'Yöneticiler artık bir hesabı Kullanıcılar sayfasından mentor ile mentee arasında dönüştürebiliyor — mentorluğa başlayan eski bir mentee, yeni bir hesaba gerek kalmadan tüm geçmişini koruyor. Mevcut mentörlükler aynen kalıyor; kişi tüm cihazlardan çıkış yapıyor ve yeni rol bir sonraki girişinde devreye giriyor.',
+      ],
+      de: [
+        'Admins können ein Konto jetzt direkt auf der Benutzerseite zwischen Mentor und Mentee umwandeln — wer als langjähriges Mentee zu mentorieren beginnt, behält die gesamte Historie statt ein neues Konto zu brauchen. Bestehende Mentorschaften bleiben unberührt; die Person wird überall abgemeldet und die neue Rolle gilt ab der nächsten Anmeldung.',
       ],
     },
   },

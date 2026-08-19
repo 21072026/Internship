@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.74.0-beta] - 2026-08-18
+## [0.79.0-beta] - 2026-08-19
 
 ### Changed
 - **In-app notifications are now multilingual (#921, #922).** Every notification used to be
@@ -34,6 +34,81 @@ version is shown in the sidebar footer of every page (links to the
     parity); a `notification-text.unit.spec.ts` unit suite covers rendering, fallbacks and
     custom-stage labels; affected e2e specs moved from text/exact-type assertions to
     event-key/params assertions.
+
+## [0.78.0-beta] - 2026-08-19
+
+### Added
+- **Role conversion, where the person is** (#1252): the MENTOR ↔ MENTEE convert
+  button (#1243) now also lives on the admin profile pages —
+  `/admin/candidates/[id]` and `/admin/mentors/[id]` — via a shared
+  `RoleConvertButton` component (the users list reuses it instead of its inline
+  panel).
+- **The converted person is told what happened** (#1252): the conversion signs
+  them out of every device, so the endpoint now leaves an in-app notification
+  (waiting after the forced re-login, linking to their new home shell) and sends
+  an email in their preferred language (EN/TR/DE). The email is deliberately not
+  gated on notification preferences — an account-level change that signs you out
+  everywhere is a transactional notice like a password reset, not an opt-out-able
+  digest.
+## [0.77.0-beta] - 2026-08-19
+
+### Added
+- **OpenGraph cards for public profiles (#966, extracted from PR #1221).** Sharing a
+  `/p/<userId>` link on LinkedIn/WhatsApp/Slack/X now unfurls into a branded 1200×630 PNG
+  (`src/app/p/[userId]/opengraph-image.tsx`, Node runtime): name, role, location, bio
+  snippet and up to 5 skills, selected with the same PII-safe visibility gate as the page.
+  Non-public and nonexistent ids get the same generic brand card, so the endpoint never
+  reveals whether an id exists. Differences from the PR #1221 version: the avatar is
+  embedded as a data URI read straight from `AvatarFile` (satori cannot fetch the relative
+  `/api/avatar/<id>` URL), and the bio is truncated in JS (satori does not support
+  `-webkit-box` line clamping — that render path was never exercised by the old CI test).
+  E2E coverage in `e2e/public-profile.spec.ts`; `publicProfiles` feature-catalogue entry
+  added (EN/TR/DE). The demo-mode part of PR #1221 was superseded by #1234; its analytics
+  part remains open (CSP + consent questions).
+## [0.76.0-beta] - 2026-08-19
+
+### Added
+- **One-click demo sign-in** (#966, maintainer request). On the demo instance the
+  sign-in page shows the shared demo accounts as three buttons (Admin / Mentor /
+  Mentee, `demo-quick-login`) that sign in directly — no copying credentials from
+  `/demo`. `src/app/auth/signin/page.tsx` became a thin server wrapper that resolves
+  the server-only `IS_DEMO_MODE` flag and hands `DEMO_ACCOUNTS`/`DEMO_PASSWORD` to the
+  (unchanged) client form as a prop — on every non-demo instance the prop is null and
+  the page renders exactly as before (guarded by an e2e test). The Safari
+  session-settle poll was extracted into `settleAndRedirect()` and shared by both
+  sign-in paths. i18n: `demo.quickTitle`/`demo.quickHint` (EN/TR/DE).
+
+## [0.75.0-beta] - 2026-08-19
+
+### Added
+- **The public demo is now reachable** (#966). The demo shipped in #1234 but nothing
+  linked to it and the environment itself had never been provisioned — the changelog
+  said "demo" while visitors had no way in. Two halves to fix that:
+  - *Server (docs/DEMO.md prerequisites, done 2026-08-19):* `internship_crm_demo` DB +
+    scoped user, `/etc/internship-crm/demo.env`, the `internship-crm-demo` container on
+    :3203 (current `preview-<sha>` image), and the `crm-demo.ersah.in` Plesk vhost with
+    the wildcard cert. First fill via the `demo-reset.yml` workflow; write blocklist
+    verified live (403 on `/api/account`).
+  - *App:* the landing page links to the demo from the hero (`hero-demo-cta`, with a
+    "synthetic data, resets twice a day" note), the bottom CTA block and the public
+    footer; new `demo` feature-catalogue entry (EN/TR/DE). All read `DEMO_URL` from
+    `src/lib/demoMode.ts` and are hidden on the demo instance itself (it has the banner).
+    E2E: `e2e/landing-demo-cta.spec.ts`.
+
+## [0.74.0-beta] - 2026-08-18
+
+### Added
+- **Admin role conversion** (#1243): an admin can convert an account between
+  MENTOR and MENTEE from the `/admin/users` row (inline confirm panel, EN/TR/DE).
+  `PATCH /api/users/[id]` accepts a `role` field — those two roles only: ADMIN is
+  not grantable through this endpoint, and COMPANY/SOURCE accounts (structural
+  links) are refused as source or target. Existing mentorships survive the flip —
+  the shells are derived from the relation table (#1141), so a converted mentor
+  still reaches their open mentees and vice versa. The conversion stamps
+  `sessionsValidFrom` (the sign-out-all cutoff): every live session of the
+  converted user is revoked, the next sign-in mints the new role — and walks a
+  promotion through the 2FA setup gate where the org policy covers mentors.
+  Audited as `user.role_changed` at warning level.
 
 ## [0.73.0-beta] - 2026-08-17
 

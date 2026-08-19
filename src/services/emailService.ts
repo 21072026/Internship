@@ -911,6 +911,41 @@ export async function sendOfferDecisionEmail({
   });
 }
 
+// Account role converted by an admin (#1252). Deliberately NOT gated on
+// emailAllowed(): the conversion signs the person out of every device — an
+// account-level notice like a password reset, not an opt-out-able digest.
+export async function sendRoleChangeEmail({
+  to,
+  fullName,
+  newRole,
+  locale,
+  orgId,
+}: {
+  to: string;
+  fullName: string;
+  newRole: 'MENTOR' | 'MENTEE';
+  locale?: string | null;
+  orgId?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = getDictionary(resolveLocale(locale)).roleChangeEmail;
+  const mentor = newRole === 'MENTOR';
+  await sendEmail({
+    to,
+    fromName: brand.name,
+    subject: mentor ? M.subjectMentor : M.subjectMentee,
+    category: 'account',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, mentor ? M.headingMentor : M.headingMentee)}
+        <p>${esc(M.greeting.replace('{name}', fullName))}</p>
+        <p>${esc(mentor ? M.bodyMentor : M.bodyMentee)}</p>
+        ${ctaBlock(brand, `${appUrl()}/auth/signin`, M.cta)}
+      </div>
+    `,
+  });
+}
+
 // --- Meeting requests (#668) ------------------------------------------------
 
 export async function sendMeetingRequestEmail({

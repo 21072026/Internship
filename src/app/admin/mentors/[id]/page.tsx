@@ -7,6 +7,7 @@ import { ArrowLeft, Users, Star } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
+import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { useT } from '@/i18n/client';
 
 interface MentorRelation {
@@ -21,6 +22,7 @@ interface MentorDetail {
   id: string;
   fullName: string;
   email: string;
+  role: string;
   department?: string;
   skills: string[];
   mentorCapacity?: number | null;
@@ -69,10 +71,14 @@ export default function AdminMentorDetailPage() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.fullName}</h1>
             <p className="text-gray-500">{user.email}{user.department ? ` · ${user.department}` : ''}</p>
           </div>
-          <Badge variant={atCapacity ? 'warning' : 'info'} className="flex items-center gap-1 flex-shrink-0">
-            <Users className="h-3 w-3" />
-            {active.length}{cap != null ? `/${cap}` : ''} {t.mentors.mentee}
-          </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
+            <Badge variant={atCapacity ? 'warning' : 'info'} className="flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              {active.length}{cap != null ? `/${cap}` : ''} {t.mentors.mentee}
+            </Badge>
+            {/* Convert right where the person is looked at (#1252). */}
+            <RoleConvertButton userId={user.id} fullName={user.fullName} role={user.role} onDone={load} />
+          </div>
         </div>
       </div>
 

@@ -4,7 +4,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
-import { isPendingActivation } from '@/lib/menteeAccount';
+import { isPendingActivation, isErasedAccount, isUnusableEmail } from '@/lib/menteeAccount';
+import { IS_DEMO_MODE } from '@/lib/demoMode';
+import { notify } from '@/lib/notify';
+import { roleHome } from '@/lib/roleHome';
+import { sendRoleChangeEmail } from '@/services/emailService';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -112,7 +116,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         referredById?: string | null;
         skills?: string[];
         mentorCapacity?: number | null;
+        role?: 'MENTOR' | 'MENTEE';
+        sessionsValidFrom?: Date;
       } = {};
+      let roleUnchanged = false;
+      let previousRole: string | null = null;
+      let convertedUser: { email: string; fullName: string; preferredLanguage: string | null; orgId: string | null } | null = null;
 
       if (typeof body.isActive === 'boolean') {
         // Guard against an admin locking themselves out.
@@ -169,6 +178,67 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         data.skills = [...new Set((body.skills as string[]).map((s) => s.trim()).filter(Boolean))];
       }
 
+      // Role conversion (#1243): a mentee graduates into mentoring, a mentor
+      // steps back into a mentee seat. Only between those two people-roles —
+      // ADMIN is deliberately not grantable here (no privilege escalation via a
+      // routine PATCH; demoting an admin is also out, so the last-admin case
+      // can't arise), and COMPANY/SOURCE accounts carry structural links a
+      // flip would orphan. Open relations survive: the shells are derived from
+      // the relation table (src/lib/dualRole.ts, #1141), so a converted mentor
+      // still reaches their mentees and vice versa.
+      if ('role' in body) {
+        // The demo's accounts are shared, and converting one stamps the
+        // sign-out-all cutoff — one visitor would sign every other visitor out
+        // of it and park the advertised "mentor" login in the mentee portal
+        // until the next reset. The path-level DEMO_BLOCKED_WRITES list can't
+        // carry this (it would also kill the benign activate/skills edits on
+        // this same route), so the field is refused here instead.
+        if (IS_DEMO_MODE) {
+          return NextResponse.json(
+            { error: 'This is a shared demo, so that action is disabled here — it signs every other visitor out of the account.' },
+            { status: 403 }
+          );
+        }
+        if (body.role !== 'MENTOR' && body.role !== 'MENTEE') {
+          return NextResponse.json({ error: 'Role can only be changed to MENTOR or MENTEE' }, { status: 400 });
+        }
+        const target = await prisma.user.findUnique({
+          where: { id },
+          // email/fullName/preferredLanguage/orgId feed the post-update notice
+          // to the converted person (#1252).
+          select: { role: true, email: true, fullName: true, preferredLanguage: true, orgId: true },
+        });
+        if (!target) {
+          return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+        if (target.role !== 'MENTOR' && target.role !== 'MENTEE') {
+          return NextResponse.json({ error: 'Only MENTOR and MENTEE accounts can be converted' }, { status: 400 });
+        }
+        // An erased account is anonymized history, not a person to repurpose —
+        // and erasure rewrites the address to a sentinel that must never be
+        // mailed (same refusal as PATCH /api/mentor/mentees/[id]).
+        if (isErasedAccount(target)) {
+          return NextResponse.json({ error: 'This account has been erased' }, { status: 400 });
+        }
+        if (target.role === body.role) {
+          // Idempotent no-op: a second tab (or second admin) whose row was
+          // stale re-sends the role the account already has. Success, not a
+          // cryptic "No supported fields" 400 — the state they asked for is
+          // the state that exists.
+          roleUnchanged = true;
+        } else {
+          previousRole = target.role;
+          convertedUser = target;
+          data.role = body.role;
+          // `role` lives in the JWT from sign-in until an explicit update(), so
+          // without this a demoted mentor would keep a live staff-shell token.
+          // Revoke every session (the sign-out-all cutoff); the next sign-in
+          // mints the new role — and walks promotion through the 2FA setup gate
+          // if the org policy covers mentors.
+          data.sessionsValidFrom = new Date();
+        }
+      }
+
       // Mentor active-mentee capacity (null clears it).
       if ('mentorCapacity' in body) {
         const c = body.mentorCapacity;
@@ -182,13 +252,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
 
       if (Object.keys(data).length === 0) {
+        if (roleUnchanged) {
+          return NextResponse.json({ user: { id, role: body.role } });
+        }
         return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
       }
 
       const user = await prisma.user.update({
         where: { id },
         data,
-        select: { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true },
+        select: { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true, role: true },
       });
 
       // Activation state is the security-relevant part of this endpoint — it is
@@ -204,6 +277,48 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           targetId: id,
           request,
         });
+      }
+
+      // A role change alters what the account can reach — same audit weight as
+      // switching it on or off (#1243).
+      if (data.role) {
+        await logActivity({
+          action: 'user.role_changed',
+          level: 'warning',
+          actorId: session.user.id,
+          actorEmail: session.user.email ?? null,
+          targetType: 'user',
+          targetId: id,
+          detail: `role ${previousRole} → ${data.role}`,
+          request,
+        });
+      }
+
+      // Tell the person what just happened to them (#1252): the conversion
+      // signed them out of every device mid-whatever-they-were-doing. The
+      // in-app notice waits for them after the forced re-login; the email is
+      // sent unconditionally (an account-level notice like a password reset,
+      // not an opt-out-able digest). Both fire-and-forget — the conversion
+      // already happened, a notification failure must not report it as failed.
+      if (data.role && convertedUser) {
+        const newRole = data.role;
+        await notify(
+          id,
+          newRole === 'MENTOR' ? 'role_changed.toMentor' : 'role_changed.toMentee',
+          {},
+          roleHome(newRole)
+        );
+        // Not to a sentinel address: a mentor-entered candidate has a generated
+        // @import.local stand-in that only bounces off the relay.
+        if (!isUnusableEmail(convertedUser.email)) {
+          sendRoleChangeEmail({
+            to: convertedUser.email,
+            fullName: convertedUser.fullName,
+            newRole,
+            locale: convertedUser.preferredLanguage,
+            orgId: convertedUser.orgId,
+          }).catch((e) => console.error('sendRoleChangeEmail failed:', e));
+        }
       }
 
       return NextResponse.json({ user });
