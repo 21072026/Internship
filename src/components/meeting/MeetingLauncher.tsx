@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
-import { isEmbeddableMeetingLink, parseJaasMeetingLink } from '@/lib/meetingLink';
+import { freeMeetingFallbackLink, isEmbeddableMeetingLink, parseJaasMeetingLink } from '@/lib/meetingLink';
 import { meetingNotesAutoOpen, useFloatingNotes } from '@/components/meeting/FloatingNotes';
 import { JaasCall } from '@/components/meeting/JaasCall';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
@@ -241,7 +241,12 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
   };
 
   // Shown wherever the room cannot be put on screen here: a link we may not
-  // embed, or a JaaS call that failed to start. The link itself always works.
+  // embed, or a JaaS call that failed to start. The link itself always works —
+  // and for a JaaS room that failed, the same room name exists on the free
+  // public instance too, so the call can continue there if 8x8 itself is the
+  // problem (tenant down, MAU quota blocked). Everyone who switches lands in
+  // the same room because the name is shared between the two hosts.
+  const freeFallback = freeMeetingFallbackLink(meeting.meetLink);
   const linkFallback = (message: string) => (
     <div className="hidden lg:flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p className="text-sm text-gray-600 dark:text-gray-400">{message}</p>
@@ -251,6 +256,17 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
           {t.meetings.instant.openInNewTab}
         </Button>
       </a>
+      {freeFallback && (
+        <>
+          <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">{t.meetings.instant.freeRoomHint}</p>
+          <a href={freeFallback} target="_blank" rel="noopener noreferrer" data-testid="meeting-free-fallback">
+            <Button size="sm" variant="outline">
+              <ExternalLink className="h-4 w-4" />
+              {t.meetings.instant.openFreeRoom}
+            </Button>
+          </a>
+        </>
+      )}
     </div>
   );
 

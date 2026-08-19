@@ -7,9 +7,11 @@
 // and the `Permissions-Policy` allowlist in next.config.js — widening one
 // without the other yields an empty box or a call with no camera.
 //
-// `8x8.vc` is our JaaS tenant (#1237) and is the one that gets embedded in
-// production; `meet.jit.si` stays for links created before the switch and for
-// environments with no JaaS credentials (local dev, CI).
+// `8x8.vc` is our JaaS tenant (#1237), used for one-on-one calls when
+// configured; `meet.jit.si` carries everything else — group/bulk meetings and
+// recurring series (JaaS bills per monthly active user, so the tenant is
+// reserved for 1:1 calls — see src/lib/meetingRoom.ts), links created before
+// the JaaS switch, and environments with no JaaS credentials (local dev, CI).
 export const EMBEDDABLE_MEETING_HOSTS = ['meet.jit.si', '8x8.vc'];
 
 // True when the link can safely be embedded. Meet/Zoom/Teams all send
@@ -56,4 +58,17 @@ export function parseJaasMeetingLink(link: string | null | undefined): JaasRoomR
   } catch {
     return null;
   }
+}
+
+// The uninterrupted-service escape hatch: a JaaS room name works verbatim on
+// the free public instance, so from any of our own 8x8.vc links a working
+// meet.jit.si link can be derived. The panel offers it when the JaaS call
+// fails to start (tenant down, quota blocked, token rejected) — everyone who
+// switches to it lands in the *same* room, because the name is the same.
+//
+// Deliberately built on parseJaasMeetingLink: a pasted Meet/Zoom/arbitrary
+// URL yields null here, and only our own generated links get a fallback.
+export function freeMeetingFallbackLink(link: string | null | undefined): string | null {
+  const jaas = parseJaasMeetingLink(link);
+  return jaas ? `https://meet.jit.si/${jaas.room}` : null;
 }

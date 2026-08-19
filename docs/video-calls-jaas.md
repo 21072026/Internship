@@ -13,16 +13,39 @@ up for it; this document is the setup that lives outside the repo.
 
 ## What the app does once configured
 
-| | Unconfigured (default) | Configured |
-|---|---|---|
-| New room links | `https://meet.jit.si/InternshipCRM-<hex>` | `https://8x8.vc/<appId>/InternshipCRM-<hex>` |
-| Embedded panel | plain iframe, **5-minute cutoff** | `external_api.js` + JWT, no cutoff |
-| Display name | typed by whoever joins | filled in from the account |
-| Moderator | whoever arrives first | the person who called the meeting (and admins) |
+**Hybrid routing:** JaaS bills by monthly active user and *every participant of a JaaS
+room counts against the allowance* (25 MAU on the free tier), so the tenant is not used
+for everything. Only **one-on-one meetings** (organizer + exactly one invitee: a single
+mentorship relation, a 1:1 meeting request, a two-person project/chat call) get an
+`8x8.vc` room. **Group and bulk meetings** (2+ invitees) and **recurring series** (whose
+audience is derived from membership later and can grow) always get a free
+`meet.jit.si` link, configured tenant or not. The decision is made once per meeting in
+`generateMeetingLink()` (`src/lib/meetingRoom.ts`).
+
+| | Unconfigured (default) | Configured, 1:1 meeting | Configured, group/series |
+|---|---|---|---|
+| New room links | `https://meet.jit.si/InternshipCRM-<hex>` | `https://8x8.vc/<appId>/InternshipCRM-<hex>` | `https://meet.jit.si/InternshipCRM-<hex>` |
+| Embedded panel | plain iframe, **5-minute cutoff** | `external_api.js` + JWT, no cutoff | plain iframe, **5-minute cutoff** — open in a tab for longer calls |
+| Display name | typed by whoever joins | filled in from the account | typed by whoever joins |
+| Moderator | whoever arrives first | the person who called the meeting (and admins) | whoever arrives first |
 
 Nothing else changes: the room URL is still emailed to invitees, still opens in any
 browser, and rooms created before the switch keep working as they did (the panel keeps
 the old iframe path for `meet.jit.si` links).
+
+### Fallback: no meeting is ever stranded
+
+Two layers keep calls possible when JaaS misbehaves:
+
+1. **Creation-time** — no/broken credentials degrade every new link to `meet.jit.si`
+   (this has always been the unconfigured behaviour). Unsetting the `JAAS_*` variables
+   is the kill switch.
+2. **Run-time** — a JaaS room name works verbatim on the free public instance, so from
+   any stored `8x8.vc/<appId>/<room>` link the app derives `https://meet.jit.si/<room>`
+   (`freeMeetingFallbackLink`, `src/lib/meetingLink.ts`). When the embedded JaaS call
+   fails to start (tenant down, MAU quota blocked, token rejected), the panel offers
+   **“Continue in the free room”** next to “Open in a new tab”. Everyone who switches
+   lands in the same room, because the room name is shared between the two hosts.
 
 ## One-time setup in the JaaS console
 
@@ -85,6 +108,8 @@ Meeting.meetLink  https://8x8.vc/<appId>/InternshipCRM-<hex>     ← src/lib/mee
 panel   ├─ GET /api/meetings/<id>/call-token                     ← authorizes, then signs
         │     200 { domain, appId, roomName, jwt }                  (src/lib/jaas.ts)
         │     409 { code: 'not-configured' | 'not-a-jaas-room' } → falls back to the link
+        │     ('not-a-jaas-room' is the *normal* answer for group/series meetings —
+        │      hybrid routing puts those on meet.jit.si by design)
         │
         └─ new JitsiMeetExternalAPI('8x8.vc', { roomName, jwt })  ← src/components/meeting/JaasCall.tsx
 ```
@@ -105,7 +130,8 @@ panel   ├─ GET /api/meetings/<id>/call-token                     ← authori
 
 ## Verifying after deployment
 
-1. Start a call from a mentee card. The stored link should be an `8x8.vc` one:
+1. Start a call from a mentee card (a 1:1 — group meetings stay on `meet.jit.si` by
+   design). The stored link should be an `8x8.vc` one:
    `select meetLink from Meeting order by createdAt desc limit 1;`
 2. `GET /api/meetings/<id>/call-token` as a participant returns `200` with a `jwt`
    (and `Cache-Control: no-store`). A `409` names the reason in `code`.
@@ -115,8 +141,12 @@ panel   ├─ GET /api/meetings/<id>/call-token                     ← authori
 
 ## Costs and limits
 
-JaaS bills by **monthly active users** with a free allowance on top of which usage is
-charged. Turning this on for a deployment real people use is a spending decision, and the
-usage page in the JaaS console is the only place it is visible — the app does not meter
-it. Leaving the variables unset is always a safe rollback: existing `8x8.vc` links keep
-opening in a browser tab, and new rooms go back to the public instance.
+JaaS bills by **monthly active users** with a free allowance (25 MAU on the dev tier) on
+top of which usage is charged — and every *participant* of a JaaS room counts, not just
+the organizer. The hybrid routing above is the MAU-saving mechanism: only 1:1 meetings
+(two participants) touch the tenant, group/bulk/series traffic never does. Turning JaaS
+on for a deployment real people use is still a spending decision, and the usage page in
+the JaaS console is the only place it is visible — the app does not meter it. Leaving
+the variables unset is always a safe rollback: existing `8x8.vc` links keep opening in a
+browser tab (and the panel offers the free-room fallback), and new rooms go back to the
+public instance.

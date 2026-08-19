@@ -55,8 +55,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ ok: true, status: 'DECLINED' });
   }
 
-  // Accept → create the confirmed meeting with an auto video link.
-  const link = generateMeetingLink();
+  // Accept → create the confirmed meeting with an auto video link. A request
+  // is always mentee → mentor, so the meeting is structurally a 1:1 call.
+  const link = generateMeetingLink({ inviteeCount: 1 });
   // The wall clock behind `proposedAt` was typed by the *requester* (see
   // POST /api/meeting-requests), so theirs is the zone this time was agreed on —
   // not the mentor's, even though the mentor is the one confirming it (#1210).
