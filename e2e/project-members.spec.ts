@@ -69,3 +69,74 @@ test('project members: add, promote, last-owner guard, legacy-owner repointing',
     await cleanupByEmail(adminEmail);
   }
 });
+
+test('project members: mentor can only list and add their own mentees', { tag: '@smoke' }, async ({ browser }) => {
+  const adminEmail = uniqueEmail('pm-scope-admin');
+  const mentorEmail = uniqueEmail('pm-scope-mentor');
+  const otherMentorEmail = uniqueEmail('pm-scope-other-mentor');
+  const ownMenteeEmail = uniqueEmail('pm-scope-own-mentee');
+  const otherMenteeEmail = uniqueEmail('pm-scope-other-mentee');
+  const pw = 'MembersScopePass123';
+  await seedUser(adminEmail, pw, 'ADMIN', 'Scope Admin');
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Scope Mentor');
+  const otherMentor = await seedUser(otherMentorEmail, 'x', 'MENTOR', 'Other Scope Mentor');
+  const ownMentee = await seedUser(ownMenteeEmail, 'x', 'MENTEE', 'Own Scope Mentee');
+  const otherMentee = await seedUser(otherMenteeEmail, 'x', 'MENTEE', 'Other Scope Mentee');
+  await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: ownMentee.id } });
+  await prisma.mentorshipRelation.create({ data: { mentorId: otherMentor.id, menteeId: otherMentee.id } });
+
+  const adminCtx = await browser.newContext();
+  const mentorCtx = await browser.newContext();
+  let projectId = '';
+  try {
+    const adminPage = await adminCtx.newPage();
+    await adminPage.goto('/auth/signin');
+    await adminPage.fill('input[type="email"], input[name="email"]', adminEmail);
+    await adminPage.fill('input[type="password"]', pw);
+    await adminPage.click('button[type="submit"]');
+    await adminPage.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    const created = await adminPage.request.post('/api/projects', {
+      data: { name: 'Scoped Members Project', ownerType: 'MENTOR', ownerUserId: mentor.id },
+    });
+    expect(created.ok()).toBeTruthy();
+    projectId = (await created.json()).project.id;
+
+    const mentorPage = await mentorCtx.newPage();
+    await mentorPage.goto('/auth/signin');
+    await mentorPage.fill('input[type="email"], input[name="email"]', mentorEmail);
+    await mentorPage.fill('input[type="password"]', pw);
+    await mentorPage.click('button[type="submit"]');
+    await mentorPage.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+
+    const picker = await mentorPage.request.get('/api/users?view=picker');
+    expect(picker.ok()).toBeTruthy();
+    const pickerUsers = (await picker.json()).users as { id: string }[];
+    expect(pickerUsers.some((user) => user.id === ownMentee.id)).toBeTruthy();
+    expect(pickerUsers.some((user) => user.id === otherMentee.id)).toBeFalsy();
+
+    const ownAdd = await mentorPage.request.post(`/api/projects/${projectId}/members`, {
+      data: { userId: ownMentee.id, role: 'MENTEE' },
+    });
+    expect(ownAdd.status()).toBe(201);
+
+    const otherAdd = await mentorPage.request.post(`/api/projects/${projectId}/members`, {
+      data: { userId: otherMentee.id, role: 'MENTEE' },
+    });
+    expect(otherAdd.status()).toBe(403);
+
+    const adminAdd = await adminPage.request.post(`/api/projects/${projectId}/members`, {
+      data: { userId: otherMentee.id, role: 'MENTEE' },
+    });
+    expect(adminAdd.status()).toBe(201);
+  } finally {
+    await mentorCtx.close();
+    await adminCtx.close();
+    if (projectId) await prisma.project.deleteMany({ where: { id: projectId } });
+    await cleanupByEmail(ownMenteeEmail);
+    await cleanupByEmail(otherMenteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(otherMentorEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});

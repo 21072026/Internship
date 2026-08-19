@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.80.1-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Mentors can add their own mentees to their projects again: the member picker now lists a mentor\u2019s mentees, while other mentors\u2019 mentees stay out of reach — hidden from the picker and refused by the API.',
+      ],
+      tr: [
+        'Mentörler kendi mentee\u2019lerini projelerine yeniden ekleyebiliyor: üye seçici artık mentörün kendi mentee\u2019lerini listeliyor; başka mentörlerin mentee\u2019leri ise erişim dışı — seçicide görünmüyor ve API tarafından reddediliyor.',
+      ],
+      de: [
+        'Mentoren können ihre eigenen Mentees wieder zu ihren Projekten hinzufügen: Die Mitgliederauswahl listet jetzt die Mentees des Mentors, während die Mentees anderer Mentoren außer Reichweite bleiben — in der Auswahl verborgen und von der API abgelehnt.',
+      ],
+    },
+  },
+  {
     version: '0.80.0-beta',
     date: '2026-08-19',
     highlights: {
