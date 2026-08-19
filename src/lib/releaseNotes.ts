@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.77.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Sharing your public profile link now looks great everywhere: on LinkedIn, WhatsApp, Slack or X the link unfurls into a branded card showing your name, role, location and top skills — instead of a bare URL.',
+      ],
+      tr: [
+        'Herkese açık profil linkinizi paylaşmak artık her yerde iyi görünüyor: LinkedIn, WhatsApp, Slack veya X’te link, çıplak bir URL yerine adınızı, rolünüzü, konumunuzu ve öne çıkan becerilerinizi gösteren markalı bir karta dönüşüyor.',
+      ],
+      de: [
+        'Das Teilen deines öffentlichen Profillinks sieht jetzt überall gut aus: Auf LinkedIn, WhatsApp, Slack oder X entfaltet sich der Link zu einer Karte mit Name, Rolle, Ort und Top-Skills — statt einer nackten URL.',
+      ],
+    },
+  },
+  {
     version: '0.76.0-beta',
     date: '2026-08-19',
     highlights: {

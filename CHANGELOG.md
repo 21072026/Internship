@@ -8,6 +8,21 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.77.0-beta] - 2026-08-19
+
+### Added
+- **OpenGraph cards for public profiles (#966, extracted from PR #1221).** Sharing a
+  `/p/<userId>` link on LinkedIn/WhatsApp/Slack/X now unfurls into a branded 1200×630 PNG
+  (`src/app/p/[userId]/opengraph-image.tsx`, Node runtime): name, role, location, bio
+  snippet and up to 5 skills, selected with the same PII-safe visibility gate as the page.
+  Non-public and nonexistent ids get the same generic brand card, so the endpoint never
+  reveals whether an id exists. Differences from the PR #1221 version: the avatar is
+  embedded as a data URI read straight from `AvatarFile` (satori cannot fetch the relative
+  `/api/avatar/<id>` URL), and the bio is truncated in JS (satori does not support
+  `-webkit-box` line clamping — that render path was never exercised by the old CI test).
+  E2E coverage in `e2e/public-profile.spec.ts`; `publicProfiles` feature-catalogue entry
+  added (EN/TR/DE). The demo-mode part of PR #1221 was superseded by #1234; its analytics
+  part remains open (CSP + consent questions).
 ## [0.76.0-beta] - 2026-08-19
 
 ### Added
