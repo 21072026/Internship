@@ -8,7 +8,7 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.81.0-beta] - 2026-08-19
+## [0.83.0-beta] - 2026-08-19
 
 ### Added
 - **Mentor capacity/availability warnings on assignment** (#942). Building on #941's
@@ -27,6 +27,59 @@ version is shown in the sidebar footer of every page (links to the
   all four pickers. E2E coverage: `mentor-assign-confirm`, `mentorship-request-approve-
   confirm`, `invite-mentor-confirm`, `mentor-picker-availability`, and extensions to
   `mentorship-direct-assign`, `mentorship-request` and `invitations`.
+
+## [0.82.0-beta] - 2026-08-19
+
+### Added
+- **Participants can declare a meeting over, and the banner can show who is really
+  in the call.** The dashboard's "meeting in progress" strip used to sit there for
+  the whole assumed 60-minute window even when everyone had hung up, reading as
+  "they are still talking". Now:
+  - Any participant can mark the running meeting as over (`POST
+    /api/meetings/[id]/end`) from a button on the banner — the strip then
+    disappears for **every** participant, not just the clicker. Untouched, the
+    banner still times out after the assumed hour exactly as before. Works for
+    one-off `Meeting` rows, for multi-mentee meetings (all sibling rows sharing
+    the room link are ended together), and for recurring-series occurrences that
+    have no `Meeting` row (composite `<seriesId>:<ISO>` ids, marked in the new
+    `MeetingOccurrenceEnd` table). Ending is participant-only, start-gated
+    (a future meeting can't be hidden), and deliberately has no undo.
+  - Optional live room info from JaaS: a new webhook receiver
+    (`/api/webhooks/jaas`, enabled by `JAAS_WEBHOOK_SECRET`; subscribe the tenant
+    to ROOM_CREATED / ROOM_DESTROYED / PARTICIPANT_JOINED / PARTICIPANT_LEFT)
+    keeps a per-room `MeetingRoomState`, and the banner shows "n in the call"
+    with real names while the room is active. Display-only: room lifecycle never
+    auto-ends a meeting (rooms die whenever the last person drops, including
+    someone popping in early). Unset secret = endpoint answers 404, feature off —
+    the default in dev, CI and un-provisioned deployments.
+  - Schema: `Meeting.endedAt` / `Meeting.endedById`, new `MeetingOccurrenceEnd`
+    and `MeetingRoomState` models (additive `db push`).
+  - E2E: `e2e/meeting-end.spec.ts` (end flow tagged `@smoke`, sibling-row fanout,
+    occurrence ids, outsider 404, webhook feed end-to-end).
+
+## [0.81.0-beta] - 2026-08-19
+
+### Changed
+- **Hybrid Jitsi routing — JaaS is now 1:1-only (#1256).** JaaS bills per monthly
+  active user (25 MAU on the free dev tier) and every participant of an `8x8.vc` room
+  counts, so `generateMeetingLink()` now takes the invitee count and only mints a JaaS
+  room for one-on-one meetings (organizer + exactly one invitee: single-relation
+  instant/scheduled meetings, accepted meeting requests, two-person project/chat
+  calls). Group and bulk meetings (2+ invitees) and recurring series (audience derived
+  from membership later, so never fixed) always get a free `meet.jit.si` link, tenant
+  configured or not. All four link-generation call sites pass the count; unit-style
+  coverage in `e2e/meeting-link-hybrid.unit.spec.ts` (tagged `@smoke`) exercises the
+  JaaS branch that CI's env-less browser suite cannot.
+
+### Added
+- **Free-room fallback for failing JaaS calls.** A JaaS room name works verbatim on the
+  public instance, so `freeMeetingFallbackLink()` (`src/lib/meetingLink.ts`) derives
+  `https://meet.jit.si/<room>` from any of our own `8x8.vc` links (pasted third-party
+  URLs get none). When the embedded JaaS call fails to start — tenant down, MAU quota
+  blocked, token rejected — the meeting panel now offers "Continue in the free room"
+  next to "Open in a new tab"; everyone who switches lands in the same room. New
+  `meetings.instant.freeRoomHint` / `openFreeRoom` strings in EN/TR/DE.
+  Docs: `docs/video-calls-jaas.md` gains the hybrid-routing table and fallback section.
 
 ## [0.80.1-beta] - 2026-08-19
 

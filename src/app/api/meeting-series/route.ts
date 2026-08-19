@@ -208,7 +208,9 @@ export async function POST(request: Request) {
     const access = await ensureProjectAccess(session.user, projectId);
     if (access.error) return access.error;
 
-    const fixedLink = meetLink || generateMeetingLink();
+    // A series' audience is derived from project membership at announce time
+    // and can grow over the series' life — never a 1:1, so never a JaaS room.
+    const fixedLink = meetLink || generateMeetingLink({ inviteeCount: null });
     const series = await prisma.meetingSeries.create({
       data: {
         projectId,

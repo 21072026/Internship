@@ -10,6 +10,30 @@ Newest entries on top.
 
 ---
 
+## 2026-08-19 — Hibrit Jitsi: JaaS yalnızca 1:1 + ücretsiz oda fallback'i (#1256, 0.81.0-beta)
+
+**JaaS MAU'su katılımcı başına sayılır, oda başına değil.** 25 MAU'luk ücretsiz katman ilk
+ayda 4/25'e geldi bile; `8x8.vc` odasına giren *her* kişi kotadan düşer. Bu yüzden
+yönlendirme kuralı davetli sayısına bağlandı (`generateMeetingLink({ inviteeCount })`,
+1 → JaaS, diğer her şey + `null` → meet.jit.si). Yeni bir env değişkeni **bilerek** yok:
+`JAAS_*`'ı silmek zaten kill-switch ve yeni var eklemek 4 ayrı infra dosyasına dokunmayı
+gerektirirdi (deploy-prod.sh'ta -e satırı + env-capture listesi, topic-deploy.sh, .env.example).
+
+**JaaS oda adı ücretsiz sunucuda birebir çalışır** — `8x8.vc/<appId>/<oda>` →
+`meet.jit.si/<oda>` türetmesi bedava bir kesinti sigortası (`freeMeetingFallbackLink`,
+`parseJaasMeetingLink` üstüne kurulu; yapıştırılmış Zoom/Meet linklerine asla uygulanmaz).
+
+**JaaS dalını e2e'de test etmenin yolu unit-tarzı spec:** CI'da `JAAS_*` yok, sunucu hep
+meet.jit.si üretir. `e2e/notification-text.unit.spec.ts` emsali gibi Playwright içinde
+`@/lib/...` import edip testte env kurup çözmek çalışıyor (`BASE_URL=http://localhost:9999`
+ile webServer'sız, DB'siz koşuyor — global-setup sunucu istemiyor).
+
+**Adversarial review yine kazandı:** 6 bulgudan 4'ü doğrulandı, hepsi "yardımcı metin
+yanlış yönlendiriyor" sınıfı (hint 'linki paylaş' diyor ama kopyalama yoktu; doküman eski
+fallback UI'ını anlatıyordu; panel akış diyagramındaki 409 notu panelin hiç yapmadığı bir
+istek ima ediyordu). Kod doğru olsa da *anlatı* yanlışsa review bunu buluyor — dokümana
+eklenen her cümleyi koda karşı doğrulatmak değiyor.
+
 ## 2026-08-19 — Rol dönüşümü: profil sayfaları + kişiye bildirim (#1252, 0.75.0-beta)
 
 **Bir kullanıcıya koşulsuz e-posta atan her yeni akış, sentinel adresleri düşünmeli.**
@@ -3714,3 +3738,36 @@ kurmadan hızlı bir doğrulama yolu.
 dalına `--force-with-lease` push ile PR numarasını korumak en temiz yol çıktı. Kapsam dışı
 hunk'ları (agent-experience.md) ve kaza silmelerini (EN `projects.demo` anahtarı —
 `check:i18n` bunu yakalar) bu aşamada ayıkla.
+
+## 2026-08-19 — Toplantı "bitti" işareti + JaaS canlı oda bilgisi (#1259, 0.81.0-beta)
+
+**Banner'daki "id" her zaman bir Meeting satırı değil.** `getUpcomingMeeting` seri
+tekrarlarını `<seriesId>:<ISO>` bileşik id'siyle uçuşta sentezliyor; bu id'ye durum
+yazan her yeni endpoint iki şekli de kabul etmek zorunda (ilk `:`'dan böl — cuid'de
+iki nokta yok). Kalıcı işaret için `MeetingSeriesReminder` ile aynı anahtar şekli
+(`@@unique([seriesId, occurrenceAt])`) birebir uydu; ayrıca gönderilen ISO'nun
+kuralın *gerçek* bir tekrarı olduğunu `seriesOccurrences` ile ±1 dk pencerede doğrulat,
+yoksa URL'e yazılan rastgele timestamp'ler tabloya çöp satır olarak girer.
+
+**Relation-bağlamlı bir toplantı N ayrı Meeting satırıdır** (davetli ilişki başına bir
+satır, aynı `meetLink`i paylaşırlar). "Bitti" gibi toplantı-düzeyi bir durum tek satıra
+yazılırsa diğer davetliler görmeye devam eder — fan-out anahtarı `(meetLink, scheduledAt)`
+ikilisi (link olay başına rastgele/eşsiz olduğu için güvenli kimlik).
+
+**Playwright pinli tarayıcı build'i eskisinden farklı bir dizin *düzeni* isteyebilir.**
+`/opt/pw-browsers`'ta 1194 var, pin 1234 istiyordu; dizini symlink'lemek yetmedi çünkü
+yeni sürüm `chrome-headless-shell-linux64/chrome-headless-shell` yolunu arıyor, eskisi
+`chrome-linux/headless_shell`. Çözüm: beklenen düzeni mkdir'le kur, binary'yi tek tek
+symlink'le, `INSTALLATION_COMPLETE` + `DEPENDENCIES_VALIDATED` dosyalarını `touch`la.
+
+**Webhook secret'ını query param olarak da kabul et** (`?secret=` — `x-webhook-secret`
+header'ına ek): JaaS konsolu her planda özel header alanı sunmuyor; URL'i zaten operatör
+yazdığı için sözleşme bizim tarafta kalıyor. Yapılandırılmamış secret = 404 (endpoint yok
+gibi), yanlış secret = 401 — inbound-email (#870) ile aynı desen, e2e'de
+`playwright.config.ts` webServer env'ine sabit test secret'ı ekleyerek test edilir.
+
+**ROOM_DESTROYED ≠ toplantı bitti.** Jitsi odası son kişi çıkınca ölür — erken girip
+çıkan tek kişi bile odayı yaratıp yok eder. Webhook beslemesini yalnızca gösterim
+(canlı katılımcı sayısı/isimleri) için kullan; "bitti" kararını katılımcıya bırak.
+Bayat state'e karşı da (serilerin `fixedLink`'i aynı odayı her hafta yeniden kullanır)
+`updatedAt` tazelik eşiği koy.

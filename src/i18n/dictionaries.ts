@@ -1026,6 +1026,9 @@ const en = {
       openInNewTab: 'Open in a new tab',
       notEmbeddable: 'This link cannot be shown inside the app.',
       embedFailed: 'The call could not be started here — open it in a new tab.',
+      freeRoomHint:
+        'If the room will not open at all, the same room also exists on the free server. Opening it also copies its link — share it with the participants so everyone lands in the same call.',
+      openFreeRoom: 'Continue in the free room',
     },
     notesWindow: {
       open: 'Notes window',
@@ -1447,6 +1450,9 @@ const en = {
     join: 'Join',
     joinAria: 'Join the meeting',
     noLink: 'No meeting link — ask the organiser.',
+    markEnded: 'Meeting is over',
+    markEndedConfirm: 'Mark this meeting as over? The banner disappears for every participant.',
+    liveParticipants: '{n} in the call',
   },
   menteeOnboarding: {
     title: 'Onboarding',
@@ -3745,6 +3751,9 @@ const tr: Dict = {
       openInNewTab: 'Yeni sekmede aç',
       notEmbeddable: 'Bu link uygulama içinde gösterilemiyor.',
       embedFailed: 'Görüşme burada başlatılamadı — yeni sekmede aç.',
+      freeRoomHint:
+        'Oda hiç açılmıyorsa aynı oda ücretsiz sunucuda da mevcut. Açtığınızda linki de kopyalanır — katılımcılarla paylaşın, herkes aynı görüşmede buluşur.',
+      openFreeRoom: 'Ücretsiz odada devam et',
     },
     notesWindow: {
       open: 'Not penceresi',
@@ -4161,6 +4170,9 @@ const tr: Dict = {
     join: 'Katıl',
     joinAria: 'Toplantıya katıl',
     noLink: 'Toplantı linki yok — düzenleyene sor.',
+    markEnded: 'Toplantı bitti',
+    markEndedConfirm: 'Toplantı bitti olarak işaretlensin mi? Bu şerit tüm katılımcılar için kaybolur.',
+    liveParticipants: 'Görüşmede {n} kişi var',
   },
   menteeOnboarding: {
     title: 'Onboarding',
@@ -6455,6 +6467,9 @@ const de: Dict = {
       openInNewTab: 'In neuem Tab öffnen',
       notEmbeddable: 'Dieser Link kann nicht in der App angezeigt werden.',
       embedFailed: 'Der Anruf konnte hier nicht gestartet werden — bitte in einem neuen Tab öffnen.',
+      freeRoomHint:
+        'Wenn sich der Raum gar nicht öffnet: Denselben Raum gibt es auch auf dem freien Server. Beim Öffnen wird sein Link mitkopiert — teilen Sie ihn mit den Teilnehmenden, damit alle im selben Gespräch landen.',
+      openFreeRoom: 'Im freien Raum fortfahren',
     },
     notesWindow: {
       open: 'Notizfenster',
@@ -6871,6 +6886,9 @@ const de: Dict = {
     join: 'Teilnehmen',
     joinAria: 'Am Treffen teilnehmen',
     noLink: 'Kein Meeting-Link — frag die Organisatorin.',
+    markEnded: 'Treffen ist vorbei',
+    markEndedConfirm: 'Dieses Treffen als beendet markieren? Der Hinweis verschwindet für alle Teilnehmenden.',
+    liveParticipants: '{n} im Gespräch',
   },
   menteeOnboarding: {
     title: 'Onboarding',

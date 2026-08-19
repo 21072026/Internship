@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     // same room, so the video link is generated once (Jitsi, no account needed)
     // when the organizer didn't paste one. The per-person RSVP token stays
     // unique — each participant confirms attendance individually.
-    const link = meetLink || generateMeetingLink();
+    const link = meetLink || generateMeetingLink({ inviteeCount: relations.length });
 
     let created = 0;
     for (const rel of relations) {
