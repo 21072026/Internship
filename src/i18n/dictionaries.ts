@@ -1012,7 +1012,7 @@ const en = {
       notEmbeddable: 'This link cannot be shown inside the app.',
       embedFailed: 'The call could not be started here — open it in a new tab.',
       freeRoomHint:
-        'If the room will not open at all, the same room also exists on the free server — share that link with the participants so everyone lands in the same call.',
+        'If the room will not open at all, the same room also exists on the free server. Opening it also copies its link — share it with the participants so everyone lands in the same call.',
       openFreeRoom: 'Continue in the free room',
     },
     notesWindow: {
@@ -3724,7 +3724,7 @@ const tr: Dict = {
       notEmbeddable: 'Bu link uygulama içinde gösterilemiyor.',
       embedFailed: 'Görüşme burada başlatılamadı — yeni sekmede aç.',
       freeRoomHint:
-        'Oda hiç açılmıyorsa aynı oda ücretsiz sunucuda da mevcut — o linki katılımcılarla paylaşın, herkes aynı görüşmede buluşur.',
+        'Oda hiç açılmıyorsa aynı oda ücretsiz sunucuda da mevcut. Açtığınızda linki de kopyalanır — katılımcılarla paylaşın, herkes aynı görüşmede buluşur.',
       openFreeRoom: 'Ücretsiz odada devam et',
     },
     notesWindow: {
@@ -6427,7 +6427,7 @@ const de: Dict = {
       notEmbeddable: 'Dieser Link kann nicht in der App angezeigt werden.',
       embedFailed: 'Der Anruf konnte hier nicht gestartet werden — bitte in einem neuen Tab öffnen.',
       freeRoomHint:
-        'Wenn sich der Raum gar nicht öffnet: Denselben Raum gibt es auch auf dem freien Server — teilen Sie diesen Link mit den Teilnehmenden, damit alle im selben Gespräch landen.',
+        'Wenn sich der Raum gar nicht öffnet: Denselben Raum gibt es auch auf dem freien Server. Beim Öffnen wird sein Link mitkopiert — teilen Sie ihn mit den Teilnehmenden, damit alle im selben Gespräch landen.',
       openFreeRoom: 'Im freien Raum fortfahren',
     },
     notesWindow: {

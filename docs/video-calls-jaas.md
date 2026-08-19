@@ -108,8 +108,10 @@ Meeting.meetLink  https://8x8.vc/<appId>/InternshipCRM-<hex>     ← src/lib/mee
 panel   ├─ GET /api/meetings/<id>/call-token                     ← authorizes, then signs
         │     200 { domain, appId, roomName, jwt }                  (src/lib/jaas.ts)
         │     409 { code: 'not-configured' | 'not-a-jaas-room' } → falls back to the link
-        │     ('not-a-jaas-room' is the *normal* answer for group/series meetings —
-        │      hybrid routing puts those on meet.jit.si by design)
+        │     (the panel only requests a token for 8x8.vc links; group/series
+        │      meetings live on meet.jit.si by design and take the plain-iframe
+        │      path with no token round trip — 'not-a-jaas-room' answers direct
+        │      API calls for them)
         │
         └─ new JitsiMeetExternalAPI('8x8.vc', { roomName, jwt })  ← src/components/meeting/JaasCall.tsx
 ```
@@ -136,8 +138,9 @@ panel   ├─ GET /api/meetings/<id>/call-token                     ← authori
 2. `GET /api/meetings/<id>/call-token` as a participant returns `200` with a `jwt`
    (and `Cache-Control: no-store`). A `409` names the reason in `code`.
 3. The panel shows the prejoin screen, then the call — and stays up past five minutes.
-   If the token were rejected the panel falls back to "open in a new tab" rather than
-   showing a blank box.
+   If the token were rejected the panel shows the failure view rather than a blank box:
+   "open in a new tab" plus the free-room fallback ("Continue in the free room", which
+   opens `https://meet.jit.si/<room>` and copies that link).
 
 ## Costs and limits
 

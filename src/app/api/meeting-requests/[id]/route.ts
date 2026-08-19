@@ -56,7 +56,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   // Accept → create the confirmed meeting with an auto video link. A request
-  // is always mentee → mentor, so the meeting is structurally a 1:1 call.
+  // lives in one relation's thread (either side may file it), so the confirmed
+  // meeting is structurally a 1:1 call: one mentor, one mentee.
   const link = generateMeetingLink({ inviteeCount: 1 });
   // The wall clock behind `proposedAt` was typed by the *requester* (see
   // POST /api/meeting-requests), so theirs is the zone this time was agreed on —

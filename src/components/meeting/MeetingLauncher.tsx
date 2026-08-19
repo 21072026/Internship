@@ -259,7 +259,17 @@ function MeetingSidePanel({ meeting, onClose }: { meeting: ActiveMeeting; onClos
       {freeFallback && (
         <>
           <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">{t.meetings.instant.freeRoomHint}</p>
-          <a href={freeFallback} target="_blank" rel="noopener noreferrer" data-testid="meeting-free-fallback">
+          <a
+            href={freeFallback}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="meeting-free-fallback"
+            // The hint asks the organizer to share the free-room link, and the
+            // header's copy button holds the (failing) original — so opening
+            // the free room also puts *its* link on the clipboard. Best-effort:
+            // a blocked clipboard must not stop the room from opening.
+            onClick={() => navigator.clipboard?.writeText(freeFallback).catch(() => {})}
+          >
             <Button size="sm" variant="outline">
               <ExternalLink className="h-4 w-4" />
               {t.meetings.instant.openFreeRoom}
