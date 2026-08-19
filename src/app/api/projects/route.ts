@@ -85,7 +85,7 @@ const schema = z.object({
   goals: z.string().max(5000).optional().nullable(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
-  ownerType: z.enum(['ADMIN', 'MENTOR', 'COMPANY']).optional(),
+  ownerType: z.enum(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY']).optional(),
   ownerUserId: z.string().optional().nullable(),
   ownerCompanyId: z.string().optional().nullable(),
 });
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     // ADMIN ownership defaults to the acting admin when no user id is supplied.
     const ownerUserId = d.ownerType === 'ADMIN' ? d.ownerUserId || session.user.id : d.ownerUserId;
     owner = await resolveOwner({ ownerType: d.ownerType, ownerUserId, ownerCompanyId: d.ownerCompanyId });
-    if (!owner) return NextResponse.json({ error: 'A valid owner (admin, mentor or company) is required' }, { status: 400 });
+    if (!owner) return NextResponse.json({ error: 'A valid owner (admin, mentor, mentee or company) is required' }, { status: 400 });
   }
 
   const project = await prisma.project.create({

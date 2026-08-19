@@ -70,3 +70,46 @@ test('owners panel: add an owner from the picker; last-owner removal shows the e
     await cleanupByEmail(adminEmail);
   }
 });
+
+// #1222: mentees are a valid project owner type. API-level regression: an
+// admin can create a MENTEE-owned project, and resolveOwner still refuses an
+// owner whose actual role does not match the claimed ownerType.
+test('a mentee can own a project; role mismatch is rejected', async ({ page }) => {
+  const adminEmail = uniqueEmail('menteeowner-admin');
+  const menteeEmail = uniqueEmail('menteeowner-mentee');
+  const mentorEmail = uniqueEmail('menteeowner-mentor');
+  const pw = 'Pass123!';
+  await seedUser(adminEmail, pw, 'ADMIN', 'MenteeOwner Admin');
+  const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'MenteeOwner Mentee');
+  const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'MenteeOwner Mentor');
+
+  await page.goto('/auth/signin');
+  await page.fill('input[type="email"], input[name="email"]', adminEmail);
+  await page.fill('input[type="password"]', pw);
+  await page.click('button[type="submit"]');
+  await page.waitForURL((url) => !url.pathname.startsWith('/auth'), { timeout: 20_000 });
+
+  let projectId = '';
+  try {
+    const ok = await page.request.post('/api/projects', {
+      data: { name: 'Mentee-Owned Project', ownerType: 'MENTEE', ownerUserId: mentee.id },
+    });
+    expect(ok.status()).toBe(201);
+    projectId = (await ok.json()).project?.id ?? (await ok.json()).id ?? '';
+    const row = await prisma.project.findFirst({ where: { name: 'Mentee-Owned Project' } });
+    expect(row?.ownerType).toBe('MENTEE');
+    expect(row?.ownerUserId).toBe(mentee.id);
+    projectId = row?.id ?? projectId;
+
+    // Claiming MENTEE ownership for a MENTOR-role user must be refused.
+    const bad = await page.request.post('/api/projects', {
+      data: { name: 'Bad Owner Project', ownerType: 'MENTEE', ownerUserId: mentor.id },
+    });
+    expect(bad.status()).toBe(400);
+  } finally {
+    if (projectId) await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
+    await cleanupByEmail(adminEmail);
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});
