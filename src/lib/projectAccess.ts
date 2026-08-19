@@ -7,7 +7,7 @@ interface SessionUser {
 }
 
 type ProjectOwner = {
-  ownerType: 'ADMIN' | 'MENTOR' | 'COMPANY';
+  ownerType: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY';
   ownerUserId: string | null;
   ownerCompanyId: string | null;
 };
@@ -62,12 +62,13 @@ export async function resolveOwner(input: {
   ownerCompanyId?: string | null;
 }): Promise<ProjectOwner | null> {
   const t = input.ownerType;
-  if (t === 'ADMIN' || t === 'MENTOR') {
+  if (t === 'ADMIN' || t === 'MENTOR' || t === 'MENTEE') {
     if (!input.ownerUserId) return null;
     const u = await prisma.user.findUnique({ where: { id: input.ownerUserId }, select: { role: true } });
     if (!u) return null;
     if (t === 'ADMIN' && u.role !== 'ADMIN') return null;
     if (t === 'MENTOR' && u.role !== 'MENTOR') return null;
+    if (t === 'MENTEE' && u.role !== 'MENTEE') return null;
     return { ownerType: t, ownerUserId: input.ownerUserId, ownerCompanyId: null };
   }
   if (t === 'COMPANY') {

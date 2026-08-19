@@ -32,7 +32,7 @@ interface Project {
   goals: string | null;
   startDate: string | null;
   endDate: string | null;
-  ownerType: 'ADMIN' | 'MENTOR' | 'COMPANY';
+  ownerType: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY';
   ownerUser?: { id: string; fullName: string } | null;
   ownerCompany?: { id: string; name: string } | null;
   tasks?: Task[];
@@ -64,6 +64,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   // Only the owner picker needs a directory here now; the member pickers moved
   // to the project page with the panel.
   const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
+  const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [ownerType, setOwnerType] = useState('ADMIN');
   const [ownerUserId, setOwnerUserId] = useState('');
@@ -84,6 +85,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
       .then((d) => {
         const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
         setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));
+        setMentees(users.filter((u) => u.role === 'MENTEE'));
       })
       .catch(() => {});
     if (!isAdmin) return;
@@ -124,6 +126,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
         // server validation ("Invalid owner").
         if (ownerType === 'COMPANY') payload.ownerCompanyId = ownerCompanyId;
         else if (ownerType === 'MENTOR') payload.ownerUserId = ownerUserId;
+        else if (ownerType === 'MENTEE') payload.ownerUserId = ownerUserId;
         else payload.ownerUserId = meId; // ADMIN → acting admin
       }
       const url = editingId ? `/api/projects/${editingId}` : '/api/projects';
@@ -258,10 +261,14 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-gray-100 pt-3">
               {editingId && <p className="sm:col-span-2 text-xs text-gray-500">{t.projects.transferHint}</p>}
               <Select label={t.projects.owner} value={ownerType} onChange={(e) => { setOwnerType(e.target.value); setOwnerUserId(''); setOwnerCompanyId(''); }}
-                options={[{ value: 'ADMIN', label: t.projects.ownerAdmin }, { value: 'MENTOR', label: t.projects.ownerMentor }, { value: 'COMPANY', label: t.projects.ownerCompany }]} />
+                options={[{ value: 'ADMIN', label: t.projects.ownerAdmin }, { value: 'MENTOR', label: t.projects.ownerMentor }, { value: 'MENTEE', label: t.projects.ownerMentee }, { value: 'COMPANY', label: t.projects.ownerCompany }]} />
               {ownerType === 'MENTOR' && (
                 <Select label={t.projects.ownerMentor} value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)}
                   options={[{ value: '', label: '—' }, ...mentors.map((m) => ({ value: m.id, label: m.fullName }))]} />
+              )}
+              {ownerType === 'MENTEE' && (
+                <Select label={t.projects.ownerMentee} value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value)}
+                  options={[{ value: '', label: '—' }, ...mentees.map((m) => ({ value: m.id, label: m.fullName }))]} />
               )}
               {ownerType === 'COMPANY' && (
                 <Select label={t.projects.ownerCompany} value={ownerCompanyId} onChange={(e) => setOwnerCompanyId(e.target.value)}

@@ -71,7 +71,7 @@ const schema = z.object({
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
   // Owner change (transfer) — admin only.
-  ownerType: z.enum(['ADMIN', 'MENTOR', 'COMPANY']).optional(),
+  ownerType: z.enum(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY']).optional(),
   ownerUserId: z.string().nullable().optional(),
   ownerCompanyId: z.string().nullable().optional(),
 });

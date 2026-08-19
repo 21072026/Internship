@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.80.0-beta] - 2026-08-19
+
+### Added
+- **Mentees can own projects** (#1222, reworked from PR #1223). `ProjectOwnerType`
+  gains `MENTEE`: the admin project form offers "A mentee" with a mentee picker,
+  `resolveOwner()` verifies the picked user really has the MENTEE role (as it already
+  did for ADMIN/MENTOR), and both project APIs accept the new owner type. The enum
+  widening deploys cleanly now that the schema guard tells widening from narrowing
+  (#1244/#1246). E2E regression in `e2e/project-owners-ui.spec.ts` covers the happy
+  path and the role-mismatch rejection. Differences from PR #1223: the out-of-scope
+  `docs/agent-experience.md` hunk was dropped, and an accidental deletion of the EN
+  `projects.demo` i18n key (which would have broken key parity) was not carried over.
+
 ## [0.79.0-beta] - 2026-08-19
 
 ### Changed

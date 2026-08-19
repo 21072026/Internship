@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.80.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Projects can now be owned by a mentee: when creating or transferring a project, "A mentee" is a choice of its own with a mentee picker — handy for personal and showcase projects that a mentee genuinely drives.',
+      ],
+      tr: [
+        'Projelerin sahibi artık bir mentee olabilir: proje oluştururken veya devrederken "Bir mentee" ayrı bir seçenek ve mentee seçicisiyle geliyor — bir mentee\u2019nin gerçekten yürüttüğü kişisel ve vitrin projeleri için birebir.',
+      ],
+      de: [
+        'Projekte können jetzt einem Mentee gehören: Beim Anlegen oder Übertragen eines Projekts ist "Ein Mentee" eine eigene Option mit Mentee-Auswahl — praktisch für persönliche und Showcase-Projekte, die ein Mentee wirklich selbst vorantreibt.',
+      ],
+    },
+  },
+  {
     version: '0.79.0-beta',
     date: '2026-08-19',
     highlights: {
