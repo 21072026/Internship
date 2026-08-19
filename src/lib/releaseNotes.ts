@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.80.2-beta',
+    version: '0.81.1-beta',
     date: '2026-08-19',
     highlights: {
       en: [
@@ -24,6 +24,24 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Dialoge sind jetzt vollständig per Tastatur bedienbar: Beim Öffnen wandert der Fokus hinein, bleibt mit Tab oder Umschalt+Tab im Dialog, Escape schließt ihn und der Fokus kehrt zum Ausgangspunkt zurück.',
+      ],
+    },
+  },
+  {
+    version: '0.81.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Video calls got smarter about hosting: one-on-one meetings run on our dedicated call service (no time limits in the embedded panel), while group meetings and recurring series use the free Jitsi server — so the paid allowance is spent only where it matters.',
+        'If an embedded call ever fails to start, the meeting panel now offers "Continue in the free room": the same room on the free server, so everyone still meets in one place with no interruption.',
+      ],
+      tr: [
+        'Görüntülü aramalarda akıllı yönlendirme: birebir görüşmeler özel arama servisimizde çalışıyor (gömülü panelde süre sınırı yok), grup toplantıları ve tekrarlayan seriler ise ücretsiz Jitsi sunucusunu kullanıyor — ücretli kota yalnızca gerektiği yerde harcanıyor.',
+        'Gömülü bir arama başlatılamazsa toplantı paneli artık "Ücretsiz odada devam et" seçeneği sunuyor: aynı oda ücretsiz sunucuda da açılıyor, böylece herkes kesintisiz aynı görüşmede buluşuyor.',
+      ],
+      de: [
+        'Videoanrufe werden jetzt klüger geroutet: Einzelgespräche laufen über unseren dedizierten Anrufdienst (ohne Zeitlimit im eingebetteten Panel), Gruppentermine und wiederkehrende Serien nutzen den freien Jitsi-Server — das bezahlte Kontingent wird nur dort verbraucht, wo es zählt.',
+        'Falls ein eingebetteter Anruf nicht startet, bietet das Meeting-Panel jetzt „Im freien Raum fortfahren“: derselbe Raum auf dem freien Server, sodass alle ohne Unterbrechung im selben Gespräch landen.',
       ],
     },
   },

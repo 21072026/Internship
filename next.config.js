@@ -33,9 +33,11 @@ const csp = [
   // The in-app meeting side panel embeds the Jitsi room we generate (#1054) —
   // narrow on purpose: only the hosts we actually create links for, and only
   // those hosts are allowed camera/microphone below (keep this in sync with
-  // EMBEDDABLE_MEETING_HOSTS in src/lib/meetingLink.ts). meet.jit.si stays for
-  // rooms created before the JaaS switch. The chat widget renders itself in an
-  // iframe, hence tawk.to here as well.
+  // EMBEDDABLE_MEETING_HOSTS in src/lib/meetingLink.ts). meet.jit.si carries
+  // group/bulk meetings and recurring series (hybrid routing — JaaS is 1:1
+  // only, src/lib/meetingRoom.ts), rooms created before the JaaS switch, and
+  // the free-room fallback when a JaaS call fails. The chat widget renders
+  // itself in an iframe, hence tawk.to here as well.
   `frame-src 'self' https://meet.jit.si ${JAAS} ${TAWK}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",

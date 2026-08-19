@@ -7,8 +7,7 @@ import { jaasConfig, jaasRoomUrl } from '@/lib/jaas';
 //
 // This used to be three copies of the same template literal (instant meetings,
 // accepted meeting requests, recurring series). They are one function now
-// because the JaaS switch below has to apply to all three — a room created on
-// the public instance would still cut out after five minutes.
+// because the JaaS/free-instance choice below has to apply to all of them.
 
 // The room name, without a host. Unguessable on purpose: the room is the only
 // thing protecting a call on the public instance, and on JaaS it is what the
@@ -17,14 +16,25 @@ export function generateMeetingRoomName(): string {
   return `InternshipCRM-${randomBytes(8).toString('hex')}`;
 }
 
-// A JaaS room when the tenant is configured, the public Jitsi otherwise.
+// Hybrid routing: JaaS MAU is a metered allowance (25/month on the free tier,
+// and *every* participant of a JaaS room counts), so the tenant is reserved for
+// the one flow where the embedded panel matters most and the head-count is
+// lowest — one-on-one calls. Everything else stays on the free public instance.
 //
-// The fallback is not a leftover: local dev, CI and every e2e run have no JaaS
-// credentials, and the five-minute embed limit is irrelevant there. It also
-// means a broken/expired key never leaves the app unable to create a meeting —
-// the link degrades to one that anybody can still open in a tab.
-export function generateMeetingLink(): string {
+//   inviteeCount === 1  → JaaS room, when the tenant is configured
+//                         (organizer + exactly one invitee = a 1:1 call)
+//   anything else       → https://meet.jit.si/<room>
+//                         (group/bulk links, and `null` for flows like
+//                         recurring series whose audience is derived from
+//                         membership later and can grow over time)
+//
+// The free fallback is not a leftover: local dev, CI and every e2e run have no
+// JaaS credentials. It also means a broken/expired key never leaves the app
+// unable to create a meeting — the link degrades to one that anybody can still
+// open in a tab. The runtime counterpart (an existing 8x8.vc room failing) is
+// handled client-side via freeMeetingFallbackLink in @/lib/meetingLink.
+export function generateMeetingLink(opts: { inviteeCount: number | null }): string {
   const room = generateMeetingRoomName();
-  const config = jaasConfig();
+  const config = opts.inviteeCount === 1 ? jaasConfig() : null;
   return config ? jaasRoomUrl(config, room) : `https://meet.jit.si/${room}`;
 }
