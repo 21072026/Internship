@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 
 import { CompanyForm } from '@/components/forms/CompanyForm';
@@ -35,6 +36,11 @@ export default function CompaniesPage() {
   const [clName, setClName] = useState('');
   const [clMsg, setClMsg] = useState('');
   const [clBusy, setClBusy] = useState(false);
+  const closeCompanyForm = () => {
+    setShowForm(false);
+    setEditingCompany(null);
+  };
+  const companyDialogRef = useModalFocus<HTMLDivElement>(showForm || editingCompany !== null, closeCompanyForm);
 
   const createCompanyLogin = async () => {
     setClBusy(true);
@@ -194,17 +200,21 @@ export default function CompaniesPage() {
       {/* Create/Edit Modal */}
       {(showForm || editingCompany) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">
+          <div
+            ref={companyDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="company-form-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          >
+            <h2 id="company-form-title" className="text-xl font-bold text-gray-900 mb-6">
               {editingCompany ? t.companiesPage.editCompany : t.companiesPage.addCompany}
             </h2>
             <CompanyForm
               defaultValues={editingCompany || undefined}
               onSubmit={editingCompany ? handleUpdate : handleCreate}
-              onCancel={() => {
-                setShowForm(false);
-                setEditingCompany(null);
-              }}
+              onCancel={closeCompanyForm}
               isEditing={!!editingCompany}
             />
           </div>

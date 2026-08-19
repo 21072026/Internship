@@ -8,6 +8,14 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.80.2-beta] - 2026-08-19
+
+### Fixed
+- **Modal keyboard accessibility** (#871). Opening a modal now moves focus to its first
+  available control, Tab and Shift+Tab stay within the modal, Escape closes it through its
+  normal close action, and focus returns to the control that opened it. Keyboard E2E coverage
+  verifies initial focus, both trap directions, Escape closure and focus restoration.
+
 ## [0.80.1-beta] - 2026-08-19
 
 ### Fixed

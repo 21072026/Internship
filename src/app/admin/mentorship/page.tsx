@@ -12,6 +12,7 @@ import { SavedViews } from '@/components/SavedViews';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen, Plus } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 // The assign dropdowns only ever show a name, so this asks the API for the
 // `picker` field set — no email/phone/university in the response (#855).
@@ -54,6 +55,7 @@ export default function MentorshipPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const assignDialogRef = useModalFocus<HTMLDivElement>(showForm, () => setShowForm(false));
   const [formData, setFormData] = useState({ mentorId: '', menteeId: '', companyId: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -208,8 +210,15 @@ export default function MentorshipPage() {
       {/* Create Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">{t.mentorships.assign}</h2>
+          <div
+            ref={assignDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mentorship-assign-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl p-6 w-full max-w-md"
+          >
+            <h2 id="mentorship-assign-title" className="text-xl font-bold text-gray-900 mb-6">{t.mentorships.assign}</h2>
             {formError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{formError}</div>
             )}

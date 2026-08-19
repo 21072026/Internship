@@ -10,6 +10,7 @@ import { isEmbeddableMeetingLink, parseJaasMeetingLink } from '@/lib/meetingLink
 import { meetingNotesAutoOpen, useFloatingNotes } from '@/components/meeting/FloatingNotes';
 import { JaasCall } from '@/components/meeting/JaasCall';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 // "Start a meeting now" (#1053, #1054).
 //
@@ -83,16 +84,16 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
   const [error, setError] = useState('');
   const [active, setActive] = useState<ActiveMeeting | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const closePending = useCallback(() => {
+    if (!busy) setPending(null);
+  }, [busy]);
+  const pendingDialogRef = useModalFocus<HTMLDivElement>(pending !== null, closePending);
 
   const start = useCallback((opts: StartOptions) => {
     setError('');
     setTitle(opts.defaultTitle ?? '');
     setPending(opts);
   }, []);
-
-  useEffect(() => {
-    if (pending) inputRef.current?.focus();
-  }, [pending]);
 
   // After mount, never during render: reading storage while rendering would
   // make the server and client markup disagree.
@@ -163,10 +164,12 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
 
       {pending && (
         <div
+          ref={pendingDialogRef}
           className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-4"
           role="dialog"
           aria-modal="true"
           aria-label={t.meetings.instant.start}
+          tabIndex={-1}
           onClick={() => !busy && setPending(null)}
         >
           <div
@@ -186,7 +189,6 @@ export function MeetingLauncherProvider({ children }: { children: React.ReactNod
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') confirm();
-                if (e.key === 'Escape' && !busy) setPending(null);
               }}
             />
             {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
