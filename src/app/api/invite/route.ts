@@ -7,6 +7,7 @@ import { sendInvitationEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { isProjectOwner } from '@/lib/projectAccess';
+import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { z } from 'zod';
 import crypto from 'crypto';
 
@@ -71,11 +72,34 @@ export async function POST(request: Request) {
         mentorId = parsed.data.mentorId || null;
         menteeId = parsed.data.menteeId || null;
       }
+      // Capacity/availability warning (#942): advisory only, mirrors POST
+      // /api/mentorship and the request-approval endpoint's use of
+      // getMentorAvailability(). The MentorshipRelation itself isn't created
+      // yet here — that happens at registration (register/route.ts) — this
+      // just warns the admin up front about the mentor they're pre-linking.
+      let warnings: string[] = [];
       if (mentorId) {
-        const mentor = await prisma.user.findUnique({ where: { id: mentorId }, select: { role: true, isActive: true } });
+        const mentor = await prisma.user.findUnique({
+          where: { id: mentorId },
+          select: { role: true, isActive: true, mentorCapacity: true, acceptingMentees: true },
+        });
         if (!mentor?.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
           return NextResponse.json({ error: 'The chosen mentor is not an active mentor' }, { status: 400 });
         }
+        const activeMenteeCount = await prisma.mentorshipRelation.count({
+          where: { mentorId, status: 'ACTIVE' },
+        });
+        const availability = getMentorAvailability({
+          mentorCapacity: mentor.mentorCapacity,
+          activeMenteeCount,
+          acceptingMentees: mentor.acceptingMentees,
+        });
+        warnings =
+          availability.status === 'at_capacity'
+            ? ['mentor_at_capacity']
+            : availability.status === 'not_accepting'
+              ? ['mentor_not_accepting']
+              : [];
       }
       if (menteeId) {
         const mentee = await prisma.user.findUnique({ where: { id: menteeId }, select: { role: true, isActive: true } });
@@ -159,6 +183,7 @@ export async function POST(request: Request) {
           invitationId: invitation.id,
           registerUrl,
           emailSent,
+          warnings,
         },
         { status: 201 }
       );
