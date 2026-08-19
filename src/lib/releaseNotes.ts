@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.84.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Duplicate candidate records are now caught and mergeable: the admin panel gained a Duplicates screen that finds records that look like the same person (matching name — Turkish characters handled —, phone or e-mail) and lets an admin merge them into one, moving every interaction, message, document, goal, evaluation and stage history along.',
+        'Wherever a candidate can be created — mentor entry, CSV import, applications and sign-ups — the system now warns about possible duplicates before a second record is born; nothing is ever merged automatically.',
+      ],
+      tr: [
+        'Yinelenen aday kayıtları artık yakalanıyor ve birleştirilebiliyor: yönetici paneline, aynı kişi gibi görünen kayıtları (Türkçe karakterlere dayanıklı ad, telefon veya e-posta eşleşmesi) bulan bir Yinelenenler ekranı eklendi; yönetici iki kaydı tek kayda birleştirebiliyor — tüm etkileşimler, mesajlar, belgeler, hedefler, değerlendirmeler ve aşama geçmişi birlikte taşınıyor.',
+        'Aday oluşturulabilen her yerde — mentor girişi, CSV içe aktarma, başvurular ve kayıtlar — sistem ikinci bir kayıt doğmadan önce olası yinelenenler için uyarıyor; hiçbir şey otomatik birleştirilmiyor.',
+      ],
+      de: [
+        'Doppelte Kandidaten-Datensätze werden jetzt erkannt und lassen sich zusammenführen: Das Admin-Panel hat einen Duplikate-Bildschirm bekommen, der Einträge findet, die nach derselben Person aussehen (Name — türkische Zeichen inklusive —, Telefon oder E-Mail), und sie zu einem Datensatz vereint — mit allen Interaktionen, Nachrichten, Dokumenten, Zielen, Bewertungen und dem Phasenverlauf.',
+        'Überall, wo ein Kandidat angelegt werden kann — Mentor-Eingabe, CSV-Import, Bewerbungen und Registrierungen — warnt das System jetzt vor möglichen Duplikaten, bevor ein zweiter Datensatz entsteht; zusammengeführt wird nie automatisch.',
+      ],
+    },
+  },
+  {
     version: '0.83.0-beta',
     date: '2026-08-19',
     highlights: {

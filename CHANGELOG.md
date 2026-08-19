@@ -8,6 +8,36 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.84.0-beta] - 2026-08-19
+
+### Added
+- **Duplicate candidate detection & merge (#841).** The same student could enter through
+  four doors (CSV import, self-registration, mentor manual entry, public application) that
+  never checked each other; there was no way to combine the resulting records.
+  - `src/lib/duplicateDetection.ts`: shared detector — exact signals on normalized e-mail
+    and phone (country code / trunk zero / separators stripped, last-10-digit compare,
+    cross-checked against WhatsApp), fuzzy name matching with Turkish-safe normalization
+    (İ/ı, ş, ğ, ç, ö, ü via `transliterate` before lowercasing — the `'İ'.toLowerCase()`
+    two-code-point trap is unit-tested), university as a corroborating signal. Generated
+    `@import.local` / `@erased.local` addresses never match. Org-scoped.
+  - Warn, never auto-merge: the mentor "new mentee" form gets a pre-flight 409 with a
+    comparison panel and an explicit "create anyway" override; CSV import (incl. dry run)
+    reports possible duplicates per row; public apply/register and source submissions
+    notify admins (`duplicate.suspected`) without leaking anything into public responses.
+  - `src/lib/mergeUsers.ts`: MENTEE-into-MENTEE merge in ONE transaction — every FK-backed
+    relation re-pointed with per-constraint dedupe (consents, files, project membership,
+    onboarding, reminders), bare no-FK user-id columns re-pointed (messages, evaluations,
+    meetings, audit trails), derived unique keys recomputed (`CompanyInterest.scopeKey`,
+    `InterviewRequest.activeKey`, `Conversation.directKey` incl. folding converged direct
+    threads), mentorship relations collapsed semantically with weekly-report weekStart
+    dedupe, profile fields folded (copy-if-empty + skills/languages union), then the
+    duplicate row deleted. Refuses cross-org, non-MENTEE, erased and directly-linked pairs.
+  - `/admin/duplicates`: bulk scan report with signal badges + side-by-side compare and an
+    irreversible-merge dialog copying the erase pattern (typed name + admin password
+    step-up, impersonation refused); `AuditLog` `USER_MERGE` entry with moved-row counts.
+  - EN/TR/DE throughout; 14-test unit spec for the normalizers/matcher plus a full e2e
+    merge spec asserting every moved relation and the audit record.
+
 ## [0.83.0-beta] - 2026-08-19
 
 ### Added
