@@ -3672,3 +3672,45 @@ ile webServer atlanır, saf node testi milisaniyelerde koşar) — tsconfig path
 **Keşif ajanlarına "kim okuyor" sorusunu da sordurun.** Render yüzeylerini tarayan ajan, GDPR
 export'unun `select { type, text }` ile taşınan satırların içeriğini sessizce düşüreceğini buldu
 — hiçbir test bunu yakalamazdı; export artık render edilmiş metni dışa veriyor.
+## 2026-08-19 — PR kuyruğu, demo provizyonu ve tek-tık demo girişi (Claude Code oturumu)
+
+**Versiyon dosyaları PR zincirini seri hale getiriyor.** `package.json` + `CHANGELOG.md` +
+`releaseNotes.ts` her PR'da aynı satırlardan değiştiği için, bekleyen N PR'ın her biri bir
+öncekinin merge'ünü bekleyip rebase + yeniden numaralandırma istiyor. Pratik akış: her PR'a
+auto-merge kur, `gh pr checks <n> --watch`'ı arka plana at, merge bitince sıradakini rebase et.
+Çakışma çözümünde `git checkout --ours <üç dosya>` + kendi girdini python ile başa enjekte
+etmek, iç içe geçmiş conflict marker'larını elle ayıklamaktan çok daha güvenilir.
+
+**`prisma migrate diff`'in iki yönü farklı SQL lehçesi üretiyor.** İleri yön (url→schema)
+tek satır, büyük harf `ENUM`, virgülden sonra boşluklu; ters yön (schema→url) çok satırlı,
+küçük harf `enum`, boşluksuz ve `-- AlterTable` yorum başlıklı. Üstüne MariaDB'nin
+Json→longtext takma adı, ters diff'te ilgisiz `MODIFY x longtext` gürültüsünü hedef kolonla
+AYNI `ALTER`'ın içine gömüyor. schema-guard'ın enum-genişletme iyileştirmesi bu yüzden
+ifade değil **clause** bazında karşılaştırmak zorunda kaldı (#1244/#1246). Yeni desen
+sınıfları eklerken `infra/test/schema-guard.test.sh`'a iki lehçeden de birebir fixture koy.
+
+**Demo ortamı kod değil, runbook'tu.** #1234 "demo shipped" derken sunucu tarafı
+(DB + demo.env + container + vhost) hiç kurulmamıştı — docs/DEMO.md bunu açıkça "landing
+linkini ortamı kuran PR'da ekle" diye notlamıştı ama issue'su yoktu, görünmez kaldı.
+Ders: bir özellik "ops adımı bekliyor" durumundaysa mutlaka issue aç; changelog'a "var"
+yazıldığı anda kullanıcı onu arıyor. Provizyonda `infra/server/topic-deploy.sh`'ın Plesk
+subdomain + wildcard-cert + `vhost_nginx.conf` reçetesi demo için birebir yeniden
+kullanılabilir çıktı (SUBLABEL=crm-demo, PORT=3203). `plesk bin subdomain --update` bazen
+"tryProcessCommand() on null" hatası basıyor ama iş görülmüş oluyor — çıktıya değil
+`curl /api/health`'e güven.
+
+**Demo container'ı imaj tazelemez.** `demo-reset.yml` yalnızca veriyi sıfırlıyor; merge
+sonrası yeni preview imajını göstermek için container'ı elle değiştirmek gerekti
+(`docker run --env-file /etc/internship-crm/demo.env` + `prisma db push`). Kalıcı çözüm #1249.
+
+**`IS_DEMO_MODE` server-only olduğu için client sayfaya prop ile iner.** Tek-tık demo
+girişinde `auth/signin/page.tsx` ince server wrapper'a dönüştü (#1253 deseni): bayrağı ve
+demo hesaplarını çözüp client forma prop geçiyor; demo dışı ortamlarda prop null ve davranış
+birebir eski. `DEMO_MODE=true npx next dev -p 3005` + SSR HTML'de testid grep'i, tam e2e
+kurmadan hızlı bir doğrulama yolu.
+
+**Copilot/insan PR'ları eskiyince**: dalı rebase etmek yerine son gerçek commit'i
+`cherry-pick` ile (yazarlığı koruyarak, `--author` + amend) taze dala almak ve aynı-repo
+dalına `--force-with-lease` push ile PR numarasını korumak en temiz yol çıktı. Kapsam dışı
+hunk'ları (agent-experience.md) ve kaza silmelerini (EN `projects.demo` anahtarı —
+`check:i18n` bunu yakalar) bu aşamada ayıkla.
