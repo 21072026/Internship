@@ -119,6 +119,30 @@ export default function NewMenteePage() {
       <Card className="max-w-2xl">
         <CardHeader><CardTitle>{t.mentor.addMentee}</CardTitle></CardHeader>
         {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+        {duplicates.length > 0 && (
+          <div data-testid="possible-duplicates" className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+            <p className="font-medium text-amber-800">{t.duplicates.possibleDuplicatesTitle}</p>
+            <p className="text-amber-700 mt-1">{t.duplicates.possibleDuplicatesHint}</p>
+            <ul className="mt-2 space-y-1">
+              {duplicates.map((d) => (
+                <li key={d.id} className="text-amber-800">
+                  <span className="font-medium">{d.fullName}</span>
+                  {d.email ? <span className="text-amber-700"> · {d.email}</span> : null}
+                  {d.university ? <span className="text-amber-700"> · {d.university}</span> : null}
+                  <span className="text-amber-700"> — {t.duplicates.matchedOn}: {d.signals.map(signalLabel).join(', ')}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex gap-2">
+              <Button type="button" variant="secondary" loading={saving} onClick={() => doSubmit(true)}>
+                {t.duplicates.createAnyway}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setDuplicates([])}>
+                {t.common.cancel}
+              </Button>
+            </div>
+          </div>
+        )}
         <form onSubmit={submit} className="space-y-4">
           <Input label={t.mentor.fullName} required value={form.fullName} onChange={(e) => set('fullName', e.target.value)} />
           <Input label={t.mentor.emailOptional} type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
