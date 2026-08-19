@@ -11,6 +11,7 @@ import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
+import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -21,6 +22,8 @@ const schema = z.object({
   university: z.string().optional(),
   department: z.string().optional(),
   referralSource: z.string().optional(),
+  // Set on resubmit after the duplicate warning (#841): "yes, create anyway".
+  confirmDuplicate: z.boolean().optional(),
 });
 
 // A mentor (or admin) creates a mentee and assigns it to themselves in one step.
@@ -58,6 +61,32 @@ export async function POST(request: Request) {
       const gate = await checkActiveRelationLimit(orgId);
       if (!gate.allowed) {
         return NextResponse.json(planLimitError(gate), { status: 403 });
+      }
+
+      // Duplicate pre-flight (#841): warn — never auto-merge, never block. The
+      // mentor sees the matches and resubmits with confirmDuplicate to proceed.
+      const duplicates = await findPossibleDuplicates({
+        orgId,
+        fullName,
+        email: hasRealEmail ? finalEmail : null,
+        phone: rest.phone,
+        whatsapp: rest.whatsapp,
+        university: rest.university,
+      });
+      if (duplicates.length > 0 && !parsed.data.confirmDuplicate) {
+        return NextResponse.json(
+          {
+            error: 'possible_duplicate',
+            possibleDuplicates: duplicates.map((m) => ({
+              id: m.id,
+              fullName: m.fullName,
+              email: m.email,
+              university: m.university,
+              signals: m.signals,
+            })),
+          },
+          { status: 409 },
+        );
       }
 
       const mentee = await prisma.user.create({

@@ -19,21 +19,32 @@ export default function NewMenteePage() {
   const [error, setError] = useState('');
   const [setPasswordUrl, setSetPasswordUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Possible-duplicate matches returned by the API's 409 pre-flight (#841).
+  const [duplicates, setDuplicates] = useState<
+    { id: string; fullName: string; email: string; university: string | null; signals: string[] }[]
+  >([]);
 
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doSubmit = async (confirmDuplicate: boolean) => {
     setSaving(true);
     setError('');
     try {
       const res = await fetch('/api/mentor/mentees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(confirmDuplicate ? { ...form, confirmDuplicate: true } : form),
       });
       const data = await res.json();
+      // The API warns about look-alike candidates before creating; the mentor
+      // can review, edit the form, or explicitly create anyway.
+      if (res.status === 409 && data.error === 'possible_duplicate') {
+        setDuplicates(data.possibleDuplicates ?? []);
+        setSaving(false);
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Failed');
+      setDuplicates([]);
       // With a real email, show the set-password link so the mentor can share
       // it if the email doesn't arrive; otherwise go straight to the list.
       if (data.setPasswordUrl) {
@@ -47,6 +58,14 @@ export default function NewMenteePage() {
       setSaving(false);
     }
   };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doSubmit(false);
+  };
+
+  const signalLabel = (s: string) =>
+    t.duplicates.signals[s as keyof typeof t.duplicates.signals] ?? s;
 
   if (setPasswordUrl) {
     return (
