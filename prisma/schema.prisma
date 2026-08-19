@@ -1545,6 +1545,11 @@ model Meeting {
   createdAt      DateTime   @default(now())
   // Null for manually scheduled meetings; set for auto-generated series instances.
   seriesId       String?
+  // "This meeting is over" — set when any participant marks it ended, which
+  // hides the dashboard banner for everyone instead of letting the assumed
+  // 60-minute window run out. Null = never marked; the window still applies.
+  endedAt        DateTime?
+  endedById      String?
 
   relation     MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
   project      Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1581,6 +1586,7 @@ model MeetingSeries {
   project   Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
   meetings  Meeting[]
   reminders MeetingSeriesReminder[]
+  ends      MeetingOccurrenceEnd[]
 
   @@index([projectId])
 }
@@ -1605,6 +1611,38 @@ model MeetingSeriesReminder {
   series MeetingSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
   @@unique([seriesId, occurrenceAt, lead])
+}
+
+// "This occurrence is over" for a series occurrence that has no Meeting row —
+// the dashboard banner synthesizes those on the fly (src/lib/upcomingMeeting.ts),
+// so the end mark needs its own home, keyed the same way as the reminders above.
+// Occurrences that DO have a generated Meeting row get both marks (the row's
+// endedAt and one of these), so every viewer's representation is covered.
+model MeetingOccurrenceEnd {
+  id           String   @id @default(cuid())
+  seriesId     String
+  occurrenceAt DateTime
+  endedById    String
+  endedAt      DateTime @default(now())
+
+  series MeetingSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, occurrenceAt])
+}
+
+// Live state of one JaaS video room, fed by the tenant's webhooks
+// (/api/webhooks/jaas, enabled by JAAS_WEBHOOK_SECRET). Purely informational:
+// the dashboard banner shows "n in the call" while the room is active. Keyed by
+// the bare room name (unguessable, unique per meeting; a series' fixedLink
+// reuses one room, so readers must also check freshness via updatedAt).
+model MeetingRoomState {
+  id           String   @id @default(cuid())
+  room         String   @unique
+  active       Boolean  @default(false)
+  // JSON array of { id, name } for everyone currently in the room.
+  participants Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // Audit trail of pipeline stage changes for a mentorship.

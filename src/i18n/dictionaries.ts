@@ -1435,6 +1435,9 @@ const en = {
     join: 'Join',
     joinAria: 'Join the meeting',
     noLink: 'No meeting link — ask the organiser.',
+    markEnded: 'Meeting is over',
+    markEndedConfirm: 'Mark this meeting as over? The banner disappears for every participant.',
+    liveParticipants: '{n} in the call',
   },
   menteeOnboarding: {
     title: 'Onboarding',
@@ -4142,6 +4145,9 @@ const tr: Dict = {
     join: 'Katıl',
     joinAria: 'Toplantıya katıl',
     noLink: 'Toplantı linki yok — düzenleyene sor.',
+    markEnded: 'Toplantı bitti',
+    markEndedConfirm: 'Toplantı bitti olarak işaretlensin mi? Bu şerit tüm katılımcılar için kaybolur.',
+    liveParticipants: 'Görüşmede {n} kişi var',
   },
   menteeOnboarding: {
     title: 'Onboarding',
@@ -6845,6 +6851,9 @@ const de: Dict = {
     join: 'Teilnehmen',
     joinAria: 'Am Treffen teilnehmen',
     noLink: 'Kein Meeting-Link — frag die Organisatorin.',
+    markEnded: 'Treffen ist vorbei',
+    markEndedConfirm: 'Dieses Treffen als beendet markieren? Der Hinweis verschwindet für alle Teilnehmenden.',
+    liveParticipants: '{n} im Gespräch',
   },
   menteeOnboarding: {
     title: 'Onboarding',

@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.82.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Meeting over? Say so: while a meeting is running, any participant can mark it as over from the dashboard strip — it then disappears for everyone at once, instead of showing "in progress" for the rest of the assumed hour.',
+        'The meeting strip can now show who is really in the video call ("2 in the call: …") when the video tenant’s live feed is connected — real names, live, not a guess.',
+      ],
+      tr: [
+        'Toplantı bitti mi? Söyleyin: toplantı sürerken katılımcılardan herhangi biri panodaki şeritten toplantıyı bitti olarak işaretleyebilir — şerit varsayılan bir saatin geri kalanında "devam ediyor" göstermek yerine herkes için aynı anda kaybolur.',
+        'Toplantı şeridi, görüntülü görüşme kiracısının canlı akışı bağlıysa görüşmede gerçekten kimlerin olduğunu da gösterebiliyor ("Görüşmede 2 kişi var: …") — tahmin değil, gerçek isimlerle canlı bilgi.',
+      ],
+      de: [
+        'Treffen vorbei? Sag es: Während ein Treffen läuft, kann jede teilnehmende Person es über den Hinweis auf dem Dashboard als beendet markieren — der Hinweis verschwindet dann sofort für alle, statt für den Rest der angenommenen Stunde "läuft" anzuzeigen.',
+        'Der Meeting-Hinweis kann jetzt zeigen, wer wirklich im Videoanruf ist („2 im Gespräch: …“), wenn der Live-Feed des Video-Tenants angebunden ist — echte Namen, live, keine Vermutung.',
+      ],
+    },
+  },
+  {
     version: '0.81.0-beta',
     date: '2026-08-19',
     highlights: {
