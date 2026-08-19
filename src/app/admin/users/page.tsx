@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { roleHome } from '@/lib/roleHome';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { UserEraseForm } from '@/components/UserEraseForm';
+import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { useT } from '@/i18n/client';
 import type { AccountState } from '@/lib/accountState';
 
@@ -61,10 +62,6 @@ export default function AdminUsersPage() {
   // refuses credential changes and deletion while impersonating, and no admin
   // knows the account holder's password anyway.
   const [eraseId, setEraseId] = useState<string | null>(null);
-  // Row whose role-conversion panel is open (#1243). Kept as a confirm step:
-  // converting revokes every session the person has, which deserves a pause.
-  const [convertId, setConvertId] = useState<string | null>(null);
-  const [convertError, setConvertError] = useState<{ userId: string; message: string } | null>(null);
   const PAGE_SIZE = 20;
 
   const loginAs = async (u: AdminUser) => {
@@ -112,10 +109,6 @@ export default function AdminUsersPage() {
     setUsers(data.users ?? []);
     setTotal(data.total ?? 0);
     setArchivedCount(data.archivedCount ?? 0);
-    // Any reload invalidates an open conversion panel: the row it belonged to
-    // may have changed role, moved to another page, or been filtered out — a
-    // panel that silently reopens on the way back would confirm stale intent.
-    setConvertId(null);
     setLoading(false);
   }, [page, statusView, filter, debouncedSearch]);
 
@@ -165,41 +158,6 @@ export default function AdminUsersPage() {
       );
     } catch (e) {
       setResendResult({ userId: u.id, ok: false, message: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  // Convert MENTOR ↔ MENTEE (#1243). The endpoint revokes the target's
-  // sessions, so the person returns as the new role at their next sign-in;
-  // existing mentorships survive because the shells are derived from the
-  // relation table (#1141).
-  const convertRole = async (u: AdminUser) => {
-    if (busyId) return; // guard against a double-click firing two conversions
-    const newRole = u.role === 'MENTOR' ? 'MENTEE' : 'MENTOR';
-    setBusyId(u.id);
-    setConvertError(null);
-    try {
-      const res = await fetch(`/api/users/${u.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? t.common.error);
-      }
-      setConvertId(null);
-      await load();
-    } catch (e) {
-      setConvertError({
-        userId: u.id,
-        message: t.usersAdmin.convertFailed.replace('{e}', e instanceof Error ? e.message : String(e)),
-      });
-      // Refresh alongside the error: the usual cause is a stale row (another
-      // tab or admin already changed the account), and retrying against it
-      // would just loop on the same answer.
-      await load();
     } finally {
       setBusyId(null);
     }
@@ -311,11 +269,6 @@ export default function AdminUsersPage() {
                   {impersonateError?.userId === u.id && (
                     <p className="text-xs text-red-600 mt-1">{impersonateError.message}</p>
                   )}
-                  {/* Outside the confirm panel: the error path reloads the list,
-                      which closes the panel — the message must outlive it. */}
-                  {convertError?.userId === u.id && (
-                    <p className="text-xs text-red-600 mt-1" data-testid={`convert-role-error-${u.id}`}>{convertError.message}</p>
-                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <RoleBadge role={u.role} />
@@ -351,18 +304,7 @@ export default function AdminUsersPage() {
                   >
                     {u.isActive ? t.usersAdmin.deactivate : t.usersAdmin.activate}
                   </Button>
-                  {/* Role conversion is people-roles only (#1243): ADMIN is not
-                      grantable here, and COMPANY/SOURCE have structural links. */}
-                  {(u.role === 'MENTOR' || u.role === 'MENTEE') && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      data-testid={`convert-role-${u.id}`}
-                      onClick={() => { setConvertId(convertId === u.id ? null : u.id); setConvertError(null); }}
-                    >
-                      {u.role === 'MENTEE' ? t.usersAdmin.makeMentor : t.usersAdmin.makeMentee}
-                    </Button>
-                  )}
+                  <RoleConvertButton userId={u.id} fullName={u.fullName} role={u.role} onDone={load} />
                   {/* Admin accounts are out of scope (the endpoint refuses them):
                       demote first, or let the owner delete their own account. */}
                   {u.role !== 'ADMIN' && u.id !== session?.user?.id && (
@@ -377,26 +319,6 @@ export default function AdminUsersPage() {
                   )}
                 </div>
               </div>
-              {convertId === u.id && (
-                <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-900 p-3">
-                  <p className="text-sm text-gray-700 dark:text-gray-300">
-                    {(u.role === 'MENTEE' ? t.usersAdmin.convertToMentorConfirm : t.usersAdmin.convertToMenteeConfirm).replace('{name}', u.fullName)}
-                  </p>
-                  <div className="flex gap-2 mt-3">
-                    <Button
-                      size="sm"
-                      loading={busyId === u.id}
-                      data-testid={`convert-role-confirm-${u.id}`}
-                      onClick={() => convertRole(u)}
-                    >
-                      {t.usersAdmin.convertConfirm}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { setConvertId(null); setConvertError(null); }}>
-                      {t.common.cancel}
-                    </Button>
-                  </div>
-                </div>
-              )}
               {eraseId === u.id && (
                 <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900 p-3">
                   <UserEraseForm

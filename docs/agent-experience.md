@@ -10,6 +10,26 @@ Newest entries on top.
 
 ---
 
+## 2026-08-19 — Rol dönüşümü: profil sayfaları + kişiye bildirim (#1252, 0.75.0-beta)
+
+**Bir kullanıcıya koşulsuz e-posta atan her yeni akış, sentinel adresleri düşünmeli.**
+`@import.local` (mentor'un elle girdiği aday) ve `@erased.local` (silinmiş hesap) adresleri
+gerçek değil; kritik relay'den sekerek deliverability'yi yakar. Hazır helper'lar var:
+`isUnusableEmail()` iki domain'i birden kapsar, `isErasedAccount()` silinmişleri tanır
+(src/lib/menteeAccount.ts). Adversarial review bunu da commit'ten önce yakaladı — kişiye
+dönük yan etki ekleyen her PR'da "bu kullanıcı gerçek mi, adresi mail'lenebilir mi" sorusu
+checklist'e girmeli.
+
+**Review workflow ajanları kota sınırına takılabiliyor** ("You've hit your limit") — journal'da
+`result: null` olarak görünür ve sessizce kaybolur. `journal.jsonl`'i okurken null'ları sayın;
+kaybolan boyut kritikse (ör. correctness) elden gözden geçirin ya da limit sıfırlanınca
+`resumeFromRunId` ile devam edin — tamamlanan ajanlar cache'ten döner.
+
+**Aynı oturumda üçüncü kez rebase:** `claude/...` branch'i merge'lendikçe aynı adla
+`git checkout -B <branch> origin/main` ile yeniden başlatıp push'u `--force-with-lease` yapmak
+sorunsuz — ama remote branch PR merge'inde otomatik silinmişse lease "stale info" ile reddeder;
+`git fetch origin <branch>` de "couldn't find remote ref" veriyorsa düz `git push -u` doğrudur.
+
 ## 2026-08-18 — Admin rol dönüşümü MENTOR ↔ MENTEE (#1243, 0.74.0-beta)
 
 **Playwright'in pinlediği browser sürümü konteynerdekiyle uyuşmayınca dizin *düzeni* de
