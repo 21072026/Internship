@@ -8,6 +8,19 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.76.0-beta] - 2026-08-19
+
+### Added
+- **One-click demo sign-in** (#966, maintainer request). On the demo instance the
+  sign-in page shows the shared demo accounts as three buttons (Admin / Mentor /
+  Mentee, `demo-quick-login`) that sign in directly — no copying credentials from
+  `/demo`. `src/app/auth/signin/page.tsx` became a thin server wrapper that resolves
+  the server-only `IS_DEMO_MODE` flag and hands `DEMO_ACCOUNTS`/`DEMO_PASSWORD` to the
+  (unchanged) client form as a prop — on every non-demo instance the prop is null and
+  the page renders exactly as before (guarded by an e2e test). The Safari
+  session-settle poll was extracted into `settleAndRedirect()` and shared by both
+  sign-in paths. i18n: `demo.quickTitle`/`demo.quickHint` (EN/TR/DE).
+
 ## [0.75.0-beta] - 2026-08-19
 
 ### Added

@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.76.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Signing in to the live demo is now one click: the demo’s sign-in page shows the three shared accounts as buttons — pick Admin, Mentor or Mentee and you are in, no credentials to copy.',
+      ],
+      tr: [
+        'Canlı demoya giriş artık tek tık: demonun giriş sayfası üç ortak hesabı buton olarak gösteriyor — Yönetici, Mentor veya Mentee’yi seçin, içeridesiniz; kopyalanacak şifre yok.',
+      ],
+      de: [
+        'Die Anmeldung in der Live-Demo ist jetzt ein Klick: Die Anmeldeseite der Demo zeigt die drei gemeinsamen Konten als Buttons — Admin, Mentor oder Mentee wählen und du bist drin, ohne Zugangsdaten zu kopieren.',
+      ],
+    },
+  },
+  {
     version: '0.75.0-beta',
     date: '2026-08-19',
     highlights: {

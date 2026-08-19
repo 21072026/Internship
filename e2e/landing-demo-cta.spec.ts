@@ -27,3 +27,12 @@ test('the demo CTA is localized', async ({ page }) => {
   await page.reload();
   await expect(page.getByTestId('hero-demo-cta')).toContainText('Canlı demoyu deneyin');
 });
+
+// The quick-login panel is a demo-instance feature (#966): the server page
+// passes the shared accounts only when DEMO_MODE=true, so on every other env
+// (including this test run) the sign-in page must not render it.
+test('the demo quick-login panel stays hidden off the demo instance', async ({ page }) => {
+  await page.goto('/auth/signin');
+  await expect(page.getByRole('heading')).toBeVisible();
+  await expect(page.getByTestId('demo-quick-login')).toHaveCount(0);
+});
