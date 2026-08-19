@@ -1,5 +1,6 @@
-// Unit tests for the duplicate-candidate detector (#841) — pure node, no browser/page.
-// Playwright resolves the tsconfig @/ paths, which node --test cannot.
+// Unit tests for the duplicate-candidate detector (#841) — pure node, no
+// browser/page. Playwright resolves the tsconfig @/ paths, which node --test
+// cannot. Run with BASE_URL=http://localhost:9 to skip the webServer.
 import { test, expect } from '@playwright/test';
 import {
   normalizeNameKey,
@@ -12,131 +13,138 @@ import {
 } from '@/lib/duplicateDetection';
 import type { CandidateRecord } from '@/lib/duplicateDetection';
 
-function record(overrides: Partial<CandidateRecord> = {}): CandidateRecord {
-  return {
-    id: 'u1',
-    fullName: 'Ayşe Yılmaz',
-    email: 'ayse@example.com',
-    phone: null,
-    whatsapp: null,
-    university: null,
-    createdAt: new Date('2026-01-01T00:00:00Z'),
-    isActive: true,
-    ...overrides,
-  };
-}
+const record = (overrides: Partial<CandidateRecord>): CandidateRecord => ({
+  id: 'existing',
+  fullName: '',
+  email: '',
+  phone: null,
+  whatsapp: null,
+  university: null,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  isActive: true,
+  ...overrides,
+});
 
-test.describe('normalizeNameKey (Turkish-safe)', () => {
-  test('İpek/Ipek/ipek/IPEK all key equal', { tag: '@smoke' }, () => {
-    const key = normalizeNameKey('İpek');
-    expect(key).toBeTruthy();
-    expect(normalizeNameKey('Ipek')).toBe(key);
-    expect(normalizeNameKey('ipek')).toBe(key);
-    expect(normalizeNameKey('IPEK')).toBe(key);
-  });
-
-  test("the 'İ'.toLowerCase() two-code-point trap does not split keys", { tag: '@smoke' }, () => {
-    // 'İ'.toLowerCase() in JS yields "i" + U+0307 (two code points); the
-    // normalizer must transliterate BEFORE lowercasing so these stay equal.
+test.describe('normalizeNameKey', () => {
+  test('Turkish variants of the same name all key equal', { tag: '@smoke' }, () => {
+    for (const variants of [
+      ['İpek', 'Ipek', 'ipek', 'IPEK'],
+      ['Şeyma', 'Seyma'],
+      ['Göksu', 'Goksu'],
+      ['Çağrı', 'Cagri', 'ÇAĞRI'],
+    ]) {
+      const keys = variants.map((v) => normalizeNameKey(v));
+      for (const key of keys) expect(key, variants.join('/')).toBe(keys[0]);
+    }
+    // The 'İ'.toLowerCase() trap: JS yields "i" + a combining dot (two code
+    // points), so transliteration must happen BEFORE lowercasing.
     expect(normalizeNameKey('İPEK')).toBe(normalizeNameKey('ipek'));
   });
 
-  test('Şeyma/Seyma, Göksu/Goksu, Çağrı/Cagri/ÇAĞRI key equal', { tag: '@smoke' }, () => {
-    expect(normalizeNameKey('Şeyma')).toBe(normalizeNameKey('Seyma'));
-    expect(normalizeNameKey('Göksu')).toBe(normalizeNameKey('Goksu'));
-    expect(normalizeNameKey('Çağrı')).toBe(normalizeNameKey('Cagri'));
-    expect(normalizeNameKey('ÇAĞRI')).toBe(normalizeNameKey('Cagri'));
+  test('collapses punctuation, case and whitespace', () => {
+    expect(normalizeNameKey('  Mehmet-Ali   ERŞAHİN ')).toBe('mehmet ali ersahin');
   });
 });
 
 test.describe('normalizePhoneKey', () => {
-  test('country-code, trunk-zero and separators all collapse to the last 10 digits', { tag: '@smoke' }, () => {
-    expect(normalizePhoneKey('+90 555 123 45 67')).toBe('5551234567');
-    expect(normalizePhoneKey('0555 123 4567')).toBe('5551234567');
-    expect(normalizePhoneKey('00905551234567')).toBe('5551234567');
-    expect(normalizePhoneKey('555-123-4567')).toBe('5551234567');
+  test('national/international/dashed formats all key to the same 10 digits', { tag: '@smoke' }, () => {
+    for (const phone of ['+90 555 123 45 67', '0555 123 4567', '00905551234567', '555-123-4567']) {
+      expect(normalizePhoneKey(phone), phone).toBe('5551234567');
+    }
   });
 
-  test('short garbage never yields a key', () => {
+  test('too-short garbage keys to the empty string (never matches)', () => {
     expect(normalizePhoneKey('123')).toBe('');
+    expect(normalizePhoneKey('')).toBe('');
     expect(normalizePhoneKey(null)).toBe('');
     expect(normalizePhoneKey(undefined)).toBe('');
   });
 });
 
 test.describe('normalizeEmailKey', () => {
-  test('case and surrounding whitespace are ignored', { tag: '@smoke' }, () => {
-    expect(normalizeEmailKey('  Ayse.Yilmaz@Example.COM ')).toBe('ayse.yilmaz@example.com');
+  test('lowercases and trims', { tag: '@smoke' }, () => {
+    expect(normalizeEmailKey('  Ipek.Yilmaz@Example.COM ')).toBe('ipek.yilmaz@example.com');
   });
 
-  test('placeholder domains carry no identity and key to empty', { tag: '@smoke' }, () => {
-    expect(normalizeEmailKey('mentee.ayse.ab12cd@import.local')).toBe('');
-    expect(normalizeEmailKey('erased-123@erased.local')).toBe('');
+  test('generated placeholder domains carry no identity and key to empty', { tag: '@smoke' }, () => {
+    expect(normalizeEmailKey('mentee.ipek.a1b2@import.local')).toBe('');
+    expect(normalizeEmailKey('erased-42@erased.local')).toBe('');
     expect(normalizeEmailKey(null)).toBe('');
-  });
-});
-
-test.describe('levenshtein (bounded)', () => {
-  test('exact match is 0, one edit is 1', () => {
-    expect(levenshtein('ipek yilmaz', 'ipek yilmaz')).toBe(0);
-    expect(levenshtein('ipek yilmaz', 'ipek yilmas')).toBe(1);
-  });
-
-  test('bails out at max and returns max + 1', () => {
-    expect(levenshtein('abcdef', 'zzzzzz', 2)).toBe(3);
-    expect(levenshtein('short', 'a much longer string', 2)).toBe(3);
-    expect(levenshtein('abc', 'abx', 0)).toBe(1);
+    expect(normalizeEmailKey(undefined)).toBe('');
   });
 });
 
 test.describe('matchSignals + scoreSignals', () => {
-  test('same name + same university passes the threshold', { tag: '@smoke' }, () => {
-    const other = record({ fullName: 'İpek Yılmaz', university: 'Boğaziçi Üniversitesi' });
+  test('same name + university reaches the threshold', { tag: '@smoke' }, () => {
     const signals = matchSignals(
-      { fullName: 'Ipek Yilmaz', university: 'Bogazici Universitesi' },
-      other,
+      { fullName: 'İpek Yılmaz', university: 'Boğaziçi Üniversitesi' },
+      record({ fullName: 'Ipek Yilmaz', university: 'Bogazici Universitesi' }),
     );
     expect(signals).toEqual(['name', 'university']);
     expect(scoreSignals(signals)).toBeGreaterThanOrEqual(DUPLICATE_SCORE_THRESHOLD);
   });
 
-  test('fuzzy name (1 typo, >= 6 chars) + university passes', { tag: '@smoke' }, () => {
-    const other = record({ fullName: 'İpek Yılmaz', university: 'Boğaziçi Üniversitesi' });
+  test('fuzzy name (one typo, >=6 chars) + university reaches the threshold', () => {
     const signals = matchSignals(
-      { fullName: 'Ipek Yilmas', university: 'Bogazici Universitesi' },
-      other,
+      { fullName: 'Göksu Demir', university: 'ODTÜ' },
+      record({ fullName: 'Goksu Demis', university: 'Odtü' }),
     );
     expect(signals).toEqual(['nameFuzzy', 'university']);
     expect(scoreSignals(signals)).toBeGreaterThanOrEqual(DUPLICATE_SCORE_THRESHOLD);
   });
 
-  test('lone university or lone fuzzy name never reaches the threshold', { tag: '@smoke' }, () => {
-    // university only counts alongside a name signal, so a name mismatch
-    // yields no signals at all even with matching universities.
-    const other = record({ fullName: 'Mehmet Demir', university: 'Boğaziçi Üniversitesi' });
+  test('a lone university match yields no signals at all', () => {
     const signals = matchSignals(
-      { fullName: 'Ayşe Kaya', university: 'Bogazici Universitesi' },
-      other,
+      { fullName: 'Şeyma Kaya', university: 'Boğaziçi Üniversitesi' },
+      record({ fullName: 'Mehmet Öztürk', university: 'Bogazici Universitesi' }),
     );
     expect(signals).toEqual([]);
-    // And the raw scores of the weak signals stay below the bar on their own.
-    expect(scoreSignals(['university'])).toBeLessThan(DUPLICATE_SCORE_THRESHOLD);
-    expect(scoreSignals(['nameFuzzy'])).toBeLessThan(DUPLICATE_SCORE_THRESHOLD);
+    expect(scoreSignals(signals)).toBeLessThan(DUPLICATE_SCORE_THRESHOLD);
   });
 
-  test('phone match alone passes (whatsapp counts as a phone)', { tag: '@smoke' }, () => {
-    const other = record({ fullName: 'Mehmet Demir', whatsapp: '0555 123 4567' });
-    const signals = matchSignals({ fullName: 'Ayşe Kaya', phone: '+90 555 123 45 67' }, other);
+  test('a lone fuzzy name does not reach the threshold', () => {
+    // Long enough to fire the fuzzy signal, but 30 < 45 on its own.
+    const signals = matchSignals(
+      { fullName: 'Göksu Demir' },
+      record({ fullName: 'Goksu Demis' }),
+    );
+    expect(signals).toEqual(['nameFuzzy']);
+    expect(scoreSignals(signals)).toBeLessThan(DUPLICATE_SCORE_THRESHOLD);
+
+    // Short names (<6 chars normalized) never even fire the fuzzy signal.
+    expect(matchSignals({ fullName: 'Ali' }, record({ fullName: 'Alp' }))).toEqual([]);
+  });
+
+  test('a phone match alone passes the threshold', { tag: '@smoke' }, () => {
+    const signals = matchSignals(
+      { fullName: 'Şeyma Kaya', phone: '+90 555 123 45 67' },
+      record({ fullName: 'Mehmet Öztürk', phone: '0555 123 4567' }),
+    );
     expect(signals).toEqual(['phone']);
     expect(scoreSignals(signals)).toBeGreaterThanOrEqual(DUPLICATE_SCORE_THRESHOLD);
   });
 
-  test('placeholder emails never produce an email signal', () => {
-    const other = record({ email: 'mentee.ayse.ab12cd@import.local', fullName: 'Zeynep Ak' });
+  test('phone matches across the phone/whatsapp fields too', () => {
     const signals = matchSignals(
-      { fullName: 'Elif Su', email: 'mentee.ayse.ab12cd@import.local' },
-      other,
+      { fullName: 'Şeyma Kaya', whatsapp: '555-123-4567' },
+      record({ fullName: 'Mehmet Öztürk', phone: '00905551234567' }),
     );
-    expect(signals).toEqual([]);
+    expect(signals).toEqual(['phone']);
+  });
+});
+
+test.describe('levenshtein', () => {
+  test('exact match is 0, one edit is 1', { tag: '@smoke' }, () => {
+    expect(levenshtein('ipek yilmaz', 'ipek yilmaz')).toBe(0);
+    expect(levenshtein('ipek yilmaz', 'ipek yilmas')).toBe(1); // substitution
+    expect(levenshtein('ipek yilmaz', 'ipek ylmaz')).toBe(1); // deletion
+    expect(levenshtein('ipek yilmaz', 'ipekk yilmaz')).toBe(1); // insertion
+  });
+
+  test('bails out at max, returning max + 1', () => {
+    expect(levenshtein('abcdef', 'uvwxyz', 2)).toBe(3);
+    // Length difference alone exceeding max short-circuits the same way.
+    expect(levenshtein('a', 'abcdef', 2)).toBe(3);
+    expect(levenshtein('abcd', 'wxyz', 1)).toBe(2);
   });
 });
