@@ -4,6 +4,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { VersionFooter } from '@/components/VersionFooter';
 import { APP_VERSION } from '@/lib/version';
 import { GITHUB_URL } from './links';
+import { IS_DEMO_MODE, DEMO_URL } from '@/lib/demoMode';
 
 /**
  * The one footer every public page wears (#1197). Only the landing had one
@@ -27,6 +28,8 @@ export async function PublicFooter() {
         { href: '/for-companies', label: n.forCompanies },
         { href: '/projects', label: n.showcase },
         { href: '/release-notes', label: n.whatsNew },
+        // The demo links to itself from its own footer — hide it there.
+        ...(IS_DEMO_MODE ? [] : [{ href: DEMO_URL, label: n.demo, external: true }]),
       ],
     },
     {

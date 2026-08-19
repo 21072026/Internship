@@ -13,7 +13,7 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.75.0-beta',
+    version: '0.78.0-beta',
     date: '2026-08-19',
     highlights: {
       en: [
@@ -27,6 +27,51 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       de: [
         'Ein Konto zwischen Mentor und Mentee umzuwandeln geht jetzt auch direkt auf der Profilseite der Person, nicht nur in der Benutzerliste.',
         'Die umgewandelte Person bleibt nicht mehr im Unklaren: Sie erhält eine E-Mail in ihrer Sprache, die die Änderung erklärt, und bei der nächsten Anmeldung begrüßt sie eine In-App-Benachrichtigung, die auf ihren neuen Arbeitsbereich verweist.',
+      ],
+    },
+  },
+  {
+    version: '0.77.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Sharing your public profile link now looks great everywhere: on LinkedIn, WhatsApp, Slack or X the link unfurls into a branded card showing your name, role, location and top skills — instead of a bare URL.',
+      ],
+      tr: [
+        'Herkese açık profil linkinizi paylaşmak artık her yerde iyi görünüyor: LinkedIn, WhatsApp, Slack veya X’te link, çıplak bir URL yerine adınızı, rolünüzü, konumunuzu ve öne çıkan becerilerinizi gösteren markalı bir karta dönüşüyor.',
+      ],
+      de: [
+        'Das Teilen deines öffentlichen Profillinks sieht jetzt überall gut aus: Auf LinkedIn, WhatsApp, Slack oder X entfaltet sich der Link zu einer Karte mit Name, Rolle, Ort und Top-Skills — statt einer nackten URL.',
+      ],
+    },
+  },
+  {
+    version: '0.76.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Signing in to the live demo is now one click: the demo’s sign-in page shows the three shared accounts as buttons — pick Admin, Mentor or Mentee and you are in, no credentials to copy.',
+      ],
+      tr: [
+        'Canlı demoya giriş artık tek tık: demonun giriş sayfası üç ortak hesabı buton olarak gösteriyor — Yönetici, Mentor veya Mentee’yi seçin, içeridesiniz; kopyalanacak şifre yok.',
+      ],
+      de: [
+        'Die Anmeldung in der Live-Demo ist jetzt ein Klick: Die Anmeldeseite der Demo zeigt die drei gemeinsamen Konten als Buttons — Admin, Mentor oder Mentee wählen und du bist drin, ohne Zugangsdaten zu kopieren.',
+      ],
+    },
+  },
+  {
+    version: '0.75.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'You can now try the product before signing up: the home page links to a public live demo with shared accounts and entirely made-up data. Click through the pipeline, log interactions, create projects — it resets twice a day.',
+      ],
+      tr: [
+        'Artık kaydolmadan ürünü deneyebilirsiniz: ana sayfa, ortak hesaplar ve tamamen uydurma verilerle çalışan herkese açık canlı demoya bağlanıyor. Süreçte gezinin, görüşme kaydı girin, proje oluşturun — günde iki kez sıfırlanır.',
+      ],
+      de: [
+        'Du kannst das Produkt jetzt vor der Registrierung ausprobieren: Die Startseite verlinkt auf eine öffentliche Live-Demo mit gemeinsamen Konten und vollständig erfundenen Daten. Klick dich durch die Pipeline, erfasse Interaktionen, lege Projekte an — zweimal täglich wird zurückgesetzt.',
       ],
     },
   },

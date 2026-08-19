@@ -71,7 +71,7 @@ export default function AdminMentorDetailPage() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.fullName}</h1>
             <p className="text-gray-500">{user.email}{user.department ? ` · ${user.department}` : ''}</p>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
             <Badge variant={atCapacity ? 'warning' : 'info'} className="flex items-center gap-1">
               <Users className="h-3 w-3" />
               {active.length}{cap != null ? `/${cap}` : ''} {t.mentors.mentee}

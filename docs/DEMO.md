@@ -97,10 +97,14 @@ workflow keeps the data fresh; nothing else is manual.
 
 ## Not included yet
 
-- **A link from the landing page.** Deliberately left out until the environment
-  is actually up — a "Try the live demo" button pointing at a host that does not
-  resolve is worse than no button. Add it (and a `features.ts` entry) in the PR
-  that provisions the env.
+- ~~**A link from the landing page.**~~ Shipped: the environment was provisioned
+  on 2026-08-19 (DB + `/etc/internship-crm/demo.env` + container on :3203 +
+  Plesk vhost, exactly the prerequisites above) and the landing page now links
+  to the demo from the hero (`hero-demo-cta`), the bottom CTA block and the
+  public footer, plus a `features.ts` catalogue entry. All of them read
+  `DEMO_URL` from `src/lib/demoMode.ts` and are hidden on the demo instance
+  itself. ⚠️ Note: nothing redeploys the demo container on merges yet — it runs
+  the `preview-<sha>` image from provisioning day until redeployed by hand.
 - **OpenGraph social cards and product analytics.** These arrived in the same
   original PR (#1221) but are separate concerns with their own trade-offs (a
   permanently widened CSP, and third-party trackers on authenticated CRM pages

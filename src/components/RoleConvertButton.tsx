@@ -58,7 +58,11 @@ export function RoleConvertButton({
   };
 
   return (
-    <div className="min-w-0">
+    // A fragment, not a wrapper: the button stays an ordinary flex item in the
+    // caller's action row, while the open panel takes `basis-full` and wraps
+    // onto its own full-width line (every mount site is a flex-wrap row) —
+    // instead of inflating one flex item and re-centering its siblings.
+    <>
       <Button
         variant="ghost"
         size="sm"
@@ -67,14 +71,16 @@ export function RoleConvertButton({
       >
         {toMentor ? t.usersAdmin.makeMentor : t.usersAdmin.makeMentee}
       </Button>
-      {error && (
-        <p className="text-xs text-red-600 mt-1" data-testid={`convert-role-error-${userId}`}>{error}</p>
-      )}
       {open && (
-        <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-900 p-3">
+        <div className="basis-full min-w-0 rounded-lg border border-amber-200 dark:border-amber-900 p-3">
           <p className="text-sm text-gray-700 dark:text-gray-300">
             {(toMentor ? t.usersAdmin.convertToMentorConfirm : t.usersAdmin.convertToMenteeConfirm).replace('{name}', fullName)}
           </p>
+          {/* Inside the panel: the panel stays open on error (component state
+              survives the onDone reload), so the message is always visible. */}
+          {error && (
+            <p className="text-xs text-red-600 mt-2" data-testid={`convert-role-error-${userId}`}>{error}</p>
+          )}
           <div className="flex gap-2 mt-3">
             <Button
               size="sm"
@@ -90,6 +96,6 @@ export function RoleConvertButton({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
