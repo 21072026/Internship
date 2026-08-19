@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
+import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { ArrowLeft, KeyRound, Trash2, Plus } from 'lucide-react';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { UserQuickActions } from '@/components/UserQuickActions';
@@ -342,6 +343,8 @@ export default function AdminMenteeDetailPage() {
             {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
             {/* Message / view-as shortcuts, right where the profile is read (#51). */}
             <UserQuickActions userId={user.id} role={user.role} />
+            {/* Convert right where the person is looked at (#1252). */}
+            {user.role && <RoleConvertButton userId={user.id} fullName={user.fullName} role={user.role} onDone={load} />}
             <Button variant="outline" size="sm" loading={resetting} onClick={resetPassword}>
               <KeyRound className="h-4 w-4 mr-1" />
               {t.candidateDetail.resetPassword}

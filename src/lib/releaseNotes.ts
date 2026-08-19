@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.75.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Converting an account between mentor and mentee is now available right on the person\'s profile page too, not only in the users list.',
+        'The converted person is no longer left guessing: they get an email in their own language explaining the change, and an in-app notification pointing at their new workspace greets them at their next sign-in.',
+      ],
+      tr: [
+        'Bir hesabı mentor ile mentee arasında dönüştürme artık yalnızca kullanıcı listesinde değil, kişinin profil sayfasında da yapılabiliyor.',
+        'Dönüştürülen kişi artık habersiz kalmıyor: değişikliği açıklayan bir e-postayı kendi dilinde alıyor ve bir sonraki girişinde onu yeni çalışma alanına yönlendiren bir uygulama içi bildirim karşılıyor.',
+      ],
+      de: [
+        'Ein Konto zwischen Mentor und Mentee umzuwandeln geht jetzt auch direkt auf der Profilseite der Person, nicht nur in der Benutzerliste.',
+        'Die umgewandelte Person bleibt nicht mehr im Unklaren: Sie erhält eine E-Mail in ihrer Sprache, die die Änderung erklärt, und bei der nächsten Anmeldung begrüßt sie eine In-App-Benachrichtigung, die auf ihren neuen Arbeitsbereich verweist.',
+      ],
+    },
+  },
+  {
     version: '0.74.0-beta',
     date: '2026-08-18',
     highlights: {

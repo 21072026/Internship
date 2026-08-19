@@ -4,8 +4,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
-import { isPendingActivation } from '@/lib/menteeAccount';
+import { isPendingActivation, isErasedAccount, isUnusableEmail } from '@/lib/menteeAccount';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
+import { notify } from '@/lib/notify';
+import { roleHome } from '@/lib/roleHome';
+import { sendRoleChangeEmail } from '@/services/emailService';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -118,6 +121,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       } = {};
       let roleUnchanged = false;
       let previousRole: string | null = null;
+      let convertedUser: { email: string; fullName: string; preferredLanguage: string | null; orgId: string | null } | null = null;
 
       if (typeof body.isActive === 'boolean') {
         // Guard against an admin locking themselves out.
@@ -198,12 +202,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         if (body.role !== 'MENTOR' && body.role !== 'MENTEE') {
           return NextResponse.json({ error: 'Role can only be changed to MENTOR or MENTEE' }, { status: 400 });
         }
-        const target = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+        const target = await prisma.user.findUnique({
+          where: { id },
+          // email/fullName/preferredLanguage/orgId feed the post-update notice
+          // to the converted person (#1252).
+          select: { role: true, email: true, fullName: true, preferredLanguage: true, orgId: true },
+        });
         if (!target) {
           return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
         if (target.role !== 'MENTOR' && target.role !== 'MENTEE') {
           return NextResponse.json({ error: 'Only MENTOR and MENTEE accounts can be converted' }, { status: 400 });
+        }
+        // An erased account is anonymized history, not a person to repurpose —
+        // and erasure rewrites the address to a sentinel that must never be
+        // mailed (same refusal as PATCH /api/mentor/mentees/[id]).
+        if (isErasedAccount(target)) {
+          return NextResponse.json({ error: 'This account has been erased' }, { status: 400 });
         }
         if (target.role === body.role) {
           // Idempotent no-op: a second tab (or second admin) whose row was
@@ -213,6 +228,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           roleUnchanged = true;
         } else {
           previousRole = target.role;
+          convertedUser = target;
           data.role = body.role;
           // `role` lives in the JWT from sign-in until an explicit update(), so
           // without this a demoted mentor would keep a live staff-shell token.
@@ -276,6 +292,35 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           detail: `role ${previousRole} → ${data.role}`,
           request,
         });
+      }
+
+      // Tell the person what just happened to them (#1252): the conversion
+      // signed them out of every device mid-whatever-they-were-doing. The
+      // in-app notice waits for them after the forced re-login; the email is
+      // sent unconditionally (an account-level notice like a password reset,
+      // not an opt-out-able digest). Both fire-and-forget — the conversion
+      // already happened, a notification failure must not report it as failed.
+      if (data.role && convertedUser) {
+        const newRole = data.role;
+        await notify(
+          id,
+          'role_changed',
+          newRole === 'MENTOR'
+            ? 'An administrator converted your account to a mentor account.'
+            : 'An administrator converted your account to a mentee account.',
+          roleHome(newRole)
+        );
+        // Not to a sentinel address: a mentor-entered candidate has a generated
+        // @import.local stand-in that only bounces off the relay.
+        if (!isUnusableEmail(convertedUser.email)) {
+          sendRoleChangeEmail({
+            to: convertedUser.email,
+            fullName: convertedUser.fullName,
+            newRole,
+            locale: convertedUser.preferredLanguage,
+            orgId: convertedUser.orgId,
+          }).catch((e) => console.error('sendRoleChangeEmail failed:', e));
+        }
       }
 
       return NextResponse.json({ user });

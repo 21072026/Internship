@@ -8,6 +8,22 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.75.0-beta] - 2026-08-19
+
+### Added
+- **Role conversion, where the person is** (#1252): the MENTOR ↔ MENTEE convert
+  button (#1243) now also lives on the admin profile pages —
+  `/admin/candidates/[id]` and `/admin/mentors/[id]` — via a shared
+  `RoleConvertButton` component (the users list reuses it instead of its inline
+  panel).
+- **The converted person is told what happened** (#1252): the conversion signs
+  them out of every device, so the endpoint now leaves an in-app notification
+  (waiting after the forced re-login, linking to their new home shell) and sends
+  an email in their preferred language (EN/TR/DE). The email is deliberately not
+  gated on notification preferences — an account-level change that signs you out
+  everywhere is a transactional notice like a password reset, not an opt-out-able
+  digest.
+
 ## [0.74.0-beta] - 2026-08-18
 
 ### Added
