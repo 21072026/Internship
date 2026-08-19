@@ -76,6 +76,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'An owner or mentor member must be an active mentor or admin' }, { status: 400 });
     }
 
+    if (session.user.role === 'MENTOR' && role === 'MENTEE') {
+      const relation = await prisma.mentorshipRelation.findFirst({
+        where: { mentorId: session.user.id, menteeId: userId },
+        select: { id: true },
+      });
+      if (!relation) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     // Demoting the last OWNER to a non-owner role would leave the project ownerless.
     const owners = project.members.filter((m) => m.role === 'OWNER');
     if (role !== 'OWNER' && owners.length === 1 && owners[0].userId === userId) {

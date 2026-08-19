@@ -32,6 +32,18 @@ version is shown in the sidebar footer of every page (links to the
   `meetings.instant.freeRoomHint` / `openFreeRoom` strings in EN/TR/DE.
   Docs: `docs/video-calls-jaas.md` gains the hybrid-routing table and fallback section.
 
+## [0.80.1-beta] - 2026-08-19
+
+### Fixed
+- **Mentors can add their own mentees to their projects again** (#1103, from PR #1240).
+  The mentor-facing `/api/users?view=picker` directory only returned mentors and admins,
+  so the member picker was empty of mentees for mentors; it now also includes the
+  mentees of the requesting mentor's own mentorship relations. Defense in depth on the
+  write side: a MENTOR adding a MENTEE member to a project is refused with 403 unless a
+  mentorship relation between them exists (admins unchanged). `@smoke` e2e regression in
+  `e2e/project-members.spec.ts` covers picker scoping, own-mentee add (201), foreign-
+  mentee add (403) and the admin path.
+
 ## [0.80.0-beta] - 2026-08-19
 
 ### Added
