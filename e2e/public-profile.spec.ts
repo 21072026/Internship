@@ -163,9 +163,9 @@ test('public contact form notifies the owner; honeypot drops bots', async ({ pag
     expect(bot.ok()).toBeTruthy();
 
     await expect(async () => {
-      const notes = await prisma.notification.findMany({ where: { userId: user.id, type: 'public_contact' } });
+      const notes = await prisma.notification.findMany({ where: { userId: user.id, type: 'public_contact.message' } });
       expect(notes.length).toBe(1);
-      expect(notes[0].text).toContain('Recruiter');
+      expect((notes[0].params as { name?: string })?.name).toBe('Recruiter');
     }).toPass({ timeout: 10_000 });
   } finally {
     await cleanupByEmail(email);

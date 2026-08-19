@@ -62,24 +62,25 @@ test('admin cron run sends meeting reminders and stamps reminderSentAt', async (
 
     // In-app notification for BOTH participants, regardless of email prefs.
     for (const userId of [mentee.id, mentor.id]) {
-      const notes = await prisma.notification.findMany({ where: { userId, type: 'meeting_reminder' } });
+      const notes = await prisma.notification.findMany({ where: { userId, type: 'meeting_reminder.startingSoon' } });
       expect(notes.length).toBe(1);
-      expect(notes[0].text).toContain('Soon Meeting');
+      const params = notes[0].params as { title?: string; when?: string };
+      expect(params.title).toBe('Soon Meeting');
       // …and the time reads on the recipient's clock, not the server's.
       const timeZone = ZONES[userId];
       const expectedTime = new Intl.DateTimeFormat('en-GB', { timeStyle: 'short', timeZone }).format(scheduledAt);
       const expectedZone = new Intl.DateTimeFormat('en-GB', { timeZone, timeZoneName: 'shortOffset' })
         .formatToParts(scheduledAt)
         .find((p) => p.type === 'timeZoneName')!.value;
-      expect(notes[0].text).toContain(expectedTime);
-      expect(notes[0].text).toContain(`(${expectedZone})`);
+      expect(params.when).toContain(expectedTime);
+      expect(params.when).toContain(`(${expectedZone})`);
     }
 
     // Idempotent: a second run must not produce a second reminder.
     const res2 = await page.request.get('/api/cron');
     expect(res2.ok()).toBeTruthy();
     for (const userId of [mentee.id, mentor.id]) {
-      const notes = await prisma.notification.count({ where: { userId, type: 'meeting_reminder' } });
+      const notes = await prisma.notification.count({ where: { userId, type: 'meeting_reminder.startingSoon' } });
       expect(notes).toBe(1);
     }
   } finally {

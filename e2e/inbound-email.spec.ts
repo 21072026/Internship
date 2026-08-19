@@ -41,7 +41,7 @@ test('inbound email reply is routed to the thread (token + sender verified)', as
     await expect.poll(async () => prisma.message.count({ where: { relationId: rel.id, channel: 'EMAIL', senderId: mentee.id } })).toBeGreaterThan(0);
     const msg = await prisma.message.findFirst({ where: { relationId: rel.id, senderId: mentee.id } });
     expect(msg?.body).toBe('Thanks, see you then!');
-    await expect.poll(async () => prisma.notification.count({ where: { userId: mentor.id, type: 'message' } })).toBeGreaterThan(0);
+    await expect.poll(async () => prisma.notification.count({ where: { userId: mentor.id, type: 'message.newByEmail' } })).toBeGreaterThan(0);
 
     // No shared secret → refused before the token is even looked at (#870).
     const anon = await request.post('/api/inbound-email', {

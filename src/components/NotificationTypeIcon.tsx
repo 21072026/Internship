@@ -40,6 +40,8 @@ const NOTIFICATION_TYPE_ICONS: Record<string, LucideIcon> = {
 };
 
 export function NotificationTypeIcon({ type, className }: { type: string; className?: string }) {
-  const Icon = NOTIFICATION_TYPE_ICONS[type] ?? Bell;
+  // i18n event keys are dotted ("message.new"); the icon is per category, so
+  // fall back to the first segment before the generic bell.
+  const Icon = NOTIFICATION_TYPE_ICONS[type] ?? NOTIFICATION_TYPE_ICONS[type.split('.')[0]] ?? Bell;
   return <Icon className={className} aria-hidden="true" />;
 }

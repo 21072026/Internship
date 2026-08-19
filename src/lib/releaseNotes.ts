@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.79.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Notifications now speak your language: the bell and the notifications page show every notification in English, Turkish or German — whichever you use — instead of always English.',
+        'Stage-change notifications now tell you which stage you moved from and to, rather than just saying your stage "was updated".',
+      ],
+      tr: [
+        'Bildirimler artık sizin dilinizde: çan ve bildirimler sayfası her bildirimi hep İngilizce göstermek yerine kullandığınız dilde — Türkçe, İngilizce veya Almanca — gösteriyor.',
+        'Aşama değişikliği bildirimleri artık yalnızca "güncellendi" demek yerine hangi aşamadan hangi aşamaya geçtiğinizi söylüyor.',
+      ],
+      de: [
+        'Benachrichtigungen sprechen jetzt deine Sprache: Die Glocke und die Benachrichtigungsseite zeigen jede Benachrichtigung auf Deutsch, Türkisch oder Englisch — je nachdem, was du verwendest — statt immer auf Englisch.',
+        'Benachrichtigungen zu Phasenwechseln sagen jetzt, von welcher Phase in welche du gewechselt bist, statt nur „wurde aktualisiert“.',
+      ],
+    },
+  },
+  {
     version: '0.78.0-beta',
     date: '2026-08-19',
     highlights: {

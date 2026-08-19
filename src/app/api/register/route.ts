@@ -173,8 +173,8 @@ export async function POST(request: Request) {
           const counterpartId = pair.mentorId === user.id ? pair.menteeId : pair.mentorId;
           await notify(
             counterpartId,
-            'mentorship',
-            `${user.fullName} joined through your invitation — you are now connected.`,
+            'mentorship.connected',
+            { name: user.fullName },
             role === 'MENTEE' ? '/mentor/mentees' : '/admin/mentorship'
           );
         }
@@ -206,14 +206,7 @@ export async function POST(request: Request) {
       const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
       await Promise.all(
         admins.map((a) =>
-          notify(
-            a.id,
-            'signup',
-            pending
-              ? `New self-registration pending approval: ${user.fullName}.`
-              : `New self-registration: ${user.fullName} — active once the email is verified.`,
-            '/admin/users'
-          )
+          notify(a.id, pending ? 'signup.pendingApproval' : 'signup.new', { name: user.fullName }, '/admin/users')
         )
       );
     }

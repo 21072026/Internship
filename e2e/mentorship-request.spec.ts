@@ -71,7 +71,7 @@ test('mentee request → admin approve creates the relation; duplicate pending i
     expect(await prisma.mentorshipRelation.count({ where: { menteeId: mentee.id, mentorId: mentor.id, status: 'ACTIVE' } })).toBe(1);
     const after = await prisma.mentorshipRequest.findUnique({ where: { id: mine!.id } });
     expect(after!.status).toBe('APPROVED');
-    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'mentorship_request' } })).toBeGreaterThanOrEqual(1);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'mentorship_request.approved' } })).toBeGreaterThanOrEqual(1);
 
     // With an active mentorship, further requests are blocked.
     const again = await menteePage.request.post('/api/mentorship-requests', { data: {} });
@@ -117,9 +117,10 @@ test('mentee request notifies active admins in-app', async ({ page }) => {
     expect(stored).toBeTruthy();
     expect(stored?.status).toBe('PENDING');
 
-    // notify() in src/app/api/mentorship-requests/route.ts uses type 'mentorship_request'.
+    // notify() in src/app/api/mentorship-requests/route.ts emits 'mentorship_request.new'
+    // (the mentee has a name in the session).
     await expect
-      .poll(async () => prisma.notification.count({ where: { userId: admin.id, type: 'mentorship_request' } }), { timeout: 10_000 })
+      .poll(async () => prisma.notification.count({ where: { userId: admin.id, type: 'mentorship_request.new' } }), { timeout: 10_000 })
       .toBeGreaterThan(0);
   } finally {
     await prisma.notification.deleteMany({ where: { userId: admin.id } });
@@ -180,12 +181,13 @@ test('admin approves a mentorship request and both mentor and mentee are notifie
     });
     expect(relation).toBeTruthy();
 
-    // notify() in src/app/api/admin/mentorship-requests/route.ts uses type 'mentorship_request'.
+    // notify() in src/app/api/admin/mentorship-requests/route.ts emits
+    // 'mentorship_request.menteeAssigned' (mentor) and 'mentorship_request.approved' (mentee).
     await expect
-      .poll(async () => prisma.notification.count({ where: { userId: mentor.id, type: 'mentorship_request' } }), { timeout: 10_000 })
+      .poll(async () => prisma.notification.count({ where: { userId: mentor.id, type: 'mentorship_request.menteeAssigned' } }), { timeout: 10_000 })
       .toBeGreaterThan(0);
     await expect
-      .poll(async () => prisma.notification.count({ where: { userId: mentee.id, type: 'mentorship_request' } }), { timeout: 10_000 })
+      .poll(async () => prisma.notification.count({ where: { userId: mentee.id, type: 'mentorship_request.approved' } }), { timeout: 10_000 })
       .toBeGreaterThan(0);
   } finally {
     await menteeCtx.close();
@@ -233,9 +235,9 @@ test('admin rejects a mentorship request and the mentee is notified with no rela
     const relation = await prisma.mentorshipRelation.findFirst({ where: { menteeId: mentee.id } });
     expect(relation).toBeNull();
 
-    // notify() in src/app/api/admin/mentorship-requests/route.ts uses type 'mentorship_request'.
+    // notify() in src/app/api/admin/mentorship-requests/route.ts emits 'mentorship_request.rejected'.
     await expect
-      .poll(async () => prisma.notification.count({ where: { userId: mentee.id, type: 'mentorship_request' } }), { timeout: 10_000 })
+      .poll(async () => prisma.notification.count({ where: { userId: mentee.id, type: 'mentorship_request.rejected' } }), { timeout: 10_000 })
       .toBeGreaterThan(0);
   } finally {
     await prisma.notification.deleteMany({ where: { userId: mentee.id } });

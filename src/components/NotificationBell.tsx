@@ -8,11 +8,13 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { showBrowserNotification } from '@/lib/browserNotifications';
 import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
+import { renderNotification } from '@/lib/notificationText';
 
 interface Note {
   id: string;
   type: string;
-  text: string;
+  text?: string | null;
+  params?: unknown;
   link?: string | null;
   read: boolean;
   createdAt: string;
@@ -43,7 +45,7 @@ export function NotificationBell() {
         for (const n of next) {
           if (!seenIds.current.has(n.id)) {
             seenIds.current.add(n.id);
-            if (!n.read) showBrowserNotification(t.notifications.title, n.text, n.link);
+            if (!n.read) showBrowserNotification(t.notifications.title, renderNotification(n, t, locale), n.link);
           }
         }
       }
@@ -52,7 +54,7 @@ export function NotificationBell() {
     } catch {
       /* ignore */
     }
-  }, [t.notifications.title]);
+  }, [t, locale]);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
@@ -116,7 +118,7 @@ export function NotificationBell() {
                     <NotificationTypeIcon type={n.type} className="h-3.5 w-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={n.read ? '' : 'font-medium'}>{n.text}</p>
+                    <p className={n.read ? '' : 'font-medium'}>{renderNotification(n, t, locale)}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(n.createdAt, locale)}</p>
                   </div>
                 </div>

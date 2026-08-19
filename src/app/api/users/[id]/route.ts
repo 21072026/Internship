@@ -304,10 +304,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         const newRole = data.role;
         await notify(
           id,
-          'role_changed',
-          newRole === 'MENTOR'
-            ? 'An administrator converted your account to a mentor account.'
-            : 'An administrator converted your account to a mentee account.',
+          newRole === 'MENTOR' ? 'role_changed.toMentor' : 'role_changed.toMentee',
+          {},
           roleHome(newRole)
         );
         // Not to a sentinel address: a mentor-entered candidate has a generated

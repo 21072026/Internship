@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   });
   await Promise.all(
     admins.map((a) =>
-      notify(a.id, 'mentor_application', `${fullName} applied to become a mentor.`, '/admin/mentor-applications')
+      notify(a.id, 'mentor_application.new', { name: fullName }, '/admin/mentor-applications')
     )
   );
 

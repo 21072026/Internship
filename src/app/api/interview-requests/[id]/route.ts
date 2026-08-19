@@ -6,8 +6,6 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { decideInterviewRequestSchema } from '@/lib/interviewRequests';
 import { notify } from '@/lib/notify';
-import { defaultLocale, isLocale } from '@/i18n/config';
-import { getDictionary } from '@/i18n/dictionaries';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -44,9 +42,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     });
     if (!result) return NextResponse.json({ error: 'Request already decided', code: 'already_decided' }, { status: 409 });
     if (nextStatus === 'APPROVED') {
-      const locale = isLocale(current.mentee.preferredLanguage) ? current.mentee.preferredLanguage : defaultLocale;
-      const dictionary = getDictionary(locale);
-      await notify(current.menteeId, 'interview_request', dictionary.interviewRequests.approvedNotification, '/portal');
+      await notify(current.menteeId, 'interview_request.approved', {}, '/portal');
     }
     return NextResponse.json({ ok: true, status: nextStatus, pipelineRecommendation: nextStatus === 'APPROVED' ? 'INTERVIEW_PENDING_250' : null });
   });

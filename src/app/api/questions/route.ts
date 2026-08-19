@@ -34,7 +34,8 @@ export async function POST(request: Request) {
   });
   const recipient = otherParticipant(rel, session.user.id);
   if (recipient && recipient !== session.user.id) {
-    await notify(recipient, 'question', `${session.user.name ?? 'Your mentee'} asked a question.`, `/mentor/mentees/${rel.id}`);
+    const askerName = session.user.name;
+    await notify(recipient, askerName ? 'question.asked' : 'question.askedGeneric', askerName ? { from: askerName } : {}, `/mentor/mentees/${rel.id}`);
   }
   return NextResponse.json({ question: q }, { status: 201 });
 }

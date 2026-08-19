@@ -54,7 +54,11 @@ export async function POST(request: Request) {
     request,
   });
   // The impersonated user is told their account was accessed (transparency).
-  await notify(target.id, 'impersonation', `An administrator accessed your account${reason ? ` (${reason})` : ''}.`);
+  await notify(
+    target.id,
+    reason ? 'impersonation.accessedWithReason' : 'impersonation.accessed',
+    reason ? { reason } : {},
+  );
 
   return NextResponse.json({ grant });
   });

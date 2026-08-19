@@ -44,7 +44,7 @@ test('admin can trigger a password reset for a user; the link never reaches the 
         prisma.activityLog.count({ where: { action: 'admin.reset_password', targetId: mentee.id } })
       )
       .toBe(1);
-    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'security' } })).toBe(1);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'security.passwordResetStarted' } })).toBe(1);
   } finally {
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(adminEmail);

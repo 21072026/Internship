@@ -117,12 +117,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
     await Promise.all(
       recipients.map((r) =>
-        notify(
-          r.id,
-          'project',
-          `${joinRequest.user.fullName} asked to join project "${project.name}".`,
-          `/projects/${id}`
-        )
+        notify(r.id, 'project.joinRequested', { from: joinRequest.user.fullName, project: project.name }, `/projects/${id}`)
       )
     );
     for (const r of recipients) {
@@ -218,10 +213,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     await notify(
       existing.userId,
-      'project',
-      decision === 'APPROVED'
-        ? `Your request to join "${project?.name ?? 'the project'}" was approved.`
-        : `Your request to join "${project?.name ?? 'the project'}" was declined.`,
+      decision === 'APPROVED' ? 'project.joinApproved' : 'project.joinRejected',
+      { project: project?.name ?? '' },
       `/projects/${id}`
     );
     await logActivity({

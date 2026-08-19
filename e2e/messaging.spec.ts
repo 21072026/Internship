@@ -31,7 +31,7 @@ test('mentor email lands in the thread and notifies the mentee', async ({ page }
       prisma.message.count({ where: { relationId: rel.id, channel: 'EMAIL' } })
     ).toBeGreaterThan(0);
     await expect.poll(async () =>
-      prisma.notification.count({ where: { userId: mentee.id, type: 'message' } })
+      prisma.notification.count({ where: { userId: mentee.id, type: 'message.new' } })
     ).toBeGreaterThan(0);
   } finally {
     await prisma.message.deleteMany({ where: { relationId: rel.id } });
@@ -64,7 +64,7 @@ test('mentee can reply in the thread and the mentor is notified', async ({ page 
       prisma.message.count({ where: { relationId: rel.id, senderId: mentee.id } })
     ).toBeGreaterThan(0);
     await expect.poll(async () =>
-      prisma.notification.count({ where: { userId: mentor.id, type: 'message' } })
+      prisma.notification.count({ where: { userId: mentor.id, type: 'message.new' } })
     ).toBeGreaterThan(0);
   } finally {
     await prisma.message.deleteMany({ where: { relationId: rel.id } });

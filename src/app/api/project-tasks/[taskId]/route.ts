@@ -133,12 +133,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
   });
 
   if (assigneeId && assigneeId !== session.user.id) {
-    await notify(
-      assigneeId,
-      'project',
-      `You were given a goal: ${updated.title}`,
-      await goalLinkFor(assigneeId, task.projectId)
-    );
+    await notify(assigneeId, 'project.goalAssigned', { title: updated.title }, await goalLinkFor(assigneeId, task.projectId));
   }
   return NextResponse.json({ task: updated });
 }

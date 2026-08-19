@@ -157,7 +157,7 @@ export async function POST(request: Request) {
     data: { readAt: new Date() },
   });
 
-  await notify(ticket.requesterId, 'support', 'Support replied to your message.', '/messages/support');
+  await notify(ticket.requesterId, 'support.replied', {}, '/messages/support');
 
   return NextResponse.json({ messageId: message.id }, { status: 201 });
 }
@@ -189,7 +189,7 @@ export async function PUT(request: Request) {
   });
 
   if (status === 'CLOSED' && ticket.status !== 'CLOSED') {
-    await notify(ticket.requesterId, 'support', 'Your support ticket was closed.', '/messages/support');
+    await notify(ticket.requesterId, 'support.closed', {}, '/messages/support');
   }
 
   return NextResponse.json({ ticket: updated });

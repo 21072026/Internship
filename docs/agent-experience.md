@@ -3642,3 +3642,33 @@ erken bitiriyordu).
 düğmenin 403 döndüğü bir sayfa ürünü değil bozuk bir uygulamayı gösterir. Doğru şekil: varsayılan
 açık + kısa ve gerekçeli bir ret listesi. E-postayı da rotalarda değil **taşımada** kesin —
 onlarca rota mail atıyor, hepsini bloklamak akışları öldürür.
+
+## 2026-08-18 — 45+ çağrı yerini tek PR'da taşımak: sözleşmeyi kırmak, tamamlığı tip sistemine saydırmak (#921/#922, 0.74.0-beta)
+
+**Geniş bir mekanik taşımada "geriye dönük uyumlu overload" tuzağına düşmeyin.** notify()'ın
+eski string imzasını geçiş süresince tutmak yerine doğrudan kaldırdım: taşınmamış her çağrı
+derleme hatası oldu ve `tsc --noEmit` tamamlık denetimine dönüştü. Paralel ajanlardan üçü
+kullanım limitine takılıp yarıda kaldığında bile hiçbir site sessizce atlanamadı — kalanları
+tek tek grep'le değil, tip hatası listesiyle bulmak mümkündü.
+
+**Paralel taşıma ajanlarına paylaşılan dosyaları önceden kendiniz yazın.** dictionaries.ts
+(70 anahtar × 3 locale), notify.ts ve render katmanını orkestratör olarak önce ben yazdım;
+ajanlara "sözlüğe dokunma, sadece kendi dosya grubunu düzenle" kuralıyla disjoint gruplar
+verdim. Tek dosyada iki ajan çakışması hiç yaşanmadı.
+
+**Ajanlar yarıda düşerse git status gerçeğin kaynağıdır, ajan raporu değil.** "Failed" görünen
+üç ajan düşmeden önce dosyalarının çoğunu bitirmişti. Workflow'u yeniden koşturmak yerine
+working tree'ye bakıp kalan ~14 siteyi elle bitirmek daha ucuzdu.
+
+**`node --test` bu repoda src modüllerini yükleyemiyor** (`@/` alias'ları ve uzantısız göreli
+import'lar ESM'de çözülmez). Birim testi Playwright spec'i olarak yazın (`BASE_URL=http://localhost:9`
+ile webServer atlanır, saf node testi milisaniyelerde koşar) — tsconfig path'lerini Playwright çözer.
+
+**Bildirim tipini olay anahtarına çevirirken ilk segmenti eski kategoriye sabitleyin**
+(`message.new`, `meeting_request.declined`): ikon eşlemesi ve tip filtresi
+`type.split('.')[0]` fallback'iyle kırılmadan çalışır; e2e'lerde exact-type sorguları
+`startsWith('<kategori>.')` ile güncellenir.
+
+**Keşif ajanlarına "kim okuyor" sorusunu da sordurun.** Render yüzeylerini tarayan ajan, GDPR
+export'unun `select { type, text }` ile taşınan satırların içeriğini sessizce düşüreceğini buldu
+— hiçbir test bunu yakalamazdı; export artık render edilmiş metni dışa veriyor.

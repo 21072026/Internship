@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { notify } from '@/lib/notify';
 import { sendPublicContactEmail } from '@/services/emailService';
 
 // Public contact form → a notification to the profile owner (EPIC: public
@@ -50,13 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
   if (!owner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const preview = message.length > 300 ? `${message.slice(0, 300)}…` : message;
-  await prisma.notification.create({
-    data: {
-      userId: owner.id,
-      type: 'public_contact',
-      text: `${name} (${email}): ${preview}`,
-    },
-  });
+  await notify(owner.id, 'public_contact.message', { name, email, preview });
 
   // Email the owner too (#668) — an outside enquiry is the most time-sensitive
   // thing a public profile receives and used to be in-app only. Opt-out

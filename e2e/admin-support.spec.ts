@@ -62,7 +62,7 @@ test('admin queue: reply takes assignment and IN_PROGRESS, close notifies the re
       .poll(() => prisma.supportMessage.count({ where: { ticketId, senderId: user.id, readAt: null } }), { timeout: 10_000 })
       .toBe(0);
     await expect
-      .poll(() => prisma.notification.count({ where: { userId: user.id, type: 'support' } }), { timeout: 10_000 })
+      .poll(() => prisma.notification.count({ where: { userId: user.id, type: 'support.replied' } }), { timeout: 10_000 })
       .toBeGreaterThanOrEqual(1);
 
     // The user sees the admin reply in their pinned chat.
@@ -76,7 +76,7 @@ test('admin queue: reply takes assignment and IN_PROGRESS, close notifies the re
     const afterClose = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
     expect(afterClose!.status).toBe('CLOSED');
     expect(afterClose!.closedAt).not.toBeNull();
-    expect(await prisma.notification.count({ where: { userId: user.id, type: 'support' } })).toBeGreaterThanOrEqual(2);
+    expect(await prisma.notification.count({ where: { userId: user.id, type: { startsWith: 'support.' } } })).toBeGreaterThanOrEqual(2);
 
     // The CLOSED filter shows it; a non-admin is rejected by the API.
     const filtered = await (await adminPage.request.get('/api/admin/support?status=CLOSED')).json();

@@ -56,7 +56,7 @@ test('admin converts a mentee to a mentor; the old session is revoked', async ({
 
     // The person is told what happened (#1252): an in-app notice waits for
     // them after the forced re-login, pointing at their new home shell…
-    const note = await prisma.notification.findFirst({ where: { userId: mentee.id, type: 'role_changed' } });
+    const note = await prisma.notification.findFirst({ where: { userId: mentee.id, type: 'role_changed.toMentor' } });
     expect(note).not.toBeNull();
     expect(note!.link).toBe('/mentor');
     // …and an account email goes out. Fire-and-forget on the server, so poll;

@@ -113,8 +113,8 @@ export async function PUT(request: Request) {
         data: { status: 'APPROVED', decidedById: session.user.id, decidedAt: new Date() },
       }),
     ]);
-    await notify(req.menteeId, 'mentorship_request', 'Your mentorship request was approved — say hi to your mentor!', '/portal');
-    await notify(mentorId, 'mentorship_request', `A new mentee was assigned to you: ${req.mentee.fullName}.`, '/mentor');
+    await notify(req.menteeId, 'mentorship_request.approved', {}, '/portal');
+    await notify(mentorId, 'mentorship_request.menteeAssigned', { menteeName: req.mentee.fullName }, '/mentor');
 
     // Email both sides (#668) — the decision used to be in-app only, so a mentee
     // who wasn't logged in never learned they had a mentor. Opt-out respected;
@@ -169,7 +169,7 @@ export async function PUT(request: Request) {
     detail: 'rejected',
     request,
   });
-  await notify(req.menteeId, 'mentorship_request', 'Your mentorship request was reviewed but could not be approved right now.', '/portal');
+  await notify(req.menteeId, 'mentorship_request.rejected', {}, '/portal');
   if (req.mentee.email && emailAllowed(req.mentee, 'mentorship')) {
     try {
       await sendMentorshipDecisionEmail({

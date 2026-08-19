@@ -1191,8 +1191,8 @@ export async function checkMentorInteractionReminders() {
       if (!relation.stalenessReminderSentAt) {
         await notify(
           relation.mentorId,
-          'stale_mentee',
-          `No recent contact with ${relation.mentee.fullName}.`,
+          'stale_mentee.noContact',
+          { menteeName: relation.mentee.fullName },
           `/mentor/mentees/${relation.id}`
         );
         await prisma.mentorshipRelation.update({
@@ -1310,7 +1310,7 @@ export async function checkStageDeadlineReminders() {
   });
 
   for (const rel of overdue) {
-    await notify(rel.mentorId, 'deadline', `Stage deadline passed for ${rel.mentee.fullName}.`, `/admin/candidates/${rel.menteeId}`);
+    await notify(rel.mentorId, 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/admin/candidates/${rel.menteeId}`);
     if (emailAllowed(rel.mentor, 'deadlines')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
@@ -1361,7 +1361,7 @@ export async function sendWeeklyReportReminders(now = new Date()) {
     const copy = getDictionary(locale).weeklyReports;
     const formattedWeek = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(weekStart);
     if (notificationCategoryAllowed(relation.mentee, 'weeklyReports')) {
-      await notify(relation.mentee.id, 'weekly_report_reminder', copy.reminderNotification, '/portal');
+      await notify(relation.mentee.id, 'weekly_report_reminder.due', {}, '/portal');
     }
     reminded++;
     if (emailAllowed(relation.mentee, 'weeklyReports')) {
@@ -1463,8 +1463,8 @@ export async function sendMeetingReminders() {
       // In-app: unconditional (notify() never throws).
       await notify(
         user.id,
-        'meeting_reminder',
-        `Meeting "${m.title}" starts in ${minutes} minute${minutes === 1 ? '' : 's'} (${when}).`,
+        'meeting_reminder.startingSoon',
+        { title: m.title, minutes, when },
         link
       );
       notified++;
@@ -1601,10 +1601,8 @@ export async function sendProjectMeetingSeriesReminders() {
         const whenLocal = formatInTimeZone(when, user.timezone);
         await notify(
           user.id,
-          'meeting_reminder',
-          lead === 'HOUR_BEFORE'
-            ? `"${series.title}" (${projectName}) starts soon — ${whenLocal}.`
-            : `"${series.title}" (${projectName}) is tomorrow — ${whenLocal}.`,
+          lead === 'HOUR_BEFORE' ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
+          { title: series.title, project: projectName, when: whenLocal },
           link
         );
         notified++;
@@ -1855,7 +1853,7 @@ export async function checkRetentionReminders() {
     } catch (e) {
       console.error('checkRetentionReminders email failed:', { userId: u.id, error: e });
     }
-    await notify(u.id, 'retention', 'Please confirm you still want us to keep your data.', `/consent/renew?token=${makeConsentRenewToken(u.id)}`);
+    await notify(u.id, 'retention.confirm', {}, `/consent/renew?token=${makeConsentRenewToken(u.id)}`);
     await prisma.user.update({ where: { id: u.id }, data: { retentionReminderSentAt: new Date() } });
     reminded += 1;
   }
@@ -1863,7 +1861,7 @@ export async function checkRetentionReminders() {
   // Let admins know how many candidates are up for retention review.
   if (reminded > 0) {
     await Promise.all(
-      admins.map((a) => notify(a.id, 'retention', `${reminded} candidate(s) asked to re-consent (data retention).`, '/admin/retention'))
+      admins.map((a) => notify(a.id, 'retention.adminSummary', { count: reminded }, '/admin/retention'))
     );
   }
 
@@ -1946,9 +1944,8 @@ export async function checkCompanyNeedMatches() {
 
       alerts += 1;
       const link = `/p/${cand.id}`;
-      const text = `New candidate matches your open position: ${cand.fullName}`;
       for (const u of company.users) {
-        await notify(u.id, 'need_match', text, link);
+        await notify(u.id, 'need_match.newCandidate', { candidateName: cand.fullName }, link);
         if (emailAllowed(u, 'digest')) {
           await sendEmail({
             category: 'company-need-alert',
@@ -2024,9 +2021,12 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             const label = requirement.labels[locale] || requirement.labels.en || requirement.key;
             const isMentee = recipient.id === mentee.id;
             const link = isMentee ? '/portal/profile#documents' : `/mentor/mentees/${mentee.id}`;
-            const notification = (isMentee ? t.reminderNotification : t.mentorReminderNotification)
-              .replace('{mentee}', mentee.fullName).replace('{requirement}', label);
-            await notify(recipient.id, 'missing_document', notification, link);
+            await notify(
+              recipient.id,
+              isMentee ? 'missing_document.self' : 'missing_document.mentor',
+              isMentee ? { requirement: label } : { mentee: mentee.fullName, requirement: label },
+              link
+            );
             notified++;
 
             if (!recipient.email || !emailAllowed(recipient, 'documents')) continue;

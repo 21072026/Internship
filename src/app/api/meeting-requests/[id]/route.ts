@@ -50,7 +50,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (parsed.data.action === 'decline') {
     await prisma.meetingRequest.update({ where: { id }, data: { status: 'DECLINED' } });
-    await notify(req.requestedById, 'meeting_request', 'Your meeting request was declined.', '/portal');
+    await notify(req.requestedById, 'meeting_request.declined', {}, '/portal');
     await emailDecision(req.requestedById, { topic: req.topic, accepted: false, link: '/portal' });
     return NextResponse.json({ ok: true, status: 'DECLINED' });
   }
@@ -76,7 +76,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     },
   });
   await prisma.meetingRequest.update({ where: { id }, data: { status: 'ACCEPTED' } });
-  await notify(req.requestedById, 'meeting_request', `Your meeting request was accepted: ${req.topic}.`, `/messages/${rel.id}`);
+  await notify(req.requestedById, 'meeting_request.accepted', { topic: req.topic }, `/messages/${rel.id}`);
   await emailDecision(req.requestedById, {
     topic: req.topic,
     accepted: true,

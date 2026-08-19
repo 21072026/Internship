@@ -314,7 +314,7 @@ test('the expiry cron transitions a due offer exactly once across two runs', asy
     const expireLogs = await prisma.auditLog.findMany({ where: { targetId: offer.id, action: 'offer.expire' } });
     expect(expireLogs).toHaveLength(1);
 
-    const notifications = await prisma.notification.findMany({ where: { userId: s.admin.id, type: 'offer_expired' } });
+    const notifications = await prisma.notification.findMany({ where: { userId: s.admin.id, type: 'offer_expired.admin' } });
     expect(notifications).toHaveLength(1);
   } finally {
     await s.cleanup();

@@ -90,7 +90,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     await createOrGetProjectConversation(id);
     if (userId !== session.user.id) {
-      await notify(userId, 'project', `You were added to project "${project.name}".`, '/projects/' + id);
+      await notify(userId, 'project.memberAdded', { project: project.name }, '/projects/' + id);
     }
     await logActivity({ action: 'project.member_add', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'project', targetId: id, detail: `${userId} as ${role}` });
     return NextResponse.json({ member }, { status: 201 });

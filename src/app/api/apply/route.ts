@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   });
 
   await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, orgId: mentor.orgId } });
-  await notify(mentor.id, 'application', `${fullName} applied to be your mentee.`, '/mentor/mentees');
+  await notify(mentor.id, 'application.received', { name: fullName }, '/mentor/mentees');
   await dispatchWebhook('application.created', { mentorId: mentor.id, menteeName: fullName, email });
 
   // Let the applicant set a password so they can sign in to the portal.

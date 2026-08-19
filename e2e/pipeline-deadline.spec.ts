@@ -36,7 +36,7 @@ test('stage deadlines flag overdue, surface on the calendar, and trigger reminde
     // The mentor received an in-app deadline notification.
     await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const notifs = await (await page.request.get('/api/notifications')).json();
-    expect(notifs.items.some((n: { type: string }) => n.type === 'deadline')).toBeTruthy();
+    expect(notifs.items.some((n: { type: string }) => n.type === 'deadline.stagePassed')).toBeTruthy();
   } finally {
     await prisma.notification.deleteMany({ where: { userId: mentor.id } });
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
