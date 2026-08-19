@@ -8,6 +8,35 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.82.0-beta] - 2026-08-19
+
+### Added
+- **Participants can declare a meeting over, and the banner can show who is really
+  in the call.** The dashboard's "meeting in progress" strip used to sit there for
+  the whole assumed 60-minute window even when everyone had hung up, reading as
+  "they are still talking". Now:
+  - Any participant can mark the running meeting as over (`POST
+    /api/meetings/[id]/end`) from a button on the banner — the strip then
+    disappears for **every** participant, not just the clicker. Untouched, the
+    banner still times out after the assumed hour exactly as before. Works for
+    one-off `Meeting` rows, for multi-mentee meetings (all sibling rows sharing
+    the room link are ended together), and for recurring-series occurrences that
+    have no `Meeting` row (composite `<seriesId>:<ISO>` ids, marked in the new
+    `MeetingOccurrenceEnd` table). Ending is participant-only, start-gated
+    (a future meeting can't be hidden), and deliberately has no undo.
+  - Optional live room info from JaaS: a new webhook receiver
+    (`/api/webhooks/jaas`, enabled by `JAAS_WEBHOOK_SECRET`; subscribe the tenant
+    to ROOM_CREATED / ROOM_DESTROYED / PARTICIPANT_JOINED / PARTICIPANT_LEFT)
+    keeps a per-room `MeetingRoomState`, and the banner shows "n in the call"
+    with real names while the room is active. Display-only: room lifecycle never
+    auto-ends a meeting (rooms die whenever the last person drops, including
+    someone popping in early). Unset secret = endpoint answers 404, feature off —
+    the default in dev, CI and un-provisioned deployments.
+  - Schema: `Meeting.endedAt` / `Meeting.endedById`, new `MeetingOccurrenceEnd`
+    and `MeetingRoomState` models (additive `db push`).
+  - E2E: `e2e/meeting-end.spec.ts` (end flow tagged `@smoke`, sibling-row fanout,
+    occurrence ids, outsider 404, webhook feed end-to-end).
+
 ## [0.81.0-beta] - 2026-08-19
 
 ### Changed
