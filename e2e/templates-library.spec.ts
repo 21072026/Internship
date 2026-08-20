@@ -22,10 +22,26 @@ test('mentee can preview a template and switch its language', async ({ page }) =
     // Open the CV template preview.
     const row = page.getByTestId('tpl-cv');
     await expect(row).toBeVisible({ timeout: 10_000 });
-    await row.getByRole('button').click();
+    const trigger = row.getByRole('button');
+    await trigger.click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    const dialogButtons = dialog.getByRole('button');
+
+    // #871: opening moves focus inside, and both directions wrap at the
+    // boundaries instead of reaching controls behind the modal.
+    await expect(dialog.getByRole('button', { name: 'EN', exact: true })).toBeFocused();
+    const buttonCount = await dialogButtons.count();
+    for (let i = 0; i < buttonCount && !(await dialogButtons.last().evaluate((element) => element === document.activeElement)); i += 1) {
+      await page.keyboard.press('Tab');
+    }
+    await expect(dialogButtons.last()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(dialogButtons.first()).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(dialogButtons.last()).toBeFocused();
+
     // Default locale is EN in the test runner → English body heading rendered.
     // Target the rendered body H1 (level 1); the modal title is a separate H2.
     await expect(dialog.getByRole('heading', { level: 1, name: 'Curriculum Vitae' })).toBeVisible();
@@ -38,6 +54,11 @@ test('mentee can preview a template and switch its language', async ({ page }) =
     await expect(dialog.getByRole('button', { name: /Save as PDF|PDF/i })).toBeVisible();
     await expect(dialog.getByRole('button', { name: '.txt' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: '.md' })).toBeVisible();
+
+    // Escape uses the ordinary close path and returns focus to the opener.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
   } finally {
     await cleanupByEmail(email);
   }

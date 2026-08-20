@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.83.1-beta',
+    date: '2026-08-20',
+    highlights: {
+      en: [
+        'Dialogs are now fully keyboard-friendly: focus moves inside when they open, stays there while you use Tab or Shift+Tab, Escape closes them, and focus returns to where you started.',
+      ],
+      tr: [
+        'İletişim kutuları artık klavyeyle tamamen erişilebilir: açıldığında odak kutuya geçer, Tab veya Shift+Tab kullanırken içeride kalır, Escape ile kapanır ve odak başladığınız yere döner.',
+      ],
+      de: [
+        'Dialoge sind jetzt vollständig per Tastatur bedienbar: Beim Öffnen wandert der Fokus hinein, bleibt mit Tab oder Umschalt+Tab im Dialog, Escape schließt ihn und der Fokus kehrt zum Ausgangspunkt zurück.',
+      ],
+    },
+  },
+  {
     version: '0.83.0-beta',
     date: '2026-08-19',
     highlights: {
