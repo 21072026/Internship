@@ -8,6 +8,12 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.83.1-beta] - 2026-08-20
+
+### Fixed
+- Admin and mentor pipeline boards now show dark-mode-compatible left/right scroll
+  hints when their columns overflow horizontally.
+
 ## [0.83.0-beta] - 2026-08-19
 
 ### Added

@@ -13,6 +13,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.83.1-beta',
+    date: '2026-08-20',
+    highlights: {
+      en: ['Admin and mentor pipeline boards now show left and right scroll hints when columns extend beyond the screen, with full dark mode support.'],
+      tr: ['Admin ve mentor pipeline panolarında sütunlar ekranın dışına taştığında artık sağ ve sol kaydırma ipuçları gösteriliyor; dark mode desteği de korunuyor.'],
+      de: ['Die Pipeline-Boards für Admins und Mentoren zeigen jetzt links und rechts Scroll-Hinweise, wenn Spalten über den Bildschirm hinausragen – vollständig im Dark Mode unterstützt.'],
+    },
+  },
+  {
     version: '0.83.0-beta',
     date: '2026-08-19',
     highlights: {
