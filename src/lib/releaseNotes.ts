@@ -13,8 +13,8 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
-    version: '0.81.1-beta',
-    date: '2026-08-19',
+    version: '0.83.1-beta',
+    date: '2026-08-20',
     highlights: {
       en: [
         'Dialogs are now fully keyboard-friendly: focus moves inside when they open, stays there while you use Tab or Shift+Tab, Escape closes them, and focus returns to where you started.',
@@ -24,6 +24,39 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       ],
       de: [
         'Dialoge sind jetzt vollständig per Tastatur bedienbar: Beim Öffnen wandert der Fokus hinein, bleibt mit Tab oder Umschalt+Tab im Dialog, Escape schließt ihn und der Fokus kehrt zum Ausgangspunkt zurück.',
+      ],
+    },
+  },
+  {
+    version: '0.83.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'When assigning a mentor — directly, by approving a mentorship request, or by pre-linking one on an invite — admins now see each mentor’s current load right in the picker, and get a confirmation prompt if that mentor is full or not currently accepting new mentees. It’s only a heads-up: the assignment still goes through if you confirm.',
+      ],
+      tr: [
+        'Bir mentor atarken — doğrudan, bir mentorluk talebini onaylayarak ya da bir davete önceden bağlayarak — adminler artık her mentörün mevcut yükünü seçicide görebiliyor; mentör doluysa veya şu anda yeni mentee almıyorsa bir onay istemi çıkıyor. Bu yalnızca bir bilgilendirme: onaylarsanız atama yine de gerçekleşiyor.',
+      ],
+      de: [
+        'Bei der Zuweisung eines Mentors — direkt, durch Genehmigung einer Mentoring-Anfrage oder durch Vorverknüpfung bei einer Einladung — sehen Admins jetzt die aktuelle Auslastung jedes Mentors direkt in der Auswahl und erhalten eine Bestätigungsabfrage, wenn dieser Mentor ausgelastet ist oder aktuell keine neuen Mentees aufnimmt. Es ist nur ein Hinweis: Die Zuweisung erfolgt trotzdem, wenn du bestätigst.',
+      ],
+    },
+  },
+  {
+    version: '0.82.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Meeting over? Say so: while a meeting is running, any participant can mark it as over from the dashboard strip — it then disappears for everyone at once, instead of showing "in progress" for the rest of the assumed hour.',
+        'The meeting strip can now show who is really in the video call ("2 in the call: …") when the video tenant’s live feed is connected — real names, live, not a guess.',
+      ],
+      tr: [
+        'Toplantı bitti mi? Söyleyin: toplantı sürerken katılımcılardan herhangi biri panodaki şeritten toplantıyı bitti olarak işaretleyebilir — şerit varsayılan bir saatin geri kalanında "devam ediyor" göstermek yerine herkes için aynı anda kaybolur.',
+        'Toplantı şeridi, görüntülü görüşme kiracısının canlı akışı bağlıysa görüşmede gerçekten kimlerin olduğunu da gösterebiliyor ("Görüşmede 2 kişi var: …") — tahmin değil, gerçek isimlerle canlı bilgi.',
+      ],
+      de: [
+        'Treffen vorbei? Sag es: Während ein Treffen läuft, kann jede teilnehmende Person es über den Hinweis auf dem Dashboard als beendet markieren — der Hinweis verschwindet dann sofort für alle, statt für den Rest der angenommenen Stunde "läuft" anzuzeigen.',
+        'Der Meeting-Hinweis kann jetzt zeigen, wer wirklich im Videoanruf ist („2 im Gespräch: …“), wenn der Live-Feed des Video-Tenants angebunden ist — echte Namen, live, keine Vermutung.',
       ],
     },
   },

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { parseDaysOfWeek, seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { parseJaasMeetingLink } from '@/lib/meetingLink';
 
 // "There is a meeting about to start / happening right now" (#51 follow-up).
 //
@@ -13,7 +14,8 @@ import { parseDaysOfWeek, seriesOccurrences } from '@/lib/meetingSeriesOccurrenc
 //      carrying that project.
 //
 // A meeting has no end time in the schema, so "still going" is a fixed window
-// after the start (MEETING_DURATION_MINUTES).
+// after the start (MEETING_DURATION_MINUTES) — unless a participant marked it
+// ended (Meeting.endedAt / MeetingOccurrenceEnd), which hides it for everyone.
 
 /** How long a meeting is assumed to run — the join link stays offered this long. */
 export const MEETING_DURATION_MINUTES = 60;
@@ -32,7 +34,14 @@ export interface UpcomingMeeting {
   minutesUntilStart: number;
   projectId: string | null;
   projectName: string | null;
+  /** Who is in the JaaS room right now — null when unknown (no webhook feed). */
+  live: { count: number; names: string[] } | null;
 }
+
+/** How long webhook-fed room state is trusted before it counts as stale — a
+ * series' fixedLink reuses one room across occurrences, so an `active` row from
+ * a missed ROOM_DESTROYED must not haunt next week's banner. */
+const ROOM_STATE_FRESH_MS = 3 * 60 * 60 * 1000;
 
 interface Candidate {
   id: string;
@@ -57,6 +66,8 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
     prisma.meeting.findMany({
       where: {
         scheduledAt: { gte: windowStart, lte: windowEnd },
+        // Marked over by a participant — gone for everyone, not just the marker.
+        endedAt: null,
         // A Meeting row hangs off a relation, a project or a conversation (#1051);
         // whichever it is, the user is expected there if they are on that side of it.
         OR: [
@@ -115,9 +126,19 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
         project: { select: { name: true } },
       },
     });
+    // Occurrence-level end marks: a synthesized occurrence has no Meeting row to
+    // carry `endedAt`, so its mark lives in its own table (same key shape as
+    // MeetingSeriesReminder). Ending a generated Meeting row writes both marks,
+    // so this one check covers every viewer's representation of the event.
+    const ends = await prisma.meetingOccurrenceEnd.findMany({
+      where: { seriesId: { in: series.map((s) => s.id) }, occurrenceAt: { gte: windowStart, lte: windowEnd } },
+      select: { seriesId: true, occurrenceAt: true },
+    });
+    const endedOccurrences = new Set(ends.map((e) => `${e.seriesId}:${e.occurrenceAt.toISOString()}`));
     for (const s of series) {
       if (parseDaysOfWeek(s.daysOfWeek).length === 0) continue;
       for (const when of seriesOccurrences(s.daysOfWeek, s.timeOfDay, windowStart, windowEnd, s.timeZone)) {
+        if (endedOccurrences.has(`${s.id}:${when.toISOString()}`)) continue;
         candidates.push({
           id: `${s.id}:${when.toISOString()}`,
           title: s.title,
@@ -165,5 +186,27 @@ export async function getUpcomingMeeting(userId: string, now = new Date()): Prom
     minutesUntilStart: Math.max(0, Math.ceil((startsAt.getTime() - now.getTime()) / 60000)),
     projectId: pick.projectId,
     projectName: pick.projectName,
+    live: await liveRoomState(pick.meetLink, now),
   };
+}
+
+// Who is in the meeting's JaaS room right now, per the webhook feed
+// (/api/webhooks/jaas). Null whenever nothing trustworthy is known — no JaaS
+// link, no webhook configured, room idle, or state stale — and the banner then
+// says nothing rather than guessing.
+async function liveRoomState(meetLink: string | null, now: Date): Promise<UpcomingMeeting['live']> {
+  const ref = parseJaasMeetingLink(meetLink);
+  if (!ref) return null;
+  const state = await prisma.meetingRoomState.findUnique({
+    where: { room: ref.room },
+    select: { active: true, participants: true, updatedAt: true },
+  });
+  if (!state?.active) return null;
+  if (now.getTime() - state.updatedAt.getTime() > ROOM_STATE_FRESH_MS) return null;
+  const list = Array.isArray(state.participants) ? state.participants : [];
+  const names = list
+    .map((p) => (p && typeof p === 'object' && 'name' in p && typeof p.name === 'string' ? p.name.trim() : ''))
+    .filter(Boolean);
+  // Count the anonymous too: an entry with no usable name is still a person.
+  return { count: list.length, names };
 }

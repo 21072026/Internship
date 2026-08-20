@@ -8,6 +8,7 @@ import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMentorshipDecisionEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
+import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { withTenantScope } from '@/lib/orgContext';
 
 // Admin queue for mentee mentorship requests (#590): list PENDING requests,
@@ -90,6 +91,8 @@ export async function PUT(request: Request) {
         orgId: true,
         emailNotifications: true,
         notificationPrefs: true,
+        mentorCapacity: true,
+        acceptingMentees: true,
       },
     });
     if (!mentor || !mentor.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
@@ -105,6 +108,25 @@ export async function PUT(request: Request) {
     if (!gate.allowed) {
       return NextResponse.json(planLimitError(gate), { status: 403 });
     }
+
+    // Capacity/availability warning (#942): advisory only, mirrors POST
+    // /api/mentorship (direct assignment) — same getMentorAvailability()
+    // helper, same "count ACTIVE relations *before* this new one" semantics.
+    // Never blocks the approval; only the plan gate above can do that.
+    const activeMenteeCount = await prisma.mentorshipRelation.count({
+      where: { mentorId, status: 'ACTIVE' },
+    });
+    const availability = getMentorAvailability({
+      mentorCapacity: mentor.mentorCapacity,
+      activeMenteeCount,
+      acceptingMentees: mentor.acceptingMentees,
+    });
+    const warnings: string[] =
+      availability.status === 'at_capacity'
+        ? ['mentor_at_capacity']
+        : availability.status === 'not_accepting'
+          ? ['mentor_not_accepting']
+          : [];
 
     const [relation] = await prisma.$transaction([
       prisma.mentorshipRelation.create({ data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId } }),
@@ -153,7 +175,7 @@ export async function PUT(request: Request) {
       detail: `approved · mentor ${mentorId}`,
       request,
     });
-    return NextResponse.json({ ok: true, relationId: relation.id });
+    return NextResponse.json({ ok: true, relationId: relation.id, warnings });
   }
 
   await prisma.mentorshipRequest.update({

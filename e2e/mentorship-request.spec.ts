@@ -201,6 +201,187 @@ test('admin approves a mentorship request and both mentor and mentee are notifie
   }
 });
 
+// #942: approving a request still succeeds when the picked mentor is at
+// capacity or not accepting — these are advisory warnings on the response,
+// mirroring POST /api/mentorship (direct assignment). See
+// src/lib/mentorAvailability.ts.
+test('approving a request with a mentor at capacity still succeeds, with a mentor_at_capacity warning', async ({ browser }) => {
+  const menteeEmail = uniqueEmail('req-cap-mentee');
+  const adminEmail = uniqueEmail('req-cap-admin');
+  const mentorEmail = uniqueEmail('req-cap-mentor');
+  const existingMenteeEmail = uniqueEmail('req-cap-existing-mentee');
+  const pw = 'RequestPass123';
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Req Cap Mentee');
+  await prisma.user.update({ where: { id: mentee.id }, data: { university: 'Test University', skills: ['React'] } });
+  const pdf = readFileSync(path.join(__dirname, 'fixtures', 'sample-cv.pdf'));
+  await prisma.cvFile.create({
+    data: { userId: mentee.id, filename: 'cv.pdf', contentType: 'application/pdf', size: pdf.length, data: pdf },
+  });
+  await seedUser(adminEmail, pw, 'ADMIN', 'Req Cap Admin');
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Req Cap Mentor');
+  const existingMentee = await seedUser(existingMenteeEmail, pw, 'MENTEE', 'Req Cap Existing Mentee');
+  await prisma.user.update({ where: { id: mentor.id }, data: { mentorCapacity: 1 } });
+  await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: existingMentee.id, orgId: existingMentee.orgId, status: 'ACTIVE', startDate: new Date() },
+  });
+
+  const menteeCtx = await browser.newContext();
+  const adminCtx = await browser.newContext();
+  let requestId = '';
+  try {
+    const menteePage = await menteeCtx.newPage();
+    await menteePage.goto('/auth/signin');
+    await menteePage.fill('input[type="email"], input[name="email"]', menteeEmail);
+    await menteePage.fill('input[type="password"]', pw);
+    await menteePage.click('button[type="submit"]');
+    await menteePage.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    const created = await menteePage.request.post('/api/mentorship-requests', { data: {} });
+    expect(created.status()).toBe(201);
+    requestId = (await created.json()).request.id;
+
+    const adminPage = await adminCtx.newPage();
+    await adminPage.goto('/auth/signin');
+    await adminPage.fill('input[type="email"], input[name="email"]', adminEmail);
+    await adminPage.fill('input[type="password"]', pw);
+    await adminPage.click('button[type="submit"]');
+    await adminPage.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    const approve = await adminPage.request.put('/api/admin/mentorship-requests', {
+      data: { requestId, action: 'approve', mentorId: mentor.id },
+    });
+    expect(approve.status()).toBe(200);
+    const body = await approve.json();
+    expect(body.warnings).toEqual(['mentor_at_capacity']);
+
+    const relation = await prisma.mentorshipRelation.findFirst({ where: { menteeId: mentee.id, mentorId: mentor.id, status: 'ACTIVE' } });
+    expect(relation).toBeTruthy();
+  } finally {
+    await menteeCtx.close();
+    await adminCtx.close();
+    if (requestId) await prisma.mentorshipRequest.deleteMany({ where: { id: requestId } });
+    await prisma.mentorshipRelation.deleteMany({ where: { mentorId: mentor.id } });
+    await cleanupByEmail(existingMenteeEmail);
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('approving a request with a mentor who has acceptingMentees=false still succeeds, with a mentor_not_accepting warning', async ({ browser }) => {
+  const menteeEmail = uniqueEmail('req-acc-mentee');
+  const adminEmail = uniqueEmail('req-acc-admin');
+  const mentorEmail = uniqueEmail('req-acc-mentor');
+  const pw = 'RequestPass123';
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Req Acc Mentee');
+  await prisma.user.update({ where: { id: mentee.id }, data: { university: 'Test University', skills: ['React'] } });
+  const pdf = readFileSync(path.join(__dirname, 'fixtures', 'sample-cv.pdf'));
+  await prisma.cvFile.create({
+    data: { userId: mentee.id, filename: 'cv.pdf', contentType: 'application/pdf', size: pdf.length, data: pdf },
+  });
+  await seedUser(adminEmail, pw, 'ADMIN', 'Req Acc Admin');
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Req Acc Mentor');
+  await prisma.user.update({ where: { id: mentor.id }, data: { mentorCapacity: 10, acceptingMentees: false } });
+
+  const menteeCtx = await browser.newContext();
+  const adminCtx = await browser.newContext();
+  let requestId = '';
+  try {
+    const menteePage = await menteeCtx.newPage();
+    await menteePage.goto('/auth/signin');
+    await menteePage.fill('input[type="email"], input[name="email"]', menteeEmail);
+    await menteePage.fill('input[type="password"]', pw);
+    await menteePage.click('button[type="submit"]');
+    await menteePage.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    const created = await menteePage.request.post('/api/mentorship-requests', { data: {} });
+    expect(created.status()).toBe(201);
+    requestId = (await created.json()).request.id;
+
+    const adminPage = await adminCtx.newPage();
+    await adminPage.goto('/auth/signin');
+    await adminPage.fill('input[type="email"], input[name="email"]', adminEmail);
+    await adminPage.fill('input[type="password"]', pw);
+    await adminPage.click('button[type="submit"]');
+    await adminPage.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    const approve = await adminPage.request.put('/api/admin/mentorship-requests', {
+      data: { requestId, action: 'approve', mentorId: mentor.id },
+    });
+    expect(approve.status()).toBe(200);
+    const body = await approve.json();
+    expect(body.warnings).toEqual(['mentor_not_accepting']);
+
+    const relation = await prisma.mentorshipRelation.findFirst({ where: { menteeId: mentee.id, mentorId: mentor.id, status: 'ACTIVE' } });
+    expect(relation).toBeTruthy();
+  } finally {
+    await menteeCtx.close();
+    await adminCtx.close();
+    if (requestId) await prisma.mentorshipRequest.deleteMany({ where: { id: requestId } });
+    await prisma.mentorshipRelation.deleteMany({ where: { mentorId: mentor.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('approving a request with an available mentor succeeds with no warnings', async ({ browser }) => {
+  const menteeEmail = uniqueEmail('req-avail-mentee');
+  const adminEmail = uniqueEmail('req-avail-admin');
+  const mentorEmail = uniqueEmail('req-avail-mentor');
+  const pw = 'RequestPass123';
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Req Avail Mentee');
+  await prisma.user.update({ where: { id: mentee.id }, data: { university: 'Test University', skills: ['React'] } });
+  const pdf = readFileSync(path.join(__dirname, 'fixtures', 'sample-cv.pdf'));
+  await prisma.cvFile.create({
+    data: { userId: mentee.id, filename: 'cv.pdf', contentType: 'application/pdf', size: pdf.length, data: pdf },
+  });
+  await seedUser(adminEmail, pw, 'ADMIN', 'Req Avail Admin');
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Req Avail Mentor');
+  await prisma.user.update({ where: { id: mentor.id }, data: { mentorCapacity: 5, acceptingMentees: true } });
+
+  const menteeCtx = await browser.newContext();
+  const adminCtx = await browser.newContext();
+  let requestId = '';
+  try {
+    const menteePage = await menteeCtx.newPage();
+    await menteePage.goto('/auth/signin');
+    await menteePage.fill('input[type="email"], input[name="email"]', menteeEmail);
+    await menteePage.fill('input[type="password"]', pw);
+    await menteePage.click('button[type="submit"]');
+    await menteePage.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    const created = await menteePage.request.post('/api/mentorship-requests', { data: {} });
+    expect(created.status()).toBe(201);
+    requestId = (await created.json()).request.id;
+
+    const adminPage = await adminCtx.newPage();
+    await adminPage.goto('/auth/signin');
+    await adminPage.fill('input[type="email"], input[name="email"]', adminEmail);
+    await adminPage.fill('input[type="password"]', pw);
+    await adminPage.click('button[type="submit"]');
+    await adminPage.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+
+    const approve = await adminPage.request.put('/api/admin/mentorship-requests', {
+      data: { requestId, action: 'approve', mentorId: mentor.id },
+    });
+    expect(approve.status()).toBe(200);
+    const body = await approve.json();
+    expect(body.warnings).toEqual([]);
+
+    const relation = await prisma.mentorshipRelation.findFirst({ where: { menteeId: mentee.id, mentorId: mentor.id, status: 'ACTIVE' } });
+    expect(relation).toBeTruthy();
+  } finally {
+    await menteeCtx.close();
+    await adminCtx.close();
+    if (requestId) await prisma.mentorshipRequest.deleteMany({ where: { id: requestId } });
+    await prisma.mentorshipRelation.deleteMany({ where: { mentorId: mentor.id, menteeId: mentee.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});
+
 // #668: rejecting a request should notify the mentee and must not create a relation.
 test('admin rejects a mentorship request and the mentee is notified with no relation created', async ({ page }) => {
   const menteeEmail = uniqueEmail('reject-mentee');

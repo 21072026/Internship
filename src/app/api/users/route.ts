@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { accountState } from '@/lib/accountState';
+import { getMentorAvailability } from '@/lib/mentorAvailability';
 import type { Prisma } from '@prisma/client';
 
 // Field sets, narrowest first (#855). The admin list used to return every
@@ -26,6 +27,16 @@ const SELECTS = {
     emailVerified: true,
     pendingApproval: true,
     password: true,
+  },
+  // Admin mentor pickers (#942): a name plus what's needed to derive
+  // availability. `activeMenteeCount` and `availability` are computed below,
+  // not selected — see the mentorAvailability branch in GET.
+  mentorAvailability: {
+    id: true,
+    fullName: true,
+    role: true,
+    mentorCapacity: true,
+    acceptingMentees: true,
   },
 } as const;
 
@@ -108,7 +119,8 @@ export async function GET(request: Request) {
 
       const { searchParams } = new URL(request.url);
       const view = searchParams.get('view');
-      const select = view === 'picker' || view === 'directory' ? SELECTS[view] : FULL_SELECT;
+      const select =
+        view === 'picker' || view === 'directory' || view === 'mentorAvailability' ? SELECTS[view] : FULL_SELECT;
 
       const roleParam = searchParams.get('role');
       const role = ROLES.find((r) => r === roleParam);
@@ -121,6 +133,38 @@ export async function GET(request: Request) {
       if (status === 'archived') where.isActive = false;
       if (search) {
         where.OR = [{ fullName: { contains: search } }, { email: { contains: search } }];
+      }
+
+      // Mentor picker with capacity/availability (#942): same `where` filters
+      // as everything else here, but the response needs two computed fields no
+      // Prisma `select` can produce — activeMenteeCount and the availability
+      // derived from it. One groupBy covers every returned mentor's ACTIVE
+      // count instead of a query per mentor. Full list, like `picker`/
+      // `directory` — a picker dropdown has no use for pagination.
+      if (view === 'mentorAvailability') {
+        const users = await prisma.user.findMany({ where, select: SELECTS.mentorAvailability, orderBy: { fullName: 'asc' } });
+        const counts = users.length
+          ? await prisma.mentorshipRelation.groupBy({
+              by: ['mentorId'],
+              where: { mentorId: { in: users.map((u) => u.id) }, status: 'ACTIVE' },
+              _count: { _all: true },
+            })
+          : [];
+        const activeCountByMentorId = new Map(counts.map((c) => [c.mentorId, c._count._all]));
+        return NextResponse.json({
+          users: users.map((u) => {
+            const activeMenteeCount = activeCountByMentorId.get(u.id) ?? 0;
+            return {
+              ...u,
+              activeMenteeCount,
+              availability: getMentorAvailability({
+                mentorCapacity: u.mentorCapacity,
+                activeMenteeCount,
+                acceptingMentees: u.acceptingMentees,
+              }),
+            };
+          }),
+        });
       }
 
       // Pagination is opt-in — applied only when `page` is passed, the same

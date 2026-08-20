@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { SavedViews } from '@/components/SavedViews';
 import { AssignMentorInline } from '@/components/admin/AssignMentorInline';
+import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { EmptyState } from '@/components/EmptyState';
 import Link from "next/link";
 import { useT } from "@/i18n/client";
@@ -52,7 +53,9 @@ export default function CandidatesPage() {
   const stages = useResolvedStages();
   const label = useStageLabel();
   const { data: session } = useSession();
-  const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
+  const [mentors, setMentors] = useState<
+    { id: string; fullName: string; mentorCapacity: number | null; activeMenteeCount: number; availability: MentorAvailability }[]
+  >([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -154,14 +157,32 @@ export default function CandidatesPage() {
       .then((r) => (r.ok ? r.json() : { sources: [] }))
       .then((d) => setSources(d.sources ?? []))
       .catch(() => {});
-    // Mentors available to assign a candidate to (admins can mentor too).
-    fetch('/api/users')
+    // Mentors available to assign a candidate to (admins can mentor too), with
+    // capacity/availability so AssignMentorInline can label each option (#942).
+    // Full or paused mentors are kept in the list, never dropped or disabled —
+    // getMentorAvailability() is only advisory here.
+    fetch('/api/users?view=mentorAvailability')
       .then((r) => (r.ok ? r.json() : { users: [] }))
       .then((d) =>
         setMentors(
-          ((d.users ?? []) as { id: string; fullName: string; role: string }[])
+          (
+            (d.users ?? []) as {
+              id: string;
+              fullName: string;
+              role: string;
+              mentorCapacity: number | null;
+              activeMenteeCount: number;
+              availability: MentorAvailability;
+            }[]
+          )
             .filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN')
-            .map((u) => ({ id: u.id, fullName: u.fullName }))
+            .map((u) => ({
+              id: u.id,
+              fullName: u.fullName,
+              mentorCapacity: u.mentorCapacity,
+              activeMenteeCount: u.activeMenteeCount,
+              availability: u.availability,
+            }))
         )
       )
       .catch(() => {});

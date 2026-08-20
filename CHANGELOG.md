@@ -8,13 +8,63 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.81.1-beta] - 2026-08-19
+## [0.83.1-beta] - 2026-08-20
 
 ### Fixed
-- **Modal keyboard accessibility** (#871). Opening a modal now moves focus to its first
-  available control, Tab and Shift+Tab stay within the modal, Escape closes it through its
-  normal close action, and focus returns to the control that opened it. Keyboard E2E coverage
-  verifies initial focus, both trap directions, Escape closure and focus restoration.
+- **Centralized modal keyboard accessibility** (#871). Opening a modal now moves focus to
+  its first available control (or the dialog fallback), Tab and Shift+Tab stay within the
+  modal, Escape closes it through its normal close action, and focus safely returns to the
+  opener. Keyboard E2E coverage verifies initial focus, both trap directions, Escape closure
+  and focus restoration.
+
+## [0.83.0-beta] - 2026-08-19
+
+### Added
+- **Mentor capacity/availability warnings on assignment** (#942). Building on #941's
+  `getMentorAvailability()`, the three places an admin puts a mentee with a mentor now
+  surface the mentor's current load and ask for confirmation before assigning one who's
+  full or not currently accepting new mentees: direct assignment (`POST /api/mentorship`,
+  used by `AssignMentorInline` on `/admin/candidates` and the assign form on
+  `/admin/mentorship`), approving a mentee's mentorship request
+  (`PUT /api/admin/mentorship-requests`), and pre-linking a mentor on an invite
+  (`POST /api/invite`, `/admin/invite`). Advisory only — capacity/availability never
+  blocks an assignment, only the existing plan-relation limit does; a full or paused
+  mentor stays selectable everywhere, never hidden or disabled. `GET
+  /api/users?view=mentorAvailability` is the new shared picker source (batched active-
+  mentee counts, no N+1), and `formatMentorAvailability()`
+  (`src/lib/mentorAvailabilityLabel.ts`) renders the same "3 / 4 · Available" label in
+  all four pickers. E2E coverage: `mentor-assign-confirm`, `mentorship-request-approve-
+  confirm`, `invite-mentor-confirm`, `mentor-picker-availability`, and extensions to
+  `mentorship-direct-assign`, `mentorship-request` and `invitations`.
+
+## [0.82.0-beta] - 2026-08-19
+
+### Added
+- **Participants can declare a meeting over, and the banner can show who is really
+  in the call.** The dashboard's "meeting in progress" strip used to sit there for
+  the whole assumed 60-minute window even when everyone had hung up, reading as
+  "they are still talking". Now:
+  - Any participant can mark the running meeting as over (`POST
+    /api/meetings/[id]/end`) from a button on the banner — the strip then
+    disappears for **every** participant, not just the clicker. Untouched, the
+    banner still times out after the assumed hour exactly as before. Works for
+    one-off `Meeting` rows, for multi-mentee meetings (all sibling rows sharing
+    the room link are ended together), and for recurring-series occurrences that
+    have no `Meeting` row (composite `<seriesId>:<ISO>` ids, marked in the new
+    `MeetingOccurrenceEnd` table). Ending is participant-only, start-gated
+    (a future meeting can't be hidden), and deliberately has no undo.
+  - Optional live room info from JaaS: a new webhook receiver
+    (`/api/webhooks/jaas`, enabled by `JAAS_WEBHOOK_SECRET`; subscribe the tenant
+    to ROOM_CREATED / ROOM_DESTROYED / PARTICIPANT_JOINED / PARTICIPANT_LEFT)
+    keeps a per-room `MeetingRoomState`, and the banner shows "n in the call"
+    with real names while the room is active. Display-only: room lifecycle never
+    auto-ends a meeting (rooms die whenever the last person drops, including
+    someone popping in early). Unset secret = endpoint answers 404, feature off —
+    the default in dev, CI and un-provisioned deployments.
+  - Schema: `Meeting.endedAt` / `Meeting.endedById`, new `MeetingOccurrenceEnd`
+    and `MeetingRoomState` models (additive `db push`).
+  - E2E: `e2e/meeting-end.spec.ts` (end flow tagged `@smoke`, sibling-row fanout,
+    occurrence ids, outsider 404, webhook feed end-to-end).
 
 ## [0.81.0-beta] - 2026-08-19
 

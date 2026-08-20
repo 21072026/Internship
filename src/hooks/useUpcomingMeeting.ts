@@ -19,6 +19,8 @@ export interface UpcomingMeeting {
   minutesUntilStart: number;
   projectId: string | null;
   projectName: string | null;
+  /** Who is in the video room right now — null when unknown (no JaaS webhook feed). */
+  live: { count: number; names: string[] } | null;
 }
 
 const POLL_MS = 60_000;
@@ -44,6 +46,22 @@ async function refresh() {
   }
   loaded = true;
   subscribers.forEach((fn) => fn(current));
+}
+
+// "This meeting is over" — any participant may say so, and the banner then
+// disappears for *everyone* (the server hides it from the shared endpoint).
+// The local store refreshes immediately so the marker sees it vanish at once;
+// other participants pick it up on their next poll. Errors are swallowed: the
+// worst case is the banner living out its assumed window, exactly as before.
+export async function endUpcomingMeeting(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/meetings/${encodeURIComponent(id)}/end`, { method: 'POST' });
+    if (!res.ok) return false;
+    await refresh();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function useUpcomingMeeting() {

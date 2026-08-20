@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
+import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { withTenantScope } from '@/lib/orgContext';
 import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { notify } from '@/lib/notify';
@@ -182,6 +183,26 @@ export async function POST(request: Request) {
       return NextResponse.json(planLimitError(gate), { status: 403 });
     }
 
+    // Capacity/availability warning (#942): advisory only, never blocking — the
+    // plan gate above is the only thing that can refuse the assignment. Counted
+    // *before* this new relation is created, so it reflects the mentor's load
+    // going into the assignment, not after it. Single source of truth for the
+    // derivation: getMentorAvailability() (#941).
+    const activeMenteeCount = await prisma.mentorshipRelation.count({
+      where: { mentorId, status: 'ACTIVE' },
+    });
+    const availability = getMentorAvailability({
+      mentorCapacity: mentor.mentorCapacity,
+      activeMenteeCount,
+      acceptingMentees: mentor.acceptingMentees,
+    });
+    const warnings: string[] =
+      availability.status === 'at_capacity'
+        ? ['mentor_at_capacity']
+        : availability.status === 'not_accepting'
+          ? ['mentor_not_accepting']
+          : [];
+
     const relation = await prisma.mentorshipRelation.create({
       data: {
         mentorId,
@@ -232,7 +253,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ relation }, { status: 201 });
+    return NextResponse.json({ relation, warnings }, { status: 201 });
     });
   } catch (error) {
     console.error('Create mentorship error:', error);

@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MentorshipRequestQueue } from '@/components/admin/MentorshipRequestQueue';
 import { Select } from '@/components/ui/Select';
 import { SavedViews } from '@/components/SavedViews';
@@ -13,13 +14,19 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen, Plus } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
 import { useModalFocus } from '@/components/ui/useModalFocus';
+import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
+import type { MentorAvailability } from '@/lib/mentorAvailability';
 
-// The assign dropdowns only ever show a name, so this asks the API for the
-// `picker` field set — no email/phone/university in the response (#855).
+// The assign dropdowns show a name plus capacity/availability (#942), so this
+// asks the API for the `mentorAvailability` field set — still no email/phone/
+// university in the response (#855).
 interface User {
   id: string;
   fullName: string;
   role: string;
+  mentorCapacity: number | null;
+  activeMenteeCount: number;
+  availability: MentorAvailability;
 }
 
 interface Company {
@@ -64,6 +71,11 @@ export default function MentorshipPage() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
+  // Confirmation held for a picked mentor whose server-reported
+  // availability.status is at_capacity/not_accepting (#942) — read straight
+  // off the `mentors` list already fetched from /api/users?view=mentorAvailability,
+  // never recomputed here.
+  const [pendingConfirm, setPendingConfirm] = useState<'at_capacity' | 'not_accepting' | null>(null);
 
   const fetchRelations = useCallback(async () => {
     setLoading(true);
@@ -87,7 +99,7 @@ export default function MentorshipPage() {
   const fetchPickers = async () => {
     try {
       const [usersRes, companiesRes] = await Promise.all([
-        fetch('/api/users?view=picker'),
+        fetch('/api/users?view=mentorAvailability'),
         fetch('/api/companies'),
       ]);
       const [usersData, companiesData] = await Promise.all([usersRes.json(), companiesRes.json()]);
@@ -150,6 +162,28 @@ export default function MentorshipPage() {
     }
   };
 
+  // Gate before handleCreate (#942): interrupts with a confirmation dialog
+  // only when the picked mentor's own availability.status is at_capacity/
+  // not_accepting. An available mentor — or a picker that failed to load
+  // availability at all — goes straight through, same as before #942.
+  const submitCreate = () => {
+    if (!formData.mentorId || !formData.menteeId) {
+      setFormError(t.mentorships.mentorMenteeRequired);
+      return;
+    }
+    const status = mentors.find((m) => m.id === formData.mentorId)?.availability?.status;
+    if (status === 'at_capacity' || status === 'not_accepting') {
+      setPendingConfirm(status);
+      return;
+    }
+    handleCreate();
+  };
+
+  const confirmCreate = () => {
+    setPendingConfirm(null);
+    handleCreate();
+  };
+
   const handleComplete = async (id: string) => {
     await fetch(`/api/mentorship/${id}`, {
       method: 'PUT',
@@ -177,9 +211,14 @@ export default function MentorshipPage() {
     role === expected
       ? ''
       : ` · ${role === 'ADMIN' ? t.modeSwitch.admin : role === 'MENTOR' ? t.modeSwitch.mentor : t.modeSwitch.mentee}`;
+  // Full or paused mentors stay in the list and stay selectable (#942) — the
+  // capacity/status suffix is advisory only, never a filter or a disable.
   const mentorOptions = mentors
     .filter((m) => m.id !== formData.menteeId)
-    .map((m) => ({ value: m.id, label: m.fullName + roleSuffix(m.role, 'MENTOR') }));
+    .map((m) => ({
+      value: m.id,
+      label: `${m.fullName}${roleSuffix(m.role, 'MENTOR')} · ${formatMentorAvailability(m, t.mentorAvailability)}`,
+    }));
   const menteeOptions = mentees
     .filter((m) => m.id !== formData.mentorId)
     .map((m) => ({ value: m.id, label: m.fullName + roleSuffix(m.role, 'MENTEE') }));
@@ -248,11 +287,21 @@ export default function MentorshipPage() {
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
-              <Button onClick={handleCreate} loading={submitting}>{t.mentorships.assignSubmit}</Button>
+              <Button onClick={submitCreate} loading={submitting}>{t.mentorships.assignSubmit}</Button>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        message={pendingConfirm === 'at_capacity' ? t.assignMentor.confirmAtCapacity : t.assignMentor.confirmNotAccepting}
+        cancelLabel={t.common.cancel}
+        confirmLabel={t.assignMentor.confirmAnyway}
+        loading={submitting}
+        onConfirm={confirmCreate}
+        onCancel={() => setPendingConfirm(null)}
+      />
 
       {/* Search + status filter */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
