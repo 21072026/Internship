@@ -23,6 +23,9 @@ function focusableElements(container: HTMLElement) {
 }
 
 /** Gives a blocking modal initial focus, a focus trap, Escape close, and focus return. */
+// Note: This hook assumes only one blocking modal is active at a time.
+// If nested/stacked modals are introduced in the future, focus trapping
+// and Escape handling should be coordinated to avoid competing listeners.
 export function useModalFocus<T extends HTMLElement>(open: boolean, onClose: () => void): RefObject<T | null> {
   const dialogRef = useRef<T>(null);
   const onCloseRef = useRef(onClose);
