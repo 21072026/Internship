@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.83.1-beta',
+    date: '2026-08-20',
+    highlights: {
+      en: [
+        'On mobile, primary actions and icon buttons now provide touch areas of at least 44×44 pixels while keeping their visual icon sizes unchanged.',
+      ],
+      tr: [
+        'Mobilde ana aksiyonlar ve ikon düğmeleri artık görsel ikon boyutları korunarak en az 44×44 piksellik dokunma alanı sunuyor.',
+      ],
+      de: [
+        'Auf Mobilgeräten bieten Hauptaktionen und Symbolschaltflächen jetzt mindestens 44×44 Pixel große Berührungsflächen, während die sichtbaren Symbolgrößen unverändert bleiben.',
+      ],
+    },
+  },
+  {
     version: '0.83.0-beta',
     date: '2026-08-19',
     highlights: {

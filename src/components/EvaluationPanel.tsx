@@ -107,7 +107,7 @@ export function EvaluationPanel({
                 <select
                   value={scores[c] ?? ''}
                   onChange={(e) => setScores({ ...scores, [c]: Number(e.target.value) })}
-                  className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                  className="min-h-11 min-w-11 rounded-lg border border-gray-300 px-2 py-1 text-sm"
                 >
                   <option value="">–</option>
                   {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
@@ -120,7 +120,7 @@ export function EvaluationPanel({
             <select
               value={type}
               onChange={(e) => setType(e.target.value as 'INTERIM' | 'FINAL')}
-              className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+              className="min-h-11 min-w-11 rounded-lg border border-gray-300 px-2 py-1 text-sm"
             >
               <option value="INTERIM">{t.evaluation.interim}</option>
               <option value="FINAL">{t.evaluation.final}</option>

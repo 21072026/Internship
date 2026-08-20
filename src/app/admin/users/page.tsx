@@ -201,7 +201,7 @@ export default function AdminUsersPage() {
             key={s}
             data-testid={`status-view-${s.toLowerCase()}`}
             onClick={() => { setStatusView(s); setPage(1); }}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            className={`min-h-11 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
               statusView === s ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
@@ -215,7 +215,7 @@ export default function AdminUsersPage() {
           <button
             key={r}
             onClick={() => { setFilter(r); setPage(1); }}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`min-h-11 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               filter === r ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
@@ -228,7 +228,7 @@ export default function AdminUsersPage() {
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder={t.usersAdmin.searchPlaceholder}
-          className="ml-auto w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+          className="ml-auto min-h-11 w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
       </div>
 

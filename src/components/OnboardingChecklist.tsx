@@ -48,7 +48,7 @@ export function OnboardingChecklist() {
           <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t.checklist.title}</h2>
           <span className="text-xs text-gray-500 dark:text-gray-400">{doneCount}/{steps.length}</span>
         </div>
-        <button onClick={dismiss} aria-label={t.checklist.dismiss} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+        <button onClick={dismiss} aria-label={t.checklist.dismiss} className="inline-flex min-h-11 min-w-11 items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -61,7 +61,7 @@ export function OnboardingChecklist() {
             <Link
               href={s.href}
               data-testid={`onboarding-step-${s.key}`}
-              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-white dark:hover:bg-gray-800 ${
+              className={`flex min-h-11 items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-white dark:hover:bg-gray-800 ${
                 s.done ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'
               }`}
             >

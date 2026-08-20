@@ -53,7 +53,7 @@ export function ReferralLinkCard() {
           onFocus={(e) => e.currentTarget.select()}
           aria-label={t.referral.yourLink}
           data-testid="referral-url"
-          className="w-full min-w-0 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 sm:flex-1"
+          className="min-h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 sm:flex-1"
         />
         <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={copy} data-testid="referral-copy">
           {copied ? <Check className="mr-1 h-3.5 w-3.5" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
