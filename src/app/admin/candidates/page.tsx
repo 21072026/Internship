@@ -284,7 +284,7 @@ export default function CandidatesPage() {
           aria-expanded={filtersOpen}
           aria-controls="candidate-filters"
           onClick={() => setFiltersOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-2 text-left md:hidden"
+          className="flex min-h-11 w-full items-center justify-between gap-2 text-left md:hidden"
         >
           <span className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-500" />
@@ -306,7 +306,7 @@ export default function CandidatesPage() {
               data-testid="candidates-search-input"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              className="min-h-11 pl-10 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
             />
           </div>
           <Input
@@ -397,7 +397,7 @@ export default function CandidatesPage() {
               setArchived(isArchive);
               setSelected(new Set());
             }}
-            className={`px-4 py-1.5 ${
+            className={`min-h-11 px-4 py-1.5 ${
               archived === isArchive
                 ? 'bg-blue-600 text-white'
                 : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'

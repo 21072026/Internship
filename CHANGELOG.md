@@ -8,6 +8,12 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.83.1-beta] - 2026-08-20
+
+### Fixed
+- **Mobile touch targets.** Primary actions and icon buttons now provide at least
+  44×44 px touch areas without increasing the visible icon size.
+
 ## [0.83.0-beta] - 2026-08-19
 
 ### Added

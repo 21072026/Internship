@@ -142,7 +142,7 @@ export function MenteeOnboardingWizard() {
                   aria-controls={panelId}
                   aria-label={isCollapsed ? t.menteeOnboarding.expand : t.menteeOnboarding.collapse}
                   title={isCollapsed ? t.menteeOnboarding.expand : t.menteeOnboarding.collapse}
-                  className="ml-auto rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
+                  className="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
                   data-testid={`onboarding-toggle-${item.menteeId}`}
                 >
                   <ChevronDown className={`h-4 w-4 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
@@ -153,7 +153,7 @@ export function MenteeOnboardingWizard() {
                   disabled={busy === `dismiss-${item.menteeId}`}
                   aria-label={t.menteeOnboarding.dismiss}
                   title={t.menteeOnboarding.dismiss}
-                  className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
                   data-testid={`dismiss-onboarding-${item.menteeId}`}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -200,6 +200,7 @@ export function MenteeOnboardingWizard() {
                                 : t.menteeOnboarding.markHint
                             }
                             data-testid={`onboarding-step-${step}`}
+                            className="inline-flex min-h-11 min-w-11 items-center justify-center"
                           >
                             {state.done ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Circle className="h-4 w-4 text-gray-300" />}
                           </button>

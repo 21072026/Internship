@@ -46,7 +46,7 @@ export function MessagesButton() {
       href="/messages"
       aria-label={t.messages.title}
       title={t.messages.title}
-      className="relative p-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+      className="relative inline-flex min-h-11 min-w-11 items-center justify-center text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
     >
       <MessageSquare className="h-5 w-5" />
       {unread > 0 && (
