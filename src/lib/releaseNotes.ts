@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.83.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'When assigning a mentor — directly, by approving a mentorship request, or by pre-linking one on an invite — admins now see each mentor’s current load right in the picker, and get a confirmation prompt if that mentor is full or not currently accepting new mentees. It’s only a heads-up: the assignment still goes through if you confirm.',
+      ],
+      tr: [
+        'Bir mentor atarken — doğrudan, bir mentorluk talebini onaylayarak ya da bir davete önceden bağlayarak — adminler artık her mentörün mevcut yükünü seçicide görebiliyor; mentör doluysa veya şu anda yeni mentee almıyorsa bir onay istemi çıkıyor. Bu yalnızca bir bilgilendirme: onaylarsanız atama yine de gerçekleşiyor.',
+      ],
+      de: [
+        'Bei der Zuweisung eines Mentors — direkt, durch Genehmigung einer Mentoring-Anfrage oder durch Vorverknüpfung bei einer Einladung — sehen Admins jetzt die aktuelle Auslastung jedes Mentors direkt in der Auswahl und erhalten eine Bestätigungsabfrage, wenn dieser Mentor ausgelastet ist oder aktuell keine neuen Mentees aufnimmt. Es ist nur ein Hinweis: Die Zuweisung erfolgt trotzdem, wenn du bestätigst.',
+      ],
+    },
+  },
+  {
     version: '0.82.0-beta',
     date: '2026-08-19',
     highlights: {

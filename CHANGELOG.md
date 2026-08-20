@@ -8,6 +8,26 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.83.0-beta] - 2026-08-19
+
+### Added
+- **Mentor capacity/availability warnings on assignment** (#942). Building on #941's
+  `getMentorAvailability()`, the three places an admin puts a mentee with a mentor now
+  surface the mentor's current load and ask for confirmation before assigning one who's
+  full or not currently accepting new mentees: direct assignment (`POST /api/mentorship`,
+  used by `AssignMentorInline` on `/admin/candidates` and the assign form on
+  `/admin/mentorship`), approving a mentee's mentorship request
+  (`PUT /api/admin/mentorship-requests`), and pre-linking a mentor on an invite
+  (`POST /api/invite`, `/admin/invite`). Advisory only — capacity/availability never
+  blocks an assignment, only the existing plan-relation limit does; a full or paused
+  mentor stays selectable everywhere, never hidden or disabled. `GET
+  /api/users?view=mentorAvailability` is the new shared picker source (batched active-
+  mentee counts, no N+1), and `formatMentorAvailability()`
+  (`src/lib/mentorAvailabilityLabel.ts`) renders the same "3 / 4 · Available" label in
+  all four pickers. E2E coverage: `mentor-assign-confirm`, `mentorship-request-approve-
+  confirm`, `invite-mentor-confirm`, `mentor-picker-availability`, and extensions to
+  `mentorship-direct-assign`, `mentorship-request` and `invitations`.
+
 ## [0.82.0-beta] - 2026-08-19
 
 ### Added

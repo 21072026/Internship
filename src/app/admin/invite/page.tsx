@@ -9,10 +9,13 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Send, Mail, Copy, Check, CheckCircle2, Circle } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
+import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
+import type { MentorAvailability } from '@/lib/mentorAvailability';
 
 const inviteSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -89,17 +92,38 @@ export default function InvitePage() {
     }
   };
 
-  // Pickers for the auto-connect fields.
-  const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
+  // Pickers for the auto-connect fields. The mentor picker carries
+  // capacity/availability (#942) so the admin can see load before pre-linking
+  // a mentor to a MENTEE invite; the mentee picker only ever needs a name.
+  const [mentors, setMentors] = useState<
+    { id: string; fullName: string; mentorCapacity: number | null; activeMenteeCount: number; availability: MentorAvailability }[]
+  >([]);
   const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
-    fetch('/api/users?view=picker')
+    fetch('/api/users?view=mentorAvailability')
       .then((r) => (r.ok ? r.json() : { users: [] }))
       .then((d) => {
-        const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
-        setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));
-        setMentees(users.filter((u) => u.role === 'MENTEE'));
+        const users = (d.users ?? []) as {
+          id: string;
+          fullName: string;
+          role: string;
+          mentorCapacity: number | null;
+          activeMenteeCount: number;
+          availability: MentorAvailability;
+        }[];
+        setMentors(
+          users
+            .filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN')
+            .map((u) => ({
+              id: u.id,
+              fullName: u.fullName,
+              mentorCapacity: u.mentorCapacity,
+              activeMenteeCount: u.activeMenteeCount,
+              availability: u.availability,
+            }))
+        );
+        setMentees(users.filter((u) => u.role === 'MENTEE').map((u) => ({ id: u.id, fullName: u.fullName })));
       })
       .catch(() => {});
     fetch('/api/projects')
@@ -121,7 +145,13 @@ export default function InvitePage() {
 
   const watchedRole = watch('role');
 
-  const onSubmit = handleSubmit(async (data) => {
+  // Does the actual POST — called either directly (available mentor, or no
+  // mentor picked at all) or after the confirmation dialog is accepted
+  // (at_capacity/not_accepting). The response's `warnings` (#942) are
+  // accepted defensively and otherwise ignored: the confirmation already
+  // happened client-side before this ran, so a second dialog off the same
+  // warning would just be a duplicate.
+  const sendInvite = async (data: InviteData) => {
     setLoading(true);
     setError('');
     setSuccess('');
@@ -159,7 +189,35 @@ export default function InvitePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Held for confirmation (#942) when a MENTEE invite pre-links a mentor
+  // whose server-reported availability.status is at_capacity/not_accepting —
+  // read straight off the `mentors` list already fetched from
+  // /api/users?view=mentorAvailability, never recomputed here.
+  const [pendingInvite, setPendingInvite] = useState<{ data: InviteData; status: 'at_capacity' | 'not_accepting' } | null>(null);
+
+  // Gate before sendInvite: only interrupts with a dialog when the invite
+  // pre-links a mentor (role MENTEE + mentorId chosen) whose availability is
+  // at_capacity/not_accepting. Everything else — no mentor picked, or one
+  // that's available — goes straight through, same as before #942.
+  const onSubmit = handleSubmit((data) => {
+    if (data.role === 'MENTEE' && data.mentorId) {
+      const status = mentors.find((m) => m.id === data.mentorId)?.availability?.status;
+      if (status === 'at_capacity' || status === 'not_accepting') {
+        setPendingInvite({ data, status });
+        return;
+      }
+    }
+    sendInvite(data);
   });
+
+  const confirmInvite = () => {
+    if (!pendingInvite) return;
+    const { data } = pendingInvite;
+    setPendingInvite(null);
+    sendInvite(data);
+  };
 
   return (
     <div>
@@ -209,7 +267,16 @@ export default function InvitePage() {
             {watchedRole === 'MENTEE' && (
               <Select
                 label={t.invite.connectMentor}
-                options={[{ value: '', label: '—' }, ...mentors.map((m) => ({ value: m.id, label: m.fullName }))]}
+                // Full or paused mentors stay in the list and stay selectable
+                // (#942) — the capacity/status suffix is advisory only, never
+                // a filter or a disable.
+                options={[
+                  { value: '', label: '—' },
+                  ...mentors.map((m) => ({
+                    value: m.id,
+                    label: `${m.fullName} · ${formatMentorAvailability(m, t.mentorAvailability)}`,
+                  })),
+                ]}
                 {...register('mentorId')}
               />
             )}
@@ -326,6 +393,16 @@ export default function InvitePage() {
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={pendingInvite !== null}
+        message={pendingInvite?.status === 'at_capacity' ? t.assignMentor.confirmAtCapacity : t.assignMentor.confirmNotAccepting}
+        cancelLabel={t.common.cancel}
+        confirmLabel={t.assignMentor.confirmAnyway}
+        loading={loading}
+        onConfirm={confirmInvite}
+        onCancel={() => setPendingInvite(null)}
+      />
     </div>
   );
 }

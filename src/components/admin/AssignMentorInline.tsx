@@ -3,11 +3,20 @@
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
+import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
+import type { MentorAvailability } from '@/lib/mentorAvailability';
 
 interface MentorOption {
   id: string;
   fullName: string;
+  // Capacity/availability (#942) — optional so callers that only have a bare
+  // {id, fullName} picker (no /api/users?view=mentorAvailability fetch) still
+  // satisfy this type; the label is simply omitted for those.
+  mentorCapacity?: number | null;
+  activeMenteeCount?: number;
+  availability?: MentorAvailability;
 }
 
 interface Suggestion {
@@ -39,6 +48,11 @@ export function AssignMentorInline({
   const [suggesting, setSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [aiUsed, setAiUsed] = useState(false);
+  // Assignment held for confirmation (#942) when the picked mentor's server-
+  // reported availability.status is at_capacity/not_accepting — never
+  // recomputed on the client, just read off the mentor object the caller
+  // already fetched from /api/users?view=mentorAvailability.
+  const [pendingAssign, setPendingAssign] = useState<{ mentorId: string; status: 'at_capacity' | 'not_accepting' } | null>(null);
 
   // Mentor suggestion (#533): rule-based ranking, AI-deepened with a rationale
   // when the AI gate allows — otherwise the top rule-based match, no rationale.
@@ -68,8 +82,12 @@ export function AssignMentorInline({
     }
   };
 
-  const assign = async (mentorId: string) => {
-    if (!mentorId) return;
+  // Does the actual POST — called either directly (available mentor) or after
+  // the confirmation dialog is accepted (at_capacity/not_accepting). The
+  // response's `warnings` (#942) are accepted defensively and otherwise
+  // ignored here: the confirmation already happened client-side before this
+  // ran, so a second dialog off the same warning would just be a duplicate.
+  const doAssign = async (mentorId: string) => {
     setBusy(true);
     setErr('');
     try {
@@ -89,6 +107,28 @@ export function AssignMentorInline({
     } finally {
       setBusy(false);
     }
+  };
+
+  // Entry point for both "Assign to me" and the dropdown "Assign" button.
+  // Gates on the mentor's own availability.status from the server — never
+  // recomputed here — and only interrupts with a dialog for at_capacity/
+  // not_accepting; an available mentor (or one with no availability info at
+  // all) is assigned immediately, same as before #942.
+  const assign = (mentorId: string) => {
+    if (!mentorId) return;
+    const status = mentors.find((m) => m.id === mentorId)?.availability?.status;
+    if (status === 'at_capacity' || status === 'not_accepting') {
+      setPendingAssign({ mentorId, status });
+      return;
+    }
+    doAssign(mentorId);
+  };
+
+  const confirmAssign = () => {
+    if (!pendingAssign) return;
+    const { mentorId } = pendingAssign;
+    setPendingAssign(null);
+    doAssign(mentorId);
   };
 
   // Other mentors (exclude self — self is the dedicated button).
@@ -112,7 +152,16 @@ export function AssignMentorInline({
         >
           <option value="">{a.chooseMentor}</option>
           {others.map((m) => (
-            <option key={m.id} value={m.id}>{m.fullName}</option>
+            <option key={m.id} value={m.id}>
+              {/* Full or paused mentors stay selectable (#942) — the label is
+                  advisory, never a restriction. */}
+              {m.availability
+                ? `${m.fullName} · ${formatMentorAvailability(
+                    { mentorCapacity: m.mentorCapacity ?? null, activeMenteeCount: m.activeMenteeCount ?? 0, availability: m.availability },
+                    t.mentorAvailability
+                  )}`
+                : m.fullName}
+            </option>
           ))}
         </select>
         <Button size="sm" variant="outline" loading={busy} disabled={!choice} onClick={() => assign(choice)}>
@@ -134,6 +183,15 @@ export function AssignMentorInline({
         </p>
       )}
       {err && <p className="text-xs text-red-600 mt-1.5">{err}</p>}
+      <ConfirmDialog
+        open={pendingAssign !== null}
+        message={pendingAssign?.status === 'at_capacity' ? a.confirmAtCapacity : a.confirmNotAccepting}
+        cancelLabel={t.common.cancel}
+        confirmLabel={a.confirmAnyway}
+        loading={busy}
+        onConfirm={confirmAssign}
+        onCancel={() => setPendingAssign(null)}
+      />
     </div>
   );
 }

@@ -166,6 +166,21 @@ const en = {
     sharedSkills: 'shared skills',
     ruleBased: 'rule-based',
     noSuggestion: 'No available mentor to suggest.',
+    // Confirmation dialog (#942) shown before assigning a mentor whose
+    // availability.status is at_capacity/not_accepting — advisory, not a block.
+    confirmAtCapacity: 'This mentor appears to be at capacity. Assign anyway?',
+    confirmNotAccepting: 'This mentor has indicated they are not accepting new mentees. Assign anyway?',
+    confirmAnyway: 'Assign anyway',
+  },
+  // Capacity/status suffix shown next to a mentor's name in an admin picker
+  // (#942) — see src/lib/mentorAvailabilityLabel.ts. Advisory only: a mentor
+  // at capacity or not accepting is still selectable, never hidden or disabled.
+  mentorAvailability: {
+    available: 'Available',
+    atCapacity: 'At capacity',
+    notAccepting: 'Not accepting',
+    capacityNotSet: 'Capacity not set',
+    activeCount: '{active} / {capacity}',
   },
   offline: { title: 'You are offline', body: 'Check your connection and try again. Some pages you have visited may still work.' },
   common: {
@@ -2887,6 +2902,16 @@ const tr: Dict = {
     sharedSkills: 'ortak yetenekler',
     ruleBased: 'kural tabanlı',
     noSuggestion: 'Önerilecek uygun mentör yok.',
+    confirmAtCapacity: 'Bu mentor kapasitesini doldurmuş görünüyor. Yine de atamak istiyor musunuz?',
+    confirmNotAccepting: 'Bu mentor yeni mentee kabul etmediğini belirtmiş. Yine de atamak istiyor musunuz?',
+    confirmAnyway: 'Yine de ata',
+  },
+  mentorAvailability: {
+    available: 'Uygun',
+    atCapacity: 'Kapasite dolu',
+    notAccepting: 'Mentee almıyor',
+    capacityNotSet: 'Kapasite belirtilmemiş',
+    activeCount: '{active} / {capacity}',
   },
   offline: { title: 'Çevrimdışısın', body: 'Bağlantını kontrol edip tekrar dene. Daha önce ziyaret ettiğin bazı sayfalar yine de çalışabilir.' },
   common: {
@@ -5593,6 +5618,16 @@ const de: Dict = {
     sharedSkills: 'gemeinsame Fähigkeiten',
     ruleBased: 'regelbasiert',
     noSuggestion: 'Kein verfügbarer Mentor zum Vorschlagen.',
+    confirmAtCapacity: 'Dieser Mentor scheint seine Kapazität erreicht zu haben. Trotzdem zuweisen?',
+    confirmNotAccepting: 'Dieser Mentor hat angegeben, aktuell keine neuen Mentees anzunehmen. Trotzdem zuweisen?',
+    confirmAnyway: 'Trotzdem zuweisen',
+  },
+  mentorAvailability: {
+    available: 'Verfügbar',
+    atCapacity: 'Kapazität voll',
+    notAccepting: 'Nimmt nicht auf',
+    capacityNotSet: 'Kapazität nicht festgelegt',
+    activeCount: '{active} / {capacity}',
   },
   offline: { title: 'Du bist offline', body: 'Prüfe deine Verbindung und versuche es erneut. Bereits besuchte Seiten funktionieren womöglich weiter.' },
   common: {
