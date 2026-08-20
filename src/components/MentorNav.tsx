@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardList, Columns3, FolderGit2, LayoutDashboard, Mail, User, Users } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardList, Columns3, FolderGit2, LayoutDashboard, Mail, MessageSquareText, User, Users } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 export function MentorNav() {
@@ -23,6 +23,7 @@ export function MentorNav() {
     { href: '/mentor/calendar', label: t.nav.calendar, Icon: CalendarDays },
     { href: '/mentor/mentee-activity', label: t.nav.menteeActivity, Icon: Activity },
     { href: '/mentor/analytics', label: t.nav.analytics, Icon: BarChart3 },
+    { href: '/mentor/feedback', label: t.nav.feedback, Icon: MessageSquareText },
   ];
 
   const isActive = (href: string) =>
