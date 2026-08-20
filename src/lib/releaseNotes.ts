@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.83.1-beta',
+    date: '2026-08-21',
+    highlights: {
+      en: [
+        'Stage deadline notifications now take mentors directly to the correct mentee detail page.',
+      ],
+      tr: [
+        'Aşama son tarihi bildirimleri artık mentörleri doğrudan doğru mentee detay sayfasına götürüyor.',
+      ],
+      de: [
+        'Benachrichtigungen zu Phasenfristen führen Mentoren jetzt direkt zur richtigen Mentee-Detailseite.',
+      ],
+    },
+  },
+  {
     version: '0.83.0-beta',
     date: '2026-08-19',
     highlights: {
