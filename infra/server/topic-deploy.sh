@@ -89,18 +89,29 @@ else
     echo "ERROR: SKIP_PULL=1 but image '$IMAGE' is not present locally" >&2; exit 1; }
 fi
 
-# Shared preview DB: reach the host's MySQL the same way the preview deploy does.
+# The long-running topic container stays bridge-isolated and reaches the host
+# through Docker's gateway alias, as before.
 CONTAINER_DB=$(echo "$DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s|127\.0\.0\.1|host.docker.internal|g')
+# Tool containers use host networking, where Docker's gateway alias is neither
+# needed nor guaranteed to resolve. Normalize an env file captured from a
+# running preview container back to host loopback.
+TOOL_DB=$(echo "$DATABASE_URL" | sed 's|host\.docker\.internal|127.0.0.1|g; s|localhost|127.0.0.1|g')
+TOOL_DB_HOST=$(echo "$TOOL_DB" | sed -E 's|^[^:]+://([^@/]+@)?([^/:?]+).*|\2|')
+CONTAINER_DB_HOST=$(echo "$CONTAINER_DB" | sed -E 's|^[^:]+://([^@/]+@)?([^/:?]+).*|\2|')
+echo "==> Database routes: Prisma tools -> ${TOOL_DB_HOST} (--network=host); app -> ${CONTAINER_DB_HOST} (bridge)"
 
-# Apply schema + seed (idempotent). Shared DB, so this affects all topics.
-docker run --rm --add-host=host.docker.internal:host-gateway \
-  -e DATABASE_URL="$CONTAINER_DB" "$IMAGE" node prisma/push-company-interest-expand.mjs
-docker run --rm --add-host=host.docker.internal:host-gateway \
-  -e DATABASE_URL="$CONTAINER_DB" "$IMAGE" node prisma/backfill-company-interest-scope.mjs
-docker run --rm --add-host=host.docker.internal:host-gateway \
-  -e DATABASE_URL="$CONTAINER_DB" "$IMAGE" npx prisma db push --accept-data-loss
-docker run --rm --add-host=host.docker.internal:host-gateway \
-  -e DATABASE_URL="$CONTAINER_DB" "$IMAGE" node prisma/seed-templates.mjs || true
+# Apply schema + seed over host networking, matching production. MySQL is bound
+# on the host's loopback interface, which is not reachable through Docker's
+# bridge gateway (`host.docker.internal`) on this server. These containers are
+# short-lived and exit before the bridge-isolated application starts.
+docker run --rm --network=host \
+  -e DATABASE_URL="$TOOL_DB" "$IMAGE" node prisma/push-company-interest-expand.mjs
+docker run --rm --network=host \
+  -e DATABASE_URL="$TOOL_DB" "$IMAGE" node prisma/backfill-company-interest-scope.mjs
+docker run --rm --network=host \
+  -e DATABASE_URL="$TOOL_DB" "$IMAGE" npx prisma db push --accept-data-loss
+docker run --rm --network=host \
+  -e DATABASE_URL="$TOOL_DB" "$IMAGE" node prisma/seed-templates.mjs || true
 
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true

@@ -1310,7 +1310,7 @@ export async function checkStageDeadlineReminders() {
   });
 
   for (const rel of overdue) {
-    await notify(rel.mentorId, 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/admin/candidates/${rel.menteeId}`);
+    await notify(rel.mentorId, 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/mentor/mentees/${rel.id}`);
     if (emailAllowed(rel.mentor, 'deadlines')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
@@ -1997,7 +1997,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
           id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true,
           menteeRelations: {
             where: { status: 'ACTIVE', mentor: { isActive: true } },
-            select: { mentor: { select: { id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } } },
+            select: { id: true, mentor: { select: { id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } } },
           },
         },
       });
@@ -2020,7 +2020,8 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             const t = getDictionary(locale).documentRequirements;
             const label = requirement.labels[locale] || requirement.labels.en || requirement.key;
             const isMentee = recipient.id === mentee.id;
-            const link = isMentee ? '/portal/profile#documents' : `/mentor/mentees/${mentee.id}`;
+            const relationId = mentee.menteeRelations.find((relation) => relation.mentor.id === recipient.id)?.id;
+            const link = isMentee ? '/portal/profile#documents' : `/mentor/mentees/${relationId}`;
             await notify(
               recipient.id,
               isMentee ? 'missing_document.self' : 'missing_document.mentor',
