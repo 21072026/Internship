@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.84.0-beta',
+    date: '2026-08-20',
+    highlights: {
+      en: [
+        'Mentors can now see all feedback received from their mentees in one Feedback screen, including overall and criteria-based averages, recent trends, and each individual review. Only feedback addressed to them is shown.',
+      ],
+      tr: [
+        'Mentörler artık mentee’lerinden aldıkları tüm değerlendirmeleri tek bir Geri Bildirim ekranında görebilir; genel ve kriter bazlı ortalamaları, son aylardaki eğilimi ve tek tek geri bildirimleri inceleyebilir. Yalnızca kendilerine gelen değerlendirmeler gösterilir.',
+      ],
+      de: [
+        'Mentoren sehen jetzt das gesamte Feedback ihrer Mentees auf einer Feedback-Seite – mit Gesamt- und Kriterien-Durchschnitten, der Entwicklung der letzten Monate und jeder einzelnen Bewertung. Angezeigt wird nur Feedback, das an sie gerichtet ist.',
+      ],
+    },
+  },
+  {
     version: '0.83.0-beta',
     date: '2026-08-19',
     highlights: {
