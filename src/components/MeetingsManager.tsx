@@ -12,6 +12,7 @@ import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { useSearchParams } from 'next/navigation';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 
 interface Relation {
   id: string;
@@ -45,6 +46,8 @@ export function MeetingsManager() {
   const interviewRequisitionTitle = searchParams.get('requisitionTitle');
   const [relations, setRelations] = useState<Relation[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
@@ -63,9 +66,20 @@ export function MeetingsManager() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [r1, r2] = await Promise.all([fetch('/api/mentorship'), fetch('/api/meetings')]);
-    setRelations((await r1.json()).relations ?? []);
-    setMeetings((await r2.json()).meetings ?? []);
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const [r1, r2] = await Promise.all([fetch('/api/mentorship'), fetch('/api/meetings')]);
+      if (!r1.ok || !r2.ok) throw new Error('Failed to load meetings data');
+
+      const [relationsData, meetingsData] = await Promise.all([r1.json(), r2.json()]);
+      setRelations(relationsData.relations ?? []);
+      setMeetings(meetingsData.meetings ?? []);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -151,6 +165,15 @@ export function MeetingsManager() {
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{result}</div>
       )}
 
+      {loadError && (
+        <Card className="mb-4" data-testid="meetings-load-error">
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-sm text-red-500">{t.meetings.loadError}</p>
+            <Button variant="outline" size="sm" onClick={load}>{t.errorBoundary.retry}</Button>
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -170,7 +193,9 @@ export function MeetingsManager() {
           </CardHeader>
           <div className="space-y-4">
             <div className="max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-lg p-2">
-              {relations.length === 0 ? (
+              {loading ? (
+                <div data-testid="meetings-relations-loading"><SkeletonRows rows={2} /></div>
+              ) : loadError ? null : relations.length === 0 ? (
                 <p className="text-sm text-gray-400">{t.mentor.noMenteesAssigned}</p>
               ) : (
                 <>
@@ -240,9 +265,11 @@ export function MeetingsManager() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{t.meetings.upcoming} ({meetings.length})</CardTitle>
+            <CardTitle>{t.meetings.upcoming}{!loading && !loadError ? ` (${meetings.length})` : ''}</CardTitle>
           </CardHeader>
-          {meetings.length === 0 ? (
+          {loading ? (
+            <div data-testid="meetings-list-loading"><SkeletonRows rows={3} /></div>
+          ) : loadError ? null : meetings.length === 0 ? (
             <p className="text-sm text-gray-400">{t.meetings.none}</p>
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
