@@ -135,8 +135,10 @@ const COPY_IF_EMPTY = [
   'university',
   'department',
   'graduationYear',
-  'cvUrl',
-  'avatarUrl',
+  // NOT cvUrl/avatarUrl: those are /api/cv/<id> // /api/avatar/<id> paths that
+  // embed the DUPLICATE's user id — copying them verbatim leaves the primary
+  // pointing at a deleted user (404). Section 2 moves the file rows and
+  // section 5 rewrites the URLs against the primary's own id.
   'displayName',
   'bio',
   'linkedinUrl',
@@ -208,6 +210,7 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
 
       // AvatarFile / CvFile: userId @unique, one row per user. Keep the
       // primary's when both exist (dup's is removed by the final cascade).
+      const movedFiles: Record<'avatarFile' | 'cvFile', boolean> = { avatarFile: false, cvFile: false };
       for (const model of ['avatarFile', 'cvFile'] as const) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const delegate = (tx as any)[model];
@@ -215,6 +218,7 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
         if (!primaryHas) {
           const moved = await delegate.updateMany({ where: { userId: duplicateId }, data: { userId: primaryId } });
           add(counts, model, moved.count);
+          movedFiles[model] = moved.count > 0;
         }
       }
 
@@ -515,6 +519,10 @@ export async function mergeUsers(input: { primaryId: string; duplicateId: string
       const union = (a: unknown, b: unknown): string[] => [
         ...new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].map(String)),
       ];
+      // The file rows moved in section 2 — point the URLs at the PRIMARY's id
+      // (the duplicate's /api/…/<id> path dies with the row below).
+      if (movedFiles.avatarFile && !primary.avatarUrl) data.avatarUrl = `/api/avatar/${primaryId}`;
+      if (movedFiles.cvFile && !primary.cvUrl) data.cvUrl = `/api/cv/${primaryId}`;
       data.skills = union(primary.skills, duplicate.skills) as unknown as Prisma.InputJsonValue;
       data.languages = union(primary.languages, duplicate.languages) as unknown as Prisma.InputJsonValue;
       const levels = {
