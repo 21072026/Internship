@@ -2137,6 +2137,10 @@ const en = {
     bulkChannelFailed: 'Bulk channel unreachable',
     bulkTag: 'bulk',
     quotaToday: 'Last 24 hours: {p} via the primary channel (this is what counts against a relay quota), {b} via the bulk channel.',
+    deliveryLastOk: 'Last successful delivery: {t}',
+    deliveryNeverOk: 'No successful delivery recorded yet',
+    deliveryFailures: '{n} failed attempt(s) since the last success — an alert goes to the ops address after 3 in a row.',
+    deliveryHealthy: 'no failures since',
   },
   checklist: {
     title: 'Get started',
@@ -4918,6 +4922,10 @@ const tr: Dict = {
     bulkChannelFailed: 'Toplu kanala ulaşılamıyor',
     bulkTag: 'toplu',
     quotaToday: 'Son 24 saat: {p} birincil kanaldan (relay kotasından düşen bu), {b} toplu kanaldan.',
+    deliveryLastOk: 'Son başarılı gönderim: {t}',
+    deliveryNeverOk: 'Henüz başarılı bir gönderim kaydedilmedi',
+    deliveryFailures: 'Son başarılı gönderimden bu yana {n} başarısız deneme — art arda 3 denemeden sonra ops adresine uyarı gider.',
+    deliveryHealthy: 'o zamandan beri hata yok',
   },
   checklist: {
     title: 'Başlayalım',
@@ -7697,6 +7705,10 @@ const de: Dict = {
     bulkChannelFailed: 'Bulk-Kanal nicht erreichbar',
     bulkTag: 'Bulk',
     quotaToday: 'Letzte 24 Stunden: {p} über den primären Kanal (das zählt gegen ein Relay-Kontingent), {b} über den Bulk-Kanal.',
+    deliveryLastOk: 'Letzte erfolgreiche Zustellung: {t}',
+    deliveryNeverOk: 'Noch keine erfolgreiche Zustellung aufgezeichnet',
+    deliveryFailures: '{n} fehlgeschlagene(r) Versuch(e) seit dem letzten Erfolg — nach 3 in Folge geht eine Warnung an die Ops-Adresse.',
+    deliveryHealthy: 'seitdem keine Fehler',
   },
   checklist: {
     title: 'Loslegen',

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { timingSafeEqual } from 'crypto';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getEmailHealth } from '@/lib/emailHealth';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { verifySmtpConnection } from '@/services/emailService';
 
@@ -92,6 +93,9 @@ export async function GET(request: Request) {
       db,
       smtp,
       ...(smtpError ? { smtpError } : {}),
+      // Delivery health (#1190), derived from the EmailLog ledger — recipient
+      // addresses are scrubbed in the lib, so nothing here carries PII.
+      email: await getEmailHealth(),
       uptimeMs: Math.round(process.uptime() * 1000),
       responseMs: Date.now() - started,
       timestamp: new Date().toISOString(),

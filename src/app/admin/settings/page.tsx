@@ -56,8 +56,19 @@ export default function AdminSettingsPage() {
     byCategory: { category: string; transport: string; count: number }[];
   } | null>(null);
 
+  // Derived delivery health (#1190): last success / failures since, computed
+  // server-side from the same EmailLog ledger the table below shows.
+  const [emailHealth, setEmailHealth] = useState<{
+    lastOkAt: string | null;
+    lastErrorAt: string | null;
+    lastError: string | null;
+    failuresSinceOk: number;
+    attempts24h: number;
+  } | null>(null);
+
   const loadEmailLog = useCallback(() => {
     fetch('/api/admin/email-log?limit=25').then((r) => (r.ok ? r.json() : null)).then((d) => d && setEmailLog(d)).catch(() => {});
+    fetch('/api/admin/email-health').then((r) => (r.ok ? r.json() : null)).then((d) => d?.email && setEmailHealth(d.email)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -293,6 +304,27 @@ export default function AdminSettingsPage() {
                 .replace('{p}', String(emailLog.last24h.primary))
                 .replace('{b}', String(emailLog.last24h.bulk))}
             </p>
+          )}
+
+          {/* Delivery health (#1190): when did a mail last actually go out, and
+              has anything failed since. Amber at 1-2 failures, red from 3 (the
+              threshold that also fires the ops alert). */}
+          {emailHealth && (
+            <div className="text-sm" data-testid="email-delivery-health">
+              <span className="text-gray-600 dark:text-gray-300">
+                {emailHealth.lastOkAt
+                  ? t.settings.deliveryLastOk.replace('{t}', new Date(emailHealth.lastOkAt).toLocaleString())
+                  : t.settings.deliveryNeverOk}
+              </span>
+              {emailHealth.failuresSinceOk > 0 ? (
+                <span className={emailHealth.failuresSinceOk >= 3 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>
+                  {' · '}
+                  {t.settings.deliveryFailures.replace('{n}', String(emailHealth.failuresSinceOk))}
+                </span>
+              ) : (
+                emailHealth.lastOkAt && <span className="text-green-600 dark:text-green-400"> · {t.settings.deliveryHealthy}</span>
+              )}
+            </div>
           )}
 
           <div className="flex flex-col sm:flex-row gap-2">
