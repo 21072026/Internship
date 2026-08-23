@@ -3772,6 +3772,59 @@ gibi), yanlış secret = 401 — inbound-email (#870) ile aynı desen, e2e'de
 Bayat state'e karşı da (serilerin `fixedLink`'i aynı odayı her hafta yeniden kullanır)
 `updatedAt` tazelik eşiği koy.
 
+## 2026-08-23 — Zamanlanmış tam e2e koşusundaki 11 kırmızıyı kapatmak (yalnızca test hataları)
+
+**Tam suite haftalardır kırmızıysa, "son merge bozdu" varsayma.** 11 başarısızlığın hepsi
+uygulama regresyonu değil test hatasıydı ve çoğu, spec'i güncellemeden davranış değiştiren
+eski PR'lardan kalmaydı (#1216, #1218, #1227, #1251). PR gate'i yalnızca @smoke koştuğu
+için bu spec'ler doğdukları günden beri hiç yeşil koşmamış olabiliyor — `git log -- <spec>`
+ile spec'in ve dokunduğu kodun tarihçesini karşılaştırmak, bisect'ten hızlı teşhis veriyor.
+
+**`page.route()` mock'ları sessizce ölmüşse iki bilinen katil var:**
+1. **Service worker**: uygulama her rol shell'inde `/sw.js` kaydediyor; SW üzerinden
+   geçen same-origin GET'leri `page.route` YAKALAMAZ — mock hiç vurulmaz, gerçek API
+   cevap verir. Çözüm: `playwright.config.ts` → `use: { serviceWorkers: 'block' }`
+   (hiçbir spec canlı SW'ye bağımlı değil; pwa.spec /sw.js'i statik dosya olarak çekiyor).
+2. **Playwright ≥1.57 glob değişikliği**: `'**/path?**'` deseni artık query string'i
+   EŞLEŞTİRMİYOR (`?` özel karakter). `'**/path*'` kullanın. Repo'da tek örnek
+   document-requirements'taydı; yenisini yazarken de `?` içeren glob'dan kaçının.
+
+**React SSR, bitişik JSX ifadeleri arasına `<!-- -->` koyar.** `{label}: {value}` SSR
+HTML'inde `Status<!-- -->: <!-- -->Approved` olur; ham `text()` üzerinde `toContain`
+asla eşleşmez. Ham HTML assert etmeden önce `.replace(/<!--.*?-->/g, '')` normalize edin.
+
+**COMPANY rolü seed'lerken org zorunlu (#1227'den beri).** `/api/mentorship` COMPANY
+için `orgId` yoksa 403 `organization_required` döner ve ilişki filtresi
+`{ orgId, companyId }`'dir — company kullanıcısına VE ilişkiye aynı `orgId`'yi verin
+(role-scoping.spec deseni). #1227 kendi bildiği spec'leri güncellemişti; company-role,
+company-portal-search, company-candidate-detail ve impersonation gözden kaçmıştı.
+Gerçek uygulamada da register orgId atamıyor (deploy backfill'i tamamlıyor) — davet
+edilen COMPANY kullanıcısı bir sonraki deploy'a kadar boş portal görür; issue açıldı.
+
+**Aynı sayfada ikinci kez giriş yapan her test `signInAsFreshUser` kullanmalı.**
+`signInAndSettle`/el yapımı `clearCookies()+login` ikilisi, eski oturumun
+`/api/auth/session` yoklamasıyla çerezi geri yazması yüzünden formu doldururken
+dashboard'a redirect yer (helpers/auth.ts'te belgeli). announcement-edit-delete ve
+requisitions tam bu yüzden kırmızıydı.
+
+**Bildirim tipleri #1251'den beri olay anahtarı** (`mentor_application.new` gibi) —
+spec'te exact eski tip (`type: 'mentor_application'`) sonsuza dek 0 sayar; ya tam yeni
+anahtarı ya `startsWith('<kategori>.')` kullanın.
+
+**Portal, kullanıcının `preferredLanguage`'ında render olur.** Spec mentee'yi `de`
+seed'leyip İngilizce metin bekliyorsa yanlış olan spec'tir — kartın Almanca etiketini
+bekleyin (getLocale: cookie > kullanıcı tercihi > default).
+
+**Bu container'da Playwright 1.62 + pinli 1234 build'i yok**: 1194'ü `chromium-1234/
+chrome-linux64/` ve `chromium_headless_shell-1234/chrome-headless-shell-linux64/
+chrome-headless-shell` düzenine symlink'leyip `INSTALLATION_COMPLETE` +
+`DEPENDENCIES_VALIDATED` touch'lamak yetti (2026-08-19 notunun aynısı, yeni sürümle).
+
+**Dev modda koşarken iki yerel-only kırmızı normal çıktı**: weekly-reports 60s test
+timeout'una takılıyor (5 context + on-demand derleme; CI production build'de sığıyor)
+ve requisitions'ın eşzamanlı PATCH testi tek çekirdekte serileşip 409 üretmeyebiliyor.
+İkisini de CI'da doğrulayın, yerelde kırmızı diye kurcalamayın.
+
 ## 2026-08-23 — #1261 hotfix'i ve katkıcı PR inceleme turu (Claude Code oturumu)
 
 **Bir PR'ı yeniden işlemeye başlamadan önce MERGED mi diye bak — ve bitince bir daha bak.**

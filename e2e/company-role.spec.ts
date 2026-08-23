@@ -12,7 +12,12 @@ test('a COMPANY user sees their linked candidates read-only and cannot reach adm
   const menteeEmail = uniqueEmail('coMentee');
   const pw = 'CompanyPass123!';
 
-  const company = await prisma.company.create({ data: { name: `Acme ${Date.now()}` } });
+  // COMPANY reads of /api/mentorship fail closed without a tenant (#1227), so
+  // the company user and the relation must share an org, same as production.
+  const org = await prisma.organization.create({
+    data: { name: `Acme Org ${Date.now()}`, slug: `acme-role-${Date.now()}` },
+  });
+  const company = await prisma.company.create({ data: { name: `Acme ${Date.now()}`, orgId: org.id } });
   const companyUser = await prisma.user.create({
     data: {
       email: companyEmail,
@@ -20,13 +25,14 @@ test('a COMPANY user sees their linked candidates read-only and cannot reach adm
       role: 'COMPANY',
       fullName: 'Acme Observer',
       companyId: company.id,
+      orgId: org.id,
       skills: [],
     },
   });
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Co Mentor');
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Linked Candidate');
   const rel = await prisma.mentorshipRelation.create({
-    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id },
+    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id, orgId: org.id },
   });
 
   try {
@@ -49,5 +55,6 @@ test('a COMPANY user sees their linked candidates read-only and cannot reach adm
     await cleanupByEmail(mentorEmail);
     await prisma.user.deleteMany({ where: { id: companyUser.id } });
     await prisma.company.deleteMany({ where: { id: company.id } });
+    await prisma.organization.deleteMany({ where: { id: org.id } });
   }
 });

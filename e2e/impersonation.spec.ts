@@ -14,10 +14,15 @@ test('impersonating a company user loads that company\'s candidates', async ({ p
   const companyUser = await seedUser(companyEmail, 'x', 'COMPANY', 'ImpCo Login');
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'ImpCo Mentor');
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Zoltan Candidate');
-  const company = await prisma.company.create({ data: { name: 'ImpCo GmbH' } });
-  await prisma.user.update({ where: { id: companyUser.id }, data: { companyId: company.id } });
+  // COMPANY reads of /api/mentorship fail closed without a tenant (#1227), so
+  // the impersonated company user and the relation must share an org.
+  const org = await prisma.organization.create({
+    data: { name: `ImpCo Org ${Date.now()}`, slug: `impco-${Date.now()}` },
+  });
+  const company = await prisma.company.create({ data: { name: 'ImpCo GmbH', orgId: org.id } });
+  await prisma.user.update({ where: { id: companyUser.id }, data: { companyId: company.id, orgId: org.id } });
   const rel = await prisma.mentorshipRelation.create({
-    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id },
+    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id, orgId: org.id },
   });
 
   try {
@@ -43,6 +48,7 @@ test('impersonating a company user loads that company\'s candidates', async ({ p
     await cleanupByEmail(companyEmail);
     await cleanupByEmail(adminEmail);
     await prisma.company.deleteMany({ where: { id: company.id } });
+    await prisma.organization.deleteMany({ where: { id: org.id } });
   }
 });
 

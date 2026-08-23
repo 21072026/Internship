@@ -127,7 +127,12 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect(print.status()).toBe(200);
     expect((await menteePage.request.get(`/weekly-reports/print?relationId=${relation.id}`)).status()).toBe(200);
     expect((await adminPage.request.get(`/weekly-reports/print?relationId=${relation.id}`)).status()).toBe(200);
-    const printHtml = await print.text();
+    // React SSR separates adjacent JSX text expressions with the literal
+    // `<!-- -->` marker (`Status<!-- -->: <!-- -->Approved`). Drop exactly that
+    // marker before matching — this is assertion normalization on trusted
+    // fixture output, not HTML sanitization (a comment-matching regex here
+    // trips CodeQL's sanitization rules).
+    const printHtml = (await print.text()).replaceAll('<!-- -->', '').replaceAll('<!---->', '');
     expect(printHtml).toContain('Built and tested the onboarding flow');
     expect(printHtml).toContain('Status: Approved');
     expect(printHtml.indexOf('Older diary entry')).toBeLessThan(printHtml.indexOf('Built and tested the onboarding flow'));

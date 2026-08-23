@@ -41,12 +41,13 @@ test('public application is accepted, creates no User, sets consentAt, and notif
     // No account is created — approval (a later task) is what does that.
     expect(await prisma.user.findUnique({ where: { email } })).toBeNull();
 
+    // Notification types are event keys since #1251 (`mentor_application.new`).
     await expect
-      .poll(async () => prisma.notification.count({ where: { userId: admin.id, type: 'mentor_application' } }), {
+      .poll(async () => prisma.notification.count({ where: { userId: admin.id, type: 'mentor_application.new' } }), {
         timeout: 10_000,
       })
       .toBeGreaterThan(0);
-    const notification = await prisma.notification.findFirst({ where: { userId: admin.id, type: 'mentor_application' } });
+    const notification = await prisma.notification.findFirst({ where: { userId: admin.id, type: 'mentor_application.new' } });
     expect(notification?.link).toBe('/admin/mentor-applications');
   } finally {
     await prisma.notification.deleteMany({ where: { userId: admin.id } });
