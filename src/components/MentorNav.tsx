@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardList, Columns3, FolderGit2, LayoutDashboard, Mail, User, Users } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardList, Columns3, FolderGit2, Inbox, LayoutDashboard, Mail, User, Users } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 export function MentorNav() {
@@ -12,6 +12,7 @@ export function MentorNav() {
     { href: '/mentor', label: t.nav.dashboard, Icon: LayoutDashboard },
     { href: '/mentor/board', label: t.nav.board, Icon: Columns3 },
     { href: '/mentor/mentees', label: t.nav.myMentees, Icon: Users },
+    { href: '/mentor/applications', label: t.nav.applications, Icon: Inbox },
     { href: '/mentor/profile', label: t.nav.myProfile, Icon: User },
     { href: '/mentor/projects', label: t.nav.projects, Icon: FolderGit2 },
     { href: '/todos', label: t.nav.todos, Icon: ClipboardList },

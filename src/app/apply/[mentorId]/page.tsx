@@ -10,6 +10,9 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
   const { mentorId } = use(params);
   const t = useT();
   const [mentorName, setMentorName] = useState<string | null | undefined>(undefined);
+  // Whether the link is open (#1188): a full or paused mentor's link explains
+  // itself BEFORE any form is shown — never an empty form that fails on submit.
+  const [accepting, setAccepting] = useState(true);
   const [form, setForm] = useState({ fullName: '', email: '', phone: '', city: '', university: '', department: '', skills: '' });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -20,7 +23,10 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
   useEffect(() => {
     fetch(`/api/apply?mentorId=${encodeURIComponent(mentorId)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setMentorName(d?.mentorName ?? null))
+      .then((d) => {
+        setMentorName(d?.mentorName ?? null);
+        setAccepting(d?.accepting !== false);
+      })
       .catch(() => setMentorName(null));
   }, [mentorId]);
 
@@ -62,6 +68,11 @@ export default function ApplyPage({ params }: { params: Promise<{ mentorId: stri
               <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-3" />
               <h1 className="text-xl font-bold text-gray-900 mb-1">{t.apply.thanksTitle}</h1>
               <p className="text-gray-500 text-sm">{t.apply.thanksBody}</p>
+            </div>
+          ) : !accepting ? (
+            <div className="text-center" data-testid="apply-closed">
+              <h1 className="text-xl font-bold text-gray-900 mb-2">{t.apply.fullTitle}</h1>
+              <p className="text-gray-500 text-sm">{t.apply.fullBody.replace('{mentor}', mentorName)}</p>
             </div>
           ) : (
             <>
