@@ -147,6 +147,7 @@ export async function POST(request: Request) {
           role,
           expiresAt,
           invitedById: session.user.id,
+          orgId: resolveOrgId(session),
           mentorId,
           menteeId,
           projectId,
