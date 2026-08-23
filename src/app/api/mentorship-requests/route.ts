@@ -8,6 +8,7 @@ import { emailAllowed } from '@/lib/notificationPrefs';
 import { sendMentorshipRequestEmail } from '@/services/emailService';
 import { getMenteeRequestGate } from '@/lib/requestGate';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Mentee-side mentorship requests (#590): a mentee asks for a mentor; an admin
@@ -16,6 +17,11 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 const createSchema = z.object({
   message: z.string().max(TEXT_LIMITS.mentorshipRequestMessage).optional(),
   targetPosition: z.string().max(120).optional(),
+  // Matching preferences (#939, story #900) — advisory hints for the admin
+  // queue; nothing is auto-assigned from them.
+  preferredField: z.string().max(120).optional(),
+  preferredLanguages: z.array(z.string().min(1).max(32)).max(8).optional(),
+  preferredMentorId: z.string().optional(),
 });
 
 // GET — the caller's own requests, newest first.
@@ -30,7 +36,17 @@ export async function GET() {
         where: { menteeId: session.user.id },
         orderBy: { createdAt: 'desc' },
         take: 10,
-        select: { id: true, status: true, message: true, targetPosition: true, createdAt: true, decidedAt: true },
+        select: {
+          id: true,
+          status: true,
+          message: true,
+          targetPosition: true,
+          preferredField: true,
+          preferredLanguages: true,
+          preferredMentor: { select: { id: true, fullName: true } },
+          createdAt: true,
+          decidedAt: true,
+        },
       }),
       getMenteeRequestGate(session.user.id),
     ]);
@@ -76,9 +92,34 @@ export async function POST(request: Request) {
 
     const message = parsed.data.message?.trim() || null;
     const targetPosition = parsed.data.targetPosition?.trim() || null;
+    const preferredField = parsed.data.preferredField?.trim() || null;
+    const preferredLanguages = (parsed.data.preferredLanguages ?? []).map((l) => l.trim()).filter(Boolean);
+    const preferredMentorId = parsed.data.preferredMentorId?.trim() || null;
+
+    // A preferred mentor must be one the mentee can actually see in the
+    // directory (#939): active MENTOR with publicProfile AND an active
+    // MENTOR_DIRECTORY_VISIBILITY consent — the exact visibility rule of
+    // GET /api/mentors (story #900). Anything else is rejected, so a mentee
+    // can never point the admin at a mentor who has not opted in.
+    if (preferredMentorId) {
+      const preferredMentor = await prisma.user.findFirst({
+        where: {
+          id: preferredMentorId,
+          role: 'MENTOR',
+          isActive: true,
+          publicProfile: true,
+          orgId: resolveOrgId(session),
+          consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
+        },
+        select: { id: true },
+      });
+      if (!preferredMentor) {
+        return NextResponse.json({ error: 'invalid_preferred_mentor' }, { status: 400 });
+      }
+    }
 
     const created = await prisma.mentorshipRequest.create({
-      data: { menteeId: session.user.id, message, targetPosition },
+      data: { menteeId: session.user.id, message, targetPosition, preferredField, preferredLanguages, preferredMentorId },
       select: { id: true, status: true, createdAt: true },
     });
 
@@ -95,6 +136,13 @@ export async function POST(request: Request) {
 
     // Email the admin queue too (#668): a pending request used to be visible only
     // to an admin who happened to log in. Opt-out respected, failures logged.
+    // sendMentorshipRequestEmail takes fixed params, so the matching
+    // preferences (#939) are appended to its free-text `message` param.
+    const preferenceLines = [
+      preferredField ? `Preferred field: ${preferredField}` : null,
+      preferredLanguages.length ? `Preferred languages: ${preferredLanguages.join(', ')}` : null,
+    ].filter((l): l is string => l !== null);
+    const emailMessage = [message, ...preferenceLines].filter(Boolean).join('\n') || null;
     for (const a of admins) {
       if (!a.email || !emailAllowed(a, 'mentorship')) continue;
       try {
@@ -103,7 +151,7 @@ export async function POST(request: Request) {
           adminName: a.fullName,
           menteeName: menteeName ?? 'a mentee',
           targetPosition,
-          message,
+          message: emailMessage,
           orgId: a.orgId,
         });
       } catch (e) {

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Send, Clock, CheckCircle2, XCircle, ListChecks } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { useT } from '@/i18n/client';
@@ -19,6 +21,14 @@ interface RequestRow {
   decidedAt?: string | null;
 }
 
+// Directory mentors for the optional "preferred mentor" picker (#939) — the
+// consent-gated GET /api/mentors contract (story #900).
+interface DirectoryMentor {
+  id: string;
+  fullName: string;
+  displayName?: string | null;
+}
+
 // Mentee-side "request a mentor" panel (#590), shown on the portal dashboard
 // while the mentee has no active mentorship. One PENDING request at a time;
 // the latest decision stays visible.
@@ -28,6 +38,12 @@ export function MentorshipRequestPanel() {
   const [requests, setRequests] = useState<RequestRow[] | null>(null);
   const [gate, setGate] = useState<Gate | null>(null);
   const [message, setMessage] = useState('');
+  // Matching preferences (#939): free-text field, comma-separated languages,
+  // and an optional preferred mentor from the consent-gated directory.
+  const [preferredField, setPreferredField] = useState('');
+  const [preferredLanguages, setPreferredLanguages] = useState('');
+  const [preferredMentorId, setPreferredMentorId] = useState('');
+  const [mentors, setMentors] = useState<DirectoryMentor[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -39,6 +55,15 @@ export function MentorshipRequestPanel() {
 
   useEffect(() => { load(); }, []);
 
+  // Only directory-visible mentors are offered — the same set the server
+  // accepts as preferredMentorId. A failed fetch just leaves the picker empty.
+  useEffect(() => {
+    fetch('/api/mentors')
+      .then((r) => (r.ok ? r.json() : { mentors: [] }))
+      .then((d) => setMentors(d.mentors ?? []))
+      .catch(() => {});
+  }, []);
+
   if (!requests) return null;
   const pending = requests.find((r) => r.status === 'PENDING');
   const latest = requests[0];
@@ -46,14 +71,26 @@ export function MentorshipRequestPanel() {
   const submit = async () => {
     setBusy(true);
     setErr('');
+    const languages = preferredLanguages
+      .split(',')
+      .map((l) => l.trim())
+      .filter(Boolean);
     try {
       const res = await fetch('/api/mentorship-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message.trim() || undefined }),
+        body: JSON.stringify({
+          message: message.trim() || undefined,
+          preferredField: preferredField.trim() || undefined,
+          preferredLanguages: languages.length ? languages : undefined,
+          preferredMentorId: preferredMentorId || undefined,
+        }),
       });
       if (res.ok) {
         setMessage('');
+        setPreferredField('');
+        setPreferredLanguages('');
+        setPreferredMentorId('');
         await load();
       } else {
         const d = await res.json().catch(() => ({}));
@@ -97,6 +134,34 @@ export function MentorshipRequestPanel() {
             showCounter
             className="mb-2"
           />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-1.5">
+            <Input
+              label={q.preferredFieldLabel}
+              value={preferredField}
+              onChange={(e) => setPreferredField(e.target.value)}
+              placeholder={q.preferredFieldPlaceholder}
+              maxLength={120}
+              data-testid="request-preferred-field"
+            />
+            <Input
+              label={q.preferredLanguagesLabel}
+              value={preferredLanguages}
+              onChange={(e) => setPreferredLanguages(e.target.value)}
+              placeholder={q.preferredLanguagesPlaceholder}
+              data-testid="request-preferred-languages"
+            />
+            <Select
+              label={q.preferredMentorLabel}
+              value={preferredMentorId}
+              onChange={(e) => setPreferredMentorId(e.target.value)}
+              options={[
+                { value: '', label: q.preferredMentorNone },
+                ...mentors.map((m) => ({ value: m.id, label: m.displayName || m.fullName })),
+              ]}
+              data-testid="request-preferred-mentor"
+            />
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{q.preferencesHint}</p>
           {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
           {gate && !gate.complete && (
             <div className="mb-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-3" data-testid="request-gate">
