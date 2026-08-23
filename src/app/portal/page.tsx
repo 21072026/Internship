@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
+import { UpcomingMeetings } from '@/components/UpcomingMeetings';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
 import { OfferCard } from '@/components/OfferCard';
 import { JourneyTracker } from '@/components/JourneyTracker';
@@ -151,6 +152,10 @@ export default async function PortalDashboard() {
           <JourneyTracker status={activeRelation.pipelineStatus} />
         </div>
       )}
+
+      {/* Upcoming meetings (#914): when is my meeting, what's the link —
+          answered on the first screen, with in-app RSVP and .ics download. */}
+      <UpcomingMeetings />
 
       {/* Compact mentor card: who my mentor is + the two actions a mentee
           reaches for daily. Company details and the interaction history moved

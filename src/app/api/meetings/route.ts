@@ -26,7 +26,12 @@ const schema = z.object({
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Every role's scope is spelled out (#913) — an unlisted role (COMPANY,
+  // SOURCE) is rejected, never silently given everything (the #831
+  // allowlist-by-omission lesson).
+  const role = session.user.role;
+  if (role !== 'ADMIN' && role !== 'MENTOR' && role !== 'MENTEE') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   return await withTenantScope(session, async () => {
@@ -35,9 +40,11 @@ export async function GET() {
     // reads `m.relation.mentee.fullName`, and an admin's unfiltered query would
     // otherwise start returning project/conversation rows with a null relation.
     const where =
-      session.user.role === 'ADMIN'
+      role === 'ADMIN'
         ? { relationId: { not: null } }
-        : { relationId: { not: null }, relation: { mentorId: session.user.id } };
+        : role === 'MENTOR'
+          ? { relationId: { not: null }, relation: { mentorId: session.user.id } }
+          : { relationId: { not: null }, relation: { menteeId: session.user.id } };
     const meetings = await prisma.meeting.findMany({
       where,
       include: { relation: { include: { mentee: { select: { fullName: true } } } } },
