@@ -1,20 +1,23 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { submitSignInForm } from './helpers/auth';
 
 const password = 'DocumentReq123!';
 const pdf = (name: string) => ({ name: `${name}.pdf`, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF-1.4 ${name}`) });
 
+// These tests re-sign-in mid-test, so the fresh-user guards are mandatory: a
+// blanket clearCookies() + unscoped submit click races the old session being
+// re-issued and ends up clicking the previous dashboard (see helpers/auth.ts).
 async function signIn(page: Page, email: string) {
-  await page.context().clearCookies();
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
+  await submitSignInForm(page, email, password);
 }
 
 test.afterAll(async () => prisma.$disconnect());
 
 test('admin CRUD validates keys, roles, stages and organization boundaries', async ({ page }) => {
+  // The guarded sign-ins each spend up to ~20s in capped networkidle waits
+  // (the app never goes network-idle, #1081) — triple the budget.
+  test.slow();
   const stamp = Date.now();
   const adminEmail = uniqueEmail('req-admin');
   const org = await prisma.organization.create({ data: { name: `Req Org ${stamp}`, slug: `req-org-${stamp}` } });
@@ -80,6 +83,7 @@ test('admin CRUD validates keys, roles, stages and organization boundaries', asy
 });
 
 test('missing state is derived from requirement links and preserves both versioning modes', async ({ page }) => {
+  test.slow(); // 4 guarded sign-ins — see the note on the first test.
   const stamp = Date.now();
   const adminEmail = uniqueEmail('req-doc-admin');
   const menteeEmail = uniqueEmail('req-doc-mentee');
@@ -168,6 +172,7 @@ test('missing state is derived from requirement links and preserves both version
 });
 
 test('portal warning and weekly reminders are missing-driven and deduped by UTC week', async ({ page }) => {
+  test.slow(); // 3 guarded sign-ins — see the note on the first test.
   const stamp = Date.now();
   const menteeEmail = uniqueEmail('req-remind-mentee');
   const mentorEmail = uniqueEmail('req-remind-mentor');
