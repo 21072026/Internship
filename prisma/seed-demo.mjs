@@ -200,6 +200,20 @@ async function main() {
     console.log(`created relation: ${m.fullName} → ${mentor.fullName} (${m.stage})`);
   }
 
+  // Org backfill (#1272): the demo box reseeds between deploys, so without
+  // this the freshly created org-less rows 403 the COMPANY demo account
+  // (fail-closed org scoping, #1227) until the next deploy's backfill runs.
+  const defaultOrg = await prisma.organization.upsert({
+    where: { slug: 'default' },
+    update: {},
+    create: { slug: 'default', name: 'Default Organization' },
+    select: { id: true },
+  });
+  for (const model of ['user', 'source', 'cohort', 'company', 'project', 'mentorshipRelation']) {
+    await prisma[model].updateMany({ where: { orgId: null }, data: { orgId: defaultOrg.id } });
+  }
+  console.log('backfilled default org onto demo rows');
+
   console.log(`\nDemo seed complete. All demo accounts share the password: ${PASSWORD}`);
   console.log(`Demo accounts use the @${DEMO_DOMAIN} domain — no real PII involved.`);
 }

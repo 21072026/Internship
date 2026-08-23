@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { z } from 'zod';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
     // Set from the invitation (its sender) or from a referral code, and written
     // onto the new account so "who brought this person in" is answerable later.
     let referredById: string | null = null;
+    let invitedOrgId: string | null = null;
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
 
     if (token) {
@@ -89,6 +91,7 @@ export async function POST(request: Request) {
       }
       role = invitation.role;
       referredById = invitation.invitedById;
+      invitedOrgId = invitation.orgId;
       autoLink = { mentorId: invitation.mentorId, menteeId: invitation.menteeId, projectId: invitation.projectId };
     } else {
       // An open registration may still carry a referral link.
@@ -117,8 +120,15 @@ export async function POST(request: Request) {
 
     const timezone = isValidTimeZone(parsed.data.timezone) ? parsed.data.timezone : null;
 
+    // Assign the tenant at creation time (#1272): invited users inherit the
+    // inviter's org (carried on the InvitationToken), everyone else gets the
+    // default org — the same one the deploy backfill would assign. Without
+    // this, fail-closed org scoping (#1227) 403s an invited COMPANY user's
+    // portal until the next deploy runs the backfill.
+    const orgId = invitedOrgId ?? (await defaultOrgId());
+
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
     });
 

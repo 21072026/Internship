@@ -1674,6 +1674,11 @@ model InvitationToken {
   used         Boolean   @default(false)
   createdAt    DateTime  @default(now())
   expiresAt    DateTime
+  // The inviter's tenant, captured at invite time (#1272) so registration can
+  // assign the org immediately instead of leaving the account org-less until
+  // the next deploy's backfill (fail-closed org scoping 403s COMPANY reads in
+  // that window). Nullable: pre-existing rows predate the column.
+  orgId        String?
   // Who sent the invitation (#51). Nullable: pre-existing rows have no inviter,
   // and the seeder/system can invite without a user. Drives two things on
   // registration — the new account's `referredById`, and the automatic
