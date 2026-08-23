@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
+import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
@@ -188,6 +190,66 @@ async function recordEmail(
   }
 }
 
+// ── E-mail delivery health alerts (#1190) ───────────────────────────────────
+// The channel's own failures must not stay silent, but the alert also travels
+// by e-mail — so the alert is best-effort and the durable signals are the
+// ActivityLog row and /api/health. In-memory dedupe (6h) is deliberate: after
+// a restart one extra alert beats a missed one.
+const EMAIL_ALERT_CATEGORY = 'ops-alert';
+const EMAIL_ALERT_MIN_FAILURES = 3;
+const EMAIL_ALERT_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let lastEmailAlertAt = 0;
+
+async function alertEmailHealth(reason: 'consecutive_failures' | 'stale', health: EmailHealth) {
+  if (Date.now() - lastEmailAlertAt < EMAIL_ALERT_INTERVAL_MS) return;
+  lastEmailAlertAt = Date.now();
+  // ActivityLog.detail is VARCHAR(191) — an oversized JSON is silently lost
+  // (P2000, the #1268 lesson), so the error is pre-trimmed and the whole
+  // payload capped.
+  const detail = JSON.stringify({
+    reason,
+    failuresSinceOk: health.failuresSinceOk,
+    lastOkAt: health.lastOkAt,
+    lastError: health.lastError?.slice(0, 80) ?? null,
+  }).slice(0, 191);
+  // The durable record — visible even when the alert e-mail below cannot leave.
+  await logActivity({ level: 'error', action: 'email.health_alert', targetType: 'email', detail });
+  const alertTo = process.env.ALERT_EMAIL_TO;
+  if (!alertTo) return;
+  try {
+    await sendEmail({
+      to: alertTo,
+      subject: `[CRM] E-mail delivery ${reason === 'stale' ? 'stalled' : 'failing'} — ${health.failuresSinceOk} failures since last success`,
+      html: `<p>E-mail delivery health alert (<b>${reason}</b>).</p><ul><li>Failures since last success: ${health.failuresSinceOk}</li><li>Last success: ${health.lastOkAt ?? 'never'}</li><li>Last error: ${health.lastError ?? '-'}</li></ul><p>Watch /api/health (detail view) for the live state.</p>`,
+      category: EMAIL_ALERT_CATEGORY,
+    });
+  } catch (e) {
+    logger.error('Email health alert could not be delivered', { error: String(e) });
+  }
+}
+
+// Fired after every FAILED attempt (never for the alert channel itself — the
+// alert failing must not re-trigger the alert).
+async function maybeAlertEmailFailures(category?: string) {
+  if (category === EMAIL_ALERT_CATEGORY) return;
+  try {
+    const health = await getEmailHealth();
+    if (health.failuresSinceOk >= EMAIL_ALERT_MIN_FAILURES) await alertEmailHealth('consecutive_failures', health);
+  } catch (e) {
+    logger.error('Email health evaluation failed', { error: String(e) });
+  }
+}
+
+// Hourly check (#1190 item 4): the last success is older than 6h while real
+// attempts kept happening — the queue is trying and nothing gets through.
+export async function runEmailHealthCheck(): Promise<EmailHealth> {
+  const health = await getEmailHealth();
+  const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
+  const stale = (!health.lastOkAt || new Date(health.lastOkAt).getTime() < sixHoursAgo) && health.attempts24h > 0 && health.failuresSinceOk > 0;
+  if (stale) await alertEmailHealth('stale', health);
+  return health;
+}
+
 export async function sendEmail({
   to,
   subject,
@@ -257,6 +319,7 @@ export async function sendEmail({
     const message = e instanceof Error ? e.message : String(e);
     logger.error('Email send failed', { to, subject, category, transport, error: message });
     await recordEmail(to, subject, category, 'FAILED', transport, message);
+    void maybeAlertEmailFailures(category).catch(() => {});
     throw e;
   }
 
@@ -2294,6 +2357,17 @@ export function initCronJobs() {
     }
   });
   scheduledTasks.set('analytics-report', analyticsTask);
+
+  // Hourly e-mail delivery health check (#1190) — alerts when sends keep
+  // failing or the last success goes stale while attempts continue.
+  const emailHealthTask = cron.schedule('5 * * * *', async () => {
+    try {
+      await runEmailHealthCheck();
+    } catch (e) {
+      logger.error('Email health cron failed', { error: String(e) });
+    }
+  });
+  scheduledTasks.set('email-health', emailHealthTask);
 
   // Missing mandatory documents — Mondays 08:30, offset from the other weekly jobs.
   const documentTask = cron.schedule('30 8 * * 1', async () => {

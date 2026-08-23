@@ -12,6 +12,7 @@ import {
   sendWeeklyAnalyticsReport,
   sendWeeklyReportReminders,
   sendWeeklyMissingDocumentReminders,
+  runEmailHealthCheck,
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
 
@@ -26,6 +27,9 @@ export async function GET(request: Request) {
     const job = new URL(request.url).searchParams.get('job');
     if (job === 'weekly-reports') {
       return NextResponse.json({ message: 'Weekly report reminders ran', weeklyReports: await sendWeeklyReportReminders() });
+    }
+    if (job === 'email-health') {
+      return NextResponse.json({ message: 'Email health check ran', email: await runEmailHealthCheck() });
     }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();
