@@ -13,6 +13,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.85.0-beta',
+    date: '2026-08-23',
+    highlights: {
+      en: [
+        'The mentee portal is no longer one endless page: the dashboard is now a short overview, and your journey, goals & feedback, and questions & requests each have their own tab — on the phone the dashboard shrank to roughly a third of its old height.',
+        'Every tab is a real page with its own link, so you can bookmark or share exactly the section you mean and the back button behaves.',
+      ],
+      tr: [
+        'Mentee portalı artık uçsuz bucaksız tek bir sayfa değil: pano kısa bir genel bakışa dönüştü; sürecin, hedefler ve geri bildirim, sorular ve talepler artık kendi sekmelerinde — telefonda pano eski yüksekliğinin yaklaşık üçte birine indi.',
+        'Her sekme kendi bağlantısı olan gerçek bir sayfa; tam olarak kastettiğin bölümü yer imine ekleyebilir veya paylaşabilirsin, geri tuşu da beklediğin gibi çalışır.',
+      ],
+      de: [
+        'Das Mentee-Portal ist keine endlose Einzelseite mehr: Das Dashboard ist jetzt ein kurzer Überblick, und dein Weg, Ziele & Feedback sowie Fragen & Anfragen haben eigene Tabs — auf dem Handy schrumpfte das Dashboard auf rund ein Drittel der alten Höhe.',
+        'Jeder Tab ist eine echte Seite mit eigenem Link: Du kannst genau den gemeinten Abschnitt als Lesezeichen speichern oder teilen, und die Zurück-Taste verhält sich wie erwartet.',
+      ],
+    },
+  },
+  {
     version: '0.84.1-beta',
     date: '2026-08-23',
     highlights: {

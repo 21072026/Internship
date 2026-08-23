@@ -79,6 +79,8 @@ test('certificate: mentor generates a PDF for a completed internship; mentee dow
     await signInAndSettle(menteePage, menteeEmail, pw, '/portal');
     const selfDl = await menteePage.request.get(`/api/documents/${docId}`);
     expect(selfDl.ok()).toBeTruthy();
+    // The documents list moved off the dashboard to /portal/profile (#916).
+    await menteePage.goto('/portal/profile');
     await expect(menteePage.getByTestId(`doc-${docId}`)).toBeVisible({ timeout: 10_000 });
 
     // An unrelated mentee is forbidden.

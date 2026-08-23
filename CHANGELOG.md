@@ -8,6 +8,22 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.85.0-beta] - 2026-08-23
+
+### Changed
+- **Mentee portal split into a summary + three sub-pages (#916).** The dashboard stacked
+  ~15 panels on one page (5 641 px tall at 390 px). `/portal` is now a short summary —
+  checklist, upcoming-meeting strip, missing documents, nudges, offer, journey strip and a
+  compact mentor card — at 2 124 px (−62 %), with the heavier panels on real sub-routes so
+  deep links and the back button behave: `/portal/journey` (full journey + mentorship
+  detail incl. company and recent interactions), `/portal/goals` (goals, weekly reports,
+  evaluations, interview prep), `/portal/requests` (questions, meeting requests). A shared
+  `PortalTabs` bar (tablist/tab a11y markup) links the four sections on every page.
+  `NotesPanel` no longer renders twice (only `/portal/notes`); the read-only profile card
+  and the documents list left the dashboard for `/portal/profile(#documents)`. Sub-route
+  fetches are trimmed to what each page needs. Affected e2e specs updated in the same
+  change; the 390 px mobile-overflow audit now covers the three new sub-pages. EN/TR/DE.
+
 ## [0.84.1-beta] - 2026-08-23
 
 ### Fixed
