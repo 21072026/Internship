@@ -3869,3 +3869,34 @@ ediyor; `version.ts` ve `releaseNotes.ts` oradan besleniyor. Deploy sonrası can
 health `version` alanı taban değil türetilmiş numarayı gösterir (0.85.0 taban + minor fragment
 → 0.86.0-beta gözlendi). Sürüm iddialarını test ederken package.json'a değil
 `scripts/release-derive.cjs` ile hesaplanan değere assert et (version-release-notes.spec böyle).
+
+## 2026-08-23 — Backlog-bitirme oturumu, 2. kısım (#1272, #937-#939, #1190)
+
+**MariaDB bu konteynerde boşta kalınca ölüyor** — `prisma db push`/spec'ler "Can't reach
+database" ya da sessizce eski şemayla devam ediyor. Her doğrulama zincirinin ilk adımı
+`service mariadb status || service mariadb start` olmalı. Sinsi biçimi: db push'un kendisi
+sessizce başarısız olmuşsa spec "column does not exist" ile düşer — bağlantı hatası değil,
+şema kaymasıdır; yeniden push et.
+
+**`ActivityLog.detail` ve tüm çıplak `String?` alanlar MySQL'de VARCHAR(191)** — #1268'in
+AuditLog dersi genelleşti: JSON payload yazan her logging çağrısı sığdırmayı kendisi
+garantilemeli (`.slice(0, 191)` + uzun alt alanları önceden kırp). P2000 logActivity içinde
+yutulur, kayıt sessizce kaybolur — tam da alarm kaydı gibi kaybolmaması gereken yerde.
+
+**E-posta sağlığı türetilmiş veri olarak kuruldu (#1190):** ayrı bir "son durum" markörü
+yerine EmailLog defterinden hesapla (`getEmailHealth`) — defter her denemede yazıldığı için
+sağlık gerçeklikten sapamaz. Alarm zinciri katmanlı: kalıcı sinyal ActivityLog satırı,
+best-effort sinyal ALERT_EMAIL_TO'ya `ops-alert` kategorili mail (kendi kategorisini
+denetlemez → özyineleme yok), tekrar bastırma in-memory 6h (restart sonrası bir fazla alarm,
+kaçan alarmdan iyidir).
+
+**Playwright'ta `page.request` oturum çerezini taşır** — "anonim çağrı" assert'i için ayrı
+`request` fixture'ını kullan (çerezsiz). Admin oturumuyla açık page.request, token'sız
+/api/health çağrısında bile detay görür (maySeeDetail admin oturumunu kabul ediyor) ve
+"anonim görmemeli" testini yanlış düşürür.
+
+**e2e'de global durum varsayma:** EmailLog gibi paylaşılan defterlere assert yazarken paralel
+spec'lerin araya satır sokabileceğini hesaba kat — eşitlik yerine alt sınır (`>=`), koşullu
+assert (cron cevabındaki anlık görüntüye göre) ve temizlenmeyen kalıcı kanıt satırı
+(in-memory dedupe yüzünden ikinci koşuda alarm atılmaz; ilk koşunun ActivityLog satırına
+`count >= 1` assert et, satırı silme).
