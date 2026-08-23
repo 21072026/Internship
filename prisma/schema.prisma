@@ -1830,7 +1830,10 @@ model AuditLog {
   actorId   String // who performed the action (e.g. the admin)
   action    String // e.g. IMPERSONATE_START / IMPERSONATE_STOP
   targetId  String? // affected user, when applicable
-  detail    String?
+  // @db.Text: a USER_MERGE detail carries per-relation move counts as JSON,
+  // which overflows the default VARCHAR(191) and turned a committed merge
+  // into a 500 with no audit row (P2000).
+  detail    String?  @db.Text
   createdAt DateTime @default(now())
 
   @@index([actorId])

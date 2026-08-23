@@ -59,6 +59,8 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     const menteeContext = await browser.newContext(); contexts.push(menteeContext);
     const menteePage = await menteeContext.newPage();
     await signInAndSettle(menteePage, menteeEmail, password, '/portal');
+    // The weekly-reports panel moved off the dashboard to /portal/goals (#916).
+    await menteePage.goto('/portal/goals');
     await expect(menteePage.getByTestId('weekly-reports-panel')).toBeVisible();
     await menteePage.getByTestId('weekly-report-summary').fill('Built the onboarding flow');
     await menteePage.getByTestId('weekly-report-hours').fill('35');
@@ -153,7 +155,7 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect(firstHistoryPage).toMatchObject({ page: 1, pageSize: 20, total: 53, totalPages: 3, hasMore: true });
     expect(finalHistoryPage).toMatchObject({ page: 3, pageSize: 20, total: 53, totalPages: 3, hasMore: false });
     expect(finalHistoryPage.reports).toHaveLength(13);
-    await menteePage.goto('/portal');
+    await menteePage.goto('/portal/goals');
     await expect(menteePage.getByTestId('weekly-reports-load-more')).toBeVisible();
     while (await menteePage.getByTestId('weekly-reports-load-more').isVisible().catch(() => false)) {
       await menteePage.getByTestId('weekly-reports-load-more').click();

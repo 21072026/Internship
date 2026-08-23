@@ -12,6 +12,7 @@ import { resolveReferrer } from '@/lib/referral';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { getSetting } from '@/lib/settings';
 import { isValidTimeZone } from '@/lib/timezone';
+import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -209,6 +210,23 @@ export async function POST(request: Request) {
           notify(a.id, pending ? 'signup.pendingApproval' : 'signup.new', { name: user.fullName }, '/admin/users')
         )
       );
+    }
+
+    // Duplicate post-check (#841): fire-and-forget — the registration already
+    // succeeded, admins just get a heads-up to review /admin/duplicates.
+    // Never surfaced in the public response.
+    if (role === 'MENTEE') {
+      void (async () => {
+        const matches = await findPossibleDuplicates({
+          orgId: user.orgId,
+          excludeId: user.id,
+          fullName,
+          email,
+        });
+        if (matches.length === 0) return;
+        const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+        await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
+      })().catch((e) => console.error('Duplicate post-check failed:', e));
     }
 
     return NextResponse.json({ user, emailVerified, pending, selfRegistered }, { status: 201 });

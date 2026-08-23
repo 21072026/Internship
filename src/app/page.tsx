@@ -14,7 +14,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
 import { TawkChat } from '@/components/TawkChat';
-import { RELEASE_NOTES } from '@/lib/releaseNotes';
+import { getAllReleaseNotes } from '@/lib/releaseNotes';
 
 export default async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
@@ -91,7 +91,7 @@ export default async function HomePage() {
 
   // Only claims a stranger can check without an account. The version count is
   // read from the release notes rather than typed in, so it cannot go stale.
-  const releaseCount = RELEASE_NOTES.length;
+  const releaseCount = getAllReleaseNotes().length;
   const transparency = [
     { t: L.trans1T, d: L.trans1D, icon: Code2 },
     { t: L.trans2T.replace('{n}', String(releaseCount)), d: L.trans2D, icon: ScrollText },

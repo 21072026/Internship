@@ -4,6 +4,7 @@
 // notable release; bump APP_VERSION in package.json to match.
 
 import type { Locale } from '@/i18n/config';
+import { APP_VERSION } from '@/lib/version';
 
 export interface ReleaseNote {
   version: string;
@@ -11,7 +12,80 @@ export interface ReleaseNote {
   highlights: Record<Locale, string[]>;
 }
 
+// Release fragments (#1275): PRs ship user-facing notes as files under
+// releases/unreleased/ instead of editing this array (see releases/README.md).
+// next.config.js merges pending fragment notes into APP_UNRELEASED_NOTES at
+// build time; here they become one synthetic entry carrying the derived
+// version, so /release-notes and the landing count stay correct between a
+// merge and the scheduled compaction PR that folds fragments into this file.
+function unreleasedEntry(): ReleaseNote | null {
+  const raw = process.env.APP_UNRELEASED_NOTES;
+  if (!raw) return null;
+  try {
+    return { version: APP_VERSION, date: '', highlights: JSON.parse(raw) };
+  } catch {
+    return null;
+  }
+}
+
+/** Canonical entries plus the pending (not yet compacted) one, newest first. */
+export function getAllReleaseNotes(): ReleaseNote[] {
+  const pending = unreleasedEntry();
+  return pending ? [pending, ...RELEASE_NOTES] : RELEASE_NOTES;
+}
+
 export const RELEASE_NOTES: ReleaseNote[] = [
+  {
+    version: '0.85.0-beta',
+    date: '2026-08-23',
+    highlights: {
+      en: [
+        'The mentee portal is no longer one endless page: the dashboard is now a short overview, and your journey, goals & feedback, and questions & requests each have their own tab — on the phone the dashboard shrank to roughly a third of its old height.',
+        'Every tab is a real page with its own link, so you can bookmark or share exactly the section you mean and the back button behaves.',
+      ],
+      tr: [
+        'Mentee portalı artık uçsuz bucaksız tek bir sayfa değil: pano kısa bir genel bakışa dönüştü; sürecin, hedefler ve geri bildirim, sorular ve talepler artık kendi sekmelerinde — telefonda pano eski yüksekliğinin yaklaşık üçte birine indi.',
+        'Her sekme kendi bağlantısı olan gerçek bir sayfa; tam olarak kastettiğin bölümü yer imine ekleyebilir veya paylaşabilirsin, geri tuşu da beklediğin gibi çalışır.',
+      ],
+      de: [
+        'Das Mentee-Portal ist keine endlose Einzelseite mehr: Das Dashboard ist jetzt ein kurzer Überblick, und dein Weg, Ziele & Feedback sowie Fragen & Anfragen haben eigene Tabs — auf dem Handy schrumpfte das Dashboard auf rund ein Drittel der alten Höhe.',
+        'Jeder Tab ist eine echte Seite mit eigenem Link: Du kannst genau den gemeinten Abschnitt als Lesezeichen speichern oder teilen, und die Zurück-Taste verhält sich wie erwartet.',
+      ],
+    },
+  },
+  {
+    version: '0.84.1-beta',
+    date: '2026-08-23',
+    highlights: {
+      en: [
+        'Merging duplicate candidate records now completes cleanly: the merge no longer reports an error after it already succeeded, the audit trail records every merge, and the merged profile keeps a working CV and photo.',
+      ],
+      tr: [
+        'Mükerrer aday kayıtlarını birleştirme artık temiz tamamlanıyor: birleştirme başarıyla bittiği hâlde hata göstermiyor, her birleştirme denetim kaydına geçiyor ve birleşen profilin özgeçmişi ile fotoğrafı çalışır durumda kalıyor.',
+      ],
+      de: [
+        'Das Zusammenführen doppelter Kandidatendatensätze läuft jetzt sauber durch: Es meldet keinen Fehler mehr, nachdem es bereits erfolgreich war, jede Zusammenführung landet im Prüfprotokoll, und das zusammengeführte Profil behält funktionierenden Lebenslauf und Foto.',
+      ],
+    },
+  },
+  {
+    version: '0.84.0-beta',
+    date: '2026-08-19',
+    highlights: {
+      en: [
+        'Duplicate candidate records are now caught and mergeable: the admin panel gained a Duplicates screen that finds records that look like the same person (matching name — Turkish characters handled —, phone or e-mail) and lets an admin merge them into one, moving every interaction, message, document, goal, evaluation and stage history along.',
+        'Wherever a candidate can be created — mentor entry, CSV import, applications and sign-ups — the system now warns about possible duplicates before a second record is born; nothing is ever merged automatically.',
+      ],
+      tr: [
+        'Yinelenen aday kayıtları artık yakalanıyor ve birleştirilebiliyor: yönetici paneline, aynı kişi gibi görünen kayıtları (Türkçe karakterlere dayanıklı ad, telefon veya e-posta eşleşmesi) bulan bir Yinelenenler ekranı eklendi; yönetici iki kaydı tek kayda birleştirebiliyor — tüm etkileşimler, mesajlar, belgeler, hedefler, değerlendirmeler ve aşama geçmişi birlikte taşınıyor.',
+        'Aday oluşturulabilen her yerde — mentor girişi, CSV içe aktarma, başvurular ve kayıtlar — sistem ikinci bir kayıt doğmadan önce olası yinelenenler için uyarıyor; hiçbir şey otomatik birleştirilmiyor.',
+      ],
+      de: [
+        'Doppelte Kandidaten-Datensätze werden jetzt erkannt und lassen sich zusammenführen: Das Admin-Panel hat einen Duplikate-Bildschirm bekommen, der Einträge findet, die nach derselben Person aussehen (Name — türkische Zeichen inklusive —, Telefon oder E-Mail), und sie zu einem Datensatz vereint — mit allen Interaktionen, Nachrichten, Dokumenten, Zielen, Bewertungen und dem Phasenverlauf.',
+        'Überall, wo ein Kandidat angelegt werden kann — Mentor-Eingabe, CSV-Import, Bewerbungen und Registrierungen — warnt das System jetzt vor möglichen Duplikaten, bevor ein zweiter Datensatz entsteht; zusammengeführt wird nie automatisch.',
+      ],
+    },
+  },
   {
     version: '0.83.0-beta',
     date: '2026-08-19',

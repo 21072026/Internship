@@ -3824,3 +3824,31 @@ chrome-headless-shell` düzenine symlink'leyip `INSTALLATION_COMPLETE` +
 timeout'una takılıyor (5 context + on-demand derleme; CI production build'de sığıyor)
 ve requisitions'ın eşzamanlı PATCH testi tek çekirdekte serileşip 409 üretmeyebiliyor.
 İkisini de CI'da doğrulayın, yerelde kırmızı diye kurcalamayın.
+
+## 2026-08-23 — #1261 hotfix'i ve katkıcı PR inceleme turu (Claude Code oturumu)
+
+**Bir PR'ı yeniden işlemeye başlamadan önce MERGED mi diye bak — ve bitince bir daha bak.**
+#1261'i incelerken (rebase + iki bug düzeltmesi) başka bir oturum PR'ı çoktan merge etmişti;
+push'um "stale info" ile reddedilince fark ettim. Doğru akış: `gh pr view --json state` işin
+başında VE push'tan hemen önce; iş merge olmuşsa düzeltmeler yeni bir hotfix PR'ına gider
+(#1268 böyle çıktı). `--force-with-lease` burada gerçek bir emniyet kemeri — kaybedilen tek
+şey birkaç dakikaydı, başkasının işi değil.
+
+**`String?` Prisma alanı MySQL'de VARCHAR(191)'dir — JSON detay yazacaksan `@db.Text` iste.**
+`AuditLog.detail`'e ilişki-başına sayaç JSON'u yazan merge, gerçek veride P2000 ile patladı;
+üstelik yazım transaction COMMIT'inden sonra olduğu için kullanıcıya 500, denetim izine hiçlik
+düştü. İki ders: (1) commit-sonrası log/audit yazımlarını try/catch'e al — geri alınamaz bir
+işlemi loglama arızası hata cevabına çevirmesin; (2) smoke-dışı spec'ler PR gate'inde koşmaz,
+bu yüzden 'CI yeşil'e değil, ilgili spec'i LOKALDE koşturmaya güven (bug'ı bu yakaladı).
+
+**Kullanıcı-id gömülü URL alanları (avatarUrl=/api/avatar/<id>, cvUrl) merge/kopya işlemlerinde
+birebir taşınamaz** — id'si silinen kayda işaret eden kırık link üretir. Dosya satırını taşı,
+URL'yi hedef kaydın id'siyle yeniden yaz.
+
+**Katkıcı PR incelemesinde işe yarayan şablon:** (1) spec'i onların dalında lokalde koştur ve
+sonucu yoruma yaz — 'çalışıyor' iddiası nesnelleşir; (2) authz'ı dört katman olarak kontrol et
+(oturum, rol, sahiplik sorgusu, tenant scope) — #1263 dördünü de doğru kurmuştu; (3) global UI
+bileşenine dokunan değişikliklerde etki alanını say (`grep -c` — #1265'te 155 size=\"sm\" düğme
+masaüstünde de büyüyordu; öneri: `[@media(pointer:coarse)]:` ile dokunmatik bağlama sınırla);
+(4) her yoruma sürüm-yeniden-numaralandırma uyarısı ekle — main bu hafta günde 3-5 numara
+ilerliyor ve her katkıcı PR'ı eski numarayla geliyor.
