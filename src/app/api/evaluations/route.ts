@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
 import { ALL_CRITERIA, EVALUATION_TYPES } from '@/lib/evaluation';
 import { dispatchWebhook } from '@/lib/webhooks';
+import { notifyIfAllowed } from '@/lib/notify';
 
 // GET ?relationId= — evaluations for a relation (participants/admin).
 export async function GET(request: Request) {
@@ -68,6 +69,16 @@ export async function POST(request: Request) {
     },
   });
   await dispatchWebhook('evaluation.added', { relationId: rel.id, type: evaluation.type, authorId: session.user.id });
+  // The evaluated side learns an evaluation exists (#925): mentee wrote it →
+  // mentor is told, mentor/admin wrote it → mentee is told. Privacy rule: the
+  // notification (which can surface on a lock screen via browser notifications)
+  // carries NO scores and NO comment text — just the fact, and a link to the
+  // page that shows it behind a session.
+  const recipientId = session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;
+  if (recipientId !== session.user.id) {
+    const link = recipientId === rel.menteeId ? '/portal' : `/mentor/mentees/${rel.menteeId}`;
+    await notifyIfAllowed(recipientId, 'goalsEvaluations', 'evaluation.added', {}, link);
+  }
   return NextResponse.json({ evaluation }, { status: 201 });
   });
 }

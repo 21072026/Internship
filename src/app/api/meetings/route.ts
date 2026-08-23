@@ -6,8 +6,9 @@ import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
+import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
-import { isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
+import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { generateMeetingLink } from '@/lib/meetingContext';
 
 const schema = z.object({
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
         : { id: { in: relationIds }, mentorId: session.user.id };
     const relations = await prisma.mentorshipRelation.findMany({
       where,
-      include: { mentee: { select: { email: true, fullName: true, timezone: true } } },
+      include: { mentee: { select: { id: true, email: true, fullName: true, timezone: true } } },
     });
 
     // Bulk scheduling creates ONE shared meeting: everyone selected joins the
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
     const link = meetLink || generateMeetingLink({ inviteeCount: relations.length });
 
     let created = 0;
+    const notifiedMentees = new Set<string>();
     for (const rel of relations) {
       const rsvpToken = randomBytes(24).toString('hex');
       await prisma.meeting.create({
@@ -127,6 +129,21 @@ export async function POST(request: Request) {
         });
       } catch (e) {
         console.error('Meeting invite email failed:', e);
+      }
+      // In-app signal alongside the invite e-mail (#924). One notification per
+      // PERSON: bulk scheduling passes many relations, and a mentee with two
+      // relations in the batch still joins the one shared room only once. The
+      // time reads on the recipient's clock, never the server's (#1030). No
+      // echo when an admin schedules a meeting on their own relation.
+      if (rel.mentee.id !== session.user.id && !notifiedMentees.has(rel.mentee.id)) {
+        notifiedMentees.add(rel.mentee.id);
+        await notifyIfAllowed(
+          rel.mentee.id,
+          'meetingReminders',
+          when ? 'meeting.scheduled' : 'meeting.scheduledNoTime',
+          when ? { title, when: formatInTimeZone(when, rel.mentee.timezone) } : { title },
+          '/portal'
+        );
       }
       created++;
     }

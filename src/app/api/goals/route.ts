@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { notifyIfAllowed } from '@/lib/notify';
 import type { Role } from '@prisma/client';
 import { z } from 'zod';
 
@@ -57,6 +58,15 @@ export async function POST(request: Request) {
       createdByRole: session.user.role as Role,
     },
   });
+
+  // The other side of the relation learns about the new goal (#925) — no echo
+  // to whoever created it. An admin is neither side, so the mentee (whose
+  // development the goal tracks) is told. Link fits the recipient's role.
+  const recipientId = session.user.id === rel.mentorId ? rel.menteeId : session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;
+  if (recipientId !== session.user.id) {
+    const link = recipientId === rel.menteeId ? '/portal/goals' : `/mentor/mentees/${rel.menteeId}`;
+    await notifyIfAllowed(recipientId, 'goalsEvaluations', 'goal.assigned', { title: goal.title }, link);
+  }
   return NextResponse.json({ goal }, { status: 201 });
   });
 }
