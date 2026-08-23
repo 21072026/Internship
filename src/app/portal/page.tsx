@@ -2,68 +2,46 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
-import { GoalsPanel } from '@/components/GoalsPanel';
-import { EvaluationPanel } from '@/components/EvaluationPanel';
-import { JourneyTracker } from '@/components/JourneyTracker';
-import { NotesPanel } from '@/components/NotesPanel';
-import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
-import { QuestionsPanel } from '@/components/QuestionsPanel';
-import { InterviewPrep } from '@/components/InterviewPrep';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
 import { OfferCard } from '@/components/OfferCard';
+import { JourneyTracker } from '@/components/JourneyTracker';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
-import { DocumentsManager } from '@/components/DocumentsManager';
-import { getServerDictionary } from "@/i18n/server";
+import { PortalTabs } from '@/components/PortalTabs';
+import { getServerDictionary } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge, StatusBadge } from '@/components/ui/Badge';
-import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
-import { User, Building2, BookOpen, ExternalLink, MessageCircle, Github, Linkedin, FolderKanban, ArrowRight } from 'lucide-react';
+import { StatusBadge } from '@/components/ui/Badge';
+import { User, Building2, ExternalLink, MessageCircle, FolderKanban, ArrowRight, Route } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
 import { missingRequirementsForUser } from '@/lib/documentRequirements';
 import type { Locale } from '@/i18n/config';
 import { FileWarning } from 'lucide-react';
-import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 
+// #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
+// deep links and the back button work and the phone page stays short:
+//   /portal/journey  — JourneyTracker + full mentorship card (company, interactions)
+//   /portal/goals    — GoalsPanel · EvaluationPanel · WeeklyReportsPanel · InterviewPrep
+//   /portal/requests — QuestionsPanel · MeetingRequestsPanel
+// NotesPanel lives ONLY on /portal/notes now (it used to render twice), and the
+// read-only profile card moved out entirely — /portal/profile is the profile.
 async function getMenteeData(menteeId: string, locale: Locale) {
   const [user, activeRelation, visibilityConsent, projects, missingDocuments] = await Promise.all([
     prisma.user.findUnique({
       where: { id: menteeId },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        phone: true,
-        university: true,
-        department: true,
-        graduationYear: true,
-        skills: true,
-        cvUrl: true,
-        githubUrl: true,
-        linkedinUrl: true,
-        portfolioUrl: true,
-        publicProfile: true,
-        targetPosition: true,
-        createdAt: true,
-      },
+      select: { university: true, skills: true },
     }),
     prisma.mentorshipRelation.findFirst({
       where: { menteeId, status: 'ACTIVE' },
-      include: {
-        mentor: {
-          // `timezone` (#1210): the meeting-request form shows a proposed slot on
-          // the mentor's clock as well as the mentee's before it is sent.
-          select: { id: true, fullName: true, email: true, department: true, phone: true, publicProfile: true, timezone: true },
-        },
-        company: true,
-        interactions: {
-          orderBy: { date: 'desc' },
-          take: 5,
-        },
+      select: {
+        id: true,
+        status: true,
+        startDate: true,
+        pipelineStatus: true,
+        mentor: { select: { id: true, fullName: true, publicProfile: true } },
       },
     }),
     // Has the mentee ever decided on company visibility (#527)? A row means
@@ -96,12 +74,14 @@ export default async function PortalDashboard() {
   return (
     <div>
       <OnboardingChecklist />
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.portal.welcome}, {session.user.name}!
         </h1>
         <p className="text-gray-500 mt-1">{t.portal.dashSubtitle}</p>
       </div>
+
+      <PortalTabs />
 
       {/* Half an hour before a meeting, and for as long as it runs (#51 follow-up). */}
       <UpcomingMeetingBanner />
@@ -156,219 +136,75 @@ export default async function PortalDashboard() {
 
       {!activeRelation && <MentorshipRequestPanel />}
 
-      {/* Offer card (#809) — kept above the fold like the journey tracker: an
-          offer needing a decision is the single most time-sensitive thing a
-          mentee can see here. */}
+      {/* Offer card (#809) — kept above the fold: an offer needing a decision is
+          the single most time-sensitive thing a mentee can see here. */}
       {activeRelation && (
         <div className="mb-6">
           <OfferCard />
         </div>
       )}
 
-      {/* Journey / pipeline stage — kept above the fold so a mentee sees where
-          they are as soon as the portal loads (#692), before the longer
-          mentorship card. */}
+      {/* Journey / pipeline stage — the "where am I" strip stays on the summary
+          (#692); the full mentorship detail lives on /portal/journey. */}
       {activeRelation && (
         <div className="mb-6">
           <JourneyTracker status={activeRelation.pipelineStatus} />
         </div>
       )}
 
-      {activeRelation && <div className="mb-6"><WeeklyReportsPanel relationId={activeRelation.id} mode="mentee" /></div>}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Summary */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-blue-600" />
-              <CardTitle>{t.portal.myProfile}</CardTitle>
-            </div>
-          </CardHeader>
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs text-gray-500">{t.profileForm.fullName}</p>
-              <p className="text-sm font-medium text-gray-900">{user?.fullName}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">{t.account.email}</p>
-              <p className="text-sm text-gray-900">{user?.email}</p>
-            </div>
-            {user?.phone && (
-              <div>
-                <p className="text-xs text-gray-500">{t.profileForm.phone}</p>
-                <p className="text-sm text-gray-900">{user.phone}</p>
-              </div>
-            )}
-            {user?.university && (
-              <div>
-                <p className="text-xs text-gray-500">{t.profileForm.university}</p>
-                <p className="text-sm text-gray-900">{user.university}</p>
-              </div>
-            )}
-            {user?.department && (
-              <div>
-                <p className="text-xs text-gray-500">{t.profileForm.department}</p>
-                <p className="text-sm text-gray-900">{user.department}</p>
-              </div>
-            )}
-            {user?.graduationYear && (
-              <div>
-                <p className="text-xs text-gray-500">{t.profileForm.graduationYear}</p>
-                <p className="text-sm text-gray-900">{user.graduationYear}</p>
-              </div>
-            )}
-            {user?.skills && (user.skills as string[]).length > 0 && (
-              <div>
-                <p className="text-xs text-gray-500 mb-1.5">{t.profileForm.skills}</p>
-                <div className="flex flex-wrap gap-1">
-                  {(user.skills as string[]).map((skill) => (
-                    <Badge key={skill} variant="info" className="text-xs">
-                      {skill}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {(user?.cvUrl || user?.githubUrl || user?.linkedinUrl || user?.portfolioUrl) && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {user?.cvUrl && (
-                  <a href={user.cvUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
-                    <ExternalLink className="h-3 w-3" />{t.portal.viewCv}
-                  </a>
-                )}
-                {user?.githubUrl && (
-                  <a href={user.githubUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-700 hover:underline"><Github className="h-3 w-3" />GitHub</a>
-                )}
-                {user?.linkedinUrl && (
-                  <a href={user.linkedinUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-700 hover:underline"><Linkedin className="h-3 w-3" />LinkedIn</a>
-                )}
-                {user?.portfolioUrl && (
-                  <a href={user.portfolioUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-gray-700 hover:underline"><ExternalLink className="h-3 w-3" />{t.profileForm.portfolio}</a>
-                )}
-              </div>
-            )}
+      {/* Compact mentor card: who my mentor is + the two actions a mentee
+          reaches for daily. Company details and the interaction history moved
+          to /portal/journey. */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-blue-600" />
+            <CardTitle>{t.portal.myMentorship}</CardTitle>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
-            <Link href="/portal/profile" className="text-sm text-blue-600 hover:underline">
-              {t.portal.editProfile} →
-            </Link>
-            {user?.publicProfile && user?.id && (
-              <a
-                href={`/p/${user.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600"
-              >
-                <ExternalLink className="h-3.5 w-3.5" /> {t.portal.viewPublicProfile}
-              </a>
-            )}
-          </div>
-        </Card>
-
-        {/* Mentor & Company */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-blue-600" />
-              <CardTitle>{t.portal.myMentorship}</CardTitle>
+        </CardHeader>
+        {!activeRelation ? (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <User className="h-8 w-8 text-gray-400" />
             </div>
-          </CardHeader>
-
-          {!activeRelation ? (
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <User className="h-8 w-8 text-gray-400" />
-              </div>
-              <p className="text-gray-500 font-medium">{t.portal.noMentor}</p>
-              <p className="text-sm text-gray-400 mt-1">
-                {t.portal.noMentorHint}
+            <p className="text-gray-500 font-medium">{t.portal.noMentor}</p>
+            <p className="text-sm text-gray-400 mt-1">
+              {t.portal.noMentorHint}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <StatusBadge status={activeRelation.status} />
+              <span className="text-xs text-gray-400">
+                {t.portal.since} {formatDate(activeRelation.startDate, locale)}
+              </span>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-xl">
+              <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2">
+                {t.portal.yourMentor}
               </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <StatusBadge status={activeRelation.status} />
-                <span className="text-xs text-gray-400">
-                  {t.portal.since} {formatDate(activeRelation.startDate, locale)}
-                </span>
-              </div>
-
-              {/* Mentor */}
-              <div className="p-4 bg-blue-50 rounded-xl">
-                <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2">
-                  {t.portal.yourMentor}
-                </p>
-                <p className="font-semibold text-gray-900">{activeRelation.mentor.fullName}</p>
-                <a href={`mailto:${activeRelation.mentor.email}`} className="text-sm text-gray-600 hover:text-blue-600 hover:underline break-all">{activeRelation.mentor.email}</a>
-                {activeRelation.mentor.phone && (
-                  <p className="text-sm text-gray-600">{activeRelation.mentor.phone}</p>
-                )}
-                {activeRelation.mentor.department && (
-                  <p className="text-sm text-gray-500 mt-1">{activeRelation.mentor.department}</p>
-                )}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Link href={`/messages/${activeRelation.id}`} className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
-                    <MessageCircle className="h-4 w-4" />
-                    {t.portal.messageMentor}
+              <p className="font-semibold text-gray-900">{activeRelation.mentor.fullName}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={`/messages/${activeRelation.id}`} className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
+                  <MessageCircle className="h-4 w-4" />
+                  {t.portal.messageMentor}
+                </Link>
+                <Link href="/portal/journey" className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
+                  <Route className="h-4 w-4" />
+                  {t.portal.tabs.journey}
+                </Link>
+                {activeRelation.mentor.publicProfile === true && (
+                  <Link href={`/p/${activeRelation.mentor.id}`} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
+                    <ExternalLink className="h-4 w-4" />
+                    {t.portal.viewMentorProfile}
                   </Link>
-                  {activeRelation.mentor.publicProfile === true && (
-                    <Link href={`/p/${activeRelation.mentor.id}`} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
-                      <ExternalLink className="h-4 w-4" />
-                      {t.portal.viewMentorProfile}
-                    </Link>
-                  )}
-                </div>
+                )}
               </div>
-
-              {/* Company */}
-              {activeRelation.company && (
-                <div className="p-4 bg-green-50 rounded-xl">
-                  <p className="text-xs font-medium text-green-500 uppercase tracking-wide mb-2">
-                    {t.portal.assignedCompany}
-                  </p>
-                  <p className="font-semibold text-gray-900">{activeRelation.company.name}</p>
-                  {activeRelation.company.industry && (
-                    <p className="text-sm text-gray-600">{activeRelation.company.industry}</p>
-                  )}
-                  {activeRelation.company.contactEmail && (
-                    <p className="text-sm text-gray-600">{activeRelation.company.contactEmail}</p>
-                  )}
-                  {activeRelation.company.description && (
-                    <p className="text-sm text-gray-500 mt-2">{activeRelation.company.description}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Recent Interactions */}
-              {activeRelation.interactions.length > 0 && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    {t.portal.recentInteractions}
-                  </p>
-                  <div className="space-y-2">
-                    {activeRelation.interactions.map((interaction) => (
-                      <div
-                        key={interaction.id}
-                        className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0"
-                      >
-                        <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
-                          <p className="text-xs text-gray-400">
-                            {formatDate(interaction.date, locale)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          )}
-        </Card>
-      </div>
+          </div>
+        )}
+      </Card>
 
       {/* Projects (#1114). Outside the mentorship card on purpose: a mentee can
           be a project member without an active relation, and hiding the card in
@@ -409,40 +245,9 @@ export default async function PortalDashboard() {
         </div>
       )}
 
-      {/* Own documents, including any internship completion certificate a
-          mentor/admin has generated (#813) — kept independent of
-          `activeRelation` so it still shows after the mentorship is marked
-          COMPLETED, when the mentorship card above disappears. */}
-      <div className="mt-6">
-        <DocumentsManager targetUserId={session.user.id} canUpload={false} canDelete={false} />
-      </div>
-
       <div className="mt-6">
         <AnnouncementsCard />
       </div>
-
-      {activeRelation && (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            <GoalsPanel relationId={activeRelation.id} />
-            <EvaluationPanel relationId={activeRelation.id} audience="MENTOR" />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            <MeetingRequestsPanel
-              relationId={activeRelation.id}
-              mode="request"
-              counterpart={{ name: activeRelation.mentor.fullName, timezone: activeRelation.mentor.timezone }}
-            />
-            <QuestionsPanel relationId={activeRelation.id} mode="ask" />
-          </div>
-        </>
-      )}
-
-      <div className="mt-6">
-        <NotesPanel />
-      </div>
-
-      <InterviewPrep defaultPosition={user?.targetPosition} />
     </div>
   );
 }
