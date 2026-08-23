@@ -13,6 +13,21 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.84.1-beta',
+    date: '2026-08-23',
+    highlights: {
+      en: [
+        'Merging duplicate candidate records now completes cleanly: the merge no longer reports an error after it already succeeded, the audit trail records every merge, and the merged profile keeps a working CV and photo.',
+      ],
+      tr: [
+        'Mükerrer aday kayıtlarını birleştirme artık temiz tamamlanıyor: birleştirme başarıyla bittiği hâlde hata göstermiyor, her birleştirme denetim kaydına geçiyor ve birleşen profilin özgeçmişi ile fotoğrafı çalışır durumda kalıyor.',
+      ],
+      de: [
+        'Das Zusammenführen doppelter Kandidatendatensätze läuft jetzt sauber durch: Es meldet keinen Fehler mehr, nachdem es bereits erfolgreich war, jede Zusammenführung landet im Prüfprotokoll, und das zusammengeführte Profil behält funktionierenden Lebenslauf und Foto.',
+      ],
+    },
+  },
+  {
     version: '0.84.0-beta',
     date: '2026-08-19',
     highlights: {
