@@ -74,27 +74,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Merge failed' }, { status: 500 });
   }
 
+  // The merge is already committed — from here on, a logging failure must not
+  // turn a successful (and irreversible) merge into a 500 the admin retries
+  // against an id that no longer exists.
   const totalMoved = Object.values(result.counts).reduce((sum, n) => sum + n, 0);
-  await prisma.auditLog.create({
-    data: {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: session.user.id,
+        action: 'USER_MERGE',
+        targetId: primaryId,
+        detail: JSON.stringify({ duplicateId, duplicateEmail: result.duplicateEmail, counts: result.counts }),
+      },
+    });
+    await logActivity({
+      action: 'user.merge',
+      level: 'warning',
       actorId: session.user.id,
-      action: 'USER_MERGE',
+      actorEmail: session.user.email ?? null,
+      targetType: 'user',
       targetId: primaryId,
-      detail: JSON.stringify({ duplicateId, duplicateEmail: result.duplicateEmail, counts: result.counts }),
-    },
-  });
-  await logActivity({
-    action: 'user.merge',
-    level: 'warning',
-    actorId: session.user.id,
-    actorEmail: session.user.email ?? null,
-    targetType: 'user',
-    targetId: primaryId,
-    // The duplicate row no longer exists — this line is the durable record of
-    // which account was absorbed and how much history moved with it.
-    detail: `absorbed ${result.duplicateEmail} (${totalMoved} rows moved)`,
-    request,
-  });
+      // The duplicate row no longer exists — this line is the durable record of
+      // which account was absorbed and how much history moved with it.
+      detail: `absorbed ${result.duplicateEmail} (${totalMoved} rows moved)`,
+      request,
+    });
+  } catch (error) {
+    console.error('USER_MERGE committed but writing its audit trail failed:', error);
+  }
 
   return NextResponse.json({ ok: true, counts: result.counts });
   });

@@ -8,6 +8,24 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
+## [0.84.1-beta] - 2026-08-23
+
+### Fixed
+- **Duplicate merge no longer 500s after committing** (#841 hotfix). `AuditLog.detail`
+  is a default VARCHAR(191); the `USER_MERGE` detail carries per-relation move counts
+  as JSON and overflowed it, so the audit insert threw P2000 AFTER `mergeUsers` had
+  committed — the admin saw a 500 for a merge that had succeeded, no audit row was
+  written, and a retry hit `not_found` because the absorbed user was already gone.
+  (Caught by running `e2e/duplicate-merge.spec.ts`, which is not in the smoke set the
+  PR gate runs.) The column is now `@db.Text` (lossless widen, passes the schema
+  guard), and the post-commit audit/activity writes can no longer turn a committed,
+  irreversible merge into an error response.
+- **Merged profiles no longer point at the deleted user's files** (#841 hotfix).
+  `cvUrl`/`avatarUrl` embed the user id (`/api/cv/<id>`, `/api/avatar/<id>`); the
+  verbatim copy-if-empty left the primary linking to the absorbed id (404 after the
+  delete). The URLs are now rewritten against the primary's own id whenever a file
+  row moved.
+
 ## [0.84.0-beta] - 2026-08-19
 
 ### Added
