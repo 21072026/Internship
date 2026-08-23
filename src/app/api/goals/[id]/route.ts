@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
 
 async function goalIfAllowed(userId: string, role: string, goalId: string) {
@@ -41,6 +42,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
     },
   });
+
+  // Completion notifies the OTHER side (#925): mentee ticks it → mentor learns,
+  // mentor ticks it → mentee learns. Only on a genuine OPEN→DONE transition —
+  // re-saving an already-done goal (title edit etc.) stays silent. `goal` is
+  // the pre-update row, so this compares against the old status.
+  if (status === 'DONE' && goal.status !== 'DONE') {
+    const rel = goal.relation;
+    const recipientId = session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;
+    if (recipientId !== session.user.id) {
+      const link = recipientId === rel.menteeId ? '/portal/goals' : `/mentor/mentees/${rel.menteeId}`;
+      await notifyIfAllowed(recipientId, 'goalsEvaluations', 'goal.completed', { title: updated.title }, link);
+    }
+  }
   return NextResponse.json({ goal: updated });
 }
 
