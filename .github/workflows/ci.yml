@@ -34,6 +34,10 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # A malformed release fragment must fail in the PR that adds it, not in
+      # next.config.js during the deploy build (#1275).
+      - name: release fragments are well-formed (#1275)
+        run: npm run check:release-fragments
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # A renamed route would silently drop out of the demo's write blocklist,

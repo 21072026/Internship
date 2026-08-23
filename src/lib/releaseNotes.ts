@@ -4,11 +4,34 @@
 // notable release; bump APP_VERSION in package.json to match.
 
 import type { Locale } from '@/i18n/config';
+import { APP_VERSION } from '@/lib/version';
 
 export interface ReleaseNote {
   version: string;
   date: string; // ISO date (release day)
   highlights: Record<Locale, string[]>;
+}
+
+// Release fragments (#1275): PRs ship user-facing notes as files under
+// releases/unreleased/ instead of editing this array (see releases/README.md).
+// next.config.js merges pending fragment notes into APP_UNRELEASED_NOTES at
+// build time; here they become one synthetic entry carrying the derived
+// version, so /release-notes and the landing count stay correct between a
+// merge and the scheduled compaction PR that folds fragments into this file.
+function unreleasedEntry(): ReleaseNote | null {
+  const raw = process.env.APP_UNRELEASED_NOTES;
+  if (!raw) return null;
+  try {
+    return { version: APP_VERSION, date: '', highlights: JSON.parse(raw) };
+  } catch {
+    return null;
+  }
+}
+
+/** Canonical entries plus the pending (not yet compacted) one, newest first. */
+export function getAllReleaseNotes(): ReleaseNote[] {
+  const pending = unreleasedEntry();
+  return pending ? [pending, ...RELEASE_NOTES] : RELEASE_NOTES;
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [

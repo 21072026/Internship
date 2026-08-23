@@ -14,6 +14,7 @@
     "lint": "next lint",
     "check:demo-blocklist": "node scripts/check-demo-blocklist.mjs",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
+    "check:release-fragments": "node scripts/check-release-fragments.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "db:check-json": "node prisma/backfill-json-columns.mjs",
     "test:e2e": "playwright test",
