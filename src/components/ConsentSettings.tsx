@@ -8,19 +8,24 @@ import { useT } from '@/i18n/client';
 
 // EPIC B2 — per-user consent toggles (GDPR). Reusable: each entry gates an
 // optional processing activity. menteeOnly entries only apply to (and only
-// render for) MENTEE accounts — e.g. talent-pool visibility (#527).
+// render for) MENTEE accounts — e.g. talent-pool visibility (#527); mentorOnly
+// entries likewise only render for MENTOR accounts — e.g. the mentee-facing
+// mentor directory (#937).
 const CONSENTS = [
   { type: 'AI_CV_PARSING', key: 'aiCvParsing' as const },
   { type: 'ACTIVITY_TRACKING', key: 'activityTracking' as const },
   { type: 'TALENT_POOL_VISIBILITY', key: 'talentPoolVisibility' as const, menteeOnly: true },
   { type: 'AI_INTERACTION_SUMMARY', key: 'aiInteractionSummary' as const, menteeOnly: true },
+  { type: 'MENTOR_DIRECTORY_VISIBILITY', key: 'mentorDirectoryVisibility' as const, mentorOnly: true },
 ];
 
 export function ConsentSettings() {
   const t = useT();
   const c = t.consent;
   const { data: session } = useSession();
-  const visibleConsents = CONSENTS.filter((x) => !x.menteeOnly || session?.user?.role === 'MENTEE');
+  const visibleConsents = CONSENTS
+    .filter((x) => !x.menteeOnly || session?.user?.role === 'MENTEE')
+    .filter((x) => !x.mentorOnly || session?.user?.role === 'MENTOR');
   const [state, setState] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
 

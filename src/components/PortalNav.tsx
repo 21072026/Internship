@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks, FolderKanban } from 'lucide-react';
+import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks, FolderKanban, Users } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 // Mentee portal sidebar navigation with active-route highlighting (mirrors the
@@ -16,6 +16,8 @@ export function PortalNav() {
     { href: '/portal/profile', label: t.nav.myProfile, Icon: User },
     // Their own projects, not the public showcase at /projects (#1114).
     { href: '/portal/projects', label: t.nav.projects, Icon: FolderKanban },
+    // Opted-in mentors only (#938) — consent-gated, see /api/mentors.
+    { href: '/mentors', label: t.nav.mentorDirectory, Icon: Users },
     { href: '/todos', label: t.nav.todos, Icon: ListChecks },
     // The shared inbox, not a portal-only copy of it (#1156).
     { href: '/messages', label: t.nav.messages, Icon: MessageSquare },

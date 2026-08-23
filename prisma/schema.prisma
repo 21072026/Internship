@@ -265,6 +265,7 @@ model User {
   companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
   mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
   decidedRequests                   MentorshipRequest[]           @relation("DecidedMentorshipRequests")
+  preferredInRequests               MentorshipRequest[]           @relation("PreferredMentorRequests")
   decidedMentorApplications         MentorApplication[]           @relation("DecidedMentorApplications")
   handledCompanyInquiries           CompanyInquiry[]              @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]               @relation("SupportRequester")
@@ -332,6 +333,11 @@ enum ConsentType {
   // Opt-in to sending the mentee's interaction-log text to the AI provider for
   // the mentor-facing auto-summary (Faz 2, #534). Default off.
   AI_INTERACTION_SUMMARY
+  // Mentor's explicit opt-in to being listed in the mentee-facing /mentors
+  // directory (#937) — required IN ADDITION to publicProfile, mirroring
+  // TALENT_POOL_VISIBILITY. Shown: name, expertise, languages, capacity
+  // status, bio. Never: email, phone, mentee list. Default off.
+  MENTOR_DIRECTORY_VISIBILITY
 }
 
 model UserConsent {
@@ -810,21 +816,32 @@ enum MentorshipRequestStatus {
 }
 
 model MentorshipRequest {
-  id             String                  @id @default(cuid())
-  menteeId       String
-  status         MentorshipRequestStatus @default(PENDING)
-  message        String?                 @db.Text
-  targetPosition String?
-  decidedById    String?
-  decidedAt      DateTime?
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
+  id                 String                  @id @default(cuid())
+  menteeId           String
+  status             MentorshipRequestStatus @default(PENDING)
+  message            String?                 @db.Text
+  targetPosition     String?
+  // Structured, NON-BINDING matching preferences (#939): the subject area the
+  // mentee wants help with, the languages they can be mentored in, and an
+  // optional specific mentor picked from the consent-gated /mentors directory.
+  // Admins see these in the approval queue; nothing is auto-assigned.
+  preferredField     String?
+  preferredLanguages Json                    @default("[]")
+  preferredMentorId  String?
+  decidedById        String?
+  decidedAt          DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
 
-  mentee    User  @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
-  decidedBy User? @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
+  mentee          User  @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  decidedBy       User? @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
+  // SetNull: a mentor leaving must not take pending requests with them — the
+  // preference simply disappears while the request survives.
+  preferredMentor User? @relation("PreferredMentorRequests", fields: [preferredMentorId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([menteeId])
+  @@index([preferredMentorId])
 }
 
 // A public, unauthenticated application to become a mentor (#904). No User
