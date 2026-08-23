@@ -161,6 +161,9 @@ model User {
   // Stable personal referral code behind /auth/register?ref=<code>. Generated
   // on first use so existing rows need no backfill.
   referralCode            String?       @unique
+  // Personal ICS calendar-feed credential (#915): unguessable, generated on
+  // demand, revocable by nulling. Null = no feed exposed for this user.
+  icsFeedToken            String?       @unique
   // Extended profile (all optional; safe to add to existing rows).
   displayName             String?
   bio                     String?       @db.Text

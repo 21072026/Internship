@@ -12,6 +12,7 @@ const TABS = [
   { href: '/portal', key: 'summary' },
   { href: '/portal/journey', key: 'journey' },
   { href: '/portal/goals', key: 'goals' },
+  { href: '/portal/calendar', key: 'calendar' },
   { href: '/portal/requests', key: 'requests' },
 ] as const;
 
