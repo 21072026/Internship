@@ -37,6 +37,11 @@ export default defineConfig({
     baseURL: externalBase || localURL,
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
+    // The app registers /sw.js on every role shell; requests served through a
+    // service worker bypass page.route(), silently disabling API mocks (the
+    // document-requirements pagination mock was the first casualty). No spec
+    // needs a live SW (pwa.spec fetches /sw.js as a static asset), so block it.
+    serviceWorkers: 'block',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     // Returning-visitor state: consent already given so the banner stays hidden

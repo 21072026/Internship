@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { prisma, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 import { mapCompanyNeedToRequisition } from '../scripts/requisition-backfill-lib.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -140,7 +141,9 @@ test.describe.serial('Story #806 requisitions', () => {
   test('unassigned COMPANY fails closed and ADMIN cannot cross tenants', async ({ page }) => {
     await login(page, emails.unassigned); const unassigned = await page.request.get('/api/requisitions');
     expect(unassigned.status()).toBe(403); expect((await unassigned.json()).code).toBe('company_not_assigned');
-    await page.context().clearCookies(); await login(page, emails.adminA);
+    // Switching users in the same page needs the fresh-user guards — a blanket
+    // clearCookies + login races the old session being re-issued (see helpers/auth.ts).
+    await signInAsFreshUser(page, emails.adminA, password, '/admin');
     expect((await page.request.get(`/api/requisitions/${foreignReqId}`)).status()).toBe(404);
   });
 });
