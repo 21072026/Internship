@@ -3825,7 +3825,20 @@ timeout'una takılıyor (5 context + on-demand derleme; CI production build'de s
 ve requisitions'ın eşzamanlı PATCH testi tek çekirdekte serileşip 409 üretmeyebiliyor.
 İkisini de CI'da doğrulayın, yerelde kırmızı diye kurcalamayın.
 
-## 2026-08-23 — #1261 hotfix'i ve katkıcı PR inceleme turu (Claude Code oturumu)
+### Ek — merge turunda çıkan iki ders (PR #1274)
+
+**CodeQL, test dosyasındaki yorum-temizleyen regex'i bile HTML sanitizasyonu sayıyor**
+(`js/incomplete-multi-character-sanitization` + `js/bad-tag-filter`, ikisi de "high").
+React SSR'ın metin ayırıcılarını assertion öncesi temizlerken `replace(/<!--.*?-->/g, '')`
+değil, literal `replaceAll('<!-- -->', '')` kullanın — davranış aynı, tarayıcı kalıbı
+görmüyor ve alarm PR'ı bloke etmiyor. Alert'i "test kodu, kapat" diye dismiss etmeye
+çalışmaktansa kalıbı ortadan kaldırmak hem hızlı hem kalıcı.
+
+**PR ortasında main'i merge etmek, o arada merge olmuş PR'ların taze spec kırıklarını da
+ithal eder.** #692 journey tracker'ı /portal'dan /portal/journey'ye taşımıştı; merge'ten
+sonra journey.spec strict-mode ihlaliyle patladı — benim 11'imle ilgisi yoktu ama benim
+koşumda kırmızıydı. Merge sonrası "önceki koşu yeşildi" güvencesi taşınmaz: tam suite'i
+merge'lenmiş head üzerinde yeniden tetikleyin (workflow_dispatch ücretsiz ve ~8 dk).
 
 **Bir PR'ı yeniden işlemeye başlamadan önce MERGED mi diye bak — ve bitince bir daha bak.**
 #1261'i incelerken (rebase + iki bug düzeltmesi) başka bir oturum PR'ı çoktan merge etmişti;
