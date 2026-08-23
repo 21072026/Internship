@@ -19,21 +19,32 @@ export default function NewMenteePage() {
   const [error, setError] = useState('');
   const [setPasswordUrl, setSetPasswordUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Possible-duplicate matches returned by the API's 409 pre-flight (#841).
+  const [duplicates, setDuplicates] = useState<
+    { id: string; fullName: string; email: string; university: string | null; signals: string[] }[]
+  >([]);
 
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doSubmit = async (confirmDuplicate: boolean) => {
     setSaving(true);
     setError('');
     try {
       const res = await fetch('/api/mentor/mentees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(confirmDuplicate ? { ...form, confirmDuplicate: true } : form),
       });
       const data = await res.json();
+      // The API warns about look-alike candidates before creating; the mentor
+      // can review, edit the form, or explicitly create anyway.
+      if (res.status === 409 && data.error === 'possible_duplicate') {
+        setDuplicates(data.possibleDuplicates ?? []);
+        setSaving(false);
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Failed');
+      setDuplicates([]);
       // With a real email, show the set-password link so the mentor can share
       // it if the email doesn't arrive; otherwise go straight to the list.
       if (data.setPasswordUrl) {
@@ -47,6 +58,14 @@ export default function NewMenteePage() {
       setSaving(false);
     }
   };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doSubmit(false);
+  };
+
+  const signalLabel = (s: string) =>
+    t.duplicates.signals[s as keyof typeof t.duplicates.signals] ?? s;
 
   if (setPasswordUrl) {
     return (
@@ -100,6 +119,30 @@ export default function NewMenteePage() {
       <Card className="max-w-2xl">
         <CardHeader><CardTitle>{t.mentor.addMentee}</CardTitle></CardHeader>
         {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+        {duplicates.length > 0 && (
+          <div data-testid="possible-duplicates" className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+            <p className="font-medium text-amber-800">{t.duplicates.possibleDuplicatesTitle}</p>
+            <p className="text-amber-700 mt-1">{t.duplicates.possibleDuplicatesHint}</p>
+            <ul className="mt-2 space-y-1">
+              {duplicates.map((d) => (
+                <li key={d.id} className="text-amber-800">
+                  <span className="font-medium">{d.fullName}</span>
+                  {d.email ? <span className="text-amber-700"> · {d.email}</span> : null}
+                  {d.university ? <span className="text-amber-700"> · {d.university}</span> : null}
+                  <span className="text-amber-700"> — {t.duplicates.matchedOn}: {d.signals.map(signalLabel).join(', ')}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex gap-2">
+              <Button type="button" variant="secondary" loading={saving} onClick={() => doSubmit(true)}>
+                {t.duplicates.createAnyway}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setDuplicates([])}>
+                {t.common.cancel}
+              </Button>
+            </div>
+          </div>
+        )}
         <form onSubmit={submit} className="space-y-4">
           <Input label={t.mentor.fullName} required value={form.fullName} onChange={(e) => set('fullName', e.target.value)} />
           <Input label={t.mentor.emailOptional} type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />

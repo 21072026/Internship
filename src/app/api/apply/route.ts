@@ -8,6 +8,7 @@ import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
+import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 
 // GET ?mentorId= — public: validate the link and return the mentor's name so
 // the application page can greet the applicant.
@@ -81,6 +82,23 @@ export async function POST(request: Request) {
   await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id, orgId: mentor.orgId } });
   await notify(mentor.id, 'application.received', { name: fullName }, '/mentor/mentees');
   await dispatchWebhook('application.created', { mentorId: mentor.id, menteeName: fullName, email });
+
+  // Duplicate post-check (#841): fire-and-forget — the application itself is
+  // already accepted, admins just get a heads-up to review /admin/duplicates.
+  // Never surfaced in the public response.
+  void (async () => {
+    const matches = await findPossibleDuplicates({
+      orgId: mentor.orgId,
+      excludeId: mentee.id,
+      fullName,
+      email,
+      phone,
+      university,
+    });
+    if (matches.length === 0) return;
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+    await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
+  })().catch((e) => console.error('Duplicate post-check failed:', e));
 
   // Let the applicant set a password so they can sign in to the portal.
   const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
