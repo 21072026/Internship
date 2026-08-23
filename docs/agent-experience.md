@@ -3799,3 +3799,20 @@ bileşenine dokunan değişikliklerde etki alanını say (`grep -c` — #1265'te
 masaüstünde de büyüyordu; öneri: `[@media(pointer:coarse)]:` ile dokunmatik bağlama sınırla);
 (4) her yoruma sürüm-yeniden-numaralandırma uyarısı ekle — main bu hafta günde 3-5 numara
 ilerliyor ve her katkıcı PR'ı eski numarayla geliyor.
+
+### Ek — aynı gün, fragment sistemini kurarken (#1275/#1276)
+
+**`GITHUB_TOKEN` ile açılan PR, required check'leri asla tetiklemez** (GitHub'ın özyineleme
+koruması) — bot'un PR'ı sonsuza dek "checks expected"da bekler. Üstelik bu org, `GITHUB_TOKEN`'ın
+PR açmasını org ayarıyla zaten yasaklıyor (repo düzeyinde açmayı denemek 409 döner; org düzeyi
+`admin:org` scope ister). Otonom bot-PR'ı isteyen her otomasyon için tek sağlam yol: fine-grained
+PAT'li bir secret (`RELEASE_BOT_TOKEN` deseni — checkout'a da `token:` olarak ver ki push da
+PAT'ten gitsin). Klasik branch protection'da required check'ler DOĞRUDAN PUSH'u da engeller —
+"bot merge sonrası main'e commit atar" tasarımları burada baştan ölü doğar; bu yüzden fragment
+sistemi build-anı türetme + zamanlanmış normal-PR sıkıştırma olarak kuruldu.
+
+**Sürüm artık build'de türetiliyor:** `next.config.js` taban+fragment'ları okuyup env inline
+ediyor; `version.ts` ve `releaseNotes.ts` oradan besleniyor. Deploy sonrası canlı doğrulama:
+health `version` alanı taban değil türetilmiş numarayı gösterir (0.85.0 taban + minor fragment
+→ 0.86.0-beta gözlendi). Sürüm iddialarını test ederken package.json'a değil
+`scripts/release-derive.cjs` ile hesaplanan değere assert et (version-release-notes.spec böyle).
