@@ -98,6 +98,13 @@ do not, and the check costs seconds. On failure an email goes to
 `ALERT_EMAIL_TO` from a *GitHub-hosted* job — an alert that needs the failing
 server to be healthy is an alert that may never send.
 
+The alert distinguishes the two halves, because they mean different things: a
+failed **freshness check** means assume there is no usable backup; a failed
+**drill** means the backups exist and look well-formed but recovery is
+unproven. Sending "BACKUP CHECK FAILED" for a drill problem would tell the
+maintainer their backups are broken while the report in the same email says
+they are fine — a false alarm costs the same trust as a missed one.
+
 ```bash
 # By hand, on the server:
 ./infra/check-backups.sh --env prod --env preview
@@ -125,6 +132,12 @@ than described, so the numbers below are measurements and not estimates.
 set -a; . /etc/internship-crm/preview.env; set +a
 ./infra/restore-drill.sh --env preview --target internship_restore_test
 ```
+
+The app user is usually not allowed to `CREATE DATABASE` — on the Plesk box it
+is not — so the scratch database is created through the same admin route the
+topic deploys use (`plesk db`, then the root socket) and then granted to the app
+user, which is who runs the restore. Without that the drill fails on its first
+statement, having exercised nothing.
 
 Three guards, none optional: the target name must contain `restore` **and**
 must differ from the database in `DATABASE_URL`, and the scratch database is

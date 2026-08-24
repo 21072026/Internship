@@ -62,6 +62,9 @@ db_host="${hostport%%:*}"; db_port="${hostport#*:}"
 [ "$db_port" = "$hostport" ] && db_port=3306
 decode() { printf '%b' "${1//%/\\x}"; }
 db_pass="$(decode "$db_pass")"; db_user="$(decode "$db_user")"
+# The env file's host is the CONTAINER's view; this runs on the host, where
+# `host.docker.internal` resolves to nothing (same trap as #1185).
+case "$db_host" in host.docker.internal|docker.for.mac.localhost) db_host=127.0.0.1 ;; esac
 
 # ── Guards ─────────────────────────────────────────────────────────────────
 case "$TARGET_DB" in
@@ -74,6 +77,19 @@ if [ "$TARGET_DB" = "$live_db" ]; then
 fi
 
 command -v mysql >/dev/null || { echo "ERROR: mysql client not found on PATH" >&2; exit 1; }
+
+# The app user is not necessarily allowed to CREATE DATABASE — on the Plesk box
+# it is not, which would have made this drill fail on its first line without
+# ever exercising a restore. Same two admin routes the topic deploys use
+# (#1185): `plesk db` first, because MySQL root there is not
+# socket-authenticated, then the plain root socket for a non-Plesk host.
+_admin_sql() {
+  if command -v plesk >/dev/null 2>&1; then
+    if printf '%s\n' "$1" | plesk db --batch --skip-column-names 2>/dev/null; then return 0; fi
+    if plesk db -e "$1" 2>/dev/null; then return 0; fi
+  fi
+  mysql --protocol=socket -u root --batch --skip-column-names -e "$1" 2>/dev/null
+}
 
 dump="$(ls -1 "$BACKUP_DIR/${ENV_NAME}-"*.sql.gz 2>/dev/null | sort | tail -1 || true)"
 [ -n "$dump" ] || { echo "ERROR: no ${ENV_NAME} dump in ${BACKUP_DIR}" >&2; exit 1; }
@@ -91,7 +107,9 @@ run_sql() { MYSQL_PWD="$db_pass" mysql -h "$db_host" -P "$db_port" -u "$db_user"
 cleanup() {
   if [ "$KEEP" -eq 0 ]; then
     log "Dropping scratch database ${TARGET_DB} (a restored dump is a second copy of real personal data)"
-    run_sql -e "DROP DATABASE IF EXISTS \`${TARGET_DB}\`;" || true
+    run_sql -e "DROP DATABASE IF EXISTS \`${TARGET_DB}\`;" 2>/dev/null \
+      || _admin_sql "DROP DATABASE IF EXISTS \`${TARGET_DB}\`;" \
+      || echo "WARN: could not drop ${TARGET_DB} — it holds a copy of real data, remove it by hand" >&2
   else
     echo "NOTE: ${TARGET_DB} kept (--keep). Drop it yourself — it holds real personal data."
   fi
@@ -102,7 +120,20 @@ log "Dump: ${dump##*/} (taken ${rpo_min} minutes ago)"
 log "Restoring into scratch database ${TARGET_DB} on ${db_host}:${db_port}"
 
 start=$(date -u +%s)
-run_sql -e "DROP DATABASE IF EXISTS \`${TARGET_DB}\`; CREATE DATABASE \`${TARGET_DB}\` CHARACTER SET utf8mb4;"
+CREATE_SQL="DROP DATABASE IF EXISTS \`${TARGET_DB}\`; CREATE DATABASE \`${TARGET_DB}\` CHARACTER SET utf8mb4;"
+if ! run_sql -e "$CREATE_SQL" 2>/dev/null; then
+  log "App user cannot create databases; creating the scratch database as an admin"
+  _admin_sql "$CREATE_SQL" || {
+    echo "ERROR: could not create the scratch database ${TARGET_DB} as either '${db_user}' or an admin." >&2
+    exit 1
+  }
+  # …and let the app user load into it, since that is who runs the restore.
+  for h in $(_admin_sql "SELECT host FROM mysql.user WHERE user='${db_user}';" \
+             | grep -E '^[A-Za-z0-9_.%:-]+$' || true); do
+    _admin_sql "GRANT ALL PRIVILEGES ON \`${TARGET_DB}\`.* TO '${db_user}'@'${h}';" >/dev/null || true
+  done
+  _admin_sql "FLUSH PRIVILEGES;" >/dev/null || true
+fi
 gzip -dc "$dump" | MYSQL_PWD="$db_pass" mysql -h "$db_host" -P "$db_port" -u "$db_user" "$TARGET_DB"
 rto_s=$(( $(date -u +%s) - start ))
 
