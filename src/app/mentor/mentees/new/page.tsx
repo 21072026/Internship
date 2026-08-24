@@ -7,13 +7,21 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ArrowLeft } from 'lucide-react';
+import { ReferrerPicker } from '@/components/ReferrerPicker';
+import { encodeReferrer } from '@/lib/referrer';
 import { useT } from '@/i18n/client';
 
 export default function NewMenteePage() {
   const t = useT();
   const router = useRouter();
   const [form, setForm] = useState({
-    fullName: '', email: '', phone: '', whatsapp: '', city: '', university: '', department: '', referralSource: '',
+    fullName: '', email: '', phone: '', whatsapp: '', city: '', university: '', department: '',
+  });
+  // Who brought this mentee in — one field for "a registered person" and "a
+  // source" alike (#1296). Replaces the old free-text "Referans" input.
+  const [referrer, setReferrer] = useState<{ referredById: string | null; sourceId: string | null }>({
+    referredById: null,
+    sourceId: null,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -33,7 +41,7 @@ export default function NewMenteePage() {
       const res = await fetch('/api/mentor/mentees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(confirmDuplicate ? { ...form, confirmDuplicate: true } : form),
+        body: JSON.stringify({ ...form, ...referrer, ...(confirmDuplicate ? { confirmDuplicate: true } : {}) }),
       });
       const data = await res.json();
       // The API warns about look-alike candidates before creating; the mentor
@@ -152,8 +160,8 @@ export default function NewMenteePage() {
             <Input label={t.mentor.city} value={form.city} onChange={(e) => set('city', e.target.value)} />
             <Input label={t.mentor.university} value={form.university} onChange={(e) => set('university', e.target.value)} />
             <Input label={t.mentor.department} value={form.department} onChange={(e) => set('department', e.target.value)} />
-            <Input label={t.mentor.referral} value={form.referralSource} onChange={(e) => set('referralSource', e.target.value)} />
           </div>
+          <ReferrerPicker value={encodeReferrer(referrer)} onChange={setReferrer} />
           <Button type="submit" loading={saving}>{t.mentor.create}</Button>
         </form>
       </Card>
