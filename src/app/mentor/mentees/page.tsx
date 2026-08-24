@@ -80,12 +80,15 @@ export default function MenteesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {relations.map((rel) => (
             <Card key={rel.id}>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-lg">{rel.mentee.fullName}</h3>
-                  <p className="text-sm text-gray-500">{rel.mentee.email}</p>
+              <div className="flex items-start justify-between gap-2 mb-4">
+                {/* `min-w-0` + `truncate`: a long address ran out of the card,
+                    because the text block would not shrink next to the status
+                    badge (#1305). */}
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-900 text-lg truncate">{rel.mentee.fullName}</h3>
+                  <p className="text-sm text-gray-500 truncate">{rel.mentee.email}</p>
                 </div>
-                <StatusBadge status={rel.status} />
+                <div className="flex-shrink-0"><StatusBadge status={rel.status} /></div>
               </div>
 
               <div className="space-y-2 mb-4">
@@ -111,9 +114,11 @@ export default function MenteesPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-2">
+              {/* Wraps on a phone: interaction count + three actions did not fit a
+                  360px card, so "Detayları gör" was clipped at the card edge (#1305). */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <Badge variant="default">{rel._count.interactions} {t.mentor.interactions}</Badge>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <StartMeetingButton
                     target={{ relationIds: [rel.id] }}
                     defaultTitle={t.meetings.instant.defaultWith.replace('{name}', rel.mentee.fullName)}

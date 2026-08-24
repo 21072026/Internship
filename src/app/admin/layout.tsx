@@ -41,7 +41,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <ResponsiveShell
-      brand={<BrandWordmark />}
+      brand={<BrandWordmark oneLine />}
       headerExtra={<GlobalSearch />}
       sidebar={
         <aside className="w-64 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">

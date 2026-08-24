@@ -79,9 +79,12 @@ export default function CompanyOverviewPage() {
               <Link
                 key={r.id}
                 href={`/company/candidates/${r.mentee.id}`}
-                className="flex items-center justify-between gap-3 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 -mx-2 px-2 rounded-lg transition-colors"
+                className="flex flex-col items-start gap-1 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 -mx-2 px-2 rounded-lg transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-3"
               >
-                <div className="min-w-0">
+                {/* Phone: the stage badge moves under the candidate, otherwise it
+                    took two thirds of the row and the university/mentor line was
+                    cut to "İTÜ · Mentor: …" (#1305). */}
+                <div className="min-w-0 max-w-full">
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{r.mentee.fullName}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                     {r.mentee.university ? `${r.mentee.university} · ` : ''}

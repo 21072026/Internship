@@ -55,7 +55,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   return (
     <ResponsiveShell
-      brand={<BrandWordmark />}
+      brand={<BrandWordmark oneLine />}
       sidebar={
         <aside className="w-64 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
         <div className="p-6 border-b border-gray-200">
