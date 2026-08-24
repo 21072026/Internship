@@ -5,7 +5,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('an admin can be assigned as a mentee\'s mentor', async ({ page }) => {
+test('an admin can be assigned as a mentee\'s mentor', { tag: '@smoke' }, async ({ page }) => {
   const adminEmail = uniqueEmail('aam-admin');
   const admin = await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'AAM Admin');
   const mentee = await seedUser(uniqueEmail('aam-mentee'), 'x', 'MENTEE', 'AAM Mentee');
@@ -27,6 +27,10 @@ test('an admin can be assigned as a mentee\'s mentor', async ({ page }) => {
     await page.goto('/admin/mentorship');
     const data = await (await page.request.get('/api/users')).json();
     expect(data.users.some((u: { id: string; role: string }) => u.id === admin.id && u.role === 'ADMIN')).toBeTruthy();
+
+    await page.goto(`/mentor/mentees/${relId}`);
+    await expect(page).toHaveURL(`/mentor/mentees/${relId}`);
+    await expect(page.getByText('AAM Mentee').first()).toBeVisible();
   } finally {
     if (relId) await prisma.mentorshipRelation.deleteMany({ where: { id: relId } });
     await cleanupByEmail(mentee.email);

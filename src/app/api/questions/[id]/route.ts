@@ -25,6 +25,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     where: { id },
     data: { answer: parsed.data.answer, answeredAt: new Date() },
   });
-  await notify(q.askedById, 'question.answered', {}, '/portal');
+  const link = q.askedById === q.relation.mentorId
+    ? `/mentor/mentees/${q.relation.id}`
+    : q.askedById === q.relation.menteeId
+      ? '/portal'
+      : `/messages/${q.relation.id}`;
+  await notify(q.askedById, 'question.answered', {}, link);
   return NextResponse.json({ question: updated });
 }

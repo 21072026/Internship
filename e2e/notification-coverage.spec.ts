@@ -112,6 +112,7 @@ test('mentee actions notify the mentor — two-way (#925)', async ({ page }) => 
   expect(done.ok()).toBeTruthy();
   await expect.poll(() => mentorCount('goal.completed')).toBe(1);
   expect(await menteeCount('goal.completed')).toBe(0);
+  expect((await prisma.notification.findFirstOrThrow({ where: { userId: mentorId, type: 'goal.completed' } })).link).toBe(`/mentor/mentees/${relationId}`);
 
   // Re-saving the already-done goal must not notify again.
   const again = await page.request.patch(`/api/goals/${seededGoal.id}`, { data: { status: 'DONE', title: 'Finish portfolio v2' } });
@@ -122,6 +123,7 @@ test('mentee actions notify the mentor — two-way (#925)', async ({ page }) => 
   const evalRes = await page.request.post('/api/evaluations', { data: { relationId, scores: { guidance: 5 } } });
   expect(evalRes.status()).toBe(201);
   await expect.poll(() => mentorCount('evaluation.added')).toBe(1);
+  expect((await prisma.notification.findFirstOrThrow({ where: { userId: mentorId, type: 'evaluation.added' } })).link).toBe(`/mentor/mentees/${relationId}`);
 });
 
 test('every stage-write path emits the same notification + keeps pipelineStatus in sync (#926)', async ({ page }) => {

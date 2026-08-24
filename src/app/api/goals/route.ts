@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   // development the goal tracks) is told. Link fits the recipient's role.
   const recipientId = session.user.id === rel.mentorId ? rel.menteeId : session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;
   if (recipientId !== session.user.id) {
-    const link = recipientId === rel.menteeId ? '/portal/goals' : `/mentor/mentees/${rel.menteeId}`;
+    const link = recipientId === rel.menteeId ? '/portal/goals' : `/mentor/mentees/${rel.id}`;
     await notifyIfAllowed(recipientId, 'goalsEvaluations', 'goal.assigned', { title: goal.title }, link);
   }
   return NextResponse.json({ goal }, { status: 201 });

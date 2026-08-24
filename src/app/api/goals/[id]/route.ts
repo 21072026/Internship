@@ -51,7 +51,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const rel = goal.relation;
     const recipientId = session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;
     if (recipientId !== session.user.id) {
-      const link = recipientId === rel.menteeId ? '/portal/goals' : `/mentor/mentees/${rel.menteeId}`;
+      const link = recipientId === rel.menteeId ? '/portal/goals' : `/mentor/mentees/${rel.id}`;
       await notifyIfAllowed(recipientId, 'goalsEvaluations', 'goal.completed', { title: updated.title }, link);
     }
   }

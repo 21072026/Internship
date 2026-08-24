@@ -103,7 +103,7 @@ export async function POST(request: Request) {
   // page that shows it behind a session.
   const recipientId = session.user.id === rel.menteeId ? rel.mentorId : rel.menteeId;
   if (recipientId !== session.user.id) {
-    const link = recipientId === rel.menteeId ? '/portal' : `/mentor/mentees/${rel.menteeId}`;
+    const link = recipientId === rel.menteeId ? '/portal' : `/mentor/mentees/${rel.id}`;
     await notifyIfAllowed(recipientId, 'goalsEvaluations', 'evaluation.added', {}, link);
   }
   return NextResponse.json({ evaluation }, { status: 201 });
