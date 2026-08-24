@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { accountState } from '@/lib/accountState';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import type { Prisma } from '@prisma/client';
+import { isTagMode, parseTagIds } from '@/lib/tags';
 
 // Field sets, narrowest first (#855). The admin list used to return every
 // column — email, phone, university, department, birth year — for every user in
@@ -56,6 +57,10 @@ const FULL_SELECT = {
   isActive: true,
   emailVerified: true,
   createdAt: true,
+  // The labels on this person (#887). Selected rather than counted: the list
+  // renders them as chips, and a second round trip per row to fetch them would
+  // be worse than the join.
+  tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
   _count: { select: { mentorRelations: true } },
 } as const;
 
@@ -133,6 +138,25 @@ export async function GET(request: Request) {
       if (status === 'archived') where.isActive = false;
       if (search) {
         where.OR = [{ fullName: { contains: search } }, { email: { contains: search } }];
+      }
+
+      // Tag filter (#887), evaluated in the DATABASE. The candidate list pages
+      // through the server, so filtering client-side would filter one page and
+      // call it the answer.
+      //
+      // OR is one `some`; AND is one `some` PER TAG, because a single
+      // `some: { tagId: { in: [...] } }` means "has any of these" no matter how
+      // it is worded. Tag ids are not org-checked here on purpose — they can
+      // only narrow the result, and a foreign id simply matches nobody.
+      const tagIds = parseTagIds(searchParams.get('tags'));
+      if (tagIds.length > 0) {
+        const modeParam = searchParams.get('tagMode');
+        const mode = isTagMode(modeParam) ? modeParam : 'or';
+        if (mode === 'and') {
+          where.AND = tagIds.map((tagId) => ({ tags: { some: { tagId } } }));
+        } else {
+          where.tags = { some: { tagId: { in: tagIds } } };
+        }
       }
 
       // Mentor picker with capacity/availability (#942): same `where` filters

@@ -99,6 +99,7 @@ model Organization {
   pipelineStages       PipelineStage[]
   evaluationTemplates  EvaluationTemplate[]
   stageSlas            StageSla[]
+  tags                 Tag[]
   mentorApplications   MentorApplication[]
   companyInquiries     CompanyInquiry[]
   documentRequirements DocumentRequirement[]
@@ -128,6 +129,50 @@ model Organization {
 // still waited — the SLA measures their experience, not our working hours.
 // Business-day arithmetic would need a holiday calendar per country and per
 // org; calendar days can only ever fire the warning EARLIER, never later.
+// Free-form labels on a person (#887).
+//
+// NOT a replacement for Cohort or Source, and the distinction matters or the
+// three blur into each other:
+//   · Cohort — the official period group a candidate belongs to. Exactly ONE.
+//   · Source — where a candidate came from. Exactly ONE.
+//   · Tag    — whatever this org needs to mark, MANY per person, invented by
+//              the people doing the work rather than configured up front.
+//
+// Org-scoped by construction (orgId required): a tenant must never see another
+// tenant's vocabulary, let alone who carries it.
+model Tag {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  // Optional hex swatch; the management screen (a separate task) owns picking it.
+  color       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  users UserTag[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+// Deleting a Tag removes the label, never the person: the cascade runs from
+// Tag → UserTag and from User → UserTag, and stops there.
+model UserTag {
+  id        String   @id @default(cuid())
+  userId    String
+  tagId     String
+  addedById String?
+  addedAt   DateTime @default(now())
+
+  user User @relation("UserTags", fields: [userId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagId])
+  @@index([tagId])
+  @@index([userId])
+}
+
 model StageSla {
   id        String   @id @default(cuid())
   orgId     String
@@ -291,6 +336,7 @@ model User {
   statusChanges                     StatusChange[]                @relation("StatusChangedBy")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
+  tags                              UserTag[]                     @relation("UserTags")
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]

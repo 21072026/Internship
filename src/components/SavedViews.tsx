@@ -45,6 +45,7 @@ export function SavedViews({
     <div className="flex flex-wrap items-center gap-2">
       <button
         onClick={save}
+        data-testid="saved-views-save"
         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50"
       >
         <Bookmark className="h-4 w-4" />

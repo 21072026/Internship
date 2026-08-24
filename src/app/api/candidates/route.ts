@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { isTagMode, parseTagIds } from '@/lib/tags';
 
 export async function GET(request: Request) {
   try {
@@ -38,6 +39,19 @@ export async function GET(request: Request) {
       isActive: !archived,
     };
     if (sourceId) where.sourceId = sourceId;
+    // Tag filter (#887). OR (default) = "any of these labels", AND = "all of
+    // them" — expressed as one `some` per tag, since a single `some` with an
+    // `in` list can be satisfied by one row.
+    const tagIds = parseTagIds(searchParams.get('tags'));
+    if (tagIds.length > 0) {
+      const rawMode = searchParams.get('tagMode');
+      const mode = isTagMode(rawMode) ? rawMode : 'or';
+      if (mode === 'and') {
+        where.AND = tagIds.map((tagId) => ({ tags: { some: { tagId } } }));
+      } else {
+        where.tags = { some: { tagId: { in: tagIds } } };
+      }
+    }
 
     const relSome: Record<string, unknown> = {};
     if (pipelineStatus) relSome.pipelineStatus = pipelineStatus;
@@ -86,6 +100,8 @@ export async function GET(request: Request) {
       // language each of them reads (#1164).
       preferredLanguage: true,
       source: { select: { id: true, name: true } },
+      // Tag chips on the row, so a filtered list shows WHY each person matched.
+      tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
       menteeRelations: {
         where: { status: 'ACTIVE' as const },
         include: {
