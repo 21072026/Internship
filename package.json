@@ -30,13 +30,13 @@
     "db:dev:down": "docker compose -f docker-compose.dev.yml down"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.117.1",
+    "@anthropic-ai/sdk": "^0.120.0",
     "@hookform/resolvers": "^3.9.0",
     "@node-saml/node-saml": "^5.1.0",
     "@prisma/client": "^5.16.1",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
-    "imapflow": "^1.7.0",
+    "imapflow": "^1.7.1",
     "lucide-react": "^0.577.0",
     "mailparser": "^3.9.15",
     "mammoth": "^1.12.1",
