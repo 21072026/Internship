@@ -150,8 +150,11 @@ workaround, #636, and it compiled on every PR push).
 - `deploy.yml` is the **legacy hosted** pipeline (ghcr.io + SSH), **superseded** — don't extend it.
 - `infra/autodeploy.sh` is a break-glass poller that **builds on the server** — don't put it
   on a cron (see `infra/README.md`).
-- ⚠️ The preview DB is **shared** by the shared preview *and* every topic env —
-  `prisma db push` there affects everyone.
+- Each **topic env has its own database** (`internship_pr<N>`, #1185), created on first
+  deploy, seeded with the synthetic demo set (`admin.demo@demo.example.com` / `DemoPass123!`)
+  and dropped when the PR closes — so a `db push` on a PR affects nobody else, and no real
+  preview data is reachable from a topic environment. The **shared preview env** at
+  `crm-preview.ersah.in` still has its own single DB; `db push` there is global.
 
 ## Conventions & gotchas for agents
 

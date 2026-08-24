@@ -10,9 +10,10 @@ import bcrypt from 'bcryptjs';
 // The base first-admin seed (prisma/seed.mjs) is unchanged and still runs via
 // `npx prisma db seed`.
 //
-// SAFETY: refuses to run unless DATABASE_URL points at localhost/127.0.0.1,
-// or SEED_DEMO_FORCE=1 is set explicitly. The shared preview/prod DBs must
-// never receive demo rows by accident.
+// SAFETY: refuses to run unless DATABASE_URL points at localhost/127.0.0.1, at
+// a `*_demo` database, or at a per-PR topic database (`internship_pr<N>`) with
+// SEED_DEMO_FORCE=1. The shared preview/prod DBs must never receive demo rows
+// by accident.
 
 const prisma = new PrismaClient();
 
@@ -28,11 +29,23 @@ function assertSafeTarget() {
   // localhost: production is `internship_crm`, preview is
   // `internship_crm_preview`, and neither can ever match.
   const demoDb = /\/[^/?]*_demo(\?|$)/.test(url);
-  if (!local && !demoDb && process.env.SEED_DEMO_FORCE !== '1') {
+  // Per-PR topic environments (#1185) get their OWN database, created and
+  // dropped with the environment, and it is filled with exactly this synthetic
+  // data. SEED_DEMO_FORCE used to be a blanket bypass — "I know what I'm
+  // doing" is not a safety property, and the one caller that needs it runs
+  // unattended in CI. It is now NARROWED to that case: the flag only unlocks a
+  // database named `internship_pr<N>`, which by construction is neither
+  // `internship_crm` (prod) nor `internship_crm_preview` (shared preview).
+  const topicDb = /\/internship_pr[0-9]+(\?|$)/.test(url);
+  const forced = process.env.SEED_DEMO_FORCE === '1' && topicDb;
+  if (!local && !demoDb && !forced) {
     console.error(
       'seed-demo: DATABASE_URL does not look local. Refusing to seed demo data.\n' +
-      'Expected a localhost DATABASE_URL or a database whose name ends in _demo.\n' +
-      'Set SEED_DEMO_FORCE=1 only if you are certain this is not the shared preview/prod DB.'
+      'Allowed targets: a localhost DATABASE_URL, a database whose name ends in _demo,\n' +
+      'or a per-PR topic database named internship_pr<N> with SEED_DEMO_FORCE=1.\n' +
+      (process.env.SEED_DEMO_FORCE === '1' && !topicDb
+        ? 'SEED_DEMO_FORCE=1 is set but the target is not an internship_pr<N> database — the flag no longer bypasses this check for anything else.'
+        : '')
     );
     process.exit(1);
   }

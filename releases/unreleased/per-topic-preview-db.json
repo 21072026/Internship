@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Per-PR preview databases (#1185, closes #1114)** — each topic environment now gets its own `internship_pr<N>` database, seeded with synthetic demo data and dropped when the PR closes, instead of sharing the preview database with every other PR. A `prisma db push` on one PR no longer reshapes the schema under the others, and no real preview data is reachable from a topic environment. `SEED_DEMO_FORCE` is narrowed from a blanket bypass to `internship_pr<N>` targets only, and the daily topic sweep now reclaims leaked databases as well as leaked containers."
+}
