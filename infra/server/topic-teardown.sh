@@ -102,5 +102,9 @@ else
   fi
 fi
 
-docker image prune -af >/dev/null 2>&1 || true
+# Dangling only — NOT `-af`. Prod and preview keep their previous release as a
+# stopped-but-tagged image (`internship-crm:previous`, #961); an unqualified
+# prune here would delete production's rollback target as a side effect of
+# closing a PR. This topic's own image was already removed by name above.
+docker image prune -f >/dev/null 2>&1 || true
 echo "==> Topic '${TOPIC}' torn down"
