@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 export interface OfferDraftFields {
   id?: string;
@@ -38,6 +39,7 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, ex
   const [step, setStep] = useState(1);
   const [fields, setFields] = useState<OfferDraftFields>(existing ?? EMPTY);
   const [busy, setBusy] = useState<'draft' | 'send' | null>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(open, onClose);
 
   useEffect(() => {
     if (open) {
@@ -91,9 +93,11 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, ex
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         data-testid="offer-wizard-modal"
+        tabIndex={-1}
         className="w-full max-w-lg rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >

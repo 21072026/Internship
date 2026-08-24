@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Accessible focus management for modal dialogs** (#871). A new `useModalFocus` hook (`src/components/ui/useModalFocus.ts`) gives every blocking dialog initial focus inside itself, a two-way Tab trap, Escape-to-close through the existing handler, and focus restoration to whatever opened it. Applied to `ConfirmDialog`, `DropoffReasonDialog`, `TemplatesLibrary`, `CertificateGenerator`, `OfferWizardModal`, `RequisitionsManager`, `CompanyEntitlements`, `MeetingLauncher` and the bare admin modals on the companies/mentors/mentorship pages, which also gained the `role=\"dialog\"` / `aria-modal` / `aria-labelledby` they were missing. Focusable-element detection filters on computed visibility, and a dialog with no focusable child falls back to the container. E2E coverage in `e2e/templates-library.spec.ts`.",
+  "notes": {
+    "en": ["Dialogs are now fully keyboard-accessible: focus moves into the dialog when it opens, stays inside while you Tab through it, Escape closes it, and focus returns to the control you opened it from."],
+    "tr": ["İletişim kutuları artık klavyeyle tam erişilebilir: kutu açılınca odak içine geçiyor, Tab ile gezerken içeride kalıyor, Esc kapatıyor ve kapanınca odak kutuyu açtığınız düğmeye geri dönüyor."],
+    "de": ["Dialoge sind jetzt vollständig per Tastatur bedienbar: Der Fokus springt beim Öffnen hinein, bleibt beim Tabben darin, Escape schließt, und danach kehrt der Fokus zum auslösenden Element zurück."]
+  }
+}

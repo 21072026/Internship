@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import { DROPOFF_REASON_CODES } from '@/lib/dropoffReasons';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 export interface DropoffReasonDialogProps {
   open: boolean;
@@ -25,20 +26,13 @@ export function DropoffReasonDialog({ open, stageLabel, loading = false, onConfi
   const d = t.dropoff;
   const [reasonCode, setReasonCode] = useState('');
   const [reasonNote, setReasonNote] = useState('');
-  const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(open, onCancel);
 
   useEffect(() => {
     if (!open) return;
     setReasonCode('');
     setReasonNote('');
-    cancelRef.current?.focus();
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCancel();
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onCancel]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -48,10 +42,12 @@ export function DropoffReasonDialog({ open, stageLabel, loading = false, onConfi
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="dropoff-reason-title"
         data-testid="dropoff-reason-dialog"
+        tabIndex={-1}
         className="w-full max-w-sm rounded-lg bg-white dark:bg-gray-800 p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -84,7 +80,7 @@ export function DropoffReasonDialog({ open, stageLabel, loading = false, onConfi
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <Button ref={cancelRef} type="button" variant="secondary" disabled={loading} onClick={onCancel} data-testid="dropoff-reason-cancel">
+          <Button type="button" variant="secondary" disabled={loading} onClick={onCancel} data-testid="dropoff-reason-cancel">
             {d.cancel}
           </Button>
           <Button
