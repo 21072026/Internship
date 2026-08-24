@@ -47,6 +47,8 @@ jobs:
     timeout-minutes: 20
     outputs:
       report: ${{ steps.check.outputs.report }}
+      freshness: ${{ steps.check.outcome }}
+      drill_ran: ${{ steps.drill.outputs.drill_ran }}
     steps:
       # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
       # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted
@@ -84,6 +86,7 @@ jobs:
 
       - name: Backup freshness & integrity
         id: check
+        continue-on-error: false
         run: |
           set -o pipefail
           chmod +x infra/check-backups.sh
@@ -105,6 +108,7 @@ jobs:
       # restores REAL data into a throwaway database and drops it afterwards;
       # infra/restore-drill.sh refuses any target that isn't clearly scratch.
       - name: Restore drill
+        id: drill
         env:
           # The drill needs the server address and credentials only — it never
           # reads from or writes to the database named here.
@@ -119,6 +123,11 @@ jobs:
           fi
           set -a; . /etc/internship-crm/preview.env; set +a
           chmod +x infra/restore-drill.sh
+          # Mark which half failed. Without this the alert below says "BACKUP
+          # CHECK FAILED" for a drill problem — telling the maintainer their
+          # backups are broken when the report two steps up says they are fine.
+          # A false alarm costs the same trust as a missed one.
+          echo "drill_ran=1" >> "$GITHUB_OUTPUT"
           ./infra/restore-drill.sh --env "$DRILL_ENV" --target internship_restore_test
 
   notify:
@@ -139,9 +148,11 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
-          ALERT_SUBJECT: '🛟 Internship CRM — BACKUP CHECK FAILED'
+          ALERT_SUBJECT: ${{ needs.verify.outputs.drill_ran == '1' && '🛟 Internship CRM — RESTORE DRILL FAILED (backups themselves are fine)' || '🛟 Internship CRM — BACKUP CHECK FAILED' }}
           ALERT_BODY: |
-            The daily backup verification failed. Until this is fixed, assume there is NO usable backup.
+            ${{ needs.verify.outputs.drill_ran == '1'
+              && 'The restore DRILL failed. The freshness check passed, so the backups exist and look well-formed — what is unproven is that they can be restored. Treat this as "recovery untested", not "no backups".'
+              || 'The backup freshness check failed. Until this is fixed, assume there is NO usable backup.' }}
 
             ${{ needs.verify.outputs.report }}
 
