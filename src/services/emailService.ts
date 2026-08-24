@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
-import { notify } from '@/lib/notify';
+import { notify, notifyIfAllowed } from '@/lib/notify';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
@@ -1380,7 +1380,10 @@ export async function checkStageDeadlineReminders() {
   });
 
   for (const rel of overdue) {
-    await notify(rel.mentorId, 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/admin/candidates/${rel.menteeId}`);
+    // The in-app half respects the same 'deadlines' preference the e-mail half
+    // does (#817) — opting out of deadline mail and still being pinged in-app
+    // for the identical event is not a preference anyone chose.
+    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/admin/candidates/${rel.menteeId}`);
     if (emailAllowed(rel.mentor, 'deadlines')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;

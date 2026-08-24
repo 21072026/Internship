@@ -5,13 +5,13 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
-import { Users, Building2, BookOpen, Bell } from 'lucide-react';
+import { Users, Building2, BookOpen, Bell, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getServerDictionary } from '@/i18n/server';
 
 async function getStats() {
-  const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups] =
+  const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount] =
     await Promise.all([
       prisma.user.count({ where: { role: 'MENTEE' } }),
       prisma.user.count({ where: { role: 'MENTOR' } }),
@@ -44,6 +44,12 @@ async function getStats() {
         by: ['pipelineStatus'],
         _count: { _all: true },
       }),
+      // Stage service levels (#817): the overdue count existed only inside the
+      // analytics page, which is one click too far for the number that means
+      // "somebody is waiting and nobody noticed".
+      prisma.mentorshipRelation.count({
+        where: { status: 'ACTIVE', stageDeadline: { lt: new Date() } },
+      }),
     ]);
 
   const pipelineCounts = Object.fromEntries(
@@ -58,6 +64,7 @@ async function getStats() {
     recentRelations,
     recentCandidates,
     pipelineCounts,
+    overdueCount,
   };
 }
 
@@ -140,8 +147,24 @@ export default async function AdminDashboard() {
       {/* Pipeline distribution */}
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle>{t.dashboard.pipeline}</CardTitle>
-          <CardDescription>{t.dashboard.perStage}</CardDescription>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <CardTitle>{t.dashboard.pipeline}</CardTitle>
+              <CardDescription>{t.dashboard.perStage}</CardDescription>
+            </div>
+            {/* Only when there is something to act on — a permanent "0 overdue"
+                badge trains people to stop reading it. */}
+            {stats.overdueCount > 0 && (
+              <Link
+                href="/admin/analytics"
+                data-testid="dashboard-overdue"
+                className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {stats.overdueCount} {t.analytics.aging.overdue}
+              </Link>
+            )}
+          </div>
         </CardHeader>
         {(() => {
           const max = Math.max(1, ...stages.map((s) => stats.pipelineCounts[s.key] ?? 0));

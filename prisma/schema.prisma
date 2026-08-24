@@ -98,6 +98,7 @@ model Organization {
   relations            MentorshipRelation[]
   pipelineStages       PipelineStage[]
   evaluationTemplates  EvaluationTemplate[]
+  stageSlas            StageSla[]
   mentorApplications   MentorApplication[]
   companyInquiries     CompanyInquiry[]
   documentRequirements DocumentRequirement[]
@@ -114,6 +115,35 @@ model Organization {
 // label / order / color / on-path grouping for the stages it lists. `key` is the
 // stable identifier (the enum value for the canonical set; a slug for custom
 // stages once storage moves off the enum in a later slice).
+// Per-stage service level (#817): "nobody should wait more than N days here".
+//
+// Deliberately NOT a column on PipelineStage, even though that is where stage
+// configuration lives. Custom stages are premium-gated and their editor
+// replaces the whole set on every save, so putting the SLA there would (a)
+// paywall a candidate-experience feature and (b) wipe every SLA whenever an
+// admin renamed a stage. A separate row keyed by stage KEY works for an org on
+// the built-in stages and an org with its own, and survives stage edits.
+//
+// DAYS ARE CALENDAR DAYS, not business days. A candidate waiting over a weekend
+// still waited — the SLA measures their experience, not our working hours.
+// Business-day arithmetic would need a holiday calendar per country and per
+// org; calendar days can only ever fire the warning EARLIER, never later.
+model StageSla {
+  id        String   @id @default(cuid())
+  orgId     String
+  // The stage this applies to. A plain key, not a relation: it must work for
+  // an org that has no PipelineStage rows at all (i.e. uses the built-ins).
+  stageKey  String
+  days      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, stageKey])
+  @@index([orgId])
+}
+
 model PipelineStage {
   id         String       @id @default(cuid())
   orgId      String
