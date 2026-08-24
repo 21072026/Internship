@@ -14,7 +14,43 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
-  const relationId = new URL(request.url).searchParams.get('relationId') || '';
+  const searchParams = new URL(request.url).searchParams;
+  if (searchParams.has('userId')) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+
+  if (searchParams.get('received') === '1') {
+    if (session.user.role !== 'MENTOR') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    const received = await prisma.evaluation.findMany({
+      where: { relation: { mentorId: session.user.id } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        authorId: true,
+        type: true,
+        scores: true,
+        comment: true,
+        createdAt: true,
+        relation: { select: { menteeId: true, mentee: { select: { id: true, fullName: true } } } },
+      },
+    });
+
+    return NextResponse.json({
+      evaluations: received.flatMap((e) => {
+        if (!e.relation || e.authorId !== e.relation.menteeId) return [];
+        return [{
+          id: e.id,
+          type: e.type,
+          scores: e.scores,
+          comment: e.comment,
+          createdAt: e.createdAt,
+          direction: 'MENTEE_ON_MENTOR',
+          mentee: e.relation.mentee,
+        }];
+      }),
+    });
+  }
+
+  const relationId = searchParams.get('relationId') || '';
 
   const rel = await prisma.mentorshipRelation.findUnique({ where: { id: relationId } });
   if (!rel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
