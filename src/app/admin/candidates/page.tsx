@@ -347,6 +347,7 @@ export default function CandidatesPage() {
           />
           <Select
             data-testid="candidates-year-filter"
+            aria-label={t.candidates.graduationYearFilterLabel}
             options={[{ value: '', label: t.candidates.allYears }, ...gradYears]}
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
@@ -366,6 +367,7 @@ export default function CandidatesPage() {
           />
           <Select
             data-testid="candidates-source-filter"
+            aria-label={t.candidates.sourceFilterLabel}
             options={[{ value: '', label: t.candidates.allSources }, ...sources.map((s) => ({ value: s.id, label: s.name }))]}
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}

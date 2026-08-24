@@ -17,8 +17,9 @@
     "color-contrast": 1
   },
   "/admin/candidates": {
-    "color-contrast": 1,
-    "select-name": 1
+    "color-contrast": 1
   },
-  "/company": {}
+  "/company": {
+    "color-contrast": 1
+  }
 }

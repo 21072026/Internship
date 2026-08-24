@@ -7,7 +7,7 @@ Automated axe-core scan of nine pages across five contexts (public, mentee,
 mentor, admin, company). The scan **measures**; it fixes nothing. Every row
 below is a candidate for its own good-first-issue.
 
-**Totals** — critical: 1 · serious: 6 · moderate: 0 · minor: 0
+**Totals** — critical: 0 · serious: 7 · moderate: 0 · minor: 0
 
 **The gate** (`e2e/a11y-baseline.json`): the counts of *critical* and *serious*
 violations that exist today are frozen per page. A new one fails the scan;
@@ -15,10 +15,10 @@ moderate/minor findings are listed here but never gate.
 
 | Page | Selector | Rule | Severity | Suggested fix (axe help) |
 | --- | --- | --- | --- | --- |
-| `/admin/candidates` | `select[data-testid="candidates-year-filter"]` | select-name | critical | Select element must have an accessible name |
 | `/` | `.relative` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
 | `/admin` | `#mode-switch-label` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
 | `/admin/candidates` | `#mode-switch-label` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
+| `/company` | `.text-center` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
 | `/mentor` | `.space-y-4 > .text-center.py-4.text-sm` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
 | `/portal` | `.text-yellow-600` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
 | `/portal/profile` | `.text-center` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
