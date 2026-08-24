@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Contributor terms: admin acceptance report** (#1027) — `/admin/contributor-terms` answers \"who accepted which terms, for what, and when\" from one screen instead of a database console. One row per person × scope (platform, plus every project they are on that asks), including the rows where the answer is no: `Accepted` / `Outdated version` / `Not accepted`, filterable by status and by project, exportable to Excel. Evidence is reported as *recorded*, never as the stored hash. ADMIN only, checked on the page itself rather than relying on the layout.",
+  "notes": {
+    "en": [
+      "Admins get a contributor-terms report: who has accepted, who is on an outdated version, who has not accepted at all — filterable and exportable to Excel."
+    ],
+    "tr": [
+      "Yöneticiler için katkı şartları raporu: kim kabul etmiş, kim eski sürümde kalmış, kim hiç kabul etmemiş — filtrelenebilir ve Excel'e aktarılabilir."
+    ],
+    "de": [
+      "Für Admins ein Bericht zu den Beitragsbedingungen: wer akzeptiert hat, wer auf einer veralteten Fassung steht, wer gar nicht akzeptiert hat — filterbar und nach Excel exportierbar."
+    ]
+  }
+}
