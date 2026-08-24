@@ -9,7 +9,7 @@ Bir bastırma dosyası yerine düz metin: gerekçe diğer güvenlik dokümanlar�
 yanında okunabilir kalıyor ve biri okuduğunda **hâlâ geçerli mi** diye sorması
 gerektiği belli oluyor.
 
-Son gözden geçirme: **2026-08-07** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
+Son gözden geçirme: **2026-08-24** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
 
 ## Açık bulgular
 
@@ -41,8 +41,54 @@ Son gözden geçirme: **2026-08-07** · Kaynak epic: [#823](https://github.com/2
 sharp 0.34.5 sabitliyor, yani majöre çıkmak bu bulguları kapatmıyordu.
 `overrides` tek gerçek çözümdü.
 
+## Kod taraması (CodeQL)
+
+### `js/xss-through-dom` — object-URL önizlemeleri (#1005)
+
+CodeQL, `URL.createObjectURL()` sonucunu bir `<img src>`'e veren her
+ek/görsel **önizlemesini** high olarak işaretliyordu: `MessageThread.tsx` (iki
+satır) ve `admin/announcements/page.tsx`. Kural haklı bir taint görüyor —
+DOM'dan gelen bir `File` bir `src` niteliğine ulaşıyor — ama bu hedef onu
+çalıştırabilecek bir hedef değil:
+
+- `URL.createObjectURL()` `blob:<origin>/<uuid>` üretir. Şemayı **tarayıcı**
+  koyar, dosya değil; dolayısıyla asla `javascript:` ya da `data:` olamaz.
+- `<img>`, baytlar SVG olsa bile script çalıştırmaz. SVG script'i yalnızca
+  belge **belge olarak** yüklendiğinde çalışır (iframe, object, doğrudan
+  gezinme).
+- Duyuru seçicisi ayrıca dosyayı `ANNOUNCEMENT_IMAGE_MIME` + `contentMatchesType()`
+  ile doğruluyor ve SVG zaten izin listesinde değil (#888/#990).
+
+**Karar: 1 — üç uyarı "false positive" olarak kapatılır.**
+
+Önce seçenek 2 denendi (#1325): `objectUrlSrc()` adında tek bir yardımcı,
+`blob:` ile başlamayan her değeri boş string'e çeviriyor ve üç çağrı yeri de
+oradan geçiyordu. **Ölçüldü ve işe yaramadı** — CodeQL bu yardımcıyı sanitizer
+olarak tanımıyor; PR'da uyarılar aynı satırlarda yeniden tetiklendi
+(*"3 new alerts including 3 high severity security vulnerabilities"*). Kod
+değişikliği geri alındı: motorun tanımadığı bir koruma uyarıyı kapatmıyor,
+üstelik o satırlara dokunan **her** PR'da "3 yeni yüksek uyarı" üretiyor —
+insanları CodeQL'i görmezden gelmeye alıştıran türden bir gürültü.
+
+Kapatılacak uyarılar (Security → Code scanning):
+
+| # | Dosya | Kural |
+|---|---|---|
+| [19](https://github.com/21072026/Internship/security/code-scanning/19) | `src/app/admin/announcements/page.tsx` | `js/xss-through-dom` |
+| [20](https://github.com/21072026/Internship/security/code-scanning/20) | `src/components/MessageThread.tsx` | `js/xss-through-dom` |
+| [21](https://github.com/21072026/Internship/security/code-scanning/21) | `src/components/MessageThread.tsx` | `js/xss-through-dom` |
+
+Kapatma gerekçesi olarak yukarıdaki üç madde yeterli; "used in tests" değil
+**"false positive"** seçilmeli.
+
+⚠️ Yeni bir ek/görsel kompoziti aynı deseni kullanırsa aynı uyarı yeniden
+çıkar. O zaman da doğru cevap dosyayı buraya eklemek ve uyarıyı kapatmaktır —
+`<img>` bir blob URL'ini çalıştıramaz, bu değişmedi.
+
 ## Yeni bir istisna eklerken
 
+0. Bulgu kod taramasından mı geliyor (bağımlılık değil)? Üstteki "Kod taraması"
+   bölümüne yaz; sorular aynı, "paket" yerine dosya/kural adı geçer.
 1. Neden düzeltilemediğini yaz (yama yok / majör gerekiyor / geçişli).
 2. **Bu uygulamada sömürülebilir mi** — sadece "advisory var" yetmez, kod yolunu adlandır.
 3. Kalıcı çözümü ve takip issue'sunu yaz.
