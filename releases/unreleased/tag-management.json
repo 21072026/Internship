@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Tag management** (#845, completing the story #887 started) — a new admin screen at `/admin/tags` lists the org's labels with how many people carry each, and lets an admin **rename** one (in place, so the tag keeps its id and nobody loses the label or has a saved view silently empty), **recolour** it, **merge** it into another, or delete it behind a confirmation that names the usage count. New `PATCH /api/tags/:id` and `POST /api/tags/:id/merge`, both ADMIN-only and org-scoped. Merge moves everyone onto the target — carrying over the original tagger rather than the admin doing the merge — and the `(userId, tagId)` unique means someone who already had both simply keeps one.",
+  "notes": {
+    "en": [
+      "Admins can now manage tags: rename, recolour, merge duplicates together, or retire one — with the number of people affected shown before anything is deleted."
+    ],
+    "tr": [
+      "Yöneticiler artık etiketleri yönetebiliyor: yeniden adlandırma, renk değiştirme, benzerleri birleştirme ya da kullanımdan kaldırma — silmeden önce kaç kişiyi etkilediği gösteriliyor."
+    ],
+    "de": [
+      "Admins können Tags jetzt verwalten: umbenennen, einfärben, Dubletten zusammenführen oder ausmustern — vor dem Löschen wird angezeigt, wie viele Personen betroffen sind."
+    ]
+  }
+}
