@@ -1,8 +1,10 @@
 'use client';
 
-import { Check, Compass, Trophy } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Check, Compass, Trophy } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { pipelineGuidance, onPathKeys } from '@/lib/pipeline';
+import { OUTCOME_ACTIONS, isCelebratory, outcomeForStage } from '@/lib/outcomeComms';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
 
@@ -30,8 +32,20 @@ export function JourneyTracker({ status }: { status: string }) {
   const pct = idx >= 0 ? Math.round(((idx + 1) / PATH.length) * 100) : 0;
   const next = idx >= 0 && idx < PATH.length - 1 ? PATH[idx + 1] : null;
   const guidance = !offPath ? pipelineGuidance(status, locale) : null;
+  // The end of the road used to render as a bare amber label — the stage
+  // changed and nothing was said, which is the one place the product's "no
+  // black hole" promise broke (#830). An outcome now says where the person
+  // stands and what they can do about it, and finding a place elsewhere reads
+  // as the success it is rather than as a rejection.
+  const outcome = outcomeForStage(status, { isOffPath: offPath });
+  const outcomeText = outcome ? t.portal.journeyOutcome[outcome] : null;
   // Milestone: a canonical milestone key, or any tenant stage marked terminal.
-  const isMilestone = MILESTONE_STAGES.has(status) || (stages.find((s) => s.key === status)?.isTerminal ?? false);
+  // Dropped/off-path stages are terminal too, which put a "🎉 Milestone
+  // reached!" banner directly above a rejection — the trophy only belongs over
+  // an outcome that is actually good news (#830).
+  const isMilestone =
+    (MILESTONE_STAGES.has(status) || (stages.find((s) => s.key === status)?.isTerminal ?? false)) &&
+    (!outcome || isCelebratory(outcome));
 
   return (
     <Card>
@@ -49,8 +63,32 @@ export function JourneyTracker({ status }: { status: string }) {
       )}
 
       {offPath ? (
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-          {label(status)}
+        <div data-testid="journey-outcome">
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+            {label(status)}
+          </div>
+          {outcomeText && outcome && (
+            <>
+              <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{outcomeText.title}</p>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{outcomeText.body}</p>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                {t.portal.journeyOutcome.whatYouCanDo}
+              </p>
+              <ul className="mt-1 space-y-1">
+                {OUTCOME_ACTIONS[outcome].map((a) => (
+                  <li key={a.key}>
+                    <Link
+                      href={a.href}
+                      className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                      {(t.portal.journeyOutcome.actions as Record<string, string>)[a.key]}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       ) : (
         <>
