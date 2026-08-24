@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -106,7 +106,9 @@ test('a non-admin cannot edit or delete an announcement', async ({ page }) => {
     expect((await page.request.post('/api/admin/announcements', { data: { text } })).ok()).toBeTruthy();
     const record = await prisma.announcement.findFirstOrThrow({ where: { text } });
 
-    await signInAndSettle(page, menteeEmail, 'MenteePass123', '/portal');
+    // Second sign-in on the same page: the admin session must be torn down with
+    // the fresh-user guards or /auth/signin redirects away mid-fill (helpers/auth.ts).
+    await signInAsFreshUser(page, menteeEmail, 'MenteePass123', '/portal');
     const patch = await page.request.patch(`/api/admin/announcements/${record.id}`, {
       data: { text: 'hijacked' },
     });

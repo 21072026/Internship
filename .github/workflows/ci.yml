@@ -34,8 +34,17 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # A malformed release fragment must fail in the PR that adds it, not in
+      # next.config.js during the deploy build (#1275).
+      - name: release fragments are well-formed (#1275)
+        run: npm run check:release-fragments
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
+      # Prisma's filter grammar is data: an object where a scalar id belongs is
+      # read as an operator, so a raw request body in a `where` turns an equality
+      # lookup into a different query. The tree is clean; this keeps it that way.
+      - name: no unvalidated request body in a Prisma filter
+        run: npm run check:query-scalars
       # A renamed route would silently drop out of the demo's write blocklist,
       # re-enabling password changes and uploads on the public demo (#966).
       - name: demo write blocklist still matches the routes (#966)

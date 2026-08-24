@@ -109,6 +109,7 @@ ellenmedi; en kritikleri:
 | `POST /api/mentorship` | yalnız `ADMIN` |
 | `POST /api/projects` | `ADMIN` veya `MENTOR` (mentor daima sahip olur) |
 | `POST /api/source/mentees` | yalnız `SOURCE`, kendi `sourceId`'si ile |
+| `GET/POST /api/sources` | `ADMIN` veya `MENTOR` — birleşik "getiren kişi / kaynak" seçiminin listesi ve yerinde kaynak yaratma (#1296). Yönetim uçları (istatistik, silme) `ADMIN`-only `/api/admin/sources` altında kalıyor. |
 
 ## Regresyon testi / Regression test
 

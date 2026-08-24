@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **WCAG touch targets (#1265)**: primary actions, icon buttons, candidate filters, tabs, inputs, selects, and related controls now provide minimum 44×44 px interactive areas while preserving visual icon sizes.",
+  "notes": {
+    "en": ["Mobile controls are easier to tap: primary actions, icon buttons, candidate filters, tabs, inputs, selects, and related controls now provide at least 44×44 pixel touch areas without enlarging their visible icons."],
+    "tr": ["Mobil kontroller artık daha kolay kullanılabiliyor: ana aksiyonlar, ikon düğmeleri, aday filtreleri, sekmeler, giriş ve seçim alanları ile ilgili kontroller, görsel ikonları büyütmeden en az 44×44 piksellik dokunma alanı sunuyor."],
+    "de": ["Mobile Bedienelemente lassen sich leichter antippen: Hauptaktionen, Symbolschaltflächen, Kandidatenfilter, Tabs, Eingabe- und Auswahlfelder sowie zugehörige Steuerelemente bieten jetzt mindestens 44×44 Pixel große Touch-Flächen, ohne die sichtbaren Symbole zu vergrößern."]
+  }
+}

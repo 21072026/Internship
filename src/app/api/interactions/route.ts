@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
+import { notifyIfAllowed } from '@/lib/notify';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const createInteractionSchema = z.object({
@@ -113,6 +114,13 @@ export async function POST(request: Request) {
     });
 
     await dispatchWebhook('interaction.logged', { relationId, type, date: interaction.date.toISOString() });
+    // The mentee learns their mentor logged something (#924) — previously this
+    // was completely silent. No echo: only a mentor/admin can reach this point,
+    // but the guard stays cheap insurance against future role changes. The
+    // notification carries no note content, just the fact.
+    if (relation.menteeId !== session.user.id) {
+      await notifyIfAllowed(relation.menteeId, 'interactions', 'interaction.logged', {}, '/portal/journey');
+    }
     return NextResponse.json({ interaction }, { status: 201 });
     });
   } catch (error) {

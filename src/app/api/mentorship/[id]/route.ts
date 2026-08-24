@@ -5,13 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
-import { notify } from '@/lib/notify';
-import { dispatchWebhook } from '@/lib/webhooks';
+import { emitStageChange } from '@/lib/stageChangeEffects';
 import { withTenantScope } from '@/lib/orgContext';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { validateDropoffReason } from '@/lib/stageChange';
-import { PIPELINE_STATUSES } from '@/lib/pipeline';
-import { resolvePipelineStages } from '@/lib/pipelineStages';
 
 const updateRelationSchema = z.object({
   status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
@@ -59,7 +56,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
               whatsapp: true,
               city: true,
               birthDate: true,
+              // The merged referrer (#1296): the person or the source who
+              // brought this mentee in, plus the legacy free text for records
+              // typed before the merge.
               referralSource: true,
+              referredBy: { select: { fullName: true } },
+              source: { select: { name: true } },
               cvUrl: true,
             },
           },
@@ -206,27 +208,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           targetId: id,
           detail: `${relation.pipelineStatus} → ${parsed.data.pipelineStatus}`,
         });
-        // The notification stores stage KEYS; the renderer localizes built-in
-        // stages at display time. Custom (per-org) stage keys have no dictionary
-        // label, so snapshot their tenant-set labels into the params (#921).
-        // `relation` still holds the pre-update row, so this is the old status.
-        const fromStatus = relation.pipelineStatus;
-        const toStatus = parsed.data.pipelineStatus!;
-        const stageParams: Record<string, string> = { from: fromStatus, to: toStatus };
-        const builtIn = PIPELINE_STATUSES as readonly string[];
-        if (!builtIn.includes(fromStatus) || !builtIn.includes(toStatus)) {
-          const stages = await resolvePipelineStages(relation.orgId);
-          if (!builtIn.includes(fromStatus)) {
-            const label = stages.find((s) => s.key === fromStatus)?.label;
-            if (label) stageParams.fromLabel = label;
-          }
-          if (!builtIn.includes(toStatus)) {
-            const label = stages.find((s) => s.key === toStatus)?.label;
-            if (label) stageParams.toLabel = label;
-          }
-        }
-        await notify(relation.menteeId, 'stage.changed', stageParams, '/portal');
-        await dispatchWebhook('pipeline.stage_change', { relationId: id, from: relation.pipelineStatus, to: parsed.data.pipelineStatus });
+        // Notification + webhook via the shared effects service (#926) so every
+        // stage-write path emits identically. `relation` still holds the
+        // pre-update row, so this is the old status.
+        await emitStageChange({
+          relationId: id,
+          menteeId: relation.menteeId,
+          orgId: relation.orgId,
+          from: relation.pipelineStatus,
+          to: parsed.data.pipelineStatus!,
+          reasonCode,
+        });
       }
 
       return NextResponse.json({ relation: updated });

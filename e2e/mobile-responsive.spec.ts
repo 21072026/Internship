@@ -147,7 +147,7 @@ test('phone width: a mentee portal and their project stay inside the viewport', 
   try {
     const page = await ctx.newPage();
     await signInAndSettle(page, menteeEmail, pw, '/portal');
-    for (const path of ['/portal', `/projects/${project.id}`, '/projects']) {
+    for (const path of ['/portal', '/portal/journey', '/portal/goals', '/portal/requests', `/projects/${project.id}`, '/projects']) {
       await page.goto(path);
       await page.waitForLoadState('networkidle');
       expect(await auditLayout(page), `${path} at ${PHONE.width}px`).toEqual([]);

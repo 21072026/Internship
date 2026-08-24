@@ -97,6 +97,7 @@ model Organization {
   projects             Project[]
   relations            MentorshipRelation[]
   pipelineStages       PipelineStage[]
+  evaluationTemplates  EvaluationTemplate[]
   mentorApplications   MentorApplication[]
   companyInquiries     CompanyInquiry[]
   documentRequirements DocumentRequirement[]
@@ -161,6 +162,17 @@ model User {
   // Stable personal referral code behind /auth/register?ref=<code>. Generated
   // on first use so existing rows need no backfill.
   referralCode            String?       @unique
+  // Personal ICS calendar-feed credential (#915): unguessable, generated on
+  // demand, revocable by nulling. Null = no feed exposed for this user.
+  icsFeedToken            String?       @unique
+  // How this user's name appears on a published testimonial (#1096):
+  // "fullname" | "initials". Null = initials — the privacy-first default;
+  // showing the full name is an explicit choice next to the consent toggle.
+  testimonialNameStyle    String?
+  // Whether the public profile shows the projects/tasks showcase (#1091).
+  // The data is the user's own work in PUBLIC projects only, so it rides the
+  // publicProfile switch — this just lets them turn that one section off.
+  publicShowProjects      Boolean       @default(true)
   // Extended profile (all optional; safe to add to existing rows).
   displayName             String?
   bio                     String?       @db.Text
@@ -265,6 +277,7 @@ model User {
   companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
   mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
   decidedRequests                   MentorshipRequest[]           @relation("DecidedMentorshipRequests")
+  preferredInRequests               MentorshipRequest[]           @relation("PreferredMentorRequests")
   decidedMentorApplications         MentorApplication[]           @relation("DecidedMentorApplications")
   handledCompanyInquiries           CompanyInquiry[]              @relation("HandledCompanyInquiries")
   supportTickets                    SupportTicket[]               @relation("SupportRequester")
@@ -332,6 +345,16 @@ enum ConsentType {
   // Opt-in to sending the mentee's interaction-log text to the AI provider for
   // the mentor-facing auto-summary (Faz 2, #534). Default off.
   AI_INTERACTION_SUMMARY
+  // Mentor's explicit opt-in to being listed in the mentee-facing /mentors
+  // directory (#937) — required IN ADDITION to publicProfile, mirroring
+  // TALENT_POOL_VISIBILITY. Shown: name, expertise, languages, capacity
+  // status, bio. Never: email, phone, mentee list. Default off.
+  MENTOR_DIRECTORY_VISIBILITY
+  // Opt-in to an excerpt of an evaluation being published on marketing pages
+  // (#1096). An evaluation is third-party personal data, so BOTH sides must
+  // hold this consent — the author (their words) and the subject (it is about
+  // them). Revoking unpublishes immediately (revokePublishedFor). Default off.
+  TESTIMONIAL
 }
 
 model UserConsent {
@@ -810,21 +833,32 @@ enum MentorshipRequestStatus {
 }
 
 model MentorshipRequest {
-  id             String                  @id @default(cuid())
-  menteeId       String
-  status         MentorshipRequestStatus @default(PENDING)
-  message        String?                 @db.Text
-  targetPosition String?
-  decidedById    String?
-  decidedAt      DateTime?
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
+  id                 String                  @id @default(cuid())
+  menteeId           String
+  status             MentorshipRequestStatus @default(PENDING)
+  message            String?                 @db.Text
+  targetPosition     String?
+  // Structured, NON-BINDING matching preferences (#939): the subject area the
+  // mentee wants help with, the languages they can be mentored in, and an
+  // optional specific mentor picked from the consent-gated /mentors directory.
+  // Admins see these in the approval queue; nothing is auto-assigned.
+  preferredField     String?
+  preferredLanguages Json                    @default("[]")
+  preferredMentorId  String?
+  decidedById        String?
+  decidedAt          DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
 
-  mentee    User  @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
-  decidedBy User? @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
+  mentee          User  @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  decidedBy       User? @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
+  // SetNull: a mentor leaving must not take pending requests with them — the
+  // preference simply disappears while the request survives.
+  preferredMentor User? @relation("PreferredMentorRequests", fields: [preferredMentorId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([menteeId])
+  @@index([preferredMentorId])
 }
 
 // A public, unauthenticated application to become a mentor (#904). No User
@@ -1370,6 +1404,10 @@ model MentorshipRelation {
 enum EvaluationType {
   INTERIM
   FINAL
+  // A scorecard written during a hiring interview (#824). Unlike the other two
+  // it may exist before any mentorship does, which is why relationId is
+  // nullable and subjectId names the candidate directly.
+  INTERVIEW
 }
 
 enum GoalStatus {
@@ -1378,17 +1416,148 @@ enum GoalStatus {
 }
 
 model Evaluation {
-  id         String         @id @default(cuid())
-  relationId String
-  authorId   String
-  type       EvaluationType @default(INTERIM)
-  scores     Json           @default("{}") // { criterion: 1..5 }
-  comment    String?        @db.Text
-  createdAt  DateTime       @default(now())
+  id          String         @id @default(cuid())
+  // Nullable since #824: an interview happens before a mentorship exists (a
+  // company round especially), so a scorecard has no relation to hang off.
+  // Every pre-existing row and every INTERIM/FINAL evaluation still carries one
+  // — the existing queries all filter by it or traverse the relation, so they
+  // are unaffected.
+  relationId  String?
+  // Who is being evaluated. Only set for relation-less rows (interviews); for a
+  // relation-backed row the subject is relation.menteeId, and duplicating it
+  // would mean a backfill and a second source of truth.
+  subjectId   String?
+  // The interview panel this scorecard belongs to (#824).
+  panelId     String?
+  // Blind scoring: a scorecard counts — and becomes visible to the rest of the
+  // panel — only once submitted. Null means its author has not committed to it.
+  // INTERIM/FINAL rows are submitted the moment they are written.
+  submittedAt DateTime?
+  authorId    String
+  type        EvaluationType @default(INTERIM)
+  scores      Json           @default("{}") // { criterion: 1..5 }
+  comment     String?        @db.Text
+  createdAt   DateTime       @default(now())
+  // Which rubric this was scored against (#822). Null means the built-in 4+4
+  // criteria, which is every row written before org templates existed and every
+  // row in an org that never defined one. Stamped at write time so a record
+  // keeps rendering with the labels of its own era even after the org rewrites
+  // its framework — criteria are deactivated, never deleted, for the same
+  // reason.
+  templateId  String?
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // Consent-based testimonial publishing (#1096/#1098). The original comment
+  // is never published or edited: the admin drafts publicExcerpt, the AUTHOR
+  // approves that exact wording (excerptApprovedAt — cleared on every edit),
+  // and only then can publish set publishedAt + sharedPublicly. Revoking the
+  // TESTIMONIAL consent on either side clears the publish fields immediately.
+  sharedPublicly    Boolean   @default(false)
+  publishedAt       DateTime?
+  publicExcerpt     String?   @db.Text
+  excerptApprovedAt DateTime?
+
+  relation MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  panel    InterviewPanel?     @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  // SetNull, not Cascade: losing a template must never delete the evaluations
+  // written against it.
+  template EvaluationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([relationId])
+  @@index([sharedPublicly, publishedAt])
+  @@index([templateId])
+  @@index([subjectId])
+  @@index([panelId])
+}
+
+// Structured interview scoring (#824).
+//
+// The point of a panel is the ORDER: every interviewer scores independently and
+// cannot see anyone else's scorecard, and only once the panel is complete does
+// the calibration view show them side by side. Break that order and the
+// scorecard is theatre — an interviewer who reads a colleague's 2 before
+// writing their own does not produce an independent signal.
+//
+// That rule is enforced in the API, never merely hidden in the UI.
+model InterviewPanel {
+  id          String    @id @default(cuid())
+  orgId       String?
+  // The candidate being interviewed.
+  subjectId   String
+  // The rubric to score against (#822). Null = the org's built-in mentee
+  // criteria, resolved at read time like everywhere else.
+  templateId  String?
+  title       String?
+  scheduledAt DateTime?
+  createdById String?
+  // Set when an admin closes the panel early — a no-show interviewer must not
+  // hold the calibration view hostage for ever. Closing reveals the scorecards
+  // that were submitted.
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members    InterviewPanelMember[]
+  scorecards Evaluation[]
+
+  @@index([orgId, subjectId])
+  @@index([subjectId, createdAt])
+}
+
+model InterviewPanelMember {
+  id      String @id @default(cuid())
+  panelId String
+  userId  String
+
+  panel InterviewPanel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  @@unique([panelId, userId])
+  @@index([userId])
+}
+
+// Per-tenant competency framework (#822), the same shape #747 gave pipeline
+// stages: an org that defines nothing keeps exactly the built-in criteria, and
+// one that defines a template replaces them for that scope.
+//
+// `scope` is a plain String validated against a whitelist in code
+// (src/lib/evaluation.ts), not a Prisma enum — the same convention the rest of
+// this repo uses for status-like values, so adding a scope is not a migration.
+model EvaluationTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  // 'MENTEE' (mentor scores the mentee) | 'MENTOR' (mentee scores the mentor).
+  scope     String
+  // Only one active template per org+scope is used; the rest are history.
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org         Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  criteria    EvaluationCriterion[]
+  evaluations Evaluation[]
+
+  @@index([orgId, scope, active])
+}
+
+model EvaluationCriterion {
+  id         String  @id @default(cuid())
+  templateId String
+  // The key stored inside Evaluation.scores. Stable: renaming a criterion
+  // changes its labels, never its key, or historical scores stop matching.
+  key        String
+  // { en?, tr?, de? } — the label in each language it was written in. A missing
+  // language falls back to English, then to the key itself, so a half-translated
+  // framework still renders.
+  labels     Json
+  order      Int     @default(0)
+  // Retired, not deleted (#822): an evaluation scored against this criterion
+  // still has to render its label years later.
+  active     Boolean @default(true)
+
+  template EvaluationTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, key])
+  @@index([templateId, order])
 }
 
 // A structured question from a mentee to their mentor, with an optional answer.
@@ -1669,11 +1838,25 @@ model StatusChange {
 model InvitationToken {
   id           String    @id @default(cuid())
   token        String    @unique
-  email        String
+  // Nullable since #670: an invitation may be a shareable link with no address
+  // attached ("invite someone who has no email yet, or whose address you don't
+  // know"). When such a link is used, registration writes the address the
+  // invitee actually signed up with back here, so the row always ends up naming
+  // whoever consumed it.
+  email        String?
+  // The inviter's own note about a link — "Ayşe from the bootcamp", "career fair
+  // handout" (#670). Never shown to the invitee; it is how the sender recognises
+  // an email-less link in their own list.
+  label        String?
   role         Role
   used         Boolean   @default(false)
   createdAt    DateTime  @default(now())
   expiresAt    DateTime
+  // The inviter's tenant, captured at invite time (#1272) so registration can
+  // assign the org immediately instead of leaving the account org-less until
+  // the next deploy's backfill (fail-closed org scoping 403s COMPANY reads in
+  // that window). Nullable: pre-existing rows predate the column.
+  orgId        String?
   // Who sent the invitation (#51). Nullable: pre-existing rows have no inviter,
   // and the seeder/system can invite without a user. Drives two things on
   // registration — the new account's `referredById`, and the automatic
@@ -1830,7 +2013,10 @@ model AuditLog {
   actorId   String // who performed the action (e.g. the admin)
   action    String // e.g. IMPERSONATE_START / IMPERSONATE_STOP
   targetId  String? // affected user, when applicable
-  detail    String?
+  // @db.Text: a USER_MERGE detail carries per-relation move counts as JSON,
+  // which overflows the default VARCHAR(191) and turned a committed merge
+  // into a 500 with no audit row (P2000).
+  detail    String?  @db.Text
   createdAt DateTime @default(now())
 
   @@index([actorId])

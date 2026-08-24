@@ -15,6 +15,8 @@ import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
+import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
+import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -30,6 +32,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
   const customStages = await resolveCustomStages(session.user.orgId);
+  // The tenant's own competency framework, or null when it uses the built-in
+  // criteria (#822) — same provider shape as the pipeline stages above.
+  const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
 
   // Auth hardening: when the org requires 2FA for this role, hold the user at a
@@ -70,7 +75,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </aside>
       }
     >
-      <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
+      <PipelineStagesProvider stages={customStages}>
+        <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
+      </PipelineStagesProvider>
     </ResponsiveShell>
   );
 }

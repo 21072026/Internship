@@ -21,6 +21,7 @@
 
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb, type RGB } from 'pdf-lib';
 import { isHexColor, type ResolvedBranding } from './branding';
+import { assertPublicHttpsUrl } from './ssrfGuard';
 
 export interface CertificatePdfInput {
   title: string;
@@ -49,7 +50,17 @@ async function tryEmbedImage(doc: PDFDocument, url: string) {
       const base64 = url.split(',')[1] ?? '';
       bytes = Buffer.from(base64, 'base64');
     } else if (/^https?:\/\//.test(url)) {
-      const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      // The logo URL is tenant-supplied (Organization.brandLogoUrl) but fetched
+      // from the SERVER's network position, so it is the same hazard the webhook
+      // sender guards against (#893): `http://169.254.169.254/…` reaches cloud
+      // metadata and `http://127.0.0.1:3306` reaches the database, neither of
+      // which the admin's own browser could touch. Nothing is echoed back here —
+      // the bytes only ever become an embedded image — so an unguarded fetch is
+      // a *blind* SSRF, still enough to probe internal services by timing and to
+      // poke internal HTTP endpoints that act on a bare GET. Same allowlist as
+      // the webhooks: https only, on a publicly-resolving address.
+      const safe = await assertPublicHttpsUrl(url);
+      const res = await fetch(safe, { signal: AbortSignal.timeout(4000) });
       if (!res.ok) return null;
       bytes = new Uint8Array(await res.arrayBuffer());
     } else {
@@ -61,7 +72,9 @@ async function tryEmbedImage(doc: PDFDocument, url: string) {
       return await doc.embedJpg(bytes);
     }
   } catch {
-    // Unreachable/unsupported logo — skip it rather than fail the whole document.
+    // Unreachable, blocked or unsupported logo — skip it rather than fail the
+    // whole document. A certificate without the logo is still a valid
+    // certificate; a 500 on download is not.
     return null;
   }
 }

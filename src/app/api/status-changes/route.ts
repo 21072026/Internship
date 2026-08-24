@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { validateDropoffReason } from '@/lib/stageChange';
+import { emitStageChange } from '@/lib/stageChangeEffects';
 
 // Stage key is a free string now (#747) so tenant-defined stages are accepted.
 const stage = z.string().min(1).max(60);
@@ -43,17 +44,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: reasonCheck.error }, { status: 400 });
     }
 
-    const change = await prisma.statusChange.create({
-      data: {
+    // A backdated entry is a history correction and must not move the
+    // relation's CURRENT stage (it may legitimately describe an old hop the
+    // pipeline has long passed). A non-backdated entry is a real stage move
+    // (#926): pipelineStatus is updated in the same transaction — the audit
+    // row and the live stage can never diverge — and the mentee notification
+    // + pipeline.stage_change webhook fire like on every other write path.
+    const isBackdated = !!createdAt;
+    const applyToRelation = !isBackdated && toStatus !== relation.pipelineStatus;
+
+    const [change] = await prisma.$transaction([
+      prisma.statusChange.create({
+        data: {
+          relationId,
+          fromStatus,
+          toStatus,
+          changedById: session.user.id,
+          reasonCode: reasonCode ?? null,
+          reasonNote: reasonNote?.trim() || null,
+          ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+        },
+      }),
+      ...(applyToRelation
+        ? [prisma.mentorshipRelation.update({ where: { id: relationId }, data: { pipelineStatus: toStatus } })]
+        : []),
+    ]);
+
+    if (applyToRelation) {
+      await emitStageChange({
         relationId,
-        fromStatus,
-        toStatus,
-        changedById: session.user.id,
-        reasonCode: reasonCode ?? null,
-        reasonNote: reasonNote?.trim() || null,
-        ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
-      },
-    });
+        menteeId: relation.menteeId,
+        orgId: relation.orgId,
+        from: relation.pipelineStatus,
+        to: toStatus,
+        reasonCode,
+      });
+    }
 
     return NextResponse.json({ change }, { status: 201 });
   });

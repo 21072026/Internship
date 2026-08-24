@@ -10,8 +10,31 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
   hint?: string;
-  options: { value: string; label: string }[];
+  // `group` puts the option under an <optgroup> with that label (#1296 — the
+  // referrer picker lists registered people and Source rows side by side).
+  // Order is preserved exactly as given; see chunkOptions.
+  options: Opt[];
   placeholder?: string;
+}
+
+type Opt = { value: string; label: string; group?: string };
+
+// Chunk the options *in their given order* so grouping never reorders anything:
+// consecutive options sharing a `group` become one <optgroup>, ungrouped options
+// stay where the caller put them (the referrer picker's "+ add a new source"
+// option has to come last, after the groups).
+function chunkOptions(options: Opt[]): ({ group: null; option: Opt } | { group: string; options: Opt[] })[] {
+  const chunks: ({ group: null; option: Opt } | { group: string; options: Opt[] })[] = [];
+  for (const opt of options) {
+    if (!opt.group) {
+      chunks.push({ group: null, option: opt });
+      continue;
+    }
+    const last = chunks[chunks.length - 1];
+    if (last && last.group === opt.group) last.options.push(opt);
+    else chunks.push({ group: opt.group, options: [opt] });
+  }
+  return chunks;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
@@ -49,11 +72,21 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               {placeholder}
             </option>
           )}
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
+          {chunkOptions(options).map((chunk, i) =>
+            chunk.group === null ? (
+              <option key={chunk.option.value} value={chunk.option.value}>
+                {chunk.option.label}
+              </option>
+            ) : (
+              <optgroup key={`${chunk.group}-${i}`} label={chunk.group}>
+                {chunk.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </optgroup>
+            )
+          )}
         </select>
         {hint && !error && <p className="mt-1.5 text-xs text-gray-500">{hint}</p>}
         {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}

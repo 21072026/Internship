@@ -4,7 +4,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { CompanyInquiryForm } from '@/components/CompanyInquiryForm';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
-import { RELEASE_NOTES } from '@/lib/releaseNotes';
+import { getAllReleaseNotes } from '@/lib/releaseNotes';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +27,7 @@ export default async function ForCompaniesPage() {
     { t: L.audCompany6T, d: L.audCompany6D },
   ];
 
-  const releaseCount = RELEASE_NOTES.length;
+  const releaseCount = getAllReleaseNotes().length;
   const proof = [
     { t: L.trans1T, d: L.trans1D, icon: Code2 },
     { t: L.trans2T.replace('{n}', String(releaseCount)), d: L.trans2D, icon: ScrollText },

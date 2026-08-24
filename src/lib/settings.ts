@@ -33,6 +33,13 @@ export const SETTING_DEFAULTS = {
   // feature consumes from this pool via runAiGated; '0' disables AI calls
   // entirely. Metered in AiUsage; resets each calendar month.
   aiMonthlyQuota: '200',
+  // Negative-outcome communication (#830). 'false' (default) means reaching an
+  // outcome stage notifies the mentor and prefills a draft — a human reads,
+  // edits and sends it. 'true' lets the templated message go out to the mentee
+  // automatically. Off by default on purpose: a rejection is the most sensitive
+  // text this product writes and the wrong message on the wrong case cannot be
+  // recalled.
+  outcomeAutoSend: 'false',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

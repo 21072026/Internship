@@ -7,6 +7,8 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { findPossibleDuplicates } from '@/lib/duplicateDetection';
+import { notify } from '@/lib/notify';
 
 // The source a SOURCE user represents (their own sourceId).
 async function ownSourceId(userId: string): Promise<string | null> {
@@ -83,9 +85,26 @@ export async function POST(request: Request) {
         skills: skills ? skills.split(',').map((s) => s.trim()).filter(Boolean) : [],
         password,
       },
-      select: { id: true, fullName: true, email: true },
+      select: { id: true, fullName: true, email: true, orgId: true },
     });
     await logActivity({ action: 'source.mentee_added', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'user', targetId: mentee.id });
-    return NextResponse.json({ mentee }, { status: 201 });
+
+    // Duplicate post-check (#841): fire-and-forget — the submission already
+    // succeeded, admins just get a heads-up to review /admin/duplicates.
+    // Never surfaced in the response the source sees.
+    void (async () => {
+      const matches = await findPossibleDuplicates({
+        orgId: mentee.orgId,
+        excludeId: mentee.id,
+        fullName,
+        email,
+        university,
+      });
+      if (matches.length === 0) return;
+      const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+      await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
+    })().catch((e) => console.error('Duplicate post-check failed:', e));
+
+    return NextResponse.json({ mentee: { id: mentee.id, fullName: mentee.fullName, email: mentee.email } }, { status: 201 });
   });
 }
