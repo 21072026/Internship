@@ -63,6 +63,9 @@ export async function listPublishedStories(limit = 12) {
   // the server. Never scores, the original comment, or contact fields.
   return rows
     .map((e) => {
+      // A relation-less row is an interview scorecard (#824) — no mentorship,
+      // no consenting two sides, never a public story.
+      if (!e.relation) return null;
       const author =
         e.authorId === e.relation.mentorId
           ? { user: e.relation.mentor, role: 'mentor' as const }
@@ -135,7 +138,7 @@ export async function getPublicEvaluationSummary(menteeId: string) {
   // Only the mentor's own evaluations of this mentee count here — the
   // mentee→mentor direction belongs to the mentor's screen (#1105), and an
   // admin-authored row has no mentor signature to show.
-  const published = rows.filter((e) => e.authorId === e.relation.mentorId);
+  const published = rows.filter((e) => e.relation && e.authorId === e.relation.mentorId);
   if (published.length === 0) return null;
 
   // Average across published evaluations. Every 1–5 score in the row counts
@@ -160,7 +163,7 @@ export async function getPublicEvaluationSummary(menteeId: string) {
     average: n > 0 ? Math.round((sum / n) * 10) / 10 : null,
     count: published.length,
     excerpt: withExcerpt?.publicExcerpt ?? null,
-    mentorName: withExcerpt
+    mentorName: withExcerpt?.relation
       ? formatTestimonialName(withExcerpt.relation.mentor.fullName, withExcerpt.relation.mentor.testimonialNameStyle)
       : null,
   };

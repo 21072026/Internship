@@ -59,6 +59,12 @@ export async function GET() {
       },
     });
     const testimonials = rows
+      // The `where` already requires a relation with consenting sides, so this
+      // narrowing only tells the compiler what the query guarantees. An
+      // interview scorecard (#824) has no relation at all and is therefore
+      // never a testimonial — which is exactly right: it was written about a
+      // candidate, not about a mentorship.
+      .filter((e): e is typeof e & { relation: NonNullable<typeof e.relation> } => !!e.relation)
       .filter((e) => e.authorId === e.relation.mentorId || e.authorId === e.relation.menteeId)
       .map((e) => ({
         id: e.id,
@@ -104,6 +110,9 @@ export async function PATCH(request: Request) {
       },
     });
     if (!evaluation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // A relation-less row is an interview scorecard (#824), never a testimonial:
+    // there are no two consenting mentorship sides to attribute a quote to.
+    if (!evaluation.relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     if (action === 'saveExcerpt') {
       const text = excerpt?.trim();

@@ -15,6 +15,9 @@ export const WEBHOOK_EVENTS = [
   'interaction.logged',
   'evaluation.added',
   'meeting.scheduled',
+  // Every assigned interviewer has submitted (or an admin closed the panel):
+  // the scores are now comparable (#824).
+  'interview_panel.completed',
 ] as const;
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 

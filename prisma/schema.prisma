@@ -1404,6 +1404,10 @@ model MentorshipRelation {
 enum EvaluationType {
   INTERIM
   FINAL
+  // A scorecard written during a hiring interview (#824). Unlike the other two
+  // it may exist before any mentorship does, which is why relationId is
+  // nullable and subjectId names the candidate directly.
+  INTERVIEW
 }
 
 enum GoalStatus {
@@ -1412,20 +1416,35 @@ enum GoalStatus {
 }
 
 model Evaluation {
-  id         String         @id @default(cuid())
-  relationId String
-  authorId   String
-  type       EvaluationType @default(INTERIM)
-  scores     Json           @default("{}") // { criterion: 1..5 }
-  comment    String?        @db.Text
-  createdAt  DateTime       @default(now())
+  id          String         @id @default(cuid())
+  // Nullable since #824: an interview happens before a mentorship exists (a
+  // company round especially), so a scorecard has no relation to hang off.
+  // Every pre-existing row and every INTERIM/FINAL evaluation still carries one
+  // — the existing queries all filter by it or traverse the relation, so they
+  // are unaffected.
+  relationId  String?
+  // Who is being evaluated. Only set for relation-less rows (interviews); for a
+  // relation-backed row the subject is relation.menteeId, and duplicating it
+  // would mean a backfill and a second source of truth.
+  subjectId   String?
+  // The interview panel this scorecard belongs to (#824).
+  panelId     String?
+  // Blind scoring: a scorecard counts — and becomes visible to the rest of the
+  // panel — only once submitted. Null means its author has not committed to it.
+  // INTERIM/FINAL rows are submitted the moment they are written.
+  submittedAt DateTime?
+  authorId    String
+  type        EvaluationType @default(INTERIM)
+  scores      Json           @default("{}") // { criterion: 1..5 }
+  comment     String?        @db.Text
+  createdAt   DateTime       @default(now())
   // Which rubric this was scored against (#822). Null means the built-in 4+4
   // criteria, which is every row written before org templates existed and every
   // row in an org that never defined one. Stamped at write time so a record
   // keeps rendering with the labels of its own era even after the org rewrites
   // its framework — criteria are deactivated, never deleted, for the same
   // reason.
-  templateId String?
+  templateId  String?
 
   // Consent-based testimonial publishing (#1096/#1098). The original comment
   // is never published or edited: the admin drafts publicExcerpt, the AUTHOR
@@ -1437,7 +1456,8 @@ model Evaluation {
   publicExcerpt     String?   @db.Text
   excerptApprovedAt DateTime?
 
-  relation MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  panel    InterviewPanel?     @relation(fields: [panelId], references: [id], onDelete: Cascade)
   // SetNull, not Cascade: losing a template must never delete the evaluations
   // written against it.
   template EvaluationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
@@ -1445,6 +1465,53 @@ model Evaluation {
   @@index([relationId])
   @@index([sharedPublicly, publishedAt])
   @@index([templateId])
+  @@index([subjectId])
+  @@index([panelId])
+}
+
+// Structured interview scoring (#824).
+//
+// The point of a panel is the ORDER: every interviewer scores independently and
+// cannot see anyone else's scorecard, and only once the panel is complete does
+// the calibration view show them side by side. Break that order and the
+// scorecard is theatre — an interviewer who reads a colleague's 2 before
+// writing their own does not produce an independent signal.
+//
+// That rule is enforced in the API, never merely hidden in the UI.
+model InterviewPanel {
+  id          String    @id @default(cuid())
+  orgId       String?
+  // The candidate being interviewed.
+  subjectId   String
+  // The rubric to score against (#822). Null = the org's built-in mentee
+  // criteria, resolved at read time like everywhere else.
+  templateId  String?
+  title       String?
+  scheduledAt DateTime?
+  createdById String?
+  // Set when an admin closes the panel early — a no-show interviewer must not
+  // hold the calibration view hostage for ever. Closing reveals the scorecards
+  // that were submitted.
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members    InterviewPanelMember[]
+  scorecards Evaluation[]
+
+  @@index([orgId, subjectId])
+  @@index([subjectId, createdAt])
+}
+
+model InterviewPanelMember {
+  id      String @id @default(cuid())
+  panelId String
+  userId  String
+
+  panel InterviewPanel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  @@unique([panelId, userId])
+  @@index([userId])
 }
 
 // Per-tenant competency framework (#822), the same shape #747 gave pipeline
