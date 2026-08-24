@@ -104,6 +104,37 @@ ve arama da sunucuya taşındı (arama 300 ms debounce'lu).
 iş. Erişim **loglanmıyor**; PII erişim kaydı
 [#821](https://github.com/21072026/Internship/issues/821) kapsamında.
 
+## Canlı parola linkleri yanıt gövdesine yazılmaz (#987)
+
+**Karar: A** — parola belirleme linki yalnızca e-posta ile gider; API yanıtı
+`{ ok, emailSent }` döner. `POST /api/admin/company-users` ve
+`POST /api/admin/source-users` artık `setPasswordUrl` döndürmüyor.
+
+Gerekçe: bu link canlı, tek kullanımlık bir kimlik bilgisi. HTTP yanıt gövdesine
+koymak onu ters proxy log'larına, tarayıcı devtools'una ve her ekran paylaşımına
+koymak demek — `/api/admin/users/[id]/reset-password` için #875'te kapatılan
+desenin aynısı. İki kural olması uzun vadede kafa karıştırır.
+
+Issue, A'nın gerçek bir operasyonel maliyeti olduğunu varsayıyordu: hesabı admin
+oluşturuyor, e-posta gitmezse hesap erişilemez kalıyor. **Ölçtük, öyle değildi:**
+`src/app/admin/companies/page.tsx` ve `src/app/admin/sources/page.tsx` yanıttaki
+linki hiç okumuyordu — yalnızca başarı mesajı gösterip formu temizliyorlardı.
+Yani link, hiçbir tüketicisi olmadan sızıyordu; kaldırmanın maliyeti sıfır.
+
+Asıl kusur başka yerdeydi ve aynı işte düzeltildi: her iki uç da e-posta hatasını
+yutup yine `ok: true` dönüyordu. Admin "hesap oluşturuldu" görüyordu, posta hiç
+gitmemişken. Artık:
+
+- yanıt `emailSent` taşıyor ve arayüz gönderilemediğini açıkça söylüyor
+  (hesap var, kimse giremiyor, posta düzelince "Parolayı sıfırla");
+- denetim kaydının `detail` alanına da yazılıyor, çünkü bu durumu sonradan
+  açıklamaya çalışan kişi oraya bakacak.
+
+Posta arızasında kurtarma yolu değişmedi: kullanıcı üzerinde parola sıfırlama
+akışını tekrar tetiklemek. Link elle paylaşılacaksa bunun için ayrı ve denetlenen
+bir yol var (#670, e-postasız davet linkleri) — "yanıt gövdesinde döndür" o yol
+değil.
+
 ## Önizleme verisi: anonimleştirme (#1186)
 
 Paylaşılan önizleme ortamı gerçek veriyle çalışıyordu. `scripts/sanitize-db.mjs`

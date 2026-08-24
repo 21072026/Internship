@@ -409,6 +409,7 @@ const en = {
     positions: 'positions',
     openPositions: 'Open positions',
     loginCreated: 'Login created — we emailed a set-password link.',
+    loginCreatedNoEmail: 'Login created, but the set-password email could NOT be sent. The account exists and nobody can sign in to it yet — use “Reset password” on the user once mail is working.',
     loadFailed: 'Failed to load companies',
     createFailed: 'Failed to create company',
     updateFailed: 'Failed to update company',
@@ -1807,6 +1808,7 @@ const en = {
     addLoginHint: 'Give a source a login so they can submit mentees (not read-only).',
     createLogin: 'Create login',
     loginCreated: 'Login created — a set-password email was sent.',
+    loginCreatedNoEmail: 'Login created, but the set-password email could NOT be sent. The account exists and nobody can sign in to it yet — use “Reset password” on the user once mail is working.',
   },
   sourcePortal: {
     title: 'My mentees',
@@ -3486,6 +3488,7 @@ const tr: Dict = {
     positions: 'pozisyon',
     openPositions: 'Açık pozisyonlar',
     loginCreated: 'Giriş oluşturuldu — parola belirleme bağlantısı e-postalandı.',
+    loginCreatedNoEmail: 'Giriş oluşturuldu ama parola belirleme e-postası GÖNDERİLEMEDİ. Hesap var ve şu an kimse giriş yapamıyor — posta düzelince kullanıcıda “Parolayı sıfırla”yı çalıştırın.',
     loadFailed: 'Şirketler yüklenemedi',
     createFailed: 'Şirket oluşturulamadı',
     updateFailed: 'Şirket güncellenemedi',
@@ -4871,6 +4874,7 @@ const tr: Dict = {
     addLoginHint: 'Bir kaynağa giriş ver ki mentee gönderebilsin (salt-okunur değil).',
     createLogin: 'Giriş oluştur',
     loginCreated: 'Giriş oluşturuldu — şifre belirleme e-postası gönderildi.',
+    loginCreatedNoEmail: 'Giriş oluşturuldu ama şifre belirleme e-postası GÖNDERİLEMEDİ. Hesap var ve şu an kimse giriş yapamıyor — posta düzelince kullanıcıda “Parolayı sıfırla”yı çalıştırın.',
   },
   sourcePortal: {
     title: 'Mentee\'lerim',
@@ -6546,6 +6550,7 @@ const de: Dict = {
     positions: 'Positionen',
     openPositions: 'Offene Positionen',
     loginCreated: 'Zugang erstellt — wir haben einen Link zum Setzen des Passworts per E-Mail gesendet.',
+    loginCreatedNoEmail: 'Zugang erstellt, aber die E-Mail zum Setzen des Passworts konnte NICHT gesendet werden. Das Konto existiert und niemand kann sich anmelden — nutze „Passwort zurücksetzen“, sobald der Mailversand wieder geht.',
     loadFailed: 'Unternehmen konnten nicht geladen werden',
     createFailed: 'Unternehmen konnte nicht erstellt werden',
     updateFailed: 'Unternehmen konnte nicht aktualisiert werden',
@@ -7931,6 +7936,7 @@ const de: Dict = {
     addLoginHint: 'Gib einer Quelle einen Login, damit sie Mentees einreichen kann (nicht nur lesend).',
     createLogin: 'Login erstellen',
     loginCreated: 'Login erstellt — eine E-Mail zum Festlegen des Passworts wurde gesendet.',
+    loginCreatedNoEmail: 'Login erstellt, aber die E-Mail zum Festlegen des Passworts konnte NICHT gesendet werden. Das Konto existiert und niemand kann sich anmelden — nutze „Passwort zurücksetzen“, sobald der Mailversand wieder geht.',
   },
   sourcePortal: {
     title: 'Meine Mentees',

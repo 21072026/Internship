@@ -51,7 +51,15 @@ export default function AdminSourcesPage() {
         body: JSON.stringify({ sourceId: loginSourceId, email: loginEmail, fullName: loginName || loginEmail }),
       });
       const data = await res.json();
-      setLoginMsg(res.ok ? t.sources.loginCreated : data.error || t.common.error);
+      // A created account whose set-password email never sent is unreachable —
+      // say so instead of reporting plain success (#987).
+      setLoginMsg(
+        res.ok
+          ? data.emailSent === false
+            ? t.sources.loginCreatedNoEmail
+            : t.sources.loginCreated
+          : data.error || t.common.error
+      );
       if (res.ok) { setLoginEmail(''); setLoginName(''); }
     } finally {
       setSaving(false);

@@ -46,7 +46,15 @@ export default function CompaniesPage() {
         body: JSON.stringify({ companyId: clCompanyId, email: clEmail, fullName: clName }),
       });
       const data = await res.json();
-      setClMsg(res.ok ? t.companiesPage.loginCreated : data.error || t.common.error);
+      // A created account whose set-password email never sent is unreachable —
+      // say so instead of reporting plain success (#987).
+      setClMsg(
+        res.ok
+          ? data.emailSent === false
+            ? t.companiesPage.loginCreatedNoEmail
+            : t.companiesPage.loginCreated
+          : data.error || t.common.error
+      );
       if (res.ok) {
         setClEmail('');
         setClName('');

@@ -39,11 +39,17 @@ export async function POST(request: Request) {
   });
 
   const token = await createPasswordResetToken(user.id, 'SET_INITIAL');
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  // The link is emailed and NOT returned (#987, the decision recorded in
+  // docs/pii-access-lifecycle.md). It is a live, single-use credential: putting
+  // it in an HTTP response body puts it in reverse-proxy logs, browser
+  // devtools and every screen share — the same leak #875 closed for
+  // /api/admin/users/[id]/reset-password. Neither admin screen ever read it.
+  let emailSent = true;
   try {
     await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, purpose: 'SET_INITIAL', orgId: user.orgId });
   } catch (e) {
     console.error('Source-user set-password email failed:', e);
+    emailSent = false;
   }
 
   await logActivity({
@@ -53,9 +59,14 @@ export async function POST(request: Request) {
     actorEmail: session.user.email ?? null,
     targetType: 'user',
     targetId: user.id,
-    detail: `source ${source.name}`,
+    // Say so in the audit trail when the mail failed: the account exists and
+    // cannot be reached, which is exactly the state somebody will be trying to
+    // explain later.
+    detail: emailSent ? `source ${source.name}` : `source ${source.name} — set-password email failed to send`,
     request,
   });
-  return NextResponse.json({ ok: true, setPasswordUrl: `${appUrl}/auth/reset?token=${token}` });
+  // `emailSent: false` means the account exists but nobody can get into it.
+  // Before #987 this was swallowed and the admin was told "created", full stop.
+  return NextResponse.json({ ok: true, emailSent });
   });
 }
