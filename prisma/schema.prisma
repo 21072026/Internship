@@ -349,6 +349,7 @@ model User {
   documents                         Document[]                    @relation("DocumentOwner")
   personalNotes                     PersonalNote[]
   consents                          UserConsent[]
+  contributorTermsAcceptances       ContributorTermsAcceptance[]
   companyInterests                  CompanyInterest[]             @relation("CompanyInterestMentee")
   companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
   mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
@@ -447,6 +448,52 @@ model UserConsent {
 
   @@unique([userId, type])
   @@index([userId])
+}
+
+// Contributor terms as DATA, not code (#1025, design in
+// docs/legal/contributor-terms-in-app.md). Terms are versioned rows rather than
+// a constant because the click-wrap only holds up if the exact text a person
+// accepted can be produced later — and because a second project may one day
+// have different IP rules, keyed separately.
+model ContributorTerms {
+  key             String // 'default' | 'project-x' …
+  version         String // '1.0'; changing the text means a NEW row, never an edit
+  locale          String // 'en' | 'tr' | 'de'
+  // Exactly one locale per (key, version) is the binding text; the others are
+  // informative translations. Which one it is has to be recorded, not assumed.
+  isAuthoritative Boolean  @default(false)
+  body            String   @db.Text // markdown
+  effectiveFrom   DateTime
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+
+  @@unique([key, version, locale])
+  @@index([key, effectiveFrom])
+}
+
+// Evidence, not preference: who accepted which version, when, and from where.
+// A row is written on acceptance and never updated — a later version produces
+// another row, so the history is the record.
+model ContributorTermsAcceptance {
+  id         String   @id @default(cuid())
+  userId     String
+  termsKey   String
+  version    String
+  // null = platform-level acceptance (onboarding). A project id scopes the
+  // acceptance to that project — § 40 UrhG is why this is a chain of specific
+  // acceptances rather than one blanket future-works consent.
+  projectId  String?
+  acceptedAt DateTime @default(now())
+  // Hashed, never raw: the evidence question is "was it the same client", not
+  // "what is their address". Same treatment the rest of the app gives an IP.
+  ipHash     String?
+  uaHash     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, termsKey, version, projectId])
+  @@index([userId])
+  @@index([termsKey, version])
 }
 
 // A referral source — the education/agency a mentee came from. Admin-managed
