@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
+import { StageSlaEditor } from '@/components/StageSlaEditor';
 
 export default function AdminSettingsPage() {
   const t = useT();
@@ -450,6 +451,9 @@ export default function AdminSettingsPage() {
 
       {/* The org's competency framework (#822) — criteria as data, not code. */}
       <EvaluationFrameworkEditor />
+
+      {/* Per-stage service levels (#817) — how long anyone may wait. */}
+      <StageSlaEditor />
     </div>
   );
 }

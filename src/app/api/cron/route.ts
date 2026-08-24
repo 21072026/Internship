@@ -31,6 +31,12 @@ export async function GET(request: Request) {
     if (job === 'email-health') {
       return NextResponse.json({ message: 'Email health check ran', email: await runEmailHealthCheck() });
     }
+    // Stage service levels (#817): runnable on its own so the idempotency of
+    // the overdue reminder can be exercised — and so an admin can re-run just
+    // this one after fixing an SMTP problem.
+    if (job === 'stage-deadlines') {
+      return NextResponse.json({ message: 'Stage deadline reminders ran', deadlines: await checkStageDeadlineReminders() });
+    }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();
       return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });

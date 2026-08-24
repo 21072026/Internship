@@ -218,6 +218,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           from: relation.pipelineStatus,
           to: parsed.data.pipelineStatus!,
           reasonCode,
+          // The same request set a deadline by hand — don't overwrite it with
+          // the stage's default (#817).
+          deadlineSetByCaller: stageDeadline !== undefined,
         });
       }
 
