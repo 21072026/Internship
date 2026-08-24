@@ -242,7 +242,10 @@ export default function AdminAnalyticsPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.analytics.title}</h1>
           <p className="text-gray-500 mt-1">{t.analytics.subtitle}</p>
         </div>
-        <div className="flex items-center gap-2 no-print">
+        {/* Up to five controls: on a phone (and in German, where the labels are
+            longest) they have to wrap, or the row pushed the whole page 51px
+            wider than the screen (#1305). */}
+        <div className="flex flex-wrap items-center gap-2 no-print">
           <Select
             aria-label={t.analytics.dateRange}
             className="w-auto"
@@ -476,7 +479,9 @@ export default function AdminAnalyticsPage() {
               const n = data.funnel[s.key] || 0;
               return (
                 <div key={s.key} className="flex items-center gap-2 text-sm">
-                  <span className="w-48 truncate text-gray-600 flex-shrink-0">{s.label}</span>
+                  {/* Half the row on a phone, a fixed 192px from `sm` up — the
+                      fixed width left the bar a few pixels wide (#1305). */}
+                  <span className="w-1/2 sm:w-48 truncate text-gray-600 flex-shrink-0">{s.label}</span>
                   <div className="flex-1 bg-gray-100 rounded h-4 overflow-hidden">
                     <div className="bg-blue-500 h-full" style={{ width: `${(n / maxFunnel) * 100}%` }} />
                   </div>
@@ -569,10 +574,13 @@ export default function AdminAnalyticsPage() {
               <p className="text-sm text-gray-400">—</p>
             ) : (
               <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                {/* The stats string is unbreakable, so on a phone the stage name
+                    gets its own line instead of being squeezed to ~35px
+                    ("100 · Erstkontakt" → "100 …", #1305). */}
                 {aging.stageAging.map((s) => (
-                  <div key={s.pipelineStatus} className="flex items-center justify-between py-2 text-sm">
-                    <span className="truncate">{label(s.pipelineStatus)}</span>
-                    <span className="text-gray-500 flex-shrink-0">
+                  <div key={s.pipelineStatus} className="flex flex-col items-start gap-0.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                    <span className="max-w-full truncate">{label(s.pipelineStatus)}</span>
+                    <span className="text-gray-500 sm:flex-shrink-0">
                       {t.analytics.aging.avg} {s.avgDays}{t.analytics.aging.days} · {t.analytics.aging.median} {s.medianDays}{t.analytics.aging.days} · {s.count} {t.analytics.aging.candidates}
                     </span>
                   </div>

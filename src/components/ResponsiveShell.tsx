@@ -30,10 +30,13 @@ export function ResponsiveShell({
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-4">
         {/* The wordmark truncates instead of pushing the bar wider than the screen:
-            brand + badge + three icon buttons did not fit a 320px phone (#936). */}
-        <div className="flex items-center min-w-0 truncate">
-          {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100">InternshipCRM</span>}
-          <BetaBadge className="ml-2" />
+            brand + badge + three icon buttons did not fit a 320px phone (#936).
+            The truncation happens *inside* the wordmark (`oneLine`, see
+            BrandWordmark) — truncating this row clipped the badge itself, so a
+            360px phone read "Internship CRM BI" (#1305). */}
+        <div className="flex items-center min-w-0">
+          {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100 truncate">InternshipCRM</span>}
+          <BetaBadge className="ml-2 flex-shrink-0" />
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Only visible while a meeting is actually running (#51 follow-up). */}

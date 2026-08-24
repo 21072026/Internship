@@ -26,7 +26,9 @@ export function ApplyLinkBox() {
           readOnly
           value={url}
           onFocus={(e) => e.target.select()}
-          className="flex-1 px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white text-gray-700"
+          // `min-w-0`: an <input> refuses to shrink below its default intrinsic
+          // width, which pushed the copy button out of the box on a phone (#1305).
+          className="flex-1 min-w-0 px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white text-gray-700"
         />
         <button
           onClick={() => {

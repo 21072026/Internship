@@ -10,6 +10,56 @@ Newest entries on top.
 
 ---
 
+## 2026-08-24 — Telefon genişliğinde düzen denetimi: sıkışan satırlar sayfa taşması yapmaz (#1305)
+
+**"Yatay kaydırma var mı" kuralı bu hataların çoğunu KAÇIRIYOR.** Bildirilen bozukluk
+(/admin/mentors'ta mentor adının "E·" olarak görünmesi) hiçbir yerde sayfayı genişletmiyordu:
+`justify-between` satırda `flex-shrink-0` bir aksiyon kümesi kimlik sütununu **18px**'e
+sıkıştırıyordu. Yakalayan kural: **bir kutunun kendi içeriğini yatay taşırması**
+(`el.scrollWidth > el.clientWidth + 4`) ve **daralmış metin** (`clientWidth < 110` iken
+içerik daha geniş). Bu iki kural `e2e/mobile-layout-audit.spec.ts`'te; `mobile-responsive`
+spec'inin eski iki kuralı (sayfa kaydırması + form alanı genişliği) yeterli değildi.
+
+**Kaçınılması gereken iki yanlış pozitif** (aksi hâlde denetim gürültüden kullanılamaz):
+`overflow-x-auto` bir ata içindeki geniş tablo (kaydırılabilir → bozuk değil) ve **negatif
+yatay margin'li çocuk** (`-mx-2 px-2` hover zeminleri kart padding'ine taşar; scrollWidth'i
+tasarımca büyütür). `sr-only` yardımcıları da 1px'tir.
+
+**Tarama TR ve DE ile yapılmalı.** `/admin/analytics`, `/admin/companies`, `/admin/support`
+İngilizce'de sığıyor, Almanca'da taşıyor — biri sayfayı 51px yatay kaydırmaya sokuyordu.
+Locale'i `document.cookie = 'locale=de;path=/'` ile zorla (i18n-coverage.spec deseni);
+kullanıcı tercihi yerine çerez kazanır.
+
+**Tekrarlayan düzeltme desenleri:** (1) satırı telefonda dikey yığ (`flex-col sm:flex-row`),
+(2) aksiyon kümesini sar (`flex-wrap`), (3) metin bloğuna `min-w-0` + `truncate` ver,
+(4) `<input>`'a `min-w-0` (input varsayılan içsel genişliğinin altına inmez, komşu butonu
+kutudan atar), (5) sabit `w-56`/`w-48` etiket sütunlarını telefonda `w-1/2 sm:w-56` yap.
+Marka satırında `truncate`'i **satıra değil isme** koy: satırı kırpmak beta rozetini yarıdan
+kesiyordu ("Internship CRM BI"). `BrandWordmark` bunun için `oneLine` prop'u aldı — kenar
+çubuğunda isim iki satıra sarabilir, mobil barda kısalır.
+
+**JSX yorumu ekleme tuzağı:** `.map((x) => (` veya bir ternary'nin `) : (` kolundan hemen
+sonra `{/* ... */}` koymak "Expected '</', got ..." sözdizimi hatası verir (iki komşu düğüm).
+Yorumu ya açılan etiketin İÇİNE ya da `map` çağrısının üstüne koy. `tsc --noEmit` bunu
+yakalar; dev sunucusu 500 döner.
+
+**Playwright bu konteynerde:** kurulu build `chromium-1194`, Playwright 1.62 ise
+`chromium_headless_shell-1234` arıyor. Çalışan yol: repoya **commit edilmeyen**
+`playwright.local.config.ts` (repo config'ini import edip
+`use.launchOptions.executablePath = '/opt/pw-browsers/chromium'` ekler) ve
+`npx playwright test --config=playwright.local.config.ts`. Config dosyası repo dışında
+(/tmp) olursa `test.afterAll() did not expect to be called here` hatası verir — repo kökünde
+tut. Ayrıca kendi spec'ini **düzeltmeyi geri alıp** koştur (`git stash push <dosya>`): benim
+denetimim ilk hâlde iki `spills` satırıyla düştü, yani boş test değil.
+
+**Yükleme durumu denetimi bozar:** `networkidle` bu kabuklarda hiç gelmiyor (TimezoneSync +
+sidebar prefetch), o yüzden `.animate-pulse` sayısının 0'a düşmesini bekle — iskelet
+üzerinden ölçüm alırsan sayfa "temiz" görünür. Aynı `page` içinde ikinci bir kullanıcıya
+`signInAndSettle` ile geçmek /mentor/mentees'i kalıcı iskelette bıraktı; rol başına ayrı
+`test()` (yani ayrı page fixture) hem hızlı hem güvenilir.
+
+---
+
 ## 2026-08-24 — Ticari SAST raporunu triyaj etmek: 25 bulgu, 25 yanlış pozitif, 2 kaçırılmış gerçek (#1294)
 
 **Bu tarayıcı `where: { field: variable }` desenini ORM'den ve veritabanı tipinden bağımsız
