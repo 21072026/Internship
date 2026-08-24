@@ -1713,7 +1713,16 @@ model StatusChange {
 model InvitationToken {
   id           String    @id @default(cuid())
   token        String    @unique
-  email        String
+  // Nullable since #670: an invitation may be a shareable link with no address
+  // attached ("invite someone who has no email yet, or whose address you don't
+  // know"). When such a link is used, registration writes the address the
+  // invitee actually signed up with back here, so the row always ends up naming
+  // whoever consumed it.
+  email        String?
+  // The inviter's own note about a link — "Ayşe from the bootcamp", "career fair
+  // handout" (#670). Never shown to the invitee; it is how the sender recognises
+  // an email-less link in their own list.
+  label        String?
   role         Role
   used         Boolean   @default(false)
   createdAt    DateTime  @default(now())
