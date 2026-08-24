@@ -16,6 +16,8 @@ import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/link
 import { TawkChat } from '@/components/TawkChat';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { listPublishedStories } from '@/lib/testimonials';
+import { getPublicStats } from '@/lib/publicStats';
+import { buildLiveStripPieces } from '@/lib/liveStrip';
 
 export default async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
@@ -42,6 +44,15 @@ export default async function HomePage() {
   // no "testimonials coming soon" placeholder. The count is computed live,
   // never written into copy by hand (§4.3).
   const stories = await listPublishedStories(3);
+
+  // Live hero numbers (#1099) — served from the same cached helper the public
+  // /api/public/stats endpoint uses, so the landing never fans out its own
+  // count() queries per request.
+  const livePieces = buildLiveStripPieces(await getPublicStats(), {
+    mentors: L.liveMentors,
+    openProjects: L.liveProjects,
+    waitingCandidates: L.liveWaiting,
+  });
   const iconBg: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',
     purple: 'bg-purple-100 text-purple-600', amber: 'bg-amber-100 text-amber-600',
@@ -205,6 +216,16 @@ export default async function HomePage() {
               </span>
             ))}
           </div>
+          {/* Live status strip (#1099): real numbers, computed — never written
+              into copy by hand (§4.3). A zero piece is not rendered; with all
+              three at zero the strip is not in the DOM at all ("0 open
+              projects" is worse than nothing). */}
+          {livePieces.length > 0 && (
+            <p className="mt-6 text-center text-sm text-gray-600" data-testid="hero-live-strip">
+              <span className="font-medium text-gray-500">{L.liveNow}</span>{' '}
+              {livePieces.join(' · ')}
+            </p>
+          )}
           <div className="text-center mt-10">
             <a href="#loop" className="inline-flex items-center gap-1.5 text-blue-600 hover:underline font-medium">
               {L.heroScrollCue} <ArrowDown className="h-4 w-4" />
