@@ -4170,3 +4170,44 @@ görünüyor, oysa workflow'a `uses:` eklenmiş oluyor.
 
 **`get_job_logs` iş bitmeden 404 döner.** Koşan bir job'un log'unu çekmeye çalışma;
 `get_check_runs` ile bitmesini bekle.
+
+## 2026-08-24 (ikinci tur) — altyapı zinciri, ölçerek karar vermek
+
+**Issue'nun kurduğu ikilemi kabul etmeden önce çağıranlara bak.** #987 "linki
+yanıttan kaldırırsak e-posta gitmediğinde hesap erişilemez kalır, bu gerçek bir
+maliyet" diye tartışıyordu. İki admin ekranı da `setPasswordUrl`'i hiç
+okumuyordu; yani canlı kimlik bilgisi tüketicisiz sızıyordu ve kaldırmanın
+maliyeti sıfırdı. Aynı arama, asıl kusuru da ortaya çıkardı: uçlar e-posta
+hatasını yutup `ok: true` dönüyordu. **Bir issue'nun varsayımı da kanıt ister.**
+
+**"Bump kullanıcılara ne sorulacağını değiştirir" — tüketicileri grep'le.**
+#1177'de `PRIVACY_POLICY_VERSION`'ı hiçbir yer kullanıcının kayıtlı sürümüyle
+karşılaştırmıyordu; `consent/renew` gizlilik yeniden onayı değil, saklama
+teyidi. Bump yalnızca gösterilen tarihi ve yeni kayıtları etkiliyordu.
+
+**Motor tanımıyorsa koruma bir şey satın almaz — ve bunu deneyerek öğren.**
+#1005'te choke-point yardımcısını yazdım, CodeQL aynı üç satırda "3 new high"
+dedi. Kodu geri aldım: o satırlara dokunan her PR'da yeniden uyarı üretmek,
+insanları CodeQL'i atlamaya alıştırır. Doğru cevap Security sekmesinden
+dismiss + gerekçeyi `docs/security-exceptions.md`'ye yazmaktı. **Elimdeki
+araçlarla tek tek code-scanning uyarılarını listeleyemiyorum** (MCP'de uç yok,
+Analyze log'u da listelemiyor) — bunu raporlarken açıkça söyle.
+
+**Yeşil tik "çalıştı" demek değil, log'a bak.** #1249'un demo job'u 6 saniyede
+bitti; şüphelenip log'u açtım, gerçekten konteyneri kurup seed etmişti. Ama
+`continue-on-error` verdiğim için kırmızı olsa da deploy yeşil görünecekti —
+opsiyonel job'larda rengi değil log'u kontrol et.
+
+**Sunucudaki durumu iddia etmeden önce curl'le ölç.** #1249'da demo
+0.78.0-beta, prod 0.105.0-beta çıktı (27 sürüm fark). Bu, PR'ın gövdesindeki en
+ikna edici satır oldu ve düzeltmeden sonra aynı komut kanıtı verdi.
+
+**`git fetch`/`checkout` 2 dakikalık Bash sınırına takılabiliyor.** Uzun
+sürebilen git komutlarını `timeout 60 …` ile sar; takıldığında dal yarı
+güncellenmiş kalıyor, `git log --oneline -1` + `git status -sb` ile durumu
+doğrula.
+
+**Backlog'tan iş seçerken önce atamalara ve açık PR'lara bak.** #869/#891/#894
+alt görevleri insan stajyerlere atanmış, #1302'nin zaten açık PR'ı vardı.
+`list_issues` ile `assignees` alanını çekmek bir çağrı; çakışan PR açmak bir
+gün.
