@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Route } from '@playwright/test';
 import { randomBytes } from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
@@ -64,6 +64,85 @@ test('a phone opens the calendar on the upcoming list, not the month grid', asyn
 
     await expect(page.getByTestId('calendar-agenda')).toBeVisible();
     await expect(page.getByTestId('calendar-month-grid')).toHaveCount(0);
+  } finally {
+    await cleanupByEmail(email);
+  }
+});
+
+const eventInside = (route: Route, id: string, title: string) => {
+  const from = new Date(new URL(route.request().url()).searchParams.get('from')!);
+  from.setDate(from.getDate() + 2);
+  return { id, type: 'meeting', title, who: 'Calendar Mentee', date: from.toISOString() };
+};
+
+test('calendar separates loading, empty and error states and retries the visible month', { tag: '@smoke' }, async ({ page }) => {
+  const email = uniqueEmail('cal-loading');
+  await seedUser(email, 'MentorPass123', 'MENTOR', 'Calendar Loading Mentor');
+  const pending: Route[] = [];
+
+  try {
+    await signInAndSettle(page, email, 'MentorPass123', '/mentor');
+    await page.route('**/api/calendar-events?**', async (route) => { pending.push(route); });
+    await page.goto('/mentor/calendar');
+
+    await expect.poll(() => pending.length).toBe(1);
+    await expect(page.getByTestId('calendar-loading')).toBeVisible();
+    await expect(page.getByTestId('calendar-empty')).toHaveCount(0);
+    await pending[0].fulfill({ json: { events: [eventInside(pending[0], 'slow-event', 'Loaded event')] } });
+    await expect(page.getByTitle('Loaded event · Calendar Mentee')).toBeVisible();
+    await expect(page.getByTestId('calendar-empty')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'next', exact: true }).click();
+    await expect.poll(() => pending.length).toBe(2);
+    await expect(page.getByTestId('calendar-loading')).toBeVisible();
+    await expect(page.getByTestId('calendar-empty')).toHaveCount(0);
+    await pending[1].fulfill({ json: { events: [] } });
+    await expect(page.getByTestId('calendar-empty')).toBeVisible();
+
+    await page.getByRole('button', { name: 'next', exact: true }).click();
+    await expect.poll(() => pending.length).toBe(3);
+    await pending[2].fulfill({ status: 500, json: { error: 'Failed' } });
+    await expect(page.getByTestId('calendar-load-error')).toContainText('Calendar events could not be loaded');
+    await expect(page.getByTestId('calendar-empty')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Try again' }).click();
+    await expect.poll(() => pending.length).toBe(4);
+    await expect(page.getByTestId('calendar-loading')).toBeVisible();
+    await pending[3].fulfill({ json: { events: [eventInside(pending[3], 'retry-event', 'Retry event')] } });
+    await expect(page.getByTitle('Retry event · Calendar Mentee')).toBeVisible();
+  } finally {
+    await cleanupByEmail(email);
+  }
+});
+
+test('a slower old-month response cannot overwrite the current month', async ({ page }) => {
+  const email = uniqueEmail('cal-race');
+  await seedUser(email, 'MentorPass123', 'MENTOR', 'Calendar Race Mentor');
+  let requestCount = 0;
+
+  try {
+    await signInAndSettle(page, email, 'MentorPass123', '/mentor');
+    await page.route('**/api/calendar-events?**', async (route) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        await route.fulfill({ json: { events: [] } });
+        return;
+      }
+      const oldRequest = requestCount === 2;
+      await new Promise((resolve) => setTimeout(resolve, oldRequest ? 300 : 20));
+      await route.fulfill({
+        json: { events: [eventInside(route, oldRequest ? 'stale-event' : 'current-event', oldRequest ? 'Stale event' : 'Current event')] },
+      });
+    });
+    await page.goto('/mentor/calendar');
+    await expect(page.getByTestId('calendar-empty')).toBeVisible();
+
+    await page.getByRole('button', { name: 'next', exact: true }).click();
+    await page.getByRole('button', { name: 'next', exact: true }).click();
+    await expect(page.getByTitle('Current event · Calendar Mentee')).toBeVisible();
+    await page.waitForTimeout(400);
+    await expect(page.getByTitle('Current event · Calendar Mentee')).toBeVisible();
+    await expect(page.getByTitle('Stale event · Calendar Mentee')).toHaveCount(0);
   } finally {
     await cleanupByEmail(email);
   }

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Calendar loading states**: distinguish loading, empty and failed calendar requests, with stale-response protection and retry.",
+  "notes": {
+    "en": ["Calendars now show a loading state before events arrive and offer a retry if they cannot be loaded, instead of briefly appearing empty."],
+    "tr": ["Takvimler artık etkinlikler gelmeden önce yükleme durumunu gösteriyor ve yüklenemezse yeniden deneme sunuyor; kısa süreliğine boş görünmüyor."],
+    "de": ["Kalender zeigen nun einen Ladezustand, bis Termine eintreffen, und bieten bei Ladefehlern einen erneuten Versuch, statt kurzzeitig leer zu erscheinen."]
+  }
+}

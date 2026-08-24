@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2, Repeat } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
 
 // The calendar (#1110).
@@ -87,6 +89,10 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
   const locale = useLocale();
   const [events, setEvents] = useState<Ev[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const requestGeneration = useRef(0);
   const [view, setView] = useState<CalendarViewMode>(initialView ?? 'month');
   const [cursor, setCursor] = useState(() => startOfDay(new Date()));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -127,25 +133,39 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
   }, [view, cursor]);
 
   const fetchKey = `${range.start.toISOString()}|${range.end.toISOString()}`;
-  const load = useCallback(async () => {
+  useEffect(() => {
+    const generation = ++requestGeneration.current;
     setLoading(true);
+    setLoadError(false);
     const qs = new URLSearchParams({ from: range.start.toISOString(), to: range.end.toISOString() });
-    try {
-      const res = await fetch(`/api/calendar-events?${qs}`);
-      const d = res.ok ? await res.json() : { events: [] };
-      setEvents(d.events ?? []);
-    } catch {
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
+    void (async () => {
+      try {
+        const res = await fetch(`/api/calendar-events?${qs}`);
+        if (!res.ok) throw new Error('Failed to load calendar events');
+        const d = await res.json();
+        if (generation !== requestGeneration.current) return;
+        setEvents(d.events ?? []);
+        setLoadedKey(fetchKey);
+      } catch {
+        if (generation !== requestGeneration.current) return;
+        setLoadError(true);
+      } finally {
+        if (generation === requestGeneration.current) setLoading(false);
+      }
+    })();
     // `fetchKey` stands in for the range: two different Date objects for the
     // same instant must not trigger a refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchKey]);
-  useEffect(() => {
-    load();
-  }, [load]);
+  }, [fetchKey, retryGeneration]);
+
+  // `loading` is set by the effect, after render. Comparing the range that has
+  // actually completed closes that one-render gap too: an old month's events
+  // can never flash inside the newly selected month.
+  const refreshing = loading || loadedKey !== fetchKey;
+  const retry = () => {
+    setLoadError(false);
+    setRetryGeneration((generation) => generation + 1);
+  };
 
   const byDay = useMemo(() => {
     const map: Record<string, Ev[]> = {};
@@ -398,7 +418,7 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
   const agendaView = (
     <div data-testid="calendar-agenda">
       {agendaGroups.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-400">{t.calendar.agendaEmpty}</p>
+        <p className="py-6 text-center text-sm text-gray-400" data-testid="calendar-empty">{t.calendar.agendaEmpty}</p>
       ) : (
         <ul className="space-y-3">
           {agendaGroups.map((g) => (
@@ -466,13 +486,24 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
         ))}
       </div>
 
-      {view === 'month' && monthView}
-      {view === 'week' && weekView}
-      {view === 'day' && dayView}
-      {view === 'agenda' && agendaView}
+      {loadError ? (
+        <div className="flex min-h-40 flex-col items-center justify-center gap-3 py-6 text-center" data-testid="calendar-load-error">
+          <p className="text-sm text-red-500">{t.calendar.loadError}</p>
+          <Button variant="outline" size="sm" onClick={retry}>{t.errorBoundary.retry}</Button>
+        </div>
+      ) : refreshing ? (
+        <div className="min-h-40 py-3" data-testid="calendar-loading"><SkeletonRows rows={4} /></div>
+      ) : (
+        <>
+          {view === 'month' && monthView}
+          {view === 'week' && weekView}
+          {view === 'day' && dayView}
+          {view === 'agenda' && agendaView}
 
-      {!loading && events.length === 0 && view !== 'agenda' && (
-        <p className="mt-4 text-center text-sm text-gray-400">{t.calendar.empty}</p>
+          {events.length === 0 && view !== 'agenda' && (
+            <p className="mt-4 text-center text-sm text-gray-400" data-testid="calendar-empty">{t.calendar.empty}</p>
+          )}
+        </>
       )}
 
       <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
