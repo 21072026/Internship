@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Binding mentor capacity (#1188)**: the public application link now closes itself when the mentor's `mentorCapacity` is reached (counting active relations plus pending applications) or when the mentor paused new mentees — `POST /api/apply` refuses with a clear reason and the public page explains the closed state instead of showing a form. Applications now land as PENDING `MentorshipRequest`s in the mentor's new `/mentor/applications` inbox; accept starts the relation, decline notifies the applicant politely — both via the shared `decideMentorshipRequest` service the admin queue was refactored onto. A null capacity keeps the link open as before; landing copy (`audMentor1D`, `faqMentor2A`) updated to the now-true promise.",
+  "notes": {
+    "en": ["Mentors are protected from unbounded commitment: set your own capacity and your application link closes itself when full; every application now waits for your accept or decline, and applicants hear back either way."],
+    "tr": ["Mentorlar sınırsız bağlanmaktan korunuyor: kontenjanını kendin belirle, dolunca başvuru bağlantın kendini kapatır; her başvuru artık kabul/ret kararını bekler ve başvuran her iki durumda da haber alır."],
+    "de": ["Mentoren sind vor unbegrenzter Bindung geschützt: Lege deine eigene Kapazität fest und dein Bewerbungslink schließt sich, wenn er voll ist; jede Bewerbung wartet nun auf dein Annehmen oder Ablehnen, und Bewerber erfahren es in beiden Fällen."]
+  }
+}

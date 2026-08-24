@@ -13,7 +13,12 @@ test('a COMPANY user can open a linked candidate\'s detail page but not an unlin
   const outsiderEmail = uniqueEmail('co-detail-outsider');
   const pw = 'CompanyPass123!';
 
-  const company = await prisma.company.create({ data: { name: `Detail Co ${Date.now()}` } });
+  // COMPANY reads of /api/mentorship fail closed without a tenant (#1227), so
+  // the company user and the relation must share an org, same as production.
+  const org = await prisma.organization.create({
+    data: { name: `Detail Org ${Date.now()}`, slug: `detail-co-${Date.now()}` },
+  });
+  const company = await prisma.company.create({ data: { name: `Detail Co ${Date.now()}`, orgId: org.id } });
   const companyUser = await prisma.user.create({
     data: {
       email: companyEmail,
@@ -21,6 +26,7 @@ test('a COMPANY user can open a linked candidate\'s detail page but not an unlin
       role: 'COMPANY',
       fullName: 'Detail Co Observer',
       companyId: company.id,
+      orgId: org.id,
       skills: [],
     },
   });
@@ -32,7 +38,7 @@ test('a COMPANY user can open a linked candidate\'s detail page but not an unlin
     data: { university: 'TU Berlin', skills: ['React', 'SQL'], skillLevels: { React: 4 }, targetPosition: 'Backend Intern' },
   });
   const rel = await prisma.mentorshipRelation.create({
-    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id, pipelineStatus: 'INTERVIEW_PENDING_250' },
+    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id, orgId: org.id, pipelineStatus: 'INTERVIEW_PENDING_250' },
   });
 
   try {
@@ -60,5 +66,6 @@ test('a COMPANY user can open a linked candidate\'s detail page but not an unlin
     await cleanupByEmail(outsiderEmail);
     await prisma.user.deleteMany({ where: { id: companyUser.id } });
     await prisma.company.deleteMany({ where: { id: company.id } });
+    await prisma.organization.deleteMany({ where: { id: org.id } });
   }
 });

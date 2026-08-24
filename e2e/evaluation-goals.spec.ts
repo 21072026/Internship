@@ -53,7 +53,8 @@ test('two-way evaluations with interim/final type, and goal tracking', async ({ 
     expect(goals.goals.find((goal: { id: string }) => goal.id === goalId).status).toBe('DONE');
 
     // Completed goals live in the archive, while active goals can be sorted.
-    await page.goto('/portal');
+    // The goals panel moved off the dashboard to /portal/goals (#916).
+    await page.goto('/portal/goals');
     const activeGoals = page.getByTestId('active-goals').locator('[data-testid^="goal-"]');
     await expect(activeGoals).toHaveCount(2);
     // Two counters, not a progress bar: the panel dropped the "x/y completed"

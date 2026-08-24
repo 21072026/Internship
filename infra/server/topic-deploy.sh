@@ -108,6 +108,10 @@ docker run --rm --network=host \
   -e DATABASE_URL="$TOOL_DB" "$IMAGE" node prisma/push-company-interest-expand.mjs
 docker run --rm --network=host \
   -e DATABASE_URL="$TOOL_DB" "$IMAGE" node prisma/backfill-company-interest-scope.mjs
+# Pre-push Json repair (#1288): a table rebuild in the push (FK/index) fails on
+# rows a previous half-applied push left as '' — repair first, same as prod.
+docker run --rm --network=host \
+  -e DATABASE_URL="$TOOL_DB" "$IMAGE" node prisma/backfill-json-columns.mjs --repair || true
 docker run --rm --network=host \
   -e DATABASE_URL="$TOOL_DB" "$IMAGE" npx prisma db push --accept-data-loss
 docker run --rm --network=host \

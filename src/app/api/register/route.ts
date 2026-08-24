@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { defaultOrgId } from '@/lib/defaultOrg';
 import { z } from 'zod';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
@@ -12,6 +13,7 @@ import { resolveReferrer } from '@/lib/referral';
 import { createOrGetProjectConversation } from '@/lib/conversations';
 import { getSetting } from '@/lib/settings';
 import { isValidTimeZone } from '@/lib/timezone';
+import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -70,6 +72,10 @@ export async function POST(request: Request) {
     // Set from the invitation (its sender) or from a referral code, and written
     // onto the new account so "who brought this person in" is answerable later.
     let referredById: string | null = null;
+    let invitedOrgId: string | null = null;
+    // The address the invitation itself named, if any — null for an email-less
+    // shareable link, which is what separates "proven address" from "typed in".
+    let invitationEmail: string | null = null;
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
 
     if (token) {
@@ -83,11 +89,17 @@ export async function POST(request: Request) {
       if (invitation.expiresAt < new Date()) {
         return NextResponse.json({ error: 'Invitation token has expired' }, { status: 400 });
       }
-      if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+      // A named invitation is bound to its address; an email-less shareable link
+      // (#670) has none to match, so the registrant's own address is taken as
+      // given — and written back onto the invitation further down, so the row
+      // still ends up naming who used it.
+      if (invitation.email && invitation.email.toLowerCase() !== email.toLowerCase()) {
         return NextResponse.json({ error: 'Email does not match the invitation' }, { status: 400 });
       }
+      invitationEmail = invitation.email;
       role = invitation.role;
       referredById = invitation.invitedById;
+      invitedOrgId = invitation.orgId;
       autoLink = { mentorId: invitation.mentorId, menteeId: invitation.menteeId, projectId: invitation.projectId };
     } else {
       // An open registration may still carry a referral link.
@@ -102,10 +114,14 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // An invitation proves the email belongs to the registrant, so invited
-    // users are verified immediately. Open (token-less) self-registration must
-    // confirm the email — created unverified, then emailed a verification link.
-    const emailVerified = !!token;
+    // An invitation *addressed to someone* proves the email belongs to the
+    // registrant — it only reached them because they read that mailbox — so
+    // those accounts are verified immediately. An email-less shareable link
+    // (#670) proves nothing about whatever address gets typed into the form, so
+    // it follows the self-registration path: created unverified, with a
+    // verification link on its way. The account is still active either way; the
+    // inviter vouched for the person, not for the mailbox.
+    const emailVerified = !!token && !!invitationEmail;
     // Open (token-less) self-registration is created inactive, but the gate it
     // waits behind depends on the `selfRegistration` setting: 'auto' (default)
     // lets the account in as soon as the emailed link is clicked — the front
@@ -116,8 +132,15 @@ export async function POST(request: Request) {
 
     const timezone = isValidTimeZone(parsed.data.timezone) ? parsed.data.timezone : null;
 
+    // Assign the tenant at creation time (#1272): invited users inherit the
+    // inviter's org (carried on the InvitationToken), everyone else gets the
+    // default org — the same one the deploy backfill would assign. Without
+    // this, fail-closed org scoping (#1227) 403s an invited COMPANY user's
+    // portal until the next deploy runs the backfill.
+    const orgId = invitedOrgId ?? (await defaultOrgId());
+
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
     });
 
@@ -144,6 +167,10 @@ export async function POST(request: Request) {
           used: true,
           registeredAt: now,
           verifiedAt: emailVerified ? now : undefined,
+          // An email-less link learns its address here — from then on the
+          // inviter's list shows who actually walked through it, and the
+          // verify-email hook can find the row to stamp.
+          ...(invitationEmail ? {} : { email }),
         },
       });
       // Backfill openedAt if the "opened" ping never landed (e.g. the token was
@@ -194,6 +221,18 @@ export async function POST(request: Request) {
       } catch (e) {
         console.error('Invitation auto-link failed:', e);
       }
+
+      // Email-less link: the address is unproven, so it gets the same
+      // confirmation mail an open sign-up gets. Non-blocking — the account is
+      // already active, verification only settles the mailbox.
+      if (!emailVerified) {
+        const verifyToken = await createEmailVerificationToken(user.id);
+        try {
+          await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName });
+        } catch (e) {
+          console.error('Verification email failed:', e);
+        }
+      }
     } else {
       const verifyToken = await createEmailVerificationToken(user.id);
       try {
@@ -209,6 +248,23 @@ export async function POST(request: Request) {
           notify(a.id, pending ? 'signup.pendingApproval' : 'signup.new', { name: user.fullName }, '/admin/users')
         )
       );
+    }
+
+    // Duplicate post-check (#841): fire-and-forget — the registration already
+    // succeeded, admins just get a heads-up to review /admin/duplicates.
+    // Never surfaced in the public response.
+    if (role === 'MENTEE') {
+      void (async () => {
+        const matches = await findPossibleDuplicates({
+          orgId: user.orgId,
+          excludeId: user.id,
+          fullName,
+          email,
+        });
+        if (matches.length === 0) return;
+        const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+        await Promise.all(admins.map((a) => notify(a.id, 'duplicate.suspected', { name: fullName }, '/admin/duplicates')));
+      })().catch((e) => console.error('Duplicate post-check failed:', e));
     }
 
     return NextResponse.json({ user, emailVerified, pending, selfRegistered }, { status: 201 });

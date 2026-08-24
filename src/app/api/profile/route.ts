@@ -42,6 +42,9 @@ const updateProfileSchema = z.object({
   // Full URL or an internal path (/api/cv/<id> set on CV upload).
   cvUrl: z.string().refine((v) => /^https?:\/\//.test(v) || v.startsWith('/'), 'Invalid URL').or(z.literal('')).nullable().optional(),
   publicProfile: z.boolean().optional(),
+  // Public-profile project showcase toggle (#1091) — the section rides
+  // publicProfile; this lets the user turn just that section off.
+  publicShowProjects: z.boolean().optional(),
   // Extended profile fields (EPIC 32).
   displayName: z.string().max(120).optional(),
   bio: z.string().max(2000).optional(),
@@ -60,6 +63,9 @@ const updateProfileSchema = z.object({
   interests: z.string().max(2000).optional(),
   targetPosition: z.string().max(160).optional(),
   mentorCapacity: z.number().int().min(0).max(100).nullable().optional(),
+  // Name display on a published testimonial (#1096): full name is an explicit
+  // choice; null/unset renders initials (the privacy-first default).
+  testimonialNameStyle: z.enum(['fullname', 'initials']).nullable().optional(),
   // Mentor's own "I can take a new mentee right now" preference (#941) — see
   // src/lib/mentorAvailability.ts for how this combines with mentorCapacity.
   // null clears the preference (falls back to a capacity-derived guess).
@@ -108,6 +114,7 @@ const PROFILE_SELECT = {
   cvUrl: true,
   avatarUrl: true,
   publicProfile: true,
+  publicShowProjects: true,
   profileViews: true,
   displayName: true,
   bio: true,
@@ -120,6 +127,7 @@ const PROFILE_SELECT = {
   targetPosition: true,
   mentorCapacity: true,
   acceptingMentees: true,
+  testimonialNameStyle: true,
   emailNotifications: true,
   notificationPrefs: true,
   preferredLanguage: true,

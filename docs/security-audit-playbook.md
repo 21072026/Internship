@@ -147,6 +147,9 @@ console.log(role, r.status, 'rows:', j.interactions.length, 'distinct mentees:',
 İlk taramada 10 "bulgu" çıktı; **6'sı `405` yanlış pozitifiydi**, 1'i doğru
 filtreleme. Gerçek olan 2 taneydi.
 
+Ticari bir SAST aracının 25 bulgusunun **tamamı** yanlış pozitif çıktı — triyajı
+ve nedenleri **§8**'de. Aynı raporu bir daha incelemeyin.
+
 ## 4. Bu denetimde TEMİZ çıkanlar (regresyon koruması)
 
 Bunlar canlı test edildi ve doğru davrandı — **bir değişiklik bunları bozarsa
@@ -168,6 +171,8 @@ regresyondur**:
 | Oturum çerezi | `httpOnly` + `SameSite=Lax` |
 | Login brute-force | **E-posta** anahtarlı limit → XFF spoof'undan etkilenmiyor (bilinçli tasarım, koruyun) |
 | Inbound e-posta | Gönderenin thread katılımcısı olması ayrıca doğrulanıyor + `timingSafeEqual` |
+| Prisma sorgu kurulumu | Uygulama kodunda ham SQL yok; hiçbir doğrulanmamış gövde alanı `where`'e girmiyor — `npm run check:query-scalars` bunu CI'da tutuyor (§8) |
+| Giden `fetch` (SSRF) | Sunucu tarafındaki iki çağrı yeri de `assertPublicHttpsUrl`'den geçiyor: `src/lib/webhooks.ts` ve `src/lib/certificatePdf.ts` |
 
 ## 5. Backlog'a çevirirken (issue yazımı)
 
@@ -222,6 +227,77 @@ Bir sonraki turda buradan başlayın:
 - **`prisma db push --accept-data-loss`** deploy adımının veri kaybı riski.
 - **Preview ortamının paylaşımlı DB'si** (issue #39) — çok kiracılı sızıntı senaryosu.
 
+
+## 8. SAST raporu triyajı — Prisma sorgu kurulumu (2026-08-24)
+
+Ticari bir statik tarayıcı **"NoSQL injection attack possible"** başlığıyla 22 bulgu
+raporladı (9'u *Critical*, 8'i *High*, 5'i *Medium*), artı 1 "file inclusion" ve
+2 "SSRF". **Hepsi yanlış pozitif çıktı.** Aynı raporu bir daha triyaj etmeyin —
+ama tarayıcının *kaçırdığı* iki gerçek bulgu vardı, onlar düzeltildi (aşağıda).
+
+### Neden "NoSQL injection" bulgularının tamamı yanlış pozitif
+
+| Tarayıcının gördüğü | Gerçek |
+|---|---|
+| `prisma.x.update({ where: { id } })` deseni | Bu projede **NoSQL veritabanı yok** — MySQL + Prisma. Prisma her değeri **bağlı parametre** olarak gönderir; hiçbir değer sorgu sözdizimi olarak yorumlanamaz. |
+| `id` bir "değişken" olduğu için kirli sayılıyor | Raporlanan 22 çağrının tamamında değer ya bir Next.js route param'ı (`[id]` segmenti — App Router'da **her zaman `string`**), ya session/DB kaynaklı bir id, ya zod ile doğrulanmış bir alan. |
+| `auth/reset`, `verify-email` token aramaları | Token'lar `z.string().min(1)` ile doğrulanıyor; flag'lenen satırlar zaten `record.userId` / `user.email` gibi **DB'den okunmuş** değerler kullanıyor. |
+
+Doğrulama yöntemi (tekrar etmek gerekirse): `$queryRaw*` kullanımı taraması
+(uygulama kodunda yalnızca `SELECT 1` health-check, o da tagged template),
+gövdeyi `where`'e taşıyan her yolun izlenmesi, ve `searchParams.get()`
+dönüşlerinin (`string | null` — asla nesne) kontrolü.
+
+### Asıl risk bu değil — Prisma **filtre-operatörü** enjeksiyonu
+
+Tarayıcı yanlış şeyi işaret etse de komşu bir sınıf gerçek. Prisma'nın filtre
+grameri **veridir**: skaler bir id'nin olması gereken yere *nesne* gelirse
+operatör olarak okunur. Doğrulamayan bir handler'a
+
+```json
+{ "id": { "not": "baskasinin-id-si" } }
+```
+
+POST etmek, `where: { id: body.id }` eşitlik aramasını sessizce "**o satır hariç
+her şey**"e çevirir — normal sorgu kılığında bir yetkilendirme atlatması.
+TypeScript bunu yasaklar ama tipler runtime'da silinir ve `request.json()`
+`any` döner: JSON gövdesiyle o filtre arasında **yalnızca bir runtime kontrolü**
+durur.
+
+Ağaç bugün temiz. Bunu koruyan şey **`npm run check:query-scalars`**
+(`scripts/check-query-scalars.mjs`, CI'da): doğrulanmamış bir gövde alanını
+`where`'e taşıyan yeni bir handler artık üretimde değil CI'da patlar. `typeof x
+=== 'string'` / `!== 'string'`, `String(x)` ve zod parse'ını geçerli koruma
+sayar; `const t = body.x` gibi bir hop takma adı da izler.
+
+### Tarayıcının kaçırdığı iki gerçek bulgu (#1294 — düzeltildi)
+
+| Bulgu | Yer | Neden gerçek |
+|---|---|---|
+| **Blind SSRF** — sertifika PDF'i | `src/lib/certificatePdf.ts` `tryEmbedImage()` | `Organization.brandLogoUrl` kiracı tarafından yazılıyor ama **sunucunun ağ konumundan** `fetch` ediliyordu, `assertPublicHttpsUrl` olmadan. `http://169.254.169.254/…` cloud metadata'ya, `http://127.0.0.1:3306` veritabanına ulaşır — admin'in tarayıcısının ulaşamadığı yerler. Byte'lar geri yansıtılmadığı için *blind*, ama zamanlamayla iç servis taramaya ve bare-GET ile iş yapan iç uçları dürtmeye yeter. Webhook'lar (#893) bu korumaya sahipti, bu çağrı yeri atlanmış. |
+| **E-posta HTML enjeksiyonu** | `src/services/emailService.ts` `brandHeader()` | `brandLogoUrl` / `brandName` / `brandColor` escape'siz `<img src="…">` ve `style` içine gömülüyordu. Tek bir `"` attribute'u kapatıp o org'un **her transactional e-postasına** markup sokuyordu. |
+
+İkisinin de ortak kökü: `brandLogoUrl` yalnızca `z.string().max(2000)` ile
+doğrulanıyordu — şema/host kontrolü yoktu. Artık yazma sınırında
+`isSafeBrandLogoUrl` (`src/lib/branding.ts`) var: `https://` (kimlik bilgisi
+içermeyen), aynı-origin `/yol`, veya inline `data:image/…`. `http://`,
+`javascript:` ve protokol-göreli `//host/x` reddediliyor. Karşılaştırma için:
+`Company.logoUrl` zaten `z.string().url()` ile doğrulanıyordu; boşluk yalnızca
+org branding'indeydi.
+
+### Diğer üç bulgu
+
+| Bulgu | Verdikt |
+|---|---|
+| `scripts/check-demo-blocklist.mjs:29` — "file inclusion" | CI script'i, sabit yolları (`src/app/api`, `src/lib/demoMode.ts`) `readdirSync`/`readFileSync` ile geziyor. İstek girdisi yok, sunucu kod yolu bile değil. |
+| `src/components/CalendarView.tsx:134` — "SSRF" | **İstemci tarafı** `fetch('/api/calendar-events?…')` — sabit göreli yol, ISO tarih parametreleri. SSRF sunucunun saldırgan kontrolündeki bir URL'e istek atmasını gerektirir. |
+| `public/sw.js:25` — "SSRF" | Service worker; `fetch` handler'ı `new URL(req.url).origin !== self.location.origin` olan her isteği **daha önce** return ediyor. Aynı-origin GET'ler için tarayıcı içi cache proxy'si. |
+
+**Ders:** bu tarayıcı `where: { field: variable }` desenini ORM'den ve
+veritabanı tipinden bağımsız olarak *Critical* etiketliyor, ve gerçek giden-istek
+yüzeyini (`src/lib/webhooks.ts`, `certificatePdf.ts`) hiç görmedi. Bir sonraki
+raporda önce **veri akışını** izleyin, şiddet etiketine göre sıralamayın.
+
 ---
 
-_Son güncelleme: 2026-07-28 · Bu playbook'u her denetimden sonra güncelleyin._
+_Son güncelleme: 2026-08-24 · Bu playbook'u her denetimden sonra güncelleyin._

@@ -22,9 +22,10 @@ test('interview prep reports unavailability without a provider and consumes no c
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
     // Availability: no key in CI → configured:false → the portal card hides.
+    // The card lives on /portal/goals since the dashboard split (#916).
     const avail = await (await page.request.get('/api/interview-prep')).json();
     expect(avail.configured).toBe(false);
-    await page.goto('/portal');
+    await page.goto('/portal/goals');
     await expect(page.getByTestId('interview-prep')).toHaveCount(0);
 
     // Direct POST passes the quota gate and stops at the provider, consuming

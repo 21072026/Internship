@@ -21,9 +21,11 @@ test('mentee portal shows a journey tracker reflecting the pipeline stage', asyn
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
-    await page.goto('/portal');
-    // The journey card renders the current stage label.
-    await expect(page.getByText(/My journey/i)).toBeVisible({ timeout: 10_000 });
+    // The journey tracker moved off the dashboard to its own page (#692);
+    // /portal now only links there, so "My journey" matches several elements.
+    await page.goto('/portal/journey');
+    // Both the page h1 and the tracker card's h3 say "My journey" — pin the h1.
+    await expect(page.getByRole('heading', { level: 1, name: /My journey/i })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/Internship in progress/i).first()).toBeVisible();
     // Actionable "what to do now" guidance for the current stage.
     await expect(page.getByText(/What to do now/i)).toBeVisible();

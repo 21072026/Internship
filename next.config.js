@@ -67,8 +67,26 @@ const securityHeaders = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 ];
 
+// Release fragments (#1275): the version shown to users is BASE (package.json)
+// plus the pending fragments under releases/unreleased/, derived here at build
+// time and inlined via env. PRs never edit package.json/CHANGELOG/releaseNotes
+// directly — see releases/README.md; a scheduled workflow later compacts the
+// fragments into those canonical files through a normal PR.
+const pkg = require('./package.json');
+const release = require('./scripts/release-derive.cjs');
+const releaseFragments = release.readFragments(__dirname);
+releaseFragments.forEach(release.validateFragment);
+const derivedVersion = release.deriveVersion(pkg.version, releaseFragments);
+const unreleasedHighlights = release.unreleasedHighlights(releaseFragments);
+
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    APP_DERIVED_VERSION: derivedVersion,
+    // One synthetic RELEASE_NOTES entry for everything not yet compacted, or
+    // '' when no pending fragment carries user-facing notes.
+    APP_UNRELEASED_NOTES: unreleasedHighlights ? JSON.stringify(unreleasedHighlights) : '',
+  },
   // pdf-parse/mammoth pull in Node-only deps (pdfjs) — keep them out of the
   // webpack server bundle so they load as plain CJS at runtime.
   // imapflow/mailparser are Node-only too (net/tls, iconv) and are used by the

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Accessibility regression gate (#862, story #826)**: `@axe-core/playwright` now scans nine pages across five contexts (public, mentee, mentor, admin, company) against WCAG 2.0/2.1/2.2 A+AA. Today's critical/serious violations are frozen per page in `e2e/a11y-baseline.json`, so any NEW one fails the run while moderate/minor findings are reported without gating; both the baseline and the severity-classified report in `docs/a11y-audit.md` are regenerated with `A11Y_UPDATE_BASELINE=1`. The nine-page scan runs in the scheduled full suite; the PR gate gains only a single lightweight check (critical violations on the sign-in page, ~3 s). No application code changed — the audit report is the input for the fix issues."
+}

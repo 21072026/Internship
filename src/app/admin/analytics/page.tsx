@@ -24,6 +24,15 @@ interface Analytics {
   rsvp: { ACCEPTED?: number; DECLINED?: number; PENDING?: number; responded?: number; acceptanceRate: number | null };
   trends?: { months: string[]; newRelations: number[]; interactions: number[] };
   range?: { from: string; to: string };
+  signupFunnel?: {
+    days: number;
+    registered: number;
+    verified: number;
+    active: number;
+    verifiedRate: number | null;
+    activeRate: number | null;
+    warn: boolean;
+  }[];
 }
 
 type RangePreset = '30' | '90' | '6m' | '12m' | 'all';
@@ -204,6 +213,68 @@ export default function AdminAnalyticsPage() {
         <Stat label={t.analytics.interactions} value={data.engagement.interactions} />
         <Stat label={t.analytics.rsvpRate} value={data.rsvp.acceptanceRate === null ? '—' : `${data.rsvp.acceptanceRate}%`} />
       </div>
+
+      {/* Signup funnel (#1191): registered → verified → active for the last 7
+          and 30 days. Its job is to expose a SILENT failure — if verification
+          mail stops arriving, everything else still looks fine. Rates are
+          computed live; a window with no sign-ups shows "—" and never warns. */}
+      {data.signupFunnel && data.signupFunnel.length > 0 && (
+        <Card className="mb-6" data-testid="signup-funnel-card">
+          <CardHeader><CardTitle>{t.analytics.signupFunnel.title}</CardTitle></CardHeader>
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{t.analytics.signupFunnel.hint}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {data.signupFunnel.map((w) => (
+              <div
+                key={w.days}
+                data-testid={`signup-funnel-${w.days}`}
+                className={`rounded-xl border p-4 ${
+                  w.warn ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20' : 'border-gray-100 dark:border-gray-800'
+                }`}
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  {t.analytics.signupFunnel.lastDays.replace('{n}', String(w.days))}
+                </p>
+                <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                  <span className="text-gray-700 dark:text-gray-300">
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{w.registered}</span>{' '}
+                    {t.analytics.signupFunnel.registered}
+                  </span>
+                  <span className="text-gray-400">→</span>
+                  <span className="text-gray-700 dark:text-gray-300">
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{w.verified}</span>{' '}
+                    {t.analytics.signupFunnel.verified}
+                  </span>
+                  <span className="text-gray-400">→</span>
+                  <span className="text-gray-700 dark:text-gray-300">
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">{w.active}</span>{' '}
+                    {t.analytics.signupFunnel.active}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-gray-500" data-testid={`signup-funnel-rates-${w.days}`}>
+                  {t.analytics.signupFunnel.verifiedRate}:{' '}
+                  <span className={w.warn ? 'font-semibold text-amber-700 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'}>
+                    {w.verifiedRate === null ? '—' : `${w.verifiedRate}%`}
+                  </span>
+                  {' · '}
+                  {t.analytics.signupFunnel.activeRate}:{' '}
+                  <span className="text-gray-700 dark:text-gray-300">{w.activeRate === null ? '—' : `${w.activeRate}%`}</span>
+                </p>
+                {w.warn && (
+                  <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300" data-testid={`signup-funnel-warning-${w.days}`}>
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                    <span>
+                      {t.analytics.signupFunnel.warning}{' '}
+                      <Link href="/admin/settings#email" className="underline hover:text-amber-900">
+                        {t.analytics.signupFunnel.warningCta}
+                      </Link>
+                    </span>
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>

@@ -1,20 +1,23 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { submitSignInForm } from './helpers/auth';
 
 const password = 'DocumentReq123!';
 const pdf = (name: string) => ({ name: `${name}.pdf`, mimeType: 'application/pdf', buffer: Buffer.from(`%PDF-1.4 ${name}`) });
 
+// These tests re-sign-in mid-test, so the fresh-user guards are mandatory: a
+// blanket clearCookies() + unscoped submit click races the old session being
+// re-issued and ends up clicking the previous dashboard (see helpers/auth.ts).
 async function signIn(page: Page, email: string) {
-  await page.context().clearCookies();
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
+  await submitSignInForm(page, email, password);
 }
 
 test.afterAll(async () => prisma.$disconnect());
 
 test('admin CRUD validates keys, roles, stages and organization boundaries', async ({ page }) => {
+  // The guarded sign-ins each spend up to ~20s in capped networkidle waits
+  // (the app never goes network-idle, #1081) — triple the budget.
+  test.slow();
   const stamp = Date.now();
   const adminEmail = uniqueEmail('req-admin');
   const org = await prisma.organization.create({ data: { name: `Req Org ${stamp}`, slug: `req-org-${stamp}` } });
@@ -57,7 +60,9 @@ test('admin CRUD validates keys, roles, stages and organization boundaries', asy
 
     const requestedPages: number[] = [];
     await page.route('**/api/admin/organizations', (route) => route.fulfill({ json: { organizations: [{ id: org.id, name: org.name }] } }));
-    await page.route('**/api/admin/documents/missing?**', (route) => {
+    // Playwright ≥1.57 no longer matches query strings with a `?**` glob —
+    // `missing*` is what actually intercepts `/missing?orgId=…`.
+    await page.route('**/api/admin/documents/missing*', (route) => {
       const requestedPage = Number(new URL(route.request().url()).searchParams.get('page'));
       requestedPages.push(requestedPage);
       return route.fulfill({ json: { rows: [], eligibleUserCount: 51, page: requestedPage, pageSize: 50, hasNextPage: requestedPage === 1 } });
@@ -78,6 +83,7 @@ test('admin CRUD validates keys, roles, stages and organization boundaries', asy
 });
 
 test('missing state is derived from requirement links and preserves both versioning modes', async ({ page }) => {
+  test.slow(); // 4 guarded sign-ins — see the note on the first test.
   const stamp = Date.now();
   const adminEmail = uniqueEmail('req-doc-admin');
   const menteeEmail = uniqueEmail('req-doc-mentee');
@@ -100,7 +106,9 @@ test('missing state is derived from requirement links and preserves both version
   const requirement = await prisma.documentRequirement.create({ data: { orgId: org.id, key: 'id-card', labels: { en: 'Identity card', tr: 'Kimlik kartı', de: 'Personalausweis' }, appliesToRole: 'MENTEE', appliesToStage: 'APPLICATION_100', order: 1 } });
   const optional = await prisma.documentRequirement.create({ data: { orgId: org.id, key: 'optional-photo', labels: { en: 'Photo', tr: 'Fotoğraf', de: 'Foto' }, mandatory: false } });
   const inactive = await prisma.documentRequirement.create({ data: { orgId: org.id, key: 'inactive-doc', labels: { en: 'Inactive', tr: 'Pasif', de: 'Inaktiv' }, active: false } });
-  const foreignRequirement = await prisma.documentRequirement.create({ data: { orgId: foreignOrg.id, key: 'foreign', labels: { en: 'Foreign', tr: 'Yabancı', de: 'Fremd' } } });
+  // MENTOR-scoped so the foreign mentee (same foreign org) has no applicable
+  // requirement — this fixture only feeds the cross-org 400 and empty-card checks.
+  const foreignRequirement = await prisma.documentRequirement.create({ data: { orgId: foreignOrg.id, key: 'foreign', labels: { en: 'Foreign', tr: 'Yabancı', de: 'Fremd' }, appliesToRole: 'MENTOR' } });
   const wrongRole = await prisma.documentRequirement.create({ data: { orgId: org.id, key: 'mentor-only', labels: { en: 'Mentor only', tr: 'Yalnız mentor', de: 'Nur Mentor' }, appliesToRole: 'MENTOR' } });
   const wrongStage = await prisma.documentRequirement.create({ data: { orgId: org.id, key: 'wrong-stage', labels: { en: 'Wrong stage', tr: 'Yanlış aşama', de: 'Falsche Phase' }, appliesToRole: 'MENTEE', appliesToStage: 'EMPLOYED_700' } });
   const anyActiveStage = await prisma.documentRequirement.create({ data: { orgId: org.id, key: 'second-active-stage', labels: { en: 'Second active stage', tr: 'İkinci aktif aşama', de: 'Zweite aktive Phase' }, appliesToRole: 'MENTEE', appliesToStage: 'INTERVIEW_PENDING_250', order: 2 } });
@@ -164,6 +172,7 @@ test('missing state is derived from requirement links and preserves both version
 });
 
 test('portal warning and weekly reminders are missing-driven and deduped by UTC week', async ({ page }) => {
+  test.slow(); // 3 guarded sign-ins — see the note on the first test.
   const stamp = Date.now();
   const menteeEmail = uniqueEmail('req-remind-mentee');
   const mentorEmail = uniqueEmail('req-remind-mentor');
@@ -193,7 +202,10 @@ test('portal warning and weekly reminders are missing-driven and deduped by UTC 
   const requirement = await prisma.documentRequirement.create({ data: { orgId: org.id, key: 'residence', labels: { en: 'Residence permit', tr: 'Oturum izni', de: 'Aufenthaltstitel' }, appliesToRole: 'MENTEE' } });
   try {
     await signIn(page, menteeEmail); await page.waitForURL((url) => url.pathname.startsWith('/portal'));
-    await expect(page.getByTestId('missing-documents-card')).toContainText('Residence permit');
+    // The portal renders in the signed-in user's preferred language — this
+    // mentee is seeded with `preferredLanguage: 'de'`, so the card shows the
+    // German label, not the English one.
+    await expect(page.getByTestId('missing-documents-card')).toContainText('Aufenthaltstitel');
     await signIn(page, emptyEmail); await page.waitForURL((url) => url.pathname.startsWith('/portal'));
     await expect(page.getByTestId('missing-documents-card')).toHaveCount(0);
 

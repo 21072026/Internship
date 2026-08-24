@@ -1,5 +1,8 @@
-// Email notification categories a user can individually opt out of.
-export const NOTIFICATION_CATEGORIES = ['messages', 'announcements', 'deadlines', 'digest', 'meetingReminders', 'mentorship', 'documents', 'weeklyReports'] as const;
+// Notification categories a user can individually opt out of. A category
+// switch applies to every channel that carries the category — e-mail AND
+// in-app rows (#886, via notifyIfAllowed) — while emailNotifications below
+// stays an e-mail-only master switch.
+export const NOTIFICATION_CATEGORIES = ['messages', 'announcements', 'deadlines', 'digest', 'meetingReminders', 'mentorship', 'documents', 'weeklyReports', 'interactions', 'goalsEvaluations', 'stageUpdates'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 interface PrefUser {

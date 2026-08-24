@@ -96,6 +96,9 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
   // In that case the CvManager owns it and the manual external-URL input hides.
   const [cvUploaded, setCvUploaded] = useState(false);
   const [publicProfile, setPublicProfile] = useState(false);
+  // Public project showcase (#1091): on by default, the user may switch just
+  // this section off while keeping the profile public.
+  const [publicShowProjects, setPublicShowProjects] = useState(true);
   const [profileViews, setProfileViews] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
@@ -135,6 +138,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
           setInitialCv(user.cvUrl || null);
           setCvUploaded(!!user.cvUrl && user.cvUrl.startsWith('/'));
           setPublicProfile(!!user.publicProfile);
+          setPublicShowProjects(user.publicShowProjects !== false);
           setProfileViews(user.profileViews || 0);
           setAvatarUrl(user.avatarUrl || null);
           setFullName(user.fullName || '');
@@ -199,6 +203,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
         skills: skillsArray,
         skillLevels: levels,
         publicProfile,
+        publicShowProjects,
         // Both roles own this one — interests for a mentee, expertise for a mentor.
         interests: data.interests,
       };
@@ -430,6 +435,17 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
                   {t.profileForm.makePublic}
                 </label>
                 <p className="text-xs text-gray-400 mt-1">{t.profileForm.makePublicHint}</p>
+                {publicProfile && (
+                  <label className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={publicShowProjects}
+                      onChange={(e) => setPublicShowProjects(e.target.checked)}
+                      data-testid="public-show-projects"
+                    />
+                    {t.profileForm.showProjects}
+                  </label>
+                )}
                 {publicProfile && userId && (
                   <div className="mt-1">
                     <a

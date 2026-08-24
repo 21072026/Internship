@@ -22,7 +22,14 @@ export default function AdminSettingsPage() {
   const [csv, setCsv] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
-  const [importRows, setImportRows] = useState<{ row: number; email: string; status: string; reason?: string }[]>([]);
+  const [importRows, setImportRows] = useState<{
+    row: number;
+    email: string;
+    status: string;
+    reason?: string;
+    // Look-alike existing candidates the API flagged for this row (#841).
+    possibleDuplicates?: { id: string; fullName: string; matchedOn: string[] }[];
+  }[]>([]);
 
   const [smtpInfo, setSmtpInfo] = useState<{
     smtp?: { ok: boolean; error?: string };
@@ -49,8 +56,19 @@ export default function AdminSettingsPage() {
     byCategory: { category: string; transport: string; count: number }[];
   } | null>(null);
 
+  // Derived delivery health (#1190): last success / failures since, computed
+  // server-side from the same EmailLog ledger the table below shows.
+  const [emailHealth, setEmailHealth] = useState<{
+    lastOkAt: string | null;
+    lastErrorAt: string | null;
+    lastError: string | null;
+    failuresSinceOk: number;
+    attempts24h: number;
+  } | null>(null);
+
   const loadEmailLog = useCallback(() => {
     fetch('/api/admin/email-log?limit=25').then((r) => (r.ok ? r.json() : null)).then((d) => d && setEmailLog(d)).catch(() => {});
+    fetch('/api/admin/email-health').then((r) => (r.ok ? r.json() : null)).then((d) => d?.email && setEmailHealth(d.email)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -216,10 +234,25 @@ export default function AdminSettingsPage() {
             {importRows.length > 0 && (
               <div className="max-h-56 overflow-y-auto border border-gray-100 rounded-lg text-xs">
                 {importRows.map((r) => (
-                  <div key={r.row} className="flex items-center gap-2 px-2 py-1 border-b border-gray-50 last:border-0">
-                    <span className="w-6 text-gray-400">{r.row}</span>
-                    <span className={`w-16 font-medium ${r.status === 'error' ? 'text-red-600' : r.status === 'skip' ? 'text-amber-600' : 'text-green-600'}`}>{r.status}</span>
-                    <span className="flex-1 truncate text-gray-600">{r.email}{r.reason ? ` · ${r.reason}` : ''}</span>
+                  <div key={r.row} className="border-b border-gray-50 last:border-0">
+                    <div className="flex items-center gap-2 px-2 py-1">
+                      <span className="w-6 text-gray-400">{r.row}</span>
+                      <span className={`w-16 font-medium ${r.status === 'error' ? 'text-red-600' : r.status === 'skip' ? 'text-amber-600' : 'text-green-600'}`}>{r.status}</span>
+                      <span className="flex-1 truncate text-gray-600">{r.email}{r.reason ? ` · ${r.reason}` : ''}</span>
+                    </div>
+                    {r.possibleDuplicates && r.possibleDuplicates.length > 0 && (
+                      <div className="mx-2 mb-1 px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-800">
+                        {t.duplicates.possibleDuplicatesTitle}:{' '}
+                        {r.possibleDuplicates.map((d, i) => (
+                          <span key={d.id}>
+                            {i > 0 && '; '}
+                            <span className="font-medium">{d.fullName}</span>
+                            {' '}({t.duplicates.matchedOn}:{' '}
+                            {d.matchedOn.map((s) => t.duplicates.signals[s as keyof typeof t.duplicates.signals] ?? s).join(', ')})
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -271,6 +304,27 @@ export default function AdminSettingsPage() {
                 .replace('{p}', String(emailLog.last24h.primary))
                 .replace('{b}', String(emailLog.last24h.bulk))}
             </p>
+          )}
+
+          {/* Delivery health (#1190): when did a mail last actually go out, and
+              has anything failed since. Amber at 1-2 failures, red from 3 (the
+              threshold that also fires the ops alert). */}
+          {emailHealth && (
+            <div className="text-sm" data-testid="email-delivery-health">
+              <span className="text-gray-600 dark:text-gray-300">
+                {emailHealth.lastOkAt
+                  ? t.settings.deliveryLastOk.replace('{t}', new Date(emailHealth.lastOkAt).toLocaleString())
+                  : t.settings.deliveryNeverOk}
+              </span>
+              {emailHealth.failuresSinceOk > 0 ? (
+                <span className={emailHealth.failuresSinceOk >= 3 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>
+                  {' · '}
+                  {t.settings.deliveryFailures.replace('{n}', String(emailHealth.failuresSinceOk))}
+                </span>
+              ) : (
+                emailHealth.lastOkAt && <span className="text-green-600 dark:text-green-400"> · {t.settings.deliveryHealthy}</span>
+              )}
+            </div>
           )}
 
           <div className="flex flex-col sm:flex-row gap-2">

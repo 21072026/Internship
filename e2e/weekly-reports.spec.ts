@@ -59,6 +59,8 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     const menteeContext = await browser.newContext(); contexts.push(menteeContext);
     const menteePage = await menteeContext.newPage();
     await signInAndSettle(menteePage, menteeEmail, password, '/portal');
+    // The weekly-reports panel moved off the dashboard to /portal/goals (#916).
+    await menteePage.goto('/portal/goals');
     await expect(menteePage.getByTestId('weekly-reports-panel')).toBeVisible();
     await menteePage.getByTestId('weekly-report-summary').fill('Built the onboarding flow');
     await menteePage.getByTestId('weekly-report-hours').fill('35');
@@ -125,7 +127,12 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect(print.status()).toBe(200);
     expect((await menteePage.request.get(`/weekly-reports/print?relationId=${relation.id}`)).status()).toBe(200);
     expect((await adminPage.request.get(`/weekly-reports/print?relationId=${relation.id}`)).status()).toBe(200);
-    const printHtml = await print.text();
+    // React SSR separates adjacent JSX text expressions with the literal
+    // `<!-- -->` marker (`Status<!-- -->: <!-- -->Approved`). Drop exactly that
+    // marker before matching — this is assertion normalization on trusted
+    // fixture output, not HTML sanitization (a comment-matching regex here
+    // trips CodeQL's sanitization rules).
+    const printHtml = (await print.text()).replaceAll('<!-- -->', '').replaceAll('<!---->', '');
     expect(printHtml).toContain('Built and tested the onboarding flow');
     expect(printHtml).toContain('Status: Approved');
     expect(printHtml.indexOf('Older diary entry')).toBeLessThan(printHtml.indexOf('Built and tested the onboarding flow'));
@@ -151,7 +158,7 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     expect(firstHistoryPage).toMatchObject({ page: 1, pageSize: 20, total: 53, totalPages: 3, hasMore: true });
     expect(finalHistoryPage).toMatchObject({ page: 3, pageSize: 20, total: 53, totalPages: 3, hasMore: false });
     expect(finalHistoryPage.reports).toHaveLength(13);
-    await menteePage.goto('/portal');
+    await menteePage.goto('/portal/goals');
     await expect(menteePage.getByTestId('weekly-reports-load-more')).toBeVisible();
     while (await menteePage.getByTestId('weekly-reports-load-more').isVisible().catch(() => false)) {
       await menteePage.getByTestId('weekly-reports-load-more').click();

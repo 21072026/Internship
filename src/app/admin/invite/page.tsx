@@ -18,7 +18,10 @@ import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 
 const inviteSchema = z.object({
-  email: z.string().email('Invalid email'),
+  // Optional since #670: an empty address mints a shareable link instead of
+  // sending mail. Anything typed still has to be a real address.
+  email: z.union([z.string().email('Invalid email'), z.literal('')]).optional(),
+  label: z.string().max(120).optional(),
   role: z.enum(['MENTOR', 'MENTEE', 'ADMIN']),
   // Optional counterpart + project: with these set, registering through the link
   // creates the mentorship and the project membership straight away (#51).
@@ -44,7 +47,7 @@ export default function InvitePage() {
   const [copied, setCopied] = useState<string | null>(null);
   // Persistent list from the server (survives refresh), plus any freshly-minted
   // register links (the GET list omits tokens for security).
-  const [invites, setInvites] = useState<{ id: string; email: string; role: string; used: boolean; createdAt: string; expiresAt: string; openedAt: string | null; registeredAt: string | null; verifiedAt: string | null }[]>([]);
+  const [invites, setInvites] = useState<{ id: string; email: string | null; label: string | null; role: string; used: boolean; createdAt: string; expiresAt: string; openedAt: string | null; registeredAt: string | null; verifiedAt: string | null; registerUrl: string | null }[]>([]);
   const [links, setLinks] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -167,6 +170,8 @@ export default function InvitePage() {
           mentorId: data.mentorId || undefined,
           menteeId: data.menteeId || undefined,
           projectId: data.projectId || undefined,
+          email: data.email || undefined,
+          label: data.label || undefined,
         }),
       });
 
@@ -178,8 +183,10 @@ export default function InvitePage() {
 
       setSuccess(
         body.emailSent
-          ? `Invitation emailed to ${data.email}`
-          : `Invitation created for ${data.email} — email not delivered, share the link below manually`
+          ? `${t.invite.emailedTo} ${data.email}`
+          : data.email
+            ? t.invite.createdNoEmail
+            : t.invite.createdLinkOnly
       );
       if (body.invitationId && body.registerUrl) setLinks((p) => ({ ...p, [body.invitationId]: body.registerUrl }));
       await loadInvites();
@@ -247,13 +254,25 @@ export default function InvitePage() {
           )}
 
           <form onSubmit={onSubmit} className="space-y-4">
+            {/* Email-less invitations (#670): leaving this empty produces a link
+                to hand over in person — the invitee may not have an address on
+                file, or the sender simply may not know it. */}
             <Input
-              label={t.invite.emailAddress}
+              label={t.invite.emailAddressOptional}
               type="email"
-              required
               placeholder="user@example.com"
+              hint={t.invite.emailOptionalHint}
+              data-testid="invite-email"
               {...register('email')}
               error={errors.email?.message}
+            />
+            <Input
+              label={t.invite.labelField}
+              placeholder={t.invite.labelPlaceholder}
+              hint={t.invite.labelHint}
+              data-testid="invite-label"
+              {...register('label')}
+              error={errors.label?.message}
             />
             <Select
               label={t.invite.role}
@@ -312,6 +331,7 @@ export default function InvitePage() {
             <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">{t.invite.howItWorks}</p>
             <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
               <li>{t.invite.step1}</li>
+              <li>{t.invite.stepLinkOnly}</li>
               <li>{t.invite.step2}</li>
               <li>{t.invite.step3}</li>
               <li>{t.invite.step4}</li>
@@ -331,7 +351,10 @@ export default function InvitePage() {
             <div className="space-y-3">
               {invites.map((invite) => {
                 const status = statusOf(invite);
-                const link = links[invite.id];
+                // The freshly-minted link from this session's POST, else the one
+                // the list itself carries for our own still-usable email-less
+                // invitations (#670) — those have no other way back.
+                const link = links[invite.id] ?? invite.registerUrl;
                 // Lifecycle steps in order, each with the moment it was reached.
                 const steps: { key: string; label: string; at: string | null }[] = [
                   { key: 'sent', label: t.invite.lifecycle.sent, at: invite.createdAt },
@@ -343,8 +366,11 @@ export default function InvitePage() {
                 <div key={invite.id} data-testid={`invite-${invite.id}`} className="py-3 border-b border-gray-50 last:border-0">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{invite.email}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {invite.email ?? invite.label ?? t.invite.linkInvitation}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {invite.email && invite.label ? `${invite.label} · ` : ''}
                         {formatDate(invite.createdAt, locale)} · {(t.invite.status as Record<string, string>)[status]}
                       </p>
                     </div>
@@ -371,7 +397,7 @@ export default function InvitePage() {
                   {!invite.used && (
                     <div className="mt-2 flex items-center gap-3 text-xs">
                       <button type="button" disabled={busyId === invite.id} onClick={() => resend(invite.id)} className="text-blue-600 hover:text-blue-800 font-medium">
-                        {t.invite.resend}
+                        {invite.email ? t.invite.resend : t.invite.extend}
                       </button>
                       <button type="button" disabled={busyId === invite.id} onClick={() => cancelInvite(invite.id)} className="text-gray-400 hover:text-red-600">
                         {t.invite.cancel}

@@ -7,7 +7,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
-import { notify } from '@/lib/notify';
+import { notify, notifyIfAllowed } from '@/lib/notify';
+import { hasConsent } from '@/lib/consent';
 
 const bodySchema = z.object({
   menteeId: z.string().min(1),
@@ -120,6 +121,16 @@ export async function POST(request: Request) {
       company?.name ? STATUS_EVENT[status] : 'company_interest.generic',
       company?.name ? { company: company.name, mentee } : { mentee }
     );
+
+    // The candidate hears the signal too (#1101) — with three hard limits:
+    // PASS is never relayed (rejection communication is #830's job, a raw
+    // "you were passed on" harms), the company's identity and note stay
+    // hidden (no direct company↔candidate channel exists yet, #807), and a
+    // mentee without an active TALENT_POOL_VISIBILITY consent is not told
+    // "you were seen" — that would hollow out what the consent means.
+    if ((status === 'INTERESTED' || status === 'SHORTLISTED') && (await hasConsent(menteeId, 'TALENT_POOL_VISIBILITY'))) {
+      await notifyIfAllowed(menteeId, 'mentorship', 'company_interest.mentee', {}, '/portal');
+    }
   }
 
   await logActivity({
