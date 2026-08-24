@@ -3913,3 +3913,25 @@ spec'lerin araya satır sokabileceğini hesaba kat — eşitlik yerine alt sın�
 assert (cron cevabındaki anlık görüntüye göre) ve temizlenmeyen kalıcı kanıt satırı
 (in-memory dedupe yüzünden ikinci koşuda alarm atılmaz; ilk koşunun ActivityLog satırına
 `count >= 1` assert et, satırı silme).
+
+## 2026-08-24 — Prod deploy'u kilitleyen Json+FK push'u (#1288)
+
+**MariaDB'de `ADD COLUMN ... CHECK(json_valid)` check'i DOĞRULAMAZ; sonraki FK/index
+adımının COPY rebuild'i DOĞRULAR.** #1281 aynı push'ta hem `preferredLanguages Json`
+(NOT NULL) hem yeni bir FK ekledi: AddColumn eski satırları sessizce `''` ile doldurup
+geçti (bilinen #1150/#1078 mekanizması — Prisma, Json `@default`'unu DDL'e yazmaz),
+AddForeignKey ise tabloyu yeniden yazarken check'e takıldı. Push yarıda kaldı, kolon
+`''` dolu kaldı ve HER yeniden deneme aynı yerde patladı — post-push çalışan
+`backfill-json-columns.mjs --repair` hiç sıraya giremedi. Çözüm: onarımı final
+push'un ÖNCESİNE de koymak (deploy-prod.sh + topic-deploy.sh) ve script'in COLUMNS
+listesine şemadaki YENİ Json kolonlarını eklemeyi unutmamak (7 kolon eksikti).
+
+**Tek satırlık lokal repro, prod log'undan daha öğretici.** Eski şemalı lokal
+MariaDB'ye 1 MentorshipRequest satırı ekleyip `db push` koşmak hatayı birebir üretti;
+düzeltme de aynı düzenekte uçtan uca doğrulandı (repair → push yeşil, FK yerinde).
+Prod'a hiç dokunmadan hem tanı hem kanıt.
+
+**Kalıcı önlem hâlâ açık:** populated bir tabloya "NOT NULL Json kolonu + rebuild
+tetikleyen değişiklik" aynı push'ta gelirse ilk deploy yine patlar (kolon henüz yokken
+pre-push repair işe yaramaz). Nullable-first ya da expand-script (#1227 deseni)
+konvansiyonu / schema-guard tespiti #1288'de tartışılıyor.
