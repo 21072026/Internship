@@ -4021,3 +4021,52 @@ config: `import base from '/home/user/Internship/playwright.config'` + `testDir`
 dosyaları `e2e/` içinde durmalı (scratchpad'den `./helpers/db` çözülmüyor) ve
 `DATABASE_URL`/`NEXTAUTH_*` env'e elle verilmeli (cwd repo olmadığı için `.env`
 okunmuyor).
+
+## 2026-08-24 — arka arkaya dört iş (#862, #670, #830, #822)
+
+**Bir dev sunucusu, tek `.next`.** İki tuzak aynı gün ısırdı: (1) dev sunucusu
+koşarken `npm run build` çalıştırmak `.next`'i bozuyor → 500'ler ve
+`Cannot find module './vendor-chunks/next-auth.js'`; (2) Playwright'ın `webServer`'ı
+3000 hazır değilken **ikinci** bir sunucuyu 3001'de açtığında iki süreç aynı `.next`'i
+paylaşıyor, her `_next/static/*` 404 dönüyor, sayfa hydrate olmuyor ve giriş formu
+native POST yapıyor. Belirti "form çalışmıyor" gibi görünüyor, sebep tamamen build
+katmanında. Kural: build'den önce `pkill` + `rm -rf .next`, tek sunucu başlat,
+`curl -o /dev/null -w '%{http_code}' .../\_next/static/chunks/main-app.js` ile 200
+gördükten sonra teste başla.
+
+**`pkill -f "next"` kendi komutunu da öldürür.** `npm run build`'i içeren bash
+satırı da "next" içerdiği için pkill onu da vuruyor; build **exit 144** ile ölüyor ve
+"build kırıldı" sanıyorsun. `pkill -f "next-server"` / `"next dev"` gibi dar desen
+kullan, ya da build'i ayrı bir çağrıda çalıştır.
+
+**MariaDB container boşta kalınca ölüyor** ve landing artık DB'ye gittiği için
+(`/api/public/stats`, #1099) `/` 500 dönüyor → Playwright'ın hazırlık kontrolü de
+düşüyor. Her oturumda ilk komut: `service mariadb start`.
+
+**Yerel kırmızıyı temiz `main`'e karşı doğrula.** Bu container'da `pipeline.spec:8`,
+`rate-limit.spec:29` ve `smoke.spec:53` değişiklikten bağımsız kırmızı. `git stash -u`
++ `npx prisma generate` ile 2 dakikada kanıtlanıyor — PR'da "bunlar bende de aynı
+şekilde düşüyor" diye yazabilmek, regresyon sanıp iyi bir değişikliği geri almaktan
+iyidir. `admin@example.com` kullanan spec'ler için yerel şifre `ChangeMe123!`
+olmayabilir; bcrypt ile bir kerelik güncellemek yeterli.
+
+**Rota parametresi hep "kayıt id'si" değil.** `/mentor/mentees/[id]` aslında
+**ilişki** id'si alıyor (`EvaluationPanel relationId={id}`), mentee id'si değil. Yeni
+bir spec yazmadan önce sayfanın `useParams()`'ı nasıl kullandığına bak; yanlış id ile
+sayfa sessizce boş açılıyor ve hata "bileşen render olmuyor" gibi görünüyor.
+
+**Org'a bağlı bir özelliği test ederken `seedUser` yetmez:** `orgId` null bırakıyor,
+dolayısıyla admin'in org'una kaydettiğin yapılandırma seed edilen ilişkide hiç
+görünmüyor (bende #822'de üç test birden 400 aldı). Ya seed sonrası `orgId`'yi
+admin'in org'una çek, ya da testin kendi `Organization` satırını yaratsın —
+"yapılandırmasız org" senaryosu için ikincisi zaten daha doğru, test sırasından da
+bağımsız olur.
+
+**Şablon/kriter gibi yapılandırmayı silmek yerine emekliye ayır.** #822'de
+`active: false`, #670'te kullanılmış davetin adresini geri yazmak: her ikisi de
+"geçmiş kayıt kendi döneminin etiketiyle okunabilsin" kuralının aynı uygulaması.
+Yeni bir yapılandırma modeli eklerken varsayılan refleks bu olmalı.
+
+**Tek dal, çok iş → PR'ı gerçeğe uydur.** Oturum tek dalda çalışıyorsa ikinci iş
+açık PR'ın üstüne biniyor. Yeni PR açmaya çalışma; PR'ın başlık ve gövdesini iki işi
+de anlatacak şekilde güncelle ve commit sha'larını yaz — diff zaten ayrı okunuyor.
