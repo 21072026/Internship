@@ -155,7 +155,10 @@ export default async function AdminDashboard() {
                     href={`/admin/candidates?status=${s.key}`}
                     className="flex items-center gap-3 rounded-lg px-1 py-0.5 hover:bg-blue-50 transition-colors"
                   >
-                    <span className="text-xs text-gray-600 w-56 flex-shrink-0 truncate">{s.label}</span>
+                    {/* The label is a fixed 224px from `sm` up; on a phone that
+                        left no room for the bar (and pushed the count 6px out of
+                        the card), so there it takes half the row instead (#1305). */}
+                    <span className="text-xs text-gray-600 w-1/2 sm:w-56 flex-shrink-0 truncate">{s.label}</span>
                     <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
                       <div
                         className="bg-blue-500 h-full rounded-full"

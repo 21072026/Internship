@@ -84,10 +84,17 @@ export default function AdminActivityPage() {
         ) : (
           <div className="divide-y divide-gray-50">
             {items.map((e) => (
-              <div key={e.id} className="flex items-center gap-3 py-2.5 text-sm">
+              // Phone: level + action + timestamp on the first line, the actor
+              // (and detail) on its own full-width line below. On one line the
+              // actor column was squeezed to ~46px — "admin@example.com" showed
+              // as "adm…", which is the only part of the row that identifies who
+              // did it (#1305). `sm:order-last` keeps the desktop order
+              // level · action · actor · ip · date.
+              <div key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm sm:flex-nowrap">
                 <Badge variant={LEVEL_VARIANT[e.level]} className="flex-shrink-0">{e.level}</Badge>
                 <span className="font-medium text-gray-900 flex-shrink-0">{e.action}</span>
-                <span className="text-gray-500 truncate flex-1">
+                <span data-testid="activity-date" className="ml-auto text-xs text-gray-400 flex-shrink-0 sm:ml-0 sm:order-last">{formatDateTime(e.createdAt, locale)}</span>
+                <span className="w-full min-w-0 truncate text-gray-500 sm:w-auto sm:flex-1">
                   {e.actorEmail || '—'}{e.detail ? ` · ${e.detail}` : ''}
                 </span>
                 {e.ip && (
@@ -98,7 +105,6 @@ export default function AdminActivityPage() {
                     {e.ip}
                   </span>
                 )}
-                <span data-testid="activity-date" className="text-xs text-gray-400 flex-shrink-0">{formatDateTime(e.createdAt, locale)}</span>
               </div>
             ))}
           </div>

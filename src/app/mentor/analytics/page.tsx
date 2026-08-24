@@ -22,13 +22,15 @@ interface MentorAnalytics {
 function StatCard({ icon: Icon, value, label, color }: { icon: React.ElementType; value: string | number; label: string; color: string }) {
   return (
     <Card>
-      <div className="flex items-center gap-4">
+      {/* Two of these sit side by side on a phone: without `min-w-0` the text
+          block refuses to shrink and the label runs out of the card (#1305). */}
+      <div className="flex items-center gap-3 sm:gap-4">
         <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center flex-shrink-0`}>
           <Icon className="h-6 w-6 text-white" />
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 break-words">{label}</p>
         </div>
       </div>
     </Card>
@@ -127,18 +129,22 @@ export default function MentorAnalyticsPage() {
                     {ma.goalsTitle}
                   </CardTitle>
                 </CardHeader>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+                {/* Three tiles across a 360px phone leave ~60px per label, which
+                    is narrower than a single Turkish word ("Tamamlandı") — tighter
+                    padding plus `break-words` keeps every label inside its tile
+                    whatever the language (#1305). */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
+                  <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-2 sm:p-3">
                     <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{data.goals.total}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{ma.goalsTotal}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 break-words">{ma.goalsTotal}</p>
                   </div>
-                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3">
+                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-2 sm:p-3">
                     <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{data.goals.open}</p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{ma.goalsOpen}</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 break-words">{ma.goalsOpen}</p>
                   </div>
-                  <div className="rounded-lg bg-green-50 dark:bg-green-950/30 p-3">
+                  <div className="rounded-lg bg-green-50 dark:bg-green-950/30 p-2 sm:p-3">
                     <p className="text-2xl font-bold text-green-700 dark:text-green-300">{data.goals.done}</p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">{ma.goalsDone}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1 break-words">{ma.goalsDone}</p>
                   </div>
                 </div>
               </Card>
