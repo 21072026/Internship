@@ -8,6 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
 import { notify, notifyIfAllowed } from '@/lib/notify';
+import { notificationLink } from '@/lib/notificationLink';
 import { hasConsent } from '@/lib/consent';
 
 const bodySchema = z.object({
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
     // mentee without an active TALENT_POOL_VISIBILITY consent is not told
     // "you were seen" — that would hollow out what the consent means.
     if ((status === 'INTERESTED' || status === 'SHORTLISTED') && (await hasConsent(menteeId, 'TALENT_POOL_VISIBILITY'))) {
-      await notifyIfAllowed(menteeId, 'mentorship', 'company_interest.mentee', {}, '/portal');
+      await notifyIfAllowed(menteeId, 'mentorship', 'company_interest.mentee', {}, notificationLink('MENTEE', 'dashboard', {}));
     }
   }
 
