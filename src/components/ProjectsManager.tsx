@@ -12,6 +12,7 @@ import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2, Inbox 
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import type { TeamMember } from '@/lib/projectTeam';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface Task {
   id: string;
@@ -311,7 +312,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       <div className="flex flex-wrap gap-1 mt-1.5" data-testid="project-members">
                         {p.team!.slice(0, 8).map((m) => (
                           <span key={m.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
-                            {m.fullName}
+                            <PersonHoverCard personId={m.id} name={m.fullName} />
                             <span className="text-gray-400">· {roleLabel(m)}</span>
                           </span>
                         ))}

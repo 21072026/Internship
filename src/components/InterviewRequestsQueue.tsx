@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 type Item = {
   id: string;
@@ -15,7 +16,7 @@ type Item = {
   createdAt: string;
   company: { name: string };
   requisition: { id: string; title: string };
-  mentee: { fullName: string; menteeRelations: { id: string }[] };
+  mentee: { id: string; fullName: string; menteeRelations: { id: string }[] };
 };
 
 function proposedSlots(value: unknown): string[] {
@@ -70,7 +71,9 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="break-words font-semibold text-gray-900 dark:text-gray-100">{item.requisition.title}</h2>
-                    <p className="break-words text-sm text-gray-600 dark:text-gray-300">{item.company.name} · {item.mentee.fullName}</p>
+                    <p className="break-words text-sm text-gray-600 dark:text-gray-300">
+                      {item.company.name} · <PersonHoverCard personId={item.mentee.id} name={item.mentee.fullName} role="MENTEE" />
+                    </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</p>
                     {item.note && <p className="mt-2 break-words text-sm text-gray-700 dark:text-gray-300">{item.note}</p>}
                     {slots.length > 0 && (

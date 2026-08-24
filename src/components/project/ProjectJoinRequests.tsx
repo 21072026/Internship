@@ -5,6 +5,7 @@ import { UserCheck, UserX, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useT } from '@/i18n/client';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // Join requests, from the owner's side (#51). Approving is the whole point of
 // the screen: it adds the ProjectMember row (with the role the applicant asked
@@ -70,7 +71,15 @@ export function ProjectJoinRequests({ projectId }: { projectId: string }) {
         {requests.map((r) => (
           <li key={r.id} className="rounded-xl border border-gray-200 p-3 text-sm dark:border-gray-800" data-testid={`join-request-${r.id}`}>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-gray-800 dark:text-gray-200">{r.user.fullName}</span>
+              {/* The applicant is a stranger until you decide on them, so their
+                  name is the one place on this screen that has to answer "who is
+                  this?" — the card does it without leaving the queue (#1166). */}
+              <PersonHoverCard
+                personId={r.user.id}
+                name={r.user.fullName}
+                role={r.user.role}
+                className="font-medium text-gray-800 dark:text-gray-200"
+              />
               {r.functionalRole && (
                 <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800">
                   {(t.projects.functionalRoles as Record<string, string>)[r.functionalRole]}

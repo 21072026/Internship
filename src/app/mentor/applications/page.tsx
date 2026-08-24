@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // The mentor's application inbox (#1188): public /apply submissions wait here
 // as pending requests until the mentor accepts (relation starts) or declines
@@ -82,7 +83,9 @@ export default function MentorApplicationsPage() {
               <li key={r.id} className="rounded-xl border border-gray-100 dark:border-gray-800 p-4" data-testid={`mentor-application-${r.id}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">{r.mentee.fullName}</p>
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">
+                      <PersonHoverCard personId={r.mentee.id} name={r.mentee.fullName} role="MENTEE" />
+                    </p>
                     <p className="text-sm text-gray-500">
                       {[r.mentee.university, r.mentee.department, r.mentee.city].filter(Boolean).join(' · ')}
                     </p>

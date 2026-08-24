@@ -4211,3 +4211,37 @@ doğrula.
 alt görevleri insan stajyerlere atanmış, #1302'nin zaten açık PR'ı vardı.
 `list_issues` ile `assignees` alanını çekmek bir çağrı; çakışan PR açmak bir
 gün.
+
+## 2026-08-24 — İsimleri her yerde tıklanabilir yapmak (#1166 devamı)
+
+**Hover kartı vardı, çağrılan yer yoktu.** `PersonHoverCard` (#1166) yalnızca 3 ekranda
+kullanılıyordu; isimlerin çoğu hâlâ düz metindi. Böyle bir "yatay" iş için doğru yöntem
+`grep -rn "fullName}" --include=*.tsx src/` ile tüm render noktalarını çıkarıp tek tek
+elemek: zaten `<Link>` olanlar (admin listeleri) atlanır, kalanlar sarılır. Kalan ~50
+eşleşmenin yarısı `label=`, `alt=`, `value=` gibi gürültü — filtreyi baştan daralt.
+
+**Kartın izin kuralı, kartın konduğu ekranı takip etmek zorunda.** `canViewPersonCard`
+"birlikte bir ilişki/proje/sohbet" arıyordu; oysa kartın en çok gerektiği yer *karar
+anı*: proje sahibinin katılma talebi kuyruğu ve mentörün başvuru kutusu — ki oralarda
+henüz ne üyelik ne ilişki var. Bekleyen `ProjectJoinRequest` / `MentorshipRequest`
+kaydını da yetki kaynağı saymak gerekti (karar verilince satır kapanır, izin de
+kendiliğinden ilişkiye devrolur).
+
+**`/mentor/mentees/<id>` ilişki id'si ister, kullanıcı id'si değil.** `personHref`
+mentör dalında kullanıcı id'si ile link üretiyordu → "ilişki bulunamadı". Kart uç
+noktası artık görüntüleyen mentörün ilişkisinin id'sini (`relationId`) döndürüyor;
+yoksa link hiç gösterilmiyor. Mevcut e2e assert'i de aynı hatayı doğruluyordu (sadece
+attribute'a bakıp sayfayı açmıyordu) — bir link testi yazarken hedefin gerçekten
+açıldığını da düşünmek gerek.
+
+**Playwright 1.62 + `/opt/pw-browsers`:** kurulu paket 1194, beklenen sürüm 1234 ve
+dizin düzeni de değişmiş — `chromium_headless_shell-1234/chrome-headless-shell-linux64/
+chrome-headless-shell` yolunu elle kurup 1194'ün `chrome-linux/headless_shell`
+dosyasına symlink vermek yetti (`playwright install` yerine).
+
+**Dev sunucuda ilk derleme, tıklamadan hemen sonraki client state'i uçurabiliyor.**
+`/projects/[id]` ilk ziyarette derlenirken Fast Refresh remount'u kartın `open`
+durumunu sıfırladı; aynı test ısınmış sunucuda geçiyordu. Çözüm testi
+`expect(async () => { await trigger.click(); await expect(card).toBeVisible(); })
+.toPass()` ile yeniden denenebilir yapmak — CI'da (`npm run start`) yaşanmayan, yerelde
+kafa karıştıran bir fark.

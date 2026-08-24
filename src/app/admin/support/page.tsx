@@ -19,6 +19,7 @@ import {
   type SupportAttachmentMeta,
   validateSupportFile,
 } from '@/lib/supportAttachments';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 type Status = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
 
@@ -214,7 +215,7 @@ export default function AdminSupportPage() {
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {tk.requester.fullName}
+                        <PersonHoverCard personId={tk.requester.id} name={tk.requester.fullName} role={tk.requester.role} />
                         <span className="ml-2 text-xs text-gray-400 font-normal">{tk.requester.email}</span>
                       </p>
                       <p className="text-sm text-gray-500 truncate">{tk.subject ?? '—'}</p>
@@ -234,7 +235,7 @@ export default function AdminSupportPage() {
                     <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
                       <span>
                         {tk.assignedAdmin
-                          ? `${a.assignedTo} ${tk.assignedAdmin.fullName}`
+                          ? <>{a.assignedTo}{' '}<PersonHoverCard personId={tk.assignedAdmin.id} name={tk.assignedAdmin.fullName} role="ADMIN" /></>
                           : a.unassigned}
                       </span>
                       {(!tk.assignedAdmin || tk.assignedAdmin.id !== me) && (
@@ -252,7 +253,9 @@ export default function AdminSupportPage() {
                               ? 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
                               : 'bg-blue-600 text-white'
                           }`}>
-                            <p className="text-[11px] font-medium opacity-70 mb-0.5">{m.sender.fullName}</p>
+                            <p className="text-[11px] font-medium opacity-70 mb-0.5">
+                              <PersonHoverCard personId={m.senderId} name={m.sender.fullName} role={m.sender.role} />
+                            </p>
                             {m.body}
                             <SupportAttachmentList attachments={m.attachments ?? []} />
                           </div>

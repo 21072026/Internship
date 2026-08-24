@@ -13,12 +13,13 @@ import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { useSearchParams } from 'next/navigation';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface Relation {
   id: string;
   // `timezone` is null for anyone who never saved one; AttendeeTimes falls back
   // to the deployment default for those, same as the emails do.
-  mentee: { fullName: string; timezone?: string | null };
+  mentee: { id: string; fullName: string; timezone?: string | null };
 }
 interface Meeting {
   id: string;
@@ -26,7 +27,7 @@ interface Meeting {
   scheduledAt: string | null;
   meetLink?: string | null;
   rsvp: 'PENDING' | 'ACCEPTED' | 'DECLINED';
-  relation: { mentee: { fullName: string } };
+  relation: { mentee: { id: string; fullName: string } };
 }
 
 const RSVP_VARIANT = { PENDING: 'warning', ACCEPTED: 'success', DECLINED: 'danger' } as const;
@@ -214,7 +215,9 @@ export function MeetingsManager() {
                       checked={!!selected[r.id]}
                       onChange={(e) => setSelected((p) => ({ ...p, [r.id]: e.target.checked }))}
                     />
-                    <span className="truncate">{r.mentee.fullName}</span>
+                    {/* Inside a <label>: the card suppresses the click that
+                        would otherwise tick this invitee's checkbox. */}
+                    <PersonHoverCard personId={r.mentee.id} name={r.mentee.fullName} role="MENTEE" className="truncate" />
                   </label>
                 ))}
                 </>
@@ -278,7 +281,8 @@ export function MeetingsManager() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{m.title}</p>
                     <p className="text-xs text-gray-500 truncate">
-                      {m.relation.mentee.fullName}{m.scheduledAt ? ` · ${formatDateTime(m.scheduledAt, locale)}` : ` · ${t.meetings.noTime}`}
+                      <PersonHoverCard personId={m.relation.mentee.id} name={m.relation.mentee.fullName} role="MENTEE" />
+                      {m.scheduledAt ? ` · ${formatDateTime(m.scheduledAt, locale)}` : ` · ${t.meetings.noTime}`}
                     </p>
                     {m.meetLink && (
                       <a

@@ -47,7 +47,7 @@ export async function GET() {
           : { relationId: { not: null }, relation: { menteeId: session.user.id } };
     const meetings = await prisma.meeting.findMany({
       where,
-      include: { relation: { include: { mentee: { select: { fullName: true } } } } },
+      include: { relation: { include: { mentee: { select: { id: true, fullName: true } } } } },
       orderBy: { scheduledAt: 'desc' },
     });
     return NextResponse.json({ meetings });
