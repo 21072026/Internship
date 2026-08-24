@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
+import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 
 interface Mentee {
@@ -171,7 +172,7 @@ export default function MentorBoardPage() {
           </div>
         </div>
       ) : (
-        <div data-testid="board-columns" className="flex gap-4 overflow-x-auto pb-4">
+        <HorizontalScrollArea testId="board-columns" className="flex gap-4 pb-4">
           {stages.map((s) => {
             const status = s.key;
             const items = itemsFor(status);
@@ -206,7 +207,7 @@ export default function MentorBoardPage() {
               </div>
             );
           })}
-        </div>
+        </HorizontalScrollArea>
       )}
 
       <DropoffReasonDialog

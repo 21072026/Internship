@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
+import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 
 interface Relation {
@@ -285,9 +286,9 @@ export default function AdminBoardPage() {
                 <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{groupTotal}</span>
               </button>
               {!isCollapsed && (
-                <div className="flex gap-4 overflow-x-auto px-3 pb-4">
+                <HorizontalScrollArea testId={`board-scroll-${group.key}`} className="flex gap-4 px-3 pb-4">
                   {statuses.map(renderColumn)}
-                </div>
+                </HorizontalScrollArea>
               )}
             </section>
           );
