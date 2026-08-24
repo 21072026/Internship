@@ -3,4 +3,6 @@
 // accepted version is recorded per user (GDPR Art. 7 demonstrability) and — in a
 // later slice — users can be asked to re-consent. Keep in sync with the
 // `privacy.lastUpdated` copy in the dictionaries.
-export const PRIVACY_POLICY_VERSION = '2026-07-01';
+// 2026-08-24: names tawk.to as a recipient of the visitor's IP and chat content
+// on the public home page, after marketing-cookie opt-in (#1177).
+export const PRIVACY_POLICY_VERSION = '2026-08-24';
