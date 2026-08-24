@@ -19,7 +19,7 @@ export async function BrandWordmark({ className }: { className?: string }) {
       ) : (
         <GraduationCap className="h-7 w-7 text-blue-600" />
       )}
-      <span className="font-bold text-gray-900 dark:text-gray-100">{brand.name}</span>
+      <span className="shrink-0 whitespace-nowrap font-bold text-gray-900 dark:text-gray-100">{brand.name}</span>
     </span>
   );
 }
