@@ -85,10 +85,14 @@ flowchart LR
 
 ### Pipeline status (the core domain concept)
 `MentorshipRelation.pipelineStatus` mirrors the original spreadsheet's status column.
-Stages (enum `PipelineStatus`): `BASVURU_100` → `ONAY_220` → `GORUSME_250` →
-`TANISTIRMA_270` → `STAJ_BASLAYACAK_300` → `STAJ_DEVAM_450` → `STAJ_BITTI_490` →
-`IS_ARIYOR_500` → `ISE_ALINABILIR_600` → `ISE_ALINDI_660` → `IS_BULDU_700`
-(plus `YARIM_BIRAKTI_460`, `BASKA_YERDE_STAJ_800`). Default `BASVURU_100`.
+Stages (enum `PipelineStatus`, `prisma/schema.prisma` is the source of truth):
+`APPLICATION_100` → `APPROVAL_PENDING_220` → `INTERVIEW_PENDING_250` →
+`INTRODUCTION_PENDING_270` → `INTERNSHIP_STARTING_300` → `INTERNSHIP_IN_PROGRESS_450` →
+`INTERNSHIP_COMPLETED_490` → `JOB_SEEKING_500` → `HIREABLE_600` → `HIRED_660` →
+`EMPLOYED_700` (plus the off-path `INTERNSHIP_DROPPED_460` and
+`INTERNSHIP_FOUND_ELSEWHERE_800`). Default `APPLICATION_100`. The Turkish names are the
+*labels* (`src/lib/pipeline.ts`), not the keys — this list used to give the labels as keys,
+which type-checks nowhere and fails only at runtime.
 
 ## Directory map
 
