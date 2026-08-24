@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Google Calendar, connected by the user** (#709) — the last open piece of the meetings epic. `/account` gains a \"Connect Google Calendar\" card: connect your own Google account and the meetings you are part of are mirrored onto your calendar; disconnect revokes the access at Google rather than only forgetting it here. Refresh tokens are encrypted at rest (new `src/lib/secretBox.ts`, AES-256-GCM keyed from `NEXTAUTH_SECRET` via HKDF), the OAuth `state` is HMAC-signed and bound to the session that started the flow, and the meeting→event mapping is per (meeting, user) so each participant gets the event on their own calendar. Gated behind `GOOGLE_CALENDAR_ENABLED` (default off) and separate from merely having credentials; unconnected users keep the in-app calendar, `.ics` and reminders unchanged. The token exchange and calendar write are now covered by an e2e that points Google's endpoints at a local stub.",
+  "notes": {
+    "en": [
+      "You can now connect your own Google Calendar from your account settings — meetings you are part of show up there too, and disconnecting revokes the access again."
+    ],
+    "tr": [
+      "Artık hesap ayarlarından kendi Google Takvimini bağlayabilirsin — katıldığın toplantılar orada da görünür, bağlantıyı kaldırdığında erişim geri alınır."
+    ],
+    "de": [
+      "Du kannst jetzt in den Kontoeinstellungen deinen eigenen Google Kalender verbinden — Termine, an denen du teilnimmst, erscheinen auch dort, und beim Trennen wird der Zugriff wieder entzogen."
+    ]
+  }
+}

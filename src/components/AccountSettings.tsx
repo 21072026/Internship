@@ -17,6 +17,7 @@ import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotif
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
 import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } from '@/lib/timezone';
+import { GoogleCalendarCard } from '@/components/GoogleCalendarCard';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
@@ -574,6 +575,8 @@ export function AccountSettings() {
         </label>
         <p className="text-xs text-gray-400 mt-1">{t.account.notesAutoOpenHint}</p>
       </Card>
+
+      <GoogleCalendarCard />
 
       {/* `id` so the "wrong zone?" footer under every emailed meeting time can
           link straight here (/account#timezone) instead of dropping the reader

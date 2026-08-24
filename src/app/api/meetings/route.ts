@@ -10,6 +10,7 @@ import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { generateMeetingLink } from '@/lib/meetingContext';
+import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
     const notifiedMentees = new Set<string>();
     for (const rel of relations) {
       const rsvpToken = randomBytes(24).toString('hex');
-      await prisma.meeting.create({
+      const meeting = await prisma.meeting.create({
         data: {
           relationId: rel.id,
           title,
@@ -120,6 +121,12 @@ export async function POST(request: Request) {
           createdById: session.user.id,
         },
       });
+      // Mirror into the calendars of whoever connected their own Google account
+      // (#709). A no-op unless the operator enabled the integration and the
+      // person opted in; unconnected users keep the e-mail + .ics path exactly
+      // as before. Fire-and-forget — a third party's API must never be able to
+      // make scheduling a meeting fail or hang.
+      pushMeetingInBackground(meeting, [session.user.id, rel.mentee.id]);
       try {
         await sendMeetingInviteEmail({
           to: rel.mentee.email,

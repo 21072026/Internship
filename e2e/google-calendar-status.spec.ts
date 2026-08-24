@@ -5,8 +5,10 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// Google Calendar integration (#417): config-gated. With no GOOGLE_* env set
-// (CI), status reports not-configured; the endpoint is ADMIN-only.
+// Google Calendar integration (#417, #709): the operator-level status endpoint,
+// ADMIN-only. Since #709 the e2e run does set GOOGLE_* (pointed at a local
+// stub), so this asserts the SHAPE and the access rule rather than a particular
+// configured/enabled value — those depend on the deployment, not on the code.
 test('google calendar status is admin-only and reports config state', async ({ page }) => {
   const adminEmail = uniqueEmail('gcal-admin');
   await seedUser(adminEmail, 'GcalPass123', 'ADMIN', 'Gcal Admin');
@@ -21,7 +23,10 @@ test('google calendar status is admin-only and reports config state', async ({ p
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
     expect(typeof body.configured).toBe('boolean');
-    expect(body.connected).toBe(false);
+    expect(typeof body.enabled).toBe('boolean');
+    // A count, not an identity: how many people connected their own calendar.
+    // Asserting a specific value here would only encode test-ordering.
+    expect(typeof body.connections).toBe('number');
     // No secrets ever leak through the status endpoint.
     expect(JSON.stringify(body)).not.toContain('CLIENT_SECRET');
   } finally {

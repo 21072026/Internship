@@ -23,6 +23,14 @@ export const E2E_INBOUND_SECRET = 'e2e-inbound-secret';
 // Shared with e2e/meeting-end.spec.ts. Unset, /api/webhooks/jaas answers 404
 // to everything and the live-room assertions would be vacuous.
 export const E2E_JAAS_WEBHOOK_SECRET = 'e2e-jaas-webhook-secret';
+// Shared with e2e/google-calendar.spec.ts (#709). The Google OAuth token
+// exchange and the Calendar write cannot be driven against real Google without
+// a Cloud project and a human at a consent screen — which is why that slice sat
+// unfinished. Pointing the app's Google endpoints at a local stub that speaks
+// the same wire format makes the app's own half of the flow testable: state
+// signing, token sealing, refresh, event create/patch/delete, revoke.
+export const E2E_GOOGLE_MOCK_PORT = 4599;
+const googleMock = `http://127.0.0.1:${E2E_GOOGLE_MOCK_PORT}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -52,7 +60,15 @@ export default defineConfig({
   // Only spin up the app locally; when BASE_URL targets a deployed env, skip it.
   webServer: externalBase
     ? undefined
-    : {
+    : [
+      {
+        command: `node e2e/support/google-mock.mjs`,
+        url: `${googleMock}/__state`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+        env: { GOOGLE_MOCK_PORT: String(E2E_GOOGLE_MOCK_PORT) },
+      },
+      {
         command: process.env.CI ? 'npm run start' : 'npm run dev',
         url: localURL,
         reuseExistingServer: !process.env.CI,
@@ -72,6 +88,16 @@ export default defineConfig({
           HEALTH_TOKEN: E2E_HEALTH_TOKEN,
           INBOUND_SECRET: E2E_INBOUND_SECRET,
           JAAS_WEBHOOK_SECRET: E2E_JAAS_WEBHOOK_SECRET,
+          // Google Calendar (#709): credentials that only mean anything to the
+          // local stub above, plus the master switch the integration is gated
+          // on. Production ships with GOOGLE_CALENDAR_ENABLED unset.
+          GOOGLE_CLIENT_ID: 'e2e-google-client',
+          GOOGLE_CLIENT_SECRET: 'e2e-google-secret',
+          GOOGLE_CALENDAR_ENABLED: '1',
+          GOOGLE_OAUTH_TOKEN_URL: `${googleMock}/token`,
+          GOOGLE_OAUTH_REVOKE_URL: `${googleMock}/revoke`,
+          GOOGLE_CALENDAR_API_BASE: `${googleMock}/calendar/v3`,
         },
       },
+    ],
 });
