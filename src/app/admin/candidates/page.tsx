@@ -18,6 +18,8 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Users, ExternalLink, Search, Filter, Download } from 'lucide-react';
 import { LanguageBadge } from '@/components/LanguageBadge';
+import { TagFilter, TagChips, type TagOption } from '@/components/TagFilter';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface Candidate {
   id: string;
@@ -34,6 +36,7 @@ interface Candidate {
   createdAt: string;
   isActive: boolean;
   preferredLanguage?: string | null;
+  tags?: { tag: TagOption }[];
   menteeRelations: {
     pipelineStatus?: string;
     mentor: { id: string; fullName: string };
@@ -69,6 +72,13 @@ export default function CandidatesPage() {
   const [projectFilter, setProjectFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
+  // The org's tag vocabulary and the current selection (#887). `tagMode`
+  // decides whether the selection means "any of these" or "all of these".
+  const [tags, setTags] = useState<TagOption[]>([]);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [tagMode, setTagMode] = useState<'and' | 'or'>('or');
+  const [bulkTagId, setBulkTagId] = useState('');
+  const [bulkNote, setBulkNote] = useState('');
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -132,8 +142,12 @@ export default function CandidatesPage() {
     if (projectFilter) params.set('project', projectFilter);
     if (sourceFilter) params.set('source', sourceFilter);
     if (archived) params.set('archived', '1');
+    if (tagFilter.length > 0) {
+      params.set('tags', tagFilter.join(','));
+      params.set('tagMode', tagMode);
+    }
     return params;
-  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter, archived]);
+  }, [skillFilter, yearFilter, search, statusFilter, cityFilter, projectFilter, sourceFilter, archived, tagFilter, tagMode]);
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -153,6 +167,10 @@ export default function CandidatesPage() {
   }, [buildFilterParams, page]);
 
   useEffect(() => {
+    fetch('/api/tags')
+      .then((r) => (r.ok ? r.json() : { tags: [] }))
+      .then((d) => setTags(d.tags ?? []))
+      .catch(() => {});
     fetch('/api/admin/sources')
       .then((r) => (r.ok ? r.json() : { sources: [] }))
       .then((d) => setSources(d.sources ?? []))
@@ -196,7 +214,7 @@ export default function CandidatesPage() {
   // Any filter change (including switching to/from the archive) returns to page 1.
   useEffect(() => {
     setPage(1);
-  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter, archived]);
+  }, [search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, sourceFilter, archived, tagFilter, tagMode]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -218,15 +236,27 @@ export default function CandidatesPage() {
     });
   };
 
-  const runBulkAction = async (action: 'activate' | 'deactivate' | 'advanceStage') => {
+  const runBulkAction = async (action: 'activate' | 'deactivate' | 'advanceStage' | 'addTag' | 'removeTag') => {
     setBulkBusy(true);
+    setBulkNote('');
     try {
       const res = await fetch('/api/admin/candidates/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateIds: Array.from(selected), action }),
+        body: JSON.stringify({
+          candidateIds: Array.from(selected),
+          action,
+          ...(action === 'addTag' || action === 'removeTag' ? { tagId: bulkTagId } : {}),
+        }),
       });
       if (res.ok) {
+        // People already carrying the maximum number of tags are skipped rather
+        // than silently counted as tagged — say so, or the operator believes a
+        // label landed on everyone they selected.
+        const data = await res.json().catch(() => ({}));
+        if (typeof data.skippedAtLimit === 'number' && data.skippedAtLimit > 0) {
+          setBulkNote(t.tags.skippedAtLimit.replace('{n}', String(data.skippedAtLimit)));
+        }
         setSelected(new Set());
         await fetchCandidates();
       }
@@ -284,7 +314,7 @@ export default function CandidatesPage() {
           aria-expanded={filtersOpen}
           aria-controls="candidate-filters"
           onClick={() => setFiltersOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-2 text-left md:hidden"
+          className="flex min-h-11 w-full items-center justify-between gap-2 text-left md:hidden"
         >
           <span className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-500" />
@@ -306,7 +336,7 @@ export default function CandidatesPage() {
               data-testid="candidates-search-input"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              className="min-h-11 pl-10 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
             />
           </div>
           <Input
@@ -348,7 +378,7 @@ export default function CandidatesPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           />
         </div>
-        {(search || skillFilter || yearFilter || cityFilter || projectFilter || sourceFilter || statusFilter) && (
+        {(search || skillFilter || yearFilter || cityFilter || projectFilter || sourceFilter || statusFilter || tagFilter.length > 0) && (
           <Button
             variant="ghost"
             size="sm"
@@ -361,15 +391,25 @@ export default function CandidatesPage() {
               setProjectFilter('');
               setSourceFilter('');
               setStatusFilter('');
+              setTagFilter([]);
             }}
           >
             {t.candidates.clearFilters}
           </Button>
         )}
+        <TagFilter
+          tags={tags}
+          selected={tagFilter}
+          mode={tagMode}
+          onToggle={(id) =>
+            setTagFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+          }
+          onModeChange={setTagMode}
+        />
         <div className="mt-3 border-t border-gray-100 pt-3">
           <SavedViews
             storageKey="candidate-views"
-            current={{ search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter }}
+            current={{ search, skillFilter, yearFilter, statusFilter, cityFilter, projectFilter, tagFilter: tagFilter.join(','), tagMode }}
             onApply={(f) => {
               setSearch(f.search || '');
               setSkillFilter(f.skillFilter || '');
@@ -377,6 +417,10 @@ export default function CandidatesPage() {
               setStatusFilter(f.statusFilter || '');
               setCityFilter(f.cityFilter || '');
               setProjectFilter(f.projectFilter || '');
+              // Saved before tags existed → no key, and the view applies with
+              // no tag filter rather than throwing.
+              setTagFilter(f.tagFilter ? f.tagFilter.split(',').filter(Boolean) : []);
+              setTagMode(f.tagMode === 'and' ? 'and' : 'or');
             }}
           />
         </div>
@@ -397,7 +441,7 @@ export default function CandidatesPage() {
               setArchived(isArchive);
               setSelected(new Set());
             }}
-            className={`px-4 py-1.5 ${
+            className={`min-h-11 px-4 py-1.5 ${
               archived === isArchive
                 ? 'bg-blue-600 text-white'
                 : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
@@ -433,12 +477,54 @@ export default function CandidatesPage() {
             <Button size="sm" variant="outline" loading={bulkBusy} onClick={() => runBulkAction('advanceStage')}>
               {t.candidates.bulkAdvanceStage}
             </Button>
+            {/* Tagging in bulk is the whole point of a tag: you notice a shared
+                property across a filtered list and mark all of them at once. */}
+            {tags.length > 0 && (
+              <>
+                <select
+                  data-testid="bulk-tag-select"
+                  aria-label={t.tags.label}
+                  value={bulkTagId}
+                  onChange={(e) => setBulkTagId(e.target.value)}
+                  className="rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1 text-xs text-gray-700 dark:text-gray-200"
+                >
+                  <option value="">{t.tags.label}</option>
+                  {tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>{tag.name}</option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-testid="bulk-tag-add"
+                  disabled={!bulkTagId}
+                  loading={bulkBusy}
+                  onClick={() => runBulkAction('addTag')}
+                >
+                  {t.tags.bulkAdd}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-testid="bulk-tag-remove"
+                  disabled={!bulkTagId}
+                  loading={bulkBusy}
+                  onClick={() => runBulkAction('removeTag')}
+                >
+                  {t.tags.bulkRemove}
+                </Button>
+              </>
+            )}
             <button onClick={() => setSelected(new Set())} className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300">
               {t.candidates.clearSelection}
             </button>
           </div>
         )}
       </div>
+
+      {bulkNote && (
+        <p data-testid="bulk-tag-note" className="-mt-2 mb-4 text-sm text-amber-700 dark:text-amber-300">{bulkNote}</p>
+      )}
 
       {/* Candidates Grid */}
       {loading ? (
@@ -484,7 +570,12 @@ export default function CandidatesPage() {
                       <LanguageBadge language={candidate.preferredLanguage} />
                     </div>
                     <p className="mt-1 min-w-0 break-words text-sm text-gray-600 dark:text-gray-300">
-                      {t.candidates.mentor}: {activeRelation?.mentor.fullName ?? t.candidates.unassigned}
+                      {t.candidates.mentor}:{' '}
+                      {activeRelation ? (
+                        <PersonHoverCard personId={activeRelation.mentor.id} name={activeRelation.mentor.fullName} role="MENTOR" />
+                      ) : (
+                        t.candidates.unassigned
+                      )}
                     </p>
                   </div>
                   <Badge data-testid="candidate-mobile-stage" variant={activeRelation?.pipelineStatus ? 'info' : 'warning'} className="max-w-[9rem] flex-shrink-0 text-center whitespace-normal break-words">
@@ -508,6 +599,7 @@ export default function CandidatesPage() {
                         ))}
                       </div>
                     )}
+                    <TagChips tags={(candidate.tags ?? []).map((ut) => ut.tag)} />
                   </div>
                 )}
 
@@ -579,7 +671,8 @@ export default function CandidatesPage() {
                   )}
                   {activeRelation && (
                     <p className="text-xs text-blue-600">
-                      👤 {t.candidates.mentor}: {activeRelation.mentor.fullName}
+                      👤 {t.candidates.mentor}:{' '}
+                      <PersonHoverCard personId={activeRelation.mentor.id} name={activeRelation.mentor.fullName} role="MENTOR" />
                       {activeRelation.company && ` · ${activeRelation.company.name}`}
                     </p>
                   )}
@@ -594,6 +687,11 @@ export default function CandidatesPage() {
                     ))}
                   </div>
                 )}
+
+                {/* Why this person is in a filtered list — the labels they carry. */}
+                <div className="mb-4">
+                  <TagChips tags={(candidate.tags ?? []).map((ut) => ut.tag)} testId={`candidate-tags-${candidate.id}`} />
+                </div>
 
                 {candidate.cvUrl && (
                   <a

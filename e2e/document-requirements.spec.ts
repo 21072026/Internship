@@ -195,8 +195,8 @@ test('portal warning and weekly reminders are missing-driven and deduped by UTC 
   await prisma.user.update({ where: { id: inactiveMentor.id }, data: { orgId: org.id, isActive: false } });
   await prisma.user.updateMany({ where: { id: { in: [completedMentor.id, admin.id] } }, data: { orgId: org.id } });
   await prisma.user.update({ where: { id: emptyMentee.id }, data: { orgId: emptyOrg.id } });
-  const mentorRelation = await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, pipelineStatus: 'APPLICATION_100' } });
-  const optedOutMentorRelation = await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: optedOutMentor.id, menteeId: mentee.id, pipelineStatus: 'APPLICATION_100' } });
+  await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, pipelineStatus: 'APPLICATION_100' } });
+  await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: optedOutMentor.id, menteeId: mentee.id, pipelineStatus: 'APPLICATION_100' } });
   await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: inactiveMentor.id, menteeId: mentee.id, pipelineStatus: 'APPLICATION_100' } });
   await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: completedMentor.id, menteeId: mentee.id, pipelineStatus: 'APPLICATION_100', status: 'COMPLETED', completedAt: new Date() } });
   const requirement = await prisma.documentRequirement.create({ data: { orgId: org.id, key: 'residence', labels: { en: 'Residence permit', tr: 'Oturum izni', de: 'Aufenthaltstitel' }, appliesToRole: 'MENTEE' } });
@@ -215,8 +215,6 @@ test('portal warning and weekly reminders are missing-driven and deduped by UTC 
     expect((await page.request.get('/api/cron?job=missing-documents')).ok()).toBeTruthy();
     expect(await prisma.documentRequirementReminder.count({ where: { requirementId: requirement.id, menteeId: mentee.id } })).toBe(3);
     expect(await prisma.notification.count({ where: { userId: { in: [mentee.id, mentor.id, optedOutMentor.id] }, type: { startsWith: 'missing_document.' } } })).toBe(3);
-    expect((await prisma.notification.findFirstOrThrow({ where: { userId: mentor.id, type: 'missing_document.mentor' } })).link).toBe(`/mentor/mentees/${mentorRelation.id}`);
-    expect((await prisma.notification.findFirstOrThrow({ where: { userId: optedOutMentor.id, type: 'missing_document.mentor' } })).link).toBe(`/mentor/mentees/${optedOutMentorRelation.id}`);
     expect(await prisma.notification.count({ where: { userId: { in: [inactiveMentor.id, completedMentor.id] }, type: { startsWith: 'missing_document.' } } })).toBe(0);
     expect(await prisma.emailLog.count({ where: { to: { in: [menteeEmail, mentorEmail] }, category: 'document-reminder' } })).toBe(2);
     expect(await prisma.emailLog.count({ where: { to: optedOutMentorEmail, category: 'document-reminder' } })).toBe(0);

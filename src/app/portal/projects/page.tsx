@@ -7,6 +7,8 @@ import { getServerDictionary } from '@/i18n/server';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
+import { hasAcceptedContributorTerms } from '@/lib/contributorTerms';
+import { ContributorTermsGate } from '@/components/ContributorTermsGate';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,25 @@ export default async function PortalProjectsPage() {
   if (!session) redirect('/auth/signin');
 
   const { t } = await getServerDictionary();
+
+  // The one contributor-facing surface in the portal (#1025). Project work is
+  // where authored material — and with it the IP question — comes from, so this
+  // is the page the platform-level contributor terms gate belongs in front of.
+  // The rest of the portal stays open on purpose: the terms are about
+  // contributions, not about being a mentee.
+  if (!(await hasAcceptedContributorTerms(session.user.id))) {
+    return (
+      <div className="py-6">
+        <ContributorTermsGate
+          title={t.contributorTerms.gateTitle}
+          body={t.contributorTerms.gateBody}
+          cta={t.contributorTerms.gateCta}
+          next="/portal/projects"
+        />
+      </div>
+    );
+  }
+
   const projects = await loadMenteeProjects(session.user.id);
 
   const statusLabel = (s: string) =>

@@ -10,6 +10,56 @@ Newest entries on top.
 
 ---
 
+## 2026-08-24 — Telefon genişliğinde düzen denetimi: sıkışan satırlar sayfa taşması yapmaz (#1305)
+
+**"Yatay kaydırma var mı" kuralı bu hataların çoğunu KAÇIRIYOR.** Bildirilen bozukluk
+(/admin/mentors'ta mentor adının "E·" olarak görünmesi) hiçbir yerde sayfayı genişletmiyordu:
+`justify-between` satırda `flex-shrink-0` bir aksiyon kümesi kimlik sütununu **18px**'e
+sıkıştırıyordu. Yakalayan kural: **bir kutunun kendi içeriğini yatay taşırması**
+(`el.scrollWidth > el.clientWidth + 4`) ve **daralmış metin** (`clientWidth < 110` iken
+içerik daha geniş). Bu iki kural `e2e/mobile-layout-audit.spec.ts`'te; `mobile-responsive`
+spec'inin eski iki kuralı (sayfa kaydırması + form alanı genişliği) yeterli değildi.
+
+**Kaçınılması gereken iki yanlış pozitif** (aksi hâlde denetim gürültüden kullanılamaz):
+`overflow-x-auto` bir ata içindeki geniş tablo (kaydırılabilir → bozuk değil) ve **negatif
+yatay margin'li çocuk** (`-mx-2 px-2` hover zeminleri kart padding'ine taşar; scrollWidth'i
+tasarımca büyütür). `sr-only` yardımcıları da 1px'tir.
+
+**Tarama TR ve DE ile yapılmalı.** `/admin/analytics`, `/admin/companies`, `/admin/support`
+İngilizce'de sığıyor, Almanca'da taşıyor — biri sayfayı 51px yatay kaydırmaya sokuyordu.
+Locale'i `document.cookie = 'locale=de;path=/'` ile zorla (i18n-coverage.spec deseni);
+kullanıcı tercihi yerine çerez kazanır.
+
+**Tekrarlayan düzeltme desenleri:** (1) satırı telefonda dikey yığ (`flex-col sm:flex-row`),
+(2) aksiyon kümesini sar (`flex-wrap`), (3) metin bloğuna `min-w-0` + `truncate` ver,
+(4) `<input>`'a `min-w-0` (input varsayılan içsel genişliğinin altına inmez, komşu butonu
+kutudan atar), (5) sabit `w-56`/`w-48` etiket sütunlarını telefonda `w-1/2 sm:w-56` yap.
+Marka satırında `truncate`'i **satıra değil isme** koy: satırı kırpmak beta rozetini yarıdan
+kesiyordu ("Internship CRM BI"). `BrandWordmark` bunun için `oneLine` prop'u aldı — kenar
+çubuğunda isim iki satıra sarabilir, mobil barda kısalır.
+
+**JSX yorumu ekleme tuzağı:** `.map((x) => (` veya bir ternary'nin `) : (` kolundan hemen
+sonra `{/* ... */}` koymak "Expected '</', got ..." sözdizimi hatası verir (iki komşu düğüm).
+Yorumu ya açılan etiketin İÇİNE ya da `map` çağrısının üstüne koy. `tsc --noEmit` bunu
+yakalar; dev sunucusu 500 döner.
+
+**Playwright bu konteynerde:** kurulu build `chromium-1194`, Playwright 1.62 ise
+`chromium_headless_shell-1234` arıyor. Çalışan yol: repoya **commit edilmeyen**
+`playwright.local.config.ts` (repo config'ini import edip
+`use.launchOptions.executablePath = '/opt/pw-browsers/chromium'` ekler) ve
+`npx playwright test --config=playwright.local.config.ts`. Config dosyası repo dışında
+(/tmp) olursa `test.afterAll() did not expect to be called here` hatası verir — repo kökünde
+tut. Ayrıca kendi spec'ini **düzeltmeyi geri alıp** koştur (`git stash push <dosya>`): benim
+denetimim ilk hâlde iki `spills` satırıyla düştü, yani boş test değil.
+
+**Yükleme durumu denetimi bozar:** `networkidle` bu kabuklarda hiç gelmiyor (TimezoneSync +
+sidebar prefetch), o yüzden `.animate-pulse` sayısının 0'a düşmesini bekle — iskelet
+üzerinden ölçüm alırsan sayfa "temiz" görünür. Aynı `page` içinde ikinci bir kullanıcıya
+`signInAndSettle` ile geçmek /mentor/mentees'i kalıcı iskelette bıraktı; rol başına ayrı
+`test()` (yani ayrı page fixture) hem hızlı hem güvenilir.
+
+---
+
 ## 2026-08-24 — Ticari SAST raporunu triyaj etmek: 25 bulgu, 25 yanlış pozitif, 2 kaçırılmış gerçek (#1294)
 
 **Bu tarayıcı `where: { field: variable }` desenini ORM'den ve veritabanı tipinden bağımsız
@@ -4021,3 +4071,177 @@ config: `import base from '/home/user/Internship/playwright.config'` + `testDir`
 dosyaları `e2e/` içinde durmalı (scratchpad'den `./helpers/db` çözülmüyor) ve
 `DATABASE_URL`/`NEXTAUTH_*` env'e elle verilmeli (cwd repo olmadığı için `.env`
 okunmuyor).
+
+## 2026-08-24 — arka arkaya dört iş (#862, #670, #830, #822)
+
+**Bir dev sunucusu, tek `.next`.** İki tuzak aynı gün ısırdı: (1) dev sunucusu
+koşarken `npm run build` çalıştırmak `.next`'i bozuyor → 500'ler ve
+`Cannot find module './vendor-chunks/next-auth.js'`; (2) Playwright'ın `webServer`'ı
+3000 hazır değilken **ikinci** bir sunucuyu 3001'de açtığında iki süreç aynı `.next`'i
+paylaşıyor, her `_next/static/*` 404 dönüyor, sayfa hydrate olmuyor ve giriş formu
+native POST yapıyor. Belirti "form çalışmıyor" gibi görünüyor, sebep tamamen build
+katmanında. Kural: build'den önce `pkill` + `rm -rf .next`, tek sunucu başlat,
+`curl -o /dev/null -w '%{http_code}' .../\_next/static/chunks/main-app.js` ile 200
+gördükten sonra teste başla.
+
+**`pkill -f "next"` kendi komutunu da öldürür.** `npm run build`'i içeren bash
+satırı da "next" içerdiği için pkill onu da vuruyor; build **exit 144** ile ölüyor ve
+"build kırıldı" sanıyorsun. `pkill -f "next-server"` / `"next dev"` gibi dar desen
+kullan, ya da build'i ayrı bir çağrıda çalıştır.
+
+**MariaDB container boşta kalınca ölüyor** ve landing artık DB'ye gittiği için
+(`/api/public/stats`, #1099) `/` 500 dönüyor → Playwright'ın hazırlık kontrolü de
+düşüyor. Her oturumda ilk komut: `service mariadb start`.
+
+**Yerel kırmızıyı temiz `main`'e karşı doğrula.** Bu container'da `pipeline.spec:8`,
+`rate-limit.spec:29` ve `smoke.spec:53` değişiklikten bağımsız kırmızı. `git stash -u`
++ `npx prisma generate` ile 2 dakikada kanıtlanıyor — PR'da "bunlar bende de aynı
+şekilde düşüyor" diye yazabilmek, regresyon sanıp iyi bir değişikliği geri almaktan
+iyidir. `admin@example.com` kullanan spec'ler için yerel şifre `ChangeMe123!`
+olmayabilir; bcrypt ile bir kerelik güncellemek yeterli.
+
+**Rota parametresi hep "kayıt id'si" değil.** `/mentor/mentees/[id]` aslında
+**ilişki** id'si alıyor (`EvaluationPanel relationId={id}`), mentee id'si değil. Yeni
+bir spec yazmadan önce sayfanın `useParams()`'ı nasıl kullandığına bak; yanlış id ile
+sayfa sessizce boş açılıyor ve hata "bileşen render olmuyor" gibi görünüyor.
+
+**Org'a bağlı bir özelliği test ederken `seedUser` yetmez:** `orgId` null bırakıyor,
+dolayısıyla admin'in org'una kaydettiğin yapılandırma seed edilen ilişkide hiç
+görünmüyor (bende #822'de üç test birden 400 aldı). Ya seed sonrası `orgId`'yi
+admin'in org'una çek, ya da testin kendi `Organization` satırını yaratsın —
+"yapılandırmasız org" senaryosu için ikincisi zaten daha doğru, test sırasından da
+bağımsız olur.
+
+**Şablon/kriter gibi yapılandırmayı silmek yerine emekliye ayır.** #822'de
+`active: false`, #670'te kullanılmış davetin adresini geri yazmak: her ikisi de
+"geçmiş kayıt kendi döneminin etiketiyle okunabilsin" kuralının aynı uygulaması.
+Yeni bir yapılandırma modeli eklerken varsayılan refleks bu olmalı.
+
+**Tek dal, çok iş → PR'ı gerçeğe uydur.** Oturum tek dalda çalışıyorsa ikinci iş
+açık PR'ın üstüne biniyor. Yeni PR açmaya çalışma; PR'ın başlık ve gövdesini iki işi
+de anlatacak şekilde güncelle ve commit sha'larını yaz — diff zaten ayrı okunuyor.
+
+## 2026-08-24 — etiketler, yedek tatbikatı, topic başına DB, runner 429
+
+**CLAUDE.md'deki aşama listesi yanlıştı** (bu oturumda düzeltildi). Enum anahtarları
+İngilizce (`INTERNSHIP_IN_PROGRESS_450`), Türkçe adlar ise *etiket*. Belgedeki listeye
+güvenip `STAJ_DEVAM_450` yazan testim sessizce yanlış aşamayı kurdu ve asıl iddiayı hiç
+sınamadı. **Şema, dokümandan üstündür**: enum değerini `prisma/schema.prisma`'dan teyit et.
+
+**Sayfanın hangi endpoint'i çağırdığını varsayma.** `/admin/candidates` `/api/users`'ı
+değil `/api/candidates`'i kullanıyor. Filtreyi yanlış route'a koyarsan her şey derlenir,
+test bile geçebilir — ama sayfa filtrelemez.
+
+**Sayfalı listede "diğerleri de görünüyor" diye assert etme.** Kaydedilmiş görünüm
+testim bu yüzden düştü: filtre kalkınca beklediğim aday ilk sayfada değildi. Seed'e
+paylaşılan benzersiz bir isim eki koyup arama kutusuyla daralt; liste artık veritabanında
+başka ne varsa ondan bağımsız.
+
+**`window.prompt` açan bir UI adımından sonra sonucu doğrula.** `page.once('dialog')`
+kurup Save'e tıklamak yetmiyor; kaydedilen görünümün gerçekten belirdiğini assert et,
+yoksa sonraki adımlar sessizce yanlış durumda çalışır. Save düğmesine `data-testid`
+eklemek de rol/isim eşleşmesinin başka bir düğmeye kaymasını engelliyor.
+
+**`pkill -f "next"` kendi `npm run build`'ini de öldürür** (exit 144). Dev sunucusunu
+`setsid nohup ... &` ile başlat ve öldürürken `next dev` gibi dar bir kalıp kullan.
+
+**Yeni route ekledikten sonra hayalet TS hatası görürsen `.next`'i sil.** Bayat
+`.next/types/validator.ts` var olmayan sorunları raporluyor.
+
+**`preview.env`'deki `DATABASE_URL` konteyner için yazılmış.** Host'u
+`host.docker.internal` — sunucuda çalışan bir script'te bu isim hiçbir şeye çözümlenmiyor
+ve her mysql çağrısı saniyeden kısa sürede düşüyor. Host tarafında loopback'e eşle
+(#1185 ilk deploy'u tam olarak buna takıldı).
+
+**Plesk kutusunda MySQL root soketle doğrulanmıyor.** Admin işi için `plesk db` kullan;
+`mysql --protocol=socket -u root` yalnızca Plesk olmayan sunucuda çalışır. GRANT verirken
+de hesabın gerçekten var olduğu host'ları `mysql.user`'dan oku — `'user'@'%'` varsaymak,
+hesap `@'localhost'` ise hiç uygulanmayan bir grant üretir ve veritabanı oluşur ama
+konteyner bağlanamaz. Verdiğin yetkiyi uygulama kullanıcısıyla `USE` ederek doğrula.
+
+**Bir istemcinin çıktısını ayrıştırıp SQL'e koyuyorsan süz.** Çerçeveli tablo basan bir
+istemciye düşülürse "host" değerleri `+------+` ve `|` olur ve doğrudan GRANT'e girer.
+
+**Self-hosted runner'da `uses:` kullanma (#1239).** Her action, arşivini
+codeload.github.com'dan indiriyor; sunucunun IP'sinden bu indirmeler 429 dönüyor ve iş
+"Set up job"da, repo kodu çalışmadan ölüyor. Repoyu düz `git fetch <sha>` ile al; action
+gerektiren adımı ayrı bir GitHub-hosted job'a taşı. Belirti yanıltıcı: runner bozuk gibi
+görünüyor, oysa workflow'a `uses:` eklenmiş oluyor.
+
+**`get_job_logs` iş bitmeden 404 döner.** Koşan bir job'un log'unu çekmeye çalışma;
+`get_check_runs` ile bitmesini bekle.
+
+## 2026-08-24 (ikinci tur) — altyapı zinciri, ölçerek karar vermek
+
+**Issue'nun kurduğu ikilemi kabul etmeden önce çağıranlara bak.** #987 "linki
+yanıttan kaldırırsak e-posta gitmediğinde hesap erişilemez kalır, bu gerçek bir
+maliyet" diye tartışıyordu. İki admin ekranı da `setPasswordUrl`'i hiç
+okumuyordu; yani canlı kimlik bilgisi tüketicisiz sızıyordu ve kaldırmanın
+maliyeti sıfırdı. Aynı arama, asıl kusuru da ortaya çıkardı: uçlar e-posta
+hatasını yutup `ok: true` dönüyordu. **Bir issue'nun varsayımı da kanıt ister.**
+
+**"Bump kullanıcılara ne sorulacağını değiştirir" — tüketicileri grep'le.**
+#1177'de `PRIVACY_POLICY_VERSION`'ı hiçbir yer kullanıcının kayıtlı sürümüyle
+karşılaştırmıyordu; `consent/renew` gizlilik yeniden onayı değil, saklama
+teyidi. Bump yalnızca gösterilen tarihi ve yeni kayıtları etkiliyordu.
+
+**Motor tanımıyorsa koruma bir şey satın almaz — ve bunu deneyerek öğren.**
+#1005'te choke-point yardımcısını yazdım, CodeQL aynı üç satırda "3 new high"
+dedi. Kodu geri aldım: o satırlara dokunan her PR'da yeniden uyarı üretmek,
+insanları CodeQL'i atlamaya alıştırır. Doğru cevap Security sekmesinden
+dismiss + gerekçeyi `docs/security-exceptions.md`'ye yazmaktı. **Elimdeki
+araçlarla tek tek code-scanning uyarılarını listeleyemiyorum** (MCP'de uç yok,
+Analyze log'u da listelemiyor) — bunu raporlarken açıkça söyle.
+
+**Yeşil tik "çalıştı" demek değil, log'a bak.** #1249'un demo job'u 6 saniyede
+bitti; şüphelenip log'u açtım, gerçekten konteyneri kurup seed etmişti. Ama
+`continue-on-error` verdiğim için kırmızı olsa da deploy yeşil görünecekti —
+opsiyonel job'larda rengi değil log'u kontrol et.
+
+**Sunucudaki durumu iddia etmeden önce curl'le ölç.** #1249'da demo
+0.78.0-beta, prod 0.105.0-beta çıktı (27 sürüm fark). Bu, PR'ın gövdesindeki en
+ikna edici satır oldu ve düzeltmeden sonra aynı komut kanıtı verdi.
+
+**`git fetch`/`checkout` 2 dakikalık Bash sınırına takılabiliyor.** Uzun
+sürebilen git komutlarını `timeout 60 …` ile sar; takıldığında dal yarı
+güncellenmiş kalıyor, `git log --oneline -1` + `git status -sb` ile durumu
+doğrula.
+
+**Backlog'tan iş seçerken önce atamalara ve açık PR'lara bak.** #869/#891/#894
+alt görevleri insan stajyerlere atanmış, #1302'nin zaten açık PR'ı vardı.
+`list_issues` ile `assignees` alanını çekmek bir çağrı; çakışan PR açmak bir
+gün.
+
+## 2026-08-24 — İsimleri her yerde tıklanabilir yapmak (#1166 devamı)
+
+**Hover kartı vardı, çağrılan yer yoktu.** `PersonHoverCard` (#1166) yalnızca 3 ekranda
+kullanılıyordu; isimlerin çoğu hâlâ düz metindi. Böyle bir "yatay" iş için doğru yöntem
+`grep -rn "fullName}" --include=*.tsx src/` ile tüm render noktalarını çıkarıp tek tek
+elemek: zaten `<Link>` olanlar (admin listeleri) atlanır, kalanlar sarılır. Kalan ~50
+eşleşmenin yarısı `label=`, `alt=`, `value=` gibi gürültü — filtreyi baştan daralt.
+
+**Kartın izin kuralı, kartın konduğu ekranı takip etmek zorunda.** `canViewPersonCard`
+"birlikte bir ilişki/proje/sohbet" arıyordu; oysa kartın en çok gerektiği yer *karar
+anı*: proje sahibinin katılma talebi kuyruğu ve mentörün başvuru kutusu — ki oralarda
+henüz ne üyelik ne ilişki var. Bekleyen `ProjectJoinRequest` / `MentorshipRequest`
+kaydını da yetki kaynağı saymak gerekti (karar verilince satır kapanır, izin de
+kendiliğinden ilişkiye devrolur).
+
+**`/mentor/mentees/<id>` ilişki id'si ister, kullanıcı id'si değil.** `personHref`
+mentör dalında kullanıcı id'si ile link üretiyordu → "ilişki bulunamadı". Kart uç
+noktası artık görüntüleyen mentörün ilişkisinin id'sini (`relationId`) döndürüyor;
+yoksa link hiç gösterilmiyor. Mevcut e2e assert'i de aynı hatayı doğruluyordu (sadece
+attribute'a bakıp sayfayı açmıyordu) — bir link testi yazarken hedefin gerçekten
+açıldığını da düşünmek gerek.
+
+**Playwright 1.62 + `/opt/pw-browsers`:** kurulu paket 1194, beklenen sürüm 1234 ve
+dizin düzeni de değişmiş — `chromium_headless_shell-1234/chrome-headless-shell-linux64/
+chrome-headless-shell` yolunu elle kurup 1194'ün `chrome-linux/headless_shell`
+dosyasına symlink vermek yetti (`playwright install` yerine).
+
+**Dev sunucuda ilk derleme, tıklamadan hemen sonraki client state'i uçurabiliyor.**
+`/projects/[id]` ilk ziyarette derlenirken Fast Refresh remount'u kartın `open`
+durumunu sıfırladı; aynı test ısınmış sunucuda geçiyordu. Çözüm testi
+`expect(async () => { await trigger.click(); await expect(card).toBeVisible(); })
+.toPass()` ile yeniden denenebilir yapmak — CI'da (`npm run start`) yaşanmayan, yerelde
+kafa karıştıran bir fark.

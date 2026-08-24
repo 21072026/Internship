@@ -67,12 +67,16 @@ BRANCH="${BRANCH:-main}"
 NO_PULL=0
 SKIP_BUILD=0
 PULL_IMAGE=0
+ROLLBACK=0
 for arg in "$@"; do
   case "$arg" in
     --no-pull) NO_PULL=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
     # The image already exists in the registry — fetching it replaces the build.
     --pull-image) PULL_IMAGE=1; SKIP_BUILD=1 ;;
+    # Put the previous release back (#961). No git, no build, no schema push —
+    # the one thing you need working when a deploy has just gone wrong.
+    --rollback) ROLLBACK=1 ;;
     *) echo "Unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -115,29 +119,9 @@ set -a; . "$ENV_FILE"; set +a
 : "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET missing in $ENV_FILE}"
 : "${NEXTAUTH_URL:?NEXTAUTH_URL missing in $ENV_FILE}"
 
-# ── 1. Sync source ───────────────────────────────────────────────────────────
-if [ "$NO_PULL" -eq 0 ]; then
-  log "Syncing $BRANCH from origin"
-  git fetch origin "$BRANCH"
-  git checkout "$BRANCH"
-  git reset --hard "origin/$BRANCH"
-fi
-# DEPLOY_SHA lets the caller name the commit the image was built from, which is
-# what the forward-only guard and the state file below must reason about. With a
-# local build that is always HEAD; with --pull-image the workflow passes the sha
-# it built so a shared/shallow runner workspace can't disagree with the image.
-GIT_SHA="${DEPLOY_SHA:-$(git rev-parse HEAD)}"
-log "Deploying ${GIT_SHA:0:7} — $(node -p "require('./package.json').version" 2>/dev/null || echo '?')"
-
-# ── 1b. Forward-only guard (prod) ────────────────────────────────────────────
-# Production must only ever move FORWARD. Two uncoordinated deployers write the
-# prod container (the cron autodeploy poller + the deploy-prod workflow), and a
-# stale/out-of-order build could otherwise overwrite a newer release with an
-# older commit (the "one step forward, one step back" regressions). When
-# FORWARD_ONLY=1, refuse to deploy a commit that is an ancestor of (i.e. older
-# than) the last one this container successfully deployed. Preview/topic deploys
-# leave FORWARD_ONLY unset so they can still deploy arbitrary/older PR refs.
-# Set FORCE=1 for a deliberate rollback.
+# ── Runtime shape: networking, health checks, image hygiene ──────────────────
+# Defined up here, before anything touches git or the registry, because the
+# rollback path below has to work when those are exactly what is broken (#961).
 STATE_FILE="${DEPLOY_STATE_FILE:-$(dirname "$ENV_FILE")/.${CONTAINER}.deployed-sha}"
 
 # Emit a warning that is actually visible in the Actions UI, not just buried in a
@@ -165,6 +149,189 @@ HEALTH_HDR=""
 health_curl() { # health_curl <url>
   if [ -n "$HEALTH_HDR" ]; then curl -fsS --max-time 10 -H "$HEALTH_HDR" "$1"; else curl -fsS --max-time 10 "$1"; fi
 }
+
+# Networking mode (#preview): prod runs on host networking with the DB at
+# localhost. Preview's DB user is only granted from the docker gateway (not
+# localhost), so preview must use bridge networking + host.docker.internal and
+# a published port. Default 'host' keeps prod behavior byte-for-byte.
+NETWORK="${NETWORK:-host}"
+if [ "$NETWORK" = host ]; then
+  APP_NET_ARGS=(--network=host)
+  APP_PORT_ARGS=(-e PORT="$PORT")
+  TOOL_NET_ARGS=(--network=host)
+else
+  # bridge: reach the host DB via host.docker.internal, publish the app port.
+  APP_NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "$PORT:3000")
+  APP_PORT_ARGS=()
+  TOOL_NET_ARGS=(--add-host=host.docker.internal:host-gateway)
+fi
+
+run_tool() { # run a one-off tool container against the DB (network per $NETWORK)
+  docker run --rm "${TOOL_NET_ARGS[@]}" -e DATABASE_URL="$DATABASE_URL" "$IMAGE" "$@"
+}
+
+# One list of runtime env flags, used for BOTH containers. Two copies of this
+# list is how a variable ends up set on the canary and missing in production.
+app_env_args() {
+  printf '%s\0' \
+    -e DATABASE_URL="$DATABASE_URL" \
+    -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
+    -e NEXTAUTH_URL="$NEXTAUTH_URL" \
+    -e NEXT_PUBLIC_APP_URL="$NEXTAUTH_URL" \
+    -e SMTP_HOST="${SMTP_HOST:-}" \
+    -e SMTP_PORT="${SMTP_PORT:-}" \
+    -e SMTP_USER="${SMTP_USER:-}" \
+    -e SMTP_PASS="${SMTP_PASS:-}" \
+    -e SMTP_FROM="${SMTP_FROM:-}" \
+    -e SMTP_BULK_HOST="${SMTP_BULK_HOST:-}" \
+    -e SMTP_BULK_PORT="${SMTP_BULK_PORT:-}" \
+    -e SMTP_BULK_USER="${SMTP_BULK_USER:-}" \
+    -e SMTP_BULK_PASS="${SMTP_BULK_PASS:-}" \
+    -e SMTP_BULK_FROM="${SMTP_BULK_FROM:-}" \
+    -e INBOUND_EMAIL_DOMAIN="${INBOUND_EMAIL_DOMAIN:-}" \
+    -e INBOUND_SECRET="${INBOUND_SECRET:-}" \
+    -e INBOUND_IMAP_HOST="${INBOUND_IMAP_HOST:-}" \
+    -e INBOUND_IMAP_PORT="${INBOUND_IMAP_PORT:-}" \
+    -e INBOUND_IMAP_USER="${INBOUND_IMAP_USER:-}" \
+    -e INBOUND_IMAP_PASS="${INBOUND_IMAP_PASS:-}" \
+    -e INBOUND_IMAP_MAILBOX="${INBOUND_IMAP_MAILBOX:-}" \
+    -e INBOUND_IMAP_POLL_SECONDS="${INBOUND_IMAP_POLL_SECONDS:-}" \
+    -e INBOUND_IMAP_ENABLED="${INBOUND_IMAP_ENABLED:-}" \
+    -e CRON_SECRET="${CRON_SECRET:-}" \
+    -e CRON_ENABLED="${CRON_ENABLED:-}" \
+    -e TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}" \
+    -e HEALTH_TOKEN="${HEALTH_TOKEN:-}" \
+    -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
+    -e JAAS_API_KEY_ID="${JAAS_API_KEY_ID:-}" \
+    -e JAAS_PRIVATE_KEY="${JAAS_PRIVATE_KEY:-}"
+}
+mapfile -d '' -t APP_ENV_ARGS < <(app_env_args)
+
+# Wait for /api/health?db=1 and assert what it says. Used for the canary, for
+# the real container, and for --rollback.
+#   check_health <url> <container> [expected-sha|any]
+check_health() {
+  local url="$1" name="$2" want_sha="${3:-any}" health='' i
+  for i in $(seq 1 30); do
+    health="$(health_curl "$url" 2>/dev/null || true)"
+    [ -n "$health" ] && break
+    sleep 2
+  done
+  if [ -z "$health" ]; then
+    echo "ERROR: $name did not answer at $url within 60s. Recent logs:" >&2
+    docker logs --tail 40 "$name" >&2 || true
+    return 1
+  fi
+  local field status sha db
+  field() { printf '%s' "$health" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"; }
+  status="$(field status)"; sha="$(field sha)"; db="$(field db)"
+  if [ "$db" = error ]; then
+    echo "ERROR: $name is up but cannot reach the database (health: $health)." >&2
+    docker logs --tail 40 "$name" >&2 || true
+    return 1
+  fi
+  if [ "$status" != ok ]; then
+    echo "ERROR: $name reported status '$status' (health: $health)." >&2
+    return 1
+  fi
+  # GIT_SHA is baked into the image at build time and truncated to 7 in
+  # src/lib/version.ts. 'dev' means the --build-arg was lost, which would also
+  # make the drift gate rebuild on every tick forever — a failure, not drift.
+  if [ "$want_sha" != any ] && [ "$sha" != "$want_sha" ]; then
+    echo "ERROR: $name is serving sha '$sha' but $want_sha was just built and deployed." >&2
+    echo "       A stale image would be live and the drift gate would treat it as current." >&2
+    docker logs --tail 40 "$name" >&2 || true
+    return 1
+  fi
+  SERVED_SHA="$sha"; SERVED_DB="$db"; SERVED_STATUS="$status"
+  return 0
+}
+
+# Reclaim disk WITHOUT deleting the rollback target. `docker image prune -af`
+# removes every image no container is using — including the `:previous` tag this
+# script just created, which would quietly undo the whole point of #961. So:
+# dangling layers unconditionally, plus app images that are neither the one
+# running nor the one we can roll back to.
+prune_images() {
+  local keep_current="$1" keep_prev="$2"
+  docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
+    | grep -E '^(ghcr\.io/[^:]+|internship-crm[^:]*):' \
+    | grep -vx "$keep_current" \
+    | grep -vx "$keep_prev" \
+    | grep -v ':previous$' \
+    | xargs -r docker rmi >/dev/null 2>&1 || true
+  docker image prune -f >/dev/null 2>&1 || true
+  docker builder prune -af --filter until=72h >/dev/null 2>&1 || true
+}
+
+remove_canary() {
+  docker stop "$CANARY" >/dev/null 2>&1 || true
+  docker rm   "$CANARY" >/dev/null 2>&1 || true
+}
+
+
+# ── Rollback (#961) ──────────────────────────────────────────────────────────
+# Deliberately BEFORE the git sync, the build and the schema push: when a deploy
+# has just gone wrong, the last thing you want is for putting the old release
+# back to depend on the machinery that broke. This path touches nothing but
+# docker.
+if [ "$ROLLBACK" = "1" ]; then
+  PREV_TAG="${CONTAINER}:previous"
+  docker image inspect "$PREV_TAG" >/dev/null 2>&1 || {
+    echo "ERROR: no rollback target — $PREV_TAG does not exist on this host." >&2
+    echo "       It is created by the deploy that replaced the previous release; an" >&2
+    echo "       environment that has not deployed since #961 shipped has none yet." >&2
+    exit 1
+  }
+  log "Rolling $CONTAINER back to $PREV_TAG"
+  docker stop "$CONTAINER" 2>/dev/null || true
+  docker rm   "$CONTAINER" 2>/dev/null || true
+  docker run -d \
+    --name "$CONTAINER" \
+    "${APP_NET_ARGS[@]}" \
+    --restart=unless-stopped \
+    "${APP_PORT_ARGS[@]}" \
+    "${APP_ENV_ARGS[@]}" \
+    "$PREV_TAG" >/dev/null
+  # No sha to assert against: the point of a rollback is that we want whatever
+  # the previous image serves. Report it so the operator can see where they are.
+  if ! check_health "http://127.0.0.1:$PORT/api/health?db=1" "$CONTAINER" any; then
+    echo "ERROR: the rollback target is ALSO unhealthy. This host needs hands." >&2
+    exit 1
+  fi
+  # The state file drives the forward-only guard. A rollback is a deliberate
+  # move backwards, so record what is actually live — otherwise the next deploy
+  # compares against a commit that is no longer serving.
+  mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
+  printf '%s\n' "$SERVED_SHA" > "$STATE_FILE" 2>/dev/null || true
+  log "Rolled back — $CONTAINER is up at :$PORT serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
+  exit 0
+fi
+
+# ── 1. Sync source ───────────────────────────────────────────────────────────
+if [ "$NO_PULL" -eq 0 ]; then
+  log "Syncing $BRANCH from origin"
+  git fetch origin "$BRANCH"
+  git checkout "$BRANCH"
+  git reset --hard "origin/$BRANCH"
+fi
+# DEPLOY_SHA lets the caller name the commit the image was built from, which is
+# what the forward-only guard and the state file below must reason about. With a
+# local build that is always HEAD; with --pull-image the workflow passes the sha
+# it built so a shared/shallow runner workspace can't disagree with the image.
+GIT_SHA="${DEPLOY_SHA:-$(git rev-parse HEAD)}"
+log "Deploying ${GIT_SHA:0:7} — $(node -p "require('./package.json').version" 2>/dev/null || echo '?')"
+
+# ── 1b. Forward-only guard (prod) ────────────────────────────────────────────
+# Production must only ever move FORWARD. Two uncoordinated deployers write the
+# prod container (the cron autodeploy poller + the deploy-prod workflow), and a
+# stale/out-of-order build could otherwise overwrite a newer release with an
+# older commit (the "one step forward, one step back" regressions). When
+# FORWARD_ONLY=1, refuse to deploy a commit that is an ancestor of (i.e. older
+# than) the last one this container successfully deployed. Preview/topic deploys
+# leave FORWARD_ONLY unset so they can still deploy arbitrary/older PR refs.
+# Set FORCE=1 for a deliberate rollback.
+
 LIVE_SHA="$(health_curl "http://127.0.0.1:$PORT/api/health" 2>/dev/null \
             | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
 if [ "${FORWARD_ONLY:-0}" = "1" ] && [ "${FORCE:-0}" != "1" ]; then
@@ -217,26 +384,6 @@ elif [ "$SKIP_BUILD" -eq 0 ]; then
   log "Building $IMAGE (GIT_SHA=$GIT_SHA)"
   docker build --build-arg GIT_SHA="$GIT_SHA" -t "$IMAGE" .
 fi
-
-# Networking mode (#preview): prod runs on host networking with the DB at
-# localhost. Preview's DB user is only granted from the docker gateway (not
-# localhost), so preview must use bridge networking + host.docker.internal and
-# a published port. Default 'host' keeps prod behavior byte-for-byte.
-NETWORK="${NETWORK:-host}"
-if [ "$NETWORK" = host ]; then
-  APP_NET_ARGS=(--network=host)
-  APP_PORT_ARGS=(-e PORT="$PORT")
-  TOOL_NET_ARGS=(--network=host)
-else
-  # bridge: reach the host DB via host.docker.internal, publish the app port.
-  APP_NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "$PORT:3000")
-  APP_PORT_ARGS=()
-  TOOL_NET_ARGS=(--add-host=host.docker.internal:host-gateway)
-fi
-
-run_tool() { # run a one-off tool container against the DB (network per $NETWORK)
-  docker run --rm "${TOOL_NET_ARGS[@]}" -e DATABASE_URL="$DATABASE_URL" "$IMAGE" "$@"
-}
 
 # ── 3. Backup, then schema sync ──────────────────────────────────────────────
 # The push below runs with --accept-data-loss, so this is the last moment at
@@ -360,6 +507,8 @@ run_tool node prisma/seed-templates.mjs || true
 # The shared project-goal template pool (#51) — every project sees these on top
 # of its own. Only ever adds missing titles.
 run_tool node prisma/seed-goal-templates.mjs || true
+# Contributor terms v1.0 (#1025) — versioned rows; never edits an existing one.
+run_tool node prisma/seed-contributor-terms.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-organization.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
@@ -376,6 +525,73 @@ run_tool node prisma/backfill-relation-completed-at.mjs || true
 run_tool node prisma/backfill-series-meetings.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
+# Blue/green, because the old way was an outage waiting to happen (#961): it
+# stopped and removed the running container BEFORE proving the new image works,
+# so any failure between `docker stop` and a passing health check left the
+# environment DOWN rather than merely stale — and on 2026-07-28 it did exactly
+# that, on all three environments at once.
+#
+# Now: start the new image under a throwaway name on a throwaway port, prove it
+# boots, reaches the database and serves the sha we just built, and only then
+# touch the thing that is currently serving. If the canary fails, the old
+# container is still running and this script exits non-zero having changed
+# nothing about what users see.
+#
+# Host networking means the canary cannot share $PORT, so it gets its own — the
+# canary proves the IMAGE, and the final swap is then a restart on the real
+# port with a known-good image rather than a leap of faith.
+CANARY="${CONTAINER}-canary"
+CANARY_PORT="${CANARY_PORT:-$((PORT + 100))}"
+
+if [ "${SKIP_CANARY:-0}" = "1" ]; then
+  log "SKIP_CANARY=1 — swapping without proving the new image first"
+else
+  log "Canary: starting $IMAGE as $CANARY on :$CANARY_PORT (the live container is untouched)"
+  remove_canary
+  if [ "$NETWORK" = host ]; then
+    CANARY_NET_ARGS=(--network=host)
+    CANARY_PORT_ARGS=(-e PORT="$CANARY_PORT")
+  else
+    CANARY_NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "$CANARY_PORT:3000")
+    CANARY_PORT_ARGS=()
+  fi
+  # The canary shares the production DATABASE_URL, so its background workers are
+  # switched OFF: a second cron would send the same reminder twice and a second
+  # IMAP poller would race the live one for the same inbox. These two flags are
+  # the documented kill switches (src/instrumentation.ts). They come AFTER the
+  # shared env list on purpose — docker takes the last `-e` for a given key, so
+  # these override whatever the env file set.
+  docker run -d \
+    --name "$CANARY" \
+    "${CANARY_NET_ARGS[@]}" \
+    "${CANARY_PORT_ARGS[@]}" \
+    "${APP_ENV_ARGS[@]}" \
+    -e CRON_ENABLED=0 \
+    -e INBOUND_IMAP_ENABLED=0 \
+    "$IMAGE" >/dev/null
+
+  if ! check_health "http://127.0.0.1:$CANARY_PORT/api/health?db=1" "$CANARY" "${GIT_SHA:0:7}"; then
+    remove_canary
+    echo "ERROR: the new image failed its canary check. NOTHING was swapped — $CONTAINER is still serving." >&2
+    exit 1
+  fi
+  log "Canary OK — ${SERVED_SHA}, db ${SERVED_DB:-skipped}. Promoting."
+  remove_canary
+fi
+
+# ── Rollback target ──────────────────────────────────────────────────────────
+# Tag the image that is about to be replaced. Before #961 the outgoing image was
+# deleted by `docker image prune -af`, so "put the previous release back" meant
+# a rebuild — exactly what you cannot do when the runner is the thing that
+# broke. Now it is a `docker run` away (--rollback below).
+PREV_TAG="${CONTAINER}:previous"
+OUTGOING_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$CONTAINER" 2>/dev/null || true)"
+if [ -n "$OUTGOING_IMAGE" ] && [ "$OUTGOING_IMAGE" != "$IMAGE" ]; then
+  docker tag "$OUTGOING_IMAGE" "$PREV_TAG" 2>/dev/null \
+    && log "Rollback target: $PREV_TAG (was $OUTGOING_IMAGE)" \
+    || warn "could not tag $OUTGOING_IMAGE as $PREV_TAG — no rollback target for this deploy"
+fi
+
 log "Restarting $CONTAINER on :$PORT"
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
@@ -384,36 +600,7 @@ docker run -d \
   "${APP_NET_ARGS[@]}" \
   --restart=unless-stopped \
   "${APP_PORT_ARGS[@]}" \
-  -e DATABASE_URL="$DATABASE_URL" \
-  -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
-  -e NEXTAUTH_URL="$NEXTAUTH_URL" \
-  -e NEXT_PUBLIC_APP_URL="$NEXTAUTH_URL" \
-  -e SMTP_HOST="${SMTP_HOST:-}" \
-  -e SMTP_PORT="${SMTP_PORT:-}" \
-  -e SMTP_USER="${SMTP_USER:-}" \
-  -e SMTP_PASS="${SMTP_PASS:-}" \
-  -e SMTP_FROM="${SMTP_FROM:-}" \
-  -e SMTP_BULK_HOST="${SMTP_BULK_HOST:-}" \
-  -e SMTP_BULK_PORT="${SMTP_BULK_PORT:-}" \
-  -e SMTP_BULK_USER="${SMTP_BULK_USER:-}" \
-  -e SMTP_BULK_PASS="${SMTP_BULK_PASS:-}" \
-  -e SMTP_BULK_FROM="${SMTP_BULK_FROM:-}" \
-  -e INBOUND_EMAIL_DOMAIN="${INBOUND_EMAIL_DOMAIN:-}" \
-  -e INBOUND_SECRET="${INBOUND_SECRET:-}" \
-  -e INBOUND_IMAP_HOST="${INBOUND_IMAP_HOST:-}" \
-  -e INBOUND_IMAP_PORT="${INBOUND_IMAP_PORT:-}" \
-  -e INBOUND_IMAP_USER="${INBOUND_IMAP_USER:-}" \
-  -e INBOUND_IMAP_PASS="${INBOUND_IMAP_PASS:-}" \
-  -e INBOUND_IMAP_MAILBOX="${INBOUND_IMAP_MAILBOX:-}" \
-  -e INBOUND_IMAP_POLL_SECONDS="${INBOUND_IMAP_POLL_SECONDS:-}" \
-  -e INBOUND_IMAP_ENABLED="${INBOUND_IMAP_ENABLED:-}" \
-  -e CRON_SECRET="${CRON_SECRET:-}" \
-  -e CRON_ENABLED="${CRON_ENABLED:-}" \
-  -e TRUSTED_PROXY_COUNT="${TRUSTED_PROXY_COUNT:-1}" \
-  -e HEALTH_TOKEN="${HEALTH_TOKEN:-}" \
-  -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
-  -e JAAS_API_KEY_ID="${JAAS_API_KEY_ID:-}" \
-  -e JAAS_PRIVATE_KEY="${JAAS_PRIVATE_KEY:-}" \
+  "${APP_ENV_ARGS[@]}" \
   "$IMAGE"
 
 # ── 6. Health check + prune ──────────────────────────────────────────────────
@@ -423,41 +610,13 @@ docker run -d \
 # "already current — nothing to deploy" decision off this same endpoint's `sha`.
 # A container serving a stale image that happens to report the right sha would
 # make the gate skip every future build.
+#
+# The canary already proved this image; this is the same assertion against the
+# container users actually reach. If it fails now, the rollback target tagged
+# above is what puts the previous release back: ./infra/deploy-prod.sh --rollback
 log "Health check http://127.0.0.1:$PORT/api/health?db=1"
-ok=0
-health=''
-for i in $(seq 1 30); do
-  health="$(health_curl "http://127.0.0.1:$PORT/api/health?db=1" 2>/dev/null || true)"
-  if [ -n "$health" ]; then ok=1; break; fi
-  sleep 2
-done
-if [ "$ok" -ne 1 ]; then
-  echo "ERROR: app did not answer on :$PORT within 60s. Recent logs:" >&2
-  docker logs --tail 40 "$CONTAINER" >&2 || true
-  exit 1
-fi
-
-health_field() { printf '%s' "$health" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"; }
-SERVED_STATUS="$(health_field status)"
-SERVED_SHA="$(health_field sha)"
-SERVED_DB="$(health_field db)"
-
-if [ "$SERVED_DB" = error ]; then
-  echo "ERROR: $CONTAINER is up but cannot reach the database (health: $health)." >&2
-  docker logs --tail 40 "$CONTAINER" >&2 || true
-  exit 1
-fi
-if [ "$SERVED_STATUS" != ok ]; then
-  echo "ERROR: $CONTAINER reported status '$SERVED_STATUS' (health: $health)." >&2
-  exit 1
-fi
-# GIT_SHA is baked into the image at build time and truncated to 7 in
-# src/lib/version.ts. 'dev' means the --build-arg was lost, which would also make
-# the drift gate rebuild on every tick forever — treat it as a failure, not drift.
-if [ "$SERVED_SHA" != "${GIT_SHA:0:7}" ]; then
-  echo "ERROR: $CONTAINER is serving sha '$SERVED_SHA' but ${GIT_SHA:0:7} was just built and deployed." >&2
-  echo "       A stale image is live and the drift gate would treat it as current. Not recording this deploy." >&2
-  docker logs --tail 40 "$CONTAINER" >&2 || true
+if ! check_health "http://127.0.0.1:$PORT/api/health?db=1" "$CONTAINER" "${GIT_SHA:0:7}"; then
+  echo "       Roll back with: CONTAINER=$CONTAINER ./infra/deploy-prod.sh --rollback" >&2
   exit 1
 fi
 log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
@@ -467,6 +626,5 @@ log "Health OK — serving ${SERVED_SHA}, db ${SERVED_DB:-skipped}"
 mkdir -p "$(dirname "$STATE_FILE")" 2>/dev/null || true
 printf '%s\n' "$GIT_SHA" > "$STATE_FILE" 2>/dev/null || true
 
-docker image prune -af >/dev/null 2>&1 || true
-docker builder prune -af --filter until=72h >/dev/null 2>&1 || true
+prune_images "$IMAGE" "$PREV_TAG"
 log "Done — $CONTAINER is up at :$PORT (${GIT_SHA:0:7})"

@@ -54,3 +54,29 @@ export async function cleanupByEmail(email: string) {
   }
   await prisma.invitationToken.deleteMany({ where: { email: { equals: email } } });
 }
+
+/**
+ * Record a contributor-terms acceptance for a seeded user (#1025, #1026).
+ *
+ * Two surfaces are gated on it: `/portal/projects` on the platform-level
+ * acceptance (`projectId` omitted), and a project's internal view on an
+ * acceptance scoped to that project (`projectId` given). A real member who is
+ * working on a project has both; a freshly seeded one has neither. No-op when
+ * the installation has no terms configured, which is also when the gates let
+ * everyone through.
+ */
+export async function acceptContributorTerms(
+  userId: string,
+  opts: { termsKey?: string; projectId?: string } = {}
+) {
+  const termsKey = opts.termsKey ?? 'default';
+  const terms = await prisma.contributorTerms.findFirst({
+    where: { key: termsKey },
+    orderBy: [{ effectiveFrom: 'desc' }, { version: 'desc' }],
+    select: { version: true },
+  });
+  if (!terms) return null;
+  return prisma.contributorTermsAcceptance.create({
+    data: { userId, termsKey, version: terms.version, projectId: opts.projectId ?? null },
+  });
+}

@@ -13,6 +13,7 @@ import { UserEraseForm } from '@/components/UserEraseForm';
 import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { useT } from '@/i18n/client';
 import type { AccountState } from '@/lib/accountState';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface AdminUser {
   id: string;
@@ -201,7 +202,7 @@ export default function AdminUsersPage() {
             key={s}
             data-testid={`status-view-${s.toLowerCase()}`}
             onClick={() => { setStatusView(s); setPage(1); }}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            className={`min-h-11 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
               statusView === s ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
@@ -215,7 +216,7 @@ export default function AdminUsersPage() {
           <button
             key={r}
             onClick={() => { setFilter(r); setPage(1); }}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`min-h-11 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               filter === r ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
@@ -228,7 +229,7 @@ export default function AdminUsersPage() {
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder={t.usersAdmin.searchPlaceholder}
-          className="ml-auto w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+          className="ml-auto min-h-11 w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
       </div>
 
@@ -251,7 +252,9 @@ export default function AdminUsersPage() {
                       {u.fullName}
                     </Link>
                   ) : (
-                    <p className="text-sm font-medium text-gray-900 truncate">{u.fullName}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      <PersonHoverCard personId={u.id} name={u.fullName} role={u.role} />
+                    </p>
                   )}
                   <p className="text-xs text-gray-500 truncate">{u.email}</p>
                   {/* Why this account is unreachable, and what to do about it.

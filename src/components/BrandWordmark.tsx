@@ -8,18 +8,20 @@ import { getOrgBranding } from '@/lib/orgBranding';
 // back to the product default ("Internship CRM") when the org has no branding or
 // there's no org, so single-tenant chrome is unchanged. Self-resolving server
 // component so layouts can drop it in with no prop threading.
-export async function BrandWordmark({ className }: { className?: string }) {
+export async function BrandWordmark({ className, oneLine = false }: { className?: string; oneLine?: boolean }) {
   const session = await getServerSession(authOptions);
   const brand = await getOrgBranding(session?.user?.orgId);
   return (
-    <span className={`flex items-center gap-2 ${className ?? ''}`}>
+    <span className={`flex items-center gap-2 ${oneLine ? 'min-w-0' : ''} ${className ?? ''}`}>
       {brand.logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- tenant logo is an arbitrary external/stored URL
-        <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[150px] object-contain" />
+        <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[150px] flex-shrink-0 object-contain" />
       ) : (
-        <GraduationCap className="h-7 w-7 text-blue-600" />
+        <GraduationCap className="h-7 w-7 flex-shrink-0 text-blue-600" />
       )}
-      <span className="font-bold text-gray-900 dark:text-gray-100">{brand.name}</span>
+      {/* Keep the mobile wordmark on one line without squeezing its name; the
+          regular sidebar/desktop wordmark may still wrap as before. */}
+      <span className={`font-bold text-gray-900 dark:text-gray-100 ${oneLine ? 'shrink-0 whitespace-nowrap' : ''}`}>{brand.name}</span>
     </span>
   );
 }

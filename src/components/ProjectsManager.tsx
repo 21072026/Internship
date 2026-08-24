@@ -12,6 +12,7 @@ import { Github, ExternalLink, Trash2, Pencil, Trello, Plus, Eye, Users2, Inbox 
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import type { TeamMember } from '@/lib/projectTeam';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface Task {
   id: string;
@@ -32,6 +33,8 @@ interface Project {
   goals: string | null;
   startDate: string | null;
   endDate: string | null;
+  contributorTermsKey?: string | null;
+  contributorTermsRequired?: boolean;
   ownerType: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY';
   ownerUser?: { id: string; fullName: string } | null;
   ownerCompany?: { id: string; name: string } | null;
@@ -44,10 +47,14 @@ interface Project {
   _count?: { relations: number; joinRequests?: number };
 }
 
+// Sentinel for "this project has no IP question" — distinct from '' (platform
+// default), which is what an unset contributorTermsKey means.
+const TERMS_NONE = '__none__';
+
 const STATUS_VARIANT: Record<ProjectStatus, 'success' | 'info' | 'default' | 'warning'> = {
   DRAFT: 'warning', ACTIVE: 'success', COMPLETED: 'info', ARCHIVED: 'default', CANCELLED: 'default',
 };
-const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUrl: '', boardUrl: '', status: 'ACTIVE', isPublic: false, goals: '', startDate: '', endDate: '' };
+const blank = { name: '', description: '', technologies: '', repoUrl: '', demoUrl: '', boardUrl: '', status: 'ACTIVE', isPublic: false, goals: '', startDate: '', endDate: '', contributorTerms: '' };
 
 export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const t = useT();
@@ -56,6 +63,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ...blank });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [termsKeys, setTermsKeys] = useState<{ key: string; version: string }[]>([]);
   // Card-first screen (#615): the create/edit form lives in a panel that only
   // opens via "Add project" or a card's edit action.
   const [showForm, setShowForm] = useState(false);
@@ -115,6 +123,10 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
           isPublic: form.isPublic,
           startDate: form.startDate || null,
           endDate: form.endDate || null,
+          // One control, three meanings (#1026): '' = platform default,
+          // TERMS_NONE = don't ask at all, anything else = that document.
+          contributorTermsRequired: form.contributorTerms !== TERMS_NONE,
+          contributorTermsKey: form.contributorTerms === TERMS_NONE ? '' : form.contributorTerms,
         });
       }
       // Admin sets/changes ownership (create or transfer-on-edit), preserving
@@ -148,6 +160,14 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
 
   const [meId, setMeId] = useState('');
   useEffect(() => { fetch('/api/profile').then((r) => r.json()).then(({ user }) => user && setMeId(user.id)); }, []);
+  // The terms documents this installation has (#1026). Empty list is fine — the
+  // picker then offers only the platform default and "don't ask".
+  useEffect(() => {
+    fetch('/api/contributor-terms/keys')
+      .then((r) => (r.ok ? r.json() : { keys: [] }))
+      .then((d) => setTermsKeys(d.keys ?? []))
+      .catch(() => {});
+  }, []);
 
   const edit = (p: Project) => {
     setShowForm(true);
@@ -157,6 +177,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
       name: p.name, description: p.description ?? '', technologies: p.technologies.join(', '),
       repoUrl: p.repoUrl ?? '', demoUrl: p.demoUrl ?? '', boardUrl: p.boardUrl ?? '', status: p.status, isPublic: p.isPublic,
       goals: p.goals ?? '', startDate: p.startDate ? p.startDate.slice(0, 10) : '', endDate: p.endDate ? p.endDate.slice(0, 10) : '',
+      contributorTerms: p.contributorTermsRequired === false ? TERMS_NONE : (p.contributorTermsKey ?? ''),
     });
     setOwnerType(p.ownerType);
     setOwnerUserId(p.ownerUser?.id ?? '');
@@ -252,6 +273,22 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
             <Input label={t.projects.endDate} type="date" disabled={!editingOwner && !!editingId} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
           </div>
           <div>
+            <Select
+              label={t.contributorTerms.projectTermsTitle}
+              data-testid="project-terms-select"
+              disabled={!editingOwner && !!editingId}
+              value={form.contributorTerms}
+              onChange={(e) => setForm({ ...form, contributorTerms: e.target.value })}
+              options={[
+                { value: '', label: t.contributorTerms.projectTermsDefault },
+                ...termsKeys
+                  .filter((k) => k.key !== 'default')
+                  .map((k) => ({ value: k.key, label: `${k.key} (v${k.version})` })),
+                { value: TERMS_NONE, label: t.contributorTerms.projectTermsNone },
+              ]} />
+            <p className="mt-1 text-xs text-gray-500">{t.contributorTerms.projectTermsHint}</p>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.projects.goals}</label>
             <Textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })}
               rows={2} maxLength={5000} showCounter />
@@ -311,7 +348,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
                       <div className="flex flex-wrap gap-1 mt-1.5" data-testid="project-members">
                         {p.team!.slice(0, 8).map((m) => (
                           <span key={m.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
-                            {m.fullName}
+                            <PersonHoverCard personId={m.id} name={m.fullName} />
                             <span className="text-gray-400">· {roleLabel(m)}</span>
                           </span>
                         ))}

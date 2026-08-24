@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, acceptContributorTerms } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 /**
@@ -42,6 +42,11 @@ test('a mentee member sees the roster on their project and their goals on their 
       },
     },
   });
+
+  // Opening a project is behind its contributor-terms gate (#1026); both people
+  // working on this one have accepted.
+  await acceptContributorTerms(mentor.id, { projectId: project.id });
+  await acceptContributorTerms(mentee.id, { projectId: project.id });
 
   try {
     // The owner sees the merged roster with the functional role on the card.
@@ -117,6 +122,12 @@ test('a mentee can ask to join a public project and the owner approves it', asyn
       members: { create: [{ userId: mentor.id, role: 'OWNER' }] },
     },
   });
+
+  // The requester is not a member yet, so no gate stands in front of them here
+  // (#1026) — the owner, who is one, has accepted. The mentee's own acceptance
+  // is what the gate would ask for after the approval lands.
+  await acceptContributorTerms(mentor.id, { projectId: project.id });
+  await acceptContributorTerms(mentee.id, { projectId: project.id });
 
   try {
     await signInAndSettle(page, menteeEmail, password, '/portal');
@@ -228,6 +239,9 @@ test('the weekly meeting an owner sets is what a member reads', async ({ page })
       },
     },
   });
+
+  await acceptContributorTerms(mentor.id, { projectId: project.id });
+  await acceptContributorTerms(mentee.id, { projectId: project.id });
 
   try {
     await signInAndSettle(page, mentorEmail, password, '/mentor');

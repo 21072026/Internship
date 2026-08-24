@@ -12,6 +12,8 @@ import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
+import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
+import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { availableModes, canUsePortal } from '@/lib/dualRole';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
@@ -44,6 +46,9 @@ export default async function PortalLayout({ children }: { children: React.React
     select: { avatarUrl: true, twoFactorEnabled: true },
   });
   const customStages = await resolveCustomStages(session.user.orgId);
+  // The tenant's own competency framework, or null when it uses the built-in
+  // criteria (#822) — same provider shape as the pipeline stages above.
+  const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
 
   // The 2FA gate lives on each staff shell; the portal needs it too now that a
@@ -55,7 +60,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   return (
     <ResponsiveShell
-      brand={<BrandWordmark />}
+      brand={<BrandWordmark oneLine />}
       sidebar={
         <aside className="w-64 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
         <div className="p-6 border-b border-gray-200">
@@ -86,7 +91,9 @@ export default async function PortalLayout({ children }: { children: React.React
         </aside>
       }
     >
-      <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
+      <PipelineStagesProvider stages={customStages}>
+        <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
+      </PipelineStagesProvider>
     </ResponsiveShell>
   );
 }

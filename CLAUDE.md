@@ -85,10 +85,14 @@ flowchart LR
 
 ### Pipeline status (the core domain concept)
 `MentorshipRelation.pipelineStatus` mirrors the original spreadsheet's status column.
-Stages (enum `PipelineStatus`): `BASVURU_100` → `ONAY_220` → `GORUSME_250` →
-`TANISTIRMA_270` → `STAJ_BASLAYACAK_300` → `STAJ_DEVAM_450` → `STAJ_BITTI_490` →
-`IS_ARIYOR_500` → `ISE_ALINABILIR_600` → `ISE_ALINDI_660` → `IS_BULDU_700`
-(plus `YARIM_BIRAKTI_460`, `BASKA_YERDE_STAJ_800`). Default `BASVURU_100`.
+Stages (enum `PipelineStatus`, `prisma/schema.prisma` is the source of truth):
+`APPLICATION_100` → `APPROVAL_PENDING_220` → `INTERVIEW_PENDING_250` →
+`INTRODUCTION_PENDING_270` → `INTERNSHIP_STARTING_300` → `INTERNSHIP_IN_PROGRESS_450` →
+`INTERNSHIP_COMPLETED_490` → `JOB_SEEKING_500` → `HIREABLE_600` → `HIRED_660` →
+`EMPLOYED_700` (plus the off-path `INTERNSHIP_DROPPED_460` and
+`INTERNSHIP_FOUND_ELSEWHERE_800`). Default `APPLICATION_100`. The Turkish names are the
+*labels* (`src/lib/pipeline.ts`), not the keys — this list used to give the labels as keys,
+which type-checks nowhere and fails only at runtime.
 
 ## Directory map
 
@@ -150,8 +154,11 @@ workaround, #636, and it compiled on every PR push).
 - `deploy.yml` is the **legacy hosted** pipeline (ghcr.io + SSH), **superseded** — don't extend it.
 - `infra/autodeploy.sh` is a break-glass poller that **builds on the server** — don't put it
   on a cron (see `infra/README.md`).
-- ⚠️ The preview DB is **shared** by the shared preview *and* every topic env —
-  `prisma db push` there affects everyone.
+- Each **topic env has its own database** (`internship_pr<N>`, #1185), created on first
+  deploy, seeded with the synthetic demo set (`admin.demo@demo.example.com` / `DemoPass123!`)
+  and dropped when the PR closes — so a `db push` on a PR affects nobody else, and no real
+  preview data is reachable from a topic environment. The **shared preview env** at
+  `crm-preview.ersah.in` still has its own single DB; `db push` there is global.
 
 ## Conventions & gotchas for agents
 

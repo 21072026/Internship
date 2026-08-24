@@ -20,7 +20,7 @@ test('a person card opens from a name and offers a way to reach them', async ({ 
     where: { id: mentee.id },
     data: { preferredLanguage: 'de', university: 'Card University' },
   });
-  await prisma.mentorshipRelation.create({
+  const relation = await prisma.mentorshipRelation.create({
     data: { mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE' },
   });
 
@@ -47,10 +47,12 @@ test('a person card opens from a name and offers a way to reach them', async ({ 
     await expect(card.getByTestId('language-badge-de')).toBeVisible();
     // Their own mentor may email them, so the action is offered.
     await expect(card.getByTestId('person-card-email')).toBeVisible();
-    // A mentor's own mentee has a profile page; the card links to it.
+    // A mentor's own mentee has a profile page; the card links to it. That
+    // route is keyed by the relation, not by the person — a link built from the
+    // user id lands on "relation not found".
     await expect(card.getByTestId('person-card-profile')).toHaveAttribute(
       'href',
-      `/mentor/mentees/${mentee.id}`
+      `/mentor/mentees/${relation.id}`
     );
 
     // Selection is untouched by all of that.
@@ -110,6 +112,61 @@ test('the card endpoint only answers for people you already share something with
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(ownEmail);
     await cleanupByEmail(strangerEmail);
+  }
+});
+
+// The join-request queue is where a name most needs to answer "who is this?":
+// the applicant is a stranger to the project until the owner decides on them,
+// so neither a membership nor a mentorship exists yet to carry the lookup
+// permission. The pending request itself is what grants it.
+test('a project owner can open the card of someone asking to join', async ({ page }) => {
+  const ownerEmail = uniqueEmail('joincard-owner');
+  const applicantEmail = uniqueEmail('joincard-applicant');
+  const pw = 'JoinCard123';
+  const owner = await seedUser(ownerEmail, pw, 'MENTOR', 'Join Card Owner');
+  const applicant = await seedUser(applicantEmail, 'x', 'MENTEE', 'Join Card Applicant');
+  await prisma.user.update({
+    where: { id: applicant.id },
+    data: { university: 'Join Card University' },
+  });
+
+  const project = await prisma.project.create({
+    data: {
+      name: `Join Card Project ${Date.now()}`,
+      ownerType: 'MENTOR',
+      ownerUserId: owner.id,
+      isPublic: true,
+      members: { create: [{ userId: owner.id, role: 'OWNER' }] },
+      joinRequests: { create: [{ userId: applicant.id, functionalRole: 'TESTER' }] },
+    },
+  });
+
+  try {
+    await signInAsFreshUser(page, ownerEmail, pw, '/mentor');
+    await gotoSettled(page, `/projects/${project.id}`);
+
+    const trigger = page.getByTestId(`person-trigger-${applicant.id}`);
+    await expect(trigger).toBeVisible({ timeout: 20_000 });
+
+    // Retried: this page compiles on first visit under the dev server, and a
+    // Fast Refresh remount right after the click drops the card's open state.
+    const card = page.getByTestId('person-card');
+    await expect(async () => {
+      await trigger.click();
+      await expect(card).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
+    await expect(card.getByText('Join Card Applicant')).toBeVisible();
+    await expect(card.getByText('Join Card University')).toBeVisible();
+    // They are nobody's mentee yet, so there is no profile page to send the
+    // owner to — the card still offers a way to talk to them.
+    await expect(card.getByTestId('person-card-message')).toBeVisible();
+  } finally {
+    await prisma.projectJoinRequest.deleteMany({ where: { projectId: project.id } });
+    await prisma.projectMember.deleteMany({ where: { projectId: project.id } });
+    await prisma.conversation.deleteMany({ where: { projectId: project.id } });
+    await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+    await cleanupByEmail(ownerEmail);
+    await cleanupByEmail(applicantEmail);
   }
 });
 

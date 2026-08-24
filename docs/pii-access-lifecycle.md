@@ -103,3 +103,69 @@ ve arama da sunucuya taşındı (arama 300 ms debounce'lu).
 "alanları kırp" değil "sunucu tarafı filtre + sayfalama"dan geçiyor — ayrı bir
 iş. Erişim **loglanmıyor**; PII erişim kaydı
 [#821](https://github.com/21072026/Internship/issues/821) kapsamında.
+
+## Canlı parola linkleri yanıt gövdesine yazılmaz (#987)
+
+**Karar: A** — parola belirleme linki yalnızca e-posta ile gider; API yanıtı
+`{ ok, emailSent }` döner. `POST /api/admin/company-users` ve
+`POST /api/admin/source-users` artık `setPasswordUrl` döndürmüyor.
+
+Gerekçe: bu link canlı, tek kullanımlık bir kimlik bilgisi. HTTP yanıt gövdesine
+koymak onu ters proxy log'larına, tarayıcı devtools'una ve her ekran paylaşımına
+koymak demek — `/api/admin/users/[id]/reset-password` için #875'te kapatılan
+desenin aynısı. İki kural olması uzun vadede kafa karıştırır.
+
+Issue, A'nın gerçek bir operasyonel maliyeti olduğunu varsayıyordu: hesabı admin
+oluşturuyor, e-posta gitmezse hesap erişilemez kalıyor. **Ölçtük, öyle değildi:**
+`src/app/admin/companies/page.tsx` ve `src/app/admin/sources/page.tsx` yanıttaki
+linki hiç okumuyordu — yalnızca başarı mesajı gösterip formu temizliyorlardı.
+Yani link, hiçbir tüketicisi olmadan sızıyordu; kaldırmanın maliyeti sıfır.
+
+Asıl kusur başka yerdeydi ve aynı işte düzeltildi: her iki uç da e-posta hatasını
+yutup yine `ok: true` dönüyordu. Admin "hesap oluşturuldu" görüyordu, posta hiç
+gitmemişken. Artık:
+
+- yanıt `emailSent` taşıyor ve arayüz gönderilemediğini açıkça söylüyor
+  (hesap var, kimse giremiyor, posta düzelince "Parolayı sıfırla");
+- denetim kaydının `detail` alanına da yazılıyor, çünkü bu durumu sonradan
+  açıklamaya çalışan kişi oraya bakacak.
+
+Posta arızasında kurtarma yolu değişmedi: kullanıcı üzerinde parola sıfırlama
+akışını tekrar tetiklemek. Link elle paylaşılacaksa bunun için ayrı ve denetlenen
+bir yol var (#670, e-postasız davet linkleri) — "yanıt gövdesinde döndür" o yol
+değil.
+
+## Önizleme verisi: anonimleştirme (#1186)
+
+Paylaşılan önizleme ortamı gerçek veriyle çalışıyordu. `scripts/sanitize-db.mjs`
+(`npm run sanitize:preview`) bunu tersine çevirir: **yapıyı korur, kişiyi siler.**
+
+- Her hesap `userN@demo.example.com` + sahte ad + tek bilinen parola olur;
+  telefon, adres, biyografi, kişisel bağlantılar temizlenir.
+- Yüklenen dosyalar (CV, avatar, doküman, ek) ve **her türlü kimlik bilgisi**
+  (davet/sıfırlama/doğrulama token'ları, API anahtarları, webhook secret'ları,
+  impersonation/SSO grant'ları) silinir.
+- Kişi tarafından ya da kişi hakkında yazılmış **serbest metnin tamamı** yer
+  tutucuyla değiştirilir: ilişki notları, mesaj gövdeleri, değerlendirme
+  yorumları, etkileşim notları, haftalık raporlar, bildirim metinleri,
+  ActivityLog `detail`/`ip`/`userAgent`, EmailLog alıcı ve konusu.
+- **Korunur:** ilişkiler, aşama geçmişi, tarihler, puanlar, sayılar — önizlemenin
+  test değeri buradan geliyor. Kayıt sayıları öncesi/sonrası aynı kalır.
+
+İki koruma:
+
+1. **Hedef kontrolü.** Script yalnızca veritabanı *adında* `preview` ya da
+   `internship_pr` geçiyorsa çalışır ve **zorlama bayrağı yoktur** — prod'a
+   yöneltilebilmesi mümkün olmamalı. (`seed:demo`'nun yerel-DB korumasının tam
+   tersi.) Kontrol URL'nin tamamında değil, ayrıştırılmış **veritabanı adında**
+   yapılır; böylece içinde "preview" geçen bir sunucu adı prod'un kapısını açamaz.
+2. **Kendi kendini doğrulama.** Çalışma bittiğinde geriye gerçek bir adres,
+   telefon, dosya, not ya da kimlik bilgisi kaldıysa **exit 1** verir — yarım
+   kalmış bir temizlik "güvenli görünen ama olmayan" veriden çok daha kötüdür.
+   `npm run sanitize:verify` bu kontrolü tek başına, hiçbir şeyi değiştirmeden
+   koşar (geri yükleme veya içe aktarma sonrası "önizleme hâlâ temiz mi?").
+
+Şema büyüdükçe **envanteri güncel tutmak şart**: `scripts/sanitize-db.mjs`
+başlığındaki liste hangi modelin yeniden yazıldığını, hangisinin boşaltıldığını,
+hangisinin silindiğini ve hangisinin **bilerek** dokunulmadığını sayar. Yeni bir
+PII alanı eklerken o listeye de eklenmezse sızıntı olur.

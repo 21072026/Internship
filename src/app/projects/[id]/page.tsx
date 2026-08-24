@@ -13,7 +13,11 @@ import { ProjectGoals } from '@/components/project/ProjectGoals';
 import { ProjectJoinRequests } from '@/components/project/ProjectJoinRequests';
 import { ProjectMembersPanel } from '@/components/project/ProjectMembersPanel';
 import { BrandWordmark } from '@/components/BrandWordmark';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { roleHome } from '@/lib/roleHome';
+import { projectTermsState } from '@/lib/contributorTerms';
+import { templateToHtml } from '@/lib/renderTemplate';
+import { ContributorTermsAccept } from '@/components/ContributorTermsAccept';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +37,7 @@ const STATUS_VARIANT: Record<string, 'success' | 'info' | 'default' | 'warning'>
 // goals, and shortcuts to the owner and the group chat.
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { t } = await getServerDictionary();
+  const { locale, t } = await getServerDictionary();
   const session = await getServerSession(authOptions);
 
   const p = await prisma.project.findUnique({
@@ -41,6 +45,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     select: {
       name: true, description: true, technologies: true, repoUrl: true, demoUrl: true, boardUrl: true, status: true,
       isPublic: true, goals: true, startDate: true, endDate: true,
+      contributorTermsKey: true, contributorTermsRequired: true,
       ownerType: true, ownerUserId: true, ownerCompanyId: true,
       ownerUser: { select: { id: true, fullName: true } }, ownerCompany: { select: { name: true } },
       // `timezone` (#1210): the weekly-meeting form previews the slot on every
@@ -79,6 +84,78 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     isMember ||
     (role === 'COMPANY' && !!session?.user.companyId && p.ownerCompanyId === session.user.companyId);
   if (!p.isPublic && !canInternal) notFound();
+
+  // Project-level contributor terms (#1026). This is the gate the design doc
+  // calls the middle link of the chain: platform acceptance says "these are the
+  // rules here", project acceptance says "…and I accept them for THIS work",
+  // which is the part § 40 UrhG actually cares about.
+  //
+  // It stands in front of the *internal* view only — the roster, the goals, the
+  // task list. A public visitor still gets the showcase stub, and an admin is
+  // never gated: they are looking in to administer, not to contribute, and
+  // locking an admin out of a project they must supervise would be a bug, not a
+  // safeguard.
+  const gate = isMember && role !== 'ADMIN'
+    ? await projectTermsState(session!.user.id, { id, ...p }, locale)
+    : { terms: null, accepted: true };
+
+  if (gate.terms && !gate.accepted) {
+    const c = t.contributorTerms;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+        <header className="border-b border-gray-200 bg-white/80 backdrop-blur-sm">
+          <div className="mx-auto flex h-16 max-w-2xl items-center gap-2 px-3 sm:px-4">
+            <Link href={roleHome(role)} className="flex min-w-0 items-center gap-2">
+              <BrandWordmark />
+            </Link>
+          </div>
+        </header>
+        <div className="mx-auto max-w-2xl px-3 py-6 sm:px-4 sm:py-12">
+          <Link
+            href={role === 'MENTOR' ? '/mentor/projects' : '/portal/projects'}
+            className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+          >
+            <ArrowLeft className="h-4 w-4" /> {t.projects.allProjects}
+          </Link>
+          <div
+            data-testid="project-terms-gate"
+            className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-8"
+          >
+            <h1 className="text-xl font-bold text-gray-900">{p.name}</h1>
+            <p className="mt-1 text-sm text-gray-500">{c.projectGateBody}</p>
+            <p className="mt-3 text-xs text-gray-400">
+              {c.versionLabel}: {gate.terms.version}
+              {gate.terms.key !== 'default' && <> · {gate.terms.key}</>}
+            </p>
+            {gate.terms.authoritativeLocale && (
+              <p
+                data-testid="terms-translation-notice"
+                className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+              >
+                {c.translationNotice.replace('{locale}', gate.terms.authoritativeLocale.toUpperCase())}
+              </p>
+            )}
+            <article
+              data-testid="terms-body"
+              className="prose prose-sm mt-4 max-h-[26rem] max-w-none overflow-y-auto rounded-lg border border-gray-100 p-4 text-gray-700 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_li]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
+              dangerouslySetInnerHTML={{ __html: templateToHtml(gate.terms.body) }}
+            />
+            <ContributorTermsAccept
+              version={gate.terms.version}
+              termsKey={gate.terms.key}
+              projectId={id}
+              labels={{
+                intro: c.acceptIntro,
+                checkbox: c.acceptCheckbox,
+                button: c.acceptButton,
+                versionChanged: c.versionChanged,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // A public project accepts join requests from anyone signed in who is not on
   // it yet (mentees and mentors alike).
@@ -187,7 +264,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   <ul className="space-y-1" data-testid="project-team">
                     {team.map((m) => (
                       <li key={m.id} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="text-gray-800">{m.fullName}</span>
+                        {/* Teammates are reachable from the roster: signed-in
+                            viewers get the card, a public visitor never reaches
+                            this branch (canInternal gates the whole block). */}
+                        <span className="text-gray-800">
+                          {/* No role hint: TeamMember.role is the *project*
+                              role (an OWNER can be a mentee, #1222), so the
+                              profile link waits for the loaded account role. */}
+                          <PersonHoverCard personId={m.id} name={m.fullName} />
+                        </span>
                         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{roleLabel(m)}</span>
                       </li>
                     ))}

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, acceptContributorTerms } from './helpers/db';
 import { signInAndSettle, signInAsFreshUser, gotoSettled } from './helpers/auth';
 import { acceptConfirmDialog } from './helpers/confirm';
 
@@ -106,6 +106,10 @@ test('a lead can tick the whole template pool at once and hand it over', async (
       },
     },
   });
+
+  // Opening a project is behind its contributor-terms gate (#1026); the lead
+  // running this project has accepted them.
+  await acceptContributorTerms(mentor.id, { projectId: project.id });
 
   try {
     await signInAndSettle(page, mentorEmail, password, '/mentor');

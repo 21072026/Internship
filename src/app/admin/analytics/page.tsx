@@ -13,6 +13,7 @@ import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { useT } from '@/i18n/client';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -81,12 +82,37 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+interface FunnelKpi {
+  order: string[];
+  conversions: { key: string; entered: number; advanced: number; rate: number | null; terminal: boolean }[];
+  biggestDropOff: { key: string; entered: number; advanced: number; rate: number | null } | null;
+  timeToHire: {
+    completionKey: string | null;
+    completed: number;
+    considered: number;
+    medianDays: number | null;
+    avgDays: number | null;
+  };
+  capacity: {
+    id: string;
+    fullName: string;
+    activeMenteeCount: number;
+    mentorCapacity: number | null;
+    status: string;
+    capacityKnown: boolean;
+    overloaded: boolean;
+  }[];
+  journeys: number;
+}
+
 export default function AdminAnalyticsPage() {
   const t = useT();
   const label = useStageLabel();
   const stages = useResolvedStages();
   const [data, setData] = useState<Analytics | null>(null);
   const [aging, setAging] = useState<Aging | null>(null);
+  // Funnel KPIs (#815): conversion, time-to-hire and mentor capacity.
+  const [kpi, setKpi] = useState<FunnelKpi | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangePreset>('6m');
@@ -107,6 +133,10 @@ export default function AdminAnalyticsPage() {
       .then((r) => r.json())
       .then((d) => setAging(d))
       .catch((e) => console.error('[analytics/aging]', e));
+    fetch(`/api/admin/analytics/funnel${qs}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setKpi(d))
+      .catch((e) => console.error('[analytics/funnel]', e));
   }, [range, t.common.error]);
 
   useEffect(() => {
@@ -118,6 +148,50 @@ export default function AdminAnalyticsPage() {
   // Drop-off reason label (#810), falling back to the raw code for anything
   // outside the current whitelist (defensive — should not normally happen).
   const reasonLabel = (code: string) => (t.dropoff.reasons as Record<string, string>)[code] ?? code;
+  // KPI rows shared by both exports (#815) — the ratios travel with the counts
+  // rather than living only on screen.
+  const kpiSheets = () => {
+    if (!kpi) return [];
+    const k = t.analytics.funnelKpi;
+    const sheets = [
+      {
+        name: 'Conversion',
+        columns: [k.stage, k.entered, k.advanced, k.conversion],
+        rows: kpi.conversions.map((c) => [
+          label(c.key),
+          c.entered,
+          c.advanced,
+          c.rate === null ? (c.terminal ? '—' : k.noData) : `${c.rate}%`,
+        ]),
+      },
+    ];
+    if (kpi.timeToHire.completed > 0) {
+      sheets.push({
+        name: 'Time to hire',
+        columns: [k.timeToHireMedian, k.timeToHireAvg, k.entered],
+        // The population comes along, so a spreadsheet cannot quote the median
+        // without the caveat the screen shows.
+        rows: [[
+          kpi.timeToHire.medianDays ?? '—',
+          kpi.timeToHire.avgDays ?? '—',
+          `${kpi.timeToHire.completed}/${kpi.timeToHire.considered}`,
+        ]],
+      });
+    }
+    if (kpi.capacity.length > 0) {
+      sheets.push({
+        name: 'Capacity',
+        columns: [k.mentor, k.activeMentees, k.ceiling, k.overloaded],
+        rows: kpi.capacity.map((m) => [
+          m.fullName,
+          m.activeMenteeCount,
+          m.capacityKnown ? (m.mentorCapacity as number) : k.noCeiling,
+          m.overloaded ? '!' : '',
+        ]),
+      });
+    }
+    return sheets;
+  };
   const dropReasonRows = (aging?.dropReasons ?? []).map((d) => [label(d.pipelineStatus), reasonLabel(d.reasonCode), d.count]);
 
   const exportExcel = async () => {
@@ -125,6 +199,7 @@ export default function AdminAnalyticsPage() {
     const { exportXlsxSheets } = await import('@/lib/excel');
     await exportXlsxSheets(`analytics-${new Date().toISOString().slice(0, 10)}`, [
       { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), data.funnel[s.key] || 0]) },
+      ...kpiSheets(),
       ...(dropReasonRows.length > 0
         ? [{ name: 'Drop reasons', columns: ['Stage', 'Reason', 'Count'], rows: dropReasonRows }]
         : []),
@@ -146,6 +221,7 @@ export default function AdminAnalyticsPage() {
     const a = t.analytics;
     await exportXlsxSheets(`analytics-full-${new Date().toISOString().slice(0, 10)}`, [
       { name: 'Funnel', columns: ['Stage', 'Count'], rows: stages.map((s) => [label(s.key), data.funnel[s.key] || 0]) },
+      ...kpiSheets(),
       ...(data.trends ? [{
         name: 'Trends',
         columns: [a.fullReportMonth, a.trendNewRelations, a.trendInteractions],
@@ -167,7 +243,10 @@ export default function AdminAnalyticsPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.analytics.title}</h1>
           <p className="text-gray-500 mt-1">{t.analytics.subtitle}</p>
         </div>
-        <div className="flex items-center gap-2 no-print">
+        {/* Up to five controls: on a phone (and in German, where the labels are
+            longest) they have to wrap, or the row pushed the whole page 51px
+            wider than the screen (#1305). */}
+        <div className="flex flex-wrap items-center gap-2 no-print">
           <Select
             aria-label={t.analytics.dateRange}
             className="w-auto"
@@ -276,6 +355,123 @@ export default function AdminAnalyticsPage() {
         </Card>
       )}
 
+      {/* Funnel KPIs (#815): the ratios, next to the counts they come from. */}
+      {kpi && (
+        <Card className="mb-6" data-testid="funnel-kpi-card">
+          <CardHeader><CardTitle>{t.analytics.funnelKpi.title}</CardTitle></CardHeader>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.analytics.funnelKpi.conversion}</p>
+              <p className="text-xs text-gray-500 mt-0.5 mb-3">{t.analytics.funnelKpi.conversionHint}</p>
+              <div className="space-y-1.5" data-testid="conversion-list">
+                {kpi.conversions.map((c) => (
+                  <div key={c.key} className="flex items-center gap-2 text-sm">
+                    <span className="w-44 truncate text-gray-600 dark:text-gray-400 flex-shrink-0">{label(c.key)}</span>
+                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded h-4 overflow-hidden">
+                      <div
+                        className={`h-full ${kpi.biggestDropOff?.key === c.key ? 'bg-red-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${c.rate ?? 0}%` }}
+                      />
+                    </div>
+                    <span className="w-24 text-right text-gray-700 dark:text-gray-300 flex-shrink-0" data-testid={`conversion-${c.key}`}>
+                      {/* No rate to show in two cases: nobody reached the stage
+                          (0% would claim they all dropped out of it), and the
+                          last stage (where "did not advance" means finished). */}
+                      {c.rate === null ? (c.terminal ? '—' : t.analytics.funnelKpi.noData) : `${c.rate}%`}
+                    </span>
+                    <span className="w-28 text-right text-xs text-gray-400 flex-shrink-0">
+                      {c.entered} {t.analytics.funnelKpi.entered}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {kpi.biggestDropOff && (
+                <p className="mt-3 text-xs text-red-700 dark:text-red-400">
+                  {t.analytics.funnelKpi.biggestDropOff}: {label(kpi.biggestDropOff.key)} (
+                  {kpi.biggestDropOff.entered - kpi.biggestDropOff.advanced})
+                </p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t.analytics.funnelKpi.timeToHire.replace(
+                  '{stage}',
+                  kpi.timeToHire.completionKey ? label(kpi.timeToHire.completionKey) : '—'
+                )}
+              </p>
+              {kpi.timeToHire.completed === 0 ? (
+                <p className="mt-2 text-sm text-gray-500" data-testid="tth-empty">{t.analytics.funnelKpi.noCompleted}</p>
+              ) : (
+                <>
+                  <div className="mt-2 flex items-baseline gap-4">
+                    <div>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100" data-testid="tth-median">
+                        {kpi.timeToHire.medianDays}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {t.analytics.funnelKpi.timeToHireMedian} · {t.analytics.funnelKpi.days}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-gray-500" data-testid="tth-avg">{kpi.timeToHire.avgDays}</p>
+                      <p className="text-xs text-gray-500">
+                        {t.analytics.funnelKpi.timeToHireAvg} · {t.analytics.funnelKpi.days}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Right-censoring, said out loud: the screen names the
+                      population these two numbers describe. */}
+                  <p className="mt-3 text-xs text-gray-500" data-testid="tth-population">
+                    {t.analytics.funnelKpi.population
+                      .replace('{completed}', String(kpi.timeToHire.completed))
+                      .replace('{considered}', String(kpi.timeToHire.considered))}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+
+          {kpi.capacity.length > 0 && (
+            <div className="mt-6 border-t border-gray-100 dark:border-gray-800 pt-4">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.analytics.funnelKpi.capacity}</p>
+              <p className="text-xs text-gray-500 mt-0.5 mb-3">{t.analytics.funnelKpi.capacityHint}</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500">
+                      <th className="py-1.5 pr-3">{t.analytics.funnelKpi.mentor}</th>
+                      <th className="py-1.5 pr-3">{t.analytics.funnelKpi.activeMentees}</th>
+                      <th className="py-1.5 pr-3">{t.analytics.funnelKpi.ceiling}</th>
+                      <th className="py-1.5"> </th>
+                    </tr>
+                  </thead>
+                  <tbody data-testid="capacity-table">
+                    {kpi.capacity.map((m) => (
+                      <tr key={m.id} className="border-t border-gray-100 dark:border-gray-800">
+                        <td className="py-1.5 pr-3 text-gray-700 dark:text-gray-300">{m.fullName}</td>
+                        <td className="py-1.5 pr-3 text-gray-900 dark:text-gray-100">{m.activeMenteeCount}</td>
+                        <td className="py-1.5 pr-3 text-gray-500">
+                          {m.capacityKnown ? m.mentorCapacity : t.analytics.funnelKpi.noCeiling}
+                        </td>
+                        <td className="py-1.5">
+                          {m.overloaded && (
+                            <span className="text-xs text-red-700 dark:text-red-400" data-testid={`overloaded-${m.id}`}>
+                              {t.analytics.funnelKpi.overloaded}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle>{t.analytics.funnel}</CardTitle></CardHeader>
@@ -284,7 +480,9 @@ export default function AdminAnalyticsPage() {
               const n = data.funnel[s.key] || 0;
               return (
                 <div key={s.key} className="flex items-center gap-2 text-sm">
-                  <span className="w-48 truncate text-gray-600 flex-shrink-0">{s.label}</span>
+                  {/* Half the row on a phone, a fixed 192px from `sm` up — the
+                      fixed width left the bar a few pixels wide (#1305). */}
+                  <span className="w-1/2 sm:w-48 truncate text-gray-600 flex-shrink-0">{s.label}</span>
                   <div className="flex-1 bg-gray-100 rounded h-4 overflow-hidden">
                     <div className="bg-blue-500 h-full" style={{ width: `${(n / maxFunnel) * 100}%` }} />
                   </div>
@@ -295,7 +493,7 @@ export default function AdminAnalyticsPage() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-testid="mentor-workload-card">
           <CardHeader><CardTitle>{t.analytics.mentorWorkload}</CardTitle></CardHeader>
           {data.mentorWorkload.length === 0 ? (
             <p className="text-sm text-gray-400">—</p>
@@ -303,7 +501,9 @@ export default function AdminAnalyticsPage() {
             <div className="divide-y divide-gray-50">
               {data.mentorWorkload.map((m) => (
                 <div key={m.id} className="flex items-center justify-between py-2 text-sm">
-                  <span className="truncate">{m.fullName}</span>
+                  <span className="truncate">
+                    <PersonHoverCard personId={m.id} name={m.fullName} role="MENTOR" />
+                  </span>
                   <span className="text-gray-500 flex-shrink-0">
                     {m.active} {t.analytics.active} · {m.hired} {t.analytics.hired}
                   </span>
@@ -377,10 +577,13 @@ export default function AdminAnalyticsPage() {
               <p className="text-sm text-gray-400">—</p>
             ) : (
               <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                {/* The stats string is unbreakable, so on a phone the stage name
+                    gets its own line instead of being squeezed to ~35px
+                    ("100 · Erstkontakt" → "100 …", #1305). */}
                 {aging.stageAging.map((s) => (
-                  <div key={s.pipelineStatus} className="flex items-center justify-between py-2 text-sm">
-                    <span className="truncate">{label(s.pipelineStatus)}</span>
-                    <span className="text-gray-500 flex-shrink-0">
+                  <div key={s.pipelineStatus} className="flex flex-col items-start gap-0.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                    <span className="max-w-full truncate">{label(s.pipelineStatus)}</span>
+                    <span className="text-gray-500 sm:flex-shrink-0">
                       {t.analytics.aging.avg} {s.avgDays}{t.analytics.aging.days} · {t.analytics.aging.median} {s.medianDays}{t.analytics.aging.days} · {s.count} {t.analytics.aging.candidates}
                     </span>
                   </div>

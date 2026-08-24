@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useT } from '@/i18n/client';
 import { durationSince } from '@/lib/relativeTime';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // Managing who is on the project (#617/#618/#51).
 //
@@ -97,7 +98,7 @@ export function ProjectMembersPanel({ projectId, myId }: { projectId: string; my
               </Badge>
             )}
             <span className="min-w-0 flex-1 text-gray-800 dark:text-gray-200">
-              {m.user.fullName}
+              <PersonHoverCard personId={m.user.id} name={m.user.fullName} role={m.user.role} />
               {m.addedAt && (() => {
                 const { count, unit } = durationSince(m.addedAt);
                 const noun = count === 1 ? t.membership[unit] : t.membership[`${unit}s` as 'days' | 'months' | 'years'];

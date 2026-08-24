@@ -12,7 +12,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
  */
 
 const PHONE = { width: 390, height: 800 };
-const DESKTOP = { width: 1280, height: 800 };
+const DESKTOP = { width: 1024, height: 800 };
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -88,7 +88,7 @@ test('mentor board on a phone: stage list, no sideways scrolling, stage change w
   }
 });
 
-test('mentor board keeps its columns and per-card stage select on desktop', async ({ page }) => {
+test('mentor board keeps its columns and per-card stage select on desktop', { tag: '@smoke' }, async ({ page }) => {
   const { ownerEmail, password, relation, cleanup } = await seedRelation('bd', 'MENTOR');
 
   try {
@@ -99,6 +99,19 @@ test('mentor board keeps its columns and per-card stage select on desktop', asyn
     // Columns are still the desktop layout (drag-and-drop targets), no list view.
     await expect(page.getByTestId('board-columns')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('board-mobile')).toHaveCount(0);
+
+    await expect(page.getByTestId('board-columns-right-hint')).toBeVisible();
+    await expect(page.getByTestId('board-columns-left-hint')).toHaveCount(0);
+    await page.getByTestId('board-columns').evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+      element.dispatchEvent(new Event('scroll'));
+    });
+    await expect(page.getByTestId('board-columns-left-hint')).toBeVisible();
+    await expect(page.getByTestId('board-columns-right-hint')).toHaveCount(0);
+
+    await page.setViewportSize({ width: 5000, height: 800 });
+    await expect(page.getByTestId('board-columns-left-hint')).toHaveCount(0);
+    await expect(page.getByTestId('board-columns-right-hint')).toHaveCount(0);
 
     // Same keyboard-accessible stage select the admin board already had.
     const card = page.getByTestId('board-card').filter({ hasText: 'bd Mentee' });

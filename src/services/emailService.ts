@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
-import { notify } from '@/lib/notify';
+import { notify, notifyIfAllowed } from '@/lib/notify';
 import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
@@ -1380,7 +1380,10 @@ export async function checkStageDeadlineReminders() {
   });
 
   for (const rel of overdue) {
-    await notify(rel.mentorId, 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/mentor/mentees/${rel.id}`);
+    // The in-app half respects the same 'deadlines' preference the e-mail half
+    // does (#817) — opting out of deadline mail and still being pinged in-app
+    // for the identical event is not a preference anyone chose.
+    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/mentor/mentees/${rel.id}`);
     if (emailAllowed(rel.mentor, 'deadlines')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
@@ -1526,7 +1529,7 @@ export async function sendMeetingReminders() {
     );
 
     for (const user of participants) {
-      const link = user.role === 'MENTEE' ? '/portal' : '/mentor/meetings';
+      const link = user.id === m.relation.mentorId ? '/mentor/meetings' : '/portal/calendar';
       // Per participant: the two sides of a relation can sit in different zones,
       // and each must read the time on their own clock (#1030).
       const when = formatInTimeZone(m.scheduledAt!, user.timezone);
@@ -2076,7 +2079,10 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
       for (const row of result.rows) {
         const mentee = byId.get(row.user.id);
         if (!mentee) continue;
-        const recipients = [mentee, ...mentee.menteeRelations.map((relation) => relation.mentor)]
+        const recipients = [
+          { ...mentee, relationId: null },
+          ...mentee.menteeRelations.map((relation) => ({ ...relation.mentor, relationId: relation.id })),
+        ]
           .filter((recipient, index, all) => all.findIndex((candidate) => candidate.id === recipient.id) === index);
         for (const requirement of row.missing) {
           for (const recipient of recipients) {
@@ -2090,8 +2096,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             const t = getDictionary(locale).documentRequirements;
             const label = requirement.labels[locale] || requirement.labels.en || requirement.key;
             const isMentee = recipient.id === mentee.id;
-            const relationId = mentee.menteeRelations.find((relation) => relation.mentor.id === recipient.id)?.id;
-            const link = isMentee ? '/portal/profile#documents' : `/mentor/mentees/${relationId}`;
+            const link = isMentee ? '/portal/profile#documents' : `/mentor/mentees/${recipient.relationId}`;
             await notify(
               recipient.id,
               isMentee ? 'missing_document.self' : 'missing_document.mentor',

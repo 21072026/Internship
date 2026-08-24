@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **No more false empty states on the meetings page** (#930). `MeetingsManager` fetched mentorships and meetings without tracking load state, so mentors with mentees briefly saw \"No mentees assigned yet\" and a `Meetings (0)` heading before the responses landed, and a non-2xx response silently degraded into the same empty list. Loading, loaded-empty and error are now distinct states: skeleton rows while loading, the empty text only after a successful empty load, and a visible error card with Retry when a request fails. EN/TR/DE load-error strings; regression in `e2e/meeting-schedule-form.spec.ts` covers the failure path.",
+  "notes": {
+    "en": ["The meetings page no longer flashes \"no mentees assigned\" while it is still loading, and when something fails to load it says so with a retry button instead of pretending the list is empty."],
+    "tr": ["Toplantılar sayfası artık yüklenirken \"atanmış mentee yok\" yazısını bir an gösterip kaybolmuyor; bir şey yüklenemezse listeyi boş göstermek yerine hatayı bildirip tekrar dene düğmesi sunuyor."],
+    "de": ["Die Besprechungsseite zeigt beim Laden nicht mehr kurz \"keine Mentees zugewiesen\", und wenn etwas nicht geladen werden kann, wird das mit einer Wiederholen-Schaltfläche gemeldet, statt eine leere Liste vorzutäuschen."]
+  }
+}

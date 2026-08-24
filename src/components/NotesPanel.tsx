@@ -182,13 +182,13 @@ export function NotesPanel() {
           placeholder={t.portal.notes.placeholder}
           showCounter
         />
-        <div data-testid="note-category-picker" className="flex flex-wrap items-center gap-1.5">
+        <div data-testid="note-category-picker" className="flex flex-wrap items-center gap-2">
           {CATEGORIES.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => setCategory(c)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+              className={`min-h-11 min-w-11 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                 category === c ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -200,10 +200,10 @@ export function NotesPanel() {
       </form>
 
       {notes.length > 0 && (
-        <div data-testid="note-category-filter" className="flex flex-wrap items-center gap-1.5 mb-3">
+        <div data-testid="note-category-filter" className="flex flex-wrap items-center gap-2 mb-3">
           <button
             onClick={() => setCategoryFilter('ALL')}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+            className={`min-h-11 min-w-11 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
               categoryFilter === 'ALL' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -213,7 +213,7 @@ export function NotesPanel() {
             <button
               key={c}
               onClick={() => setCategoryFilter(c)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+              className={`min-h-11 min-w-11 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                 categoryFilter === c ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >

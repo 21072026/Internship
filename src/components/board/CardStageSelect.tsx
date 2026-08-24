@@ -33,7 +33,7 @@ export function CardStageSelect({
         e.stopPropagation();
         onChange(e.target.value);
       }}
-      className="mt-2 w-full rounded border border-gray-200 px-1.5 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+      className="mt-2 min-h-11 w-full rounded border border-gray-200 px-1.5 py-1 text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
     >
       {stages.map((s) => (
         <option key={s.key} value={s.key}>{s.label}</option>

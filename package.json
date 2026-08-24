@@ -26,6 +26,8 @@
     "postinstall": "prisma generate",
     "seed:templates": "node prisma/seed-templates.mjs",
     "seed:demo": "node prisma/seed-demo.mjs",
+    "sanitize:preview": "node scripts/sanitize-db.mjs",
+    "sanitize:verify": "node scripts/sanitize-db.mjs --verify-only",
     "db:dev:up": "docker compose -f docker-compose.dev.yml up -d",
     "backfill:requisitions": "node scripts/backfill-requisitions.mjs",
     "db:dev:down": "docker compose -f docker-compose.dev.yml down"

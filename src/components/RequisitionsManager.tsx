@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import Link from 'next/link';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 type Company = { id: string; name: string };
 type Owner = { id: string; fullName: string; companyId: string | null };
@@ -44,6 +45,7 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const formDialogRef = useModalFocus<HTMLFormElement>(showForm, () => setShowForm(false));
 
   const statusLabel = (status: string) => r.statuses[status as keyof typeof r.statuses] ?? status;
   const load = useCallback(async () => {
@@ -124,8 +126,8 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
         <div className="flex flex-wrap gap-2">{!admin && <Link className="inline-flex items-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200" href={`/company/requisitions/${item.id}`}>{r.details}</Link>}<Button size="sm" variant="outline" onClick={() => openEdit(item)}><Pencil className="h-4 w-4" />{r.edit}</Button>{!['CANCELLED', 'FILLED'].includes(item.status) && <Button size="sm" variant="ghost" onClick={() => void cancelItem(item)}><XCircle className="h-4 w-4" />{r.close}</Button>}</div></div>
       </Card>)}</div>}
     <div className="mt-5 flex items-center justify-center gap-3"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{r.pagination.previous}</Button><span className="text-sm text-gray-500">{r.pagination.page.replace('{page}', String(page)).replace('{total}', String(totalPages))}</span><Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>{r.pagination.next}</Button></div>
-    {showForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><form onSubmit={save} className="max-h-[90vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl bg-white p-6 dark:bg-gray-900">
-      <div className="flex items-center justify-between"><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{editing ? r.edit : r.create}</h2><button type="button" aria-label={r.cancel} onClick={() => setShowForm(false)}><XCircle className="h-5 w-5" /></button></div>
+    {showForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><form ref={formDialogRef} role="dialog" aria-modal="true" aria-labelledby="requisition-form-title" tabIndex={-1} onSubmit={save} className="max-h-[90vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-2xl bg-white p-6 dark:bg-gray-900">
+      <div className="flex items-center justify-between"><h2 id="requisition-form-title" className="text-xl font-bold text-gray-900 dark:text-gray-100">{editing ? r.edit : r.create}</h2><button type="button" aria-label={r.cancel} onClick={() => setShowForm(false)}><XCircle className="h-5 w-5" /></button></div>
       {admin && !editing && <Select required label={r.company} value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value, ownerId: '' })} options={companies.map((c) => ({ value: c.id, label: c.name }))} placeholder={r.validation.companyRequired} />}
       <Input required label={r.requisitionTitle} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
       <div><label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">{r.description}</label><Textarea maxLength={2000} showCounter value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>

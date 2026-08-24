@@ -70,6 +70,10 @@ const schema = z.object({
   goals: z.string().max(5000).nullable().optional(),
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
+  // Which contributor terms this project's members accept (#1026). Empty
+  // string = the platform default; owner-only, like the other policy fields.
+  contributorTermsKey: z.string().max(60).nullable().optional().or(z.literal('')),
+  contributorTermsRequired: z.boolean().optional(),
   // Owner change (transfer) — admin only.
   ownerType: z.enum(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY']).optional(),
   ownerUserId: z.string().nullable().optional(),
@@ -94,7 +98,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const d = parsed.data;
 
     if (!owner) {
-      const protectedSent = (['name', 'status', 'isPublic', 'startDate', 'endDate', 'ownerType', 'ownerUserId', 'ownerCompanyId'] as const)
+      const protectedSent = (['name', 'status', 'isPublic', 'startDate', 'endDate', 'ownerType', 'ownerUserId', 'ownerCompanyId', 'contributorTermsKey', 'contributorTermsRequired'] as const)
         .filter((k) => d[k] !== undefined);
       if (protectedSent.length > 0) {
         return NextResponse.json(
@@ -116,6 +120,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (d.goals !== undefined) data.goals = d.goals || null;
     if (d.startDate !== undefined) data.startDate = d.startDate ? new Date(d.startDate) : null;
     if (d.endDate !== undefined) data.endDate = d.endDate ? new Date(d.endDate) : null;
+    if (d.contributorTermsKey !== undefined) data.contributorTermsKey = d.contributorTermsKey || null;
+    if (d.contributorTermsRequired !== undefined) data.contributorTermsRequired = d.contributorTermsRequired;
 
     // Transfer (admin only): change the owner, preserving the invariant.
     let transferred: string | null = null;

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Backup verification & restore drill (#1183)** — `infra/check-backups.sh` verifies daily that backups are still being taken (freshness, size, gzip integrity, retention window) and emails `ALERT_EMAIL_TO` when they are not; `infra/restore-drill.sh` rehearses the restore into a throwaway database and measures RPO/RTO. `docs/disaster-recovery.md` gained the failure playbook and the drill log."
+}

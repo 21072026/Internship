@@ -21,11 +21,16 @@ name: Topic Preview (hosted build → server swap, auto per-PR)
 #      `plesk` CLI (topic-deploy.sh creates the subdomain + injects the proxy).
 #   2. Wildcard DNS *.ersah.in → the server (infra/setup-dns-cloudflare.sh) and a
 #      wildcard TLS cert in ${CERT_DIR} (infra/acme-issue-wildcard.sh).
-#   3. /etc/internship-crm/preview.env (chmod 600) with DATABASE_URL (the SHARED
-#      preview DB), NEXTAUTH_SECRET, SMTP_* — the same file deploy-preview uses.
+#   3. /etc/internship-crm/preview.env (chmod 600) with DATABASE_URL,
+#      NEXTAUTH_SECRET, SMTP_* — the same file deploy-preview uses.
+#   4. The DB user in that file can create and drop the per-topic databases:
+#        GRANT ALL PRIVILEGES ON `internship\_pr%`.* TO '<user>'@'%';
 #
-# ⚠️ The preview DB is SHARED across all topics (see infra/README.md) — a schema
-# `db push` here affects every topic. Coordinate concurrent schema changes.
+# Each topic gets its OWN database, `internship_pr<N>` (#1185): a `db push` on
+# one PR no longer reshapes the schema under every other PR, and no real preview
+# data is reachable from a topic environment — they are seeded with the
+# synthetic demo set only. The database is dropped when the PR closes, and the
+# daily topic sweep removes any that leak.
 #
 # FORK PRs get no topic environment: GitHub keeps their GITHUB_TOKEN read-only
 # (so the image cannot be pushed to ghcr) and withholds repo secrets, and running
@@ -95,8 +100,39 @@ jobs:
           # of both and, checked on the box, of everything else.
           echo "port=$((3400 + PR % 100))" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout
-        uses: actions/checkout@v7
+      # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
+      # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted
+      # runners are unaffected), and it fails in "Set up job" — before a single
+      # line of repo code runs. That killed every topic preview and every deploy
+      # at the same point. Plain git over HTTPS is not throttled that way, and
+      # these jobs only ever needed the infra/ scripts.
+      - name: Fetch the repo (no action download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FETCH_REF: ${{ github.event.pull_request.head.sha }}
+          FETCH_DEPTH: '1'
+        run: |
+          set -euo pipefail
+          [ -d .git ] || git init -q .
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          # The token reaches git through a credential helper reading the
+          # environment, so it is never in argv (readable via `ps` on a shared box)
+          # and never written into .git/config.
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+          if [ "$FETCH_DEPTH" = "0" ]; then
+            # Full history: the forward-only guard in deploy-prod.sh asks
+            # `git merge-base --is-ancestor` whether this commit predates the live
+            # one, and a shallow clone cannot answer that.
+            git -c credential.helper="$HELPER" fetch --no-tags --prune origin \
+              "+refs/heads/*:refs/remotes/origin/*"
+            git -c credential.helper="$HELPER" fetch --no-tags origin "$FETCH_REF"
+          else
+            git -c credential.helper="$HELPER" fetch --no-tags --depth="$FETCH_DEPTH" origin "$FETCH_REF"
+          fi
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
 
       - name: Deploy topic environment
         env:
@@ -112,18 +148,33 @@ jobs:
           # No SKIP_PULL: the image comes from ghcr, built on the hosted runner.
           ./infra/server/topic-deploy.sh
 
-      - name: Comment topic URL on the PR
-        uses: actions/github-script@v9
+  # ── Say where it is (GitHub-hosted) ─────────────────────────────────────────
+  # Separate job on purpose (#1239): posting a comment needs GitHub, not the
+  # server, and every `uses:` inside a self-hosted job is an action archive this
+  # box has to download from codeload — which is exactly what 429s.
+  comment:
+    name: Comment topic URL on the PR
+    needs: deploy
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v9
         with:
           script: |
-            const topic = '${{ steps.t.outputs.topic }}';
+            const topic = `pr${context.issue.number}`;
             const url = `https://crm-${topic}.${{ env.BASE_DOMAIN }}`;
             const marker = '<!-- topic-preview -->';
             const body = `${marker}\n### 🧪 Topic preview ready\n\n` +
               `Branch **\`${{ github.head_ref }}\`** → **${url}**\n\n` +
-              `> Isolated environment for this PR (container \`internship-crm-${topic}\`). ` +
-              `Rebuilt on every push; torn down automatically when this PR is merged or closed.\n` +
-              `> Shares the preview database with other topics — coordinate schema changes.`;
+              `> Isolated environment for this PR (container \`internship-crm-${topic}\`, ` +
+              `database \`internship_${topic}\`). Rebuilt on every push; container and database are ` +
+              `both removed when this PR is merged or closed.\n` +
+              `> Its own database, seeded with synthetic demo data — sign in with ` +
+              `\`admin.demo@demo.example.com\` / \`DemoPass123!\`. Schema changes here affect nobody else.`;
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number,
             });
@@ -142,8 +193,41 @@ jobs:
     if: github.event.action == 'closed'
     runs-on: self-hosted
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
+      # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted
+      # runners are unaffected), and it fails in "Set up job" — before a single
+      # line of repo code runs. That killed every topic preview and every deploy
+      # at the same point. Plain git over HTTPS is not throttled that way, and
+      # these jobs only ever needed the infra/ scripts.
+      - name: Fetch the repo (no action download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `github.sha` on a closed PR is the merge ref, which may already be
+          # gone; the base branch is always there and carries the same scripts.
+          FETCH_REF: ${{ github.event.pull_request.base.ref }}
+          FETCH_DEPTH: '1'
+        run: |
+          set -euo pipefail
+          [ -d .git ] || git init -q .
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          # The token reaches git through a credential helper reading the
+          # environment, so it is never in argv (readable via `ps` on a shared box)
+          # and never written into .git/config.
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+          if [ "$FETCH_DEPTH" = "0" ]; then
+            # Full history: the forward-only guard in deploy-prod.sh asks
+            # `git merge-base --is-ancestor` whether this commit predates the live
+            # one, and a shallow clone cannot answer that.
+            git -c credential.helper="$HELPER" fetch --no-tags --prune origin \
+              "+refs/heads/*:refs/remotes/origin/*"
+            git -c credential.helper="$HELPER" fetch --no-tags origin "$FETCH_REF"
+          else
+            git -c credential.helper="$HELPER" fetch --no-tags --depth="$FETCH_DEPTH" origin "$FETCH_REF"
+          fi
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
 
       - name: Tear down
         env:

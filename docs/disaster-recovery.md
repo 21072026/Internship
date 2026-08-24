@@ -1,9 +1,13 @@
 # Disaster recovery — restoring the database
 
-> Status: **runbook**. The backup half is automated (`infra/backup-db.sh`, wired
-> into every prod/preview deploy plus a daily cron — see
-> [`infra/README.md`](../infra/README.md#5-database-backups--the-destructive-schema-gate)).
-> The restore half is this document. Issue: #1183 · Epic: #1179.
+> Status: **runbook + automation**. The backup half is automated
+> (`infra/backup-db.sh`, wired into every prod/preview deploy plus a daily cron
+> — see [`infra/README.md`](../infra/README.md#5-database-backups--the-destructive-schema-gate)).
+> That it is still *running* is checked daily by
+> [`.github/workflows/backup-verify.yml`](../.github/workflows/backup-verify.yml)
+> → `infra/check-backups.sh`, and the restore itself is rehearsed by
+> `infra/restore-drill.sh`. This page is the human procedure behind both.
+> Issue: #1183 · Epic: #1179.
 
 A backup nobody has restored is a file, not a backup. This page exists so the
 restore is a procedure you follow rather than one you invent at 2 a.m.
@@ -23,8 +27,9 @@ restore is a procedure you follow rather than one you invent at 2 a.m.
 
 ## Restore
 
-Times below are **placeholders until the first drill fills them in** — see
-"Drill log". Do not quote them to anyone before then.
+No timings are quoted here on purpose: the measured ones live in the drill log
+at the bottom of this page, and the only number worth quoting is the one from a
+drill against a real environment.
 
 ```bash
 # 0. Decide WHICH dump. Newest is not always right: if the damage was a bad
@@ -68,6 +73,86 @@ answering 200 only proves the app booted.
 - **Do not copy a dump off the server** without a reason that survives being
   written down in the incident notes.
 
+## Is the backup still alive?
+
+A backup does not fail loudly. It stops — a cron entry lost in a server
+rebuild, a deploy hook failing before the backup step, a full disk — and
+everything looks normal until the day it matters.
+
+`infra/check-backups.sh` answers four questions per environment, reading only
+file metadata and the gzip header (never the contents — these dumps hold real
+personal data):
+
+1. is there a dump at all;
+2. is the newest one younger than `MAX_AGE_HOURS` (36 by default — the daily
+   cron plus deploy hooks make anything older a signal, not a fluctuation);
+3. is it at least `MIN_BYTES` and a valid gzip stream (a truncated dump
+   restores nothing while looking like a backup);
+4. does the set cover at least `MIN_HISTORY_DAYS` distinct days — one fresh
+   dump is not a history, and the retention window is what makes "restore to
+   before the bad merge" possible.
+
+It runs **daily at 06:20 UTC** on the self-hosted runner. The issue asked for
+monthly; monthly means up to thirty days of believing you have backups when you
+do not, and the check costs seconds. On failure an email goes to
+`ALERT_EMAIL_TO` from a *GitHub-hosted* job — an alert that needs the failing
+server to be healthy is an alert that may never send.
+
+The alert distinguishes the two halves, because they mean different things: a
+failed **freshness check** means assume there is no usable backup; a failed
+**drill** means the backups exist and look well-formed but recovery is
+unproven. Sending "BACKUP CHECK FAILED" for a drill problem would tell the
+maintainer their backups are broken while the report in the same email says
+they are fine — a false alarm costs the same trust as a missed one.
+
+```bash
+# By hand, on the server:
+./infra/check-backups.sh --env prod --env preview
+```
+
+### When the check fails
+
+| Report says | What it means | First move |
+|---|---|---|
+| `no dump found` | backups never ran here, or the directory moved | check `crontab -l` and `BACKUP_DIR` |
+| `stale: Nh old` | the cron or the deploy hook stopped | `tail /var/log/internship-backup.log` |
+| `too small` / `not a valid gzip stream` | the dump is being truncated — disk full, or mysqldump dying mid-stream | `df -h`, then run `infra/backup-db.sh` by hand and read the error |
+| `history covers only N day(s)` | rotation is deleting faster than it writes, or the box was down | check `KEEP_DAYS` and the log for gaps |
+
+Until it is fixed, assume there is **no usable backup** and do not merge a
+schema change.
+
+## The drill
+
+`infra/restore-drill.sh` performs the restore above against a throwaway
+database and prints the two numbers. It is the same procedure, executed rather
+than described, so the numbers below are measurements and not estimates.
+
+```bash
+set -a; . /etc/internship-crm/preview.env; set +a
+./infra/restore-drill.sh --env preview --target internship_restore_test
+```
+
+The app user is usually not allowed to `CREATE DATABASE` — on the Plesk box it
+is not — so the scratch database is created through the same admin route the
+topic deploys use (`plesk db`, then the root socket) and then granted to the app
+user, which is who runs the restore. Without that the drill fails on its first
+statement, having exercised nothing.
+
+Three guards, none optional: the target name must contain `restore` **and**
+must differ from the database in `DATABASE_URL`, and the scratch database is
+dropped when the drill finishes (a restored dump is a second copy of real
+personal data sitting on disk — pass `--keep` only if you are going to inspect
+it, and drop it yourself afterwards).
+
+It verifies **row counts** in the tables that carry the product's value —
+`User`, `MentorshipRelation`, `InteractionLog`, `StatusChange`, `Evaluation` —
+and never prints a row. "The app boots" is not the bar; the accumulated history
+coming back is.
+
+It also runs **monthly**, on the 1st, from the same workflow, and on demand via
+*Run workflow* → *Also run the restore drill*.
+
 ## Drill log
 
 The point of a drill is to measure two numbers and keep them honest:
@@ -77,8 +162,21 @@ The point of a drill is to measure two numbers and keep them honest:
 
 | Date | Environment | Dump used | RPO | RTO | Notes |
 |---|---|---|---|---|---|
-| _pending_ | preview | | | | first drill not yet run — do this before quoting any recovery time |
+| 2026-08-24 | **preview** (77 tables, 67 users, 56 relations, 90 stage changes) | `preview-…T190500Z.sql.gz` (~7 MB) | **4 min** | **1 s** | First real drill, run from `backup-verify.yml` on the server. The scratch database had to be created by an admin — the app user cannot `CREATE DATABASE` — and was dropped at the end. |
+| 2026-08-24 | dev container (77 tables, 25 users) | `prod-20260824T175256Z.sql.gz` (76 KB) | 0 min | 1 s | Script validation only, kept for comparison. |
 
 Run the drill against **preview or a scratch database**, never prod. Fill the
 row in with measured values; an estimate here is worse than an empty row,
 because it will be believed.
+
+**What these numbers do and do not say.** RTO is the `mysql` load time and
+nothing else — it excludes noticing the problem, deciding which dump to use,
+stopping the container and bringing the schema up to the deployed code. Budget
+minutes, not seconds, for a real recovery. It also scales with dump size:
+preview's dump is ~7 MB and prod's is ~11.5 MB, both small enough that the load
+is instant; the day prod is a gigabyte, re-measure rather than quoting this row.
+
+**RPO is not a property of the restore.** The 4 minutes above is simply how old
+the newest dump happened to be — a deploy had just taken one. The number that
+matters is the worst case: backups run daily at 03:15 plus before every deploy,
+so a quiet day means **up to 24 hours** of writes at risk.

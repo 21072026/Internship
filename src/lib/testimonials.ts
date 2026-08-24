@@ -63,6 +63,9 @@ export async function listPublishedStories(limit = 12) {
   // the server. Never scores, the original comment, or contact fields.
   return rows
     .map((e) => {
+      // A relation-less row is an interview scorecard (#824) — no mentorship,
+      // no consenting two sides, never a public story.
+      if (!e.relation) return null;
       const author =
         e.authorId === e.relation.mentorId
           ? { user: e.relation.mentor, role: 'mentor' as const }
@@ -101,8 +104,6 @@ export function formatTestimonialName(fullName: string, style: string | null | u
 // gate holds — the caller renders nothing at all in that case (no empty box,
 // no zero-star row). Gates: mentee consent, evaluation published+shared,
 // authored by the relation's mentor, that mentor's consent active.
-const MENTOR_CRITERIA_ON_MENTEE = ['technical', 'communication', 'reliability', 'growth'] as const;
-
 export async function getPublicEvaluationSummary(menteeId: string) {
   const menteeConsent = await prisma.userConsent.findUnique({
     where: { userId_type: { userId: menteeId, type: 'TESTIMONIAL' } },
@@ -137,17 +138,20 @@ export async function getPublicEvaluationSummary(menteeId: string) {
   // Only the mentor's own evaluations of this mentee count here — the
   // mentee→mentor direction belongs to the mentor's screen (#1105), and an
   // admin-authored row has no mentor signature to show.
-  const published = rows.filter((e) => e.authorId === e.relation.mentorId);
+  const published = rows.filter((e) => e.relation && e.authorId === e.relation.mentorId);
   if (published.length === 0) return null;
 
-  // Average of the four mentor→mentee criteria across published evaluations.
-  // The raw scores JSON never leaves the server — only this derived number.
+  // Average across published evaluations. Every 1–5 score in the row counts
+  // rather than a hardcoded list of criterion names: these rows are already
+  // filtered to the mentor's own evaluations of this mentee, so whatever keys
+  // they carry ARE that org's mentee rubric — which since #822 need not be the
+  // built-in four. The raw scores JSON never leaves the server, only this
+  // derived number.
   let sum = 0;
   let n = 0;
   for (const e of published) {
     const scores = (e.scores ?? {}) as Record<string, unknown>;
-    for (const criterion of MENTOR_CRITERIA_ON_MENTEE) {
-      const v = scores[criterion];
+    for (const v of Object.values(scores)) {
       if (typeof v === 'number' && v >= 1 && v <= 5) {
         sum += v;
         n += 1;
@@ -159,7 +163,7 @@ export async function getPublicEvaluationSummary(menteeId: string) {
     average: n > 0 ? Math.round((sum / n) * 10) / 10 : null,
     count: published.length,
     excerpt: withExcerpt?.publicExcerpt ?? null,
-    mentorName: withExcerpt
+    mentorName: withExcerpt?.relation
       ? formatTestimonialName(withExcerpt.relation.mentor.fullName, withExcerpt.relation.mentor.testimonialNameStyle)
       : null,
   };

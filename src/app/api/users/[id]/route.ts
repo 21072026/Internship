@@ -41,6 +41,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           referredById: true,
           referredBy: { select: { id: true, fullName: true, role: true } },
           source: { select: { id: true, name: true } },
+          // Free-form labels on this person (#887).
+          tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
           university: true,
           department: true,
           graduationYear: true,
@@ -65,7 +67,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           menteeRelations: {
             orderBy: { startDate: 'desc' },
             include: {
-              mentor: { select: { fullName: true, email: true } },
+              mentor: { select: { id: true, fullName: true, email: true } },
               company: { select: { name: true, industry: true } },
               project: { select: { id: true, name: true } },
               cohort: { select: { id: true, name: true } },

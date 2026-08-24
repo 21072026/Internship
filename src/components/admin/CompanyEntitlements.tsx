@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { PREMIUM_FEATURES } from '@/lib/entitlementsCatalog';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 // Admin modal to toggle a company's premium features (freemium Faz 0). Purely
 // enables/disables entitlements; the features themselves ship in later phases.
@@ -21,6 +22,7 @@ export function CompanyEntitlements({
   const [features, setFeatures] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
 
   useEffect(() => {
     fetch(`/api/admin/companies/${companyId}/entitlements`)
@@ -54,10 +56,15 @@ export function CompanyEntitlements({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="company-entitlements-title"
+        tabIndex={-1}
         className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto"
         onClick={(ev) => ev.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{e.title}</h2>
+        <h2 id="company-entitlements-title" className="text-xl font-bold text-gray-900 dark:text-gray-100">{e.title}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-4">{e.subtitle.replace('{name}', companyName)}</p>
 
         {loading ? (

@@ -28,18 +28,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
   const { token, response } = parsed.data;
-  const meeting = await prisma.meeting.findUnique({ where: { rsvpToken: token } });
+  const meeting = await prisma.meeting.findUnique({
+    where: { rsvpToken: token },
+    include: { relation: { select: { mentorId: true, menteeId: true } } },
+  });
   if (!meeting) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   await prisma.meeting.update({
     where: { id: meeting.id },
     data: { rsvp: response === 'yes' ? 'ACCEPTED' : 'DECLINED' },
   });
+  const creatorLink = meeting.projectId
+    ? `/projects/${meeting.projectId}`
+    : meeting.conversationId
+      ? `/messages/c/${meeting.conversationId}`
+      : meeting.relation?.menteeId === meeting.createdById
+        ? '/portal'
+        : '/mentor/meetings';
   await notify(
     meeting.createdById,
     response === 'yes' ? 'rsvp.accepted' : 'rsvp.declined',
     { title: meeting.title },
-    '/mentor/meetings'
+    creatorLink
   );
   return NextResponse.json({ ok: true, rsvp: response === 'yes' ? 'ACCEPTED' : 'DECLINED' });
 }

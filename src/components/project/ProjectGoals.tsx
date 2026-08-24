@@ -8,6 +8,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
 import { resolveTemplateTitle } from '@/lib/goalTemplates';
 import type { TeamMember } from '@/lib/projectTeam';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // Project goals, per person (#51).
 //
@@ -229,7 +230,9 @@ export function ProjectGoals({
         </span>
       )}
       {task.assignee && task.assigneeId !== myId && (
-        <span className="text-xs text-gray-400">· {task.assignee.fullName}</span>
+        <span className="text-xs text-gray-400">
+          · <PersonHoverCard personId={task.assignee.id} name={task.assignee.fullName} />
+        </span>
       )}
       {opts.canClaim && (
         <button type="button" onClick={() => claim(task)} disabled={busy === task.id} className="ml-auto inline-flex items-center gap-1 text-xs text-blue-600 hover:underline" data-testid={`claim-${task.id}`}>

@@ -1,9 +1,9 @@
 {
   "bump": "patch",
-  "changelog": "- **Mentor notification links (#1266)**: deadline and missing-document notifications now use the mentorship relation ID and open the mentor mentee detail page.",
+  "changelog": "- **Mentor deadline notification link (#1266)**: deadline reminders now open the mentor's relation-scoped mentee detail page.",
   "notes": {
-    "en": ["Deadline and missing-document notifications now take mentors directly to the correct mentee page."],
-    "tr": ["Son tarih ve eksik belge bildirimleri artık mentörleri doğrudan doğru mentee sayfasına yönlendiriyor."],
-    "de": ["Benachrichtigungen zu Fristen und fehlenden Dokumenten führen Mentoren jetzt direkt zur richtigen Mentee-Seite."]
+    "en": ["Deadline notifications now take mentors directly to the correct mentee page."],
+    "tr": ["Son tarih bildirimleri artık mentörleri doğrudan doğru mentee sayfasına yönlendiriyor."],
+    "de": ["Benachrichtigungen zu Fristen führen Mentoren jetzt direkt zur richtigen Mentee-Seite."]
   }
 }

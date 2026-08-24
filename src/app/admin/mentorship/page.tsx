@@ -13,8 +13,10 @@ import { SavedViews } from '@/components/SavedViews';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen, Plus } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // The assign dropdowns show a name plus capacity/availability (#942), so this
 // asks the API for the `mentorAvailability` field set — still no email/phone/
@@ -61,6 +63,7 @@ export default function MentorshipPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const assignDialogRef = useModalFocus<HTMLDivElement>(showForm, () => setShowForm(false));
   const [formData, setFormData] = useState({ mentorId: '', menteeId: '', companyId: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -247,8 +250,15 @@ export default function MentorshipPage() {
       {/* Create Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">{t.mentorships.assign}</h2>
+          <div
+            ref={assignDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mentorship-assign-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl p-6 w-full max-w-md"
+          >
+            <h2 id="mentorship-assign-title" className="text-xl font-bold text-gray-900 mb-6">{t.mentorships.assign}</h2>
             {formError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{formError}</div>
             )}
@@ -300,7 +310,7 @@ export default function MentorshipPage() {
           <button
             key={sf}
             onClick={() => setStatusFilter(sf)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`min-h-11 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               statusFilter === sf ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
@@ -313,7 +323,7 @@ export default function MentorshipPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t.mentorships.searchPlaceholder}
-          className="ml-auto w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+          className="ml-auto min-h-11 w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
       </div>
       <div className="mb-4">
@@ -346,7 +356,9 @@ export default function MentorshipPage() {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                     <Link href={`/admin/candidates/${rel.mentee.id}`} className="font-semibold text-gray-900 hover:text-blue-700 hover:underline">{rel.mentee.fullName}</Link>
                     <span className="text-gray-400">→</span>
-                    <span className="font-semibold text-gray-900">{rel.mentor.fullName}</span>
+                    <span className="font-semibold text-gray-900">
+                      <PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" />
+                    </span>
                     <StatusBadge status={rel.status} />
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">

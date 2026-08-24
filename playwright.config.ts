@@ -62,6 +62,10 @@ export default defineConfig({
         // the spoofing assertions in rate-limit-spoof.spec.ts meaningful (#858).
         env: {
           TRUSTED_PROXY_COUNT: '0',
+          // E2E must never deliver real mail from a developer's loaded .env;
+          // synchronous route mail would otherwise wait on that external SMTP.
+          SMTP_USER: '',
+          SMTP_BULK_USER: '',
           // Exercises the gated shape of /api/health (#897). Unset, the endpoint
           // keeps its legacy fully-public response and health.spec.ts's
           // assertions about what an anonymous caller may see would be vacuous.

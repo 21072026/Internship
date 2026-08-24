@@ -97,6 +97,9 @@ model Organization {
   projects             Project[]
   relations            MentorshipRelation[]
   pipelineStages       PipelineStage[]
+  evaluationTemplates  EvaluationTemplate[]
+  stageSlas            StageSla[]
+  tags                 Tag[]
   mentorApplications   MentorApplication[]
   companyInquiries     CompanyInquiry[]
   documentRequirements DocumentRequirement[]
@@ -113,6 +116,79 @@ model Organization {
 // label / order / color / on-path grouping for the stages it lists. `key` is the
 // stable identifier (the enum value for the canonical set; a slug for custom
 // stages once storage moves off the enum in a later slice).
+// Per-stage service level (#817): "nobody should wait more than N days here".
+//
+// Deliberately NOT a column on PipelineStage, even though that is where stage
+// configuration lives. Custom stages are premium-gated and their editor
+// replaces the whole set on every save, so putting the SLA there would (a)
+// paywall a candidate-experience feature and (b) wipe every SLA whenever an
+// admin renamed a stage. A separate row keyed by stage KEY works for an org on
+// the built-in stages and an org with its own, and survives stage edits.
+//
+// DAYS ARE CALENDAR DAYS, not business days. A candidate waiting over a weekend
+// still waited — the SLA measures their experience, not our working hours.
+// Business-day arithmetic would need a holiday calendar per country and per
+// org; calendar days can only ever fire the warning EARLIER, never later.
+// Free-form labels on a person (#887).
+//
+// NOT a replacement for Cohort or Source, and the distinction matters or the
+// three blur into each other:
+//   · Cohort — the official period group a candidate belongs to. Exactly ONE.
+//   · Source — where a candidate came from. Exactly ONE.
+//   · Tag    — whatever this org needs to mark, MANY per person, invented by
+//              the people doing the work rather than configured up front.
+//
+// Org-scoped by construction (orgId required): a tenant must never see another
+// tenant's vocabulary, let alone who carries it.
+model Tag {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  // Optional hex swatch; the management screen (a separate task) owns picking it.
+  color       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  users UserTag[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+// Deleting a Tag removes the label, never the person: the cascade runs from
+// Tag → UserTag and from User → UserTag, and stops there.
+model UserTag {
+  id        String   @id @default(cuid())
+  userId    String
+  tagId     String
+  addedById String?
+  addedAt   DateTime @default(now())
+
+  user User @relation("UserTags", fields: [userId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagId])
+  @@index([tagId])
+  @@index([userId])
+}
+
+model StageSla {
+  id        String   @id @default(cuid())
+  orgId     String
+  // The stage this applies to. A plain key, not a relation: it must work for
+  // an org that has no PipelineStage rows at all (i.e. uses the built-ins).
+  stageKey  String
+  days      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, stageKey])
+  @@index([orgId])
+}
+
 model PipelineStage {
   id         String       @id @default(cuid())
   orgId      String
@@ -260,6 +336,7 @@ model User {
   statusChanges                     StatusChange[]                @relation("StatusChangedBy")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
+  tags                              UserTag[]                     @relation("UserTags")
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
@@ -272,6 +349,7 @@ model User {
   documents                         Document[]                    @relation("DocumentOwner")
   personalNotes                     PersonalNote[]
   consents                          UserConsent[]
+  contributorTermsAcceptances       ContributorTermsAcceptance[]
   companyInterests                  CompanyInterest[]             @relation("CompanyInterestMentee")
   companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
   mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
@@ -370,6 +448,52 @@ model UserConsent {
 
   @@unique([userId, type])
   @@index([userId])
+}
+
+// Contributor terms as DATA, not code (#1025, design in
+// docs/legal/contributor-terms-in-app.md). Terms are versioned rows rather than
+// a constant because the click-wrap only holds up if the exact text a person
+// accepted can be produced later — and because a second project may one day
+// have different IP rules, keyed separately.
+model ContributorTerms {
+  key             String // 'default' | 'project-x' …
+  version         String // '1.0'; changing the text means a NEW row, never an edit
+  locale          String // 'en' | 'tr' | 'de'
+  // Exactly one locale per (key, version) is the binding text; the others are
+  // informative translations. Which one it is has to be recorded, not assumed.
+  isAuthoritative Boolean  @default(false)
+  body            String   @db.Text // markdown
+  effectiveFrom   DateTime
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+
+  @@unique([key, version, locale])
+  @@index([key, effectiveFrom])
+}
+
+// Evidence, not preference: who accepted which version, when, and from where.
+// A row is written on acceptance and never updated — a later version produces
+// another row, so the history is the record.
+model ContributorTermsAcceptance {
+  id         String   @id @default(cuid())
+  userId     String
+  termsKey   String
+  version    String
+  // null = platform-level acceptance (onboarding). A project id scopes the
+  // acceptance to that project — § 40 UrhG is why this is a chain of specific
+  // acceptances rather than one blanket future-works consent.
+  projectId  String?
+  acceptedAt DateTime @default(now())
+  // Hashed, never raw: the evidence question is "was it the same client", not
+  // "what is their address". Same treatment the rest of the app gives an IP.
+  ipHash     String?
+  uaHash     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, termsKey, version, projectId])
+  @@index([userId])
+  @@index([termsKey, version])
 }
 
 // A referral source — the education/agency a mentee came from. Admin-managed
@@ -1118,6 +1242,15 @@ model Project {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
+  // Which contributor terms this project's members accept, and whether it asks
+  // at all (#1026). A key rather than a foreign key: the terms are versioned
+  // rows, and a project follows the *document*, not one frozen version of it —
+  // pointing at a row would pin the project to wording that has been superseded.
+  // null → the platform default. `contributorTermsRequired = false` is for a
+  // project that genuinely has no IP question (a reading group, a demo).
+  contributorTermsKey      String?
+  contributorTermsRequired Boolean @default(true)
+
   ownerUser     User?                 @relation("ProjectOwner", fields: [ownerUserId], references: [id])
   ownerCompany  Company?              @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
   relations     MentorshipRelation[]
@@ -1403,6 +1536,10 @@ model MentorshipRelation {
 enum EvaluationType {
   INTERIM
   FINAL
+  // A scorecard written during a hiring interview (#824). Unlike the other two
+  // it may exist before any mentorship does, which is why relationId is
+  // nullable and subjectId names the candidate directly.
+  INTERVIEW
 }
 
 enum GoalStatus {
@@ -1411,13 +1548,35 @@ enum GoalStatus {
 }
 
 model Evaluation {
-  id         String         @id @default(cuid())
-  relationId String
-  authorId   String
-  type       EvaluationType @default(INTERIM)
-  scores     Json           @default("{}") // { criterion: 1..5 }
-  comment    String?        @db.Text
-  createdAt  DateTime       @default(now())
+  id          String         @id @default(cuid())
+  // Nullable since #824: an interview happens before a mentorship exists (a
+  // company round especially), so a scorecard has no relation to hang off.
+  // Every pre-existing row and every INTERIM/FINAL evaluation still carries one
+  // — the existing queries all filter by it or traverse the relation, so they
+  // are unaffected.
+  relationId  String?
+  // Who is being evaluated. Only set for relation-less rows (interviews); for a
+  // relation-backed row the subject is relation.menteeId, and duplicating it
+  // would mean a backfill and a second source of truth.
+  subjectId   String?
+  // The interview panel this scorecard belongs to (#824).
+  panelId     String?
+  // Blind scoring: a scorecard counts — and becomes visible to the rest of the
+  // panel — only once submitted. Null means its author has not committed to it.
+  // INTERIM/FINAL rows are submitted the moment they are written.
+  submittedAt DateTime?
+  authorId    String
+  type        EvaluationType @default(INTERIM)
+  scores      Json           @default("{}") // { criterion: 1..5 }
+  comment     String?        @db.Text
+  createdAt   DateTime       @default(now())
+  // Which rubric this was scored against (#822). Null means the built-in 4+4
+  // criteria, which is every row written before org templates existed and every
+  // row in an org that never defined one. Stamped at write time so a record
+  // keeps rendering with the labels of its own era even after the org rewrites
+  // its framework — criteria are deactivated, never deleted, for the same
+  // reason.
+  templateId  String?
 
   // Consent-based testimonial publishing (#1096/#1098). The original comment
   // is never published or edited: the admin drafts publicExcerpt, the AUTHOR
@@ -1429,10 +1588,108 @@ model Evaluation {
   publicExcerpt     String?   @db.Text
   excerptApprovedAt DateTime?
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  panel    InterviewPanel?     @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  // SetNull, not Cascade: losing a template must never delete the evaluations
+  // written against it.
+  template EvaluationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([relationId])
   @@index([sharedPublicly, publishedAt])
+  @@index([templateId])
+  @@index([subjectId])
+  @@index([panelId])
+}
+
+// Structured interview scoring (#824).
+//
+// The point of a panel is the ORDER: every interviewer scores independently and
+// cannot see anyone else's scorecard, and only once the panel is complete does
+// the calibration view show them side by side. Break that order and the
+// scorecard is theatre — an interviewer who reads a colleague's 2 before
+// writing their own does not produce an independent signal.
+//
+// That rule is enforced in the API, never merely hidden in the UI.
+model InterviewPanel {
+  id          String    @id @default(cuid())
+  orgId       String?
+  // The candidate being interviewed.
+  subjectId   String
+  // The rubric to score against (#822). Null = the org's built-in mentee
+  // criteria, resolved at read time like everywhere else.
+  templateId  String?
+  title       String?
+  scheduledAt DateTime?
+  createdById String?
+  // Set when an admin closes the panel early — a no-show interviewer must not
+  // hold the calibration view hostage for ever. Closing reveals the scorecards
+  // that were submitted.
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members    InterviewPanelMember[]
+  scorecards Evaluation[]
+
+  @@index([orgId, subjectId])
+  @@index([subjectId, createdAt])
+}
+
+model InterviewPanelMember {
+  id      String @id @default(cuid())
+  panelId String
+  userId  String
+
+  panel InterviewPanel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  @@unique([panelId, userId])
+  @@index([userId])
+}
+
+// Per-tenant competency framework (#822), the same shape #747 gave pipeline
+// stages: an org that defines nothing keeps exactly the built-in criteria, and
+// one that defines a template replaces them for that scope.
+//
+// `scope` is a plain String validated against a whitelist in code
+// (src/lib/evaluation.ts), not a Prisma enum — the same convention the rest of
+// this repo uses for status-like values, so adding a scope is not a migration.
+model EvaluationTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  // 'MENTEE' (mentor scores the mentee) | 'MENTOR' (mentee scores the mentor).
+  scope     String
+  // Only one active template per org+scope is used; the rest are history.
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org         Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  criteria    EvaluationCriterion[]
+  evaluations Evaluation[]
+
+  @@index([orgId, scope, active])
+}
+
+model EvaluationCriterion {
+  id         String  @id @default(cuid())
+  templateId String
+  // The key stored inside Evaluation.scores. Stable: renaming a criterion
+  // changes its labels, never its key, or historical scores stop matching.
+  key        String
+  // { en?, tr?, de? } — the label in each language it was written in. A missing
+  // language falls back to English, then to the key itself, so a half-translated
+  // framework still renders.
+  labels     Json
+  order      Int     @default(0)
+  // Retired, not deleted (#822): an evaluation scored against this criterion
+  // still has to render its label years later.
+  active     Boolean @default(true)
+
+  template EvaluationTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, key])
+  @@index([templateId, order])
 }
 
 // A structured question from a mentee to their mentor, with an optional answer.

@@ -151,11 +151,28 @@ called with `GHCR_USER`/`GHCR_TOKEN` (the run's `GITHUB_TOKEN`, for the pull) an
 `SKIP_PULL=1` for a locally built image, and the old base64-over-SSH credential
 form (`ACTOR`/`B64_TOKEN` + `B64_*`), for a manual deploy from a shell.
 
-**Database: a single shared preview DB.** No per-topic DB, so no DB-admin secret
-is needed. ⚠️ Trade-off: all topics share schema/data — two concurrent PRs with
-divergent schema changes can drift (`prisma db push` is global). Coordinate schema
-changes across simultaneous topics, or switch to per-topic DBs later (would need a
-`CREATE/DROP DATABASE`-capable secret).
+**Database: one per topic** (`internship_pr<N>`, #1185). The env file supplies the
+MySQL host and credentials; `topic-deploy.sh` creates the topic's own database on
+the same server, points the container at it, and fills a *fresh* one with the
+synthetic demo set (`prisma/seed-demo.mjs`). A re-push keeps whatever the reviewer
+has been clicking on and only brings the schema up to date. `topic-teardown.sh`
+drops it when the PR closes; the daily topic sweep drops any that leak.
+
+Two consequences worth stating: a `prisma db push` on one PR no longer reshapes the
+schema under every other PR, and **no real preview data is reachable from a topic
+environment** — sign in with `admin.demo@demo.example.com` / `DemoPass123!`. The
+shared preview env at `crm-preview.ersah.in` keeps its own single database.
+
+Privileges usually need no setup: the script runs as root on the database host,
+so if the app user cannot create databases it falls back to the local root
+socket and grants the app user access to the one database it just made. If
+neither route works the deploy **stops** with the grant to run —
+
+```sql
+GRANT ALL PRIVILEGES ON `internship\_pr%`.* TO '<preview-user>'@'%';
+```
+
+— rather than falling back to the shared database. Isolation is the point.
 
 ### Prerequisites on the server
 - Self-hosted runner registered; its user (root here) can run `docker` and the
@@ -190,6 +207,32 @@ Nothing on the box compiles anymore. Between 2026-06 and 2026-07-29 it did: with
 the private repo's Actions quota exhausted (#636) the builds were moved onto the
 self-hosted runner, so the production host ran `npm ci` + `next build` for every
 merge **and every push to every open PR**.
+
+### No `uses:` in a self-hosted job (#1239)
+
+Every `uses:` makes the runner download that action's archive from
+`codeload.github.com`. From this box's IP those downloads started answering
+**429**, three attempts and a backoff apart, and the job died in *Set up job* —
+before a line of repo code ran. Every topic preview and every deploy failed at
+the same point while the identical `ubuntu-latest` jobs passed, so the throttle
+is on the address, not the workflow.
+
+So the self-hosted jobs use **no actions at all**. They fetch what they need
+with plain git over HTTPS:
+
+```bash
+git init -q .                       # workspace persists between runs
+git remote add origin https://github.com/$GITHUB_REPOSITORY.git
+git fetch --no-tags --depth=1 origin "$SHA"
+git checkout -q --force --detach FETCH_HEAD
+git clean -qfdx
+```
+
+Anything that needs an action — posting the topic-preview comment, sending an
+alert email — is a separate GitHub-hosted job. **Keep it that way**: adding a
+`uses:` to a self-hosted job reintroduces the failure, and it fails before your
+step ever runs, which makes it look like the runner is broken rather than the
+workflow.
 
 ---
 
@@ -367,6 +410,20 @@ A dump is rejected (and the deploy stops) if it is under `MIN_BYTES`, is not a
 valid gzip stream, or contains no `CREATE TABLE`. A backup that looks fine but
 restores nothing is worse than no backup at all.
 
+### Is it still running? (#1183)
+
+`infra/backup-db.sh` validates the dump it writes; nothing validated that it is
+still *running*. `.github/workflows/backup-verify.yml` does, **daily at 06:20
+UTC** on the self-hosted runner, via `infra/check-backups.sh`: is there a dump,
+is it fresher than `MAX_AGE_HOURS`, is it a well-formed non-trivial gzip, and
+does the set still cover `MIN_HISTORY_DAYS` distinct days. A failure emails
+`ALERT_EMAIL_TO` from a GitHub-hosted job — an alert that needs the failing
+server to be healthy may never send.
+
+```bash
+./infra/check-backups.sh --env prod --env preview
+```
+
 ### Restoring
 
 See [`docs/disaster-recovery.md`](../docs/disaster-recovery.md) for the full
@@ -375,6 +432,45 @@ runbook. The short version:
 ```bash
 gzip -dc /var/backups/internship-crm/prod-<stamp>.sql.gz | mysql -h <host> -u <user> -p <db>
 ```
+
+The rehearsal is scripted: `infra/restore-drill.sh` restores the newest dump
+into a throwaway database, verifies the row counts that matter, prints the
+measured RPO/RTO and drops the copy. It runs monthly (1st) from the same
+workflow, or on demand via *Run workflow* → *Also run the restore drill*.
+
+### Rolling back (#961)
+
+The swap is blue/green: the new image runs first as `<container>-canary` on
+`PORT+100`, and only when it answers `/api/health?db=1` with `status: ok`, a
+reachable database and the sha that was just built does the live container get
+touched. A bad image therefore fails the deploy without taking the environment
+down — which is what happened on 2026-07-28, when all three environments served
+503 because the old container was removed before the new one was proven.
+
+The image that was replaced is tagged `<container>:previous` and is deliberately
+kept out of the prune, so putting the last release back is a `docker run`, not a
+rebuild:
+
+```bash
+CONTAINER=internship-crm ./infra/deploy-prod.sh --rollback
+```
+
+That path runs **before** the git sync, the image pull and the schema push: when
+a deploy has just gone wrong, the way back must not depend on the machinery that
+broke. It health-checks what it started (without asserting a sha — a rollback
+wants whatever the old image serves) and records the served commit in the state
+file so the next deploy's forward-only guard compares against reality.
+
+Two consequences worth knowing:
+
+- **No `docker image prune -af` anywhere any more.** `-a` removes every image no
+  container is using, which includes `:previous`. `deploy-prod.sh`,
+  `topic-deploy.sh` and `topic-teardown.sh` now prune dangling layers and remove
+  app images by name instead. (The legacy `deploy.yml` still has a blanket
+  prune; it is superseded and not on any trigger, but if it is ever revived it
+  will eat the rollback targets.)
+- **A fresh environment has no rollback target** until its first deploy under
+  this scheme replaces something. `--rollback` says so rather than guessing.
 
 ### Overrides (use knowingly)
 

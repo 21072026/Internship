@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, acceptContributorTerms } from './helpers/db';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -43,6 +43,11 @@ test('mentee portal: own private projects are listed, foreign ones are not', { t
   const relation = await prisma.mentorshipRelation.create({
     data: { mentorId: admin.id, menteeId: mentee.id, status: 'ACTIVE', projectId: viaRelation.id },
   });
+  // Both contributor-terms gates (#1025, #1026): the portal project list needs
+  // the platform-level acceptance, and opening a project needs one scoped to
+  // that project. A mentee actually working on these has both.
+  await acceptContributorTerms(mentee.id);
+  await acceptContributorTerms(mentee.id, { projectId: viaMember.id });
 
   try {
     await page.goto('/auth/signin');

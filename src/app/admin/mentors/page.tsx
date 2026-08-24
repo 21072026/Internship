@@ -9,6 +9,7 @@ import { Users, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 interface MentorUser {
   id: string;
@@ -34,6 +35,7 @@ export default function MentorsPage() {
   // the Users admin page (#570).
   const [statusView, setStatusView] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const editDialogRef = useModalFocus<HTMLDivElement>(editing !== null, () => setEditing(null));
 
   const load = useCallback(() => {
     setLoading(true);
@@ -148,7 +150,12 @@ export default function MentorsPage() {
               const cap = m.mentorCapacity;
               const atCapacity = cap != null && cap > 0 && m._count.mentorRelations >= cap;
               return (
-                <div key={m.id} className="flex items-start justify-between gap-3 py-3">
+                // Phone: the identity block gets the full width and the actions wrap
+                // below it. Side by side, the Turkish action labels ("Uzmanlığı
+                // düzenle" + "Pasifleştir") left the name/email column ~18px wide,
+                // so the mentor was unidentifiable and the expertise chips ran
+                // under the buttons (#1305).
+                <div key={m.id} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3 py-3">
                   <div className="flex items-start gap-3 min-w-0">
                     <div className="w-9 h-9 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-green-700 font-semibold text-sm">{m.fullName?.[0] || 'M'}</span>
@@ -173,12 +180,12 @@ export default function MentorsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:flex-nowrap sm:items-end sm:flex-shrink-0">
                     <Badge variant={atCapacity ? 'warning' : 'info'} className="flex items-center gap-1">
                       <Users className="h-3 w-3" />
                       {m._count.mentorRelations}{cap != null ? `/${cap}` : ''} {t.mentors.mentee}
                     </Badge>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button variant="outline" size="sm" onClick={() => openEdit(m)}>
                         <Pencil className="h-3.5 w-3.5" />
                         {t.mentors.editExpertise}
@@ -202,8 +209,15 @@ export default function MentorsPage() {
 
       {editing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">{t.mentors.editExpertise}</h2>
+          <div
+            ref={editDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mentor-edit-title"
+            tabIndex={-1}
+            className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md"
+          >
+            <h2 id="mentor-edit-title" className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">{t.mentors.editExpertise}</h2>
             <p className="text-sm text-gray-500 mb-4">{editing.fullName}</p>
             <div className="space-y-4">
               <Input

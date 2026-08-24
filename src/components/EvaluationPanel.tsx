@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { EVAL_CRITERIA, MENTOR_CRITERIA } from '@/lib/evaluation';
+import { criteriaForScores, defaultCriteria, type ResolvedCriterion } from '@/lib/evaluation';
+import { useCriteria, useCriterionLabel } from '@/lib/evaluationCriteriaClient';
 import { useT, useLocale } from '@/i18n/client';
 import { relativeTime } from '@/lib/relativeTime';
 
@@ -19,6 +20,8 @@ interface Evaluation {
   direction: 'MENTOR_ON_MENTEE' | 'MENTEE_ON_MENTOR';
   createdAt: string;
   canDelete?: boolean;
+  // The rubric this was scored against (#822); null means the built-ins.
+  templateId?: string | null;
 }
 
 // Shows a relation's evaluation history. When not read-only, the current user
@@ -36,6 +39,9 @@ export function EvaluationPanel({
   const t = useT();
   const locale = useLocale();
   const [items, setItems] = useState<Evaluation[]>([]);
+  // The criteria of every rubric these evaluations were written against —
+  // retired ones included, so an old record keeps its own labels (#822).
+  const [templates, setTemplates] = useState<Record<string, ResolvedCriterion[]>>({});
   const [scores, setScores] = useState<Record<string, number>>({});
   const [comment, setComment] = useState('');
   const [type, setType] = useState<'INTERIM' | 'FINAL'>('INTERIM');
@@ -44,11 +50,18 @@ export function EvaluationPanel({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const formCriteria = audience === 'MENTOR' ? MENTOR_CRITERIA : EVAL_CRITERIA;
+  // What the form asks for: the tenant's own framework when it defined one,
+  // otherwise the built-in four.
+  const formCriteria = useCriteria(audience === 'MENTOR' ? 'MENTOR' : 'MENTEE');
+  const criterionLabel = useCriterionLabel();
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/evaluations?relationId=${relationId}`);
-    if (res.ok) setItems((await res.json()).evaluations ?? []);
+    if (res.ok) {
+      const data = await res.json();
+      setItems(data.evaluations ?? []);
+      setTemplates(data.templates ?? {});
+    }
   }, [relationId]);
   useEffect(() => { load(); }, [load]);
 
@@ -90,7 +103,11 @@ export function EvaluationPanel({
     }
   };
 
-  const label = (c: string) => (t.evaluation.criteria as Record<string, string>)[c] ?? c;
+  // A record's own rubric: the template it was stamped with, else the built-ins
+  // for its direction.
+  const rubricFor = (ev: Evaluation): ResolvedCriterion[] =>
+    (ev.templateId && templates[ev.templateId]) ||
+    defaultCriteria(ev.direction === 'MENTEE_ON_MENTOR' ? 'MENTOR' : 'MENTEE');
   const typeLabel = (ty: string) => (ty === 'FINAL' ? t.evaluation.final : t.evaluation.interim);
 
   return (
@@ -102,12 +119,12 @@ export function EvaluationPanel({
         <form onSubmit={submit} className="space-y-3 mb-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {formCriteria.map((c) => (
-              <label key={c} className="flex items-center justify-between gap-2 text-sm">
-                <span className="text-gray-700">{label(c)}</span>
+              <label key={c.key} className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-gray-700">{criterionLabel(c)}</span>
                 <select
-                  value={scores[c] ?? ''}
-                  onChange={(e) => setScores({ ...scores, [c]: Number(e.target.value) })}
-                  className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                  value={scores[c.key] ?? ''}
+                  onChange={(e) => setScores({ ...scores, [c.key]: Number(e.target.value) })}
+                  className="min-h-11 min-w-11 rounded-lg border border-gray-300 px-2 py-1 text-sm"
                 >
                   <option value="">–</option>
                   {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
@@ -120,7 +137,7 @@ export function EvaluationPanel({
             <select
               value={type}
               onChange={(e) => setType(e.target.value as 'INTERIM' | 'FINAL')}
-              className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+              className="min-h-11 min-w-11 rounded-lg border border-gray-300 px-2 py-1 text-sm"
             >
               <option value="INTERIM">{t.evaluation.interim}</option>
               <option value="FINAL">{t.evaluation.final}</option>
@@ -170,7 +187,9 @@ export function EvaluationPanel({
             );
           })()}
           {items.map((ev) => {
-            const crit = ev.direction === 'MENTEE_ON_MENTOR' ? MENTOR_CRITERIA : EVAL_CRITERIA;
+            // Scores whose criterion no longer exists anywhere are still shown
+            // (by key) rather than silently dropped.
+            const crit = criteriaForScores(rubricFor(ev), ev.scores);
             return (
               <div key={ev.id} className="rounded-lg border border-gray-100 p-3">
                 <div className="flex items-center gap-2 mb-1.5">
@@ -190,8 +209,8 @@ export function EvaluationPanel({
                   )}
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                  {crit.filter((c) => ev.scores[c]).map((c) => (
-                    <span key={c} className="text-gray-700">{label(c)}: <strong>{ev.scores[c]}/5</strong></span>
+                  {crit.map((c) => (
+                    <span key={c.key} className="text-gray-700">{criterionLabel(c)}: <strong>{ev.scores[c.key]}/5</strong></span>
                   ))}
                 </div>
                 {ev.comment && <p className="text-sm text-gray-600 mt-1.5 whitespace-pre-wrap">{ev.comment}</p>}

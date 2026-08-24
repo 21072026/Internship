@@ -6,7 +6,14 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('candidates are usable without horizontal overflow on mobile and keep the desktop list', async ({ page }) => {
+async function expectTouchTarget(locator: import('@playwright/test').Locator) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
+}
+
+test('candidates are usable without horizontal overflow on mobile and keep the desktop list', { tag: '@smoke' }, async ({ page }) => {
   const adminEmail = uniqueEmail('candidates-mobile-admin');
   const mentorEmail = uniqueEmail('candidates-mobile-mentor');
   const menteeEmail = uniqueEmail('candidates-mobile-mentee');
@@ -35,7 +42,10 @@ test('candidates are usable without horizontal overflow on mobile and keep the d
     await page.goto('/admin/candidates');
 
     const search = page.getByTestId('candidates-search-input');
-    await page.getByTestId('candidates-mobile-filter-toggle').click();
+    const filterToggle = page.getByTestId('candidates-mobile-filter-toggle');
+    await expectTouchTarget(page.getByRole('link', { name: 'Messages' }));
+    await expectTouchTarget(page.getByRole('button', { name: 'Open menu' }));
+    await filterToggle.click();
     await expect(search).toBeVisible();
     await search.fill(menteeEmail);
 
@@ -56,8 +66,17 @@ test('candidates are usable without horizontal overflow on mobile and keep the d
       'candidates-source-filter',
       'candidates-stage-filter',
     ]) {
-      await expect(page.getByTestId(testId)).toBeVisible();
+      const target = page.getByTestId(testId);
+      await expect(target).toBeVisible();
+      await expectTouchTarget(target);
     }
+    await expectTouchTarget(filterToggle);
+    await expectTouchTarget(page.getByTestId('candidates-tab-active'));
+    await expectTouchTarget(page.getByTestId('candidates-tab-archived'));
+
+    await page.getByRole('button', { name: 'Open menu' }).click();
+    await expectTouchTarget(page.getByRole('button', { name: 'Close menu' }));
+    await page.getByRole('button', { name: 'Close menu' }).click();
 
     const hasHorizontalOverflow = await page.evaluate(() => {
       const element = document.scrollingElement;

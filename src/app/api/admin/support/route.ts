@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { notificationLink } from '@/lib/notificationLink';
 import {
   SUPPORT_ATTACHMENT_MAX_COUNT,
   validateSupportFile,
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
 
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: parsed.data.ticketId },
-    select: { id: true, status: true, requesterId: true, assignedAdminId: true },
+    select: { id: true, status: true, requesterId: true, assignedAdminId: true, requester: { select: { role: true } } },
   });
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -157,7 +158,7 @@ export async function POST(request: Request) {
     data: { readAt: new Date() },
   });
 
-  await notify(ticket.requesterId, 'support.replied', {}, '/messages/support');
+  await notify(ticket.requesterId, 'support.replied', {}, notificationLink(ticket.requester.role, 'support', {}));
 
   return NextResponse.json({ messageId: message.id }, { status: 201 });
 }
@@ -174,7 +175,7 @@ export async function PUT(request: Request) {
 
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: parsed.data.ticketId },
-    select: { id: true, status: true, requesterId: true },
+    select: { id: true, status: true, requesterId: true, requester: { select: { role: true } } },
   });
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -189,7 +190,7 @@ export async function PUT(request: Request) {
   });
 
   if (status === 'CLOSED' && ticket.status !== 'CLOSED') {
-    await notify(ticket.requesterId, 'support.closed', {}, '/messages/support');
+    await notify(ticket.requesterId, 'support.closed', {}, notificationLink(ticket.requester.role, 'support', {}));
   }
 
   return NextResponse.json({ ticket: updated });

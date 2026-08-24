@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardList, Columns3, FolderGit2, Inbox, LayoutDashboard, Mail, User, UserPlus, Users } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardCheck, ClipboardList, Columns3, FolderGit2, Inbox, LayoutDashboard, Mail, MessageSquareText, User, UserPlus, Users } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 export function MentorNav() {
@@ -21,10 +21,12 @@ export function MentorNav() {
     { href: '/mentor/email', label: t.nav.email, Icon: Mail },
     { href: '/mentor/meetings', label: t.nav.meetings, Icon: CalendarClock },
     { href: '/mentor/interview-requests', label: t.nav.interviewRequests, Icon: CalendarDays },
+    { href: '/interviews', label: t.nav.interviewPanels, Icon: ClipboardCheck },
     { href: '/mentor/availability', label: t.nav.availability, Icon: CalendarRange },
     { href: '/mentor/calendar', label: t.nav.calendar, Icon: CalendarDays },
     { href: '/mentor/mentee-activity', label: t.nav.menteeActivity, Icon: Activity },
     { href: '/mentor/analytics', label: t.nav.analytics, Icon: BarChart3 },
+    { href: '/mentor/feedback', label: t.nav.feedback, Icon: MessageSquareText },
   ];
 
   const isActive = (href: string) =>

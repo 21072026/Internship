@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Tags on people (#887)** — an org-scoped `Tag`/`UserTag` model, a multi-tag candidate filter evaluated server-side with an explicit any/all switch, tag chips on candidate rows and an inline editor on the candidate page, bulk tag/untag from the candidate list, and tag state carried in saved views. Mentors may tag their own mentees; limits (20 per person, 100 per org) are enforced server-side on both the single and the bulk path.",
+  "notes": {
+    "en": [
+      "Label candidates however your team actually thinks about them, then filter the list by any or all of those labels — and save that filter as a view. Mentors can tag their own mentees."
+    ],
+    "tr": [
+      "Adayları ekibinizin gerçekten düşündüğü gibi etiketleyin, listeyi bu etiketlerin herhangi birine ya da hepsine göre süzün ve bu süzgeci görünüm olarak kaydedin. Mentorlar kendi mentee'lerini etiketleyebilir."
+    ],
+    "de": [
+      "Versieh Kandidatinnen und Kandidaten mit euren eigenen Labels, filtere die Liste nach einem oder allen davon und speichere den Filter als Ansicht. Mentorinnen und Mentoren können ihre eigenen Mentees taggen."
+    ]
+  }
+}

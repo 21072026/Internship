@@ -68,8 +68,39 @@ jobs:
       deploy: ${{ steps.gate.outputs.deploy }}
       sha: ${{ steps.gate.outputs.sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
+      # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted
+      # runners are unaffected), and it fails in "Set up job" — before a single
+      # line of repo code runs. That killed every topic preview and every deploy
+      # at the same point. Plain git over HTTPS is not throttled that way, and
+      # these jobs only ever needed the infra/ scripts.
+      - name: Fetch the repo (no action download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FETCH_REF: ${{ github.sha }}
+          FETCH_DEPTH: '1'
+        run: |
+          set -euo pipefail
+          [ -d .git ] || git init -q .
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          # The token reaches git through a credential helper reading the
+          # environment, so it is never in argv (readable via `ps` on a shared box)
+          # and never written into .git/config.
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+          if [ "$FETCH_DEPTH" = "0" ]; then
+            # Full history: the forward-only guard in deploy-prod.sh asks
+            # `git merge-base --is-ancestor` whether this commit predates the live
+            # one, and a shallow clone cannot answer that.
+            git -c credential.helper="$HELPER" fetch --no-tags --prune origin \
+              "+refs/heads/*:refs/remotes/origin/*"
+            git -c credential.helper="$HELPER" fetch --no-tags origin "$FETCH_REF"
+          else
+            git -c credential.helper="$HELPER" fetch --no-tags --depth="$FETCH_DEPTH" origin "$FETCH_REF"
+          fi
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
 
       - name: Decide whether a deploy is needed
         id: gate
@@ -155,10 +186,39 @@ jobs:
       contents: read
       packages: read
     steps:
-      - name: Checkout ${{ needs.gate.outputs.sha }}
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.gate.outputs.sha }}
+      # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
+      # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted
+      # runners are unaffected), and it fails in "Set up job" — before a single
+      # line of repo code runs. That killed every topic preview and every deploy
+      # at the same point. Plain git over HTTPS is not throttled that way, and
+      # these jobs only ever needed the infra/ scripts.
+      - name: Fetch the repo (no action download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FETCH_REF: ${{ needs.gate.outputs.sha }}
+          FETCH_DEPTH: '1'
+        run: |
+          set -euo pipefail
+          [ -d .git ] || git init -q .
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          # The token reaches git through a credential helper reading the
+          # environment, so it is never in argv (readable via `ps` on a shared box)
+          # and never written into .git/config.
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+          if [ "$FETCH_DEPTH" = "0" ]; then
+            # Full history: the forward-only guard in deploy-prod.sh asks
+            # `git merge-base --is-ancestor` whether this commit predates the live
+            # one, and a shallow clone cannot answer that.
+            git -c credential.helper="$HELPER" fetch --no-tags --prune origin \
+              "+refs/heads/*:refs/remotes/origin/*"
+            git -c credential.helper="$HELPER" fetch --no-tags origin "$FETCH_REF"
+          else
+            git -c credential.helper="$HELPER" fetch --no-tags --depth="$FETCH_DEPTH" origin "$FETCH_REF"
+          fi
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
 
       - name: Deploy
         env:
@@ -196,6 +256,49 @@ jobs:
           NETWORK=bridge \
           ENV_FILE="$ENV_FILE" \
           ./infra/deploy-prod.sh --no-pull --pull-image
+
+  # ── 3b. The public demo rides the same image (#1249) ────────────────────────
+  # The demo container was provisioned once, on 2026-08-19, and nothing ever
+  # updated its IMAGE again — `demo-reset.yml` refreshes the data twice a day,
+  # so the demo LOOKED maintained while the software inside it aged. Measured on
+  # 2026-08-24: demo 0.78.0-beta against 0.105.0-beta on prod and preview, 27
+  # minor versions behind, with the landing page pointing visitors straight at
+  # it. A live demo that is months old is worse than none, because it is
+  # believed.
+  #
+  # Separate job, not a step inside `deploy`: the demo is optional and must
+  # never be able to fail the preview deploy. `continue-on-error` keeps the
+  # deploy's verdict about preview, and the script exits 0 when the demo is not
+  # provisioned on this host at all.
+  demo:
+    name: Refresh the public demo
+    needs: [gate, build, deploy]
+    if: needs.gate.outputs.deploy == 'true'
+    continue-on-error: true
+    runs-on: self-hosted
+    steps:
+      - name: Fetch the repo (no action download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FETCH_REF: ${{ needs.gate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [ -d .git ] || git init -q .
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+          git -c credential.helper="$HELPER" fetch --no-tags --depth=1 origin "$FETCH_REF"
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
+
+      - name: Put the demo on the image preview just deployed
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+        run: |
+          set -euo pipefail
+          chmod +x infra/server/demo-refresh.sh
+          ./infra/server/demo-refresh.sh --image "$IMAGE"
 
   # ── 4. Alert ────────────────────────────────────────────────────────────────
   # A failed deploy leaves the container swapped out (docker stop precedes

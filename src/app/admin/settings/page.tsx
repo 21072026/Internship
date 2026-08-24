@@ -5,6 +5,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
+import { StageSlaEditor } from '@/components/StageSlaEditor';
 
 export default function AdminSettingsPage() {
   const t = useT();
@@ -14,6 +16,10 @@ export default function AdminSettingsPage() {
   const [weeklyDigest, setWeeklyDigest] = useState(true);
   const [require2fa, setRequire2fa] = useState('off');
   const [selfRegistration, setSelfRegistration] = useState('auto');
+  // Negative-outcome auto-send (#830) — off by default, deliberately.
+  const [outcomeAutoSend, setOutcomeAutoSend] = useState(false);
+  // Blind interview review (#819) — org-wide, off by default.
+  const [blindReview, setBlindReview] = useState(false);
   const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
   const [premiumAnalytics, setPremiumAnalytics] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -107,6 +113,8 @@ export default function AdminSettingsPage() {
       setSelfRegistration(settings.selfRegistration ?? 'auto');
       setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
       setPremiumAnalytics(settings.premiumAnalytics === 'true');
+      setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
+      setBlindReview(settings.blindReview === 'true');
     }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -117,7 +125,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false' }),
+        body: JSON.stringify({ reminderDays, retentionMonths, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false' }),
       });
       if (res.ok) setFlash(t.settings.saved);
     } finally {
@@ -182,6 +190,32 @@ export default function AdminSettingsPage() {
                 <option value="manual">{t.settings.selfRegistrationManual}</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">{t.settings.selfRegistrationHint}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.outcomeAutoSend}</label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={outcomeAutoSend}
+                  onChange={(e) => setOutcomeAutoSend(e.target.checked)}
+                  data-testid="outcome-auto-send"
+                />
+                {t.settings.outcomeAutoSendLabel}
+              </label>
+              <p className="text-xs text-gray-500 mt-1">{t.settings.outcomeAutoSendHint}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.blindReview}</label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={blindReview}
+                  onChange={(e) => setBlindReview(e.target.checked)}
+                  data-testid="blind-review"
+                />
+                {t.settings.blindReviewLabel}
+              </label>
+              <p className="text-xs text-gray-500 mt-1">{t.settings.blindReviewHint}</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t.settings.require2fa}</label>
@@ -430,6 +464,12 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </Card>
+
+      {/* The org's competency framework (#822) — criteria as data, not code. */}
+      <EvaluationFrameworkEditor />
+
+      {/* Per-stage service levels (#817) — how long anyone may wait. */}
+      <StageSlaEditor />
     </div>
   );
 }
