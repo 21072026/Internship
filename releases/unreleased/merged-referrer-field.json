@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **One field for \"who brought this person in\" (#1296).** `User.referredById` (a registered person) and `User.sourceId` (a `Source` row) were two selects on two different cards of the candidate screen; they are now a single grouped picker (`ReferrerPicker`, `src/lib/referrer.ts`) whose kinds are mutually exclusive — `PATCH /api/users/[id]` rejects both at once and clears the other kind on every write. A source can be created from inside the picker (`GET/POST /api/sources`, admin + mentor), so an unregistered referrer no longer means a trip to `/admin/sources`. The mentor's \"new mentee\" form uses the same picker instead of the old free-text \"Referans\" input, and pre-merge free text is shown with a one-click \"save as source\".",
-  "notes": {
-    "en": ["\"Referred by\" and \"Source\" are now one field — pick the person or the source who brought a candidate in, and add a new source right there without leaving the screen."],
-    "tr": ["\"Getiren kişi\" ile \"Kaynak\" tek alan oldu — adayı kim getirdiyse onu seç, listede yoksa yeni kaynağı ekrandan çıkmadan hemen ekle."],
-    "de": ["„Geworben von“ und „Quelle“ sind jetzt ein Feld — wähle die Person oder die Quelle, die eine Kandidatin gebracht hat, und lege eine neue Quelle direkt dort an."]
-  }
-}

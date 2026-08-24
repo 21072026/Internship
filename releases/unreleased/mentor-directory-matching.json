@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Consent-based mentor directory + structured matching preferences (#937, #938, #939 — story #900).** New `MENTOR_DIRECTORY_VISIBILITY` consent (mentor-only `/account` toggle; revocation delists immediately); `/mentors` mentee-facing directory (`GET /api/mentors`: publicProfile AND active consent — the talent-pool dual gate verbatim — strict select allowlist, never e-mail/phone/WhatsApp, COMPANY/SOURCE fail closed, skill/language/accepting filters + pagination, availability via `getMentorAvailability`); `MentorshipRequest` gains non-binding `preferredField`/`preferredLanguages`/`preferredMentorId` (validated against the same directory-visibility rule), surfaced as chips + a preselected (changeable) mentor in the admin queue. Three new e2e specs, each proven locally against a real DB.",
-  "notes": {
-    "en": ["Mentees can now browse a mentor directory — only mentors who explicitly opted in are listed, and contact details are never shown.", "When requesting a mentor, mentees can state a subject area, mentoring languages and an optional preferred mentor; admins see these hints in the approval queue, nothing is auto-assigned."],
-    "tr": ["Mentee'ler artık bir mentor dizinine göz atabiliyor — yalnızca açıkça onay veren mentorlar listeleniyor ve iletişim bilgileri asla gösterilmiyor.", "Mentor talep ederken mentee'ler alan, mentorluk dili ve isteğe bağlı tercih edilen mentor belirtebiliyor; yöneticiler bu ipuçlarını onay kuyruğunda görüyor, hiçbir şey otomatik atanmıyor."],
-    "de": ["Mentees können jetzt ein Mentorenverzeichnis durchsuchen — gelistet sind nur Mentoren, die ausdrücklich zugestimmt haben, Kontaktdaten werden nie angezeigt.", "Bei der Mentor-Anfrage können Mentees Fachgebiet, Mentoring-Sprachen und optional einen Wunsch-Mentor angeben; Admins sehen diese Hinweise in der Warteschlange, nichts wird automatisch zugewiesen."]
-  }
-}

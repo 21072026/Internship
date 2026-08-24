@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Signup funnel visibility (#1191)**: the admin analytics page gains a \"Signup funnel\" card — registered → verified → active counts plus verification and activation rates for the last 7 and 30 days, computed live and always outside the date-range picker (it answers \"is the front door working right now?\"). With enough volume and an unusually low verification rate the card turns amber and points at the e-mail health panel; a window with no sign-ups shows \"—\" and never warns. Completes story #1189 (make silent failures visible) alongside #1190.",
-  "notes": {
-    "en": ["Admins can now see the signup funnel at a glance — how many people registered, verified and became active in the last 7 and 30 days — with a warning that points at e-mail delivery when verification suddenly drops."],
-    "tr": ["Yöneticiler artık kayıt hunisini tek bakışta görüyor — son 7 ve 30 günde kaç kişi kaydoldu, doğruladı ve aktifleşti — doğrulama ani düşerse e-posta teslimatını işaret eden bir uyarıyla birlikte."],
-    "de": ["Admins sehen den Registrierungs-Funnel jetzt auf einen Blick — wie viele sich in den letzten 7 und 30 Tagen registriert, verifiziert und aktiviert haben — mit einer Warnung, die auf die E-Mail-Zustellung verweist, wenn die Verifizierung einbricht."]
-  }
-}

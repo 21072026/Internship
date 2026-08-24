@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Deploys can no longer take an environment down (#961)** — the container swap is now blue/green: the new image is proved as a canary (health, database, served sha) before the running container is touched, so a bad image fails the deploy instead of leaving nothing serving. The replaced image is kept as `<container>:previous` and excluded from image pruning, and `./infra/deploy-prod.sh --rollback` puts it back without git, a registry or a schema push."
-}

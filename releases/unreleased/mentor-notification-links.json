@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Mentor deadline notification link (#1266)**: deadline reminders now open the mentor's relation-scoped mentee detail page.",
-  "notes": {
-    "en": ["Deadline notifications now take mentors directly to the correct mentee page."],
-    "tr": ["Son tarih bildirimleri artık mentörleri doğrudan doğru mentee sayfasına yönlendiriyor."],
-    "de": ["Benachrichtigungen zu Fristen führen Mentoren jetzt direkt zur richtigen Mentee-Seite."]
-  }
-}

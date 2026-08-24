@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Email delivery health (#1190)**: delivery health (last success, failures since, attempts in 24h) is now derived from the `EmailLog` ledger and surfaced on the admin settings page, `/api/admin/email-health` and the token-gated `/api/health` detail view. An hourly check writes a durable `email.health_alert` activity entry and sends a best-effort ops email (`ALERT_EMAIL_TO`) after 3 consecutive failures or when the last success goes stale while attempts continue. Error text is scrubbed of recipient addresses before it leaves the server.",
-  "notes": {
-    "en": ["Email delivery problems no longer stay silent: the settings page shows the last successful delivery and failures since, and admins are alerted when sending keeps failing."],
-    "tr": ["E-posta gönderim sorunları artık sessiz kalmıyor: ayarlar sayfası son başarılı gönderimi ve o zamandan beri olan hataları gösteriyor; gönderim sürekli başarısız olursa yöneticiler uyarılıyor."],
-    "de": ["E-Mail-Zustellprobleme bleiben nicht mehr unbemerkt: Die Einstellungsseite zeigt die letzte erfolgreiche Zustellung und die Fehler seitdem; Admins werden gewarnt, wenn der Versand wiederholt fehlschlägt."]
-  }
-}

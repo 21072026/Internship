@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **The privacy notice names tawk.to (#1177)** — the live chat on the public home page receives the visitor's IP address and message content, which the consent gate and cookie banner already said but the notice itself did not. `PRIVACY_POLICY_VERSION` bumped to 2026-08-24 so new consent records reference the current text.",
-  "notes": {
-    "en": ["The privacy notice now names the live-chat provider on the home page and exactly what it receives — your IP and what you type, only if you accept marketing cookies."],
-    "tr": ["Gizlilik bildirimi artık ana sayfadaki canlı sohbet sağlayıcısını ve ona tam olarak neyin gittiğini yazıyor: IP adresin ve yazdıkların, yalnızca pazarlama çerezlerini kabul edersen."],
-    "de": ["Die Datenschutzerklärung nennt jetzt den Live-Chat-Anbieter auf der Startseite und was er genau erhält — deine IP-Adresse und deine Eingaben, nur wenn du Marketing-Cookies zustimmst."]
-  }
-}

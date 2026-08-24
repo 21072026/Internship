@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **The restore drill can actually run (#1183 follow-up)** — it creates its scratch database through the same admin route the topic deploys use, because the app user cannot `CREATE DATABASE` on the server and the drill would otherwise fail before exercising a restore. The backup alert now names which half failed: a stale backup and an unproven restore are different problems, and sending \"BACKUP CHECK FAILED\" for a drill error reports broken backups that are in fact fine."
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Pipeline board scroll affordance (#684)**: admin and mentor boards now show state-aware horizontal edge fades when more columns are available, including dark-mode styling and non-interactive overlays.",
-  "notes": {
-    "en": ["Admin and mentor pipeline boards now show left and right scroll hints when columns extend beyond the visible area; the hints update with the scroll position and support dark mode."],
-    "tr": ["Admin ve mentor pipeline board’larında sütunlar görünür alanın dışına taştığında sol ve sağ kaydırma ipuçları gösterilir; ipuçları kaydırma konumuna göre güncellenir ve dark mode’u destekler."],
-    "de": ["In den Pipeline-Boards für Admins und Mentoren zeigen nun Hinweise am linken und rechten Rand, wenn weitere Spalten außerhalb des sichtbaren Bereichs liegen; sie passen sich der Scrollposition an und unterstützen den Dark Mode."]
-  }
-}

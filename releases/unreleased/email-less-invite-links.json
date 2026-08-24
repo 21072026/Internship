@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Email-less invitation links (#670)**: an invitation no longer needs an address. `InvitationToken.email` is nullable and gains a private `label`; leaving the email empty mints a shareable single-use, 7-day link instead of sending mail, and registration through it skips the address match, writes the registrant's address back onto the row and auto-links the mentorship the invitation already carried. Because such a link proves nothing about the address typed into the form, those accounts are created unverified and get the standard confirmation mail (named invitations stay verified-on-arrival). New `/mentor/invite` page (nav entry, role fixed to MENTEE server-side) lets mentors mint their own links; the invite list hands a still-usable email-less link back to the person who minted it, and resend/cancel now work for the invitation's own sender, not only admins.",
-  "notes": {
-    "en": ["Invite someone without knowing their email: leave the address empty and share the link yourself. Whoever registers with it becomes your mentee automatically — and mentors now have their own invite page."],
-    "tr": ["Birini e-postasını bilmeden davet et: adresi boş bırak, bağlantıyı kendin paylaş. Bağlantıyla kaydolan kişi otomatik olarak senin mentee’n olur — mentörlerin artık kendi davet sayfası da var."],
-    "de": ["Lade jemanden ein, ohne die E-Mail-Adresse zu kennen: Feld leer lassen und den Link selbst weitergeben. Wer sich damit registriert, wird automatisch dein Mentee — und Mentor:innen haben jetzt eine eigene Einladungsseite."]
-  }
-}

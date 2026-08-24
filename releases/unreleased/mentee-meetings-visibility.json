@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Mentee meeting visibility (#874)**: `GET /api/meetings` now serves MENTEE sessions their own relations' meetings (fail-closed for unlisted roles, #913); the portal dashboard gains an \"Upcoming meetings\" card with join link, in-app RSVP (reusing the meeting's own token credential) and per-meeting .ics download (#914); `/portal/calendar` renders the shared CalendarView for mentees plus a personal, rotatable/revocable ICS subscription feed (`User.icsFeedToken`, `/api/calendar/feed/<token>`, title+time only) (#915). Mentee-facing deadline events no longer link into /admin.",
-  "notes": {
-    "en": ["Mentees can finally see their meetings in the app: an upcoming-meetings card on the portal with join link, one-click RSVP and calendar download, plus a full calendar page with a personal feed you can subscribe to from Google/Outlook/Apple Calendar."],
-    "tr": ["Mentee'ler toplantılarını artık uygulamada görüyor: portalda katıl linki, tek tıkla RSVP ve takvim indirme içeren yaklaşan toplantılar kartı; ayrıca Google/Outlook/Apple Takvim'den abone olunabilen kişisel akış bağlantısıyla tam bir takvim sayfası."],
-    "de": ["Mentees sehen ihre Meetings endlich in der App: eine Karte mit anstehenden Meetings im Portal mit Beitrittslink, Ein-Klick-RSVP und Kalender-Download, dazu eine vollständige Kalenderseite mit persönlichem Feed zum Abonnieren in Google/Outlook/Apple Kalender."]
-  }
-}
