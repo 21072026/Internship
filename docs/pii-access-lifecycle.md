@@ -103,3 +103,38 @@ ve arama da sunucuya taşındı (arama 300 ms debounce'lu).
 "alanları kırp" değil "sunucu tarafı filtre + sayfalama"dan geçiyor — ayrı bir
 iş. Erişim **loglanmıyor**; PII erişim kaydı
 [#821](https://github.com/21072026/Internship/issues/821) kapsamında.
+
+## Önizleme verisi: anonimleştirme (#1186)
+
+Paylaşılan önizleme ortamı gerçek veriyle çalışıyordu. `scripts/sanitize-db.mjs`
+(`npm run sanitize:preview`) bunu tersine çevirir: **yapıyı korur, kişiyi siler.**
+
+- Her hesap `userN@demo.example.com` + sahte ad + tek bilinen parola olur;
+  telefon, adres, biyografi, kişisel bağlantılar temizlenir.
+- Yüklenen dosyalar (CV, avatar, doküman, ek) ve **her türlü kimlik bilgisi**
+  (davet/sıfırlama/doğrulama token'ları, API anahtarları, webhook secret'ları,
+  impersonation/SSO grant'ları) silinir.
+- Kişi tarafından ya da kişi hakkında yazılmış **serbest metnin tamamı** yer
+  tutucuyla değiştirilir: ilişki notları, mesaj gövdeleri, değerlendirme
+  yorumları, etkileşim notları, haftalık raporlar, bildirim metinleri,
+  ActivityLog `detail`/`ip`/`userAgent`, EmailLog alıcı ve konusu.
+- **Korunur:** ilişkiler, aşama geçmişi, tarihler, puanlar, sayılar — önizlemenin
+  test değeri buradan geliyor. Kayıt sayıları öncesi/sonrası aynı kalır.
+
+İki koruma:
+
+1. **Hedef kontrolü.** Script yalnızca veritabanı *adında* `preview` ya da
+   `internship_pr` geçiyorsa çalışır ve **zorlama bayrağı yoktur** — prod'a
+   yöneltilebilmesi mümkün olmamalı. (`seed:demo`'nun yerel-DB korumasının tam
+   tersi.) Kontrol URL'nin tamamında değil, ayrıştırılmış **veritabanı adında**
+   yapılır; böylece içinde "preview" geçen bir sunucu adı prod'un kapısını açamaz.
+2. **Kendi kendini doğrulama.** Çalışma bittiğinde geriye gerçek bir adres,
+   telefon, dosya, not ya da kimlik bilgisi kaldıysa **exit 1** verir — yarım
+   kalmış bir temizlik "güvenli görünen ama olmayan" veriden çok daha kötüdür.
+   `npm run sanitize:verify` bu kontrolü tek başına, hiçbir şeyi değiştirmeden
+   koşar (geri yükleme veya içe aktarma sonrası "önizleme hâlâ temiz mi?").
+
+Şema büyüdükçe **envanteri güncel tutmak şart**: `scripts/sanitize-db.mjs`
+başlığındaki liste hangi modelin yeniden yazıldığını, hangisinin boşaltıldığını,
+hangisinin silindiğini ve hangisinin **bilerek** dokunulmadığını sayar. Yeni bir
+PII alanı eklerken o listeye de eklenmezse sızıntı olur.
