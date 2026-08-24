@@ -47,12 +47,20 @@ function sourceFiles(paths) {
   return out;
 }
 
+// Every regex below is built by interpolating a symbol read out of the source,
+// so the symbol has to be escaped as a LITERAL first. Escaping only `.` and `$`
+// (the two characters a JS member expression actually contains) left the escape
+// incomplete — a backslash in the input would have survived into the pattern and
+// changed its meaning, which is the whole class of bug this file exists to
+// police. Escape the full metacharacter set instead.
+const escapeRe = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // `const body = await request.json()`, `const { id } = await req.json()`,
 // and the `.catch(() => ({}))` spelling this repo uses on optional bodies.
 const RAW_BODY_BINDING = /(?:const|let|var)\s+(\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?(?:request|req)\.json\(\)/g;
 // `const target = body.referredById || null` — one hop off a raw body.
 const aliasOf = (name) =>
-  new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*${name}\\.[\\w$]+`, 'g');
+  new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*${escapeRe(name)}\\.[\\w$]+`, 'g');
 
 // Walk from an opening brace to its match so nested filters (`OR: [{ ... }]`)
 // are captured whole rather than cut at the first `}`.
@@ -90,7 +98,7 @@ function whereRegions(source) {
 // `if (typeof x !== 'string') return` that guards everything after it. `String(x)`
 // and a zod parse of the same symbol count too.
 function hasScalarGuard(source, symbol) {
-  const s = symbol.replace(/[.$]/g, '\\$&');
+  const s = escapeRe(symbol);
   return (
     new RegExp(`typeof\\s+${s}\\s*[!=]==?\\s*['"](?:string|number)['"]`).test(source) ||
     new RegExp(`String\\(\\s*${s}\\s*\\)`).test(source) ||
@@ -104,7 +112,7 @@ function hasScalarGuard(source, symbol) {
 // matched EXPRESSIONS (`body.id`, not `body`) because that is what a runtime
 // guard is written against — `typeof body.id === 'string'`, never `typeof body`.
 function valueUsages(region, symbol) {
-  const s = symbol.replace(/[.$]/g, '\\$&');
+  const s = escapeRe(symbol);
   // A container symbol is only interesting through a property access; a symbol
   // that is already a member expression is used as-is.
   const expr = /\./.test(symbol) ? s : `${s}(?:\\.[\\w$]+)?`;
