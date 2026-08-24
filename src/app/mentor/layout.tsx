@@ -13,6 +13,8 @@ import { prisma } from '@/lib/prisma';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
+import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
+import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { MentorNav } from '@/components/MentorNav';
 import { availableModes, canUseMentorShell } from '@/lib/dualRole';
@@ -34,6 +36,9 @@ export default async function MentorLayout({ children }: { children: React.React
   const { locale, t } = await getServerDictionary();
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, twoFactorEnabled: true } });
   const customStages = await resolveCustomStages(session.user.orgId);
+  // The tenant's own competency framework, or null when it uses the built-in
+  // criteria (#822) — same provider shape as the pipeline stages above.
+  const customCriteria = await resolveCustomCriteria(session.user.orgId);
   const modes = await availableModes(session.user);
 
   // Auth hardening: hold in-scope roles at the 2FA setup gate until enabled.
@@ -44,7 +49,7 @@ export default async function MentorLayout({ children }: { children: React.React
 
   return (
     <ResponsiveShell
-      brand={<BrandWordmark />}
+      brand={<BrandWordmark oneLine />}
       headerExtra={<GlobalSearch />}
       sidebar={
         <aside className="w-64 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
@@ -79,7 +84,9 @@ export default async function MentorLayout({ children }: { children: React.React
         </aside>
       }
     >
-      <PipelineStagesProvider stages={customStages}>{children}</PipelineStagesProvider>
+      <PipelineStagesProvider stages={customStages}>
+        <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
+      </PipelineStagesProvider>
     </ResponsiveShell>
   );
 }

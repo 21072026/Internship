@@ -12,10 +12,13 @@ test('company portal lists linked candidates and search narrows them', async ({ 
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'CP Mentor');
   const m1 = await seedUser(uniqueEmail('cp-zara'), 'x', 'MENTEE', 'Zara Unique');
   const m2 = await seedUser(uniqueEmail('cp-other'), 'x', 'MENTEE', 'Other Person');
-  const company = await prisma.company.create({ data: { name: `Acme ${Date.now()}` } });
-  await prisma.user.update({ where: { id: compUser.id }, data: { companyId: company.id } });
-  const r1 = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: m1.id, companyId: company.id } });
-  const r2 = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: m2.id, companyId: company.id } });
+  // COMPANY reads of /api/mentorship fail closed without a tenant (#1227), so
+  // the company user and the relations must share an org, same as production.
+  const org = await prisma.organization.create({ data: { name: `Acme Org ${Date.now()}`, slug: `acme-search-${Date.now()}` } });
+  const company = await prisma.company.create({ data: { name: `Acme ${Date.now()}`, orgId: org.id } });
+  await prisma.user.update({ where: { id: compUser.id }, data: { companyId: company.id, orgId: org.id } });
+  const r1 = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: m1.id, companyId: company.id, orgId: org.id } });
+  const r2 = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: m2.id, companyId: company.id, orgId: org.id } });
 
   try {
     await page.goto('/auth/signin');
@@ -38,5 +41,6 @@ test('company portal lists linked candidates and search narrows them', async ({ 
     await cleanupByEmail(m2.email);
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(compUserEmail);
+    await prisma.organization.deleteMany({ where: { id: org.id } });
   }
 });

@@ -155,7 +155,9 @@ export async function GET(request: Request) {
       who: r.mentee.fullName,
       date: r.stageDeadline!.toISOString(),
       overdue: r.stageDeadline! < new Date() && !TERMINAL.includes(r.pipelineStatus),
-      link: `/admin/candidates/${r.menteeId}`,
+      // A mentee sees their own deadline but has no admin page to land on
+      // (#915) — a dead /admin link would 403/redirect.
+      link: role === 'MENTEE' ? '/portal/journey' : `/admin/candidates/${r.menteeId}`,
     })),
   ].sort((a, b) => a.date.localeCompare(b.date));
 

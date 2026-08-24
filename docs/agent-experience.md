@@ -10,6 +10,104 @@ Newest entries on top.
 
 ---
 
+## 2026-08-24 — Telefon genişliğinde düzen denetimi: sıkışan satırlar sayfa taşması yapmaz (#1305)
+
+**"Yatay kaydırma var mı" kuralı bu hataların çoğunu KAÇIRIYOR.** Bildirilen bozukluk
+(/admin/mentors'ta mentor adının "E·" olarak görünmesi) hiçbir yerde sayfayı genişletmiyordu:
+`justify-between` satırda `flex-shrink-0` bir aksiyon kümesi kimlik sütununu **18px**'e
+sıkıştırıyordu. Yakalayan kural: **bir kutunun kendi içeriğini yatay taşırması**
+(`el.scrollWidth > el.clientWidth + 4`) ve **daralmış metin** (`clientWidth < 110` iken
+içerik daha geniş). Bu iki kural `e2e/mobile-layout-audit.spec.ts`'te; `mobile-responsive`
+spec'inin eski iki kuralı (sayfa kaydırması + form alanı genişliği) yeterli değildi.
+
+**Kaçınılması gereken iki yanlış pozitif** (aksi hâlde denetim gürültüden kullanılamaz):
+`overflow-x-auto` bir ata içindeki geniş tablo (kaydırılabilir → bozuk değil) ve **negatif
+yatay margin'li çocuk** (`-mx-2 px-2` hover zeminleri kart padding'ine taşar; scrollWidth'i
+tasarımca büyütür). `sr-only` yardımcıları da 1px'tir.
+
+**Tarama TR ve DE ile yapılmalı.** `/admin/analytics`, `/admin/companies`, `/admin/support`
+İngilizce'de sığıyor, Almanca'da taşıyor — biri sayfayı 51px yatay kaydırmaya sokuyordu.
+Locale'i `document.cookie = 'locale=de;path=/'` ile zorla (i18n-coverage.spec deseni);
+kullanıcı tercihi yerine çerez kazanır.
+
+**Tekrarlayan düzeltme desenleri:** (1) satırı telefonda dikey yığ (`flex-col sm:flex-row`),
+(2) aksiyon kümesini sar (`flex-wrap`), (3) metin bloğuna `min-w-0` + `truncate` ver,
+(4) `<input>`'a `min-w-0` (input varsayılan içsel genişliğinin altına inmez, komşu butonu
+kutudan atar), (5) sabit `w-56`/`w-48` etiket sütunlarını telefonda `w-1/2 sm:w-56` yap.
+Marka satırında `truncate`'i **satıra değil isme** koy: satırı kırpmak beta rozetini yarıdan
+kesiyordu ("Internship CRM BI"). `BrandWordmark` bunun için `oneLine` prop'u aldı — kenar
+çubuğunda isim iki satıra sarabilir, mobil barda kısalır.
+
+**JSX yorumu ekleme tuzağı:** `.map((x) => (` veya bir ternary'nin `) : (` kolundan hemen
+sonra `{/* ... */}` koymak "Expected '</', got ..." sözdizimi hatası verir (iki komşu düğüm).
+Yorumu ya açılan etiketin İÇİNE ya da `map` çağrısının üstüne koy. `tsc --noEmit` bunu
+yakalar; dev sunucusu 500 döner.
+
+**Playwright bu konteynerde:** kurulu build `chromium-1194`, Playwright 1.62 ise
+`chromium_headless_shell-1234` arıyor. Çalışan yol: repoya **commit edilmeyen**
+`playwright.local.config.ts` (repo config'ini import edip
+`use.launchOptions.executablePath = '/opt/pw-browsers/chromium'` ekler) ve
+`npx playwright test --config=playwright.local.config.ts`. Config dosyası repo dışında
+(/tmp) olursa `test.afterAll() did not expect to be called here` hatası verir — repo kökünde
+tut. Ayrıca kendi spec'ini **düzeltmeyi geri alıp** koştur (`git stash push <dosya>`): benim
+denetimim ilk hâlde iki `spills` satırıyla düştü, yani boş test değil.
+
+**Yükleme durumu denetimi bozar:** `networkidle` bu kabuklarda hiç gelmiyor (TimezoneSync +
+sidebar prefetch), o yüzden `.animate-pulse` sayısının 0'a düşmesini bekle — iskelet
+üzerinden ölçüm alırsan sayfa "temiz" görünür. Aynı `page` içinde ikinci bir kullanıcıya
+`signInAndSettle` ile geçmek /mentor/mentees'i kalıcı iskelette bıraktı; rol başına ayrı
+`test()` (yani ayrı page fixture) hem hızlı hem güvenilir.
+
+---
+
+## 2026-08-24 — Ticari SAST raporunu triyaj etmek: 25 bulgu, 25 yanlış pozitif, 2 kaçırılmış gerçek (#1294)
+
+**Bu tarayıcı `where: { field: variable }` desenini ORM'den ve veritabanı tipinden bağımsız
+olarak *Critical* etiketliyor.** "NoSQL injection attack possible" başlığı altında 22 bulgu
+geldi — bu projede NoSQL veritabanı yok. MySQL + Prisma, her değer bağlı parametre. Şiddet
+etiketine göre sıralamak zaman kaybı; **veri akışını izleyin**. Sıralamanın maliyeti
+gerçekti: rapor 9 tanesini *Critical* yaparken asıl SSRF yüzeyini hiç görmedi.
+
+**Triyajı 20 dakikaya indiren tarama sırası** (hepsi negatif çıkarsa sınıf temizdir):
+```bash
+grep -rn '\$queryRaw\|\$executeRaw' src/          # uygulamada ham SQL var mı
+grep -rln "json()" src/app/api --include=route.ts | \
+  while IFS= read -r f; do grep -q "safeParse\|\.parse(" "$f" || echo "NO-ZOD: $f"; done
+grep -rn "where:.*body\.\|where: *{ *\.\.\." src/   # gövde → where
+grep -rn "where:.*searchParams\.get" src/           # string|null → where
+```
+Route param'ları (`[id]`) App Router'da **her zaman `string`**; catch-all (`[...slug]`)
+`string[]`. Tek catch-all `[...nextauth]`. Yani `where: { id }` route param'ından geliyorsa
+o satır kapalı — argümanı burada bitirin.
+
+**Asıl sınıf injection değil, Prisma filtre-operatörü enjeksiyonu.** Prisma'nın filtre grameri
+veridir: skalerin olduğu yere nesne gelirse operatör okunur. `{"id":{"not":"x"}}` bir
+eşitlik aramasını "o satır hariç her şey"e çevirir. TypeScript yasaklar ama tipler runtime'da
+silinir ve `request.json()` `any` döner. `npm run check:query-scalars` bunu CI'da tutuyor.
+
+**Statik denetim yazarken fixture ile İKİ YÖNDE test edin.** İlk sürümüm doğru çalışıyor
+gibiydi (ağaçta 0 bulgu) ama iki hatası vardı: (1) `typeof body.id === 'string'` korumasını
+`body`'de arıyordu, eşleşen somut ifadede değil; (2) regex `===?` yazdığım için `!==` — yani
+en yaygın early-return biçimi — eşleşmiyordu. Fixture'lar olmasa ikisi de sessizce yanlış
+pozitif üretirdi. `check-auth-reads.mjs`'in `process.argv` override'ı tam bu iş için var,
+yeni denetimlerde kopyalayın. **Hiç başarısız olamayan bir kontrol işe yaramaz.**
+
+**Tarayıcının kaçırdığı iki gerçek bulgu, tam da aradığı sınıflarda.** `certificatePdf.ts`
+kiracının yazdığı `brandLogoUrl`'i sunucudan `fetch` ediyordu, `assertPublicHttpsUrl`
+olmadan → blind SSRF (cloud metadata + `127.0.0.1:3306`). Koruma #893'te zaten yazılmıştı,
+sadece bu çağrı yeri atlanmış. `emailService.ts` `brandHeader()` aynı alanı escape'siz
+`<img src>`'e gömüyordu — `esc()` helper'ı aynı dosyada, 530 satır aşağıda, başka yerlerde
+kullanılıyor. **Ders:** bir korumanın repoda var olması onun *her* çağrı yerinde kullanıldığı
+anlamına gelmiyor. Sınıfı bulduğunuzda `grep -rn "fetch("` ile tüm çağrı yerlerini sayın;
+ben giden isteklerin ikisinden birinin korumasız olduğunu böyle gördüm.
+
+**Ortam:** `npm install` şart (CLAUDE.md'de yazılı). Öncesinde `npx tsc --noEmit` 20+
+hayalet hata veriyor (`Cannot find name 'process'`, `@types/node` yok) — bunları kendi
+değişikliğiniz sanmayın. `npm install` ayrıca `package-lock.json`'a alakasız `fsevents`
+`"dev": true` satırları yazıyor; commit'ten önce `git checkout package-lock.json`.
+
+---
+
 ## 2026-08-19 — Hibrit Jitsi: JaaS yalnızca 1:1 + ücretsiz oda fallback'i (#1256, 0.81.0-beta)
 
 **JaaS MAU'su katılımcı başına sayılır, oda başına değil.** 25 MAU'luk ücretsiz katman ilk
@@ -3771,3 +3869,254 @@ gibi), yanlış secret = 401 — inbound-email (#870) ile aynı desen, e2e'de
 (canlı katılımcı sayısı/isimleri) için kullan; "bitti" kararını katılımcıya bırak.
 Bayat state'e karşı da (serilerin `fixedLink`'i aynı odayı her hafta yeniden kullanır)
 `updatedAt` tazelik eşiği koy.
+
+## 2026-08-23 — Zamanlanmış tam e2e koşusundaki 11 kırmızıyı kapatmak (yalnızca test hataları)
+
+**Tam suite haftalardır kırmızıysa, "son merge bozdu" varsayma.** 11 başarısızlığın hepsi
+uygulama regresyonu değil test hatasıydı ve çoğu, spec'i güncellemeden davranış değiştiren
+eski PR'lardan kalmaydı (#1216, #1218, #1227, #1251). PR gate'i yalnızca @smoke koştuğu
+için bu spec'ler doğdukları günden beri hiç yeşil koşmamış olabiliyor — `git log -- <spec>`
+ile spec'in ve dokunduğu kodun tarihçesini karşılaştırmak, bisect'ten hızlı teşhis veriyor.
+
+**`page.route()` mock'ları sessizce ölmüşse iki bilinen katil var:**
+1. **Service worker**: uygulama her rol shell'inde `/sw.js` kaydediyor; SW üzerinden
+   geçen same-origin GET'leri `page.route` YAKALAMAZ — mock hiç vurulmaz, gerçek API
+   cevap verir. Çözüm: `playwright.config.ts` → `use: { serviceWorkers: 'block' }`
+   (hiçbir spec canlı SW'ye bağımlı değil; pwa.spec /sw.js'i statik dosya olarak çekiyor).
+2. **Playwright ≥1.57 glob değişikliği**: `'**/path?**'` deseni artık query string'i
+   EŞLEŞTİRMİYOR (`?` özel karakter). `'**/path*'` kullanın. Repo'da tek örnek
+   document-requirements'taydı; yenisini yazarken de `?` içeren glob'dan kaçının.
+
+**React SSR, bitişik JSX ifadeleri arasına `<!-- -->` koyar.** `{label}: {value}` SSR
+HTML'inde `Status<!-- -->: <!-- -->Approved` olur; ham `text()` üzerinde `toContain`
+asla eşleşmez. Ham HTML assert etmeden önce `.replace(/<!--.*?-->/g, '')` normalize edin.
+
+**COMPANY rolü seed'lerken org zorunlu (#1227'den beri).** `/api/mentorship` COMPANY
+için `orgId` yoksa 403 `organization_required` döner ve ilişki filtresi
+`{ orgId, companyId }`'dir — company kullanıcısına VE ilişkiye aynı `orgId`'yi verin
+(role-scoping.spec deseni). #1227 kendi bildiği spec'leri güncellemişti; company-role,
+company-portal-search, company-candidate-detail ve impersonation gözden kaçmıştı.
+Gerçek uygulamada da register orgId atamıyor (deploy backfill'i tamamlıyor) — davet
+edilen COMPANY kullanıcısı bir sonraki deploy'a kadar boş portal görür; issue açıldı.
+
+**Aynı sayfada ikinci kez giriş yapan her test `signInAsFreshUser` kullanmalı.**
+`signInAndSettle`/el yapımı `clearCookies()+login` ikilisi, eski oturumun
+`/api/auth/session` yoklamasıyla çerezi geri yazması yüzünden formu doldururken
+dashboard'a redirect yer (helpers/auth.ts'te belgeli). announcement-edit-delete ve
+requisitions tam bu yüzden kırmızıydı.
+
+**Bildirim tipleri #1251'den beri olay anahtarı** (`mentor_application.new` gibi) —
+spec'te exact eski tip (`type: 'mentor_application'`) sonsuza dek 0 sayar; ya tam yeni
+anahtarı ya `startsWith('<kategori>.')` kullanın.
+
+**Portal, kullanıcının `preferredLanguage`'ında render olur.** Spec mentee'yi `de`
+seed'leyip İngilizce metin bekliyorsa yanlış olan spec'tir — kartın Almanca etiketini
+bekleyin (getLocale: cookie > kullanıcı tercihi > default).
+
+**Bu container'da Playwright 1.62 + pinli 1234 build'i yok**: 1194'ü `chromium-1234/
+chrome-linux64/` ve `chromium_headless_shell-1234/chrome-headless-shell-linux64/
+chrome-headless-shell` düzenine symlink'leyip `INSTALLATION_COMPLETE` +
+`DEPENDENCIES_VALIDATED` touch'lamak yetti (2026-08-19 notunun aynısı, yeni sürümle).
+
+**Dev modda koşarken iki yerel-only kırmızı normal çıktı**: weekly-reports 60s test
+timeout'una takılıyor (5 context + on-demand derleme; CI production build'de sığıyor)
+ve requisitions'ın eşzamanlı PATCH testi tek çekirdekte serileşip 409 üretmeyebiliyor.
+İkisini de CI'da doğrulayın, yerelde kırmızı diye kurcalamayın.
+
+### Ek — merge turunda çıkan iki ders (PR #1274)
+
+**CodeQL, test dosyasındaki yorum-temizleyen regex'i bile HTML sanitizasyonu sayıyor**
+(`js/incomplete-multi-character-sanitization` + `js/bad-tag-filter`, ikisi de "high").
+React SSR'ın metin ayırıcılarını assertion öncesi temizlerken `replace(/<!--.*?-->/g, '')`
+değil, literal `replaceAll('<!-- -->', '')` kullanın — davranış aynı, tarayıcı kalıbı
+görmüyor ve alarm PR'ı bloke etmiyor. Alert'i "test kodu, kapat" diye dismiss etmeye
+çalışmaktansa kalıbı ortadan kaldırmak hem hızlı hem kalıcı.
+
+**PR ortasında main'i merge etmek, o arada merge olmuş PR'ların taze spec kırıklarını da
+ithal eder.** #692 journey tracker'ı /portal'dan /portal/journey'ye taşımıştı; merge'ten
+sonra journey.spec strict-mode ihlaliyle patladı — benim 11'imle ilgisi yoktu ama benim
+koşumda kırmızıydı. Merge sonrası "önceki koşu yeşildi" güvencesi taşınmaz: tam suite'i
+merge'lenmiş head üzerinde yeniden tetikleyin (workflow_dispatch ücretsiz ve ~8 dk).
+
+**Bir PR'ı yeniden işlemeye başlamadan önce MERGED mi diye bak — ve bitince bir daha bak.**
+#1261'i incelerken (rebase + iki bug düzeltmesi) başka bir oturum PR'ı çoktan merge etmişti;
+push'um "stale info" ile reddedilince fark ettim. Doğru akış: `gh pr view --json state` işin
+başında VE push'tan hemen önce; iş merge olmuşsa düzeltmeler yeni bir hotfix PR'ına gider
+(#1268 böyle çıktı). `--force-with-lease` burada gerçek bir emniyet kemeri — kaybedilen tek
+şey birkaç dakikaydı, başkasının işi değil.
+
+**`String?` Prisma alanı MySQL'de VARCHAR(191)'dir — JSON detay yazacaksan `@db.Text` iste.**
+`AuditLog.detail`'e ilişki-başına sayaç JSON'u yazan merge, gerçek veride P2000 ile patladı;
+üstelik yazım transaction COMMIT'inden sonra olduğu için kullanıcıya 500, denetim izine hiçlik
+düştü. İki ders: (1) commit-sonrası log/audit yazımlarını try/catch'e al — geri alınamaz bir
+işlemi loglama arızası hata cevabına çevirmesin; (2) smoke-dışı spec'ler PR gate'inde koşmaz,
+bu yüzden 'CI yeşil'e değil, ilgili spec'i LOKALDE koşturmaya güven (bug'ı bu yakaladı).
+
+**Kullanıcı-id gömülü URL alanları (avatarUrl=/api/avatar/<id>, cvUrl) merge/kopya işlemlerinde
+birebir taşınamaz** — id'si silinen kayda işaret eden kırık link üretir. Dosya satırını taşı,
+URL'yi hedef kaydın id'siyle yeniden yaz.
+
+**Katkıcı PR incelemesinde işe yarayan şablon:** (1) spec'i onların dalında lokalde koştur ve
+sonucu yoruma yaz — 'çalışıyor' iddiası nesnelleşir; (2) authz'ı dört katman olarak kontrol et
+(oturum, rol, sahiplik sorgusu, tenant scope) — #1263 dördünü de doğru kurmuştu; (3) global UI
+bileşenine dokunan değişikliklerde etki alanını say (`grep -c` — #1265'te 155 size=\"sm\" düğme
+masaüstünde de büyüyordu; öneri: `[@media(pointer:coarse)]:` ile dokunmatik bağlama sınırla);
+(4) her yoruma sürüm-yeniden-numaralandırma uyarısı ekle — main bu hafta günde 3-5 numara
+ilerliyor ve her katkıcı PR'ı eski numarayla geliyor.
+
+### Ek — aynı gün, fragment sistemini kurarken (#1275/#1276)
+
+**`GITHUB_TOKEN` ile açılan PR, required check'leri asla tetiklemez** (GitHub'ın özyineleme
+koruması) — bot'un PR'ı sonsuza dek "checks expected"da bekler. Üstelik bu org, `GITHUB_TOKEN`'ın
+PR açmasını org ayarıyla zaten yasaklıyor (repo düzeyinde açmayı denemek 409 döner; org düzeyi
+`admin:org` scope ister). Otonom bot-PR'ı isteyen her otomasyon için tek sağlam yol: fine-grained
+PAT'li bir secret (`RELEASE_BOT_TOKEN` deseni — checkout'a da `token:` olarak ver ki push da
+PAT'ten gitsin). Klasik branch protection'da required check'ler DOĞRUDAN PUSH'u da engeller —
+"bot merge sonrası main'e commit atar" tasarımları burada baştan ölü doğar; bu yüzden fragment
+sistemi build-anı türetme + zamanlanmış normal-PR sıkıştırma olarak kuruldu.
+
+**Sürüm artık build'de türetiliyor:** `next.config.js` taban+fragment'ları okuyup env inline
+ediyor; `version.ts` ve `releaseNotes.ts` oradan besleniyor. Deploy sonrası canlı doğrulama:
+health `version` alanı taban değil türetilmiş numarayı gösterir (0.85.0 taban + minor fragment
+→ 0.86.0-beta gözlendi). Sürüm iddialarını test ederken package.json'a değil
+`scripts/release-derive.cjs` ile hesaplanan değere assert et (version-release-notes.spec böyle).
+
+## 2026-08-23 — Backlog-bitirme oturumu, 2. kısım (#1272, #937-#939, #1190)
+
+**MariaDB bu konteynerde boşta kalınca ölüyor** — `prisma db push`/spec'ler "Can't reach
+database" ya da sessizce eski şemayla devam ediyor. Her doğrulama zincirinin ilk adımı
+`service mariadb status || service mariadb start` olmalı. Sinsi biçimi: db push'un kendisi
+sessizce başarısız olmuşsa spec "column does not exist" ile düşer — bağlantı hatası değil,
+şema kaymasıdır; yeniden push et.
+
+**`ActivityLog.detail` ve tüm çıplak `String?` alanlar MySQL'de VARCHAR(191)** — #1268'in
+AuditLog dersi genelleşti: JSON payload yazan her logging çağrısı sığdırmayı kendisi
+garantilemeli (`.slice(0, 191)` + uzun alt alanları önceden kırp). P2000 logActivity içinde
+yutulur, kayıt sessizce kaybolur — tam da alarm kaydı gibi kaybolmaması gereken yerde.
+
+**E-posta sağlığı türetilmiş veri olarak kuruldu (#1190):** ayrı bir "son durum" markörü
+yerine EmailLog defterinden hesapla (`getEmailHealth`) — defter her denemede yazıldığı için
+sağlık gerçeklikten sapamaz. Alarm zinciri katmanlı: kalıcı sinyal ActivityLog satırı,
+best-effort sinyal ALERT_EMAIL_TO'ya `ops-alert` kategorili mail (kendi kategorisini
+denetlemez → özyineleme yok), tekrar bastırma in-memory 6h (restart sonrası bir fazla alarm,
+kaçan alarmdan iyidir).
+
+**Playwright'ta `page.request` oturum çerezini taşır** — "anonim çağrı" assert'i için ayrı
+`request` fixture'ını kullan (çerezsiz). Admin oturumuyla açık page.request, token'sız
+/api/health çağrısında bile detay görür (maySeeDetail admin oturumunu kabul ediyor) ve
+"anonim görmemeli" testini yanlış düşürür.
+
+**e2e'de global durum varsayma:** EmailLog gibi paylaşılan defterlere assert yazarken paralel
+spec'lerin araya satır sokabileceğini hesaba kat — eşitlik yerine alt sınır (`>=`), koşullu
+assert (cron cevabındaki anlık görüntüye göre) ve temizlenmeyen kalıcı kanıt satırı
+(in-memory dedupe yüzünden ikinci koşuda alarm atılmaz; ilk koşunun ActivityLog satırına
+`count >= 1` assert et, satırı silme).
+
+## 2026-08-24 — Prod deploy'u kilitleyen Json+FK push'u (#1288)
+
+**MariaDB'de `ADD COLUMN ... CHECK(json_valid)` check'i DOĞRULAMAZ; sonraki FK/index
+adımının COPY rebuild'i DOĞRULAR.** #1281 aynı push'ta hem `preferredLanguages Json`
+(NOT NULL) hem yeni bir FK ekledi: AddColumn eski satırları sessizce `''` ile doldurup
+geçti (bilinen #1150/#1078 mekanizması — Prisma, Json `@default`'unu DDL'e yazmaz),
+AddForeignKey ise tabloyu yeniden yazarken check'e takıldı. Push yarıda kaldı, kolon
+`''` dolu kaldı ve HER yeniden deneme aynı yerde patladı — post-push çalışan
+`backfill-json-columns.mjs --repair` hiç sıraya giremedi. Çözüm: onarımı final
+push'un ÖNCESİNE de koymak (deploy-prod.sh + topic-deploy.sh) ve script'in COLUMNS
+listesine şemadaki YENİ Json kolonlarını eklemeyi unutmamak (7 kolon eksikti).
+
+**Tek satırlık lokal repro, prod log'undan daha öğretici.** Eski şemalı lokal
+MariaDB'ye 1 MentorshipRequest satırı ekleyip `db push` koşmak hatayı birebir üretti;
+düzeltme de aynı düzenekte uçtan uca doğrulandı (repair → push yeşil, FK yerinde).
+Prod'a hiç dokunmadan hem tanı hem kanıt.
+
+**Kalıcı önlem hâlâ açık:** populated bir tabloya "NOT NULL Json kolonu + rebuild
+tetikleyen değişiklik" aynı push'ta gelirse ilk deploy yine patlar (kolon henüz yokken
+pre-push repair işe yaramaz). Nullable-first ya da expand-script (#1227 deseni)
+konvansiyonu / schema-guard tespiti #1288'de tartışılıyor.
+
+## 2026-08-24 — "Getiren kişi" + "Kaynak" birleşmesi (#1296)
+
+**Aynı soruya iki kolon, iki kartta iki select:** `User.referredById` (#51 ile geldi)
+ile `User.sourceId` yıllardır aynı soruyu (bu kişiyi kim getirdi?) cevaplıyordu.
+Birleştirmenin ucuz yolu şema göçü değil, **tek mantıksal alan**: `src/lib/referrer.ts`
+encode/decode (`user:<id>` / `source:<id>`) + her yazımda diğer kolonu boşaltan API
+değişmezi. Rapor tarafı (`/admin/sources`, #539) `sourceId` üzerinden çalışmaya devam
+ediyor, yani veri kaybı yok.
+
+**Rol bazlı kolon anlamını kontrol et:** `/admin/users` her rolü — SOURCE ve COMPANY
+dahil — `/admin/candidates/[id]`'ye linkliyor. "Aday ekranı" sandığın form SOURCE
+hesabında da açılıyor ve orada `sourceId` "kim getirdi" değil "hangi kaynak adına
+konuşuyor" demek. Birleşik alan her seçimde iki kolonu birlikte yazdığı için bu bağı
+sessizce koparıyordu; API'de hedefin rolüne bakıp merged yazımın `sourceId`'ye
+dokunmasını engellemek gerekti (tek anahtarlı `{ sourceId }` yazımı hâlâ serbest).
+
+**`<optgroup>` eklerken sırayı koruyun:** "grupsuz seçenekler önce, gruplar sonra"
+şeklindeki naif gruplama, listenin en sonunda durması gereken "+ Yeni kaynak ekle"
+seçeneğini grupların üstüne taşıdı. Doğrusu verilen sırada *chunk*'lamak: ardışık aynı
+`group` değerleri bir `<optgroup>`, grupsuzlar kaldığı yerde (`Select.chunkOptions`).
+
+**Şüpheli e2e hatasını HEAD~1'e karşı doğrula.** Bu container'da smoke setinin 2 testi
+(`pipeline.spec`, `smoke.spec` "admin pages load") değişiklikten bağımsız kırmızı —
+dev sunucusunun `CLIENT_FETCH_ERROR`'u ve eksik seed/stage yapılandırması. Dokunduğum
+sayfaya ait görünen `pipeline.spec` hatasını `git checkout HEAD~1 -- <dosyalar>` ile
+1 dakikada eledim; regresyon sanıp değişikliği geri almaktan iyidir. Ayrıca
+`admin@example.com` kullanan spec'ler için `npx prisma db seed` şart.
+
+**Playwright: sabitlenmiş headless-shell yok, symlink de çözmüyor** (CLAUDE.md'nin
+önerisi bu build'de çalışmıyor, dizin yapısı farklı — playbook'taki `executablePath`
+notu geçerli). Repo config'ini bozmadan koşmanın yolu scratchpad'de bir override
+config: `import base from '/home/user/Internship/playwright.config'` + `testDir`,
+`globalSetup` mutlak yol, `webServer: { ...base.webServer, cwd: '<repo>' }`,
+`use.launchOptions.executablePath: '/opt/pw-browsers/chromium'`. İki tuzak: spec
+dosyaları `e2e/` içinde durmalı (scratchpad'den `./helpers/db` çözülmüyor) ve
+`DATABASE_URL`/`NEXTAUTH_*` env'e elle verilmeli (cwd repo olmadığı için `.env`
+okunmuyor).
+
+## 2026-08-24 — arka arkaya dört iş (#862, #670, #830, #822)
+
+**Bir dev sunucusu, tek `.next`.** İki tuzak aynı gün ısırdı: (1) dev sunucusu
+koşarken `npm run build` çalıştırmak `.next`'i bozuyor → 500'ler ve
+`Cannot find module './vendor-chunks/next-auth.js'`; (2) Playwright'ın `webServer`'ı
+3000 hazır değilken **ikinci** bir sunucuyu 3001'de açtığında iki süreç aynı `.next`'i
+paylaşıyor, her `_next/static/*` 404 dönüyor, sayfa hydrate olmuyor ve giriş formu
+native POST yapıyor. Belirti "form çalışmıyor" gibi görünüyor, sebep tamamen build
+katmanında. Kural: build'den önce `pkill` + `rm -rf .next`, tek sunucu başlat,
+`curl -o /dev/null -w '%{http_code}' .../\_next/static/chunks/main-app.js` ile 200
+gördükten sonra teste başla.
+
+**`pkill -f "next"` kendi komutunu da öldürür.** `npm run build`'i içeren bash
+satırı da "next" içerdiği için pkill onu da vuruyor; build **exit 144** ile ölüyor ve
+"build kırıldı" sanıyorsun. `pkill -f "next-server"` / `"next dev"` gibi dar desen
+kullan, ya da build'i ayrı bir çağrıda çalıştır.
+
+**MariaDB container boşta kalınca ölüyor** ve landing artık DB'ye gittiği için
+(`/api/public/stats`, #1099) `/` 500 dönüyor → Playwright'ın hazırlık kontrolü de
+düşüyor. Her oturumda ilk komut: `service mariadb start`.
+
+**Yerel kırmızıyı temiz `main`'e karşı doğrula.** Bu container'da `pipeline.spec:8`,
+`rate-limit.spec:29` ve `smoke.spec:53` değişiklikten bağımsız kırmızı. `git stash -u`
++ `npx prisma generate` ile 2 dakikada kanıtlanıyor — PR'da "bunlar bende de aynı
+şekilde düşüyor" diye yazabilmek, regresyon sanıp iyi bir değişikliği geri almaktan
+iyidir. `admin@example.com` kullanan spec'ler için yerel şifre `ChangeMe123!`
+olmayabilir; bcrypt ile bir kerelik güncellemek yeterli.
+
+**Rota parametresi hep "kayıt id'si" değil.** `/mentor/mentees/[id]` aslında
+**ilişki** id'si alıyor (`EvaluationPanel relationId={id}`), mentee id'si değil. Yeni
+bir spec yazmadan önce sayfanın `useParams()`'ı nasıl kullandığına bak; yanlış id ile
+sayfa sessizce boş açılıyor ve hata "bileşen render olmuyor" gibi görünüyor.
+
+**Org'a bağlı bir özelliği test ederken `seedUser` yetmez:** `orgId` null bırakıyor,
+dolayısıyla admin'in org'una kaydettiğin yapılandırma seed edilen ilişkide hiç
+görünmüyor (bende #822'de üç test birden 400 aldı). Ya seed sonrası `orgId`'yi
+admin'in org'una çek, ya da testin kendi `Organization` satırını yaratsın —
+"yapılandırmasız org" senaryosu için ikincisi zaten daha doğru, test sırasından da
+bağımsız olur.
+
+**Şablon/kriter gibi yapılandırmayı silmek yerine emekliye ayır.** #822'de
+`active: false`, #670'te kullanılmış davetin adresini geri yazmak: her ikisi de
+"geçmiş kayıt kendi döneminin etiketiyle okunabilsin" kuralının aynı uygulaması.
+Yeni bir yapılandırma modeli eklerken varsayılan refleks bu olmalı.
+
+**Tek dal, çok iş → PR'ı gerçeğe uydur.** Oturum tek dalda çalışıyorsa ikinci iş
+açık PR'ın üstüne biniyor. Yeni PR açmaya çalışma; PR'ın başlık ve gövdesini iki işi
+de anlatacak şekilde güncelle ve commit sha'larını yaz — diff zaten ayrı okunuyor.

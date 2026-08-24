@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Blind interview review (#819, the half that needs no demographic data)**: a new org setting `blindReview` (off by default) withholds a candidate's name, photo, university and id from an interviewer until that interviewer submits their own scorecard — from the API response, not just the screen, and in the panel list as well as the detail view. The assignment notification switches to a wording that names nobody, since a push that says who it is undoes the blinding before the panel is opened. A stable per-candidate label (\"Candidate #A3F2\") lets a panel discuss the same person without knowing who it is. Identity returns the moment the scores are submitted, and an admin who is not on the panel is never blinded — they have no scorecard to bias and they run the calibration. Deliberately an organisation-wide setting rather than a per-reviewer toggle: a bias control people opt into is one the reviewers who most need it skip.",
+  "notes": {
+    "en": ["Interviews can now be scored blind: with the setting on, an interviewer sees a candidate's work and a stable anonymous label instead of their name, photo and university, and only learns who it was after submitting their scores."],
+    "tr": ["Mülakatlar artık kör puanlanabiliyor: ayar açıkken görüşmeci, adayın adı, fotoğrafı ve üniversitesi yerine sabit bir anonim etiket görür ve kim olduğunu ancak puanlarını gönderdikten sonra öğrenir."],
+    "de": ["Interviews lassen sich jetzt blind bewerten: Ist die Einstellung aktiv, sieht die interviewende Person statt Name, Foto und Hochschule ein stabiles anonymes Kürzel — und erfährt erst nach Abgabe der Bewertung, um wen es ging."]
+  }
+}

@@ -42,7 +42,9 @@ test('admin analytics dashboard renders the pipeline funnel', async ({ page }) =
     await page.goto('/admin/analytics');
     await expect(page.getByText('Pipeline funnel')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Mentor workload & outcomes')).toBeVisible();
-    await expect(page.getByText('Ana Mentor')).toBeVisible();
+    // Scoped to the workload card on purpose: the funnel-KPI capacity table
+    // (#815) lists mentors too, so an unscoped name locator now matches twice.
+    await expect(page.getByTestId('mentor-workload-card').getByText('Ana Mentor')).toBeVisible();
   } finally {
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
     await cleanupByEmail(menteeEmail);

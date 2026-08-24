@@ -24,8 +24,19 @@ import crypto from 'crypto';
 //            recorded as referred by them.
 // Every invitation also records `invitedById`, which becomes the new account's
 // `referredById` — so admins and mentors count as a *source* just like mentees.
+//
+// An invitation does not have to carry an address (#670). Leaving `email` empty
+// mints a shareable link instead: nothing is sent, the inviter passes the URL on
+// by hand (WhatsApp, in person, printed on a flyer), and whoever registers with
+// it lands in exactly the same place a named invitee would — including the
+// automatic mentorship. The link stays single-use and 7-day-limited, so a leaked
+// one costs at most one unwanted account in the invited role.
 const inviteSchema = z.object({
-  email: z.string().email('Invalid email'),
+  // '' is the "no address" case the form sends for an untouched field; a
+  // non-empty value still has to be a real address.
+  email: z.union([z.string().email('Invalid email'), z.literal('')]).optional().nullable(),
+  // The sender's private note about the link — how they recognise it later.
+  label: z.string().trim().max(120).optional().nullable(),
   role: z.enum(['MENTOR', 'MENTEE', 'ADMIN']),
   mentorId: z.string().min(1).optional().nullable(),
   menteeId: z.string().min(1).optional().nullable(),
@@ -57,7 +68,10 @@ export async function POST(request: Request) {
         );
       }
 
-      const { email, role } = parsed.data;
+      const { role } = parsed.data;
+      // Empty/whitespace address → an email-less shareable link.
+      const email = parsed.data.email?.trim() ? parsed.data.email.trim() : null;
+      const label = parsed.data.label?.trim() || null;
       if (!allowed.includes(role)) {
         return NextResponse.json({ error: `You cannot invite a ${role.toLowerCase()}` }, { status: 403 });
       }
@@ -118,22 +132,27 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'You cannot add members to that project' }, { status: 403 });
       }
 
-      const existingUser = await prisma.user.findUnique({ where: { email } });
-      if (existingUser) {
-        return NextResponse.json(
-          { error: 'A user with this email already exists' },
-          { status: 409 }
-        );
-      }
+      // Both duplicate guards are address-based, so they only apply to a named
+      // invitation. An email-less link has nothing to collide with — and several
+      // of them at once is the point (one per person you hand it to).
+      if (email) {
+        const existingUser = await prisma.user.findUnique({ where: { email } });
+        if (existingUser) {
+          return NextResponse.json(
+            { error: 'A user with this email already exists' },
+            { status: 409 }
+          );
+        }
 
-      const existingToken = await prisma.invitationToken.findFirst({
-        where: { email, used: false, expiresAt: { gt: new Date() } },
-      });
-      if (existingToken) {
-        return NextResponse.json(
-          { error: 'An active invitation has already been sent to this email' },
-          { status: 409 }
-        );
+        const existingToken = await prisma.invitationToken.findFirst({
+          where: { email, used: false, expiresAt: { gt: new Date() } },
+        });
+        if (existingToken) {
+          return NextResponse.json(
+            { error: 'An active invitation has already been sent to this email' },
+            { status: 409 }
+          );
+        }
       }
 
       const token = crypto.randomBytes(32).toString('hex');
@@ -144,9 +163,11 @@ export async function POST(request: Request) {
         data: {
           token,
           email,
+          label,
           role,
           expiresAt,
           invitedById: session.user.id,
+          orgId: resolveOrgId(session),
           mentorId,
           menteeId,
           projectId,
@@ -159,7 +180,7 @@ export async function POST(request: Request) {
         actorEmail: session.user.email ?? null,
         targetType: 'invitation',
         targetId: invitation.id,
-        detail: `${email} · ${role}`,
+        detail: `${email ?? label ?? 'link'} · ${role}`,
         request,
       });
 
@@ -170,11 +191,13 @@ export async function POST(request: Request) {
       // invitation — the admin can still share registerUrl manually. Report delivery
       // status instead of 500-ing.
       let emailSent = false;
-      try {
-        await sendInvitationEmail({ to: email, token, role, orgId: resolveOrgId(session) });
-        emailSent = !!process.env.SMTP_USER;
-      } catch (mailErr) {
-        console.error('Invitation email failed (token still valid):', mailErr);
+      if (email) {
+        try {
+          await sendInvitationEmail({ to: email, token, role, orgId: resolveOrgId(session) });
+          emailSent = !!process.env.SMTP_USER;
+        } catch (mailErr) {
+          console.error('Invitation email failed (token still valid):', mailErr);
+        }
       }
 
       return NextResponse.json(
@@ -209,7 +232,9 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
+          token: true,
           email: true,
+          label: true,
           role: true,
           used: true,
           createdAt: true,
@@ -217,11 +242,26 @@ export async function GET() {
           openedAt: true,
           registeredAt: true,
           verifiedAt: true,
+          invitedById: true,
           invitedBy: { select: { id: true, fullName: true } },
         },
       });
 
-      return NextResponse.json({ invitations });
+      // An email-less link has no second delivery path: it was never mailed and
+      // resending it is meaningless, so losing the tab would strand the token
+      // forever. Hand its URL back — but only to the person who minted it, and
+      // only while it is still usable. Every other row keeps its token private.
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const now = new Date();
+      const withLinks = invitations.map(({ token, invitedById, ...i }) => ({
+        ...i,
+        registerUrl:
+          !i.email && !i.used && i.expiresAt > now && invitedById === session.user.id
+            ? `${appUrl}/auth/register?token=${token}`
+            : null,
+      }));
+
+      return NextResponse.json({ invitations: withLinks });
     });
   } catch (error) {
     console.error('Get invitations error:', error);

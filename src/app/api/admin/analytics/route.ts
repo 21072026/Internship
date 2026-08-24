@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { buildSignupWindow, type SignupCounts } from '@/lib/signupFunnel';
 
 // GET — aggregate analytics for the admin dashboard:
 // pipeline funnel, mentor workload/outcomes, engagement and RSVP rate.
@@ -62,6 +63,25 @@ export async function GET(request: Request) {
     prisma.interactionLog.findMany({ where: { date: inRange }, select: { date: true } }),
   ]);
 
+  // Signup funnel (#1191) — deliberately NOT tied to the date-range picker:
+  // it answers "is the front door working RIGHT NOW?", so it always looks at
+  // the last 7 and 30 days. Counted per window rather than derived from one
+  // list, so a huge tenant never loads every user row just to bucket them.
+  const signupWindows = await Promise.all(
+    [7, 30].map(async (days) => {
+      const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      const createdIn = { createdAt: { gte: since } };
+      const [registered, verified, active] = await Promise.all([
+        prisma.user.count({ where: createdIn }),
+        prisma.user.count({ where: { ...createdIn, emailVerified: true } }),
+        // "Active" is the end of the door: verified, enabled, and past any
+        // approval hold — the state in which the account can actually be used.
+        prisma.user.count({ where: { ...createdIn, emailVerified: true, isActive: true, pendingApproval: false } }),
+      ]);
+      return buildSignupWindow(days, { registered, verified, active } satisfies SignupCounts);
+    })
+  );
+
   // Monthly trend buckets.
   const newRelationsByMonth: Record<string, number> = Object.fromEntries(months.map((m) => [m, 0]));
   for (const r of relDates) { const k = monthKey(r.startDate); if (k in newRelationsByMonth) newRelationsByMonth[k]++; }
@@ -112,6 +132,7 @@ export async function GET(request: Request) {
     rsvp: { ...rsvp, responded: rsvpResponded, acceptanceRate: rsvpAcceptanceRate },
     trends,
     range,
+    signupFunnel: signupWindows,
   });
   });
 }

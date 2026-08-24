@@ -105,6 +105,14 @@ export const MATRIX: MatrixEntry[] = [
     ownership: () => true,
   },
   {
+    // The referrer picker's source list (#1296) — names only, and open to
+    // MENTOR because the merged referrer field sits on screens mentors use.
+    path: '/api/sources',
+    collection: 'sources',
+    expect: { ADMIN: 'all', MENTOR: 'all', MENTEE: 'deny', COMPANY: 'deny', SOURCE: 'deny' },
+    ownership: () => true,
+  },
+  {
     path: '/api/source/mentees',
     collection: 'mentees',
     expect: { ADMIN: 'deny', MENTOR: 'deny', MENTEE: 'deny', COMPANY: 'deny', SOURCE: 'own' },

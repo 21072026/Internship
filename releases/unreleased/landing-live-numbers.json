@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Live landing numbers (#1099)**: new session-less `GET /api/public/stats` returns exactly three integers (active mentors, open public projects, candidates waiting for a mentor) — rate-limited, 10-minute in-process cache, zero PII. The hero gains a live status strip fed by the same cached helper; a zero count drops its piece and with all three at zero the strip is not rendered at all. Numbers are computed, never hand-written into copy (reusing the placeholder templates #1107 pre-seeded).",
+  "notes": {
+    "en": ["The landing hero now shows real, live numbers — active mentors, open projects and candidates waiting for a mentor — computed from the database and hidden entirely when there is nothing to show."],
+    "tr": ["Landing hero artık gerçek, canlı sayılar gösteriyor — aktif mentorlar, açık projeler ve mentor bekleyen adaylar — veritabanından hesaplanıyor ve gösterecek bir şey yokken tamamen gizleniyor."],
+    "de": ["Der Landing-Hero zeigt jetzt echte, live berechnete Zahlen — aktive Mentoren, offene Projekte und wartende Kandidaten — aus der Datenbank berechnet und komplett ausgeblendet, wenn es nichts zu zeigen gibt."]
+  }
+}

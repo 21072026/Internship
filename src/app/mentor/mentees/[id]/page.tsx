@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Plus, Trash2, ExternalLink, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
+import { referrerLabel } from '@/lib/referrer';
 import { useT, useLocale } from '@/i18n/client';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
@@ -61,6 +62,8 @@ interface RelationDetail {
     city?: string;
     birthDate?: string;
     referralSource?: string;
+    referredBy?: { fullName: string } | null;
+    source?: { name: string } | null;
     cvUrl?: string;
     // No password set yet → the mentee cannot sign in (#1123).
     pendingActivation?: boolean;
@@ -302,10 +305,12 @@ export default function MenteeDetailPage() {
                 </p>
               </div>
             )}
-            {relation.mentee.referralSource && (
+            {/* Who brought this mentee in — one line, whether that is a
+                registered person, a source, or the legacy free text (#1296). */}
+            {referrerLabel(relation.mentee) && (
               <div>
-                <p className="text-xs text-gray-500">{t.candidateDetail.referral}</p>
-                <p className="text-sm text-gray-900">{relation.mentee.referralSource}</p>
+                <p className="text-xs text-gray-500">{t.referrer.label}</p>
+                <p className="text-sm text-gray-900" data-testid="mentee-referrer">{referrerLabel(relation.mentee)}</p>
               </div>
             )}
             {relation.mentee.skills.length > 0 && (

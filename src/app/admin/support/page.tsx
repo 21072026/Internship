@@ -174,7 +174,9 @@ export default function AdminSupportPage() {
       </div>
       <p className="text-gray-500 mb-6">{a.subtitle}</p>
 
-      <div className="flex gap-2 mb-4" data-testid="support-filters">
+      {/* Filter chips wrap: in German the four labels ran 14px past the screen
+          and put the whole page into horizontal scroll (#1305). */}
+      <div className="flex flex-wrap gap-2 mb-4" data-testid="support-filters">
         {FILTERS.map((f) => (
           <button
             key={f.value || 'all'}

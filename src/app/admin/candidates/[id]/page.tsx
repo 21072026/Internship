@@ -27,6 +27,8 @@ import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { OfferManagementPanel } from '@/components/OfferManagementPanel';
+import { ReferrerPicker } from '@/components/ReferrerPicker';
+import { encodeReferrer, referrerLabel } from '@/lib/referrer';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
@@ -99,9 +101,6 @@ export default function AdminMenteeDetailPage() {
   const [resetSent, setResetSent] = useState<boolean | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
-  const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
-  // Every admin/mentor/mentee, so a person can be picked as the referral source.
-  const [people, setPeople] = useState<{ id: string; fullName: string }[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/users/${id}`);
@@ -255,41 +254,17 @@ export default function AdminMenteeDetailPage() {
       .then((r) => (r.ok ? r.json() : { cohorts: [] }))
       .then((d) => setCohorts(d.cohorts ?? []))
       .catch((e) => console.error('[candidate] cohorts load failed', e));
-    fetch('/api/users?view=picker')
-      .then((r) => (r.ok ? r.json() : { users: [] }))
-      .then((d) => setPeople(d.users ?? []))
-      .catch((e) => console.error('[candidate] people load failed', e));
-    fetch('/api/admin/sources')
-      .then((r) => (r.ok ? r.json() : { sources: [] }))
-      .then((d) => setSources(d.sources ?? []))
-      .catch((e) => console.error('[candidate] sources load failed', e));
   }, [id]);
 
-  const changeReferredBy = useCallback(
-    async (referredById: string) => {
+  // One field, one write (#1296): whichever kind was picked is set and the other
+  // is cleared, so a candidate never carries both a referring person and a
+  // referral source.
+  const changeReferrer = useCallback(
+    async (fields: { referredById: string | null; sourceId: string | null }) => {
       setSaving(true);
       try {
         const res = await fetch(`/api/users/${id}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ referredById: referredById || null }),
-        });
-        if (!res.ok) throw new Error();
-        await load();
-        toast(t.candidateDetail.saved);
-      } catch {
-        toast(t.candidateDetail.saveError, 'error');
-      } finally {
-        setSaving(false);
-      }
-    },
-    [id, load, toast, t]
-  );
-
-  const changeSource = useCallback(
-    async (sourceId: string) => {
-      setSaving(true);
-      try {
-        const res = await fetch(`/api/users/${id}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: sourceId || null }),
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
         });
         if (!res.ok) throw new Error();
         await load();
@@ -388,7 +363,6 @@ export default function AdminMenteeDetailPage() {
             <Field label={t.candidateDetail.whatsapp} value={user.whatsapp} />
             <Field label={t.candidateDetail.city} value={user.city} />
             <Field label={t.candidateDetail.birthDate} value={user.birthDate ? formatDate(user.birthDate, locale) : null} />
-            <Field label={t.candidateDetail.referral} value={user.referralSource} />
             {user.skills.length > 0 && (
               <div>
                 <p className="text-xs text-gray-500 mb-1">{t.candidateDetail.skills}</p>
@@ -399,15 +373,16 @@ export default function AdminMenteeDetailPage() {
                 </div>
               </div>
             )}
-            {/* Who brought this candidate in (#51). Any admin, mentor or mentee
-                can be the source; invite/referral links set it automatically. */}
-            <Select
-              label={t.referral.sourcePerson}
-              data-testid="referred-by-select"
+            {/* Who brought this candidate in — ONE field (#1296). A registered
+                person (set automatically by invite/referral links) or a Source
+                row; new sources can be added right here. */}
+            <ReferrerPicker
+              value={encodeReferrer(user)}
+              valueLabel={referrerLabel(user)}
+              excludeUserId={user.id}
+              legacyText={user.referralSource}
               disabled={saving}
-              value={user.referredById ?? ''}
-              onChange={(e) => changeReferredBy(e.target.value)}
-              options={[{ value: '', label: t.referral.noSource }, ...people.map((p) => ({ value: p.id, label: p.fullName }))]}
+              onChange={changeReferrer}
             />
             <div className="pt-1">
               <CvManager targetUserId={user.id} initialCvUrl={user.cvUrl} />
@@ -450,13 +425,6 @@ export default function AdminMenteeDetailPage() {
                   value={rel.cohort?.id ?? ''}
                   disabled={saving}
                   onChange={(e) => changeRelField(rel.id, { cohortId: e.target.value || null })}
-                />
-                <Select
-                  label={t.candidateDetail.source}
-                  options={[{ value: '', label: t.candidateDetail.noSource }, ...sources.map((s) => ({ value: s.id, label: s.name }))]}
-                  value={user.source?.id ?? ''}
-                  disabled={saving}
-                  onChange={(e) => changeSource(e.target.value)}
                 />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.candidateDetail.stageDeadline}</label>
