@@ -217,6 +217,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           orgId: relation.orgId,
           from: relation.pipelineStatus,
           to: parsed.data.pipelineStatus!,
+          reasonCode,
         });
       }
 

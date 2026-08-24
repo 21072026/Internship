@@ -97,6 +97,7 @@ model Organization {
   projects             Project[]
   relations            MentorshipRelation[]
   pipelineStages       PipelineStage[]
+  evaluationTemplates  EvaluationTemplate[]
   mentorApplications   MentorApplication[]
   companyInquiries     CompanyInquiry[]
   documentRequirements DocumentRequirement[]
@@ -1418,6 +1419,13 @@ model Evaluation {
   scores     Json           @default("{}") // { criterion: 1..5 }
   comment    String?        @db.Text
   createdAt  DateTime       @default(now())
+  // Which rubric this was scored against (#822). Null means the built-in 4+4
+  // criteria, which is every row written before org templates existed and every
+  // row in an org that never defined one. Stamped at write time so a record
+  // keeps rendering with the labels of its own era even after the org rewrites
+  // its framework — criteria are deactivated, never deleted, for the same
+  // reason.
+  templateId String?
 
   // Consent-based testimonial publishing (#1096/#1098). The original comment
   // is never published or edited: the admin drafts publicExcerpt, the AUTHOR
@@ -1429,10 +1437,60 @@ model Evaluation {
   publicExcerpt     String?   @db.Text
   excerptApprovedAt DateTime?
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation  @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  // SetNull, not Cascade: losing a template must never delete the evaluations
+  // written against it.
+  template EvaluationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([relationId])
   @@index([sharedPublicly, publishedAt])
+  @@index([templateId])
+}
+
+// Per-tenant competency framework (#822), the same shape #747 gave pipeline
+// stages: an org that defines nothing keeps exactly the built-in criteria, and
+// one that defines a template replaces them for that scope.
+//
+// `scope` is a plain String validated against a whitelist in code
+// (src/lib/evaluation.ts), not a Prisma enum — the same convention the rest of
+// this repo uses for status-like values, so adding a scope is not a migration.
+model EvaluationTemplate {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  // 'MENTEE' (mentor scores the mentee) | 'MENTOR' (mentee scores the mentor).
+  scope     String
+  // Only one active template per org+scope is used; the rest are history.
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org         Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  criteria    EvaluationCriterion[]
+  evaluations Evaluation[]
+
+  @@index([orgId, scope, active])
+}
+
+model EvaluationCriterion {
+  id         String  @id @default(cuid())
+  templateId String
+  // The key stored inside Evaluation.scores. Stable: renaming a criterion
+  // changes its labels, never its key, or historical scores stop matching.
+  key        String
+  // { en?, tr?, de? } — the label in each language it was written in. A missing
+  // language falls back to English, then to the key itself, so a half-translated
+  // framework still renders.
+  labels     Json
+  order      Int     @default(0)
+  // Retired, not deleted (#822): an evaluation scored against this criterion
+  // still has to render its label years later.
+  active     Boolean @default(true)
+
+  template EvaluationTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, key])
+  @@index([templateId, order])
 }
 
 // A structured question from a mentee to their mentor, with an optional answer.

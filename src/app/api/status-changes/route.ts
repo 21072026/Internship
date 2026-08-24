@@ -77,6 +77,7 @@ export async function POST(request: Request) {
         orgId: relation.orgId,
         from: relation.pipelineStatus,
         to: toStatus,
+        reasonCode,
       });
     }
 

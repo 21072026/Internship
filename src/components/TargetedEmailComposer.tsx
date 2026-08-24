@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -17,7 +18,12 @@ interface EmailDraft {
   body: string;
 }
 
-const TEMPLATE_KEYS = ['welcome', 'checkin', 'interview', 'followup'] as const;
+// The outcome templates (#830) sit at the end: they are the ones a mentor is
+// sent here to write, and the ones nobody should reach for by accident.
+const TEMPLATE_KEYS = [
+  'welcome', 'checkin', 'interview', 'followup',
+  'outcomeNoMatch', 'outcomePlacedElsewhere', 'outcomePoolInvite',
+] as const;
 
 const emptyDraft = (): EmailDraft => ({ subject: '', body: '' });
 const blankDrafts = () =>
@@ -46,6 +52,14 @@ export function TargetedEmailComposer() {
   const [tab, setTab] = useState<Locale>(locale);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  // Arrived from an outcome notification (#830): ?relation=<id>&template=<key>.
+  // The composer is the *preview* step — it fills the draft and ticks the one
+  // recipient, then stops. Nothing is sent until the mentor presses send, which
+  // is the whole point: a rejection is the most sensitive text this product
+  // writes, and the wrong message on the wrong case cannot be recalled.
+  const params = useSearchParams();
+  const prefillRelation = params.get('relation');
+  const prefillTemplate = params.get('template');
 
   const load = useCallback(async () => {
     const res = await fetch('/api/mentorship');
@@ -81,6 +95,18 @@ export function TargetedEmailComposer() {
       return next;
     });
   };
+
+  // Applied once the relations are in, and only for a relation the caller
+  // actually has — a stale or foreign id simply prefills nothing.
+  useEffect(() => {
+    if (!prefillRelation || !relations.some((r) => r.id === prefillRelation)) return;
+    setSelected({ [prefillRelation]: true });
+    if (prefillTemplate && (TEMPLATE_KEYS as readonly string[]).includes(prefillTemplate)) {
+      applyTemplate(prefillTemplate);
+    }
+    // Runs when the relation list arrives; applyTemplate is a stable local.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relations, prefillRelation, prefillTemplate]);
 
   const patchDraft = (patch: Partial<EmailDraft>) =>
     setDrafts((prev) => ({ ...prev, [tab]: { ...prev[tab], ...patch } }));
