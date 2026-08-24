@@ -56,14 +56,20 @@ export async function cleanupByEmail(email: string) {
 }
 
 /**
- * Record a platform-level contributor-terms acceptance for a seeded user (#1025).
+ * Record a contributor-terms acceptance for a seeded user (#1025, #1026).
  *
- * `/portal/projects` is gated on it, so any spec that drives a mentee into the
- * project workspace needs this — a real mentee working on a project has
- * accepted; a freshly seeded one has not. No-op when the installation has no
- * terms configured, which is also when the gate lets everyone through.
+ * Two surfaces are gated on it: `/portal/projects` on the platform-level
+ * acceptance (`projectId` omitted), and a project's internal view on an
+ * acceptance scoped to that project (`projectId` given). A real member who is
+ * working on a project has both; a freshly seeded one has neither. No-op when
+ * the installation has no terms configured, which is also when the gates let
+ * everyone through.
  */
-export async function acceptContributorTerms(userId: string, termsKey = 'default') {
+export async function acceptContributorTerms(
+  userId: string,
+  opts: { termsKey?: string; projectId?: string } = {}
+) {
+  const termsKey = opts.termsKey ?? 'default';
   const terms = await prisma.contributorTerms.findFirst({
     where: { key: termsKey },
     orderBy: [{ effectiveFrom: 'desc' }, { version: 'desc' }],
@@ -71,6 +77,6 @@ export async function acceptContributorTerms(userId: string, termsKey = 'default
   });
   if (!terms) return null;
   return prisma.contributorTermsAcceptance.create({
-    data: { userId, termsKey, version: terms.version, projectId: null },
+    data: { userId, termsKey, version: terms.version, projectId: opts.projectId ?? null },
   });
 }

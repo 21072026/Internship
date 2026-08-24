@@ -124,3 +124,24 @@ export async function loadProjectTeam(projectId: string): Promise<TeamMember[]> 
   ]);
   return mergeTeam(members, relations);
 }
+
+/**
+ * Is this user on the project's team? Unions both membership sources, the same
+ * way mergeTeam does — a legacy MentorshipRelation.projectId counts as much as
+ * a ProjectMember row, and an authorization check that only looked at one of
+ * them would silently lock out half the team (#1026).
+ */
+export async function isProjectMember(projectId: string, userId: string): Promise<boolean> {
+  if (!projectId || !userId) return false;
+  const [member, relation] = await Promise.all([
+    prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { id: true },
+    }),
+    prisma.mentorshipRelation.findFirst({
+      where: { projectId, status: 'ACTIVE', OR: [{ menteeId: userId }, { mentorId: userId }] },
+      select: { id: true },
+    }),
+  ]);
+  return !!member || !!relation;
+}

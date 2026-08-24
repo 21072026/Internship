@@ -153,3 +153,55 @@ export async function acceptanceHistory(userId: string) {
     select: { termsKey: true, version: true, projectId: true, acceptedAt: true },
   });
 }
+
+/** What a project asks of its members, and whether this one has agreed yet. */
+export interface ProjectTermsState {
+  /** null when the project asks for nothing — nothing to render, nothing to gate. */
+  terms: ActiveTerms | null;
+  accepted: boolean;
+}
+
+/**
+ * The project-level half of the chain (#1026).
+ *
+ * Scoping an acceptance to a concrete project is what makes the consent chain
+ * hold: § 40 UrhG treats a single blanket grant over unspecified future works as
+ * weak, so "I accept the terms of THIS project" is worth more than one signature
+ * covering everything a person will ever write here.
+ *
+ * A project follows a terms *document* (`contributorTermsKey`), not a frozen
+ * version of it — so when the wording is superseded the gate rises again by
+ * itself, with no separate re-consent machinery.
+ *
+ * Returns `{ terms: null, accepted: true }` — i.e. no gate — when the project
+ * opts out, or when the key it names has no text. A project pointing at a
+ * document nobody wrote must not become unreachable to its own members.
+ */
+export async function projectTermsState(
+  userId: string,
+  project: { id: string; contributorTermsKey: string | null; contributorTermsRequired: boolean },
+  locale = 'en'
+): Promise<ProjectTermsState> {
+  if (!project.contributorTermsRequired) return { terms: null, accepted: true };
+
+  const key = project.contributorTermsKey ?? DEFAULT_TERMS_KEY;
+  const terms = await getActiveTerms(key, locale);
+  if (!terms) return { terms: null, accepted: true };
+
+  const row = await prisma.contributorTermsAcceptance.findFirst({
+    where: { userId, termsKey: key, version: terms.version, projectId: project.id },
+    select: { id: true },
+  });
+  return { terms, accepted: !!row };
+}
+
+/** The terms documents an admin can point a project at, newest version each. */
+export async function listTermsKeys(): Promise<{ key: string; version: string }[]> {
+  const rows = await prisma.contributorTerms.findMany({
+    orderBy: [{ key: 'asc' }, { effectiveFrom: 'desc' }, { version: 'desc' }],
+    select: { key: true, version: true },
+  });
+  const seen = new Map<string, string>();
+  for (const r of rows) if (!seen.has(r.key)) seen.set(r.key, r.version);
+  return [...seen].map(([key, version]) => ({ key, version }));
+}

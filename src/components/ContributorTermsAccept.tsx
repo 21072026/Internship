@@ -18,12 +18,17 @@ import { Check, Loader2 } from 'lucide-react';
 export function ContributorTermsAccept({
   version,
   termsKey,
+  projectId,
   nextHref,
   labels,
 }: {
   version: string;
   termsKey: string;
-  nextHref: string;
+  /** Set for a project-scoped acceptance; omitted = platform level. */
+  projectId?: string;
+  /** Where to go once accepted. Omit to stay put and re-render in place — what
+      an in-page gate wants, since the content behind it is on this same URL. */
+  nextHref?: string;
   labels: {
     intro: string;
     checkbox: string;
@@ -43,7 +48,7 @@ export function ContributorTermsAccept({
       const res = await fetch('/api/contributor-terms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version, key: termsKey }),
+        body: JSON.stringify({ version, key: termsKey, projectId }),
       });
       if (res.status === 409) {
         const data = await res.json().catch(() => ({}));
@@ -59,7 +64,7 @@ export function ContributorTermsAccept({
         setError(data?.error ?? 'Failed');
         return;
       }
-      router.push(nextHref);
+      if (nextHref) router.push(nextHref);
       router.refresh();
     } catch {
       setError('Network error');
