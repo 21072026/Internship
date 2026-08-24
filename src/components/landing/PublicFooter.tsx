@@ -3,7 +3,7 @@ import { GraduationCap } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { VersionFooter } from '@/components/VersionFooter';
 import { APP_VERSION } from '@/lib/version';
-import { GITHUB_URL } from './links';
+import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from './links';
 import { IS_DEMO_MODE, DEMO_URL } from '@/lib/demoMode';
 
 /**
@@ -62,6 +62,20 @@ export async function PublicFooter() {
               <span className="font-bold text-gray-900 dark:text-gray-100 truncate">InternshipCRM</span>
             </Link>
             <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{n.tagline}</p>
+            {/* Founder identity (#1097): a real person by name — the sole
+                rights holder is a natural person, never a company (CLAUDE.md
+                → Licensing & IP). */}
+            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400" data-testid="footer-founder">
+              {n.builtBy}{' '}
+              <a
+                href={FOUNDER_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-700 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white underline underline-offset-2"
+              >
+                {FOUNDER_NAME}
+              </a>
+            </p>
           </div>
 
           {columns.map((col) => (

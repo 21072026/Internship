@@ -12,7 +12,7 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
-import { GITHUB_URL } from '@/components/landing/links';
+import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
 import { TawkChat } from '@/components/TawkChat';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
 
@@ -478,6 +478,20 @@ export default async function HomePage() {
             <Link href="/release-notes" className="text-blue-600 hover:underline">{L.transLinkReleases}</Link>
             <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1.5">
               <Github className="h-4 w-4" />{L.transLinkGithub}
+            </a>
+          </div>
+
+          {/* Founder identity (#1097): on a beta product, namelessness is the
+              biggest trust-breaker (docs/landing-value-proposition.md §4.1).
+              A real person, by name — never a company as the owner (CLAUDE.md
+              → Licensing & IP). */}
+          <div className="mt-6 p-6 rounded-xl border border-gray-200 text-center" data-testid="founder-identity">
+            <h3 className="font-semibold text-gray-900 mb-1">{L.founderTitle}</h3>
+            <p className="text-sm text-gray-600 leading-relaxed max-w-2xl mx-auto">
+              {L.founderBody.replace('{name}', FOUNDER_NAME)}
+            </p>
+            <a href={FOUNDER_URL} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline">
+              <Github className="h-4 w-4" />{L.founderLink}
             </a>
           </div>
         </div>

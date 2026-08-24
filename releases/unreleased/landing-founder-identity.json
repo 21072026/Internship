@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Landing founder identity (#1097)**: the transparency section gains a \"Who is behind this?\" block and the public footer a \"Built and maintained by\" line — both naming the founder (a natural person, per the licensing/IP rule: no company as owner) with a link to his public GitHub profile, in EN/TR/DE. Completes #1097; the GitHub links, business-model line and transparency strip landed earlier via #1107.",
+  "notes": {
+    "en": ["The landing page now says who builds InternshipCRM and why — a named founder with a public profile link, in the transparency section and the footer."],
+    "tr": ["Landing sayfası artık InternshipCRM’i kimin, neden yaptığını söylüyor — şeffaflık bölümünde ve footer’da, herkese açık profil bağlantısıyla isimli kurucu."],
+    "de": ["Die Landing-Seite sagt jetzt, wer InternshipCRM baut und warum — ein namentlich genannter Gründer mit öffentlichem Profil-Link, im Transparenzbereich und im Footer."]
+  }
+}
