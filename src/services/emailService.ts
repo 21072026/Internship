@@ -1383,7 +1383,7 @@ export async function checkStageDeadlineReminders() {
     // The in-app half respects the same 'deadlines' preference the e-mail half
     // does (#817) — opting out of deadline mail and still being pinged in-app
     // for the identical event is not a preference anyone chose.
-    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/admin/candidates/${rel.menteeId}`);
+    await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/mentor/mentees/${rel.id}`);
     if (emailAllowed(rel.mentor, 'deadlines')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;

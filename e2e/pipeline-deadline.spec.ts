@@ -6,7 +6,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('stage deadlines flag overdue, surface on the calendar, and trigger reminders', async ({ page }) => {
+test('stage deadlines flag overdue, surface on the calendar, and trigger reminders', { tag: '@smoke' }, async ({ page }) => {
   const adminEmail = uniqueEmail('dl-admin');
   const mentorEmail = uniqueEmail('dl-mentor');
   const menteeEmail = uniqueEmail('dl-mentee');
@@ -33,10 +33,22 @@ test('stage deadlines flag overdue, surface on the calendar, and trigger reminde
     const after = await prisma.mentorshipRelation.findUnique({ where: { id: rel.id } });
     expect(after?.deadlineReminderSentAt).toBeTruthy();
 
+    // The admin's candidate detail route remains available to admins.
+    await page.goto(`/admin/candidates/${rel.menteeId}`);
+    await expect(page).toHaveURL(`/admin/candidates/${rel.menteeId}`);
+    await expect(page.getByText('DL Mentee').first()).toBeVisible();
+
     // The mentor received an in-app deadline notification.
     await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const notifs = await (await page.request.get('/api/notifications')).json();
-    expect(notifs.items.some((n: { type: string }) => n.type === 'deadline.stagePassed')).toBeTruthy();
+    expect(notifs.items).toContainEqual(expect.objectContaining({
+      type: 'deadline.stagePassed',
+      link: `/mentor/mentees/${rel.id}`,
+    }));
+    await page.goto('/notifications');
+    await page.getByRole('link', { name: /Stage deadline passed/ }).click();
+    await expect(page).toHaveURL(`/mentor/mentees/${rel.id}`);
+    await expect(page.getByText('DL Mentee').first()).toBeVisible();
   } finally {
     await prisma.notification.deleteMany({ where: { userId: mentor.id } });
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
