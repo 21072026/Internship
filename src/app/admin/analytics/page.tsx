@@ -13,6 +13,7 @@ import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { useT } from '@/i18n/client';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface Analytics {
   funnel: Record<string, number>;
@@ -303,7 +304,9 @@ export default function AdminAnalyticsPage() {
             <div className="divide-y divide-gray-50">
               {data.mentorWorkload.map((m) => (
                 <div key={m.id} className="flex items-center justify-between py-2 text-sm">
-                  <span className="truncate">{m.fullName}</span>
+                  <span className="truncate">
+                    <PersonHoverCard personId={m.id} name={m.fullName} role="MENTOR" />
+                  </span>
                   <span className="text-gray-500 flex-shrink-0">
                     {m.active} {t.analytics.active} · {m.hired} {t.analytics.hired}
                   </span>

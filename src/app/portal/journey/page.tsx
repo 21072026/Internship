@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { User, Building2, BookOpen, ExternalLink, MessageCircle } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 async function getActiveRelation(menteeId: string) {
   return prisma.mentorshipRelation.findFirst({
@@ -87,7 +88,9 @@ export default async function PortalJourneyPage() {
               <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2">
                 {t.portal.yourMentor}
               </p>
-              <p className="font-semibold text-gray-900">{activeRelation.mentor.fullName}</p>
+              <p className="font-semibold text-gray-900">
+                <PersonHoverCard personId={activeRelation.mentor.id} name={activeRelation.mentor.fullName} role="MENTOR" />
+              </p>
               <a href={`mailto:${activeRelation.mentor.email}`} className="text-sm text-gray-600 hover:text-blue-600 hover:underline break-all">{activeRelation.mentor.email}</a>
               {activeRelation.mentor.phone && (
                 <p className="text-sm text-gray-600">{activeRelation.mentor.phone}</p>

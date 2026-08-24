@@ -13,6 +13,7 @@ import { ProjectGoals } from '@/components/project/ProjectGoals';
 import { ProjectJoinRequests } from '@/components/project/ProjectJoinRequests';
 import { ProjectMembersPanel } from '@/components/project/ProjectMembersPanel';
 import { BrandWordmark } from '@/components/BrandWordmark';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { roleHome } from '@/lib/roleHome';
 
 export const dynamic = 'force-dynamic';
@@ -187,7 +188,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   <ul className="space-y-1" data-testid="project-team">
                     {team.map((m) => (
                       <li key={m.id} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="text-gray-800">{m.fullName}</span>
+                        {/* Teammates are reachable from the roster: signed-in
+                            viewers get the card, a public visitor never reaches
+                            this branch (canInternal gates the whole block). */}
+                        <span className="text-gray-800">
+                          {/* No role hint: TeamMember.role is the *project*
+                              role (an OWNER can be a mentee, #1222), so the
+                              profile link waits for the loaded account role. */}
+                          <PersonHoverCard personId={m.id} name={m.fullName} />
+                        </span>
                         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{roleLabel(m)}</span>
                       </li>
                     ))}

@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Users, ExternalLink, Search, Filter, Download } from 'lucide-react';
 import { LanguageBadge } from '@/components/LanguageBadge';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface Candidate {
   id: string;
@@ -484,7 +485,12 @@ export default function CandidatesPage() {
                       <LanguageBadge language={candidate.preferredLanguage} />
                     </div>
                     <p className="mt-1 min-w-0 break-words text-sm text-gray-600 dark:text-gray-300">
-                      {t.candidates.mentor}: {activeRelation?.mentor.fullName ?? t.candidates.unassigned}
+                      {t.candidates.mentor}:{' '}
+                      {activeRelation ? (
+                        <PersonHoverCard personId={activeRelation.mentor.id} name={activeRelation.mentor.fullName} role="MENTOR" />
+                      ) : (
+                        t.candidates.unassigned
+                      )}
                     </p>
                   </div>
                   <Badge data-testid="candidate-mobile-stage" variant={activeRelation?.pipelineStatus ? 'info' : 'warning'} className="max-w-[9rem] flex-shrink-0 text-center whitespace-normal break-words">
@@ -579,7 +585,8 @@ export default function CandidatesPage() {
                   )}
                   {activeRelation && (
                     <p className="text-xs text-blue-600">
-                      👤 {t.candidates.mentor}: {activeRelation.mentor.fullName}
+                      👤 {t.candidates.mentor}:{' '}
+                      <PersonHoverCard personId={activeRelation.mentor.id} name={activeRelation.mentor.fullName} role="MENTOR" />
                       {activeRelation.company && ` · ${activeRelation.company.name}`}
                     </p>
                   )}

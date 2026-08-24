@@ -4,8 +4,9 @@ import { prisma } from '@/lib/prisma';
 //
 // The rule for who may see one is deliberately narrow and easy to state: **you
 // can look up anyone whose name the app already shows you**. Concretely, that is
-// a mentorship counterpart, someone on a project with you, or someone in a
-// conversation with you — plus everyone, for an admin. Anything else is denied,
+// a mentorship counterpart, someone on a project with you, someone in a
+// conversation with you, or the other side of a request still waiting for a
+// decision — plus everyone, for an admin. Anything else is denied,
 // so a role added later (COMPANY, SOURCE, whatever comes next) gets nothing
 // until it is named here rather than inheriting a view it was never granted.
 
@@ -57,7 +58,48 @@ export async function canViewPersonCard(viewer: CardViewer, personId: string): P
     },
     select: { id: true },
   });
-  return !!sharedConversation;
+  if (sharedConversation) return true;
+
+  // A pending request puts two names on one screen *before* either of the
+  // relationships above exists: the project owner reading "X wants to join",
+  // and the mentor reading "Y applied to you". Deciding on a person you cannot
+  // look up is exactly the moment the card is most useful, so both sides of an
+  // open request may see each other — and no further, since the row disappears
+  // once it is decided (approval creates the membership/relation that then
+  // carries the permission on its own).
+  const joinRequest = await prisma.projectJoinRequest.findFirst({
+    where: {
+      status: 'PENDING',
+      OR: [
+        { userId: personId, project: projectLedBy(viewer.id) },
+        { userId: viewer.id, project: projectLedBy(personId) },
+      ],
+    },
+    select: { id: true },
+  });
+  if (joinRequest) return true;
+
+  const application = await prisma.mentorshipRequest.findFirst({
+    where: {
+      status: 'PENDING',
+      OR: [
+        { menteeId: personId, preferredMentorId: viewer.id },
+        { menteeId: viewer.id, preferredMentorId: personId },
+      ],
+    },
+    select: { id: true },
+  });
+  return !!application;
+}
+
+/** Who may decide a project's join requests — the isProjectOwner rule as a where-filter. */
+function projectLedBy(userId: string) {
+  return {
+    OR: [
+      { ownerUserId: userId },
+      { members: { some: { userId, role: 'OWNER' as const } } },
+    ],
+  };
 }
 
 export interface PersonCard {
@@ -73,6 +115,11 @@ export interface PersonCard {
   pipelineStatus: string | null;
   mentorName: string | null;
   companyName: string | null;
+  /**
+   * The active mentorship, but only when the *viewer* is its mentor: it is what
+   * keys /mentor/mentees/<relationId>, the mentor-side profile page.
+   */
+  relationId: string | null;
   /** Only for viewers who can actually email them — see loadPersonCard. */
   email: string | null;
 }
@@ -101,6 +148,7 @@ export async function loadPersonCard(viewer: CardViewer, personId: string): Prom
         orderBy: { startDate: 'desc' },
         take: 1,
         select: {
+          id: true,
           pipelineStatus: true,
           mentorId: true,
           mentor: { select: { fullName: true } },
@@ -126,6 +174,7 @@ export async function loadPersonCard(viewer: CardViewer, personId: string): Prom
     pipelineStatus: active?.pipelineStatus ?? null,
     mentorName: active?.mentor?.fullName ?? null,
     companyName: active?.company?.name ?? null,
+    relationId: active && active.mentorId === viewer.id ? active.id : null,
     email: mayEmail ? person.email : null,
   };
 }

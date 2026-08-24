@@ -65,7 +65,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           menteeRelations: {
             orderBy: { startDate: 'desc' },
             include: {
-              mentor: { select: { fullName: true, email: true } },
+              mentor: { select: { id: true, fullName: true, email: true } },
               company: { select: { name: true, industry: true } },
               project: { select: { id: true, name: true } },
               cohort: { select: { id: true, name: true } },

@@ -11,6 +11,7 @@ import { ApplyLinkBox } from '@/components/ApplyLinkBox';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface MentorshipRelation {
   id: string;
@@ -82,7 +83,9 @@ export default function MenteesPage() {
             <Card key={rel.id}>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="font-semibold text-gray-900 text-lg">{rel.mentee.fullName}</h3>
+                  <h3 className="font-semibold text-gray-900 text-lg">
+                    <PersonHoverCard personId={rel.mentee.id} name={rel.mentee.fullName} role="MENTEE" />
+                  </h3>
                   <p className="text-sm text-gray-500">{rel.mentee.email}</p>
                 </div>
                 <StatusBadge status={rel.status} />

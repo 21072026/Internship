@@ -21,6 +21,7 @@ import { loadMenteeProjects } from '@/lib/menteeProjects';
 import { missingRequirementsForUser } from '@/lib/documentRequirements';
 import type { Locale } from '@/i18n/config';
 import { FileWarning } from 'lucide-react';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
 // deep links and the back button work and the phone page stays short:
@@ -189,7 +190,9 @@ export default async function PortalDashboard() {
               <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2">
                 {t.portal.yourMentor}
               </p>
-              <p className="font-semibold text-gray-900">{activeRelation.mentor.fullName}</p>
+              <p className="font-semibold text-gray-900">
+                <PersonHoverCard personId={activeRelation.mentor.id} name={activeRelation.mentor.fullName} role="MENTOR" />
+              </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link href={`/messages/${activeRelation.id}`} className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
                   <MessageCircle className="h-4 w-4" />
