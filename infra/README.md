@@ -367,6 +367,20 @@ A dump is rejected (and the deploy stops) if it is under `MIN_BYTES`, is not a
 valid gzip stream, or contains no `CREATE TABLE`. A backup that looks fine but
 restores nothing is worse than no backup at all.
 
+### Is it still running? (#1183)
+
+`infra/backup-db.sh` validates the dump it writes; nothing validated that it is
+still *running*. `.github/workflows/backup-verify.yml` does, **daily at 06:20
+UTC** on the self-hosted runner, via `infra/check-backups.sh`: is there a dump,
+is it fresher than `MAX_AGE_HOURS`, is it a well-formed non-trivial gzip, and
+does the set still cover `MIN_HISTORY_DAYS` distinct days. A failure emails
+`ALERT_EMAIL_TO` from a GitHub-hosted job — an alert that needs the failing
+server to be healthy may never send.
+
+```bash
+./infra/check-backups.sh --env prod --env preview
+```
+
 ### Restoring
 
 See [`docs/disaster-recovery.md`](../docs/disaster-recovery.md) for the full
@@ -375,6 +389,11 @@ runbook. The short version:
 ```bash
 gzip -dc /var/backups/internship-crm/prod-<stamp>.sql.gz | mysql -h <host> -u <user> -p <db>
 ```
+
+The rehearsal is scripted: `infra/restore-drill.sh` restores the newest dump
+into a throwaway database, verifies the row counts that matter, prints the
+measured RPO/RTO and drops the copy. It runs monthly (1st) from the same
+workflow, or on demand via *Run workflow* → *Also run the restore drill*.
 
 ### Overrides (use knowingly)
 

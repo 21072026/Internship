@@ -1,0 +1,120 @@
+name: Backup verification & restore drill
+
+# The other half of #1181's backup automation (#1183, epic #1179).
+#
+# infra/backup-db.sh validates the dump it writes. Nothing validated that it is
+# still RUNNING — and the way a backup dies is quiet: a cron entry lost in a
+# server rebuild, a deploy hook failing before the backup step, a full disk.
+# You find out on the day you need it.
+#
+# TWO CADENCES, on purpose:
+#   · freshness check — DAILY. The issue asked for monthly; monthly means up to
+#     30 days of believing you have backups when you do not, and the check costs
+#     seconds. Daily is the cadence the failure mode deserves.
+#   · restore drill — MONTHLY. It creates a scratch copy of real data and takes
+#     minutes, so it runs on the 1st and is otherwise on-demand.
+#
+# Both run on the SELF-HOSTED runner because the dumps only exist on that box.
+# The alert job runs GitHub-hosted: an alert that needs the failing server to be
+# healthy is an alert that may never send.
+
+on:
+  schedule:
+    - cron: '20 6 * * *'   # daily 06:20 UTC — after the 03:15 backup cron
+  workflow_dispatch:
+    inputs:
+      drill:
+        description: 'Also run the restore drill (restores into a scratch DB)'
+        type: boolean
+        default: false
+      env_name:
+        description: 'Environment to drill (prod or preview)'
+        type: choice
+        options: [preview, prod]
+        default: preview
+
+concurrency:
+  group: backup-verify
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Check backup freshness
+    runs-on: self-hosted
+    timeout-minutes: 20
+    outputs:
+      report: ${{ steps.check.outputs.report }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Backup freshness & integrity
+        id: check
+        run: |
+          set -o pipefail
+          chmod +x infra/check-backups.sh
+          # Tee so the same text reaches the log, the job summary (inside the
+          # script) and the alert email — one report, not three descriptions.
+          if ./infra/check-backups.sh --env prod --env preview 2>&1 | tee /tmp/backup-check.txt; then
+            status=ok
+          else
+            status=fail
+          fi
+          {
+            echo 'report<<EOF'
+            cat /tmp/backup-check.txt
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+          [ "$status" = ok ]
+
+      # Only on the 1st of the month, or when asked for by hand. The drill
+      # restores REAL data into a throwaway database and drops it afterwards;
+      # infra/restore-drill.sh refuses any target that isn't clearly scratch.
+      - name: Restore drill
+        env:
+          # The drill needs the server address and credentials only — it never
+          # reads from or writes to the database named here.
+          DRILL_ENV: ${{ github.event.inputs.env_name || 'preview' }}
+          FORCE_DRILL: ${{ github.event.inputs.drill }}
+        run: |
+          # Actions expressions have no date function, so the monthly cadence is
+          # decided here: the 1st of the month, or whenever asked for by hand.
+          if [ "$FORCE_DRILL" != "true" ] && [ "$(date -u +%d)" != "01" ]; then
+            echo "Not the 1st and not requested — skipping the drill."
+            exit 0
+          fi
+          set -a; . /etc/internship-crm/preview.env; set +a
+          chmod +x infra/restore-drill.sh
+          ./infra/restore-drill.sh --env "$DRILL_ENV" --target internship_restore_test
+
+  notify:
+    name: Email alert on failure
+    needs: [verify]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Send alert email
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          ALERT_SUBJECT: '🛟 Internship CRM — BACKUP CHECK FAILED'
+          ALERT_BODY: |
+            The daily backup verification failed. Until this is fixed, assume there is NO usable backup.
+
+            ${{ needs.verify.outputs.report }}
+
+            What to do: docs/disaster-recovery.md → "When the check fails".
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/send-alert-email.mjs
