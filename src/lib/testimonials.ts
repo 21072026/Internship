@@ -95,6 +95,76 @@ export function formatTestimonialName(fullName: string, style: string | null | u
     .join(' ');
 }
 
+// Public-profile evaluation summary (#1094): the mentor→mentee criteria
+// averaged over PUBLISHED evaluations about this mentee, plus the latest
+// approved excerpt with the mentor's display name. Returns null unless every
+// gate holds — the caller renders nothing at all in that case (no empty box,
+// no zero-star row). Gates: mentee consent, evaluation published+shared,
+// authored by the relation's mentor, that mentor's consent active.
+const MENTOR_CRITERIA_ON_MENTEE = ['technical', 'communication', 'reliability', 'growth'] as const;
+
+export async function getPublicEvaluationSummary(menteeId: string) {
+  const menteeConsent = await prisma.userConsent.findUnique({
+    where: { userId_type: { userId: menteeId, type: 'TESTIMONIAL' } },
+    select: { grantedAt: true, revokedAt: true },
+  });
+  if (!menteeConsent?.grantedAt || menteeConsent.revokedAt) return null;
+
+  const rows = await prisma.evaluation.findMany({
+    where: {
+      sharedPublicly: true,
+      publishedAt: { not: null },
+      relation: {
+        menteeId,
+        mentor: ACTIVE_TESTIMONIAL_CONSENT,
+      },
+    },
+    orderBy: { publishedAt: 'desc' },
+    select: {
+      id: true,
+      scores: true,
+      publicExcerpt: true,
+      excerptApprovedAt: true,
+      authorId: true,
+      relation: {
+        select: {
+          mentorId: true,
+          mentor: { select: { fullName: true, testimonialNameStyle: true } },
+        },
+      },
+    },
+  });
+  // Only the mentor's own evaluations of this mentee count here — the
+  // mentee→mentor direction belongs to the mentor's screen (#1105), and an
+  // admin-authored row has no mentor signature to show.
+  const published = rows.filter((e) => e.authorId === e.relation.mentorId);
+  if (published.length === 0) return null;
+
+  // Average of the four mentor→mentee criteria across published evaluations.
+  // The raw scores JSON never leaves the server — only this derived number.
+  let sum = 0;
+  let n = 0;
+  for (const e of published) {
+    const scores = (e.scores ?? {}) as Record<string, unknown>;
+    for (const criterion of MENTOR_CRITERIA_ON_MENTEE) {
+      const v = scores[criterion];
+      if (typeof v === 'number' && v >= 1 && v <= 5) {
+        sum += v;
+        n += 1;
+      }
+    }
+  }
+  const withExcerpt = published.find((e) => e.publicExcerpt?.trim() && e.excerptApprovedAt);
+  return {
+    average: n > 0 ? Math.round((sum / n) * 10) / 10 : null,
+    count: published.length,
+    excerpt: withExcerpt?.publicExcerpt ?? null,
+    mentorName: withExcerpt
+      ? formatTestimonialName(withExcerpt.relation.mentor.fullName, withExcerpt.relation.mentor.testimonialNameStyle)
+      : null,
+  };
+}
+
 // Revoking the TESTIMONIAL consent unpublishes everything the user is author
 // OR subject of, in the same request (#1096) — a revoked consent must never
 // leave a story live until some scheduled cleanup.
