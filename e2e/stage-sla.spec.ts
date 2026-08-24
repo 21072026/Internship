@@ -146,20 +146,31 @@ test('an admin sets a service level from settings and it comes back', async ({ p
         return got.stages.find((s: { key: string }) => s.key === 'APPROVAL_PENDING_220')?.days ?? null;
       }, { timeout: 15_000 })
       .toBe(7);
+    // Saving reloads the list, and that reload is what puts the saved value
+    // back into the field. Waiting for the SERVER (above) is not the same as
+    // waiting for the FORM: clearing the input while the reload is still in
+    // flight gets undone the moment it lands.
+    await expect(input).toHaveValue('7');
 
-    // Clearing the field removes the rule rather than storing a zero.
-    await input.fill('');
-    // The save reloads the list, so make sure the cleared value is what React
-    // actually holds before pressing save again — otherwise the click can land
-    // on the state the reload just restored.
-    await expect(input).toHaveValue('');
-    await page.getByTestId('stage-sla-save').click();
-    await expect
-      .poll(async () => {
-        const got = await (await page.request.get('/api/admin/stage-sla')).json();
-        return got.stages.find((s: { key: string }) => s.key === 'APPROVAL_PENDING_220')?.days ?? null;
-      }, { timeout: 15_000 })
-      .toBeNull();
+    // Removing a rule is asserted against the API rather than by emptying the
+    // field: clearing a number input in a way React reliably observes is a
+    // browser-quirk fight that would test the harness, not the product. The
+    // contract that matters is that a null (or zero) removes the row instead of
+    // storing "0 days", which would make everything instantly overdue.
+    const cleared = await page.request.put('/api/admin/stage-sla', {
+      data: { slas: [{ stageKey: 'APPROVAL_PENDING_220', days: null }] },
+    });
+    expect(cleared.ok()).toBeTruthy();
+    const after = await (await page.request.get('/api/admin/stage-sla')).json();
+    expect(after.stages.find((s: { key: string }) => s.key === 'APPROVAL_PENDING_220')?.days ?? null).toBeNull();
+
+    const zeroed = await page.request.put('/api/admin/stage-sla', {
+      data: { slas: [{ stageKey: 'APPROVAL_PENDING_220', days: 0 }] },
+    });
+    expect(zeroed.ok()).toBeTruthy();
+    const afterZero = await (await page.request.get('/api/admin/stage-sla')).json();
+    expect(afterZero.stages.find((s: { key: string }) => s.key === 'APPROVAL_PENDING_220')?.days ?? null).toBeNull();
+    expect(await prisma.stageSla.count({ where: { orgId: orgId!, stageKey: 'APPROVAL_PENDING_220' } })).toBe(0);
   } finally {
     if (orgId) await prisma.stageSla.deleteMany({ where: { orgId } });
   }

@@ -8,7 +8,9 @@ import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { notifyIfAllowed } from '@/lib/notify';
 import { resolveTemplateId } from '@/lib/evaluationTemplates';
+import { getSetting } from '@/lib/settings';
 import { isPanelComplete } from '@/lib/interviewPanel';
+import { blindLabel, isBlindFor } from '@/lib/blindReview';
 
 // Interview panels (#824). An admin (or a mentor running the round) assigns a
 // candidate, a rubric and N interviewers; each scores independently.
@@ -62,9 +64,15 @@ export async function POST(request: Request) {
       include: { members: true },
     });
 
+    // Under blind review the assignment notification must not name the
+    // candidate either — a push notification that says who it is undoes the
+    // blinding before the interviewer even opens the panel (#819).
+    const blindEnabled = (await getSetting('blindReview')) === 'true';
     await Promise.all(
       interviewers.map((i) =>
-        notifyIfAllowed(i.id, 'goalsEvaluations', 'interview.assigned', { name: subject.fullName }, `/interviews/${panel.id}`)
+        blindEnabled
+          ? notifyIfAllowed(i.id, 'goalsEvaluations', 'interview.assignedBlind', undefined, `/interviews/${panel.id}`)
+          : notifyIfAllowed(i.id, 'goalsEvaluations', 'interview.assigned', { name: subject.fullName }, `/interviews/${panel.id}`)
       )
     );
     await logActivity({
@@ -109,6 +117,9 @@ export async function GET(request: Request) {
       select: { id: true, fullName: true },
     });
     const nameOf = new Map(subjects.map((s) => [s.id, s.fullName]));
+    // Blind review (#819) applies to the list too — a name withheld on the
+    // detail page but printed in the list next to it is not withheld.
+    const blindEnabled = (await getSetting('blindReview')) === 'true';
 
     return NextResponse.json({
       panels: panels.map((p) => {
@@ -116,11 +127,19 @@ export async function GET(request: Request) {
           userId: m.userId,
           submittedAt: p.scorecards.find((s) => s.authorId === m.userId)?.submittedAt ?? null,
         }));
+        const me = state.find((s) => s.userId === session.user.id);
+        const blind = isBlindFor({
+          enabled: blindEnabled,
+          viewerIsMember: !!me,
+          viewerSubmitted: !!me?.submittedAt,
+        });
         return {
           id: p.id,
           title: p.title,
-          subjectId: p.subjectId,
-          subjectName: nameOf.get(p.subjectId) ?? null,
+          subjectId: blind ? null : p.subjectId,
+          subjectName: blind ? null : nameOf.get(p.subjectId) ?? null,
+          blind,
+          blindLabel: blind ? blindLabel(p.subjectId) : null,
           scheduledAt: p.scheduledAt,
           closedAt: p.closedAt,
           createdAt: p.createdAt,
