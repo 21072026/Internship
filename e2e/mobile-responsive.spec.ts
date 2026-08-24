@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, acceptContributorTerms } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
 
 /**
@@ -78,6 +78,10 @@ test('phone width: the project page and project list stay inside the viewport', 
       },
     },
   });
+
+  // Opening a project is behind its contributor-terms gate (#1026); the owner
+  // running it has accepted them.
+  await acceptContributorTerms(mentor.id, { projectId: project.id });
 
   const ctx = await browser.newContext({ viewport: PHONE });
   try {

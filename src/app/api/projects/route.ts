@@ -85,6 +85,9 @@ const schema = z.object({
   goals: z.string().max(5000).optional().nullable(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
+  // Which contributor terms this project's members accept (#1026).
+  contributorTermsKey: z.string().max(60).optional().nullable().or(z.literal('')),
+  contributorTermsRequired: z.boolean().optional(),
   ownerType: z.enum(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY']).optional(),
   ownerUserId: z.string().optional().nullable(),
   ownerCompanyId: z.string().optional().nullable(),
@@ -128,6 +131,8 @@ export async function POST(request: Request) {
       goals: d.goals || null,
       startDate: d.startDate ? new Date(d.startDate) : null,
       endDate: d.endDate ? new Date(d.endDate) : null,
+      contributorTermsKey: d.contributorTermsKey || null,
+      ...(d.contributorTermsRequired !== undefined ? { contributorTermsRequired: d.contributorTermsRequired } : {}),
       ...owner,
     },
     include,

@@ -1242,6 +1242,15 @@ model Project {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
+  // Which contributor terms this project's members accept, and whether it asks
+  // at all (#1026). A key rather than a foreign key: the terms are versioned
+  // rows, and a project follows the *document*, not one frozen version of it —
+  // pointing at a row would pin the project to wording that has been superseded.
+  // null → the platform default. `contributorTermsRequired = false` is for a
+  // project that genuinely has no IP question (a reading group, a demo).
+  contributorTermsKey      String?
+  contributorTermsRequired Boolean @default(true)
+
   ownerUser     User?                 @relation("ProjectOwner", fields: [ownerUserId], references: [id])
   ownerCompany  Company?              @relation("CompanyProjects", fields: [ownerCompanyId], references: [id])
   relations     MentorshipRelation[]

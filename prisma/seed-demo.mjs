@@ -227,6 +227,44 @@ async function main() {
   }
   console.log('backfilled default org onto demo rows');
 
+  // Contributor terms (#1025, #1026). The demo set portrays projects that have
+  // been running for a while, and someone who has been on a project for months
+  // has long since accepted its terms — so the realistic demo state is accepted,
+  // not a legal wall on the first click. Idempotent: only ever adds what is
+  // missing, and does nothing at all when no terms are configured.
+  const demoTerms = await prisma.contributorTerms.findFirst({
+    where: { key: 'default' },
+    orderBy: [{ effectiveFrom: 'desc' }, { version: 'desc' }],
+    select: { version: true },
+  });
+  if (demoTerms) {
+    const demoUsers = await prisma.user.findMany({
+      where: { email: { endsWith: `@${DEMO_DOMAIN}` } },
+      select: { id: true },
+    });
+    const demoMembers = await prisma.projectMember.findMany({
+      where: { userId: { in: demoUsers.map((u) => u.id) } },
+      select: { userId: true, projectId: true },
+    });
+    const wanted = [
+      ...demoUsers.map((u) => ({ userId: u.id, projectId: null })),
+      ...demoMembers.map((m) => ({ userId: m.userId, projectId: m.projectId })),
+    ];
+    let accepted = 0;
+    for (const w of wanted) {
+      const exists = await prisma.contributorTermsAcceptance.findFirst({
+        where: { userId: w.userId, termsKey: 'default', version: demoTerms.version, projectId: w.projectId },
+        select: { id: true },
+      });
+      if (exists) continue;
+      await prisma.contributorTermsAcceptance.create({
+        data: { userId: w.userId, termsKey: 'default', version: demoTerms.version, projectId: w.projectId },
+      });
+      accepted++;
+    }
+    console.log(`recorded ${accepted} demo contributor-terms acceptances`);
+  }
+
   console.log(`\nDemo seed complete. All demo accounts share the password: ${PASSWORD}`);
   console.log(`Demo accounts use the @${DEMO_DOMAIN} domain — no real PII involved.`);
 }

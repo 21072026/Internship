@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { acceptTerms, acceptanceHistory, getActiveTerms, hasAcceptedContributorTerms } from '@/lib/contributorTerms';
+import { DEFAULT_TERMS_KEY, acceptTerms, acceptanceHistory, getActiveTerms, hasAcceptedContributorTerms } from '@/lib/contributorTerms';
+import { prisma } from '@/lib/prisma';
+import { isProjectMember } from '@/lib/projectTeam';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 
@@ -43,7 +45,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const active = await getActiveTerms(parsed.data.key);
+  // A project-scoped acceptance has to be about a project this person is
+  // actually on, under the terms that project actually names (#1026). Without
+  // this an acceptance row could be minted for any projectId and any key —
+  // evidence that says nothing, which is worse than no evidence.
+  let key = parsed.data.key;
+  if (parsed.data.projectId) {
+    const project = await prisma.project.findUnique({
+      where: { id: parsed.data.projectId },
+      select: { contributorTermsKey: true, contributorTermsRequired: true },
+    });
+    if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!project.contributorTermsRequired) {
+      return NextResponse.json({ error: 'This project does not require contributor terms' }, { status: 409 });
+    }
+    if (session.user.role !== 'ADMIN' && !(await isProjectMember(parsed.data.projectId, session.user.id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    key = project.contributorTermsKey ?? DEFAULT_TERMS_KEY;
+  }
+
+  const active = await getActiveTerms(key);
   if (!active) return NextResponse.json({ error: 'No contributor terms are configured' }, { status: 409 });
   if (active.version !== parsed.data.version) {
     // Not an error the user caused — tell the client to re-render the new text.
@@ -54,7 +76,7 @@ export async function POST(request: Request) {
   }
 
   const acceptance = await acceptTerms(session.user.id, {
-    termsKey: parsed.data.key,
+    termsKey: key,
     projectId: parsed.data.projectId ?? null,
     request,
   });
