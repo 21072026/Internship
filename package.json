@@ -55,6 +55,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/mailparser": "^3.4.6",
