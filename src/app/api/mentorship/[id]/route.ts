@@ -56,7 +56,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
               whatsapp: true,
               city: true,
               birthDate: true,
+              // The merged referrer (#1296): the person or the source who
+              // brought this mentee in, plus the legacy free text for records
+              // typed before the merge.
               referralSource: true,
+              referredBy: { select: { fullName: true } },
+              source: { select: { name: true } },
               cvUrl: true,
             },
           },

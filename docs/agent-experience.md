@@ -3983,3 +3983,41 @@ Prod'a hiç dokunmadan hem tanı hem kanıt.
 tetikleyen değişiklik" aynı push'ta gelirse ilk deploy yine patlar (kolon henüz yokken
 pre-push repair işe yaramaz). Nullable-first ya da expand-script (#1227 deseni)
 konvansiyonu / schema-guard tespiti #1288'de tartışılıyor.
+
+## 2026-08-24 — "Getiren kişi" + "Kaynak" birleşmesi (#1296)
+
+**Aynı soruya iki kolon, iki kartta iki select:** `User.referredById` (#51 ile geldi)
+ile `User.sourceId` yıllardır aynı soruyu (bu kişiyi kim getirdi?) cevaplıyordu.
+Birleştirmenin ucuz yolu şema göçü değil, **tek mantıksal alan**: `src/lib/referrer.ts`
+encode/decode (`user:<id>` / `source:<id>`) + her yazımda diğer kolonu boşaltan API
+değişmezi. Rapor tarafı (`/admin/sources`, #539) `sourceId` üzerinden çalışmaya devam
+ediyor, yani veri kaybı yok.
+
+**Rol bazlı kolon anlamını kontrol et:** `/admin/users` her rolü — SOURCE ve COMPANY
+dahil — `/admin/candidates/[id]`'ye linkliyor. "Aday ekranı" sandığın form SOURCE
+hesabında da açılıyor ve orada `sourceId` "kim getirdi" değil "hangi kaynak adına
+konuşuyor" demek. Birleşik alan her seçimde iki kolonu birlikte yazdığı için bu bağı
+sessizce koparıyordu; API'de hedefin rolüne bakıp merged yazımın `sourceId`'ye
+dokunmasını engellemek gerekti (tek anahtarlı `{ sourceId }` yazımı hâlâ serbest).
+
+**`<optgroup>` eklerken sırayı koruyun:** "grupsuz seçenekler önce, gruplar sonra"
+şeklindeki naif gruplama, listenin en sonunda durması gereken "+ Yeni kaynak ekle"
+seçeneğini grupların üstüne taşıdı. Doğrusu verilen sırada *chunk*'lamak: ardışık aynı
+`group` değerleri bir `<optgroup>`, grupsuzlar kaldığı yerde (`Select.chunkOptions`).
+
+**Şüpheli e2e hatasını HEAD~1'e karşı doğrula.** Bu container'da smoke setinin 2 testi
+(`pipeline.spec`, `smoke.spec` "admin pages load") değişiklikten bağımsız kırmızı —
+dev sunucusunun `CLIENT_FETCH_ERROR`'u ve eksik seed/stage yapılandırması. Dokunduğum
+sayfaya ait görünen `pipeline.spec` hatasını `git checkout HEAD~1 -- <dosyalar>` ile
+1 dakikada eledim; regresyon sanıp değişikliği geri almaktan iyidir. Ayrıca
+`admin@example.com` kullanan spec'ler için `npx prisma db seed` şart.
+
+**Playwright: sabitlenmiş headless-shell yok, symlink de çözmüyor** (CLAUDE.md'nin
+önerisi bu build'de çalışmıyor, dizin yapısı farklı — playbook'taki `executablePath`
+notu geçerli). Repo config'ini bozmadan koşmanın yolu scratchpad'de bir override
+config: `import base from '/home/user/Internship/playwright.config'` + `testDir`,
+`globalSetup` mutlak yol, `webServer: { ...base.webServer, cwd: '<repo>' }`,
+`use.launchOptions.executablePath: '/opt/pw-browsers/chromium'`. İki tuzak: spec
+dosyaları `e2e/` içinde durmalı (scratchpad'den `./helpers/db` çözülmüyor) ve
+`DATABASE_URL`/`NEXTAUTH_*` env'e elle verilmeli (cwd repo olmadığı için `.env`
+okunmuyor).
