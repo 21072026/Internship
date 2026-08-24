@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { CheckCircle2, Circle, Lock, TriangleAlert } from 'lucide-react';
+import { CheckCircle2, Circle, Lock, TriangleAlert, UserRoundX } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { useCriterionLabel } from '@/lib/evaluationCriteriaClient';
@@ -27,6 +27,10 @@ interface PanelData {
     id: string;
     title: string | null;
     subjectName: string | null;
+    // Blind review (#819): the identity is withheld server-side until this
+    // viewer has submitted their own scorecard.
+    blind: boolean;
+    blindLabel: string | null;
     scheduledAt: string | null;
     closedAt: string | null;
     complete: boolean;
@@ -105,9 +109,25 @@ export function InterviewPanelView({ panelId }: { panelId: string }) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {panel.title || t.interviewPanel.title} · {panel.subjectName}
+          {panel.title || t.interviewPanel.title} ·{' '}
+          {panel.blind ? (
+            <span data-testid="blind-subject">
+              {t.interviewPanel.blindLabelPrefix} #{panel.blindLabel}
+            </span>
+          ) : (
+            panel.subjectName
+          )}
         </h1>
         {panel.scheduledAt && <p className="text-gray-500 mt-1">{formatDateTime(panel.scheduledAt, locale)}</p>}
+        {panel.blind && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2.5">
+            <UserRoundX className="h-4 w-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" aria-hidden />
+            <div>
+              <p className="text-xs font-semibold text-indigo-800 dark:text-indigo-200">{t.interviewPanel.blindTitle}</p>
+              <p className="text-sm text-indigo-900 dark:text-indigo-100 mt-0.5">{t.interviewPanel.blindHintCandidate}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <Card>

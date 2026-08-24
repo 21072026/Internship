@@ -17,6 +17,8 @@ interface PanelRow {
   id: string;
   title: string | null;
   subjectName: string | null;
+  blind: boolean;
+  blindLabel: string | null;
   scheduledAt: string | null;
   closedAt: string | null;
   createdAt: string;
@@ -162,7 +164,8 @@ export default function InterviewsPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <Link href={`/interviews/${p.id}`} className="text-sm font-medium text-blue-600 hover:underline truncate block">
-                        {p.title || t.interviewPanel.title} · {p.subjectName}
+                        {p.title || t.interviewPanel.title} ·{' '}
+                        {p.blind ? `${t.interviewPanel.blindLabelPrefix} #${p.blindLabel}` : p.subjectName}
                       </Link>
                       <p className="text-xs text-gray-400">
                         {formatDate(p.createdAt, locale)} ·{' '}

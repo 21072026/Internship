@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { criteriaByTemplate, resolveCriteria } from '@/lib/evaluationTemplates';
 import { canSeeOtherScorecards, divergence, isPanelComplete, panelAverage } from '@/lib/interviewPanel';
+import { blindLabel, isBlindFor } from '@/lib/blindReview';
+import { getSetting } from '@/lib/settings';
 
 // Panel detail — and the place blind scoring is actually enforced (#824).
 //
@@ -56,6 +58,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const own = panel.scorecards.find((s) => s.authorId === session.user.id) ?? null;
     const submitted = panel.scorecards.filter((s) => s.submittedAt);
 
+    // Blind review (#819): while an interviewer has not committed their own
+    // scores, the candidate's identity is withheld — from the RESPONSE, not
+    // just from the screen. A name that reaches the browser has already done
+    // its anchoring work, whatever the UI chooses to paint.
+    const blind = isBlindFor({
+      enabled: (await getSetting('blindReview')) === 'true',
+      viewerIsMember: isMember,
+      viewerSubmitted: !!own?.submittedAt,
+    });
+
     // Who has submitted is NOT a score, and the panel cannot function without
     // it — that is how everyone knows when the collection is done.
     const roster = state.map((s) => ({
@@ -69,8 +81,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       panel: {
         id: panel.id,
         title: panel.title,
-        subjectId: panel.subjectId,
-        subjectName: nameOf.get(panel.subjectId) ?? null,
+        // The id is withheld too: it addresses /p/<id> and the candidate page,
+        // so leaving it behind would make the blinding one click deep.
+        subjectId: blind ? null : panel.subjectId,
+        subjectName: blind ? null : nameOf.get(panel.subjectId) ?? null,
+        blind,
+        blindLabel: blind ? blindLabel(panel.subjectId) : null,
         scheduledAt: panel.scheduledAt,
         closedAt: panel.closedAt,
         complete,
