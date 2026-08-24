@@ -438,6 +438,40 @@ into a throwaway database, verifies the row counts that matter, prints the
 measured RPO/RTO and drops the copy. It runs monthly (1st) from the same
 workflow, or on demand via *Run workflow* → *Also run the restore drill*.
 
+### Rolling back (#961)
+
+The swap is blue/green: the new image runs first as `<container>-canary` on
+`PORT+100`, and only when it answers `/api/health?db=1` with `status: ok`, a
+reachable database and the sha that was just built does the live container get
+touched. A bad image therefore fails the deploy without taking the environment
+down — which is what happened on 2026-07-28, when all three environments served
+503 because the old container was removed before the new one was proven.
+
+The image that was replaced is tagged `<container>:previous` and is deliberately
+kept out of the prune, so putting the last release back is a `docker run`, not a
+rebuild:
+
+```bash
+CONTAINER=internship-crm ./infra/deploy-prod.sh --rollback
+```
+
+That path runs **before** the git sync, the image pull and the schema push: when
+a deploy has just gone wrong, the way back must not depend on the machinery that
+broke. It health-checks what it started (without asserting a sha — a rollback
+wants whatever the old image serves) and records the served commit in the state
+file so the next deploy's forward-only guard compares against reality.
+
+Two consequences worth knowing:
+
+- **No `docker image prune -af` anywhere any more.** `-a` removes every image no
+  container is using, which includes `:previous`. `deploy-prod.sh`,
+  `topic-deploy.sh` and `topic-teardown.sh` now prune dangling layers and remove
+  app images by name instead. (The legacy `deploy.yml` still has a blanket
+  prune; it is superseded and not on any trigger, but if it is ever revived it
+  will eat the rollback targets.)
+- **A fresh environment has no rollback target** until its first deploy under
+  this scheme replaces something. `--rollback` says so rather than guessing.
+
 ### Overrides (use knowingly)
 
 | Variable | Effect |

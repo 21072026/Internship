@@ -354,7 +354,15 @@ sleep 2
 rcode=$(curl -s -k -o /dev/null -w '%{http_code}' -H "Host: ${FQDN}" "https://127.0.0.1/api/health" 2>/dev/null || echo "ERR")
 echo "==> Route check (Host: ${FQDN}) -> ${rcode}"
 
-# Reclaim space from older images.
-docker image prune -af >/dev/null 2>&1 || true
+# Reclaim space from older images — but never the rollback targets. `-af`
+# removes every image no container is using, and prod/preview keep their
+# previous release as a stopped-but-tagged image (`internship-crm:previous`,
+# #961). A topic deploy pruning that away would silently delete production's way
+# back. Dangling layers only, plus topic images nothing is running.
+docker image prune -f >/dev/null 2>&1 || true
+docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null \
+  | grep -E '^ghcr\.io/[^:]+:topic-pr[0-9]+$' \
+  | grep -vx "$IMAGE" \
+  | xargs -r docker rmi >/dev/null 2>&1 || true
 
 echo "==> Topic '${TOPIC}' is live at ${URL}"
