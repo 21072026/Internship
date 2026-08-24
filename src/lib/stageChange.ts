@@ -13,6 +13,10 @@
 import { resolvePipelineStages } from './pipelineStages';
 import { isDropoffReasonCode } from './dropoffReasons';
 
+export function isStageTransition(fromStatus: string, toStatus: string): boolean {
+  return fromStatus !== toStatus;
+}
+
 export async function isNegativeStage(orgId: string | null | undefined, stageKey: string): Promise<boolean> {
   const stages = await resolvePipelineStages(orgId);
   return stages.find((s) => s.key === stageKey)?.isOffPath ?? false;

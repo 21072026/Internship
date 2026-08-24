@@ -8,7 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 import { withTenantScope } from '@/lib/orgContext';
 import { isPendingActivation } from '@/lib/menteeAccount';
-import { validateDropoffReason } from '@/lib/stageChange';
+import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
 
 const updateRelationSchema = z.object({
   status: z.enum(['ACTIVE', 'COMPLETED']).optional(),
@@ -103,6 +103,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({
         relation: {
           ...relation,
+          statusChanges: relation.statusChanges.filter((change) =>
+            isStageTransition(change.fromStatus, change.toStatus)
+          ),
           mentee: { ...mentee, pendingActivation: isPendingActivation({ password: menteePassword }) },
           companyInterest,
         },
@@ -149,15 +152,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         );
       }
 
-      const { stageDeadline, reasonCode, reasonNote, ...rest } = parsed.data;
-      const stageChanging = !!parsed.data.pipelineStatus && parsed.data.pipelineStatus !== relation.pipelineStatus;
+      const { stageDeadline, reasonCode, reasonNote, pipelineStatus, ...rest } = parsed.data;
+      const stageChanging = !!pipelineStatus && isStageTransition(relation.pipelineStatus, pipelineStatus);
 
       // Validate the drop-off reason BEFORE writing anything — a rejected
       // reason must never leave the relation moved with no audit trail behind it.
       if (stageChanging) {
         const reasonCheck = await validateDropoffReason({
           orgId: relation.orgId,
-          toStatus: parsed.data.pipelineStatus!,
+          toStatus: pipelineStatus!,
           reasonCode,
           reasonNote,
         });
@@ -166,7 +169,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         }
       }
 
-      const data: Prisma.MentorshipRelationUncheckedUpdateInput = { ...rest };
+      const data: Prisma.MentorshipRelationUncheckedUpdateInput = {
+        ...rest,
+        ...(stageChanging ? { pipelineStatus } : {}),
+      };
       // Stamp/clear the end of the relation — it anchors the post-mentorship
       // CV/document access window (#854).
       if (parsed.data.status && parsed.data.status !== relation.status) {
@@ -176,6 +182,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;
         // A fresh deadline (or cleared) re-arms the overdue reminder.
         data.deadlineReminderSentAt = null;
+      }
+
+      // A stage-only request that selects the current value is a successful
+      // no-op. Avoid issuing an empty UPDATE while keeping existing clients'
+      // `res.ok` contract intact.
+      if (Object.keys(data).length === 0) {
+        return NextResponse.json({ relation, changed: false });
       }
 
       const updated = await prisma.mentorshipRelation.update({
@@ -194,7 +207,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           data: {
             relationId: id,
             fromStatus: relation.pipelineStatus,
-            toStatus: parsed.data.pipelineStatus!,
+            toStatus: pipelineStatus!,
             changedById: session.user.id,
             reasonCode: reasonCode ?? null,
             reasonNote: reasonNote?.trim() || null,
@@ -206,7 +219,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           actorEmail: session.user.email ?? null,
           targetType: 'relation',
           targetId: id,
-          detail: `${relation.pipelineStatus} → ${parsed.data.pipelineStatus}`,
+          detail: `${relation.pipelineStatus} → ${pipelineStatus}`,
         });
         // Notification + webhook via the shared effects service (#926) so every
         // stage-write path emits identically. `relation` still holds the
@@ -216,7 +229,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           menteeId: relation.menteeId,
           orgId: relation.orgId,
           from: relation.pipelineStatus,
-          to: parsed.data.pipelineStatus!,
+          to: pipelineStatus!,
           reasonCode,
           // The same request set a deadline by hand — don't overwrite it with
           // the stage's default (#817).

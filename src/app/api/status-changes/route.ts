@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
-import { validateDropoffReason } from '@/lib/stageChange';
+import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
 import { emitStageChange } from '@/lib/stageChangeEffects';
 
 // Stage key is a free string now (#747) so tenant-defined stages are accepted.
@@ -39,6 +39,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
     }
 
+    // The live row is authoritative for current-stage moves; a client-supplied
+    // `fromStatus` must not turn selecting the current stage into audit noise.
+    // Keep the explicit equality check too for backdated corrections, where
+    // the target may differ from today's live stage but from → to is still no-op.
+    if (toStatus === relation.pipelineStatus || !isStageTransition(fromStatus, toStatus)) {
+      return NextResponse.json({ change: null, changed: false });
+    }
+
     const reasonCheck = await validateDropoffReason({ orgId: relation.orgId, toStatus, reasonCode, reasonNote });
     if (!reasonCheck.ok) {
       return NextResponse.json({ error: reasonCheck.error }, { status: 400 });
@@ -57,7 +65,7 @@ export async function POST(request: Request) {
       prisma.statusChange.create({
         data: {
           relationId,
-          fromStatus,
+          fromStatus: isBackdated ? fromStatus : relation.pipelineStatus,
           toStatus,
           changedById: session.user.id,
           reasonCode: reasonCode ?? null,
@@ -81,6 +89,6 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ change }, { status: 201 });
+    return NextResponse.json({ change, changed: true }, { status: 201 });
   });
 }

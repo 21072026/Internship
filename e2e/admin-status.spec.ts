@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
@@ -49,5 +50,85 @@ test('admin can move a completed mentee back to an earlier stage; history is app
   } finally {
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(menteeEmail);
+  }
+});
+
+test('same-stage writes are no-ops and legacy no-op history stays hidden for custom stages', async ({ page }) => {
+  const adminEmail = uniqueEmail('noop-admin');
+  const mentorEmail = uniqueEmail('noop-mentor');
+  const menteeEmail = uniqueEmail('noop-mentee');
+  const password = 'NoopStage123!';
+  const admin = await seedUser(adminEmail, password, 'ADMIN', 'No-op Admin');
+  const mentor = await seedUser(mentorEmail, password, 'MENTOR', 'No-op Mentor');
+  const mentee = await seedUser(menteeEmail, password, 'MENTEE', 'No-op Mentee');
+  const relation = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: mentee.id, pipelineStatus: 'custom-review' },
+  });
+  await prisma.statusChange.createMany({
+    data: [
+      { relationId: relation.id, fromStatus: 'custom-review', toStatus: 'custom-review', changedById: admin.id },
+      { relationId: relation.id, fromStatus: 'custom-start', toStatus: 'custom-review', changedById: admin.id },
+    ],
+  });
+
+  try {
+    await signInAsFreshUser(page, adminEmail, password, '/admin');
+
+    const notificationCount = () => prisma.notification.count({ where: { userId: mentee.id } });
+    const beforeNotifications = await notificationCount();
+    const noOp = await page.request.post('/api/status-changes', {
+      data: { relationId: relation.id, fromStatus: 'client-stale-stage', toStatus: 'custom-review' },
+    });
+    expect(noOp.status()).toBe(200);
+    expect(await noOp.json()).toMatchObject({ change: null, changed: false });
+    expect(await prisma.statusChange.count({ where: { relationId: relation.id } })).toBe(2);
+    expect(await notificationCount()).toBe(beforeNotifications);
+
+    const changed = await page.request.post('/api/status-changes', {
+      data: { relationId: relation.id, fromStatus: 'client-stale-stage', toStatus: 'custom-interview' },
+    });
+    expect(changed.status()).toBe(201);
+    expect((await changed.json()).changed).toBe(true);
+    expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relation.id } })).pipelineStatus).toBe('custom-interview');
+    expect(await prisma.statusChange.findFirst({
+      where: { relationId: relation.id, fromStatus: 'custom-review', toStatus: 'custom-interview' },
+    })).toBeTruthy();
+
+    const beforePutChanges = await prisma.statusChange.count({ where: { relationId: relation.id } });
+    const beforePutNotifications = await notificationCount();
+    const noOpPut = await page.request.put(`/api/mentorship/${relation.id}`, {
+      data: { pipelineStatus: 'custom-interview' },
+    });
+    expect(noOpPut.status()).toBe(200);
+    expect((await noOpPut.json()).changed).toBe(false);
+    expect(await prisma.statusChange.count({ where: { relationId: relation.id } })).toBe(beforePutChanges);
+    expect(await notificationCount()).toBe(beforePutNotifications);
+
+    const changedPut = await page.request.put(`/api/mentorship/${relation.id}`, {
+      data: { pipelineStatus: 'custom-final' },
+    });
+    expect(changedPut.status()).toBe(200);
+    expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relation.id } })).pipelineStatus).toBe('custom-final');
+    expect(await prisma.statusChange.findFirst({
+      where: { relationId: relation.id, fromStatus: 'custom-interview', toStatus: 'custom-final' },
+    })).toBeTruthy();
+
+    const relationResponse = await page.request.get(`/api/mentorship/${relation.id}`);
+    expect(relationResponse.ok()).toBeTruthy();
+    const relationBody = await relationResponse.json();
+    expect(relationBody.relation.statusChanges).not.toContainEqual(expect.objectContaining({
+      fromStatus: 'custom-review',
+      toStatus: 'custom-review',
+    }));
+
+    await page.goto(`/admin/candidates/${mentee.id}`);
+    await expect(page.getByText('custom-start')).toBeVisible();
+    await expect(page.getByText('custom-interview').first()).toBeVisible();
+    await expect(page.getByText('custom-final').first()).toBeVisible();
+    await expect(page.locator('li').filter({ hasText: /custom-review\s*→\s*custom-review/ })).toHaveCount(0);
+  } finally {
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(adminEmail);
   }
 });
