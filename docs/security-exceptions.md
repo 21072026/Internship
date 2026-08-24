@@ -59,18 +59,31 @@ DOM'dan gelen bir `File` bir `src` niteliğine ulaşıyor — ama bu hedef onu
 - Duyuru seçicisi ayrıca dosyayı `ANNOUNCEMENT_IMAGE_MIME` + `contentMatchesType()`
   ile doğruluyor ve SVG zaten izin listesinde değil (#888/#990).
 
-**Karar: tek bir choke point** — `src/lib/objectUrl.ts` içindeki
-`objectUrlSrc()`, `blob:` ile başlamayan her değeri boş string'e çeviriyor ve
-üç çağrı yerinin de kullandığı tek yol o. Çalışma zamanında gereksiz; amacı,
-yukarıdaki muhakemenin dayandığı değişmezi üç ayrı yorum yerine **kodda tek
-yerde** tutmak. Yeni bir kompozit ekleyen kişi de aynı yoldan geçer, uyarı
-listesine bir satır daha eklemez.
+**Karar: 1 — üç uyarı "false positive" olarak kapatılır.**
 
-⚠️ Bu koruma yalnızca **CodeQL onu tanırsa** uyarıyı kapatır. Tanımıyorsa
-doğru hamle üç uyarıyı Security sekmesinden "false positive" olarak
-kapatmaktır — gerekçe zaten burada yazılı. Hangi yolun geçerli olduğu
-#1005'te kayıtlı; motor tanımadıysa bu bölüm "dismiss edildi" olarak
-güncellenmeli, koruma yine de kalabilir (zararsız ve niyeti belgeliyor).
+Önce seçenek 2 denendi (#1325): `objectUrlSrc()` adında tek bir yardımcı,
+`blob:` ile başlamayan her değeri boş string'e çeviriyor ve üç çağrı yeri de
+oradan geçiyordu. **Ölçüldü ve işe yaramadı** — CodeQL bu yardımcıyı sanitizer
+olarak tanımıyor; PR'da uyarılar aynı satırlarda yeniden tetiklendi
+(*"3 new alerts including 3 high severity security vulnerabilities"*). Kod
+değişikliği geri alındı: motorun tanımadığı bir koruma uyarıyı kapatmıyor,
+üstelik o satırlara dokunan **her** PR'da "3 yeni yüksek uyarı" üretiyor —
+insanları CodeQL'i görmezden gelmeye alıştıran türden bir gürültü.
+
+Kapatılacak uyarılar (Security → Code scanning):
+
+| # | Dosya | Kural |
+|---|---|---|
+| [19](https://github.com/21072026/Internship/security/code-scanning/19) | `src/app/admin/announcements/page.tsx` | `js/xss-through-dom` |
+| [20](https://github.com/21072026/Internship/security/code-scanning/20) | `src/components/MessageThread.tsx` | `js/xss-through-dom` |
+| [21](https://github.com/21072026/Internship/security/code-scanning/21) | `src/components/MessageThread.tsx` | `js/xss-through-dom` |
+
+Kapatma gerekçesi olarak yukarıdaki üç madde yeterli; "used in tests" değil
+**"false positive"** seçilmeli.
+
+⚠️ Yeni bir ek/görsel kompoziti aynı deseni kullanırsa aynı uyarı yeniden
+çıkar. O zaman da doğru cevap dosyayı buraya eklemek ve uyarıyı kapatmaktır —
+`<img>` bir blob URL'ini çalıştıramaz, bu değişmedi.
 
 ## Yeni bir istisna eklerken
 

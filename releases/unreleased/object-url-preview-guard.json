@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **One choke point for object-URL previews (#1005)** — `objectUrlSrc()` renders only `blob:` URLs and drops anything else, used by every attachment/image preview. It is redundant at runtime (the browser, not the file, produces the scheme, and `<img>` cannot execute SVG) but it puts that invariant in code instead of leaving it as a comment on three call sites, and `docs/security-exceptions.md` now records the reasoning under a new code-scanning section."
-}
