@@ -32,7 +32,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center gap-2 font-medium rounded-lg',
+          // WCAG 2.2 Target Size (#1265): the 44px floor is a TOUCH guideline —
+          // scoped to below `lg` so pointer-driven desktop layouts (dense admin
+          // tables, inline row actions, dialog footers) keep their `size="sm"`
+          // density instead of every button in the app growing 12px.
+          'inline-flex max-lg:min-h-11 max-lg:min-w-11 items-center justify-center gap-2 font-medium rounded-lg',
           'focus:outline-none focus:ring-2 focus:ring-offset-2',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           'transition-colors duration-150',

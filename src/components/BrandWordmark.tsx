@@ -19,11 +19,9 @@ export async function BrandWordmark({ className, oneLine = false }: { className?
       ) : (
         <GraduationCap className="h-7 w-7 flex-shrink-0 text-blue-600" />
       )}
-      {/* `oneLine` (the mobile top bar) truncates the *name* when the row runs
-          out of room. That bar used to truncate the whole row instead, which cut
-          the beta badge in half — a 360px phone read "Internship CRM BI" (#1305).
-          Everywhere else the name may wrap, which loses nothing. */}
-      <span className={`font-bold text-gray-900 dark:text-gray-100 ${oneLine ? 'truncate' : ''}`}>{brand.name}</span>
+      {/* Keep the mobile wordmark on one line without squeezing its name; the
+          regular sidebar/desktop wordmark may still wrap as before. */}
+      <span className={`font-bold text-gray-900 dark:text-gray-100 ${oneLine ? 'shrink-0 whitespace-nowrap' : ''}`}>{brand.name}</span>
     </span>
   );
 }

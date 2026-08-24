@@ -300,7 +300,7 @@ export default function MentorshipPage() {
           <button
             key={sf}
             onClick={() => setStatusFilter(sf)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`min-h-11 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               statusFilter === sf ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
@@ -313,7 +313,7 @@ export default function MentorshipPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t.mentorships.searchPlaceholder}
-          className="ml-auto w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+          className="ml-auto min-h-11 w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
       </div>
       <div className="mb-4">

@@ -28,15 +28,12 @@ export function ResponsiveShell({
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 lg:flex">
       {/* Mobile top bar */}
-      <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-4">
-        {/* The wordmark truncates instead of pushing the bar wider than the screen:
-            brand + badge + three icon buttons did not fit a 320px phone (#936).
-            The truncation happens *inside* the wordmark (`oneLine`, see
-            BrandWordmark) — truncating this row clipped the badge itself, so a
-            360px phone read "Internship CRM BI" (#1305). */}
+      <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-2">
+        {/* Keep enough room for the one-line wordmark and three 44px actions;
+            the secondary environment badge returns at the sm breakpoint. */}
         <div className="flex items-center min-w-0">
           {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100 truncate">InternshipCRM</span>}
-          <BetaBadge className="ml-2 flex-shrink-0" />
+          <BetaBadge className="ml-2 hidden flex-shrink-0 sm:inline-flex" />
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Only visible while a meeting is actually running (#51 follow-up). */}
@@ -45,7 +42,7 @@ export function ResponsiveShell({
           <NotificationBell />
           {/* No negative margin: `-mr-2` pushed the icon 8px past the bar's px-4 and
               made the page 2px wider than a 320px phone (#936). */}
-          <button onClick={() => setOpen(true)} aria-label="Open menu" className="p-2 text-gray-600 hover:text-gray-900">
+          <button onClick={() => setOpen(true)} aria-label="Open menu" className="inline-flex min-h-11 min-w-11 items-center justify-center text-gray-600 hover:text-gray-900">
             <Menu className="h-6 w-6" />
           </button>
         </div>
@@ -65,7 +62,7 @@ export function ResponsiveShell({
         <button
           onClick={() => setOpen(false)}
           aria-label="Close menu"
-          className="lg:hidden absolute top-3 right-3 z-10 p-1 text-gray-500 hover:text-gray-800"
+          className="lg:hidden absolute top-1 right-1 z-10 inline-flex min-h-11 min-w-11 items-center justify-center text-gray-500 hover:text-gray-800"
         >
           <X className="h-5 w-5" />
         </button>
