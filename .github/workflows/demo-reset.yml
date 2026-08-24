@@ -15,6 +15,10 @@ name: Reset the public demo
 #   - the demo container `internship-crm-demo` is running
 #   - /etc/internship-crm/demo.env has DATABASE_URL pointing at
 #     internship_crm_demo, plus DEMO_MODE=true
+#
+# The steps themselves live in infra/server/demo-refresh.sh, which the preview
+# deploy also calls (#1249) — one implementation for "make the demo current",
+# whether that means new data or a new image.
 
 on:
   schedule:
@@ -34,43 +38,26 @@ jobs:
     name: Wipe + re-seed the demo database
     runs-on: self-hosted
     steps:
-      - name: Reset
+      - name: Fetch the repo (no action download)
         env:
-          ENV_FILE: /etc/internship-crm/demo.env
-          CONTAINER: internship-crm-demo
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FETCH_REF: ${{ github.sha }}
         run: |
           set -euo pipefail
+          [ -d .git ] || git init -q .
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+          git -c credential.helper="$HELPER" fetch --no-tags --depth=1 origin "$FETCH_REF"
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
 
-          [ -f "$ENV_FILE" ] || { echo "ERROR: $ENV_FILE is missing — see docs/DEMO.md" >&2; exit 1; }
-          docker inspect "$CONTAINER" >/dev/null 2>&1 || {
-            echo "ERROR: container '$CONTAINER' does not exist — the demo is not deployed" >&2; exit 1; }
-
-          # Run inside the demo container so the tools use exactly the image,
-          # Prisma client and DATABASE_URL the demo itself runs with. Nothing is
-          # passed in from the workflow — the env file on the box is the source
-          # of truth, and secrets never enter the Actions log.
-          run() { docker exec "$CONTAINER" "$@"; }
-
-          echo "==> Wiping (refuses anything not named *_demo)"
-          run node prisma/reset-demo.mjs
-
-          echo "==> Re-applying the schema"
-          run npx prisma db push --accept-data-loss --skip-generate
-
-          echo "==> Seeding the first admin"
-          run node prisma/seed.mjs
-
-          echo "==> Seeding the synthetic demo dataset"
-          run node prisma/seed-demo.mjs
-
-          echo "==> Health check"
-          # The reset does not restart the container, but a wiped-then-reseeded
-          # DB is exactly when a stale Prisma client or a failed seed shows up.
-          for i in $(seq 1 10); do
-            if curl -fsS --max-time 5 http://127.0.0.1:3203/api/health >/dev/null; then
-              echo "demo is healthy"; exit 0
-            fi
-            sleep 3
-          done
-          echo "ERROR: the demo did not answer /api/health after the reset" >&2
-          exit 1
+      - name: Reset
+        run: |
+          set -euo pipefail
+          chmod +x infra/server/demo-refresh.sh
+          # Same script the preview deploy calls with --image (#1249). One
+          # implementation, so the twice-daily reset and the redeploy cannot
+          # drift into doing different things to the same environment.
+          ./infra/server/demo-refresh.sh --data-only

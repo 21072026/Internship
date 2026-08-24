@@ -92,8 +92,42 @@ mysql -e "GRANT ALL ON internship_crm_demo.* TO 'crm-demo'@'%' IDENTIFIED BY '<p
 gh workflow run demo-reset.yml
 ```
 
-Once `/etc/internship-crm/demo.env` and the container exist, the scheduled
-workflow keeps the data fresh; nothing else is manual.
+Once `/etc/internship-crm/demo.env` and the container exist, nothing else is
+manual: the scheduled workflow keeps the **data** fresh, and every preview
+deploy puts the demo on the **image** it just shipped (#1249).
+
+## How it stays current
+
+Both halves run the same script, `infra/server/demo-refresh.sh`, so the two
+paths cannot drift into doing different things to the same environment:
+
+| | Trigger | What it does |
+|---|---|---|
+| `--data-only` | `demo-reset.yml`, 02:00 and 14:00 UTC | wipe → schema → seed |
+| `--image <ref>` | `deploy-preview.yml`, after every preview deploy | recreate the container on that image, **then** wipe → schema → seed |
+
+The image path re-seeds too, deliberately: a new image can move the schema, so
+the data has to be rebuilt against it rather than left in place. It is a no-op
+when the demo already runs that image.
+
+Two properties worth keeping if this is ever rewritten:
+
+- **Not provisioned is not a failure.** If `demo.env` or the container is
+  missing the script exits 0 saying so. The demo is optional; a preview deploy
+  must not go red because an optional environment was never set up here. The
+  job is `continue-on-error` for the same reason — the deploy's verdict is
+  about *preview*.
+- **Nothing is passed in from CI.** The container is started with
+  `--env-file /etc/internship-crm/demo.env`, so the demo's own configuration
+  never enters an Actions log, and the tools run *inside* the container with
+  exactly the image, Prisma client and `DATABASE_URL` the demo itself uses.
+
+Why this exists: the container was provisioned on 2026-08-19 and nothing
+updated its image again, while `demo-reset.yml` refreshed the data twice a day
+— so the demo *looked* maintained as the software inside it aged. Measured on
+2026-08-24 before the fix: **0.78.0-beta on the demo against 0.105.0-beta on
+prod and preview**, 27 minor versions apart, with the landing page sending
+visitors straight to it.
 
 ## Not included yet
 
@@ -103,8 +137,7 @@ workflow keeps the data fresh; nothing else is manual.
   to the demo from the hero (`hero-demo-cta`), the bottom CTA block and the
   public footer, plus a `features.ts` catalogue entry. All of them read
   `DEMO_URL` from `src/lib/demoMode.ts` and are hidden on the demo instance
-  itself. ⚠️ Note: nothing redeploys the demo container on merges yet — it runs
-  the `preview-<sha>` image from provisioning day until redeployed by hand.
+  itself.
 - **OpenGraph social cards and product analytics.** These arrived in the same
   original PR (#1221) but are separate concerns with their own trade-offs (a
   permanently widened CSP, and third-party trackers on authenticated CRM pages

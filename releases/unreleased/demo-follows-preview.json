@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **The public demo stops aging (#1249)** — every preview deploy now puts the demo container on the image it just shipped and re-seeds it, instead of leaving it on the image from provisioning day. Measured before the fix: the demo served 0.78.0-beta while prod and preview served 0.105.0-beta. The twice-daily data reset and the redeploy share one script (`infra/server/demo-refresh.sh`), and a host without the demo provisioned is a no-op rather than a failed deploy.",
+  "notes": {
+    "en": ["The public demo now updates with every release instead of standing still — what you see there is what shipped."],
+    "tr": ["Herkese açık demo artık her sürümle birlikte güncelleniyor; orada gördüğünüz şey yayınlanan sürüm."],
+    "de": ["Die öffentliche Demo wird jetzt mit jedem Release aktualisiert — was dort zu sehen ist, ist der ausgelieferte Stand."]
+  }
+}
