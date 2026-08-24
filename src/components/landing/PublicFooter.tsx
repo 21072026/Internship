@@ -38,6 +38,7 @@ export async function PublicFooter() {
         { href: '/apply-as-mentor', label: n.becomeMentor },
         { href: GITHUB_URL, label: n.github, external: true },
         { href: '/code-of-conduct', label: t.codeOfConduct.title },
+        { href: '/contributor-terms', label: t.contributorTerms.title },
       ],
     },
     {

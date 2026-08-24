@@ -127,24 +127,33 @@ const ROWS = [
   { locale: 'de', isAuthoritative: false, body: DE },
 ];
 
-async function main() {
+/**
+ * Also called from prisma/seed.mjs, so a fresh database (local dev, the e2e
+ * job, a new topic environment) has the terms without a second command — the
+ * gate has nothing to show if nobody ran this.
+ */
+export async function seedContributorTerms(client = prisma) {
   let created = 0;
   for (const row of ROWS) {
-    const existing = await prisma.contributorTerms.findUnique({
+    const existing = await client.contributorTerms.findUnique({
       where: { key_version_locale: { key: KEY, version: VERSION, locale: row.locale } },
     });
     if (existing) continue;
-    await prisma.contributorTerms.create({
+    await client.contributorTerms.create({
       data: { key: KEY, version: VERSION, effectiveFrom: EFFECTIVE_FROM, ...row },
     });
     created++;
   }
   console.log(`[seed-contributor-terms] ${created} of ${ROWS.length} locales created for ${KEY} v${VERSION}.`);
+  return created;
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+// Run standalone (deploy backfill), but stay quiet when imported by seed.mjs.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  seedContributorTerms()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

@@ -54,3 +54,23 @@ export async function cleanupByEmail(email: string) {
   }
   await prisma.invitationToken.deleteMany({ where: { email: { equals: email } } });
 }
+
+/**
+ * Record a platform-level contributor-terms acceptance for a seeded user (#1025).
+ *
+ * `/portal/projects` is gated on it, so any spec that drives a mentee into the
+ * project workspace needs this — a real mentee working on a project has
+ * accepted; a freshly seeded one has not. No-op when the installation has no
+ * terms configured, which is also when the gate lets everyone through.
+ */
+export async function acceptContributorTerms(userId: string, termsKey = 'default') {
+  const terms = await prisma.contributorTerms.findFirst({
+    where: { key: termsKey },
+    orderBy: [{ effectiveFrom: 'desc' }, { version: 'desc' }],
+    select: { version: true },
+  });
+  if (!terms) return null;
+  return prisma.contributorTermsAcceptance.create({
+    data: { userId, termsKey, version: terms.version, projectId: null },
+  });
+}

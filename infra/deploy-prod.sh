@@ -507,6 +507,8 @@ run_tool node prisma/seed-templates.mjs || true
 # The shared project-goal template pool (#51) — every project sees these on top
 # of its own. Only ever adds missing titles.
 run_tool node prisma/seed-goal-templates.mjs || true
+# Contributor terms v1.0 (#1025) — versioned rows; never edits an existing one.
+run_tool node prisma/seed-contributor-terms.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-organization.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
