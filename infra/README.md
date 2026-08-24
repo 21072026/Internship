@@ -151,11 +151,28 @@ called with `GHCR_USER`/`GHCR_TOKEN` (the run's `GITHUB_TOKEN`, for the pull) an
 `SKIP_PULL=1` for a locally built image, and the old base64-over-SSH credential
 form (`ACTOR`/`B64_TOKEN` + `B64_*`), for a manual deploy from a shell.
 
-**Database: a single shared preview DB.** No per-topic DB, so no DB-admin secret
-is needed. ⚠️ Trade-off: all topics share schema/data — two concurrent PRs with
-divergent schema changes can drift (`prisma db push` is global). Coordinate schema
-changes across simultaneous topics, or switch to per-topic DBs later (would need a
-`CREATE/DROP DATABASE`-capable secret).
+**Database: one per topic** (`internship_pr<N>`, #1185). The env file supplies the
+MySQL host and credentials; `topic-deploy.sh` creates the topic's own database on
+the same server, points the container at it, and fills a *fresh* one with the
+synthetic demo set (`prisma/seed-demo.mjs`). A re-push keeps whatever the reviewer
+has been clicking on and only brings the schema up to date. `topic-teardown.sh`
+drops it when the PR closes; the daily topic sweep drops any that leak.
+
+Two consequences worth stating: a `prisma db push` on one PR no longer reshapes the
+schema under every other PR, and **no real preview data is reachable from a topic
+environment** — sign in with `admin.demo@demo.example.com` / `DemoPass123!`. The
+shared preview env at `crm-preview.ersah.in` keeps its own single database.
+
+Privileges usually need no setup: the script runs as root on the database host,
+so if the app user cannot create databases it falls back to the local root
+socket and grants the app user access to the one database it just made. If
+neither route works the deploy **stops** with the grant to run —
+
+```sql
+GRANT ALL PRIVILEGES ON `internship\_pr%`.* TO '<preview-user>'@'%';
+```
+
+— rather than falling back to the shared database. Isolation is the point.
 
 ### Prerequisites on the server
 - Self-hosted runner registered; its user (root here) can run `docker` and the

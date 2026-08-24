@@ -21,11 +21,16 @@ name: Topic Preview (hosted build → server swap, auto per-PR)
 #      `plesk` CLI (topic-deploy.sh creates the subdomain + injects the proxy).
 #   2. Wildcard DNS *.ersah.in → the server (infra/setup-dns-cloudflare.sh) and a
 #      wildcard TLS cert in ${CERT_DIR} (infra/acme-issue-wildcard.sh).
-#   3. /etc/internship-crm/preview.env (chmod 600) with DATABASE_URL (the SHARED
-#      preview DB), NEXTAUTH_SECRET, SMTP_* — the same file deploy-preview uses.
+#   3. /etc/internship-crm/preview.env (chmod 600) with DATABASE_URL,
+#      NEXTAUTH_SECRET, SMTP_* — the same file deploy-preview uses.
+#   4. The DB user in that file can create and drop the per-topic databases:
+#        GRANT ALL PRIVILEGES ON `internship\_pr%`.* TO '<user>'@'%';
 #
-# ⚠️ The preview DB is SHARED across all topics (see infra/README.md) — a schema
-# `db push` here affects every topic. Coordinate concurrent schema changes.
+# Each topic gets its OWN database, `internship_pr<N>` (#1185): a `db push` on
+# one PR no longer reshapes the schema under every other PR, and no real preview
+# data is reachable from a topic environment — they are seeded with the
+# synthetic demo set only. The database is dropped when the PR closes, and the
+# daily topic sweep removes any that leak.
 #
 # FORK PRs get no topic environment: GitHub keeps their GITHUB_TOKEN read-only
 # (so the image cannot be pushed to ghcr) and withholds repo secrets, and running
@@ -121,9 +126,11 @@ jobs:
             const marker = '<!-- topic-preview -->';
             const body = `${marker}\n### 🧪 Topic preview ready\n\n` +
               `Branch **\`${{ github.head_ref }}\`** → **${url}**\n\n` +
-              `> Isolated environment for this PR (container \`internship-crm-${topic}\`). ` +
-              `Rebuilt on every push; torn down automatically when this PR is merged or closed.\n` +
-              `> Shares the preview database with other topics — coordinate schema changes.`;
+              `> Isolated environment for this PR (container \`internship-crm-${topic}\`, ` +
+              `database \`internship_${topic}\`). Rebuilt on every push; container and database are ` +
+              `both removed when this PR is merged or closed.\n` +
+              `> Its own database, seeded with synthetic demo data — sign in with ` +
+              `\`admin.demo@demo.example.com\` / \`DemoPass123!\`. Schema changes here affect nobody else.`;
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number,
             });
