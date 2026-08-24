@@ -164,6 +164,10 @@ model User {
   // Personal ICS calendar-feed credential (#915): unguessable, generated on
   // demand, revocable by nulling. Null = no feed exposed for this user.
   icsFeedToken            String?       @unique
+  // How this user's name appears on a published testimonial (#1096):
+  // "fullname" | "initials". Null = initials — the privacy-first default;
+  // showing the full name is an explicit choice next to the consent toggle.
+  testimonialNameStyle    String?
   // Extended profile (all optional; safe to add to existing rows).
   displayName             String?
   bio                     String?       @db.Text
@@ -341,6 +345,11 @@ enum ConsentType {
   // TALENT_POOL_VISIBILITY. Shown: name, expertise, languages, capacity
   // status, bio. Never: email, phone, mentee list. Default off.
   MENTOR_DIRECTORY_VISIBILITY
+  // Opt-in to an excerpt of an evaluation being published on marketing pages
+  // (#1096). An evaluation is third-party personal data, so BOTH sides must
+  // hold this consent — the author (their words) and the subject (it is about
+  // them). Revoking unpublishes immediately (revokePublishedFor). Default off.
+  TESTIMONIAL
 }
 
 model UserConsent {
@@ -1406,9 +1415,20 @@ model Evaluation {
   comment    String?        @db.Text
   createdAt  DateTime       @default(now())
 
+  // Consent-based testimonial publishing (#1096/#1098). The original comment
+  // is never published or edited: the admin drafts publicExcerpt, the AUTHOR
+  // approves that exact wording (excerptApprovedAt — cleared on every edit),
+  // and only then can publish set publishedAt + sharedPublicly. Revoking the
+  // TESTIMONIAL consent on either side clears the publish fields immediately.
+  sharedPublicly    Boolean   @default(false)
+  publishedAt       DateTime?
+  publicExcerpt     String?   @db.Text
+  excerptApprovedAt DateTime?
+
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
 
   @@index([relationId])
+  @@index([sharedPublicly, publishedAt])
 }
 
 // A structured question from a mentee to their mentor, with an optional answer.

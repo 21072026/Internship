@@ -15,6 +15,7 @@ import { PublicShell } from '@/components/landing/PublicShell';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
 import { TawkChat } from '@/components/TawkChat';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
+import { listPublishedStories } from '@/lib/testimonials';
 
 export default async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
@@ -35,6 +36,12 @@ export default async function HomePage() {
   // Fed from the single-source catalogue (#584/#588): the landing shows the
   // featured subset; /features shows everything.
   const features = getFeatures(t).filter((f) => f.featured);
+
+  // Consent-gated success stories (#1100). Honesty rule (§4.2): with zero
+  // published stories the section does not exist — no heading, no empty grid,
+  // no "testimonials coming soon" placeholder. The count is computed live,
+  // never written into copy by hand (§4.3).
+  const stories = await listPublishedStories(3);
   const iconBg: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',
     purple: 'bg-purple-100 text-purple-600', amber: 'bg-amber-100 text-amber-600',
@@ -496,6 +503,31 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Success stories (#1100) — rendered ONLY when at least one published,
+          consent-gated story exists; otherwise this section is not in the DOM
+          at all (docs/landing-value-proposition.md §4.2 honesty rule). */}
+      {stories.length > 0 && (
+        <section className="py-16 px-4" data-testid="landing-stories">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.stories.title}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              {stories.map((s) => (
+                <figure key={s.id} className="rounded-xl border border-gray-200 bg-white p-6">
+                  <blockquote className="text-sm text-gray-700 leading-relaxed">“{s.excerpt}”</blockquote>
+                  <figcaption className="mt-4 text-sm">
+                    <span className="font-medium text-gray-900">{s.name}</span>
+                    <span className="text-gray-400"> · {L.stories.roles[s.role]}</span>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+            <div className="mt-6 text-center">
+              <Link href="/stories" className="text-sm text-blue-600 hover:underline">{L.stories.viewAll}</Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* FAQ */}
       <section className="py-16 px-4">

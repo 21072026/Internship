@@ -3,10 +3,11 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { getConsents, setConsent } from '@/lib/consent';
+import { revokePublishedFor } from '@/lib/testimonials';
 import { logActivity } from '@/lib/activity';
 import type { ConsentType } from '@prisma/client';
 
-const CONSENT_TYPES = ['AI_CV_PARSING', 'ACTIVITY_TRACKING', 'TALENT_POOL_VISIBILITY', 'AI_INTERACTION_SUMMARY', 'MENTOR_DIRECTORY_VISIBILITY'] as const;
+const CONSENT_TYPES = ['AI_CV_PARSING', 'ACTIVITY_TRACKING', 'TALENT_POOL_VISIBILITY', 'AI_INTERACTION_SUMMARY', 'MENTOR_DIRECTORY_VISIBILITY', 'TESTIMONIAL'] as const;
 
 const bodySchema = z.object({
   type: z.enum(CONSENT_TYPES),
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
 
   await setConsent(session.user.id, parsed.data.type as ConsentType, parsed.data.granted);
+  // Revoking the testimonial consent unpublishes every story the user is
+  // author or subject of, in this same request (#1096) — never left to a cron.
+  if (parsed.data.type === 'TESTIMONIAL' && !parsed.data.granted) {
+    await revokePublishedFor(session.user.id);
+  }
   await logActivity({
     action: parsed.data.granted ? 'consent.grant' : 'consent.revoke',
     actorId: session.user.id,

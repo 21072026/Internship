@@ -60,6 +60,9 @@ const updateProfileSchema = z.object({
   interests: z.string().max(2000).optional(),
   targetPosition: z.string().max(160).optional(),
   mentorCapacity: z.number().int().min(0).max(100).nullable().optional(),
+  // Name display on a published testimonial (#1096): full name is an explicit
+  // choice; null/unset renders initials (the privacy-first default).
+  testimonialNameStyle: z.enum(['fullname', 'initials']).nullable().optional(),
   // Mentor's own "I can take a new mentee right now" preference (#941) — see
   // src/lib/mentorAvailability.ts for how this combines with mentorCapacity.
   // null clears the preference (falls back to a capacity-derived guess).
@@ -120,6 +123,7 @@ const PROFILE_SELECT = {
   targetPosition: true,
   mentorCapacity: true,
   acceptingMentees: true,
+  testimonialNameStyle: true,
   emailNotifications: true,
   notificationPrefs: true,
   preferredLanguage: true,
