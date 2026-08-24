@@ -73,6 +73,9 @@ export async function POST(request: Request) {
     // onto the new account so "who brought this person in" is answerable later.
     let referredById: string | null = null;
     let invitedOrgId: string | null = null;
+    // The address the invitation itself named, if any — null for an email-less
+    // shareable link, which is what separates "proven address" from "typed in".
+    let invitationEmail: string | null = null;
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
 
     if (token) {
@@ -86,9 +89,14 @@ export async function POST(request: Request) {
       if (invitation.expiresAt < new Date()) {
         return NextResponse.json({ error: 'Invitation token has expired' }, { status: 400 });
       }
-      if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+      // A named invitation is bound to its address; an email-less shareable link
+      // (#670) has none to match, so the registrant's own address is taken as
+      // given — and written back onto the invitation further down, so the row
+      // still ends up naming who used it.
+      if (invitation.email && invitation.email.toLowerCase() !== email.toLowerCase()) {
         return NextResponse.json({ error: 'Email does not match the invitation' }, { status: 400 });
       }
+      invitationEmail = invitation.email;
       role = invitation.role;
       referredById = invitation.invitedById;
       invitedOrgId = invitation.orgId;
@@ -106,10 +114,14 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // An invitation proves the email belongs to the registrant, so invited
-    // users are verified immediately. Open (token-less) self-registration must
-    // confirm the email — created unverified, then emailed a verification link.
-    const emailVerified = !!token;
+    // An invitation *addressed to someone* proves the email belongs to the
+    // registrant — it only reached them because they read that mailbox — so
+    // those accounts are verified immediately. An email-less shareable link
+    // (#670) proves nothing about whatever address gets typed into the form, so
+    // it follows the self-registration path: created unverified, with a
+    // verification link on its way. The account is still active either way; the
+    // inviter vouched for the person, not for the mailbox.
+    const emailVerified = !!token && !!invitationEmail;
     // Open (token-less) self-registration is created inactive, but the gate it
     // waits behind depends on the `selfRegistration` setting: 'auto' (default)
     // lets the account in as soon as the emailed link is clicked — the front
@@ -155,6 +167,10 @@ export async function POST(request: Request) {
           used: true,
           registeredAt: now,
           verifiedAt: emailVerified ? now : undefined,
+          // An email-less link learns its address here — from then on the
+          // inviter's list shows who actually walked through it, and the
+          // verify-email hook can find the row to stamp.
+          ...(invitationEmail ? {} : { email }),
         },
       });
       // Backfill openedAt if the "opened" ping never landed (e.g. the token was
@@ -204,6 +220,18 @@ export async function POST(request: Request) {
         }
       } catch (e) {
         console.error('Invitation auto-link failed:', e);
+      }
+
+      // Email-less link: the address is unproven, so it gets the same
+      // confirmation mail an open sign-up gets. Non-blocking — the account is
+      // already active, verification only settles the mailbox.
+      if (!emailVerified) {
+        const verifyToken = await createEmailVerificationToken(user.id);
+        try {
+          await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName });
+        } catch (e) {
+          console.error('Verification email failed:', e);
+        }
       }
     } else {
       const verifyToken = await createEmailVerificationToken(user.id);
