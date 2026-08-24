@@ -22,6 +22,7 @@ test('one referrer field: pick a person, then create a source in place', { tag: 
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Ref Admin');
   const mentor = await seedUser(mentorEmail, 'x', 'MENTOR', 'Ref Mentor');
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Ref Mentee');
+  const sourceUserEmail = uniqueEmail('ref-source-login');
   const newSourceName = `Gulizar Hanim ${Date.now()}`;
   let createdSourceId = '';
 
@@ -71,7 +72,32 @@ test('one referrer field: pick a person, then create a source in place', { tag: 
       data: { referredById: mentor.id, sourceId: createdSourceId },
     });
     expect(both.status()).toBe(400);
+
+    // On a SOURCE login `sourceId` is which source that account speaks for, not
+    // a referrer — the merged field must never clear it.
+    const sourceUser = await prisma.user.create({
+      data: {
+        email: sourceUserEmail,
+        password: '!source-no-login',
+        role: 'SOURCE',
+        fullName: 'Ref Source Login',
+        skills: [],
+        sourceId: createdSourceId,
+      },
+    });
+    const patched = await page.request.patch(`/api/users/${sourceUser.id}`, {
+      data: { referredById: mentor.id, sourceId: null },
+    });
+    expect(patched.ok()).toBeTruthy();
+    const afterSourceWrite = await prisma.user.findUnique({
+      where: { id: sourceUser.id },
+      select: { sourceId: true, referredById: true },
+    });
+    expect(afterSourceWrite?.sourceId).toBe(createdSourceId);
+    expect(afterSourceWrite?.referredById).toBe(mentor.id);
   } finally {
+    await prisma.user.updateMany({ where: { email: sourceUserEmail }, data: { sourceId: null, referredById: null } });
+    await cleanupByEmail(sourceUserEmail);
     await prisma.user.updateMany({ where: { id: mentee.id }, data: { sourceId: null, referredById: null } });
     if (createdSourceId) await prisma.source.deleteMany({ where: { id: createdSourceId } });
     await prisma.source.deleteMany({ where: { name: newSourceName } });

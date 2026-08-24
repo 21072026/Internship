@@ -183,7 +183,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       // Exception: on a SOURCE-role account `sourceId` is not a referrer, it is
       // *which source this login speaks for* (see /api/admin/source-users), so
       // it is never cleared as a side effect here.
-      if (data.referredById || data.sourceId) {
+      if ('referredById' in data || 'sourceId' in data) {
         if (data.referredById && data.sourceId) {
           return NextResponse.json(
             { error: 'A person has one referrer: pass either referredById or sourceId, not both' },
@@ -191,8 +191,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           );
         }
         const target = await prisma.user.findUnique({ where: { id }, select: { role: true } });
-        if (data.referredById && target?.role !== 'SOURCE') data.sourceId = null;
-        if (data.sourceId) data.referredById = null;
+        if (target?.role === 'SOURCE') {
+          // The merged field sends both columns on every write. On a SOURCE
+          // login that would clear the account's own binding, so the field
+          // simply does not reach it — repointing a SOURCE account is a
+          // deliberate single-key `{ sourceId }` write.
+          if ('referredById' in data) delete data.sourceId;
+        } else {
+          if (data.referredById) data.sourceId = null;
+          if (data.sourceId) data.referredById = null;
+        }
       }
 
       // Mentor expertise (skills) — admin can populate so skill-match works.

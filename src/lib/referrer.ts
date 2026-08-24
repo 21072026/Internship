@@ -22,12 +22,19 @@ export type ReferrerKind = 'user' | 'source';
 export type ReferrerFields = {
   referredById?: string | null;
   sourceId?: string | null;
+  /**
+   * Needed only to spot the one account kind where `sourceId` is NOT a referrer:
+   * on a SOURCE login it records *which source that account speaks for*
+   * (`/api/admin/source-users`). Reading it as "who referred them" would show a
+   * source account as having referred itself.
+   */
+  role?: string | null;
 };
 
 /** The select value for a person, given their two backing columns. */
 export function encodeReferrer(fields: ReferrerFields): string {
   if (fields.referredById) return `user:${fields.referredById}`;
-  if (fields.sourceId) return `source:${fields.sourceId}`;
+  if (fields.sourceId && fields.role !== 'SOURCE') return `source:${fields.sourceId}`;
   return REFERRER_NONE;
 }
 
@@ -58,11 +65,12 @@ export function referrerLabel(
     referredBy?: { fullName: string } | null;
     source?: { name: string } | null;
     referralSource?: string | null;
+    role?: string | null;
   },
   fallback = ''
 ): string {
   if (person.referredBy?.fullName) return person.referredBy.fullName;
-  if (person.source?.name) return person.source.name;
+  if (person.source?.name && person.role !== 'SOURCE') return person.source.name;
   if (person.referralSource) return person.referralSource;
   return fallback;
 }
