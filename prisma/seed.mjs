@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { seedContributorTerms } from './seed-contributor-terms.mjs';
 
 const prisma = new PrismaClient();
 
@@ -45,6 +46,10 @@ async function main() {
   for (const m of ['user', 'source', 'cohort', 'company', 'project', 'mentorshipRelation']) {
     await prisma[m].updateMany({ where: { orgId: null }, data: { orgId: defaultOrg.id } });
   }
+
+  // Contributor terms v1.0 (#1025) — the acceptance gate has nothing to show
+  // until these rows exist, so a fresh database gets them with the first seed.
+  await seedContributorTerms(prisma);
 
   // Idempotent company seed (Company.name is not unique, so check first).
   for (const name of SEED_COMPANIES) {

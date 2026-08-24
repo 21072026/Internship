@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, acceptContributorTerms } from './helpers/db';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -43,6 +43,9 @@ test('mentee portal: own private projects are listed, foreign ones are not', { t
   const relation = await prisma.mentorshipRelation.create({
     data: { mentorId: admin.id, menteeId: mentee.id, status: 'ACTIVE', projectId: viaRelation.id },
   });
+  // /portal/projects is behind the contributor-terms gate (#1025); a mentee who
+  // is actually working on projects has accepted them.
+  await acceptContributorTerms(mentee.id);
 
   try {
     await page.goto('/auth/signin');
