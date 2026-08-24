@@ -162,10 +162,21 @@ The point of a drill is to measure two numbers and keep them honest:
 
 | Date | Environment | Dump used | RPO | RTO | Notes |
 |---|---|---|---|---|---|
-| 2026-08-24 | dev container (77 tables, 25 users) | `prod-20260824T175256Z.sql.gz` (76 KB) | 0 min | **1 s** | Script validation only — a development database, not preview. Proves the procedure and the guards run end to end; says nothing about how long production takes. |
-| _pending_ | preview | | | | run `backup-verify.yml` with *Also run the restore drill* — this is the row that produces quotable numbers |
+| 2026-08-24 | **preview** (77 tables, 67 users, 56 relations, 90 stage changes) | `preview-…T190500Z.sql.gz` (~7 MB) | **4 min** | **1 s** | First real drill, run from `backup-verify.yml` on the server. The scratch database had to be created by an admin — the app user cannot `CREATE DATABASE` — and was dropped at the end. |
+| 2026-08-24 | dev container (77 tables, 25 users) | `prod-20260824T175256Z.sql.gz` (76 KB) | 0 min | 1 s | Script validation only, kept for comparison. |
 
 Run the drill against **preview or a scratch database**, never prod. Fill the
 row in with measured values; an estimate here is worse than an empty row,
-because it will be believed. RTO scales with dump size, so the dev-container
-row above is a lower bound and nothing more.
+because it will be believed.
+
+**What these numbers do and do not say.** RTO is the `mysql` load time and
+nothing else — it excludes noticing the problem, deciding which dump to use,
+stopping the container and bringing the schema up to the deployed code. Budget
+minutes, not seconds, for a real recovery. It also scales with dump size:
+preview's dump is ~7 MB and prod's is ~11.5 MB, both small enough that the load
+is instant; the day prod is a gigabyte, re-measure rather than quoting this row.
+
+**RPO is not a property of the restore.** The 4 minutes above is simply how old
+the newest dump happened to be — a deploy had just taken one. The number that
+matters is the worst case: backups run daily at 03:15 plus before every deploy,
+so a quiet day means **up to 24 hours** of writes at risk.
