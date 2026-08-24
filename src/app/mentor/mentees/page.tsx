@@ -11,6 +11,7 @@ import { ApplyLinkBox } from '@/components/ApplyLinkBox';
 import { EmptyState } from '@/components/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface MentorshipRelation {
   id: string;
@@ -83,9 +84,12 @@ export default function MenteesPage() {
               <div className="flex items-start justify-between gap-2 mb-4">
                 {/* `min-w-0` + `truncate`: a long address ran out of the card,
                     because the text block would not shrink next to the status
-                    badge (#1305). */}
+                    badge (#1305). The name is a hover-card trigger (#1302); the
+                    truncation stays on the heading so the link inherits it. */}
                 <div className="min-w-0">
-                  <h3 className="font-semibold text-gray-900 text-lg truncate">{rel.mentee.fullName}</h3>
+                  <h3 className="font-semibold text-gray-900 text-lg truncate">
+                    <PersonHoverCard personId={rel.mentee.id} name={rel.mentee.fullName} role="MENTEE" />
+                  </h3>
                   <p className="text-sm text-gray-500 truncate">{rel.mentee.email}</p>
                 </div>
                 <div className="flex-shrink-0"><StatusBadge status={rel.status} /></div>

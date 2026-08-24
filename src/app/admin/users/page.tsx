@@ -13,6 +13,7 @@ import { UserEraseForm } from '@/components/UserEraseForm';
 import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { useT } from '@/i18n/client';
 import type { AccountState } from '@/lib/accountState';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface AdminUser {
   id: string;
@@ -251,7 +252,9 @@ export default function AdminUsersPage() {
                       {u.fullName}
                     </Link>
                   ) : (
-                    <p className="text-sm font-medium text-gray-900 truncate">{u.fullName}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      <PersonHoverCard personId={u.id} name={u.fullName} role={u.role} />
+                    </p>
                   )}
                   <p className="text-xs text-gray-500 truncate">{u.email}</p>
                   {/* Why this account is unreachable, and what to do about it.

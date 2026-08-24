@@ -15,6 +15,7 @@ import { BookOpen, Plus } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // The assign dropdowns show a name plus capacity/availability (#942), so this
 // asks the API for the `mentorAvailability` field set — still no email/phone/
@@ -346,7 +347,9 @@ export default function MentorshipPage() {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                     <Link href={`/admin/candidates/${rel.mentee.id}`} className="font-semibold text-gray-900 hover:text-blue-700 hover:underline">{rel.mentee.fullName}</Link>
                     <span className="text-gray-400">→</span>
-                    <span className="font-semibold text-gray-900">{rel.mentor.fullName}</span>
+                    <span className="font-semibold text-gray-900">
+                      <PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" />
+                    </span>
                     <StatusBadge status={rel.status} />
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">

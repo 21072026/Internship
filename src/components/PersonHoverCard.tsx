@@ -34,6 +34,7 @@ interface PersonCardData {
   pipelineStatus: string | null;
   mentorName: string | null;
   companyName: string | null;
+  relationId: string | null;
   email: string | null;
 }
 
@@ -178,8 +179,14 @@ export function PersonHoverCard({
 
   // The caller's `role` hint stands in until the fetch lands, so the profile
   // link is right from the first paint on the surfaces that already know what
-  // they are rendering; the loaded record wins once it arrives.
-  const href = personHref(session?.user?.role, { id: personId, role: data?.role ?? role });
+  // they are rendering; the loaded record wins once it arrives. `relationId`
+  // only ever comes from the loaded record — a mentor's mentee page is keyed by
+  // the relation, which no call site knows from a name alone.
+  const href = personHref(session?.user?.role, {
+    id: personId,
+    role: data?.role ?? role,
+    relationId: data?.relationId ?? null,
+  });
   const label = name ?? data?.fullName ?? '';
   const roleLabel = (r: string) =>
     ({

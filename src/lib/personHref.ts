@@ -10,7 +10,7 @@
 // name as plain text rather than a link that 404s or 403s.
 export function personHref(
   viewerRole: string | null | undefined,
-  person: { id: string; role?: string | null }
+  person: { id: string; role?: string | null; relationId?: string | null }
 ): string | null {
   const role = person.role ?? 'MENTEE';
 
@@ -22,10 +22,14 @@ export function personHref(
     return null;
   }
 
-  // A mentor's own mentee. The page authorizes the relation itself, so a mentor
-  // who follows this for someone else's mentee is refused there — this only
-  // decides what to render as a link.
-  if (viewerRole === 'MENTOR' && role === 'MENTEE') return `/mentor/mentees/${person.id}`;
+  // A mentor's own mentee. That route is keyed by the *relation*, not by the
+  // person (/mentor/mentees/<relationId>), so it can only be offered when the
+  // caller knows which relation — the card endpoint supplies it for the mentor
+  // who owns it. Without one there is no mentor-side page for this person, and
+  // a link built from the user id would land on "relation not found".
+  if (viewerRole === 'MENTOR' && role === 'MENTEE') {
+    return person.relationId ? `/mentor/mentees/${person.relationId}` : null;
+  }
 
   return null;
 }

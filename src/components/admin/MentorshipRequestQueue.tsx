@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface RequestRow {
   id: string;
@@ -151,7 +152,7 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
           <div key={r.id} data-testid={`request-${r.id}`} className="py-3 flex flex-col lg:flex-row lg:items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {r.mentee.fullName}
+                <PersonHoverCard personId={r.mentee.id} name={r.mentee.fullName} role="MENTEE" />
                 {r.targetPosition && <span className="text-xs text-gray-500 ml-2">→ {r.targetPosition}</span>}
               </p>
               <p className="text-xs text-gray-500 truncate">{r.mentee.email}{r.mentee.university ? ` · ${r.mentee.university}` : ''}</p>
@@ -170,7 +171,8 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
                   )}
                   {r.preferredMentor && (
                     <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
-                      {q.prefMentor}: {r.preferredMentor.fullName}
+                      {q.prefMentor}:{' '}
+                      <PersonHoverCard personId={r.preferredMentor.id} name={r.preferredMentor.fullName} role="MENTOR" />
                     </span>
                   )}
                 </div>

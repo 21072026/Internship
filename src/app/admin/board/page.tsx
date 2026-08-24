@@ -13,13 +13,14 @@ import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 interface Relation {
   id: string;
   pipelineStatus: string;
   stageDeadline?: string | null;
   mentee: { id: string; fullName: string; university?: string };
-  mentor: { fullName: string };
+  mentor: { id: string; fullName: string };
   _count: { interactions: number };
 }
 
@@ -167,7 +168,9 @@ export default function AdminBoardPage() {
         <div className="flex items-center gap-3 text-xs text-gray-400 mt-2">
           <span className="flex items-center gap-1 truncate">
             <User className="h-3 w-3 flex-shrink-0" />
-            {r.mentor.fullName}
+            {/* stopPropagation lives in the card itself, so opening it does not
+                also open the mentee behind the card's click-through. */}
+            <PersonHoverCard personId={r.mentor.id} name={r.mentor.fullName} role="MENTOR" className="truncate" />
           </span>
           <span className="flex items-center gap-1 flex-shrink-0">
             <GraduationCap className="h-3 w-3" />

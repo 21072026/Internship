@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getRetentionReview, getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getServerDictionary } from '@/i18n/server';
 import { formatDate } from '@/lib/relativeTime';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 // Admin retention review (GDPR Art. 5(1)(e)): candidates whose consent has
 // passed the retention limit. "overdue" ones (past the grace period without
@@ -39,7 +40,9 @@ export default async function AdminRetentionPage() {
               {items.map((it) => (
                 <tr key={it.userId} className="border-b border-gray-100 dark:border-gray-800/60 last:border-0">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900 dark:text-gray-100">{it.fullName}</div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                      <PersonHoverCard personId={it.userId} name={it.fullName} role="MENTEE" />
+                    </div>
                     <div className="text-xs text-gray-400">{it.email}</div>
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">

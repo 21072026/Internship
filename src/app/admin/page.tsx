@@ -9,6 +9,7 @@ import { Users, Building2, BookOpen, Bell, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getServerDictionary } from '@/i18n/server';
+import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 async function getStats() {
   const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount] =
@@ -21,7 +22,7 @@ async function getStats() {
         take: 5,
         orderBy: { startDate: 'desc' },
         include: {
-          mentor: { select: { fullName: true } },
+          mentor: { select: { id: true, fullName: true } },
           mentee: { select: { id: true, fullName: true } },
           company: { select: { name: true } },
         },
@@ -223,7 +224,7 @@ export default async function AdminDashboard() {
                       {rel.mentee.fullName}
                     </Link>
                     {' → '}
-                    {rel.mentor.fullName}
+                    <PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" />
                   </p>
                   {rel.company && (
                     <p className="text-xs text-gray-500">{rel.company.name}</p>
