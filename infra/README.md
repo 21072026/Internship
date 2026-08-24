@@ -208,6 +208,32 @@ the private repo's Actions quota exhausted (#636) the builds were moved onto the
 self-hosted runner, so the production host ran `npm ci` + `next build` for every
 merge **and every push to every open PR**.
 
+### No `uses:` in a self-hosted job (#1239)
+
+Every `uses:` makes the runner download that action's archive from
+`codeload.github.com`. From this box's IP those downloads started answering
+**429**, three attempts and a backoff apart, and the job died in *Set up job* —
+before a line of repo code ran. Every topic preview and every deploy failed at
+the same point while the identical `ubuntu-latest` jobs passed, so the throttle
+is on the address, not the workflow.
+
+So the self-hosted jobs use **no actions at all**. They fetch what they need
+with plain git over HTTPS:
+
+```bash
+git init -q .                       # workspace persists between runs
+git remote add origin https://github.com/$GITHUB_REPOSITORY.git
+git fetch --no-tags --depth=1 origin "$SHA"
+git checkout -q --force --detach FETCH_HEAD
+git clean -qfdx
+```
+
+Anything that needs an action — posting the topic-preview comment, sending an
+alert email — is a separate GitHub-hosted job. **Keep it that way**: adding a
+`uses:` to a self-hosted job reintroduces the failure, and it fails before your
+step ever runs, which makes it look like the runner is broken rather than the
+workflow.
+
 ---
 
 ## CI-independent operations (deploying without Actions, #636)

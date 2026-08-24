@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Deploys stop dying on a 429 (#1239)** — self-hosted jobs no longer use any GitHub Action. Downloading an action archive from codeload answered 429 from the server's IP and failed the job before any repo code ran, taking down every topic preview and every prod/preview deploy; those jobs now fetch the repo with plain git, and the steps that genuinely need an action (the topic-preview comment) moved to a GitHub-hosted job."
+}

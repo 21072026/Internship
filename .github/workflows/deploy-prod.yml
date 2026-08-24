@@ -76,8 +76,39 @@ jobs:
       deploy: ${{ steps.gate.outputs.deploy }}
       sha: ${{ steps.gate.outputs.sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
+      # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted
+      # runners are unaffected), and it fails in "Set up job" — before a single
+      # line of repo code runs. That killed every topic preview and every deploy
+      # at the same point. Plain git over HTTPS is not throttled that way, and
+      # these jobs only ever needed the infra/ scripts.
+      - name: Fetch the repo (no action download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FETCH_REF: ${{ github.sha }}
+          FETCH_DEPTH: '1'
+        run: |
+          set -euo pipefail
+          [ -d .git ] || git init -q .
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          # The token reaches git through a credential helper reading the
+          # environment, so it is never in argv (readable via `ps` on a shared box)
+          # and never written into .git/config.
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+          if [ "$FETCH_DEPTH" = "0" ]; then
+            # Full history: the forward-only guard in deploy-prod.sh asks
+            # `git merge-base --is-ancestor` whether this commit predates the live
+            # one, and a shallow clone cannot answer that.
+            git -c credential.helper="$HELPER" fetch --no-tags --prune origin \
+              "+refs/heads/*:refs/remotes/origin/*"
+            git -c credential.helper="$HELPER" fetch --no-tags origin "$FETCH_REF"
+          else
+            git -c credential.helper="$HELPER" fetch --no-tags --depth="$FETCH_DEPTH" origin "$FETCH_REF"
+          fi
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
 
       - name: Decide whether a deploy is needed
         id: gate
@@ -159,14 +190,39 @@ jobs:
       contents: read
       packages: read
     steps:
-      - name: Checkout ${{ needs.gate.outputs.sha }}
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.gate.outputs.sha }}
-          # Full history: the forward-only guard in deploy-prod.sh asks
-          # `git merge-base --is-ancestor` whether this commit predates the live
-          # one, which a shallow clone can't answer.
-          fetch-depth: 0
+      # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
+      # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted
+      # runners are unaffected), and it fails in "Set up job" — before a single
+      # line of repo code runs. That killed every topic preview and every deploy
+      # at the same point. Plain git over HTTPS is not throttled that way, and
+      # these jobs only ever needed the infra/ scripts.
+      - name: Fetch the repo (no action download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FETCH_REF: ${{ needs.gate.outputs.sha }}
+          FETCH_DEPTH: '0'
+        run: |
+          set -euo pipefail
+          [ -d .git ] || git init -q .
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          # The token reaches git through a credential helper reading the
+          # environment, so it is never in argv (readable via `ps` on a shared box)
+          # and never written into .git/config.
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+          if [ "$FETCH_DEPTH" = "0" ]; then
+            # Full history: the forward-only guard in deploy-prod.sh asks
+            # `git merge-base --is-ancestor` whether this commit predates the live
+            # one, and a shallow clone cannot answer that.
+            git -c credential.helper="$HELPER" fetch --no-tags --prune origin \
+              "+refs/heads/*:refs/remotes/origin/*"
+            git -c credential.helper="$HELPER" fetch --no-tags origin "$FETCH_REF"
+          else
+            git -c credential.helper="$HELPER" fetch --no-tags --depth="$FETCH_DEPTH" origin "$FETCH_REF"
+          fi
+          git checkout -q --force --detach FETCH_HEAD
+          git clean -qfdx
 
       - name: Deploy
         env:

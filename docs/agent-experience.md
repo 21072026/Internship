@@ -4120,3 +4120,53 @@ Yeni bir yapılandırma modeli eklerken varsayılan refleks bu olmalı.
 **Tek dal, çok iş → PR'ı gerçeğe uydur.** Oturum tek dalda çalışıyorsa ikinci iş
 açık PR'ın üstüne biniyor. Yeni PR açmaya çalışma; PR'ın başlık ve gövdesini iki işi
 de anlatacak şekilde güncelle ve commit sha'larını yaz — diff zaten ayrı okunuyor.
+
+## 2026-08-24 — etiketler, yedek tatbikatı, topic başına DB, runner 429
+
+**CLAUDE.md'deki aşama listesi yanlıştı** (bu oturumda düzeltildi). Enum anahtarları
+İngilizce (`INTERNSHIP_IN_PROGRESS_450`), Türkçe adlar ise *etiket*. Belgedeki listeye
+güvenip `STAJ_DEVAM_450` yazan testim sessizce yanlış aşamayı kurdu ve asıl iddiayı hiç
+sınamadı. **Şema, dokümandan üstündür**: enum değerini `prisma/schema.prisma`'dan teyit et.
+
+**Sayfanın hangi endpoint'i çağırdığını varsayma.** `/admin/candidates` `/api/users`'ı
+değil `/api/candidates`'i kullanıyor. Filtreyi yanlış route'a koyarsan her şey derlenir,
+test bile geçebilir — ama sayfa filtrelemez.
+
+**Sayfalı listede "diğerleri de görünüyor" diye assert etme.** Kaydedilmiş görünüm
+testim bu yüzden düştü: filtre kalkınca beklediğim aday ilk sayfada değildi. Seed'e
+paylaşılan benzersiz bir isim eki koyup arama kutusuyla daralt; liste artık veritabanında
+başka ne varsa ondan bağımsız.
+
+**`window.prompt` açan bir UI adımından sonra sonucu doğrula.** `page.once('dialog')`
+kurup Save'e tıklamak yetmiyor; kaydedilen görünümün gerçekten belirdiğini assert et,
+yoksa sonraki adımlar sessizce yanlış durumda çalışır. Save düğmesine `data-testid`
+eklemek de rol/isim eşleşmesinin başka bir düğmeye kaymasını engelliyor.
+
+**`pkill -f "next"` kendi `npm run build`'ini de öldürür** (exit 144). Dev sunucusunu
+`setsid nohup ... &` ile başlat ve öldürürken `next dev` gibi dar bir kalıp kullan.
+
+**Yeni route ekledikten sonra hayalet TS hatası görürsen `.next`'i sil.** Bayat
+`.next/types/validator.ts` var olmayan sorunları raporluyor.
+
+**`preview.env`'deki `DATABASE_URL` konteyner için yazılmış.** Host'u
+`host.docker.internal` — sunucuda çalışan bir script'te bu isim hiçbir şeye çözümlenmiyor
+ve her mysql çağrısı saniyeden kısa sürede düşüyor. Host tarafında loopback'e eşle
+(#1185 ilk deploy'u tam olarak buna takıldı).
+
+**Plesk kutusunda MySQL root soketle doğrulanmıyor.** Admin işi için `plesk db` kullan;
+`mysql --protocol=socket -u root` yalnızca Plesk olmayan sunucuda çalışır. GRANT verirken
+de hesabın gerçekten var olduğu host'ları `mysql.user`'dan oku — `'user'@'%'` varsaymak,
+hesap `@'localhost'` ise hiç uygulanmayan bir grant üretir ve veritabanı oluşur ama
+konteyner bağlanamaz. Verdiğin yetkiyi uygulama kullanıcısıyla `USE` ederek doğrula.
+
+**Bir istemcinin çıktısını ayrıştırıp SQL'e koyuyorsan süz.** Çerçeveli tablo basan bir
+istemciye düşülürse "host" değerleri `+------+` ve `|` olur ve doğrudan GRANT'e girer.
+
+**Self-hosted runner'da `uses:` kullanma (#1239).** Her action, arşivini
+codeload.github.com'dan indiriyor; sunucunun IP'sinden bu indirmeler 429 dönüyor ve iş
+"Set up job"da, repo kodu çalışmadan ölüyor. Repoyu düz `git fetch <sha>` ile al; action
+gerektiren adımı ayrı bir GitHub-hosted job'a taşı. Belirti yanıltıcı: runner bozuk gibi
+görünüyor, oysa workflow'a `uses:` eklenmiş oluyor.
+
+**`get_job_logs` iş bitmeden 404 döner.** Koşan bir job'un log'unu çekmeye çalışma;
+`get_check_runs` ile bitmesini bekle.
