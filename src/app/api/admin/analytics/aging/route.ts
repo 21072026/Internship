@@ -119,7 +119,19 @@ export async function GET(request: Request) {
     .sort((a, b) => b.avgDays - a.avgDays);
 
   // Current dwell in the present stage, for active relations only.
-  const active = relations.filter((r) => r.status === 'ACTIVE');
+  //
+  // People in the re-engagement pool (#834) are excluded. They are not stuck —
+  // somebody made an explicit "we'll write in September" arrangement with them,
+  // and leaving them in `overdue` is precisely what makes this report rot: a
+  // list where half the entries will never move stops being read. They are not
+  // hidden either; `pooledCount` keeps them visible as their own number.
+  const pooledIds = new Set(
+    (await prisma.user.findMany({
+      where: { id: { in: relations.map((r) => r.mentee.id) }, reEngageAt: { not: null } },
+      select: { id: true },
+    })).map((u) => u.id)
+  );
+  const active = relations.filter((r) => r.status === 'ACTIVE' && !pooledIds.has(r.mentee.id));
   const items = active.map((r) => {
     const last = r.statusChanges[r.statusChanges.length - 1];
     const enteredStageAt = last ? last.createdAt : r.startDate;
@@ -136,6 +148,10 @@ export async function GET(request: Request) {
   const oldestStuck = [...items].sort((a, b) => b.daysInStage - a.daysInStage).slice(0, 10);
   const overdue = items.filter((it) => it.overdue).sort((a, b) => b.daysInStage - a.daysInStage);
 
-  return NextResponse.json({ stageAging, oldestStuck, overdue, overdueCount: overdue.length, dropReasons });
+  return NextResponse.json({
+    stageAging, oldestStuck, overdue, overdueCount: overdue.length,
+    pooledCount: relations.filter((r) => r.status === 'ACTIVE' && pooledIds.has(r.mentee.id)).length,
+    dropReasons,
+  });
   });
 }

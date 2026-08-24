@@ -11,6 +11,7 @@ import { markReadUrl } from '@/lib/emailActionToken';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
+import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
@@ -1939,6 +1940,49 @@ export async function checkRetentionReminders() {
   }
 
   return { checked: users.length, reminded, retentionMonths: months, graceDays: RETENTION_GRACE_DAYS };
+}
+
+/**
+ * "You said to write again — here we are" (#834).
+ *
+ * Idempotent by `reEngageNotifiedAt`: a tick that runs twice, or a container
+ * that restarts mid-run, must not mail the same person twice. The stamp is
+ * written per person immediately after their message, not in a batch at the
+ * end, so a crash halfway through resumes rather than repeats.
+ *
+ * Consent is re-checked here (via dueForReminder) rather than trusted from the
+ * date that was set months ago: someone can withdraw in between, and the whole
+ * promise of the one-click link is that withdrawing actually stops the mail.
+ */
+export async function checkReEngagementReminders() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const people = await dueForReminder();
+
+  let reminded = 0;
+  for (const p of people) {
+    const leaveUrl = `${appUrl}/re-engage?token=${makeLeaveToken(p.id)}`;
+    try {
+      await sendEmail({
+        to: p.email,
+        subject: 'Tekrar görüşelim mi? / Shall we talk again?',
+        html: `<p>Merhaba ${p.fullName},</p>
+<p>Daha önce seninle yeni bir dönem açıldığında tekrar iletişime geçmemizi kabul etmiştin. O zaman geldi.</p>
+${p.reEngageNote ? `<p><em>${p.reEngageNote}</em></p>` : ''}
+<p>İlgilenmiyorsan tek tıkla çıkabilirsin: <a href="${leaveUrl}">bana bir daha yazmayın</a>.</p>`,
+      });
+    } catch (e) {
+      console.error('checkReEngagementReminders email failed:', { userId: p.id, error: e });
+    }
+    await notify(p.id, 're_engagement.due', {}, '/portal');
+    await prisma.user.update({ where: { id: p.id }, data: { reEngageNotifiedAt: new Date() } });
+    reminded += 1;
+  }
+
+  if (reminded > 0) {
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+    await Promise.all(admins.map((a) => notify(a.id, 're_engagement.adminSummary', { count: reminded }, '/admin/candidates?view=pool')));
+  }
+  return { checked: people.length, reminded };
 }
 
 // Does a consenting candidate match any of a company's open positions? A match

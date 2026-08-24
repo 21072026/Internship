@@ -13,6 +13,7 @@ import {
   sendWeeklyReportReminders,
   sendWeeklyMissingDocumentReminders,
   runEmailHealthCheck,
+  checkReEngagementReminders,
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
 
@@ -37,12 +38,15 @@ export async function GET(request: Request) {
     if (job === 'stage-deadlines') {
       return NextResponse.json({ message: 'Stage deadline reminders ran', deadlines: await checkStageDeadlineReminders() });
     }
+    if (job === 're-engagement') {
+      return NextResponse.json({ message: 'Re-engagement reminders ran', reEngagement: await checkReEngagementReminders() });
+    }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();
       return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });
     }
 
-    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports] = await Promise.all([
+    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports, reEngagement] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
@@ -54,6 +58,7 @@ export async function GET(request: Request) {
       sendWeeklyMissingDocumentReminders(),
       expireOffers(),
       sendWeeklyReportReminders(),
+      checkReEngagementReminders(),
     ]);
 
     return NextResponse.json({
@@ -69,6 +74,7 @@ export async function GET(request: Request) {
       missingDocuments,
       offers,
       weeklyReports,
+      reEngagement,
     });
   } catch (error) {
     console.error('Cron error:', error);

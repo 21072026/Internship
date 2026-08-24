@@ -296,6 +296,17 @@ model User {
   // Set when a retention/re-consent reminder was last emailed (avoids resending
   // on every cron run). Cleared when the user renews consent.
   retentionReminderSentAt DateTime?
+  // The re-engagement pool (#834). On the CANDIDATE, not on MentorshipRelation:
+  // the pool is a promise between the organisation and the person ("we will
+  // write in September"), and a relation is precisely the thing that ends when
+  // the cycle ends — hanging the promise on it would kill the promise at the
+  // moment it becomes due. It would also let someone with two relations sit in
+  // the pool twice on two different dates, which is incoherent as a commitment.
+  reEngageAt              DateTime?
+  reEngageNote            String?       @db.Text
+  // Idempotency for the reminder cron: stamped when the "let's talk again"
+  // message goes out, so a tick that runs twice does not mail twice.
+  reEngageNotifiedAt      DateTime?
   // Opt-out switch for transactional email (messages, announcements). In-app
   // notifications are always created regardless.
   emailNotifications      Boolean       @default(true)
@@ -433,6 +444,13 @@ enum ConsentType {
   // hold this consent — the author (their words) and the subject (it is about
   // them). Revoking unpublishes immediately (revokePublishedFor). Default off.
   TESTIMONIAL
+  // "Write to me again when there is a place" (#834) — permission to be
+  // CONTACTED in a later cycle. Deliberately NOT the same thing as permission
+  // to keep storing the data: that one is anchored on User.consentAt and
+  // governed by lib/retention. Conflating them would turn "yes, get in touch in
+  // September" into indefinite retention, which is the exact behaviour this
+  // feature exists to end. Joining the pool never moves consentAt.
+  RE_ENGAGEMENT_POOL
 }
 
 model UserConsent {
