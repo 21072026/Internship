@@ -25,7 +25,7 @@ const EFFECTIVE_FROM = new Date('2026-07-01T00:00:00Z');
 const EN = `## Contributor terms (IP)
 
 Accepting these terms is how contributions to Internship CRM are licensed. The same
-wording is in \`CONTRIBUTING.md\` and is confirmed again on every pull request.
+wording is in CONTRIBUTING.md and is confirmed again on every pull request.
 
 - **Sole rights holder.** All rights in Internship CRM are held by **Mehmet Erşahin**
   (a natural person, not a company). Only the rights holder may license the software.
@@ -45,10 +45,10 @@ wording is in \`CONTRIBUTING.md\` and is confirmed again on every pull request.
   third-party rights. Don't paste in code you don't have the right to contribute.
 - **Beyond the mentorship.** Paid, external, or corporate contributors sign a short
   written agreement instead of relying on this acceptance — see
-  \`docs/legal/cla-contributor-agreement.md\`.
+  docs/legal/cla-contributor-agreement.md.
 
 Trademarks are **not** covered by the AGPL: the "Internship CRM" name, logo, and the
-\`crm.ersah.in\` domain stay with the rights holder.
+crm.ersah.in domain stay with the rights holder.
 
 Accepting here covers your contributions to this platform. Individual projects may ask
 you to accept their own terms when you join them, and each pull request confirms the
@@ -57,10 +57,9 @@ specific contribution it contains.`;
 const TR = `## Katkı şartları (fikri mülkiyet)
 
 Internship CRM'e yapılan katkılar bu şartlarla lisanslanır. Aynı metin
-\`CONTRIBUTING.md\` içinde yer alır ve her pull request'te yeniden onaylanır.
+CONTRIBUTING.md içinde yer alır ve her pull request'te yeniden onaylanır.
 
-> **Bağlayıcı metin İngilizcedir.** Aşağıdaki çeviri bilgilendirme amaçlıdır;
-> bir farklılık olursa İngilizce metin geçerlidir.
+**Bağlayıcı metin İngilizcedir.** Aşağıdaki çeviri bilgilendirme amaçlıdır; bir farklılık olursa İngilizce metin geçerlidir.
 
 - **Tek hak sahibi.** Internship CRM üzerindeki tüm haklar **Mehmet Erşahin**'e
   aittir (bir şirkete değil, gerçek kişiye). Yazılımı yalnızca hak sahibi lisanslayabilir.
@@ -78,10 +77,10 @@ Internship CRM'e yapılan katkılar bu şartlarla lisanslanır. Aynı metin
 - **Özgünlük.** Katkının kendi eserin olduğunu ve üçüncü kişilerin haklarını
   ihlal etmediğini beyan edersin. Katkı olarak sunma hakkın olmayan kodu yapıştırma.
 - **Mentorluk dışı.** Ücretli, harici veya kurumsal katkıcılar bu onaya dayanmak
-  yerine kısa bir yazılı sözleşme imzalar — bkz. \`docs/legal/cla-contributor-agreement.md\`.
+  yerine kısa bir yazılı sözleşme imzalar — bkz. docs/legal/cla-contributor-agreement.md.
 
 Markalar AGPL kapsamında **değildir**: "Internship CRM" adı, logosu ve
-\`crm.ersah.in\` alan adı hak sahibinde kalır.
+crm.ersah.in alan adı hak sahibinde kalır.
 
 Buradaki onay bu platformdaki katkılarını kapsar. Projeler sen katıldığında kendi
 şartlarını da isteyebilir; her pull request ise içerdiği somut katkıyı onaylar.`;
@@ -89,10 +88,9 @@ Buradaki onay bu platformdaki katkılarını kapsar. Projeler sen katıldığın
 const DE = `## Beitragsbedingungen (Urheberrecht)
 
 Beiträge zu Internship CRM werden zu diesen Bedingungen lizenziert. Derselbe Text
-steht in \`CONTRIBUTING.md\` und wird bei jedem Pull Request erneut bestätigt.
+steht in CONTRIBUTING.md und wird bei jedem Pull Request erneut bestätigt.
 
-> **Verbindlich ist die englische Fassung.** Diese Übersetzung dient der
-> Information; bei Abweichungen gilt der englische Text.
+**Verbindlich ist die englische Fassung.** Diese Übersetzung dient der Information; bei Abweichungen gilt der englische Text.
 
 - **Alleiniger Rechteinhaber.** Alle Rechte an Internship CRM liegen bei
   **Mehmet Erşahin** (eine natürliche Person, kein Unternehmen). Nur der
@@ -114,10 +112,10 @@ steht in \`CONTRIBUTING.md\` und wird bei jedem Pull Request erneut bestätigt.
   Rechte Dritter verletzt. Füge keinen Code ein, den du nicht beitragen darfst.
 - **Außerhalb des Mentorings.** Bezahlte, externe oder unternehmerische Beitragende
   unterzeichnen statt dieser Zustimmung eine kurze schriftliche Vereinbarung — siehe
-  \`docs/legal/cla-contributor-agreement.md\`.
+  docs/legal/cla-contributor-agreement.md.
 
 Marken sind **nicht** von der AGPL erfasst: der Name „Internship CRM", das Logo und
-die Domain \`crm.ersah.in\` verbleiben beim Rechteinhaber.
+die Domain crm.ersah.in verbleiben beim Rechteinhaber.
 
 Diese Zustimmung gilt für deine Beiträge auf dieser Plattform. Einzelne Projekte
 können beim Beitritt eigene Bedingungen verlangen, und jeder Pull Request bestätigt
