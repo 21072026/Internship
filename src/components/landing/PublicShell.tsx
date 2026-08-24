@@ -4,6 +4,7 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { PublicHeader } from './PublicHeader';
 import { PublicFooter } from './PublicFooter';
+import { AnalyticsScripts } from '@/components/AnalyticsScripts';
 
 /**
  * Frame for every public page (#1197): same header, same background, same
@@ -45,6 +46,9 @@ export async function PublicShell({
         {children}
       </main>
       <PublicFooter />
+      {/* Public pages only (#1242) — never the signed-in CRM, where a pageview
+          would carry a mentee's name in the URL to a third party. */}
+      <AnalyticsScripts />
     </div>
   );
 }
