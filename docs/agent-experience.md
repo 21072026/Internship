@@ -10,6 +10,54 @@ Newest entries on top.
 
 ---
 
+## 2026-08-24 — Ticari SAST raporunu triyaj etmek: 25 bulgu, 25 yanlış pozitif, 2 kaçırılmış gerçek (#1294)
+
+**Bu tarayıcı `where: { field: variable }` desenini ORM'den ve veritabanı tipinden bağımsız
+olarak *Critical* etiketliyor.** "NoSQL injection attack possible" başlığı altında 22 bulgu
+geldi — bu projede NoSQL veritabanı yok. MySQL + Prisma, her değer bağlı parametre. Şiddet
+etiketine göre sıralamak zaman kaybı; **veri akışını izleyin**. Sıralamanın maliyeti
+gerçekti: rapor 9 tanesini *Critical* yaparken asıl SSRF yüzeyini hiç görmedi.
+
+**Triyajı 20 dakikaya indiren tarama sırası** (hepsi negatif çıkarsa sınıf temizdir):
+```bash
+grep -rn '\$queryRaw\|\$executeRaw' src/          # uygulamada ham SQL var mı
+grep -rln "json()" src/app/api --include=route.ts | \
+  while IFS= read -r f; do grep -q "safeParse\|\.parse(" "$f" || echo "NO-ZOD: $f"; done
+grep -rn "where:.*body\.\|where: *{ *\.\.\." src/   # gövde → where
+grep -rn "where:.*searchParams\.get" src/           # string|null → where
+```
+Route param'ları (`[id]`) App Router'da **her zaman `string`**; catch-all (`[...slug]`)
+`string[]`. Tek catch-all `[...nextauth]`. Yani `where: { id }` route param'ından geliyorsa
+o satır kapalı — argümanı burada bitirin.
+
+**Asıl sınıf injection değil, Prisma filtre-operatörü enjeksiyonu.** Prisma'nın filtre grameri
+veridir: skalerin olduğu yere nesne gelirse operatör okunur. `{"id":{"not":"x"}}` bir
+eşitlik aramasını "o satır hariç her şey"e çevirir. TypeScript yasaklar ama tipler runtime'da
+silinir ve `request.json()` `any` döner. `npm run check:query-scalars` bunu CI'da tutuyor.
+
+**Statik denetim yazarken fixture ile İKİ YÖNDE test edin.** İlk sürümüm doğru çalışıyor
+gibiydi (ağaçta 0 bulgu) ama iki hatası vardı: (1) `typeof body.id === 'string'` korumasını
+`body`'de arıyordu, eşleşen somut ifadede değil; (2) regex `===?` yazdığım için `!==` — yani
+en yaygın early-return biçimi — eşleşmiyordu. Fixture'lar olmasa ikisi de sessizce yanlış
+pozitif üretirdi. `check-auth-reads.mjs`'in `process.argv` override'ı tam bu iş için var,
+yeni denetimlerde kopyalayın. **Hiç başarısız olamayan bir kontrol işe yaramaz.**
+
+**Tarayıcının kaçırdığı iki gerçek bulgu, tam da aradığı sınıflarda.** `certificatePdf.ts`
+kiracının yazdığı `brandLogoUrl`'i sunucudan `fetch` ediyordu, `assertPublicHttpsUrl`
+olmadan → blind SSRF (cloud metadata + `127.0.0.1:3306`). Koruma #893'te zaten yazılmıştı,
+sadece bu çağrı yeri atlanmış. `emailService.ts` `brandHeader()` aynı alanı escape'siz
+`<img src>`'e gömüyordu — `esc()` helper'ı aynı dosyada, 530 satır aşağıda, başka yerlerde
+kullanılıyor. **Ders:** bir korumanın repoda var olması onun *her* çağrı yerinde kullanıldığı
+anlamına gelmiyor. Sınıfı bulduğunuzda `grep -rn "fetch("` ile tüm çağrı yerlerini sayın;
+ben giden isteklerin ikisinden birinin korumasız olduğunu böyle gördüm.
+
+**Ortam:** `npm install` şart (CLAUDE.md'de yazılı). Öncesinde `npx tsc --noEmit` 20+
+hayalet hata veriyor (`Cannot find name 'process'`, `@types/node` yok) — bunları kendi
+değişikliğiniz sanmayın. `npm install` ayrıca `package-lock.json`'a alakasız `fsevents`
+`"dev": true` satırları yazıyor; commit'ten önce `git checkout package-lock.json`.
+
+---
+
 ## 2026-08-19 — Hibrit Jitsi: JaaS yalnızca 1:1 + ücretsiz oda fallback'i (#1256, 0.81.0-beta)
 
 **JaaS MAU'su katılımcı başına sayılır, oda başına değil.** 25 MAU'luk ücretsiz katman ilk
