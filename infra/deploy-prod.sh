@@ -326,6 +326,17 @@ run_tool node prisma/push-company-interest-expand.mjs
 log "backfill CompanyInterest deterministic scope keys"
 run_tool node prisma/backfill-company-interest-scope.mjs
 
+# ALSO before the push, not only after (#1288): when a previous half-applied
+# push has left a Json column filled with '' (the MariaDB longtext fill, see
+# the note below), the NEXT push can die before the post-push repair ever
+# runs — any step that rebuilds the table (AddForeignKey, index changes)
+# re-validates the json_valid() CHECK against the poisoned rows. That is
+# exactly how MentorshipRequest.preferredLanguages wedged the 2026-08-24 prod
+# deploy: the '' fill from the failed run's AddColumn step made every retry
+# fail at the AddForeignKey step. Repairing first makes the push re-runnable.
+log "repair invalid Json column values (pre-push, idempotent)"
+run_tool node prisma/backfill-json-columns.mjs --repair || true
+
 log "prisma db push (final contract phase)"
 run_tool npx prisma db push --accept-data-loss
 
