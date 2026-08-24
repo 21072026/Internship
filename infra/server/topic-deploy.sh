@@ -175,7 +175,12 @@ if ! _sql -e "$CREATE_SQL" 2>/dev/null; then
     # grant that never applies to it, and the container then cannot connect to
     # the database we just made.
     granted=0
-    for h in $(_admin_sql "SELECT host FROM mysql.user WHERE user='${DB_USER}';"); do
+    # Filter the host list rather than trusting it: if the first admin route
+    # ever falls through to a client that prints a bordered table, the "hosts"
+    # would be `+------+` and `|` — and those would go straight into a GRANT.
+    # Only things that can actually be a MySQL host survive.
+    for h in $(_admin_sql "SELECT host FROM mysql.user WHERE user='${DB_USER}';" \
+               | grep -E '^[A-Za-z0-9_.%:-]+$' || true); do
       _admin_sql "GRANT ALL PRIVILEGES ON \`${TOPIC_DB}\`.* TO '${DB_USER}'@'${h}';" && granted=1
     done
     [ "$granted" = 1 ] || _admin_sql "GRANT ALL PRIVILEGES ON \`${TOPIC_DB}\`.* TO '${DB_USER}'@'%';"
