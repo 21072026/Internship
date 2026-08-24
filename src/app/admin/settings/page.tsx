@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 
 export default function AdminSettingsPage() {
   const t = useT();
@@ -446,6 +447,9 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </Card>
+
+      {/* The org's competency framework (#822) — criteria as data, not code. */}
+      <EvaluationFrameworkEditor />
     </div>
   );
 }
