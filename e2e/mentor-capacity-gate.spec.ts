@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // #1188: mentor capacity is BINDING on the public application link, and every
 // application waits for the mentor's accept/decline. Capacity counts active
@@ -101,11 +102,7 @@ test('mentor accepts an application: relation starts, applicant notified; declin
     const rejectUser = await prisma.user.findUniqueOrThrow({ where: { email: rejectEmail } });
 
     // Mentor signs in and decides from the applications inbox.
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', mentorEmail);
-    await page.fill('input[type="password"]', PASSWORD);
-    await page.click('button[type="submit"]');
-    await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+    await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');
     await page.goto('/mentor/applications');
 
     const acceptReq = await prisma.mentorshipRequest.findFirstOrThrow({ where: { menteeId: acceptUser.id } });
@@ -134,13 +131,12 @@ test('mentor accepts an application: relation starts, applicant notified; declin
     await seedUser(otherMentorEmail, PASSWORD, 'MENTOR', 'Other Mentor');
     try {
       const foreign = await prisma.mentorshipRequest.create({ data: { menteeId: rejectUser.id, preferredMentorId: mentor.id } });
-      await page.goto('/auth/signin');
-      await page.context().clearCookies();
-      await page.goto('/auth/signin');
-      await page.fill('input[type="email"], input[name="email"]', otherMentorEmail);
-      await page.fill('input[type="password"]', PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+      // Switching mentors mid-test needs the fresh-user guards: a blanket
+      // clearCookies() lets /api/auth/session re-issue the previous session, so
+      // /auth/signin redirects away mid-fill and the submit click resolves
+      // against the old dashboard (documented in helpers/auth.ts). This is what
+      // made the spec fail in the 2026-08-23 21:18 scheduled run.
+      await signInAsFreshUser(page, otherMentorEmail, PASSWORD, '/mentor');
       const attack = await page.request.put('/api/mentor/applications', {
         data: { requestId: foreign.id, action: 'accept' },
       });
