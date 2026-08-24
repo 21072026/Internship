@@ -28,6 +28,7 @@ import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { OfferManagementPanel } from '@/components/OfferManagementPanel';
 import { ReferrerPicker } from '@/components/ReferrerPicker';
+import { TagEditor } from '@/components/TagEditor';
 import { encodeReferrer, referrerLabel } from '@/lib/referrer';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
@@ -72,6 +73,7 @@ interface MenteeDetail {
   cvUrl?: string;
   // No password set yet → the candidate cannot sign in (#1123).
   pendingActivation?: boolean;
+  tags?: { tag: { id: string; name: string; color?: string | null } }[];
   menteeRelations: Relation[];
 }
 
@@ -384,6 +386,10 @@ export default function AdminMenteeDetailPage() {
               disabled={saving}
               onChange={changeReferrer}
             />
+            {/* Free-form labels (#887) — a cohort is the one official period
+                group this candidate belongs to; tags are as many free marks as
+                the team needs. */}
+            <TagEditor userId={user.id} initial={(user.tags ?? []).map((ut) => ut.tag)} />
             <div className="pt-1">
               <CvManager targetUserId={user.id} initialCvUrl={user.cvUrl} />
             </div>

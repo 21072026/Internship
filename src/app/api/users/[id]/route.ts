@@ -41,6 +41,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           referredById: true,
           referredBy: { select: { id: true, fullName: true, role: true } },
           source: { select: { id: true, name: true } },
+          // Free-form labels on this person (#887).
+          tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
           university: true,
           department: true,
           graduationYear: true,
