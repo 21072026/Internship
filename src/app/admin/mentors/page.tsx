@@ -9,6 +9,7 @@ import { Users, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 interface MentorUser {
   id: string;
@@ -34,6 +35,7 @@ export default function MentorsPage() {
   // the Users admin page (#570).
   const [statusView, setStatusView] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const editDialogRef = useModalFocus<HTMLDivElement>(editing !== null, () => setEditing(null));
 
   const load = useCallback(() => {
     setLoading(true);
@@ -207,8 +209,15 @@ export default function MentorsPage() {
 
       {editing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">{t.mentors.editExpertise}</h2>
+          <div
+            ref={editDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mentor-edit-title"
+            tabIndex={-1}
+            className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md"
+          >
+            <h2 id="mentor-edit-title" className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">{t.mentors.editExpertise}</h2>
             <p className="text-sm text-gray-500 mb-4">{editing.fullName}</p>
             <div className="space-y-4">
               <Input

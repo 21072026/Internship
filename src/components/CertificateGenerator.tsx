@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import { templateToHtml } from '@/lib/renderTemplate';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 import {
   buildCertificateBody,
   buildReferenceLetterBody,
@@ -53,6 +54,7 @@ export function CertificateGenerator({
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const dialogRef = useModalFocus<HTMLDivElement>(open, () => setOpen(false));
 
   // Regenerates the draft body from the current fields. Re-runs whenever the
   // structured inputs change — changing a field after hand-editing the body
@@ -107,10 +109,12 @@ export function CertificateGenerator({
 
       {open && (
         <div
+          ref={dialogRef}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
           aria-label={c.title}
+          tabIndex={-1}
           onClick={() => setOpen(false)}
         >
           <div

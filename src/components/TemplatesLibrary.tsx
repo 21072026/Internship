@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useT, useLocale } from '@/i18n/client';
 import { TEMPLATES, type DocTemplate, type TemplateLocale } from '@/lib/templates';
 import { templateToHtml, templateToText } from '@/lib/renderTemplate';
+import { useModalFocus } from '@/components/ui/useModalFocus';
 
 const ICONS: Record<string, typeof FileText> = { FileText, Mail, ClipboardList, CheckSquare };
 const LOCALES: TemplateLocale[] = ['en', 'tr', 'de'];
@@ -60,6 +61,7 @@ export function TemplatesLibrary() {
   const base: TemplateLocale = (['en', 'tr', 'de'].includes(locale) ? locale : 'en') as TemplateLocale;
   const [active, setActive] = useState<DocTemplate | null>(null);
   const [lang, setLang] = useState<TemplateLocale>(base);
+  const dialogRef = useModalFocus<HTMLDivElement>(active !== null, () => setActive(null));
 
   const open = (tpl: DocTemplate) => { setLang(base); setActive(tpl); };
   const tl = t.templatesLib;
@@ -92,10 +94,12 @@ export function TemplatesLibrary() {
 
       {active && (
         <div
+          ref={dialogRef}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           role="dialog"
           aria-modal="true"
           aria-label={active.title[lang]}
+          tabIndex={-1}
           onClick={() => setActive(null)}
         >
           <div
