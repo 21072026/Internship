@@ -17,6 +17,7 @@ import {
   validateAnnouncementImage,
 } from '@/lib/announcementImage';
 import { locales, type Locale } from '@/i18n/config';
+import { objectUrlSrc } from '@/lib/objectUrl';
 
 type Bodies = Partial<Record<Locale, string>>;
 
@@ -313,7 +314,7 @@ export default function AdminAnnouncementsPage() {
                 <div className="flex items-start gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={image.url}
+                    src={objectUrlSrc(image.url)}
                     alt={image.file.name}
                     data-testid="announcement-image-preview"
                     className="h-24 w-24 rounded-lg object-cover border border-gray-200 dark:border-gray-700"

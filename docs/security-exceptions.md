@@ -9,7 +9,7 @@ Bir bastırma dosyası yerine düz metin: gerekçe diğer güvenlik dokümanlar�
 yanında okunabilir kalıyor ve biri okuduğunda **hâlâ geçerli mi** diye sorması
 gerektiği belli oluyor.
 
-Son gözden geçirme: **2026-08-07** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
+Son gözden geçirme: **2026-08-24** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
 
 ## Açık bulgular
 
@@ -41,8 +41,41 @@ Son gözden geçirme: **2026-08-07** · Kaynak epic: [#823](https://github.com/2
 sharp 0.34.5 sabitliyor, yani majöre çıkmak bu bulguları kapatmıyordu.
 `overrides` tek gerçek çözümdü.
 
+## Kod taraması (CodeQL)
+
+### `js/xss-through-dom` — object-URL önizlemeleri (#1005)
+
+CodeQL, `URL.createObjectURL()` sonucunu bir `<img src>`'e veren her
+ek/görsel **önizlemesini** high olarak işaretliyordu: `MessageThread.tsx` (iki
+satır) ve `admin/announcements/page.tsx`. Kural haklı bir taint görüyor —
+DOM'dan gelen bir `File` bir `src` niteliğine ulaşıyor — ama bu hedef onu
+çalıştırabilecek bir hedef değil:
+
+- `URL.createObjectURL()` `blob:<origin>/<uuid>` üretir. Şemayı **tarayıcı**
+  koyar, dosya değil; dolayısıyla asla `javascript:` ya da `data:` olamaz.
+- `<img>`, baytlar SVG olsa bile script çalıştırmaz. SVG script'i yalnızca
+  belge **belge olarak** yüklendiğinde çalışır (iframe, object, doğrudan
+  gezinme).
+- Duyuru seçicisi ayrıca dosyayı `ANNOUNCEMENT_IMAGE_MIME` + `contentMatchesType()`
+  ile doğruluyor ve SVG zaten izin listesinde değil (#888/#990).
+
+**Karar: tek bir choke point** — `src/lib/objectUrl.ts` içindeki
+`objectUrlSrc()`, `blob:` ile başlamayan her değeri boş string'e çeviriyor ve
+üç çağrı yerinin de kullandığı tek yol o. Çalışma zamanında gereksiz; amacı,
+yukarıdaki muhakemenin dayandığı değişmezi üç ayrı yorum yerine **kodda tek
+yerde** tutmak. Yeni bir kompozit ekleyen kişi de aynı yoldan geçer, uyarı
+listesine bir satır daha eklemez.
+
+⚠️ Bu koruma yalnızca **CodeQL onu tanırsa** uyarıyı kapatır. Tanımıyorsa
+doğru hamle üç uyarıyı Security sekmesinden "false positive" olarak
+kapatmaktır — gerekçe zaten burada yazılı. Hangi yolun geçerli olduğu
+#1005'te kayıtlı; motor tanımadıysa bu bölüm "dismiss edildi" olarak
+güncellenmeli, koruma yine de kalabilir (zararsız ve niyeti belgeliyor).
+
 ## Yeni bir istisna eklerken
 
+0. Bulgu kod taramasından mı geliyor (bağımlılık değil)? Üstteki "Kod taraması"
+   bölümüne yaz; sorular aynı, "paket" yerine dosya/kural adı geçer.
 1. Neden düzeltilemediğini yaz (yama yok / majör gerekiyor / geçişli).
 2. **Bu uygulamada sömürülebilir mi** — sadece "advisory var" yetmez, kod yolunu adlandır.
 3. Kalıcı çözümü ve takip issue'sunu yaz.

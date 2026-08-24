@@ -5,6 +5,7 @@ import { FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { objectUrlSrc } from '@/lib/objectUrl';
 
 export interface PendingMessageAttachment {
   file: File;
@@ -39,9 +40,9 @@ export function PendingAttachmentList({ attachments, onRemove, removeLabel }: {
       {attachments.map((attachment, index) => (
         <div key={attachment.url} className="relative group">
           {attachment.file.type.startsWith('image/') ? (
-            <a href={attachment.url} target="_blank" rel="noopener noreferrer" title={attachment.file.name}>
+            <a href={objectUrlSrc(attachment.url)} target="_blank" rel="noopener noreferrer" title={attachment.file.name}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={attachment.url} alt={attachment.file.name} className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
+              <img src={objectUrlSrc(attachment.url)} alt={attachment.file.name} className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
             </a>
           ) : (
             <div className="flex items-center gap-2 text-xs bg-gray-100 dark:bg-gray-800 rounded-lg px-2.5 py-1.5 h-16">
