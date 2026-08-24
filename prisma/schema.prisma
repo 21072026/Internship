@@ -168,6 +168,10 @@ model User {
   // "fullname" | "initials". Null = initials — the privacy-first default;
   // showing the full name is an explicit choice next to the consent toggle.
   testimonialNameStyle    String?
+  // Whether the public profile shows the projects/tasks showcase (#1091).
+  // The data is the user's own work in PUBLIC projects only, so it rides the
+  // publicProfile switch — this just lets them turn that one section off.
+  publicShowProjects      Boolean       @default(true)
   // Extended profile (all optional; safe to add to existing rows).
   displayName             String?
   bio                     String?       @db.Text

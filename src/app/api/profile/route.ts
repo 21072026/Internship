@@ -42,6 +42,9 @@ const updateProfileSchema = z.object({
   // Full URL or an internal path (/api/cv/<id> set on CV upload).
   cvUrl: z.string().refine((v) => /^https?:\/\//.test(v) || v.startsWith('/'), 'Invalid URL').or(z.literal('')).nullable().optional(),
   publicProfile: z.boolean().optional(),
+  // Public-profile project showcase toggle (#1091) — the section rides
+  // publicProfile; this lets the user turn just that section off.
+  publicShowProjects: z.boolean().optional(),
   // Extended profile fields (EPIC 32).
   displayName: z.string().max(120).optional(),
   bio: z.string().max(2000).optional(),
@@ -111,6 +114,7 @@ const PROFILE_SELECT = {
   cvUrl: true,
   avatarUrl: true,
   publicProfile: true,
+  publicShowProjects: true,
   profileViews: true,
   displayName: true,
   bio: true,
