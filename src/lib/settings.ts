@@ -33,6 +33,19 @@ export const SETTING_DEFAULTS = {
   // feature consumes from this pool via runAiGated; '0' disables AI calls
   // entirely. Metered in AiUsage; resets each calendar month.
   aiMonthlyQuota: '200',
+  // Negative-outcome communication (#830). 'false' (default) means reaching an
+  // outcome stage notifies the mentor and prefills a draft — a human reads,
+  // edits and sends it. 'true' lets the templated message go out to the mentee
+  // automatically. Off by default on purpose: a rejection is the most sensitive
+  // text this product writes and the wrong message on the wrong case cannot be
+  // recalled.
+  outcomeAutoSend: 'false',
+  // Blind interview review (#819). 'true' hides a candidate's name, photo and
+  // university from an interviewer until that interviewer has submitted their
+  // own scorecard. Off by default so nothing changes for an existing
+  // installation; an org setting rather than a per-reviewer toggle, because a
+  // bias control people opt into is one the reviewers who most need it skip.
+  blindReview: 'false',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

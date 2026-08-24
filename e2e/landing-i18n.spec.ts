@@ -14,6 +14,10 @@ test('landing page shows features, pipeline and CTAs in English by default', { t
   await expect(menteeCta).toHaveAttribute('href', '/auth/register');
   // Each of the three audiences gets a card that jumps to its own section.
   await expect(page.getByTestId('role-card')).toHaveCount(3);
+  // Founder identity (#1097): a real person by name in the transparency band
+  // and the footer — the sole rights holder is a natural person, no company.
+  await expect(page.getByTestId('founder-identity')).toContainText('Mehmet Erşahin');
+  await expect(page.getByTestId('footer-founder')).toContainText('Mehmet Erşahin');
 });
 
 test('landing page switches to Turkish via the locale cookie', { tag: '@smoke' }, async ({ page }) => {

@@ -45,10 +45,12 @@ deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
 The **full suite** also runs on a schedule, 4× a day at 03/09/15/21 UTC
-(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted); after **every** scheduled
-run a Turkish summary email goes out (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`):
-"✅ 238/238 test geçti" heartbeat or the failing tests with error snippets. Set the repo
-variable `E2E_REPORT_MODE=failures` for red-only alerts.
+(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted). A drift gate skips the
+scheduled firing when main hasn't changed since the last completed run (re-testing the same
+commit only repeats the same verdict); `workflow_dispatch` always runs. A Turkish summary
+email (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`) goes out **only when the run is
+red** — the failing tests with error snippets. Set the repo variable
+`E2E_REPORT_MODE=always` to restore the "✅ N/N test geçti" green heartbeat.
 
 ## Architecture
 
@@ -211,20 +213,22 @@ workaround, #636, and it compiled on every PR push).
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.
-- **Versioning (maintainer instruction, 2026-07-20): bump the version + changelog on EVERY
-  shipped change**, not just notable batches — the maintainer tracks "what changed / what's
-  live" from the version. For each user-visible PR: bump `package.json` `version` (semver —
-  patch for fixes/small tweaks, minor for features), add a `CHANGELOG.md` entry (developer-
-  facing, Keep a Changelog format), and add a matching `src/lib/releaseNotes.ts` entry (user-
-  facing, EN/TR/DE, rendered at `/release-notes`, linked from the sidebar version footer). The
-  app version is read from `package.json` at build time (`src/lib/version.ts`); the git SHA is
-  baked into the Docker image via a build arg — no other wiring is needed. (Trivial non-user-
-  facing changes — pure docs, CI config — don't need a bump.)
-  **Versioning checklist — do ALL of these before the final commit of every user-visible PR:**
-  1. Bump `package.json` → `"version"` (patch `0.x.y` → `0.x.y+1`, or minor for large features).
-  2. Add a `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md` (developer-facing, Keep a Changelog).
-  3. Prepend an entry to `RELEASE_NOTES` in `src/lib/releaseNotes.ts` (user-facing EN/TR/DE strings).
-  Missing any one of these three is a checklist failure — reviewers will call it out.
+- **Versioning (maintainer instruction, 2026-07-20; mechanism reworked 2026-08-23, #1275):
+  every shipped change is versioned** — the maintainer tracks "what changed / what's live"
+  from the version. But PRs **never edit** `package.json`'s version, `CHANGELOG.md` or
+  `src/lib/releaseNotes.ts` directly anymore: those three changed on the same lines in every
+  PR, so parallel PRs always conflicted and raced for the same number.
+  **Versioning checklist — ONE step per shipped PR:** add a file
+  `releases/unreleased/<kebab-slug>.json` with `bump` (`minor` for features, `patch` for
+  fixes), `changelog` (developer-facing Keep-a-Changelog bullet, markdown) and — for
+  user-visible changes — `notes` with EN/TR/DE user-facing highlight strings (all three or
+  none). Full format + rationale: [releases/README.md](releases/README.md). Trivial
+  non-user-facing changes (pure docs, CI config) still need no fragment.
+  The displayed version is derived at build time from base+fragments (`next.config.js` →
+  `src/lib/version.ts`), so it is correct immediately after every merge; a scheduled workflow
+  (`release-compact.yml`) later folds fragments into the canonical files through a normal PR.
+  `npm run check:release-fragments` validates fragments in CI. A shipped change without a
+  fragment is a checklist failure — reviewers will call it out.
 - **E2E locator pitfalls** (hit repeatedly): `AdminNav` renders its own sidebar
   `input[type="search"]` filter box present on every admin page — an unscoped
   `input[type="search"]` selector in a new test will hit that instead of a page-level search

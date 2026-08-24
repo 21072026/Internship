@@ -44,6 +44,7 @@ test('admin board groups stages into collapsible phases and flags overdue cards'
     // The overdue candidate card is shown with its badge.
     await expect(page.getByText('BG Zeynep Overdue')).toBeVisible();
     await expect(page.getByText(/overdue/i).first()).toBeVisible();
+    await expect(page.getByTestId('board-scroll-result-right-hint')).toBeVisible();
 
     // Collapsing the pre-internship phase hides its cards.
     await preHeader.click();

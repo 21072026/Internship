@@ -637,15 +637,18 @@ export function AccountSettings() {
         </label>
         <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
 
-        <div className={`mt-3 space-y-1.5 pl-6 ${emailNotifications ? '' : 'opacity-40 pointer-events-none'}`}>
-          {/* Driven by NOTIFICATION_CATEGORIES (#668) so a new email category
-              can't ship without an opt-out toggle here. */}
+        <div className="mt-3 space-y-1.5 pl-6">
+          {/* Driven by NOTIFICATION_CATEGORIES (#668) so a new category can't
+              ship without an opt-out toggle here. Category switches gate BOTH
+              e-mail and in-app notifications (#886), so they stay interactive
+              even when the e-mail master switch above is off. */}
+          <p className="text-xs text-gray-400">{t.account.notifCategoriesHint}</p>
           {NOTIFICATION_CATEGORIES.map((cat) => (
             <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
               <input
                 type="checkbox"
                 checked={notifPrefs[cat] !== false}
-                disabled={savingPrefs || !emailNotifications}
+                disabled={savingPrefs}
                 onChange={(e) => togglePref(cat, e.target.checked)}
               />
               {(t.account.notifCategories as Record<string, string>)[cat]}

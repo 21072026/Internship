@@ -11,6 +11,7 @@ import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
+import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -20,7 +21,15 @@ const schema = z.object({
   city: z.string().optional(),
   university: z.string().optional(),
   department: z.string().optional(),
+  // Legacy free-text referral. Still accepted so older clients keep working;
+  // the form now sends the merged referrer below instead (#1296).
   referralSource: z.string().optional(),
+  // Who brought this mentee in — one field, two possible kinds: a registered
+  // person or a Source row. Never both (#1296).
+  referredById: z.string().optional().nullable(),
+  sourceId: z.string().optional().nullable(),
+  // Set on resubmit after the duplicate warning (#841): "yes, create anyway".
+  confirmDuplicate: z.boolean().optional(),
 });
 
 // A mentor (or admin) creates a mentee and assigns it to themselves in one step.
@@ -60,6 +69,54 @@ export async function POST(request: Request) {
         return NextResponse.json(planLimitError(gate), { status: 403 });
       }
 
+      // Duplicate pre-flight (#841): warn — never auto-merge, never block. The
+      // mentor sees the matches and resubmits with confirmDuplicate to proceed.
+      const duplicates = await findPossibleDuplicates({
+        orgId,
+        fullName,
+        email: hasRealEmail ? finalEmail : null,
+        phone: rest.phone,
+        whatsapp: rest.whatsapp,
+        university: rest.university,
+      });
+      if (duplicates.length > 0 && !parsed.data.confirmDuplicate) {
+        return NextResponse.json(
+          {
+            error: 'possible_duplicate',
+            possibleDuplicates: duplicates.map((m) => ({
+              id: m.id,
+              fullName: m.fullName,
+              email: m.email,
+              university: m.university,
+              signals: m.signals,
+            })),
+          },
+          { status: 409 },
+        );
+      }
+
+      // The merged referrer (#1296). Exactly one kind may be set, and a person
+      // referrer must be a real person-role account — the same rule
+      // `PATCH /api/users/[id]` enforces, so both entry points agree.
+      const referredById = rest.referredById || null;
+      const sourceId = rest.sourceId || null;
+      if (referredById && sourceId) {
+        return NextResponse.json(
+          { error: 'A person has one referrer: pass either referredById or sourceId, not both' },
+          { status: 400 },
+        );
+      }
+      if (referredById) {
+        const referrer = await prisma.user.findUnique({ where: { id: referredById }, select: { role: true } });
+        if (!referrer || !['ADMIN', 'MENTOR', 'MENTEE'].includes(referrer.role)) {
+          return NextResponse.json({ error: 'Invalid source user' }, { status: 400 });
+        }
+      }
+      if (sourceId) {
+        const source = await prisma.source.findUnique({ where: { id: sourceId }, select: { id: true } });
+        if (!source) return NextResponse.json({ error: 'Source not found' }, { status: 400 });
+      }
+
       const mentee = await prisma.user.create({
         data: {
           email: finalEmail,
@@ -74,6 +131,8 @@ export async function POST(request: Request) {
           university: rest.university || null,
           department: rest.department || null,
           referralSource: rest.referralSource || null,
+          referredById,
+          sourceId,
         },
       });
 

@@ -13,6 +13,11 @@ interface RequestRow {
   id: string;
   message?: string | null;
   targetPosition?: string | null;
+  // Matching preferences (#939) — advisory hints from the mentee; the
+  // preferred mentor merely preselects the picker below, never binds it.
+  preferredField?: string | null;
+  preferredLanguages?: unknown; // JSON column — guarded with Array.isArray
+  preferredMentor?: { id: string; fullName: string } | null;
   createdAt: string;
   mentee: { id: string; fullName: string; email: string; university?: string | null; skills: string[] };
 }
@@ -55,6 +60,24 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
       .catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Preselect the mentee's preferred mentor (#939) — non-binding: it only
+  // fills a select the admin has not touched yet, and only when that mentor
+  // is actually in the passed list. The admin can still pick anyone.
+  useEffect(() => {
+    setChoices((c) => {
+      let changed = false;
+      const next = { ...c };
+      for (const r of rows) {
+        const preferred = r.preferredMentor;
+        if (preferred && next[r.id] === undefined && mentors.some((m) => m.id === preferred.id)) {
+          next[r.id] = preferred.id;
+          changed = true;
+        }
+      }
+      return changed ? next : c;
+    });
+  }, [rows, mentors]);
 
   // Does the actual PUT — called either directly (reject, or approve of an
   // available mentor) or after the confirmation dialog is accepted. The
@@ -120,7 +143,11 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
       </CardHeader>
       {err && <p className="text-sm text-red-600 mb-2">{err}</p>}
       <div className="divide-y divide-gray-50 dark:divide-gray-800">
-        {rows.map((r) => (
+        {rows.map((r) => {
+          const preferredLanguages = Array.isArray(r.preferredLanguages)
+            ? (r.preferredLanguages as unknown[]).map((l) => String(l))
+            : [];
+          return (
           <div key={r.id} data-testid={`request-${r.id}`} className="py-3 flex flex-col lg:flex-row lg:items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -129,6 +156,25 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
               </p>
               <p className="text-xs text-gray-500 truncate">{r.mentee.email}{r.mentee.university ? ` · ${r.mentee.university}` : ''}</p>
               {r.message && <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-line">{r.message}</p>}
+              {(r.preferredField || preferredLanguages.length > 0 || r.preferredMentor) && (
+                <div className="flex flex-wrap gap-1.5 mt-1.5" data-testid="request-preferences">
+                  {r.preferredField && (
+                    <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+                      {q.prefField}: {r.preferredField}
+                    </span>
+                  )}
+                  {preferredLanguages.length > 0 && (
+                    <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+                      {q.prefLanguages}: {preferredLanguages.join(', ')}
+                    </span>
+                  )}
+                  {r.preferredMentor && (
+                    <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+                      {q.prefMentor}: {r.preferredMentor.fullName}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
               <select
@@ -159,7 +205,8 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
               </Button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
     <ConfirmDialog

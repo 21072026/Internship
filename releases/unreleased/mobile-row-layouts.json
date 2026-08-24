@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Phone-width row layouts (#1305)**: rows whose action cluster was pinned `flex-shrink-0` opposite the identity column now stack or wrap on a phone — `/admin/mentors` (the name/email column was squeezed to ~18px, chips ran under the buttons), `/admin/activity` (actor cut to `adm…`), `/mentor/mentees` (the third action clipped at the card edge), `/company` and the funnel/aging/stat rows on `/admin` + `/admin/analytics` + `/mentor/analytics`. The mobile top bar now truncates the brand *name* instead of the whole row, so the beta badge is no longer cut in half. `/admin/analytics`, `/admin/companies` and `/admin/support` also stopped pushing the page into horizontal scroll in German. New `e2e/mobile-layout-audit.spec.ts` audits four mechanical rules (no sideways scroll, nothing past the right edge, no box spilling its own content, no text box under 110px) across admin/mentor screens at 360px in Turkish and German; the reported-screens test is tagged `@smoke`.",
+  "notes": {
+    "en": ["Phone layouts fixed: mentor, activity-log and mentee rows no longer squeeze the name and e-mail away, and the beta badge is no longer clipped."],
+    "tr": ["Telefon görünümü düzeltildi: mentor, aktivite günlüğü ve mentee satırları artık isim ile e-postayı sıkıştırmıyor, beta rozeti de kırpılmıyor."],
+    "de": ["Telefon-Layouts korrigiert: In Mentor-, Aktivitäts- und Mentee-Zeilen werden Name und E-Mail nicht mehr zusammengedrückt, und das Beta-Abzeichen wird nicht mehr abgeschnitten."]
+  }
+}

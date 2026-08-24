@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { GraduationCap } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { getPublicEvaluationSummary } from '@/lib/testimonials';
 import { getServerDictionary } from '@/i18n/server';
 import { ProfileViewPing } from '@/components/ProfileViewPing';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -35,6 +36,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       interests: true,
       languages: true,
       mentorCapacity: true,
+      publicShowProjects: true,
       _count: {
         select: {
           mentorRelations: { where: { status: 'ACTIVE' } },
@@ -44,6 +46,29 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   });
 
   if (!user) notFound();
+
+  // Project showcase (#1091): the user's own work in PUBLIC projects only —
+  // a private project must never leak even its name, so both queries carry
+  // the isPublic filter. Task TITLES are project-internal and never shown,
+  // only the completed count. The whole section is skippable per user.
+  const [memberships, doneTasks] = user.publicShowProjects
+    ? await Promise.all([
+        prisma.projectMember.findMany({
+          where: { userId, project: { isPublic: true } },
+          select: {
+            functionalRole: true,
+            project: { select: { id: true, name: true, technologies: true, status: true } },
+          },
+        }),
+        prisma.projectTask.count({
+          where: { assigneeId: userId, done: true, project: { isPublic: true } },
+        }),
+      ])
+    : [[], 0];
+
+  // Consent-gated mentor evaluation summary (#1094) — every gate enforced
+  // server-side in the lib; null means the section does not exist at all.
+  const evaluationSummary = user.role === 'MENTEE' ? await getPublicEvaluationSummary(userId) : null;
 
   const skills = Array.isArray(user.skills) ? (user.skills as string[]) : [];
   const languages = Array.isArray(user.languages) ? (user.languages as string[]) : [];
@@ -157,6 +182,73 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
               </div>
             )}
           </dl>
+
+          {/* Evaluation summary (#1094): derived average + one approved
+              excerpt. Rendered only when every consent/publish gate held —
+              otherwise not even an empty box. */}
+          {evaluationSummary && (evaluationSummary.average !== null || evaluationSummary.excerpt) && (
+            <div className="mt-6 pt-4 border-t border-gray-100" data-testid="public-evaluation-summary">
+              <h2 className="text-sm font-semibold text-gray-900 mb-2">{t.publicProfile.evaluationTitle}</h2>
+              {evaluationSummary.average !== null && (
+                <p className="text-sm text-gray-700" data-testid="public-evaluation-average">
+                  <span className="font-semibold text-blue-700">{evaluationSummary.average}</span>
+                  <span className="text-gray-400">/5</span>{' '}
+                  <span className="text-gray-500">
+                    {t.publicProfile.evaluationCount.replace('{n}', String(evaluationSummary.count))}
+                  </span>
+                </p>
+              )}
+              {evaluationSummary.excerpt && (
+                <figure className="mt-2 rounded-xl bg-blue-50 p-4">
+                  <blockquote className="text-sm text-gray-700 italic leading-relaxed">
+                    “{evaluationSummary.excerpt}”
+                  </blockquote>
+                  {evaluationSummary.mentorName && (
+                    <figcaption className="mt-2 text-xs text-gray-500">
+                      — {evaluationSummary.mentorName}, {t.publicProfile.evaluationByMentor}
+                    </figcaption>
+                  )}
+                </figure>
+              )}
+            </div>
+          )}
+
+          {/* Project showcase (#1091): public projects only; hidden entirely
+              when there is nothing to show — "0 projects" is worse than
+              nothing. */}
+          {memberships.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-gray-100" data-testid="public-projects">
+              <h2 className="text-sm font-semibold text-gray-900 mb-2">{t.publicProfile.projectsTitle}</h2>
+              <ul className="space-y-2">
+                {memberships.map((m) => (
+                  <li key={m.project.id} className="rounded-xl bg-gray-50 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900">{m.project.name}</span>
+                      {m.functionalRole && (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] text-blue-700">
+                          {t.publicProfile.functionalRoles[m.functionalRole]}
+                        </span>
+                      )}
+                    </div>
+                    {Array.isArray(m.project.technologies) && (m.project.technologies as string[]).length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {(m.project.technologies as string[]).slice(0, 8).map((tech) => (
+                          <span key={tech} className="rounded bg-white px-1.5 py-0.5 text-[11px] text-gray-600 border border-gray-200">
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {doneTasks > 0 && (
+                <p className="mt-2 text-xs text-gray-500" data-testid="public-projects-tasks">
+                  {t.publicProfile.tasksCompleted.replace('{n}', String(doneTasks))}
+                </p>
+              )}
+            </div>
+          )}
 
           {links.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">

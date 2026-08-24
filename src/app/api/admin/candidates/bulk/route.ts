@@ -7,6 +7,7 @@ import { logActivity } from '@/lib/activity';
 import { nextOnPathStatus, type PipelineStatus } from '@/lib/pipeline';
 import { withTenantScope } from '@/lib/orgContext';
 import { validateDropoffReason } from '@/lib/stageChange';
+import { emitStageChange } from '@/lib/stageChangeEffects';
 
 const bodySchema = z.object({
   candidateIds: z.array(z.string().min(1)).min(1).max(200),
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
     });
 
     let advanced = 0;
+    const notifiedMentees = new Set<string>();
     for (const rel of relations) {
       // Advance along the happy path only, via nextOnPathStatus — never a raw
       // indexOf+1 on the stage list (#740). Off-path/terminal states
@@ -86,6 +88,18 @@ export async function POST(request: Request) {
           },
         }),
       ]);
+      // Same effects as every other stage-write path (#926/#886): one
+      // notification per PERSON even if a mentee has two active relations in
+      // the batch (no notification storm), webhook per relation regardless.
+      await emitStageChange({
+        relationId: rel.id,
+        menteeId: rel.menteeId,
+        orgId: rel.orgId,
+        from: rel.pipelineStatus,
+        to: nextStatus,
+        skipNotify: notifiedMentees.has(rel.menteeId),
+      });
+      notifiedMentees.add(rel.menteeId);
       advanced++;
     }
 

@@ -34,6 +34,17 @@ const COLUMNS = [
   { table: 'MenteeOnboarding', column: 'steps', fallback: '{}' },
   { table: 'Evaluation', column: 'scores', fallback: '{}' },
   { table: 'MeetingSeries', column: 'daysOfWeek', fallback: '[]' },
+  { table: 'Notification', column: 'params', fallback: null },
+  { table: 'Announcement', column: 'translations', fallback: null },
+  // An empty labels object renders as the requirement key (requirementLabel()
+  // falls back key-ward), which is the honest display for a lost value.
+  { table: 'DocumentRequirement', column: 'labels', fallback: '{}' },
+  // The column whose '' fill killed the 2026-08-24 prod deploy: the same push
+  // added an FK on the table, and that rebuild re-validated json_valid().
+  { table: 'MentorshipRequest', column: 'preferredLanguages', fallback: '[]' },
+  { table: 'MeetingRoomState', column: 'participants', fallback: '[]' },
+  { table: 'Requisition', column: 'requiredSkills', fallback: '[]' },
+  { table: 'InterviewRequest', column: 'proposedSlots', fallback: null },
 ];
 
 const repair = process.argv.includes('--repair');

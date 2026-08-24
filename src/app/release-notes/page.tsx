@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { GraduationCap, Sparkles } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
-import { RELEASE_NOTES } from '@/lib/releaseNotes';
+import { getAllReleaseNotes } from '@/lib/releaseNotes';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { PublicShell } from '@/components/landing/PublicShell';
 
@@ -21,7 +21,7 @@ export default async function ReleaseNotesPage() {
         </div>
 
         <div className="space-y-6">
-          {RELEASE_NOTES.map((r) => (
+          {getAllReleaseNotes().map((r) => (
             <div key={r.version} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
               <div className="flex items-baseline justify-between mb-3">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">v{r.version}</h2>

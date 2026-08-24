@@ -127,7 +127,9 @@ export default function CompaniesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      {/* Wraps on a phone: "Unternehmen hinzufügen" next to the title pushed the
+          button 9px past the content column in German (#1305). */}
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.companiesPage.title}</h1>
           <p className="text-gray-500 mt-1">{t.companiesPage.subtitle}</p>

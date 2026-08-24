@@ -8,6 +8,7 @@ import { randomBytes } from 'crypto';
 import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
+import { findPossibleDuplicates, type DuplicateSignal } from '@/lib/duplicateDetection';
 
 const schema = z.object({ csv: z.string().min(1).max(200_000), dryRun: z.boolean().optional() });
 
@@ -50,7 +51,16 @@ export async function POST(request: Request) {
   const skipped: string[] = [];
   const errors: string[] = [];
   // Per-row validation report (1-based row numbers, after header).
-  const rows: { row: number; email: string; status: 'create' | 'skip' | 'error'; reason?: string }[] = [];
+  const rows: {
+    row: number;
+    email: string;
+    status: 'create' | 'skip' | 'error';
+    reason?: string;
+    // Look-alike existing candidates (#841) — warn-only, the row is still
+    // created/creatable; the admin reviews and merges from /admin/duplicates.
+    possibleDuplicates?: { id: string; fullName: string; matchedOn: DuplicateSignal[] }[];
+  }[] = [];
+  const orgId = resolveOrgId(session);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -66,7 +76,22 @@ export async function POST(request: Request) {
       rows.push({ row: i + 1, email, status: 'skip', reason: 'already exists' });
       continue;
     }
-    rows.push({ row: i + 1, email, status: 'create' });
+    // Duplicate pre-flight (#841): report-only — the import proceeds either
+    // way, the row just carries the matches so the report can flag them.
+    const matches = await findPossibleDuplicates({
+      orgId,
+      fullName: fullName || email.split('@')[0],
+      phone,
+      university,
+    });
+    rows.push({
+      row: i + 1,
+      email,
+      status: 'create',
+      ...(matches.length > 0
+        ? { possibleDuplicates: matches.map((m) => ({ id: m.id, fullName: m.fullName, matchedOn: m.signals })) }
+        : {}),
+    });
     if (dryRun) continue;
     const password = await bcrypt.hash(randomBytes(18).toString('hex'), 10);
     await prisma.user.create({
@@ -77,7 +102,7 @@ export async function POST(request: Request) {
         role: 'MENTEE',
         // Inherit the importing admin's org so CSV-imported users stay inside
         // the tenant's counts/isolation, like every other create path (#678).
-        orgId: resolveOrgId(session),
+        orgId,
         phone: phone || null,
         university: university || null,
         department: department || null,

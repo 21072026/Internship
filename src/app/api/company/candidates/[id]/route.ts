@@ -93,7 +93,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         scores: e.scores,
         comment: e.comment,
         createdAt: e.createdAt,
-        authorName: e.relation.mentor.fullName,
+        // Always present here: these rows come from r.evaluations, i.e. through
+        // the relation itself (an interview scorecard has none — #824).
+        authorName: e.relation?.mentor.fullName ?? null,
       }))
     );
 

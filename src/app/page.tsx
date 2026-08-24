@@ -12,9 +12,12 @@ import { hasSessionCookie } from '@/lib/sessionCookie';
 import { roleHome } from '@/lib/roleHome';
 import { getServerDictionary } from '@/i18n/server';
 import { PublicShell } from '@/components/landing/PublicShell';
-import { GITHUB_URL } from '@/components/landing/links';
+import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
 import { TawkChat } from '@/components/TawkChat';
-import { RELEASE_NOTES } from '@/lib/releaseNotes';
+import { getAllReleaseNotes } from '@/lib/releaseNotes';
+import { listPublishedStories } from '@/lib/testimonials';
+import { getPublicStats } from '@/lib/publicStats';
+import { buildLiveStripPieces } from '@/lib/liveStrip';
 
 export default async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
@@ -35,6 +38,21 @@ export default async function HomePage() {
   // Fed from the single-source catalogue (#584/#588): the landing shows the
   // featured subset; /features shows everything.
   const features = getFeatures(t).filter((f) => f.featured);
+
+  // Consent-gated success stories (#1100). Honesty rule (§4.2): with zero
+  // published stories the section does not exist — no heading, no empty grid,
+  // no "testimonials coming soon" placeholder. The count is computed live,
+  // never written into copy by hand (§4.3).
+  const stories = await listPublishedStories(3);
+
+  // Live hero numbers (#1099) — served from the same cached helper the public
+  // /api/public/stats endpoint uses, so the landing never fans out its own
+  // count() queries per request.
+  const livePieces = buildLiveStripPieces(await getPublicStats(), {
+    mentors: L.liveMentors,
+    openProjects: L.liveProjects,
+    waitingCandidates: L.liveWaiting,
+  });
   const iconBg: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-600', green: 'bg-green-100 text-green-600',
     purple: 'bg-purple-100 text-purple-600', amber: 'bg-amber-100 text-amber-600',
@@ -91,7 +109,7 @@ export default async function HomePage() {
 
   // Only claims a stranger can check without an account. The version count is
   // read from the release notes rather than typed in, so it cannot go stale.
-  const releaseCount = RELEASE_NOTES.length;
+  const releaseCount = getAllReleaseNotes().length;
   const transparency = [
     { t: L.trans1T, d: L.trans1D, icon: Code2 },
     { t: L.trans2T.replace('{n}', String(releaseCount)), d: L.trans2D, icon: ScrollText },
@@ -198,6 +216,16 @@ export default async function HomePage() {
               </span>
             ))}
           </div>
+          {/* Live status strip (#1099): real numbers, computed — never written
+              into copy by hand (§4.3). A zero piece is not rendered; with all
+              three at zero the strip is not in the DOM at all ("0 open
+              projects" is worse than nothing). */}
+          {livePieces.length > 0 && (
+            <p className="mt-6 text-center text-sm text-gray-600" data-testid="hero-live-strip">
+              <span className="font-medium text-gray-500">{L.liveNow}</span>{' '}
+              {livePieces.join(' · ')}
+            </p>
+          )}
           <div className="text-center mt-10">
             <a href="#loop" className="inline-flex items-center gap-1.5 text-blue-600 hover:underline font-medium">
               {L.heroScrollCue} <ArrowDown className="h-4 w-4" />
@@ -480,8 +508,47 @@ export default async function HomePage() {
               <Github className="h-4 w-4" />{L.transLinkGithub}
             </a>
           </div>
+
+          {/* Founder identity (#1097): on a beta product, namelessness is the
+              biggest trust-breaker (docs/landing-value-proposition.md §4.1).
+              A real person, by name — never a company as the owner (CLAUDE.md
+              → Licensing & IP). */}
+          <div className="mt-6 p-6 rounded-xl border border-gray-200 text-center" data-testid="founder-identity">
+            <h3 className="font-semibold text-gray-900 mb-1">{L.founderTitle}</h3>
+            <p className="text-sm text-gray-600 leading-relaxed max-w-2xl mx-auto">
+              {L.founderBody.replace('{name}', FOUNDER_NAME)}
+            </p>
+            <a href={FOUNDER_URL} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline">
+              <Github className="h-4 w-4" />{L.founderLink}
+            </a>
+          </div>
         </div>
       </section>
+
+      {/* Success stories (#1100) — rendered ONLY when at least one published,
+          consent-gated story exists; otherwise this section is not in the DOM
+          at all (docs/landing-value-proposition.md §4.2 honesty rule). */}
+      {stories.length > 0 && (
+        <section className="py-16 px-4" data-testid="landing-stories">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-10">{L.stories.title}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              {stories.map((s) => (
+                <figure key={s.id} className="rounded-xl border border-gray-200 bg-white p-6">
+                  <blockquote className="text-sm text-gray-700 leading-relaxed">“{s.excerpt}”</blockquote>
+                  <figcaption className="mt-4 text-sm">
+                    <span className="font-medium text-gray-900">{s.name}</span>
+                    <span className="text-gray-400"> · {L.stories.roles[s.role]}</span>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+            <div className="mt-6 text-center">
+              <Link href="/stories" className="text-sm text-blue-600 hover:underline">{L.stories.viewAll}</Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* FAQ */}
       <section className="py-16 px-4">

@@ -37,6 +37,11 @@ const NOTIFICATION_TYPE_ICONS: Record<string, LucideIcon> = {
   meeting_request: CalendarClock,
   announcement: Megaphone,
   mentor_application: GraduationCap,
+  interaction: FileText,
+  meeting: CalendarClock,
+  goal: Target,
+  evaluation: UserCheck,
+  company_interest: Handshake,
 };
 
 export function NotificationTypeIcon({ type, className }: { type: string; className?: string }) {

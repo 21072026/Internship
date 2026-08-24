@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPlans';
-import { isHexColor } from '@/lib/branding';
+import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
@@ -156,6 +156,16 @@ export async function PATCH(request: Request) {
   // Validate an explicitly-set (non-blank) brand color as a hex value.
   if (brandColor && brandColor.trim() && !isHexColor(brandColor)) {
     return NextResponse.json({ error: 'Brand color must be a hex value like #2563eb' }, { status: 400 });
+  }
+
+  // The logo URL is fetched by the server when a certificate is rendered and is
+  // interpolated into every branded email — a bare `z.string()` let an admin
+  // point either at an internal address. See isSafeBrandLogoUrl.
+  if (brandLogoUrl !== undefined && !isSafeBrandLogoUrl(brandLogoUrl)) {
+    return NextResponse.json(
+      { error: 'Logo URL must be an https:// address, a path like /logo.svg, or an inline data:image' },
+      { status: 400 }
+    );
   }
 
   const existing = await prisma.organization.findUnique({ where: { id } });

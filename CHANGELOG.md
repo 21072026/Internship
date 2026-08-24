@@ -8,11 +8,69 @@ version is shown in the sidebar footer of every page (links to the
 [user-facing release notes](src/lib/releaseNotes.ts), rendered at
 `/release-notes`) and in the landing-page footer.
 
-## [0.83.1-beta] - 2026-08-20
+## [0.85.0-beta] - 2026-08-23
+
+### Changed
+- **Mentee portal split into a summary + three sub-pages (#916).** The dashboard stacked
+  ~15 panels on one page (5 641 px tall at 390 px). `/portal` is now a short summary —
+  checklist, upcoming-meeting strip, missing documents, nudges, offer, journey strip and a
+  compact mentor card — at 2 124 px (−62 %), with the heavier panels on real sub-routes so
+  deep links and the back button behave: `/portal/journey` (full journey + mentorship
+  detail incl. company and recent interactions), `/portal/goals` (goals, weekly reports,
+  evaluations, interview prep), `/portal/requests` (questions, meeting requests). A shared
+  `PortalTabs` bar (tablist/tab a11y markup) links the four sections on every page.
+  `NotesPanel` no longer renders twice (only `/portal/notes`); the read-only profile card
+  and the documents list left the dashboard for `/portal/profile(#documents)`. Sub-route
+  fetches are trimmed to what each page needs. Affected e2e specs updated in the same
+  change; the 390 px mobile-overflow audit now covers the three new sub-pages. EN/TR/DE.
+
+## [0.84.1-beta] - 2026-08-23
 
 ### Fixed
-- Admin and mentor pipeline boards now show dark-mode-compatible left/right scroll
-  hints when their columns overflow horizontally.
+- **Duplicate merge no longer 500s after committing** (#841 hotfix). `AuditLog.detail`
+  is a default VARCHAR(191); the `USER_MERGE` detail carries per-relation move counts
+  as JSON and overflowed it, so the audit insert threw P2000 AFTER `mergeUsers` had
+  committed — the admin saw a 500 for a merge that had succeeded, no audit row was
+  written, and a retry hit `not_found` because the absorbed user was already gone.
+  (Caught by running `e2e/duplicate-merge.spec.ts`, which is not in the smoke set the
+  PR gate runs.) The column is now `@db.Text` (lossless widen, passes the schema
+  guard), and the post-commit audit/activity writes can no longer turn a committed,
+  irreversible merge into an error response.
+- **Merged profiles no longer point at the deleted user's files** (#841 hotfix).
+  `cvUrl`/`avatarUrl` embed the user id (`/api/cv/<id>`, `/api/avatar/<id>`); the
+  verbatim copy-if-empty left the primary linking to the absorbed id (404 after the
+  delete). The URLs are now rewritten against the primary's own id whenever a file
+  row moved.
+
+## [0.84.0-beta] - 2026-08-19
+
+### Added
+- **Duplicate candidate detection & merge (#841).** The same student could enter through
+  four doors (CSV import, self-registration, mentor manual entry, public application) that
+  never checked each other; there was no way to combine the resulting records.
+  - `src/lib/duplicateDetection.ts`: shared detector — exact signals on normalized e-mail
+    and phone (country code / trunk zero / separators stripped, last-10-digit compare,
+    cross-checked against WhatsApp), fuzzy name matching with Turkish-safe normalization
+    (İ/ı, ş, ğ, ç, ö, ü via `transliterate` before lowercasing — the `'İ'.toLowerCase()`
+    two-code-point trap is unit-tested), university as a corroborating signal. Generated
+    `@import.local` / `@erased.local` addresses never match. Org-scoped.
+  - Warn, never auto-merge: the mentor "new mentee" form gets a pre-flight 409 with a
+    comparison panel and an explicit "create anyway" override; CSV import (incl. dry run)
+    reports possible duplicates per row; public apply/register and source submissions
+    notify admins (`duplicate.suspected`) without leaking anything into public responses.
+  - `src/lib/mergeUsers.ts`: MENTEE-into-MENTEE merge in ONE transaction — every FK-backed
+    relation re-pointed with per-constraint dedupe (consents, files, project membership,
+    onboarding, reminders), bare no-FK user-id columns re-pointed (messages, evaluations,
+    meetings, audit trails), derived unique keys recomputed (`CompanyInterest.scopeKey`,
+    `InterviewRequest.activeKey`, `Conversation.directKey` incl. folding converged direct
+    threads), mentorship relations collapsed semantically with weekly-report weekStart
+    dedupe, profile fields folded (copy-if-empty + skills/languages union), then the
+    duplicate row deleted. Refuses cross-org, non-MENTEE, erased and directly-linked pairs.
+  - `/admin/duplicates`: bulk scan report with signal badges + side-by-side compare and an
+    irreversible-merge dialog copying the erase pattern (typed name + admin password
+    step-up, impersonation refused); `AuditLog` `USER_MERGE` entry with moved-row counts.
+  - EN/TR/DE throughout; 14-test unit spec for the normalizers/matcher plus a full e2e
+    merge spec asserting every moved relation and the audit record.
 
 ## [0.83.0-beta] - 2026-08-19
 

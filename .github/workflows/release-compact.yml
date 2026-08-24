@@ -1,0 +1,78 @@
+name: Compact release fragments
+
+# #1275 — the other half of the release-fragment system (releases/README.md).
+# PRs only ADD files under releases/unreleased/; this workflow periodically
+# folds them into the three canonical files (package.json version, CHANGELOG.md,
+# src/lib/releaseNotes.ts) and deletes them — through a NORMAL pull request, so
+# branch protection and the PR checks stay in force (a bot cannot push to main
+# directly here: classic protection requires status checks on every push).
+#
+# Between a merge and this compaction, the app already shows the right version:
+# next.config.js derives it from base+fragments at build time — so a delayed
+# compaction is harmless.
+#
+# TOKEN NOTE: the repo secret RELEASE_BOT_TOKEN (a maintainer's fine-grained
+# PAT — this repo only, contents + pull-requests: write) is effectively
+# REQUIRED for the scheduled path, twice over: the org setting forbids the
+# default GITHUB_TOKEN from creating PRs at all, and even where allowed, a
+# GITHUB_TOKEN-created PR would not trigger the required checks (GitHub's
+# recursion guard), so auto-merge could never fire. Without the secret this
+# workflow fails at the PR step — harmless: compaction can lag indefinitely
+# (builds derive the version from base+fragments), and any maintainer or agent
+# session can run `node scripts/release-compact.mjs` and open the PR normally.
+
+on:
+  schedule:
+    # Daily, in the quiet hours between the 03:00 UTC e2e-full run and the
+    # first European work pushes.
+    - cron: '45 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: release-compact
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Push the bot branch with the PAT too (not only the PR creation), so
+          # the branch's own push-triggered workflows run as well.
+          token: ${{ secrets.RELEASE_BOT_TOKEN || github.token }}
+
+      - name: Compact fragments
+        id: compact
+        run: |
+          set -euo pipefail
+          if ! ls releases/unreleased/*.json >/dev/null 2>&1; then
+            echo "nothing to compact"; echo "changed=0" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          node scripts/release-compact.mjs
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "changed=1" >> "$GITHUB_OUTPUT"
+
+      - name: Open the compaction PR
+        if: steps.compact.outputs.changed == '1'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.compact.outputs.version }}
+        run: |
+          set -euo pipefail
+          BRANCH="bot/release-compact-${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore(release): compact fragments into ${VERSION} (#1275)"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "chore(release): compact fragments into ${VERSION}" \
+            --body "Scheduled compaction (#1275): folds the pending \`releases/unreleased/\` fragments into \`package.json\`, \`CHANGELOG.md\` and \`src/lib/releaseNotes.ts\`, then deletes them. The displayed version does not change — builds already derived \`${VERSION}\` from base+fragments; this only makes the canonical files match it."
+          gh pr merge "$BRANCH" --squash --auto
