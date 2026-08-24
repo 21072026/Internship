@@ -81,6 +81,9 @@ else
     [ "$_port" = "$_hostport" ] && _port=3306
     _decode() { printf '%b' "${1//%/\\x}"; }
     _user="$(_decode "$_user")"; _pass="$(_decode "$_pass")"
+    # The env file's host is written for the container; on the host itself
+    # `host.docker.internal` resolves to nothing (#1185 follow-up).
+    case "$_host" in host.docker.internal|docker.for.mac.localhost) _host=127.0.0.1 ;; esac
     if [ "$TOPIC_DB" = "$_shared" ]; then
       echo "REFUSED: ${TOPIC_DB} is the shared preview database" >&2
     elif command -v mysql >/dev/null; then
@@ -88,9 +91,10 @@ else
       # Same two routes as the deploy: the app user, then the local root socket
       # (this runs as root on the DB host). A database that survives teardown is
       # the leak this change exists to avoid, so it is worth the second attempt.
-      MYSQL_PWD="$_pass" mysql -h "$_host" -P "$_port" -u "$_user" \
-        -e "DROP DATABASE IF EXISTS \`${TOPIC_DB}\`;" 2>/dev/null \
-        || mysql --protocol=socket -u root -e "DROP DATABASE IF EXISTS \`${TOPIC_DB}\`;" 2>/dev/null \
+      _drop="DROP DATABASE IF EXISTS \`${TOPIC_DB}\`;"
+      MYSQL_PWD="$_pass" mysql -h "$_host" -P "$_port" -u "$_user" -e "$_drop" 2>/dev/null \
+        || { command -v plesk >/dev/null 2>&1 && printf '%s\n' "$_drop" | plesk db 2>/dev/null; } \
+        || mysql --protocol=socket -u root -e "$_drop" 2>/dev/null \
         || echo "WARN: could not drop ${TOPIC_DB} — the daily topic sweep will retry"
     else
       echo "WARN: mysql client not found — ${TOPIC_DB} left in place"

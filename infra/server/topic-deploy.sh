@@ -126,6 +126,15 @@ DB_HOST="${_hostport%%:*}"; DB_PORT="${_hostport#*:}"
 _decode() { printf '%b' "${1//%/\\x}"; }
 DB_USER="$(_decode "$DB_USER")"; DB_PASS="$(_decode "$DB_PASS")"
 
+# The env file's URL is written for the CONTAINER, so its host is often
+# `host.docker.internal` — a name that only resolves INSIDE a container. This
+# script runs on the host, where the same server is reachable on loopback.
+# (Without this the very first deploy failed instantly: every mysql call, app
+# user and admin alike, could not resolve the host at all.)
+case "$DB_HOST" in
+  host.docker.internal|docker.for.mac.localhost) DB_HOST=127.0.0.1 ;;
+esac
+
 if [ "$TOPIC_DB" = "$SHARED_DB" ]; then
   echo "ERROR: topic database name equals the shared preview database ('${SHARED_DB}')" >&2
   exit 1
@@ -134,12 +143,22 @@ fi
 command -v mysql >/dev/null || { echo "ERROR: mysql client not found on the host" >&2; exit 1; }
 _sql() { MYSQL_PWD="$DB_PASS" mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" --batch --skip-column-names "$@"; }
 # This script runs as root ON the database host, so when the app user has not
-# been granted CREATE on the topic databases we can still do it through the
-# local root socket — and grant the app user access to what we just created, so
-# the container can actually connect. Without this the feature would need a
-# manual GRANT before the first PR, and every topic preview would break until
-# somebody ran it.
-_root_sql() { mysql --protocol=socket -u root --batch --skip-column-names "$@" 2>/dev/null; }
+# been granted CREATE on the topic databases we can still do it as an admin —
+# and grant the app user access to what we just created, so the container can
+# actually connect. Without this the feature would need a manual GRANT before
+# the first PR, and every topic preview would break until somebody ran it.
+#
+# Two admin routes, in order. `plesk db` first because this IS a Plesk box and
+# there the MySQL root account is not socket-authenticated — Plesk holds the
+# admin credentials and hands them to the client for you. The plain root socket
+# is the fallback for a non-Plesk host.
+_admin_sql() {
+  if command -v plesk >/dev/null 2>&1; then
+    if printf '%s\n' "$1" | plesk db --batch --skip-column-names 2>/dev/null; then return 0; fi
+    if plesk db -e "$1" 2>/dev/null; then return 0; fi
+  fi
+  mysql --protocol=socket -u root --batch --skip-column-names -e "$1" 2>/dev/null
+}
 
 # Is this the first deploy of this PR, or a re-push into an existing database?
 # A fresh one gets seeded; an existing one keeps whatever the reviewer has been
@@ -149,12 +168,30 @@ EXISTING_TABLES=$(_sql -e "SELECT COUNT(*) FROM information_schema.tables WHERE 
 echo "==> Topic database: ${TOPIC_DB} on ${DB_HOST}:${DB_PORT} (shared preview DB '${SHARED_DB}' is NOT used)"
 CREATE_SQL="CREATE DATABASE IF NOT EXISTS \`${TOPIC_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 if ! _sql -e "$CREATE_SQL" 2>/dev/null; then
-  echo "==> App user cannot create databases; trying the local root socket"
-  if _root_sql -e "$CREATE_SQL" \
-     && _root_sql -e "GRANT ALL PRIVILEGES ON \`${TOPIC_DB}\`.* TO '${DB_USER}'@'%'; FLUSH PRIVILEGES;"; then
-    echo "==> Created ${TOPIC_DB} as root and granted it to '${DB_USER}'"
+  echo "==> App user cannot create databases; creating it as a MySQL admin"
+  if _admin_sql "$CREATE_SQL"; then
+    # Grant to every host the account actually exists under. Guessing '%' is how
+    # this silently half-works: an account defined as 'user'@'localhost' gets a
+    # grant that never applies to it, and the container then cannot connect to
+    # the database we just made.
+    granted=0
+    for h in $(_admin_sql "SELECT host FROM mysql.user WHERE user='${DB_USER}';"); do
+      _admin_sql "GRANT ALL PRIVILEGES ON \`${TOPIC_DB}\`.* TO '${DB_USER}'@'${h}';" && granted=1
+    done
+    [ "$granted" = 1 ] || _admin_sql "GRANT ALL PRIVILEGES ON \`${TOPIC_DB}\`.* TO '${DB_USER}'@'%';"
+    _admin_sql "FLUSH PRIVILEGES;" >/dev/null
+    # Prove it: the grant is worth nothing if the app user still cannot use the
+    # database, and finding that out here beats finding it out from a container
+    # that will not boot.
+    if ! _sql -e "USE \`${TOPIC_DB}\`; SELECT 1;" >/dev/null 2>&1; then
+      echo "ERROR: created ${TOPIC_DB} but '${DB_USER}' still cannot access it." >&2
+      echo "       Grant it once, as a MySQL admin:" >&2
+      echo "       GRANT ALL PRIVILEGES ON \`internship\\_pr%\`.* TO '${DB_USER}'@'%';" >&2
+      exit 1
+    fi
+    echo "==> Created ${TOPIC_DB} as admin and granted it to '${DB_USER}'"
   else
-    echo "ERROR: could not create ${TOPIC_DB}." >&2
+    echo "ERROR: could not create ${TOPIC_DB} — neither '${DB_USER}' nor a local admin could." >&2
     echo "       Grant it once, as a MySQL admin:" >&2
     echo "       GRANT ALL PRIVILEGES ON \`internship\\_pr%\`.* TO '${DB_USER}'@'%';" >&2
     echo "       Refusing to fall back to the shared preview database — isolation is the point (#1185)." >&2
