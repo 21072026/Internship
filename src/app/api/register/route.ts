@@ -202,7 +202,7 @@ export async function POST(request: Request) {
             counterpartId,
             'mentorship.connected',
             { name: user.fullName },
-            role === 'MENTEE' ? '/mentor/mentees' : '/admin/mentorship'
+            role === 'MENTEE' ? '/mentor/mentees' : '/portal'
           );
         }
         if (autoLink.projectId) {

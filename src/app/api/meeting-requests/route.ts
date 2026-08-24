@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   // Notify the other party (the mentor) of the request.
   const recipient = otherParticipant(rel, session.user.id);
   if (recipient && recipient !== session.user.id) {
-    const link = `/mentor/mentees/${rel.id}`;
+    const link = recipient === rel.mentorId ? `/mentor/mentees/${rel.id}` : '/portal';
     const requesterName = session.user.name;
     await notify(
       recipient,

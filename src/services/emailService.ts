@@ -1529,7 +1529,7 @@ export async function sendMeetingReminders() {
     );
 
     for (const user of participants) {
-      const link = user.role === 'MENTEE' ? '/portal' : '/mentor/meetings';
+      const link = user.id === m.relation.mentorId ? '/mentor/meetings' : '/portal/calendar';
       // Per participant: the two sides of a relation can sit in different zones,
       // and each must read the time on their own clock (#1030).
       const when = formatInTimeZone(m.scheduledAt!, user.timezone);
@@ -2070,7 +2070,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
           id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true,
           menteeRelations: {
             where: { status: 'ACTIVE', mentor: { isActive: true } },
-            select: { mentor: { select: { id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } } },
+            select: { id: true, mentor: { select: { id: true, fullName: true, email: true, orgId: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true } } },
           },
         },
       });
@@ -2079,7 +2079,10 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
       for (const row of result.rows) {
         const mentee = byId.get(row.user.id);
         if (!mentee) continue;
-        const recipients = [mentee, ...mentee.menteeRelations.map((relation) => relation.mentor)]
+        const recipients = [
+          { ...mentee, relationId: null },
+          ...mentee.menteeRelations.map((relation) => ({ ...relation.mentor, relationId: relation.id })),
+        ]
           .filter((recipient, index, all) => all.findIndex((candidate) => candidate.id === recipient.id) === index);
         for (const requirement of row.missing) {
           for (const recipient of recipients) {
@@ -2093,7 +2096,7 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             const t = getDictionary(locale).documentRequirements;
             const label = requirement.labels[locale] || requirement.labels.en || requirement.key;
             const isMentee = recipient.id === mentee.id;
-            const link = isMentee ? '/portal/profile#documents' : `/mentor/mentees/${mentee.id}`;
+            const link = isMentee ? '/portal/profile#documents' : `/mentor/mentees/${recipient.relationId}`;
             await notify(
               recipient.id,
               isMentee ? 'missing_document.self' : 'missing_document.mentor',

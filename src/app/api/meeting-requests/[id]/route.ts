@@ -47,11 +47,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  const requesterLink = req.requestedById === rel.mentorId
+    ? `/mentor/mentees/${rel.id}`
+    : req.requestedById === rel.menteeId
+      ? '/portal'
+      : `/messages/${rel.id}`;
 
   if (parsed.data.action === 'decline') {
     await prisma.meetingRequest.update({ where: { id }, data: { status: 'DECLINED' } });
-    await notify(req.requestedById, 'meeting_request.declined', {}, '/portal');
-    await emailDecision(req.requestedById, { topic: req.topic, accepted: false, link: '/portal' });
+    await notify(req.requestedById, 'meeting_request.declined', {}, requesterLink);
+    await emailDecision(req.requestedById, { topic: req.topic, accepted: false, link: requesterLink });
     return NextResponse.json({ ok: true, status: 'DECLINED' });
   }
 
