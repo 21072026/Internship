@@ -29,11 +29,11 @@ export function ResponsiveShell({
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 lg:flex">
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 h-14 px-2">
-        {/* Keep enough room for the one-line wordmark beside the badge and the
-            three 44px action targets on a 360px phone. */}
+        {/* Keep enough room for the one-line wordmark and three 44px actions;
+            the secondary environment badge returns at the sm breakpoint. */}
         <div className="flex items-center min-w-0">
           {brand ?? <span className="font-bold text-gray-900 dark:text-gray-100 truncate">InternshipCRM</span>}
-          <BetaBadge className="ml-2 flex-shrink-0" />
+          <BetaBadge className="ml-2 hidden flex-shrink-0 sm:inline-flex" />
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Only visible while a meeting is actually running (#51 follow-up). */}
