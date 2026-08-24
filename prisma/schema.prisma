@@ -350,6 +350,7 @@ model User {
   personalNotes                     PersonalNote[]
   consents                          UserConsent[]
   contributorTermsAcceptances       ContributorTermsAcceptance[]
+  googleCalendar                    GoogleCalendarConnection?
   companyInterests                  CompanyInterest[]             @relation("CompanyInterestMentee")
   companyNeedAlerts                 CompanyNeedAlert[]            @relation("CompanyNeedAlertMentee")
   mentorshipRequests                MentorshipRequest[]           @relation("MentorshipRequests")
@@ -1852,11 +1853,12 @@ model Meeting {
   endedAt        DateTime?
   endedById      String?
 
-  relation     MentorshipRelation? @relation(fields: [relationId], references: [id], onDelete: Cascade)
-  project      Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  conversation Conversation?       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  series       MeetingSeries?      @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  relation     MentorshipRelation?       @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  project      Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversation Conversation?             @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  series       MeetingSeries?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   notes        PersonalNote[]
+  googleEvents GoogleCalendarEventLink[]
 
   @@index([relationId])
   @@index([projectId])
@@ -2275,4 +2277,56 @@ model InterviewRequest {
   @@index([companyId, requisitionId])
   @@index([menteeId, status])
   @@index([requisitionId, menteeId])
+}
+
+/// A user's own Google Calendar, connected by them and revocable by them (#709).
+/// One row per user: the app never creates a Google account and never writes to
+/// anyone's calendar without this row existing.
+model GoogleCalendarConnection {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  /// The Google account that granted consent — shown back to the person so they
+  /// can tell WHICH calendar this is before they trust it or disconnect it.
+  googleEmail String
+  /// 'primary' unless the operator points it elsewhere.
+  calendarId  String @default("primary")
+  /// What Google actually granted. Stored so a scope that was reduced on
+  /// re-consent is visible rather than discovered by a failing write.
+  scope       String @db.Text
+
+  /// Both sealed with lib/secretBox (AES-256-GCM), never written in the clear.
+  /// The access token is short-lived; the refresh token is the one that matters.
+  accessTokenEnc  String   @db.Text
+  refreshTokenEnc String?  @db.Text
+  expiresAt       DateTime
+
+  /// Operational state, so a broken connection is visible in the UI instead of
+  /// failing silently on every meeting.
+  lastSyncAt DateTime?
+  lastError  String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events GoogleCalendarEventLink[]
+}
+
+/// Which Google event a meeting became, on whose calendar (#709).
+/// Per (meeting, user) rather than per meeting: the same meeting is pushed to
+/// every connected participant's own calendar, and each gets a different event
+/// id — one column on Meeting could only ever remember one of them.
+model GoogleCalendarEventLink {
+  id            String   @id @default(cuid())
+  meetingId     String
+  connectionId  String
+  googleEventId String
+  pushedAt      DateTime @default(now())
+
+  meeting    Meeting                  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  connection GoogleCalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, connectionId])
+  @@index([connectionId])
 }

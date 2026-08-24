@@ -9,6 +9,13 @@
 // exactly like the SSO slice (#545).
 //
 // No secrets are hard-coded; everything reads from env.
+//
+// Google's own endpoints are read from env with the real URLs as defaults. That
+// is not indirection for its own sake: it is what makes the token exchange
+// TESTABLE. Without it the code path that swaps an authorization code for a
+// refresh token can only be exercised against live Google, which is why this
+// slice sat unfinished — the e2e now points these at a local stub and drives
+// connect → callback → push → disconnect end to end.
 
 // OAuth scopes: manage the user's own calendar events (create Meet links, push
 // meetings). Requested only when the user explicitly connects — the app never
@@ -54,4 +61,29 @@ export function googleConsentUrl(state: string): string | null {
     state,
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
+
+export function googleTokenUrl(): string {
+  return process.env.GOOGLE_OAUTH_TOKEN_URL || 'https://oauth2.googleapis.com/token';
+}
+
+export function googleRevokeUrl(): string {
+  return process.env.GOOGLE_OAUTH_REVOKE_URL || 'https://oauth2.googleapis.com/revoke';
+}
+
+export function googleCalendarApiBase(): string {
+  return (process.env.GOOGLE_CALENDAR_API_BASE || 'https://www.googleapis.com/calendar/v3').replace(/\/$/, '');
+}
+
+/**
+ * The master switch (#709), default OFF.
+ *
+ * Configured (credentials present) and enabled (operator has decided to turn it
+ * on) are deliberately two different things. Credentials can land in the env for
+ * a staging trial long before anyone wants meetings flowing into real calendars,
+ * and an integration that switches itself on the moment a secret appears is the
+ * kind of surprise this flag exists to prevent.
+ */
+export function isGoogleCalendarEnabled(): boolean {
+  return process.env.GOOGLE_CALENDAR_ENABLED === '1' && isGoogleCalendarConfigured();
 }
