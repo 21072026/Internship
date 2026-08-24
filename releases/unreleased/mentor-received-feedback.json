@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Mentor received-feedback dashboard (#1105)**: adds a tenant-scoped mentor-only aggregate API and read-only dashboard with rubric averages, a six-month trend, and individual mentee feedback.",
-  "notes": {
-    "en": ["Mentors can now review all feedback received from their mentees in one place, including overall and criterion averages, recent trends, and individual comments. Only feedback received by the signed-in mentor is shown."],
-    "tr": ["Mentörler artık mentee’lerinden aldıkları tüm değerlendirmeleri tek ekranda; genel ve kriter ortalamaları, son dönem eğilimi ve tek tek yorumlarla birlikte görebilir. Yalnızca oturum açan mentöre gelen değerlendirmeler gösterilir."],
-    "de": ["Mentoren können jetzt alle Rückmeldungen ihrer Mentees an einem Ort sehen – einschließlich Gesamt- und Kriteriendurchschnitten, der jüngsten Entwicklung und einzelner Kommentare. Angezeigt wird nur Feedback für den angemeldeten Mentor."]
-  }
-}

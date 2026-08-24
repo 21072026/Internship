@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Negative-outcome communication (#830)**: reaching the end of the road is no longer silent. `src/lib/outcomeComms.ts` maps a stage (plus its #810 drop-off reason) to one of three outcomes — `noMatch`, `placedElsewhere`, `poolInvite` — each with a full EN/TR/DE e-mail template. Landing on an outcome stage notifies the mentor with a link into the targeted-email composer, recipient ticked and template applied (`?relation=&template=`), and gives the mentee outcome-specific wording *instead of* the generic \"your stage changed\" line. Nothing is mailed automatically unless an admin turns on the new `outcomeAutoSend` setting, which ships off. The portal's journey card replaces the bare off-path label with where things stand plus concrete next steps, and the \"🎉 Milestone reached!\" banner no longer sits above a rejection. `INTERNSHIP_FOUND_ELSEWHERE_800` — and any drop-off marked `ACCEPTED_ELSEWHERE` — reads as the success it is, with its own celebratory wording.",
-  "notes": {
-    "en": ["A \"no\" now comes with an answer: candidates see where they stand and what they can do next, mentors get a ready-to-edit message instead of a blank page, and finding an internship elsewhere is treated as the good news it is."],
-    "tr": ["Artık \"hayır\" da bir cevapla geliyor: adaylar durumlarını ve bundan sonra ne yapabileceklerini görüyor, mentörler boş sayfa yerine düzenlemeye hazır bir mesaj alıyor ve başka yerde staj bulmak hak ettiği gibi iyi haber olarak karşılanıyor."],
-    "de": ["Ein \"Nein\" kommt jetzt mit einer Antwort: Kandidat:innen sehen, wo sie stehen und was sie als Nächstes tun können, Mentor:innen bekommen eine fertige Nachricht zum Bearbeiten statt einer leeren Seite, und ein Praktikum anderswo gilt als das, was es ist — eine gute Nachricht."]
-  }
-}

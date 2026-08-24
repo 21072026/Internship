@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Role-compatible notification links**: notification targets now use the recipient’s mentorship side and the correct relation or conversation identifier across evaluations, goals, requests, questions, invitations, meetings, and document reminders.",
-  "notes": {
-    "en": ["Notifications now open the correct page for your role and relationship context, including mentor, mentee, dual-role, meeting, and document-reminder flows."],
-    "tr": ["Bildirimler artık mentör, mentee, çift rollü kullanıcı, toplantı ve belge hatırlatma akışlarında rolünüze ve ilişki bağlamınıza uygun doğru sayfayı açar."],
-    "de": ["Benachrichtigungen öffnen jetzt die richtige Seite für Ihre Rolle und den jeweiligen Beziehungskontext, einschließlich Mentor-, Mentee-, Doppelrollen-, Meeting- und Dokumenterinnerungsabläufen."]
-  }
-}

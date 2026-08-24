@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Consent-based testimonials (#1096, #1098, #1100 — story #1087)**: new `TESTIMONIAL` consent type (both roles; revoking unpublishes in the same request via `revokePublishedFor`), `Evaluation.sharedPublicly/publishedAt/publicExcerpt/excerptApprovedAt` and a `User.testimonialNameStyle` display preference (initials by default). `/admin/testimonials` moderation: only both-sides-consented evaluations enter the pool, the admin drafts an excerpt (original comment never edited), the AUTHOR approves the exact wording at `/testimonials/approve`, and only then can publish succeed — every move audit-logged. Public chain: session-less `GET /api/public/stories` (four server-side gates re-checked per request, no scores/comment/contact fields), `/stories` page (404 when empty), and a landing stories section that does not exist in the DOM until a real story is published (no placeholders, per the landing honesty rules).",
-  "notes": {
-    "en": ["Success stories, done right: a real evaluation excerpt can be published only with both sides' consent and the author's approval of the exact wording — shown with initials by default, withdrawable at any time, gone immediately."],
-    "tr": ["Başarı hikâyeleri, doğru şekilde: gerçek bir değerlendirme alıntısı yalnızca iki tarafın rızası ve yazarın birebir metin onayıyla yayınlanır — varsayılan olarak baş harflerle gösterilir, istenildiği an geri alınır, anında yayından düşer."],
-    "de": ["Erfolgsgeschichten, richtig gemacht: Ein echter Bewertungsauszug wird nur mit Einwilligung beider Seiten und Freigabe des exakten Wortlauts veröffentlicht — standardmäßig mit Initialen, jederzeit widerrufbar und sofort entfernt."]
-  }
-}

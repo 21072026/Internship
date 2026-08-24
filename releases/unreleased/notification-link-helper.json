@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- Centralize role-safe notification destinations with exhaustive fallback coverage (#929).",
-  "notes": {
-    "en": ["Notification links now use consistent, role-appropriate destinations."],
-    "tr": ["Bildirim bağlantıları artık role uygun ve tutarlı hedefler kullanıyor."],
-    "de": ["Benachrichtigungslinks führen jetzt konsistent zu rollengerechten Zielen."]
-  }
-}

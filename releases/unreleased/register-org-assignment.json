@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Registration assigns the tenant at creation time (#1272).** Invited users inherit the inviter's org (carried on `InvitationToken.orgId`, set at invite time); token-less self-registration gets the default org via the new `defaultOrgId()` helper — the same upsert the deploy backfill uses. Previously every account was created org-less, so fail-closed org scoping (#1227) 403'd an invited COMPANY user's portal until the next deploy ran the backfill. The demo seeder now backfills the default org onto its rows too, so the demo company account survives demo resets between deploys.",
-  "notes": {
-    "en": ["Invited company users see their candidates immediately after registering — previously the portal could stay empty until the next deployment."],
-    "tr": ["Davet edilen şirket kullanıcıları kayıttan hemen sonra adaylarını görüyor — önceden portal bir sonraki dağıtıma kadar boş kalabiliyordu."],
-    "de": ["Eingeladene Unternehmensnutzer sehen ihre Kandidaten sofort nach der Registrierung — zuvor konnte das Portal bis zum nächsten Deployment leer bleiben."]
-  }
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Public profile showcase (#1091, #1094 — story #1086)**: `/p/[userId]` gains two proof sections. Projects (#1091): memberships in PUBLIC projects with functional-role badge and technology chips plus the completed-task count — private projects leak nothing (both queries filter `isPublic`), task titles are never shown, and a new `User.publicShowProjects` toggle (profile settings, default on) hides the section. Evaluation summary (#1094): the mentor→mentee criteria averaged over PUBLISHED evaluations plus the latest author-approved excerpt with the mentor's display-style name — rendered only when the mentee's and the author's TESTIMONIAL consents are active, raw scores/comment never leave the server, and with any gate down the section does not render at all.",
-  "notes": {
-    "en": ["Public profiles became proof: your public projects with your role and completed-task count, and — with both sides' consent — your mentor's published evaluation average and an approved quote."],
-    "tr": ["Herkese açık profiller kanıta dönüştü: rolün ve tamamlanan görev sayınla herkese açık projelerin, ve — iki tarafın rızasıyla — mentorunun yayınlanmış değerlendirme ortalaması ile onaylı bir alıntı."],
-    "de": ["Öffentliche Profile wurden zum Beleg: deine öffentlichen Projekte mit Rolle und Zahl abgeschlossener Aufgaben, und — mit Einwilligung beider Seiten — der veröffentlichte Bewertungsdurchschnitt deines Mentors samt freigegebenem Zitat."]
-  }
-}
