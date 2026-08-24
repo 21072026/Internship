@@ -69,6 +69,34 @@ test('admin creates an organization and it appears in the list', async ({ page }
     });
     expect(badColor.status()).toBe(400);
 
+    // The logo URL is fetched BY THE SERVER when a certificate is rendered, so
+    // an internal address here is an SSRF vector, not a broken image — the
+    // scheme is checked on write for the same reason ssoEntryPoint is below.
+    for (const logo of [
+      'http://169.254.169.254/latest/meta-data/', // cloud metadata
+      'http://127.0.0.1:3306', // the database, from the server's position
+      'http://example.test/logo.png', // plaintext
+      '//evil.test/logo.png', // protocol-relative: a foreign host in disguise
+      'javascript:alert(1)',
+      'https://user:pass@example.test/logo.png', // embedded credentials
+    ]) {
+      const res = await page.request.patch('/api/admin/organizations', {
+        data: { id: org!.id, brandLogoUrl: logo },
+      });
+      expect(res.status(), `logo URL should be refused: ${logo}`).toBe(400);
+    }
+    // …and it is still unset, so a refused value never reached the row.
+    expect((await prisma.organization.findUnique({ where: { id: org!.id } }))?.brandLogoUrl).toBeNull();
+
+    // The three legitimate shapes are accepted.
+    for (const logo of ['https://cdn.example.test/logo.svg', '/logo.svg', 'data:image/png;base64,iVBORw0KGgo=']) {
+      const res = await page.request.patch('/api/admin/organizations', {
+        data: { id: org!.id, brandLogoUrl: logo },
+      });
+      expect(res.ok(), `logo URL should be accepted: ${logo}`).toBeTruthy();
+      expect((await prisma.organization.findUnique({ where: { id: org!.id } }))?.brandLogoUrl).toBe(logo);
+    }
+
     // A blank field clears the override.
     const clear = await page.request.patch('/api/admin/organizations', {
       data: { id: org!.id, brandName: '' },

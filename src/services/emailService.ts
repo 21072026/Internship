@@ -39,11 +39,18 @@ async function emailBrand(orgId?: string | null) {
 }
 
 // A small brand header (logo if the tenant set one, otherwise the heading text).
+// Every value here is tenant-supplied (Organization.brandName / brandLogoUrl /
+// brandColor), so all three are attribute-escaped: unescaped, a `"` in a brand
+// name or logo URL closes the attribute and the rest of the string becomes
+// markup in every transactional email that org sends. `brandLogoUrl` is also
+// scheme-checked on write (isSafeBrandLogoUrl) and `brandColor` must be a hex
+// value; escaping here is the second layer, for rows written before those
+// checks existed.
 function brandHeader(brand: { name: string; accent: string; logoUrl: string | null }, heading: string): string {
   const logo = brand.logoUrl
-    ? `<img src="${brand.logoUrl}" alt="${brand.name}" style="max-height:40px;margin-bottom:12px;" />`
+    ? `<img src="${esc(brand.logoUrl)}" alt="${esc(brand.name)}" style="max-height:40px;margin-bottom:12px;" />`
     : '';
-  return `${logo}<h2 style="color: ${brand.accent};">${heading}</h2>`;
+  return `${logo}<h2 style="color: ${esc(brand.accent)};">${heading}</h2>`;
 }
 
 // Bounded waits so an unreachable or wedged SMTP host fails fast instead of
