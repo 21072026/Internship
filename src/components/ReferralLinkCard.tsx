@@ -60,7 +60,7 @@ export function ReferralLinkCard() {
           {copied ? t.referral.copied : t.referral.copy}
         </Button>
       </div>
-      <p className="mt-2 text-xs text-gray-400">
+      <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
         {count > 0 ? t.referral.referredCount.replace('{n}', String(count)) : t.referral.none}
       </p>
     </Card>

@@ -105,13 +105,13 @@ export default async function PortalDashboard() {
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center justify-between">
           <div>
             <p className="font-medium text-yellow-800">{t.portal.completeProfile}</p>
-            <p className="text-sm text-yellow-600 mt-0.5">
+            <p className="text-sm text-yellow-800 mt-0.5">
               {t.portal.completeProfileHint}
             </p>
           </div>
           <Link
             href="/onboarding"
-            className="bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors flex-shrink-0 ml-4"
+            className="bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-800 transition-colors flex-shrink-0 ml-4"
           >
             {t.portal.completeProfileCta}
           </Link>
@@ -174,7 +174,7 @@ export default async function PortalDashboard() {
               <User className="h-8 w-8 text-gray-400" />
             </div>
             <p className="text-gray-500 font-medium">{t.portal.noMentor}</p>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {t.portal.noMentorHint}
             </p>
           </div>

@@ -32,7 +32,7 @@ export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
 
   return (
     <div className="px-4 pt-2" data-testid="mode-switcher">
-      <p id="mode-switch-label" className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+      <p id="mode-switch-label" className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400">
         {t.modeSwitch.label}
       </p>
       <div
@@ -48,7 +48,7 @@ export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
           const classes = `flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
             isActive
               ? `bg-white dark:bg-gray-700 shadow-sm ${active}`
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
           }`;
 
           // The active segment is inert on purpose: it is a state indicator, and
@@ -72,7 +72,7 @@ export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
         })}
       </div>
       {(current === 'mentor' || current === 'mentee') && (
-        <p className="px-1 pt-1.5 text-[11px] leading-snug text-gray-400 dark:text-gray-500">
+        <p className="px-1 pt-1.5 text-[11px] leading-snug text-gray-600 dark:text-gray-400">
           {current === 'mentor' ? t.modeSwitch.mentorHint : t.modeSwitch.menteeHint}
         </p>
       )}

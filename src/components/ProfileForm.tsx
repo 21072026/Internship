@@ -241,7 +241,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
     }
   });
 
-  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
+  if (loading) return <div className="text-center py-12 text-gray-600 dark:text-gray-400">{t.common.loading}</div>;
 
   return (
     <div>

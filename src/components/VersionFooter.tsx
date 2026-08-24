@@ -29,7 +29,7 @@ export function VersionFooter({ version }: { version: string }) {
     <Link
       href="/release-notes"
       onClick={markSeen}
-      className="relative inline-flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+      className="relative inline-flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 dark:!text-gray-400 dark:hover:!text-blue-400 transition-colors"
       title={t.releaseNotes.title}
     >
       v{version}

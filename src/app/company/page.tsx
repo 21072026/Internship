@@ -72,7 +72,7 @@ export default function CompanyOverviewPage() {
         {loading ? (
           <SkeletonRows rows={6} />
         ) : shown.length === 0 ? (
-          <p className="text-center py-12 text-gray-400">{t.company.none}</p>
+          <p className="text-center py-12 text-gray-600 dark:text-gray-400">{t.company.none}</p>
         ) : (
           <div className="divide-y divide-gray-50 dark:divide-gray-800">
             {shown.map((r) => (

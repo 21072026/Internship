@@ -55,7 +55,7 @@ export function AnnouncementsCard() {
       {items === null ? (
         <SkeletonRows rows={3} />
       ) : items.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-4">{t.announcementFeed.none}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400 text-center py-4">{t.announcementFeed.none}</p>
       ) : (
         <div className="space-y-3" data-testid="announcements-list">
           {items.map((a) => {

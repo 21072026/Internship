@@ -214,7 +214,7 @@ export default async function AdminDashboard() {
           </CardHeader>
           <div className="space-y-3">
             {stats.recentRelations.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">{t.dashboard.noMentorships}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-center py-4">{t.dashboard.noMentorships}</p>
             )}
             {stats.recentRelations.map((rel) => (
               <div key={rel.id} className="flex items-center justify-between py-2">
@@ -251,7 +251,7 @@ export default async function AdminDashboard() {
           </CardHeader>
           <div className="space-y-3">
             {stats.recentCandidates.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">{t.dashboard.noCandidates}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-center py-4">{t.dashboard.noCandidates}</p>
             )}
             {stats.recentCandidates.map((candidate) => (
               <div key={candidate.id} className="flex items-start justify-between py-2">
