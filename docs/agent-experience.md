@@ -4245,3 +4245,45 @@ durumunu sıfırladı; aynı test ısınmış sunucuda geçiyordu. Çözüm test
 `expect(async () => { await trigger.click(); await expect(card).toBeVisible(); })
 .toPass()` ile yeniden denenebilir yapmak — CI'da (`npm run start`) yaşanmayan, yerelde
 kafa karıştıran bir fark.
+
+## 2026-08-25 — Dokuz PR'lık inceleme+merge turu (Claude Code oturumu)
+
+**"İnceleme yorumu bıraktım" ile "istediğim yapıldı" aynı şey değil.** Dokuz PR'ın
+ikisinde katkıcı benim isteğimi atlamıştı ve ikisi de sessizce geçebilirdi: #1265'te
+asıl bloklayıcı itiraz (ortak `Button`'a konan koşulsuz 44px tabanı) hiç uygulanmamıştı,
+#1264'ün gövdesinde `Closes #<AUFGABE_NUMARASI>` **yer tutucusu** duruyordu. Merge
+etmeden önce her incelemenin maddelerini tek tek koda/gövdeye karşı doğrula — CI yeşil
+olması istediklerinin yapıldığı anlamına gelmiyor.
+
+**CSS'i "dokunmatik bağlama" kapsarken önce test koşumunun yeteneğine bak.** #1265 için
+`[@media(pointer:coarse)]` önermiştim; `playwright.config.ts`'te **tek proje** var
+(Desktop Chrome, `hasTouch` yok), dolayısıyla o kapsama katkıcının `@smoke` testini
+kırardı. Doğrusu viewport tabanlıydı (`max-lg:`), çünkü test zaten
+`setViewportSize({ width: 375 })` ile ölçüyor. Ölçerek doğrula: /admin/candidates'te en
+kısa düğmeler 1280px'te 28/32/34px, 375px'te ≥44px.
+
+**Yerel e2e hatasını suçlamadan önce katkıcının kendi dalında koştur.** #1266'nın
+çakışmasını çözdükten sonra `pipeline-deadline` yerelde düştü; aynı test **onun
+dokunulmamış dalında da** düşüyordu (yerelde `.env`'deki gerçek SMTP dev sunucusunu
+senkron mail denemeleriyle tıkıyor — CI'da #1317 bunu `SMTP_USER: ''` ile kapatmış).
+Çözümü suçlamak yerine "aynı test, iki dal" deneyi 2 dakikada ayrımı yapıyor; hakem CI.
+
+**Üç yönlü çakışmaların çoğu "iki taraf da ekledi"dir.** #1303'ün dördünden üçü iki import
+veya iki retro girdisiydi (ikisini de tut). Tek gerçek birleştirme, main'in taşma
+düzeltmesiyle (`min-w-0` + `truncate`) PR'ın tıklanabilir adını aynı başlıkta buluşturmaktı.
+Marker temizliğini satır-başı (`startswith('<<<<<<< ')`) ile kontrol et: bu repoda
+`agent-experience.md` kod bloklarında **literal** marker metni geçiyor ve naif bir
+`'<<<<<<<' in text` kontrolü yanlış alarm veriyor.
+
+**Fragment sistemi çalıştı, tek eksik token.** `release-compact.yml` ilk zamanlanmış
+koşusunda `GitHub Actions is not permitted to create or approve pull requests` ile düştü
+(org ayarı). Belgelenen yedek yol iş görüyor: `node scripts/release-compact.mjs` + normal
+PR. 45 fragment tek seferde 0.85.0 → 0.110.1-beta'ya katlandı, prod da aynı numarayı
+gösterdi — türetme ile kanonik dosyalar arasındaki fark tasarım gereği zararsız olsa da
+CHANGELOG'un 45 değişiklik geride kalmasına izin verme.
+
+**Baseline'lar iki yönlü okunur.** #1331 `/admin/candidates` a11y baseline'ını daraltırken
+(`select-name` kalktı) aynı regenerate `/company` için **yeni** bir `color-contrast`
+ihlalini dondurdu — katkıcının dokunmadığı bir sayfada. Baseline diff'lerinde "hangi
+kayıt eklendi?" sorusunu da sor; eklenen her satır, sistemin yakalaması gereken bir
+ihlalin kapıdan geçmesidir (#1333).
