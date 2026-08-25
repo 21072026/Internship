@@ -93,6 +93,22 @@ jobs:
           E2E_GREP: ${{ inputs.grep || '@smoke' }}
         run: npx playwright test --grep "$E2E_GREP"
 
+      # The accessibility regression gate, run OUTSIDE the grep (#826).
+      #
+      # This step exists because the gate shipped in #862 did not gate. The scan
+      # carries no @smoke tag, and the step above filters on @smoke, so the
+      # 9-page baseline comparison only ever ran in the scheduled suite — a PR
+      # introducing a new serious violation sailed through. #1333 is that
+      # failure mode realised.
+      #
+      # Kept as its own step rather than tagged @smoke so the smoke set stays
+      # small and fast (CLAUDE.md), while the gate still blocks the PR it is
+      # supposed to block. Skipped when a manual run asked for a specific grep,
+      # because that run is targeting something else on purpose.
+      - name: Accessibility regression gate
+        if: ${{ !inputs.grep }}
+        run: npx playwright test e2e/a11y-scan.spec.ts
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7

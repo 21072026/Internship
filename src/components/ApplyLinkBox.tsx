@@ -25,6 +25,10 @@ export function ApplyLinkBox() {
         <input
           readOnly
           value={url}
+          // Read-only, but still a form control: without a name axe reports a
+          // critical `label` violation and a screen reader announces "edit
+          // text, blank". The heading above it is the field's name (#826).
+          aria-label={t.applyLink.shareTitle}
           onFocus={(e) => e.target.select()}
           // `min-w-0`: an <input> refuses to shrink below its default intrinsic
           // width, which pushed the copy button out of the box on a phone (#1305).

@@ -984,7 +984,7 @@ const en = {
     hideEmpty: 'Hide empty stages',
     overdue: 'overdue',
     wipWarning: 'Over the recommended limit',
-    groups: { pre: 'Pre-internship', internship: 'Internship', result: 'Outcome' },
+    groups: { pre: 'Pre-internship', internship: 'Internship', result: 'Outcome', custom: 'Custom stages' },
   },
   mentorEmail: {
     title: 'Email mentees',
@@ -2326,6 +2326,8 @@ const en = {
     confirmDelete: 'Delete document "{title}"?',
     requirement: 'Document requirement',
     noRequirement: 'No requirement selected',
+    fileField: 'Choose a file to upload',
+    typeField: 'Document type',
   },
   documentRequirements: {
     organization: 'Organization', configurationTitle: 'Document requirements', missingTitle: 'Missing mandatory documents',
@@ -4183,7 +4185,7 @@ const tr: Dict = {
     hideEmpty: 'Boş aşamaları gizle',
     overdue: 'gecikmiş',
     wipWarning: 'Önerilen limitin üzerinde',
-    groups: { pre: 'Staj öncesi', internship: 'Staj', result: 'Sonuç' },
+    groups: { pre: 'Staj öncesi', internship: 'Staj', result: 'Sonuç', custom: 'Özel aşamalar' },
   },
   mentorEmail: {
     title: 'Mentee’lere e-posta',
@@ -5515,6 +5517,8 @@ const tr: Dict = {
     types: { CV: 'CV', CONTRACT: 'Sözleşme', CERTIFICATE: 'Sertifika', OTHER: 'Diğer' },
     confirmDelete: '"{title}" belgesini silmek istiyor musun?',
     requirement: 'Belge gereksinimi',
+    fileField: 'Yüklenecek dosyayı seç',
+    typeField: 'Doküman türü',
     noRequirement: 'Gereksinim seçilmedi',
   },
   documentRequirements: {
@@ -7371,7 +7375,7 @@ const de: Dict = {
     hideEmpty: 'Leere Phasen ausblenden',
     overdue: 'überfällig',
     wipWarning: 'Über dem empfohlenen Limit',
-    groups: { pre: 'Vor dem Praktikum', internship: 'Praktikum', result: 'Ergebnis' },
+    groups: { pre: 'Vor dem Praktikum', internship: 'Praktikum', result: 'Ergebnis', custom: 'Eigene Phasen' },
   },
   mentorEmail: {
     title: 'Mentees per E-Mail erreichen',
@@ -8703,6 +8707,8 @@ const de: Dict = {
     types: { CV: 'Lebenslauf', CONTRACT: 'Vertrag', CERTIFICATE: 'Zertifikat', OTHER: 'Sonstiges' },
     confirmDelete: 'Dokument "{title}" löschen?',
     requirement: 'Dokumentanforderung',
+    fileField: 'Datei zum Hochladen auswählen',
+    typeField: 'Dokumenttyp',
     noRequirement: 'Keine Anforderung ausgewählt',
   },
   documentRequirements: {

@@ -168,12 +168,18 @@ export function MentorshipRequestPanel() {
               <p className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1.5 mb-1">
                 <ListChecks className="h-4 w-4" /> {q.gateTitle}
               </p>
-              <ul className="text-xs text-amber-700 dark:text-amber-400 list-disc list-inside">
+              {/* `inline-block py-1.5` on the links, `space-y-1` between the
+                  items: a bare `text-xs` link is a 16px-tall tap target, under
+                  WCAG 2.2 AA 2.5.8's 24px floor (#826). 12px text + 6px padding
+                  each side lands at 28px rather than exactly 24, so rounding
+                  cannot put it back under. The spacing keeps the two adjacent
+                  targets from colliding, which is the other half of that SC. */}
+              <ul className="text-xs text-amber-700 dark:text-amber-400 list-disc list-inside space-y-1">
                 {gate.missing.includes('profile') && (
-                  <li><Link href="/portal/profile" className="underline">{q.gateProfile}</Link></li>
+                  <li><Link href="/portal/profile" className="underline inline-block py-1.5">{q.gateProfile}</Link></li>
                 )}
                 {gate.missing.includes('cv') && (
-                  <li><Link href="/portal/profile" className="underline">{q.gateCv}</Link></li>
+                  <li><Link href="/portal/profile" className="underline inline-block py-1.5">{q.gateCv}</Link></li>
                 )}
               </ul>
             </div>

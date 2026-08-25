@@ -72,7 +72,10 @@ export default function CompanyOverviewPage() {
         {loading ? (
           <SkeletonRows rows={6} />
         ) : shown.length === 0 ? (
-          <p className="text-center py-12 text-gray-400">{t.company.none}</p>
+          // gray-400 on white is 2.8:1, under the 4.5:1 floor for body text; gray-500
+          // is 4.6:1 and globals.css already retints it to #9ca3af in dark mode, so the
+          // dark surface keeps the lighter tone it had (#826).
+          <p className="text-center py-12 text-gray-500">{t.company.none}</p>
         ) : (
           <div className="divide-y divide-gray-50 dark:divide-gray-800">
             {shown.map((r) => (

@@ -131,9 +131,14 @@ export function DocumentsManager({
 
       {canUpload && (
         <form onSubmit={upload} className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3">
-          <input ref={fileRef} type="file" required className="text-sm max-w-[200px]" />
+          {/* aria-label, not a visible <label>: the row is a compact inline
+              form and both controls are self-evident sighted — but a file input
+              with no accessible name is a `label` CRITICAL, and a screen reader
+              reaching it hears only "button". Found by the a11y gate the moment
+              it started running on PRs (#826). */}
+          <input ref={fileRef} type="file" required aria-label={t.documents.fileField} className="text-sm max-w-[200px]" />
           {!templates && (
-            <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
+            <select aria-label={t.documents.typeField} value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
               {DOCUMENT_TYPES.map((ty) => <option key={ty} value={ty}>{typeLabel(ty)}</option>)}
             </select>
           )}
