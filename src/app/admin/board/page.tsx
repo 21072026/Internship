@@ -195,6 +195,10 @@ export default function AdminBoardPage() {
     return (
       <div
         key={status}
+        // Keyed by stage so a test can name one column. Without it the only
+        // handle is the header text, which also matches every card's "Move to
+        // stage" <option> and trips strict mode (#828).
+        data-testid={`board-column-${status}`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(status); }}
         onDragLeave={() => setDragOver((s) => (s === status ? null : s))}
         onDrop={(e) => {
@@ -208,7 +212,7 @@ export default function AdminBoardPage() {
         }`}
       >
         <div className="flex items-center justify-between mb-3 px-1">
-          <span className="text-xs font-semibold text-gray-700">{label(status)}</span>
+          <span data-testid={`board-column-title-${status}`} className="text-xs font-semibold text-gray-700">{label(status)}</span>
           <span
             title={overLimit ? t.adminBoard.wipWarning : undefined}
             className={`text-xs rounded-full px-2 py-0.5 border ${
