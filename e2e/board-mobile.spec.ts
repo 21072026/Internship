@@ -209,12 +209,19 @@ for (const stageCount of [3, 13]) {
       // Every custom stage has a column. This is the assertion the old code
       // failed: iterating PIPELINE_GROUPS, none of these keys matched, so the
       // board rendered three empty group shells and no columns at all.
-      const columns = page.getByTestId('board-columns');
-      for (const [i] of keys.entries()) {
-        await expect(columns.getByText(`bc${stageCount} Aşama ${i + 1}`, { exact: true })).toBeVisible();
+      //
+      // Target the column and its heading by testid, never by their text: the
+      // cards inside a column each carry a "Move to stage" <select> whose
+      // <option>s hold every stage label, so any text locator — even one scoped
+      // to the column — resolves to 2 and trips strict mode.
+      for (const [i, key] of keys.entries()) {
+        await expect(page.getByTestId(`board-column-${key}`)).toBeVisible();
+        await expect(page.getByTestId(`board-column-title-${key}`)).toHaveText(
+          `bc${stageCount} Aşama ${i + 1}`,
+        );
       }
       // …and no built-in stage leaks in alongside them.
-      await expect(columns.getByText('Application', { exact: true })).toHaveCount(0);
+      await expect(page.getByTestId('board-column-APPLICATION_100')).toHaveCount(0);
 
       // The phone list has always been right; assert it still is, so the fix
       // cannot be "make desktop match by breaking mobile".
