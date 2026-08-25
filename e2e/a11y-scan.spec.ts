@@ -32,6 +32,11 @@ const baseline: Baseline = fs.existsSync(BASELINE_PATH)
   ? (JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8')) as Baseline)
   : {};
 const collected: Finding[] = [];
+// Every context appends here; a single test at the end asserts the whole list.
+// `describe.configure({ mode: 'serial' })` skips the remaining tests once one
+// fails, so asserting inside a context would hide every context after it — the
+// run would only ever reveal the first bad page.
+const allRegressions: string[] = [];
 
 async function scan(page: Page, key: string) {
   // The app never goes network-idle (TimezoneSync + <Link> prefetch, #1081),
@@ -58,10 +63,7 @@ async function scan(page: Page, key: string) {
       const f = gated.find((x) => x.rule === rule)!;
       return `${key}: ${rule} (${f.severity}) ×${n} > baseline ${allowed[rule] ?? 0} — ${f.selectors[0] ?? ''}`;
     });
-  if (!UPDATE_BASELINE) {
-    expect(regressions, `New critical/serious accessibility violations on ${key}`).toEqual([]);
-  }
-  return counts;
+  return { counts, regressions };
 }
 
 const freshCounts: Baseline = {};
@@ -103,12 +105,22 @@ async function forceDark(page: Page) {
  * of being averaged away against the light one.
  */
 async function scanAll(page: Page, keys: string[]) {
+  // Collect across every key and assert ONCE at the end, rather than failing at
+  // the first bad page. `expect` throws, so a per-page assertion aborts the test
+  // — and with `mode: 'serial'` it also skips the remaining contexts. That turns
+  // a run into "learn one violation per CI cycle", which is how fixing this
+  // spec's own findings took three round trips. One list, one run.
+  const regressions: string[] = [];
   for (const key of keys) {
     await page.goto(key);
-    freshCounts[key] = await scan(page, key);
+    const light = await scan(page, key);
+    freshCounts[key] = light.counts;
+    regressions.push(...light.regressions);
 
     await forceDark(page);
-    freshCounts[`${key}#dark`] = await scan(page, `${key}#dark`);
+    const dark = await scan(page, `${key}#dark`);
+    freshCounts[`${key}#dark`] = dark.counts;
+    regressions.push(...dark.regressions);
     // Back to light before the next page, so one dark scan cannot leak into it.
     await page.emulateMedia({ colorScheme: 'light' });
     await page.evaluate(() => {
@@ -116,6 +128,7 @@ async function scanAll(page: Page, keys: string[]) {
       try { localStorage.removeItem('theme'); } catch { /* ignore */ }
     });
   }
+  allRegressions.push(...regressions);
 }
 
 // Sign-in goes through the repo's own helper (e2e/helpers/auth.ts) rather than
@@ -206,6 +219,14 @@ test('company: portal', async ({ page }) => {
   } finally {
     await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
   }
+});
+
+// The gate itself, deliberately last: by now every context has scanned, so a
+// failure here lists EVERY new violation in the product rather than the first
+// one encountered.
+test('no new critical or serious accessibility violations', async () => {
+  test.skip(UPDATE_BASELINE, 'regenerating the baseline — nothing to gate against');
+  expect(allRegressions, 'New critical/serious accessibility violations').toEqual([]);
 });
 
 // The severity-classified report, one line per violation so each can become
