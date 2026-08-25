@@ -10,6 +10,40 @@ Newest entries on top.
 
 ---
 
+## 2026-08-25 — Mentör gözüyle site denetimi: hatalar "çalışmıyor"da değil, "yarım kalmış"ta (#1348)
+
+**Denetimi çalışan uygulamada yap, statik okuma bulguyu yarım bırakıyor.** Playbook'un yerel
+kurulumu (apt MariaDB + `db push` + `db seed` + `seed:demo`) burada ~5 dakikada ayağa kalkıyor;
+`mentor.aylin@demo.example.com` / `DemoPass123!` ile `locale=tr` çerezi eklenmiş bir Playwright
+bağlamında 19 mentör sayfasını gezmek, kodu okurken "muhtemelen" kalan üç bulguyu kesinleştirdi:
+menüdeki tür seçenekleri gerçekten `["Meeting","Feedback","Email"]` döndü, panoda 3 mentee'den
+yalnızca 1'i ekrana girdi, mentee detayının sağ sütunu tam boy boş çıktı. Ekran görüntüsü
+almadan bu üçü de "kod öyle görünüyor" seviyesinde kalırdı.
+
+**Playwright'ı repo kökünden çalıştır, `playwright` paketi yok — `@playwright/test` var.**
+Ve `/opt/pw-browsers/chromium/chrome-linux/chrome` **yok**; gerçek yol sürüm ekli:
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome` (`find /opt/pw-browsers -name chrome`).
+
+**En verimli bulgu kalıbı: "API'nin kabul ettiği ile arayüzün sunduğu arasındaki fark."**
+Bu turdaki bulguların yarısı bu şekilde çıktı — `POST /api/interactions` beş tür kabul ediyor,
+form üçünü gösteriyor; `PUT /api/mentorship/[id]` `companyId`/`stageDeadline` kabul ediyor ve
+mentörü yetkilendiriyor, ama o alanları yazan tek arayüz admin ekranı; `PUT /api/interactions/[id]`
+yazılmış ama hiçbir arayüz çağırmıyor. `grep -rn "api/<uç>" src --include=*.tsx` ile "bu ucu kim
+çağırıyor" sorusunu sormak, sayfaları tek tek okumaktan daha hızlı hata buluyor.
+
+**Aynı sorunun tersi: "veri giriliyor ama kimse okumuyor."** `AvailabilitySlot`'u yazan üç yer
+var (ekran, onboarding formu, checklist sayımı), **okuyan sıfır** — üstelik ana sayfa SSS'i
+mentee'ye o slotlardan talep açmayı vaat ediyor (`faqMentee2A`). Bir modelin tüketicisini
+`grep -rn "<model>\|/api/<uç>" src` ile saymak, ölü özellikleri tek komutta ortaya çıkarıyor.
+
+**`sub_issue_write` yanıtı ebeveynin TÜM gövdesini geri veriyor.** 17 bağlantı ≈ 90k token.
+Skill'in dediği gibi: önce hepsini oluştur, `child id → parent number` eşlemesini bir dosyaya
+yaz, bağlamayı en sona bırak. Ayrıca **issue numaraları ardışık gelmiyor** (paralel PR/issue
+trafiği araya giriyor): gövdede başka bir issue'ya atıf yapacaksan numarayı **oluşturduktan
+sonra** doldur, tahmin etme — bu turda iki gövdede yanlış numara oluştu ve sonradan düzeltildi.
+
+---
+
 ## 2026-08-24 — Telefon genişliğinde düzen denetimi: sıkışan satırlar sayfa taşması yapmaz (#1305)
 
 **"Yatay kaydırma var mı" kuralı bu hataların çoğunu KAÇIRIYOR.** Bildirilen bozukluk
