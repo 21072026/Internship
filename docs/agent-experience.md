@@ -4353,3 +4353,59 @@ ekranıydı. Aynı şekilde board temizliğinde: #869, #705, #714 yalnızca alt 
 kapandığı için kapanmayı bekliyordu; #884'ün PR'ında `Closes #` boş bırakıldığı için
 GitHub bağlamamıştı. **`closed_by_pull_requests` boş olması işin yapılmadığı anlamına
 gelmez** — içerikten doğrula.
+
+## 2026-08-25 — İK gözüyle ürün turu: bulguları issue'ya çevirmek
+
+**"Kapalı" bir issue'nun işi yapıldığı anlamına gelmiyor — tersi de doğru.** Dosyada
+zaten "`closed_by_pull_requests` boş olması işin yapılmadığı anlamına gelmez" notu var;
+bu turda tam **karşıtına** rastladım: #808 (talent pool aramasını derinleştir) `completed`
+olarak kapatılmış, ama kapanan tek alt görevi boş-durum işi #852 idi. Kabul
+kriterlerindeki "yetkinlik filtresi artık JS'te değil" ve "sayfalama + doğru toplam"
+maddeleri hiç yapılmamış, kod satır satır eski hâlinde. Bir hikâye, alt görevleri kapandı
+diye kapanıyorsa gövdesindeki kriterler sessizce kayboluyor. **Yeni bir bulguyu "bu
+zaten kapalı" diye atmadan önce kodu aç.**
+
+**DOM'da olan bir element görünüyor demek değil — grafikleri ölçerek doğrula.**
+`/admin/analytics` "Trendler" kartı hiç çubuk göstermiyor: 12 çubuğun `style.height`
+değeri doğru (`77.7778%`), `getBoundingClientRect().height` ise **0**, çünkü ebeveynin
+yüksekliği 0. Sebep saf CSS: dış kap `h-44` veriyor ama `items-end` olduğu için sütunlar
+stretch edilmiyor, sütun yüksekliği içerikten geliyor, içindeki çubuk alanı `flex-1`
+(`flex-basis: 0`) olduğu için 0 kalıyor → yüzdeler 0'a çözülüyor. Aynı repoda **çalışan**
+karşılığı var (`src/app/mentor/feedback/page.tsx`: dış kap `h-32`, sütun `h-full`). Bunun
+aylarca fark edilmemesinin sebebi, varlık kontrolü yapan bir testin geçmesi. Grafik
+testleri yüksekliği **ölçmeli**.
+
+**`take` + JS'te filtre = sessizce eksik sonuç.** `company/talent-pool` rotası `take: 60`
+uygulayıp *sonra* yetkinliğe göre süzüyor; yani arama havuzun tamamında değil, en son
+güncellenmiş 60 kayıtta çalışıyor ve toplam gösterilmediği için kullanıcı bunu göremiyor.
+Doğrusu aynı repoda yazılı: `api/candidates/route.ts` çek → süz → `total =
+filtered.length` → dilimle. **Aynı problemin iki farklı uygulaması varsa biri yanlıştır** —
+karşılaştır.
+
+**i18n tarih hatasını görmek için tarayıcı dilini uygulama dilinden ayır.** Playwright
+context'ine `locale: 'en-US'`, `timezoneId: 'America/New_York'` verip uygulamaya `locale=tr`
+çerezi eklediğimde `/admin/interview-requests` tamamen Türkçe render edildi ama tarih
+`8/25/2026` çıktı. Tarayıcı dili TR olan bir makinede bu hata **hiç görünmez**. Aynı
+kurulum `toLocaleString()` kaynaklı saat-dilimi hatalarını da açığa çıkarıyor.
+
+**Bir özellik "bozuk" mu, yoksa sadece tohumlanmamış mı — önce satır say.** Requisitions,
+Mülakat talepleri, Teklifler ekranları demo veride bomboş; ilk refleks "bu akış çalışmıyor"
+oldu. `mariadb -e "SELECT COUNT(*) …"` ile bakınca `Requisition`/`InterviewRequest`/`Offer`/
+`InterviewPanel`/`CompanyInterest` **hepsi 0** çıktı: `seed:demo` yalnızca mentorluk yarısını
+üretiyor. Akışları elle (API'ye curl ile iş talebi + kısa liste + mülakat talebi yazarak)
+kurdum, sonra ekranlar doğru çalıştı.
+
+**Kurulum tarifi hâlâ geçerli, tek tuzak Chromium yolu.** `apt` MariaDB + `db push` +
+`db seed` + `seed:demo` sorunsuz. Playwright için `/opt/pw-browsers/chromium` bir
+**symlink** (1194'ün `chrome-linux/chrome`'una), ama `playwright-core`'un varsayılanı
+`chromium-1234/chrome-linux64/chrome` arıyor — `executablePath: '/opt/pw-browsers/chromium'`
+vermek yeterli, dizin kurmaya gerek yok. Ayrıca scratchpad'den `import`: `playwright-core`
+CommonJS, `import pw from '<abs path>/index.js'; const { chromium } = pw;` şeklinde çekilir.
+
+**Issue ağacı kurarken iki pratik kazanç.** (1) `issue_write` **create** çağrısı
+`issue_fields` kabul ediyor, yani org'un `Priority` alanı **oluşturma anında** set edilebilir —
+her issue için ikinci bir `update` çağrısına gerek yok. (2) `sub_issue_write` yanıtı
+ebeveynin **tüm gövdesini** geri veriyor; 20+ bağlamada bu ciddi bağlam yakıyor. Önce
+hepsini oluştur, `child id → parent number` eşlemesini diske yaz, bağlamayı en sona bırak.
+Bir de: yeni issue numaraları **atlamalı** veriliyor (1357 → 1359 → 1364), bu yüzden bir
+issue gövdesinde henüz oluşturulmamış bir numaraya atıf yapma — sonradan düzeltmek gerekti.
