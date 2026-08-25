@@ -2011,6 +2011,10 @@ const en = {
     remove: 'Remove',
     none: 'No availability set',
     days: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+    inZone: 'Times are shown in {zone} — your profile time zone.',
+    zoneUnset: 'You have not set a time zone yet, so these hours are read as {zone}. Set yours so mentees see the right time.',
+    zoneSetCta: 'Set your time zone',
+    overlap: 'That overlaps a slot you already have on this day ({from}–{to}).',
   },
   integrations: {
     title: 'Integrations & API',
@@ -5205,6 +5209,10 @@ const tr: Dict = {
     remove: 'Kaldır',
     none: 'Müsaitlik tanımlı değil',
     days: ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'],
+    inZone: 'Saatler {zone} dilimine göre gösteriliyor — profilindeki saat dilimi.',
+    zoneUnset: 'Henüz bir saat dilimi seçmedin, bu yüzden bu saatler {zone} kabul ediliyor. Mentee’lerin doğru saati görmesi için kendi dilimini ayarla.',
+    zoneSetCta: 'Saat dilimini ayarla',
+    overlap: 'Bu aralık, o gün zaten olan bir slotla çakışıyor ({from}–{to}).',
   },
   integrations: {
     title: 'Entegrasyonlar & API',
@@ -8395,6 +8403,10 @@ const de: Dict = {
     remove: 'Entfernen',
     none: 'Keine Verfügbarkeit festgelegt',
     days: ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'],
+    inZone: 'Zeiten werden in {zone} angezeigt — deine Profil-Zeitzone.',
+    zoneUnset: 'Du hast noch keine Zeitzone gesetzt, daher gelten diese Zeiten als {zone}. Setze deine eigene, damit Mentees die richtige Zeit sehen.',
+    zoneSetCta: 'Zeitzone festlegen',
+    overlap: 'Das überschneidet sich mit einem Slot, den du an diesem Tag schon hast ({from}–{to}).',
   },
   integrations: {
     title: 'Integrationen & API',
