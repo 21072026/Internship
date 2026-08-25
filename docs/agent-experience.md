@@ -4353,3 +4353,42 @@ ekranıydı. Aynı şekilde board temizliğinde: #869, #705, #714 yalnızca alt 
 kapandığı için kapanmayı bekliyordu; #884'ün PR'ında `Closes #` boş bırakıldığı için
 GitHub bağlamamıştı. **`closed_by_pull_requests` boş olması işin yapılmadığı anlamına
 gelmez** — içerikten doğrula.
+
+## 2026-08-25 — Siteyi pazarlamacı gözüyle incelemek (backlog turu, #1360)
+
+**Ürün olgun, pazarlama katmanı yoktu — ve bunu tek bir grep söylüyor.**
+`grep -rn "export const metadata\|generateMetadata" src/app` yalnızca `layout.tsx`'i
+döndürdü: yani 15+ genel sayfanın hepsi tek bir İngilizce `<title>` paylaşıyor. Aynı
+şekilde `grep -rn "openGraph\|twitter" src` → boş, `ls src/app/{robots,sitemap}.ts` →
+yok, `grep -rln "application/ld+json" src` → boş. Bir sitenin SEO/sosyal yüzeyi olup
+olmadığını dört grep'te öğreniyorsun; ekranları tek tek gezmeye gerek yok.
+
+**Dil çerezde yaşıyorsa çoklu dil pazarlama açısından yok sayılır.** `LanguageSwitcher`
+çalıştığı için bu eksik görünmüyor: `src/i18n/server.ts` dili yalnızca çerezden ve
+kullanıcı tercihinden okuyor, URL'de dil yok. Sonuç yapısal — TR/DE metni indekslenemez,
+Türkçe kampanyaya verilecek açılış URL'i üretilemez, "şu sayfanın Almancasını gönder"
+mümkün değil. Ayrıca `middleware.ts` yalnızca `/api/:path*` ile eşleştiği için
+`Accept-Language` hiç okunmuyor: her ilk ziyaret İngilizce. Bir i18n kurulumunu
+incelerken sorulacak iki soru: *dil URL'de mi?* ve *ilk ziyarette müzakere var mı?*
+
+**Hukuki metni denetlemenin yolu sözlük dosyasından geçiyor.**
+`src/i18n/dictionaries.ts:2887` canlı üretimde *"Controller and DPO contact details must
+be completed by the operator before production use."* diyor. Kayıt formu, firma talep
+formu ve çerez rızası toplayan bir site, veri sorumlusunu hiç bildirmiyor. Yer tutucu
+metinleri `grep -n "must be completed\|TODO\|TBD" src/i18n/dictionaries.ts` ile aramak,
+sayfaları okumaktan hızlı.
+
+**`pgrep -f mariadbd` kendi grep'ini yakalıyor.** "RUNNING" yazdı, oysa kutuda MariaDB
+kurulu bile değildi (`which mariadbd` boş). Süreç kontrolünde `pgrep -x` kullan ya da
+binary'nin varlığını da doğrula — aksi hâlde var olmayan bir DB'ye bağlanmayı deneyip
+teşhisi yanlış kurarsın.
+
+**`sub_issue_write` ebeveynin tüm gövdesini + repo metadata'sını geri yazıyor** (çağrı
+başına ~6k token) ve her tur bağlamın tamamını yeniden ücretlendiriyor. 20 düğümlük bir
+ağaç kurarken: önce hepsini oluştur (create yanıtı yalnızca id+url), id→ebeveyn eşlemesini
+bir scratch dosyasına yaz, sonra bağlamayı **tek turda birden çok çağrıyla** yap. Aynı
+ebeveyne eşzamanlı ekleme yarış riski taşıdığı için turları *farklı* ebeveynlere göre grupla.
+
+**Bu repoda semantik `search_issues` her sorguya 0 döndürdü.** Mükerrer kontrolünü
+`list_issues` + `state: OPEN` ile yaptım (18 açık kayıt, hepsi tek sayfa). Semantik arama
+boş dönüyorsa "mükerrer yok" diye okumak yanlış — listeye bak.
