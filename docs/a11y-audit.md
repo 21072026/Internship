@@ -9,11 +9,6 @@ below is a candidate for its own good-first-issue.
 
 **Totals** — critical: 0 · serious: 8 · moderate: 0 · minor: 0
 
-> ⚠️ **The last regenerate widened the baseline.** These were newly frozen in rather than fixed:
->
-> - `/admin#dark: color-contrast 0 → 1`
-> - `/admin/candidates#dark: color-contrast 0 → 1`
-
 
 **The gate** (`e2e/a11y-baseline.json`): the counts of *critical* and *serious*
 violations that exist today are frozen per page. A new one fails the scan;

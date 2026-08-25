@@ -2326,6 +2326,8 @@ const en = {
     confirmDelete: 'Delete document "{title}"?',
     requirement: 'Document requirement',
     noRequirement: 'No requirement selected',
+    fileField: 'Choose a file to upload',
+    typeField: 'Document type',
   },
   documentRequirements: {
     organization: 'Organization', configurationTitle: 'Document requirements', missingTitle: 'Missing mandatory documents',
@@ -5515,6 +5517,8 @@ const tr: Dict = {
     types: { CV: 'CV', CONTRACT: 'Sözleşme', CERTIFICATE: 'Sertifika', OTHER: 'Diğer' },
     confirmDelete: '"{title}" belgesini silmek istiyor musun?',
     requirement: 'Belge gereksinimi',
+    fileField: 'Yüklenecek dosyayı seç',
+    typeField: 'Doküman türü',
     noRequirement: 'Gereksinim seçilmedi',
   },
   documentRequirements: {
@@ -8703,6 +8707,8 @@ const de: Dict = {
     types: { CV: 'Lebenslauf', CONTRACT: 'Vertrag', CERTIFICATE: 'Zertifikat', OTHER: 'Sonstiges' },
     confirmDelete: 'Dokument "{title}" löschen?',
     requirement: 'Dokumentanforderung',
+    fileField: 'Datei zum Hochladen auswählen',
+    typeField: 'Dokumenttyp',
     noRequirement: 'Keine Anforderung ausgewählt',
   },
   documentRequirements: {
