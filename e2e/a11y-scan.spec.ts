@@ -65,10 +65,56 @@ async function scan(page: Page, key: string) {
 }
 
 const freshCounts: Baseline = {};
+
+/**
+ * Force dark mode on the page currently loaded.
+ *
+ * Same technique as e2e/dark-mode.spec.ts, in the other direction: the class is
+ * what globals.css keys its overrides off, and the cookie/localStorage keep the
+ * choice across the client-side theme script re-running.
+ */
+async function forceDark(page: Page) {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.evaluate(() => {
+    document.cookie = 'theme=dark; path=/; max-age=31536000';
+    try { localStorage.setItem('theme', 'dark'); } catch { /* ignore */ }
+  });
+  // RELOAD, don't just add the class. Adding `.dark` to a page already rendered
+  // light gives a HALF-dark document — light surfaces with dark-mode text
+  // colours on them — and axe faithfully reports contrast failures that no real
+  // user would ever see. Scanning that would freeze fiction into the baseline,
+  // which is exactly what the widening warning above exists to prevent. The
+  // reload lets the server and the theme script both commit to dark first.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.documentElement.classList.contains('dark'), null, { timeout: 10_000 });
+}
+
+/**
+ * Scan every page twice: light, then dark (#826).
+ *
+ * Dark mode is not cosmetic here. This codebase retints by REMAPPING utility
+ * classes in globals.css (`html.dark .bg-white`, `.text-gray-*`, …) rather than
+ * by writing `dark:` on each element, and the known trap is a mid-tone
+ * `text-*-600/700` landing on a retinted `bg-*-50` box — dark on dark. Scanning
+ * light only means the gate has never looked at half the product.
+ *
+ * Dark results are keyed `"<page>#dark"` so they gate independently: a
+ * violation that exists only in dark mode gets its own baseline entry instead
+ * of being averaged away against the light one.
+ */
 async function scanAll(page: Page, keys: string[]) {
   for (const key of keys) {
     await page.goto(key);
     freshCounts[key] = await scan(page, key);
+
+    await forceDark(page);
+    freshCounts[`${key}#dark`] = await scan(page, `${key}#dark`);
+    // Back to light before the next page, so one dark scan cannot leak into it.
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.evaluate(() => {
+      document.cookie = 'theme=light; path=/; max-age=0';
+      try { localStorage.removeItem('theme'); } catch { /* ignore */ }
+    });
   }
 }
 
@@ -91,8 +137,28 @@ test.describe.configure({ mode: 'serial' });
 
 test.afterAll(async () => {
   if (UPDATE_BASELINE) {
+    // Regenerating is how a FIX gets recorded — but the same write also lets a
+    // NEW violation freeze itself in, silently, on a page nobody touched. That
+    // is #1333: regenerating for /admin/candidates quietly widened /company
+    // from {} to { color-contrast: 1 }. So say out loud what got wider, and
+    // name it in the report, because a diff nobody reads is not a safeguard.
+    const widened: string[] = [];
+    for (const [key, counts] of Object.entries(freshCounts)) {
+      const before = baseline[key] ?? {};
+      for (const [rule, n] of Object.entries(counts)) {
+        const was = before[rule] ?? 0;
+        if (n > was) widened.push(`${key}: ${rule} ${was} → ${n}`);
+      }
+    }
+    if (widened.length > 0) {
+      console.warn(
+        `\n⚠️  This regenerate WIDENS the accessibility baseline — new violations are being frozen in:\n` +
+          widened.map((w) => `    ${w}`).join('\n') +
+          `\n    Fix them, or say in the PR why they are being accepted.\n`
+      );
+    }
     fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(freshCounts, null, 2)}\n`);
-    fs.writeFileSync(REPORT_PATH, renderReport(collected));
+    fs.writeFileSync(REPORT_PATH, renderReport(collected, widened));
   }
   for (const email of emails) await cleanupByEmail(email);
   await prisma.$disconnect();
@@ -144,7 +210,7 @@ test('company: portal', async ({ page }) => {
 
 // The severity-classified report, one line per violation so each can become
 // its own good-first-issue.
-function renderReport(findings: Finding[]): string {
+function renderReport(findings: Finding[], widened: string[] = []): string {
   const order = ['critical', 'serious', 'moderate', 'minor'];
   const rank = (s: string) => {
     const i = order.indexOf(s);
@@ -167,6 +233,11 @@ mentor, admin, company). The scan **measures**; it fixes nothing. Every row
 below is a candidate for its own good-first-issue.
 
 **Totals** — ${totals}
+${
+  widened.length
+    ? `\n> ⚠️ **The last regenerate widened the baseline.** These were newly frozen in rather than fixed:\n>\n${widened.map((w) => `> - \`${w}\``).join('\n')}\n`
+    : ''
+}
 
 **The gate** (\`e2e/a11y-baseline.json\`): the counts of *critical* and *serious*
 violations that exist today are frozen per page. A new one fails the scan;

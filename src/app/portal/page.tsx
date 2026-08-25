@@ -111,7 +111,7 @@ export default async function PortalDashboard() {
           </div>
           <Link
             href="/onboarding"
-            className="bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors flex-shrink-0 ml-4"
+            className="bg-yellow-400 text-gray-900 dark:!text-gray-900 px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-300 transition-colors flex-shrink-0 ml-4"
           >
             {t.portal.completeProfileCta}
           </Link>
