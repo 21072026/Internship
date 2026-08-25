@@ -984,7 +984,7 @@ const en = {
     hideEmpty: 'Hide empty stages',
     overdue: 'overdue',
     wipWarning: 'Over the recommended limit',
-    groups: { pre: 'Pre-internship', internship: 'Internship', result: 'Outcome' },
+    groups: { pre: 'Pre-internship', internship: 'Internship', result: 'Outcome', custom: 'Custom stages' },
   },
   mentorEmail: {
     title: 'Email mentees',
@@ -4185,7 +4185,7 @@ const tr: Dict = {
     hideEmpty: 'Boş aşamaları gizle',
     overdue: 'gecikmiş',
     wipWarning: 'Önerilen limitin üzerinde',
-    groups: { pre: 'Staj öncesi', internship: 'Staj', result: 'Sonuç' },
+    groups: { pre: 'Staj öncesi', internship: 'Staj', result: 'Sonuç', custom: 'Özel aşamalar' },
   },
   mentorEmail: {
     title: 'Mentee’lere e-posta',
@@ -7375,7 +7375,7 @@ const de: Dict = {
     hideEmpty: 'Leere Phasen ausblenden',
     overdue: 'überfällig',
     wipWarning: 'Über dem empfohlenen Limit',
-    groups: { pre: 'Vor dem Praktikum', internship: 'Praktikum', result: 'Ergebnis' },
+    groups: { pre: 'Vor dem Praktikum', internship: 'Praktikum', result: 'Ergebnis', custom: 'Eigene Phasen' },
   },
   mentorEmail: {
     title: 'Mentees per E-Mail erreichen',

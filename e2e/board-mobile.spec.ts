@@ -146,3 +146,85 @@ test('admin board on a phone: stage list at 390px and no overflow at 320px', asy
     await cleanup();
   }
 });
+
+/**
+ * Custom pipelines on the board (#828).
+ *
+ * The phone list reads the viewer's RESOLVED stages, but the desktop admin board
+ * used to iterate the hardcoded `PIPELINE_GROUPS` constant — so an org that had
+ * renamed its pipeline saw its stages on a phone and nothing on a desktop. The
+ * suite never seeded a custom stage set, so nothing caught it. These two cases
+ * are the extremes: a 3-stage org (fewer stages than the constant) and a
+ * 13-stage org whose keys share none of the built-ins.
+ */
+async function seedCustomOrg(prefix: string, stageCount: number) {
+  const org = await prisma.organization.create({
+    data: { slug: `${prefix}-${Date.now()}`, name: `${prefix} Org` },
+  });
+  const keys = Array.from({ length: stageCount }, (_, i) => `${prefix.toUpperCase()}_STAGE_${i + 1}`);
+  await prisma.pipelineStage.createMany({
+    data: keys.map((key, i) => ({
+      orgId: org.id,
+      key,
+      label: `${prefix} Aşama ${i + 1}`,
+      order: i,
+      isTerminal: i === stageCount - 1,
+      isOffPath: false,
+    })),
+  });
+
+  const password = 'BoardCustom123!';
+  const adminEmail = uniqueEmail(`${prefix}-admin`);
+  const mentorEmail = uniqueEmail(`${prefix}-mentor`);
+  const menteeEmail = uniqueEmail(`${prefix}-mentee`);
+  const admin = await seedUser(adminEmail, password, 'ADMIN', `${prefix} Admin`);
+  const mentor = await seedUser(mentorEmail, password, 'MENTOR', `${prefix} Mentor`);
+  const mentee = await seedUser(menteeEmail, password, 'MENTEE', `${prefix} Mentee`);
+  for (const u of [admin, mentor, mentee]) {
+    await prisma.user.update({ where: { id: u.id }, data: { orgId: org.id } });
+  }
+  const relation = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: mentee.id, orgId: org.id, pipelineStatus: keys[0] },
+  });
+
+  const cleanup = async () => {
+    await prisma.mentorshipRelation.deleteMany({ where: { id: relation.id } });
+    for (const email of [adminEmail, mentorEmail, menteeEmail]) await cleanupByEmail(email);
+    await prisma.pipelineStage.deleteMany({ where: { orgId: org.id } });
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  };
+  return { adminEmail, password, keys, relation, cleanup };
+}
+
+for (const stageCount of [3, 13]) {
+  test(`admin board shows a ${stageCount}-stage custom pipeline on desktop and on a phone`, async ({ page }) => {
+    const { adminEmail, password, keys, cleanup } = await seedCustomOrg(`bc${stageCount}`, stageCount);
+
+    try {
+      await page.setViewportSize(DESKTOP);
+      await signIn(page, adminEmail, password, '/admin');
+      await page.goto('/admin/board');
+      await expect(page.getByTestId('board-columns')).toBeVisible({ timeout: 10_000 });
+
+      // Every custom stage has a column. This is the assertion the old code
+      // failed: iterating PIPELINE_GROUPS, none of these keys matched, so the
+      // board rendered three empty group shells and no columns at all.
+      const columns = page.getByTestId('board-columns');
+      for (const [i] of keys.entries()) {
+        await expect(columns.getByText(`bc${stageCount} Aşama ${i + 1}`, { exact: true })).toBeVisible();
+      }
+      // …and no built-in stage leaks in alongside them.
+      await expect(columns.getByText('Application', { exact: true })).toHaveCount(0);
+
+      // The phone list has always been right; assert it still is, so the fix
+      // cannot be "make desktop match by breaking mobile".
+      await page.setViewportSize(PHONE);
+      await page.goto('/admin/board');
+      await expect(page.getByTestId('board-mobile')).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId('board-stage-filter')).toHaveValue(keys[0]);
+      expect(await overflowX(page)).toBe(0);
+    } finally {
+      await cleanup();
+    }
+  });
+}

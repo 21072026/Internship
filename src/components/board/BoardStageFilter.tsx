@@ -28,7 +28,7 @@ export function BoardStageFilter({
         data-testid="board-stage-filter"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+        className="w-full min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
       >
         {stages.map((s) => (
           <option key={s.key} value={s.key}>
