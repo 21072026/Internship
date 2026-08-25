@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Added** — the availability screen now states which time zone the weekly hours are read in (the mentor's profile zone), prompts for one when none is saved, and groups slots by day. **Fixed** — an interval overlapping one already on that weekday, exact repeats included, is refused with 409 and the message names the interval it collided with; previously the same hours could be added twice.",
+  "notes": {
+    "en": ["Your availability now says which time zone the hours are in, and refuses a slot that overlaps one you already have."],
+    "tr": ["Müsaitlik ekranın artık saatlerin hangi zaman dilimine ait olduğunu yazıyor ve mevcut bir slotla çakışan aralığı kabul etmiyor."],
+    "de": ["Deine Verfügbarkeit nennt jetzt die Zeitzone der Stunden und lehnt einen Slot ab, der sich mit einem bestehenden überschneidet."]
+  }
+}

@@ -131,3 +131,78 @@ test('an admin cannot delete a slot belonging to another organization', async ({
     }
   }
 });
+
+/**
+ * #1363 — a slot carries no zone of its own and is read in the mentor's
+ * `User.timezone`; overlapping intervals on the same weekday are refused.
+ */
+test('the screen names the time zone the hours are read in', async ({ page }) => {
+  const mentorEmail = uniqueEmail('avail-zone-mentor');
+  const mentor = await seedUser(mentorEmail, PASSWORD, 'MENTOR', 'Avail Zone Mentor');
+
+  try {
+    await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');
+
+    // A chosen zone is stated plainly, with no prompt.
+    await prisma.user.update({ where: { id: mentor.id }, data: { timezone: 'Europe/Berlin' } });
+    await page.goto('/mentor/availability');
+    const banner = page.getByTestId('availability-zone');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Europe/Berlin');
+    await expect(banner.getByRole('link')).toHaveCount(0);
+
+    // With none saved, the copy must NOT present the fallback as the mentor's
+    // own, and must offer the way to set one.
+    //
+    // Clearing it after sign-in is deliberate: TimezoneSync (#1030) posts the
+    // browser zone on the first authenticated load, so a freshly seeded mentor
+    // already has one by the time any page renders. It only posts once per
+    // browser session, so the reload below leaves the column null.
+    await prisma.user.update({ where: { id: mentor.id }, data: { timezone: null } });
+    await page.reload();
+    await expect(banner.getByRole('link')).toBeVisible();
+    // The fallback zone is deployment configuration (APP_TIMEZONE), so assert
+    // that the banner agrees with what the endpoint resolved rather than
+    // hard-coding a zone this runner may not use.
+    const { timezone, timezoneSet } = await (await page.request.get('/api/availability')).json();
+    expect(timezoneSet).toBe(false);
+    await expect(banner).toContainText(timezone);
+  } finally {
+    await cleanupByEmail(mentorEmail);
+  }
+});
+
+test('an overlapping slot is refused and no row is created', async ({ page }) => {
+  const mentorEmail = uniqueEmail('avail-overlap-mentor');
+  const mentor = await seedUser(mentorEmail, PASSWORD, 'MENTOR', 'Avail Overlap Mentor');
+
+  try {
+    await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');
+    const post = (data: Record<string, unknown>) => page.request.post('/api/availability', { data });
+
+    expect((await post({ weekday: 1, startTime: '09:00', endTime: '11:00' })).status()).toBe(201);
+
+    // Straddling, contained, identical — all overlaps.
+    for (const range of [
+      { startTime: '10:00', endTime: '12:00' },
+      { startTime: '09:30', endTime: '10:30' },
+      { startTime: '09:00', endTime: '11:00' },
+      { startTime: '08:00', endTime: '13:00' },
+    ]) {
+      const res = await post({ weekday: 1, ...range });
+      expect(res.status(), `${range.startTime}-${range.endTime} should clash`).toBe(409);
+      expect((await res.json()).code).toBe('overlap');
+    }
+
+    // Back-to-back is not an overlap — the comparison is half-open, which is how
+    // a person reads 09:00–10:00 followed by 10:00–11:00.
+    expect((await post({ weekday: 1, startTime: '11:00', endTime: '12:00' })).status()).toBe(201);
+    // Same clock, different day, is fine.
+    expect((await post({ weekday: 2, startTime: '09:00', endTime: '11:00' })).status()).toBe(201);
+
+    // Exactly the three that were accepted, so no refusal wrote a row anyway.
+    expect(await prisma.availabilitySlot.count({ where: { mentorId: mentor.id } })).toBe(3);
+  } finally {
+    await cleanupByEmail(mentorEmail);
+  }
+});
