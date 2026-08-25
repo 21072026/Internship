@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Fixed** — `GET /api/availability?mentorId=` returned any mentor's weekly hours to any signed-in account, across organizations: `AvailabilitySlot` carries no `orgId` and is not a tenant-anchored model, so the central isolation middleware never saw the query. Reading another mentor's hours now requires being an admin in the same organization, a mentee with an active relation to that mentor, or the mentor having opted into the directory. The admin delete escape hatch is scoped to the admin's own organization for the same reason."
+}
