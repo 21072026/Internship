@@ -5,7 +5,9 @@ import { Card } from '@/components/ui/Card';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { BookOpen } from 'lucide-react';
 import { useLocale } from '@/i18n/client';
+import { useT } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
+import { AsyncSection } from '@/components/ui/AsyncSection';
 
 interface Interaction {
   id: string;
@@ -20,15 +22,25 @@ interface Interaction {
 
 export default function PortalInteractionsPage() {
   const locale = useLocale();
+  const t = useT();
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchInteractions = useCallback(async () => {
-    const res = await fetch('/api/interactions');
-    const data = await res.json();
-    setInteractions(data.interactions || []);
-    setLoading(false);
-  }, []);
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/interactions');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setInteractions(data.interactions || []);
+    } catch {
+      setError(t.common.error);
+    } finally {
+      setLoading(false);
+    }
+  }, [t.common.error]);
 
   useEffect(() => {
     fetchInteractions();
@@ -41,17 +53,21 @@ export default function PortalInteractionsPage() {
         <p className="text-gray-500 mt-1">Your interaction history with your mentor</p>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Loading...</div>
-      ) : interactions.length === 0 ? (
-        <Card className="text-center py-12">
+      <AsyncSection
+        loading={loading}
+        error={error}
+        empty={interactions.length === 0}
+        emptyText={<Card className="text-center py-12">
           <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">No interactions logged yet</p>
           <p className="text-sm text-gray-400 mt-1">
             Your mentor will log interactions here as your sessions happen.
           </p>
-        </Card>
-      ) : (
+        </Card>}
+        retryText={t.errorBoundary.retry}
+        onRetry={fetchInteractions}
+        skeleton="list"
+      >
         <div className="space-y-4">
           {interactions.map((interaction) => (
             <Card key={interaction.id}>
@@ -72,7 +88,7 @@ export default function PortalInteractionsPage() {
             </Card>
           ))}
         </div>
-      )}
+      </AsyncSection>
     </div>
   );
 }

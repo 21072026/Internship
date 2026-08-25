@@ -24,6 +24,13 @@ The first ten are **functional / correctness** tests: given an input, is the out
 right? The stress test is a **non-functional** test: the app may be correct yet too
 slow or fragile under load — this catches that.
 
+## Async UI states
+
+Use `AsyncSection` for new asynchronous lists and panels: loading, error and empty are distinct states.
+Loading must never render the empty state, and errors should offer a retry when the caller can reload.
+The component owns presentation only; fetching, state and retry behavior stay in the caller.
+Choose the smallest matching `list`, `card` or `stats` skeleton variant.
+
 ## Stress / load test
 
 `scripts/stress-test.mjs` is a dependency-free (native `fetch`) load generator. It
