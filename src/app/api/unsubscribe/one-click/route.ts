@@ -114,31 +114,43 @@ export async function GET(request: Request) {
   // component, so this reproduces the caller's own token byte for byte — the
   // person still lands on exactly the URL the mail footer advertised.
   const canonical = makeUnsubscribeToken(scope.userId, scope.group);
-  return NextResponse.redirect(new URL(`/u/${encodeURIComponent(canonical)}`, redirectBase(request)), 302);
+  return redirectToPage(`/u/${encodeURIComponent(canonical)}`);
 }
 
 /**
- * The base for that redirect comes from the ENVIRONMENT, not from `request.url`.
+ * The redirect target never touches `request.url`, in either leg.
  *
- * Behind the Plesk nginx that terminates TLS, the request this handler sees is
- * plain http:// on an internal port, so a target built from it can hand the
- * browser a cleartext hop carrying a never-expiring unsubscribe token in the
- * path. Every other redirect under src/app/api/** resolves its base the same
- * way, and this feature's own link builders (src/lib/unsubscribeToken.ts) use
- * exactly this variable — so the redirect now lands on the same host the mail
- * footer already pointed at. `request.url` stays only as the last fallback, for
- * a deployment that never set the variable.
+ * The path comes from a token we re-minted ourselves (above). The base comes from
+ * the environment, or from nothing at all — and "nothing at all" is the
+ * interesting case. Two separate problems ruled out the obvious
+ * `new URL(path, request.url)`:
+ *
+ *   • Behind the Plesk nginx that terminates TLS, the request this handler sees
+ *     is plain http:// on an internal port, so a base built from it can hand the
+ *     browser a cleartext hop carrying a never-expiring unsubscribe token in the
+ *     path.
+ *   • `request.url`'s host is reconstructed from a header the caller sends, so it
+ *     is remote input reaching a redirect sink — an open redirect, and CodeQL is
+ *     right to say so. Fixing only the path leg left this one, which is why the
+ *     first attempt at this did not clear the alert.
+ *
+ * With NEXT_PUBLIC_APP_URL unset we therefore emit a RELATIVE Location rather
+ * than guessing a host. RFC 7231 §7.1.2 allows it, and the browser resolves it
+ * against the URL it actually requested — which, for a person clicking through
+ * from their mail client, is the public https one. So the fallback keeps the
+ * visitor exactly where they already are instead of us echoing a host back at
+ * them, which is both safer and closer to what we meant.
  */
-function redirectBase(request: Request): string {
+function redirectToPage(path: string): NextResponse {
   const configured = process.env.NEXT_PUBLIC_APP_URL;
   if (configured) {
     try {
       // Parsed rather than concatenated: a stray trailing path or a typo in the
       // variable must not turn a redirect into a 500 on the opt-out path.
-      return new URL(configured).toString();
+      return NextResponse.redirect(new URL(path, new URL(configured).origin), 302);
     } catch {
-      // fall through to the request's own origin
+      // fall through to the relative form
     }
   }
-  return request.url;
+  return new NextResponse(null, { status: 302, headers: { Location: path } });
 }
