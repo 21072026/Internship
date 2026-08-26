@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { loadAccessibleMeeting } from '@/lib/meetingAccess';
+import { logActivity } from '@/lib/activity';
 import {
   MAX_GUESTS_PER_MEETING,
   guestSchema,
@@ -13,23 +14,25 @@ import {
   normalizeGuests,
 } from '@/lib/meetingGuests';
 
-// External guests on an existing meeting (#1430).
+// External guests on an existing meeting (#1446).
 //
 // Scheduling with guests is POST /api/meetings; this is the after-the-fact
 // half — "I forgot to invite the client" and "I typed the address wrong" — and
 // without it the feature is one-shot: a mistyped address would keep a live
 // token forever with no way to take it back.
 //
-// Who may do it: anyone who may take part in the meeting AND is a mentor,
-// admin, or the organizer. A mentee is deliberately excluded even on their own
-// meeting — a guest row is an unauthenticated way into the room and an outbound
-// email to an arbitrary address, which is not a capability to hand to every
-// account in the system.
+// Who may do it: see authorize() below.
 async function authorize(meetingId: string, user: { id: string; role: string }) {
+  // Participation first — and "not yours" is indistinguishable from "no such
+  // meeting", so the id space stays opaque.
   const accessible = await loadAccessibleMeeting(user, meetingId);
   if (!accessible) return null;
-  const mayInvite = accessible.organizer || user.role === 'MENTOR' || user.role === 'ADMIN';
-  return mayInvite ? accessible : null;
+  // Then role, on its own: being the organizer is NOT enough. /api/meetings/instant
+  // has no role gate, so a MENTEE can create a meeting and would be its organizer —
+  // and inviting a guest is both an unauthenticated way into the room and an
+  // outbound email to an address the caller chose. That is not a capability every
+  // account in the system gets.
+  return user.role === 'MENTOR' || user.role === 'ADMIN' ? accessible : null;
 }
 
 // GET — the guest list with each one's answer, for the organizer's view.
@@ -143,6 +146,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       where: { id: parsed.data.guestId, meetingId: id },
     });
     if (removed.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // Killing a live credential belongs in the audit trail, same as revoking an
+    // .ics feed link does.
+    await logActivity({
+      action: 'meeting.guest.revoked',
+      level: 'warning',
+      actorId: session.user.id,
+      actorEmail: session.user.email ?? null,
+      targetType: 'Meeting',
+      targetId: id,
+    });
     return NextResponse.json({ ok: true });
   });
 }

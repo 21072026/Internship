@@ -1886,7 +1886,7 @@ model Meeting {
 }
 
 // An invitee who has no account here — a company contact, a parent, an external
-// interviewer (#1430). Everyone else on a meeting is reached through the
+// interviewer (#1446). Everyone else on a meeting is reached through the
 // meeting's context (the relation's mentor/mentee, the project's members, the
 // conversation's participants); a guest is reached only by the address the
 // organizer typed, so the row IS the invitation.
@@ -1903,6 +1903,11 @@ model Meeting {
 // deliberately a SEPARATE column from Meeting.rsvpToken rather than a shared
 // token table: the two are looked up by different queries and a guest must not
 // be able to present a token that resolves to a participant's row.
+//
+// No `orgId`, deliberately: this is a child of Meeting, and Meeting itself is
+// not in TENANT_MODELS (src/lib/orgContext.ts) — both are reached only through a
+// scoped parent. Worth stating, because a model that is not anchored gets no
+// automatic tenant protection and every reader has to know that on purpose.
 model MeetingGuest {
   id          String     @id @default(cuid())
   meetingId   String
@@ -1922,8 +1927,9 @@ model MeetingGuest {
 
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
+  // No @@index([meetingId]): @@unique([meetingId, email]) already gives MySQL a
+  // leftmost-prefix index on meetingId, and a second one is dead weight.
   @@unique([meetingId, email])
-  @@index([meetingId])
 }
 
 // A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;

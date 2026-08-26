@@ -9,7 +9,7 @@ import { formatDateTime } from '@/lib/relativeTime';
 interface Meeting {
   title: string;
   // Null for a link-only meeting: the API has always been able to return one,
-  // and a guest can now be added to one after the fact (#1430), so the page
+  // and a guest can now be added to one after the fact (#1446), so the page
   // must not render `new Date(null)` as "Invalid Date".
   scheduledAt: string | null;
   meetLink?: string | null;

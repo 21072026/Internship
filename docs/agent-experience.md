@@ -10,6 +10,55 @@ Newest entries on top.
 
 ---
 
+## 2026-08-26 — Dış katılımcı daveti: "hesabı olmayan davetli" bir yetki üretme primitifi (#1446)
+
+**Playwright'ın beklediği tarayıcı sürümü ile `/opt/pw-browsers`'takinin farkı bu turda
+sadece symlink'le kapanmadı — dizin *düzeni* de değişmiş.** Beklenen
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`, kurulu olan
+`chromium_headless_shell-1194/chrome-linux/headless_shell`. Yani CLAUDE.md'deki "symlink at"
+tavsiyesi artık tek başına yetmiyor; iki isim birden köprülenmeli:
+
+```bash
+ln -sfn /opt/pw-browsers/chromium-1194 /opt/pw-browsers/chromium-1234
+mkdir -p /opt/pw-browsers/chromium_headless_shell-1234/chrome-headless-shell-linux64
+touch /opt/pw-browsers/chromium_headless_shell-1234/{INSTALLATION_COMPLETE,DEPENDENCIES_VALIDATED}
+ln -sfn /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell \
+        /opt/pw-browsers/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell
+# (aynı dizindeki .pak/.dat/.so dosyalarını da tek tek link'le — yoksa açılmıyor)
+```
+
+**E2E spec süreci `.env`'i okumuyor.** `playwright.config.ts` uygulamayı başlatırken ortamı
+kuruyor ama `e2e/helpers/db.ts`'in kendi `PrismaClient`'ı ayrı bir süreçte doğuyor ve
+`DATABASE_URL` bulamayınca "Validation Error Count: 1" ile ölüyor. Çalıştırmadan önce
+`export DATABASE_URL=...` şart.
+
+**Test koşarken kaynak dosyayı düzenleme.** Koşu sırasında `sed` ile yorum satırı bile
+değiştirmek dev sunucuyu yeniden derletiyor; React yeniden mount olunca formun state'i
+(`title`, seçili mentee) sıfırlanıyor ve buton `disabled` kalıyor — hata
+"element is not enabled" diye görünüyor, sanki testin locator'ı yanlışmış gibi. Düzenlemeleri
+bitir, sonra koş.
+
+**Asıl tasarım dersi: "hesabı olmayan davetli" masum bir alan değil, bir kimlik bilgisi
+üretme primitifi.** `MeetingGuest` satırı = giriş gerektirmeyen bir bearer token + seçilen
+adrese giden bir e-posta. Bu yüzden iki kural özelliğin kendisi kadar önemli:
+1. **Sistemde hesabı olan bir adrese asla misafir token'ı basma.** Yoksa "toplantı planla"
+   yetkisi, bir meslektaşın adresine kimliği doğrulanmamış bir bilet basma yetkisine dönüşür.
+2. **Rolü organizatörlükten ayrı kontrol et.** `loadAccessibleMeeting` katılımı kanıtlıyor ama
+   `accessible.organizer` yetmiyor: `/api/meetings/instant`'ın rol kapısı yok, yani bir MENTEE
+   toplantı yaratıp kendi toplantısının organizatörü olabiliyor. Kapı `MENTOR || ADMIN`.
+
+**Bir alt-ajanın "in tree" kodu okuması, tasarım turunu incelemeye çeviriyor — ve işe yarıyor.**
+Araştırma workflow'u koşarken paralel olarak yazdığım kod, tasarım ajanının önüne çıktı; dönen
+plan bir taslak değil, numaralı düzeltme listesi oldu (yukarıdaki rol açığı, MENTEE'ye misafir
+adreslerinin sızması, hatırlatma cron'unun misafirleri atlaması, `sanitize-db.mjs`'in
+temizlemediği PII). Bunların hiçbirini kendi başıma yakalamamıştım.
+
+**Kendi uydurduğun issue numarasını doğrula.** Kod boyunca `#1430` yazmıştım; o numara gerçekten
+vardı ama tamamen alakasız bir admin story'siydi. `issue_read` ile bakmak 15 saniye, 15 dosyada
+yanlış referans bırakmak kalıcı.
+
+---
+
 ## 2026-08-25 — Mentör gözüyle site denetimi: hatalar "çalışmıyor"da değil, "yarım kalmış"ta (#1348)
 
 **Denetimi çalışan uygulamada yap, statik okuma bulguyu yarım bırakıyor.** Playbook'un yerel

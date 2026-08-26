@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { buildMeetingIcs } from '@/lib/ics';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // GET — public .ics for a meeting, addressed by its unguessable RSVP token
 // (the same credential used for the email RSVP links).
 //
-// An external guest's token works here too (#1430): they have no account, so
+// An external guest's token works here too (#1446): they have no account, so
 // the .ics is the only way the meeting reaches their calendar at all, and the
 // file exposes nothing the invite email did not already tell them.
-export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
+  // Second public surface addressed by a bare token, and this one prints the
+  // join link twice (DESCRIPTION + LOCATION). Same budget as the RSVP read.
+  const limited = enforceRateLimit(req, 'meeting-ics', { limit: 60, windowMs: 10 * 60 * 1000 });
+  if (limited) return limited;
+
   const { token } = await params;
   let meeting = await prisma.meeting.findUnique({ where: { rsvpToken: token } });
   if (!meeting) {

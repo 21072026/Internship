@@ -31,7 +31,7 @@ interface Meeting {
   meetLink?: string | null;
   rsvp: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   relation: { mentee: { id: string; fullName: string } };
-  // Present only on the row a bulk schedule attached its guests to (#1430) —
+  // Present only on the row a bulk schedule attached its guests to (#1446) —
   // every other row of the batch has an empty list, which is correct: the
   // outsider was invited once, to the shared room.
   guests?: MeetingGuest[];

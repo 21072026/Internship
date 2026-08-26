@@ -1063,7 +1063,7 @@ const en = {
     pending: 'Pending',
     accepted: 'Accepted',
     declined: 'Declined',
-    // External guests (#1430) — people with no account here, invited by address.
+    // External guests (#1446) — people with no account here, invited by address.
     guests: {
       label: 'Invite people outside the platform',
       hint: 'Type an email address and press Enter. They get the same invitation with Yes/No buttons — no account needed.',
@@ -4288,7 +4288,7 @@ const tr: Dict = {
     pending: 'Bekliyor',
     accepted: 'Kabul edildi',
     declined: 'Reddedildi',
-    // Dışarıdan katılımcılar (#1430).
+    // Dışarıdan katılımcılar (#1446).
     guests: {
       label: 'Platform dışından kişileri davet et',
       hint: 'Bir e-posta adresi yazıp Enter’a bas. Aynı daveti Evet/Hayır butonlarıyla alırlar — hesap açmalarına gerek yok.',
@@ -7502,7 +7502,7 @@ const de: Dict = {
     pending: 'Ausstehend',
     accepted: 'Zugesagt',
     declined: 'Abgesagt',
-    // Externe Gäste (#1430).
+    // Externe Gäste (#1446).
     guests: {
       label: 'Personen außerhalb der Plattform einladen',
       hint: 'E-Mail-Adresse eintippen und Enter drücken. Sie erhalten dieselbe Einladung mit Ja/Nein-Buttons — ganz ohne Konto.',

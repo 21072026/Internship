@@ -13,7 +13,7 @@ export interface MeetingGuest {
 const RSVP_VARIANT = { PENDING: 'warning', ACCEPTED: 'success', DECLINED: 'danger' } as const;
 
 /**
- * The outsiders on a meeting and what each of them answered (#1430).
+ * The outsiders on a meeting and what each of them answered (#1446).
  *
  * Rendered next to the meeting rather than folded into the participant list:
  * an outside guest is reached only by the address someone typed, so "did that

@@ -7,7 +7,7 @@ import { notify } from '@/lib/notify';
 // Public endpoint — an invitee responds to a meeting invite via the token in
 // their email. No auth: the unguessable token is the credential.
 //
-// Two kinds of token land here (#1430) and they are looked up separately, never
+// Two kinds of token land here (#1446) and they are looked up separately, never
 // as one query over a shared column:
 //   Meeting.rsvpToken      — a participant (mentor/mentee/project member)
 //   MeetingGuest.rsvpToken — an outsider with no account here
@@ -35,6 +35,12 @@ async function resolveToken(token: string): Promise<Resolved | null> {
 }
 
 export async function GET(request: Request) {
+  // Reads were unlimited, which since #1446 makes this the probe surface for
+  // *two* token spaces — and it answers with the join link. Generous enough
+  // that a real invitee reloading the page never notices.
+  const limited = enforceRateLimit(request, 'rsvp-read', { limit: 60, windowMs: 10 * 60 * 1000 });
+  if (limited) return limited;
+
   const token = new URL(request.url).searchParams.get('token') || '';
   const resolved = await resolveToken(token);
   if (!resolved) return NextResponse.json({ error: 'Not found' }, { status: 404 });

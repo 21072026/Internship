@@ -8,6 +8,7 @@ import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { generateMeetingLink } from '@/lib/meetingContext';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
@@ -24,7 +25,7 @@ const schema = z.object({
   // (#1210). Stored on the meeting so the invite can name the reading that was
   // actually agreed on. Invalid/absent falls back to the profile zone.
   timeZone: z.string().max(80).optional(),
-  // Outsiders with no account here (#1430). Each gets its own RSVP token and
+  // Outsiders with no account here (#1446). Each gets its own RSVP token and
   // the same emailed yes/no buttons; see src/lib/meetingGuests.ts for why the
   // whole batch is attached to ONE of the created rows.
   guests: guestsField,
@@ -56,8 +57,19 @@ export async function GET() {
       include: {
         relation: { include: { mentee: { select: { id: true, fullName: true } } } },
         // The organizer has to be able to see whether the outsiders they invited
-        // said yes — otherwise the invite is send-and-forget (#1430).
-        guests: { select: { id: true, email: true, name: true, rsvp: true }, orderBy: { createdAt: 'asc' } },
+        // said yes — otherwise the invite is send-and-forget (#1446). A MENTEE is
+        // not the organizer of their own meeting: the addresses were typed by
+        // their mentor, they are a third party's PII, and this same payload is
+        // rendered on /portal. So the list is included only for the roles that
+        // can actually invite.
+        ...(role === 'ADMIN' || role === 'MENTOR'
+          ? {
+              guests: {
+                select: { id: true, email: true, name: true, rsvp: true },
+                orderBy: { createdAt: 'asc' as const },
+              },
+            }
+          : {}),
       },
       orderBy: { scheduledAt: 'desc' },
     });
@@ -72,6 +84,12 @@ export async function POST(request: Request) {
   if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Unlimited until #1446. Scheduling always mailed people, but only people the
+  // caller was already connected to; it can now mail addresses the caller typed,
+  // which is worth a cap of its own. Well above any real scheduling session.
+  const limited = enforceRateLimit(request, 'meeting-schedule', { limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
 
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json());
@@ -119,10 +137,13 @@ export async function POST(request: Request) {
     // Guests are resolved once for the whole batch: they are invited to the
     // shared room, not to each relation. Anyone with an account is dropped here
     // and reached the normal way instead — see normalizeGuests.
-    const { guests: guestList, rejectedAsMembers } = await normalizeGuests(
-      guests,
-      relations.map((r) => r.mentee.email)
-    );
+    const { guests: guestList, rejectedAsMembers } = await normalizeGuests(guests, [
+      ...relations.map((r) => r.mentee.email),
+      // The organizer's own address too. It would be caught anyway by the
+      // has-an-account lookup, but passing it explicitly makes the *reason*
+      // reported back to the UI the right one.
+      ...(session.user.email ? [session.user.email] : []),
+    ]);
 
     let created = 0;
     // The row the guests hang off — the first one written in this batch.

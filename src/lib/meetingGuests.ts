@@ -2,10 +2,11 @@ import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { logActivity } from '@/lib/activity';
 import { sendMeetingGuestInviteEmail } from '@/services/emailService';
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 
-// External meeting guests (#1430) — inviting someone who has no account here.
+// External meeting guests (#1446) — inviting someone who has no account here.
 //
 // Everyone else on a meeting is derived from its context (the relation's
 // mentor/mentee, the project's members, the conversation's participants), so
@@ -73,6 +74,13 @@ export async function normalizeGuests(
   }
 
   // Has an account here — reached as a participant, not as a guest.
+  //
+  // "Here" means this tenant: `User` is a TENANT_MODEL (src/lib/orgContext.ts),
+  // so under MT_ENFORCE_ISOLATION this query does not see another org's users
+  // and they are treated as outsiders. That is the intended reading — someone in
+  // a different tenant genuinely cannot reach this meeting through the app, so a
+  // guest invitation is the only way to invite them, and it is the one the
+  // organizer asked for.
   if (seen.size > 0) {
     const users = await prisma.user.findMany({
       where: { email: { in: [...seen.keys()] } },
@@ -159,6 +167,19 @@ export async function inviteGuests({
     } catch (e) {
       logger.error('Meeting guest invite email failed', { meetingId, error: String(e) });
     }
+  }
+
+  // One line per fan-out, not per guest: what an admin reviewing the log wants
+  // to see is "this account mailed N outsiders", and EmailLog already holds the
+  // per-address detail.
+  if (created.length > 0) {
+    await logActivity({
+      action: 'meeting.guest.invited',
+      actorId: invitedById,
+      targetType: 'Meeting',
+      targetId: meetingId,
+      detail: `${created.length} guest(s): ${created.map((g) => g.email).join(', ')}`,
+    });
   }
 
   return created;

@@ -1,4 +1,4 @@
-// Client-safe half of the external-guest rules (#1430).
+// Client-safe half of the external-guest rules (#1446).
 //
 // The cap is enforced on the server (src/lib/meetingGuests.ts) but has to be
 // shown in the form, and that module imports prisma and the mail service — so

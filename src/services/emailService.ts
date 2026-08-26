@@ -580,7 +580,7 @@ export async function sendMeetingInviteEmail({
   });
 }
 
-// The same invitation, addressed to someone who has no account here (#1430).
+// The same invitation, addressed to someone who has no account here (#1446).
 //
 // Kept as a sibling of sendMeetingInviteEmail rather than a flag on it, because
 // three things genuinely differ for an outsider and each of them is a
@@ -1572,6 +1572,11 @@ export async function sendMeetingReminders() {
           mentor: { select: participantSelect },
         },
       },
+      // External guests (#1446). Without this an outsider gets the invitation
+      // and then silence — and unlike a participant they have no dashboard, no
+      // in-app notification and no calendar feed to fall back on, so the
+      // reminder email is the *only* nudge they can get.
+      guests: { select: { email: true, name: true, rsvp: true } },
     },
   });
 
@@ -1642,8 +1647,69 @@ export async function sendMeetingReminders() {
         console.error('Meeting reminder email failed:', e);
       }
     }
+
+    // Guests, after the participants. No notify() — there is no userId — and no
+    // emailAllowed() — there are no notificationPrefs to consult. Someone who
+    // already declined is left alone: they answered, and a reminder for a
+    // meeting you said no to reads as not having been listened to.
+    for (const guest of m.guests) {
+      if (guest.rsvp === 'DECLINED') continue;
+      try {
+        await sendMeetingGuestReminderEmail({
+          to: guest.email,
+          name: guest.name,
+          title: m.title,
+          scheduledAt: m.scheduledAt!,
+          meetLink: m.meetLink,
+          organizerTimeZone: m.timeZone,
+          minutes,
+        });
+        emailed++;
+      } catch (e) {
+        console.error('Meeting guest reminder email failed:', e);
+      }
+    }
   }
   return { checked: meetings.length, reminded, notified, emailed };
+}
+
+// The reminder half of sendMeetingGuestInviteEmail — same reasons for being a
+// sibling rather than a flag: no /account link a guest could use, the
+// organizer's clock instead of a saved zone they don't have, and a line saying
+// why this arrived at all.
+async function sendMeetingGuestReminderEmail({
+  to,
+  name,
+  title,
+  scheduledAt,
+  meetLink,
+  organizerTimeZone,
+  minutes,
+}: {
+  to: string;
+  name?: string | null;
+  title: string;
+  scheduledAt: Date;
+  meetLink?: string | null;
+  organizerTimeZone?: string | null;
+  minutes: number;
+}) {
+  const zone = resolveTimeZone(organizerTimeZone);
+  const when = `${formatInTimeZone(scheduledAt, zone)} (${zoneLabel(scheduledAt, zone)})`;
+  await sendEmail({
+    to,
+    category: 'meeting-guest-reminder',
+    subject: `Reminder: ${title} starts soon`,
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      ${name ? `<p>Hi ${esc(name)},</p>` : ''}
+      <p>This is a reminder for <strong>${esc(title)}</strong>.</p>
+      <p><strong>When:</strong> ${esc(when)} (in about ${minutes} minute${minutes === 1 ? '' : 's'})</p>
+      ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
+      <p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+        You were invited to this meeting as a guest — no account needed, just open the link above.
+      </p>
+    </div>`,
+  });
 }
 
 // --- Recurring project meetings (#51) ---------------------------------------

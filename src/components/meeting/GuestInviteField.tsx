@@ -16,7 +16,7 @@ export interface PendingGuest {
 const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * "Also invite these people, who don't have accounts here" (#1430).
+ * "Also invite these people, who don't have accounts here" (#1446).
  *
  * A chip list rather than a comma-separated text field: an address becomes a
  * chip the moment it is committed, so the organizer can see — before sending —
