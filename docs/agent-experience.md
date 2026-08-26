@@ -69,6 +69,29 @@ tarafı için ayrı bir kapı koymak: `k6 archive <betik> -O /dev/null` tek iste
 bundle + init-context değerlendirmesi yapıyor, var olmayan bir metriği adlandıran eşiği bile
 yakalıyor.
 
+**"Ortam bozuk" demeden önce zaman çizelgesine bak — ortam silinmiş olabilir.** Topic
+ortamına (`crm-pr1458.ersah.in`) k6 koşturdum, her istek
+`x509: certificate is valid for s.ersah.in` ile patladı. İlk teşhisim "yeni subdomain'in
+sertifikası henüz kesilmemiş" oldu ve bunu PR'a yorum olarak yazdım — **yanlıştı**. Gerçek
+sıralama: 14:26'da curl ile altı uç noktayı da 200 aldım, 14:26:40'ta PR auto-merge ile
+birleşti, 14:27:29'da `topic-teardown.sh` Plesk subdomain'ini sildi, 14:27:32'de k6 koşum
+başladı. Yani sertifika sorunu değil, **ortam artık yoktu**; sunucu varsayılan sertifikasını
+dönüyordu. Ders: bir PR ortamına karşı ölçüm yapıyorsan önce PR'ın hâlâ açık olduğunu doğrula,
+ve beklenmedik bir altyapı hatasında iş akışı loglarının zaman damgalarını kendi
+komutlarınınkiyle yan yana koy. Prod (`crm.ersah.in`) k6 ile sorunsuz — kalıcı doğrulamayı
+orada yap.
+
+**Auto-merge açtıysan branch'in ayağının altından kayabilir.** Baseline ölçümünü commit'leyip
+push ettiğimde PR çoktan birleşmişti (dokuz dakika önce); commit branch'te kaldı, main'e
+girmedi. Birleşmiş bir PR yeni iş taşıyamaz — branch'i güncel main'den yeniden kurup ayrı bir
+PR açmak gerekiyor. Auto-merge açıkken "bir şey daha ekleyeyim" refleksi bu tuzağa götürüyor.
+
+**Eşikleri "muhakemeyle koydum" diye bırakma; PR'ın kendi önizleme ortamı canlıya çıkınca
+gerçek bir taban ölç.** 1 VU'luk 40 saniyelik bir koşu (prod'a ihmal edilebilir yük) altı uç
+noktanın da 200 döndüğünü, Cloudflare'in k6 user-agent'ına challenge basmadığını ve p95'lerin
+156–777ms bandında olduğunu gösterdi — yani koyduğum bütçelerin tabanın 2–6 katı olduğunu.
+Bu tablo dokümana girdi; "sayılar nereden geliyor" sorusunun cevabı artık dosyada duruyor.
+
 **Kendi işini düşman gözüyle inceleten paralel ajanlar burada gerçekten karşılığını verdi:**
 dört bağımsız merceğin (k6 betiği / e-posta / workflow / güvenlik+doküman) bulduğu 20 kusurun
 neredeyse tamamı somut ve doğruydu, ve yarısı ancak k6'i kurup koşturarak bulunabilirdi.
