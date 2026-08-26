@@ -4595,6 +4595,50 @@ kapandığı için kapanmayı bekliyordu; #884'ün PR'ında `Closes #` boş bır
 GitHub bağlamamıştı. **`closed_by_pull_requests` boş olması işin yapılmadığı anlamına
 gelmez** — içerikten doğrula.
 
+## 2026-08-26 — Sürüm başına bir sürüm numarası (#1457)
+
+**Bir mekanizmanın "çalışıyor" görünmesi, doğru sayıyı ürettiği anlamına gelmiyor.** #1275
+parça (fragment) sistemi çakışmaları gerçekten çözdü, ama sıralamayı **dosya adına** göre
+yapıyordu. `minor` bir parçanın `patch = 0` sıfırlaması, adı ondan önce sıralanan `patch`
+parçalarını yutuyor: 2026-08 içinde **üst üste üç merge aynı sürümle (`0.114.0-beta`)
+yayına girdi**. Kimse fark etmedi çünkü çıktı hâlâ geçerli bir semver'di. Bir sürüm
+fonksiyonu yazarken "her merge sayıyı ilerletir mi?" sorusunu **teste yazmak** gerekiyor;
+gözle bakınca doğru görünüyor.
+
+**Bir dosyanın ne zaman ve hangi commit'le geldiğini git zaten biliyor.** Parçaya elle
+tarih/commit yazdırmaya (bot'un main'e push etmesi gerekirdi — branch protection yüzünden
+imkânsız) gerek yok:
+`git log --reverse --topo-order --diff-filter=A --format='C%H%x09%ct' --name-only -- <dizin>`
+tek çağrıda tüm dizinin ekleme sırasını + sha + zamanını veriyor. N dosya için N `git log`
+çağırmaya gerek yok. `%ct` (committer) kullan, `%at` (author) değil: squash merge'de author
+tarihi haftalar öncesi olabilir ve zaten yayınlanmış sürümleri yeniden numaralandırır.
+
+**Sığ (shallow) klonda `--diff-filter=A` yalan söylüyor.** Klonun kesildiği graft
+commit'i, taşıdığı *her* dosyayı "eklemiş" gibi görünüyor. GitHub Actions checkout'u
+varsayılan olarak `fetch-depth: 1`, yani bu sessizce yanlış tarih üretirdi.
+`.git/shallow` içindeki sha'ları okuyup o commit'ten gelen damgayı **reddet**, ve tarih
+üretmesi gereken workflow'lara `fetch-depth: 0` ver. Yanlış veri, veri yokluğundan kötü:
+compaction damgasız ama commit'lenmiş bir parça görürse **hata verip durmalı**
+(`assertStamped`), bugünün tarihini uydurmamalı.
+
+**`.dockerignore` `.git`'i dışlıyor** — yani `next.config.js` imaj build'i içinde git'e
+soramaz. Çözüm: runner'da `node scripts/release-derive.cjs --stamps` ile hesaplayıp
+`--build-arg RELEASE_STAMPS=...` ile içeri vermek. Build zamanı türetme yapan her şeyde
+"bu bilgi Docker context'inde var mı?" diye kontrol et.
+
+**Geçmişi düzeltmek, dönüşüm tersinir olduğu kanıtlanabiliyorsa güvenli.** Eski compaction
+45 parçayı tek başlık altına gömmüştü. Parçalar `git show <compaction>^:<yol>` ile geri
+okunabildiği ve eski gövde tam olarak `parçalar.map(changelog).join('\n')` olduğu için
+yeniden bölme iki yönlü doğrulanabildi: (1) replay yayınlanmış `0.110.1-beta`'ya birebir
+düşüyor, (2) her madde ve her highlight birebir korunuyor. `scripts/release-resplit.mjs`
+ikisi de tutmazsa **yazmayı reddediyor** — geçmişi ancak yeniden üretebildiğin ölçüde
+yeniden yazabilirsin.
+
+**Alt ajanlarla keşif, tek başına okumaktan hızlı ama son adımı sen yap.** Dört paralel
+"scout" (build/git, UI tüketicileri, CI kapıları, tasarım kritiği) yarım saatlik okumayı
+90 saniyeye indirdi; tasarım kritiği yapan ajan, çalışma ağacında yarım kalmış
+`next.config.js` çağrısını da yakaladı. Sentez ajanı oturum limitine takıldı — plan zaten
+scout raporlarındaydı, sentez adımına bel bağlamamak iyi oldu.
 ## 2026-08-25 — İK gözüyle ürün turu: bulguları issue'ya çevirmek
 
 **"Kapalı" bir issue'nun işi yapıldığı anlamına gelmiyor — tersi de doğru.** Dosyada

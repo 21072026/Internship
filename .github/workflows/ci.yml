@@ -24,6 +24,11 @@ jobs:
       DATABASE_URL: 'mysql://user:pass@127.0.0.1:3306/db'
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: the release gate below dates each pending change from
+          # the commit that added its fragment, which a shallow clone hides
+          # (#1457). The repo's history is small — this costs a second.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -38,6 +43,12 @@ jobs:
       # next.config.js during the deploy build (#1275).
       - name: release fragments are well-formed (#1275)
         run: npm run check:release-fragments
+      # The version arithmetic runs in three places that must agree (build, this
+      # gate, compaction). When they silently disagreed, three merges in a row
+      # shipped under one version number and 45 changes were buried in a single
+      # changelog section (#1457).
+      - name: release version arithmetic (#1457)
+        run: npm run test:release
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # Prisma's filter grammar is data: an object where a scalar id belongs is
