@@ -173,7 +173,7 @@ test('RFC 8058 one-click applies immediately and is idempotent', async ({ reques
   }
 });
 
-test('a GET of the one-click URL is inert', { tag: '@smoke' }, async ({ request }) => {
+test('a GET of the one-click URL is inert', async ({ request }) => {
   const email = uniqueEmail('unsub-scanner');
   const user = await seedUser(email, 'UnsubPass123', 'MENTEE', 'Unsub Scanner');
   try {

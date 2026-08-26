@@ -22,9 +22,16 @@ async function emailDecision(
     where: { id: requestedById },
     select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, timezone: true },
   });
+  // Same reasoning as POST /api/meeting-requests: the legacy key here is
+  // `meetingReminders`, the mail is the answer to a request the person made
+  // (group meeting_invites), so no group conjunct is added on top of it — an
+  // opt-out from automated reminders must not swallow the reply someone is
+  // waiting for. sendEmail() enforces the right group from the category.
   if (!user?.email || !emailAllowed(user, 'meetingReminders')) return;
   try {
-    await sendMeetingRequestDecisionEmail({ to: user.email, fullName: user.fullName, orgId: user.orgId, timeZone: user.timezone, ...args });
+    // `requestedById` is the requester — the one who asked and is owed the
+    // answer. The accepting mentor/admin is the actor, not the recipient.
+    await sendMeetingRequestDecisionEmail({ to: user.email, fullName: user.fullName, orgId: user.orgId, timeZone: user.timezone, userId: requestedById, ...args });
   } catch (e) {
     console.error('Meeting request decision email failed:', e);
   }

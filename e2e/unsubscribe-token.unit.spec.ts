@@ -37,7 +37,7 @@ import {
 process.env.NEXTAUTH_SECRET ||= 'unit-test-secret';
 
 test.describe('the e-mail group taxonomy', () => {
-  test('has twelve groups with unique ids and no category in two of them', { tag: '@smoke' }, () => {
+  test('has twelve groups with unique ids and no category in two of them', () => {
     expect(EMAIL_GROUPS).toHaveLength(12);
     expect(new Set(EMAIL_GROUP_IDS).size).toBe(12);
     expect(EMAIL_GROUP_IDS).toEqual(EMAIL_GROUPS.map((g) => g.id));

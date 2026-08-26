@@ -75,6 +75,12 @@ export async function POST(request: Request) {
       where: { id: recipient },
       select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, timezone: true },
     });
+    // Deliberately NOT extended with an `emailGroupAllowedForCategory` conjunct.
+    // The legacy key this check reads is `meetingReminders`, but the mail is a
+    // meeting *request* (group meeting_invites), and adding the reminders
+    // conjunct would let an opt-out from automated nagging silently swallow a
+    // named person asking you to attend something. The group that does apply is
+    // enforced centrally in sendEmail() from the category.
     if (rcpt?.email && emailAllowed(rcpt, 'meetingReminders')) {
       try {
         await sendMeetingRequestEmail({
@@ -87,6 +93,9 @@ export async function POST(request: Request) {
           orgId: rcpt.orgId,
           timeZone: rcpt.timezone,
           requesterTimeZone: requester?.timezone ?? null,
+          // The other party, i.e. whoever is being asked to attend — not
+          // `session.user.id`, who is the person asking.
+          userId: recipient,
         });
       } catch (e) {
         console.error('Meeting request email failed:', e);

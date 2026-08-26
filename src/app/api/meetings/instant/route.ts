@@ -9,6 +9,7 @@ import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { notify } from '@/lib/notify';
 import { generateMeetingLink, resolveMeetingContext, type Invitee } from '@/lib/meetingContext';
 
@@ -138,7 +139,10 @@ async function inviteAll(
         organizer ? { organizer, title } : { title },
         meetLink
       );
+      // The legacy check stays as-is; the group conjunct is what an unsubscribe
+      // from *meeting invites* now acts on. Both must pass.
       if (!emailAllowed(inv, 'meetingReminders')) return;
+      if (!emailGroupAllowedForCategory(inv, 'meeting-invite')) return;
       // For a relation invite, use that relation's own token; otherwise any row
       // works (a project/chat meeting has exactly one).
       const row = inv.relationId ? rows.find((r) => r.relationId === inv.relationId) : rows[0];
@@ -152,6 +156,9 @@ async function inviteAll(
           meetLink,
           rsvpToken: row.rsvpToken,
           timeZone: inv.timezone,
+          // One mail per invitee, so the id is this invitee's — the organizer is
+          // not in `invitees` and must not be charged with anyone's opt-out.
+          userId: inv.userId,
         });
       } catch (e) {
         console.error('Instant meeting invite email failed:', e);

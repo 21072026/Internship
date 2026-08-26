@@ -113,7 +113,11 @@ async function announceNextOccurrence(
       ...(role === 'MENTOR' ? { mentorId: sessionUserId } : {}),
       ...(menteeIds.length > 0 ? { menteeId: { in: menteeIds } } : {}),
     },
-    include: { mentee: { select: { email: true, fullName: true, timezone: true } } },
+    // `id` is here for the invite's `userId` below — without it this mail ships
+    // with no unsubscribe footer and no List-Unsubscribe header. It is the one
+    // select this change had to widen; every other send site already had the
+    // recipient's id in scope.
+    include: { mentee: { select: { id: true, email: true, fullName: true, timezone: true } } },
   });
 
   let invited = 0;
@@ -132,6 +136,9 @@ async function announceNextOccurrence(
         // The rule's own clock — "09:00 on Mondays" is 09:00 *somewhere*, and an
         // invitee in another zone should see which somewhere (#1210).
         organizerTimeZone: series.timeZone,
+        // The mentee being invited, not `sessionUserId` (the mentor/admin who
+        // created the series and is not mailed here at all).
+        userId: rel.mentee.id,
       });
       invited++;
     } catch (e) {

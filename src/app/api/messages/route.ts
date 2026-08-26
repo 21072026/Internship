@@ -19,6 +19,7 @@ import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { withTenantScope } from '@/lib/orgContext';
@@ -313,7 +314,7 @@ export async function POST(request: Request) {
         where: { id: recipient },
         select: { email: true, emailNotifications: true, notificationPrefs: true },
       });
-      if (rcpt?.email && emailAllowed(rcpt, 'messages')) {
+      if (rcpt?.email && emailAllowed(rcpt, 'messages') && emailGroupAllowedForCategory(rcpt, 'message')) {
         const sender = session.user.name ?? 'Your mentor';
         const safe = body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
         const attachCount = fileBufs.length;
@@ -331,6 +332,13 @@ export async function POST(request: Request) {
         sendEmail({
           to: rcpt.email,
           category: 'message',
+          // `recipient` is the OTHER party's id (otherParticipant / the
+          // participants minus the sender), which is exactly whose preferences
+          // and unsubscribe token this mail must carry — passing the sender's id
+          // here would mint a token that lets one user switch off another's mail.
+          // No `locale`: the body below is hard-coded English, and a translated
+          // footer under an English message reads as a bug rather than a courtesy.
+          userId: recipient,
           subject: `New message from ${sender}`,
           html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>Reply to this email or open the conversation in the app.</p>${actions}`,
           // Project DMs with no mentorship behind them get the same notification

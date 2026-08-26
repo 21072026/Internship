@@ -58,13 +58,23 @@ export function AccountSettings() {
   const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null; createdAt: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
-  // Per-group e-mail preferences (#1300). These are NOT a second copy of
+  // Per-group e-mail preferences (#1290). These are NOT a second copy of
   // `notifPrefs`: they are the resolved *answers* for the twelve e-mail groups,
   // derived from the same JSON blob but flattened through the back-compat rules
   // in resolveEmailGroupPrefs (a legacy `mentorship: false` shows up here as
   // `mentorship_lifecycle: false` even though no `email:` key exists yet). The
   // blob itself stays the single stored truth and is what we PUT back.
   const [groupPrefs, setGroupPrefs] = useState<Record<EmailGroupId, boolean>>(() => resolveEmailGroupPrefs({}));
+  // Has GET /api/profile come back yet? Both switch lists below write the WHOLE
+  // notificationPrefs blob back (PUT /api/profile replaces that column, it does
+  // not merge), and until this is true `notifPrefs` is still the empty initial
+  // object. A click in that window would therefore PUT `{ 'email:digests':
+  // false }` and silently delete every key the user actually had — a legacy
+  // in-app opt-out, another group, all of it. The switches also render
+  // optimistically "on" during that window, so they are not merely unsaveable,
+  // they are showing a default rather than an answer. Both lists stay disabled
+  // until the stored truth has arrived.
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
   // Browser (foreground) notifications — per-device, not stored server-side (#675).
   const [browserNotif, setBrowserNotif] = useState(false);
@@ -124,6 +134,9 @@ export function AccountSettings() {
         // and then persist that as an explicit opt-out the first time they
         // touched any switch, losing choices they never made.
         setGroupPrefs(resolveEmailGroupPrefs({ notificationPrefs: user.notificationPrefs }));
+        // Set only after both of the above: this is what unlocks the switches,
+        // and it must never be true while `notifPrefs` is still the placeholder.
+        setPrefsLoaded(true);
         // The language selector must reflect the EFFECTIVE locale, not just the
         // DB preference: getLocale() lets the `locale` cookie win, so a cookie of
         // `tr` with a `preferredLanguage` of `en`/null renders a Turkish UI while
@@ -687,7 +700,7 @@ export function AccountSettings() {
             receive is a lockout rather than a choice. */}
         <p className="text-xs text-gray-400 mt-1">{t.emailGroups.account_security.desc}</p>
 
-        {/* Per-group e-mail opt-out (#1300). Driven by EMAIL_GROUPS so a new
+        {/* Per-group e-mail opt-out (#1290). Driven by EMAIL_GROUPS so a new
             group cannot ship without a switch here, exactly like the legacy
             list below is driven by NOTIFICATION_CATEGORIES. These switches are
             about E-MAIL only; the legacy list underneath is about the in-app
@@ -712,7 +725,7 @@ export function AccountSettings() {
                     type="checkbox"
                     data-testid={`email-group-toggle-${g.id}`}
                     checked={groupPrefs[g.id] !== false}
-                    disabled={savingPrefs}
+                    disabled={savingPrefs || !prefsLoaded}
                     onChange={(e) => toggleGroup(g.id, e.target.checked)}
                   />
                   {t.emailGroups[g.id].name}
@@ -759,13 +772,17 @@ export function AccountSettings() {
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.legacyHeading}</h4>
           <p className="text-xs text-gray-400">{t.unsubscribe.legacyHint}</p>
           <p className="text-xs text-gray-400">{t.account.notifCategoriesHint}</p>
+          {/* `prefsLoaded` guards this list for the same reason it guards the
+              group switches above: it writes the identical blob, and a click
+              before GET /api/profile answers would PUT one key over the top of
+              everything the user actually had. */}
           <div className="pl-6 space-y-1.5">
             {NOTIFICATION_CATEGORIES.map((cat) => (
               <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
                 <input
                   type="checkbox"
                   checked={notifPrefs[cat] !== false}
-                  disabled={savingPrefs}
+                  disabled={savingPrefs || !prefsLoaded}
                   onChange={(e) => togglePref(cat, e.target.checked)}
                 />
                 {(t.account.notifCategories as Record<string, string>)[cat]}

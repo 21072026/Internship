@@ -23,7 +23,13 @@ function isAllowlisted(pathname: string) {
     // "Please verify your email address to make changes." on their own opt-out.
     // Gmail's anonymous one-click POST already passed (token === null falls
     // through), but a person clicking the link in a logged-in tab did not.
-    pathname.startsWith('/api/unsubscribe') ||
+    // Written as exact-or-subpath rather than a bare `startsWith`, the same
+    // shape as '/api/auth/' above: a plain prefix would also allowlist a future
+    // sibling like /api/unsubscribe-all, silently exempting it from the
+    // verification gate. The three routes that belong here are the collection
+    // itself, /one-click and /prefs.
+    pathname === '/api/unsubscribe' ||
+    pathname.startsWith('/api/unsubscribe/') ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.

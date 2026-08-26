@@ -188,10 +188,23 @@ So outbound mail is split by `category` (`src/services/emailService.ts`):
 
 | Channel | Env | Carries | Where it should point |
 |---------|-----|---------|-----------------------|
-| **primary** | `SMTP_*` | `verification`, `invitation`, `password-reset`, `message`, `test`, **and anything uncategorised** | the relay (Brevo) |
-| **bulk** | `SMTP_BULK_*` | `unread-digest`, `activity-digest`, `mentor-digest`, `analytics-report`, `meeting-reminder`, `interaction-reminder`, `stage-deadline`, `retention-reminder`, `company-need-alert`, `announcement` | our own Plesk server |
+| **primary** | `SMTP_*` | `verification`, `invitation`, `password-reset`, `message`, `mentor-direct`, `test`, the mentorship/meeting/offer lifecycle mail, the inbound-request mail, **and anything uncategorised** | the relay (Brevo) |
+| **bulk** | `SMTP_BULK_*` | every category of a group flagged `bulk: true` — the digests, the reminder families, `analytics-report`, `company-need-alert`, `announcement`, `re-engagement` — plus `retention-reminder` | our own Plesk server |
 
-Two deliberate choices:
+The bulk column is no longer a hand-written list. It is **derived** from the
+e-mail groups (§2d): `BULK_CATEGORIES = BULK_GROUP_CATEGORIES ∪
+{'retention-reminder'}`. The hand-maintained set it replaced had already drifted
+from the taxonomy — `document-reminder` and `weekly-report` were automated
+volume riding the transactional relay — so "which mail is a blast?" is now
+answered in exactly one place, `src/lib/emailGroups.ts`.
+
+`retention-reminder` is the single union'd exception, and it is worth
+understanding because it looks like a bug: it belongs to an **essential** group
+(a legally required notice, never unsubscribable, no footer) yet rides the bulk
+relay. Which transport carries a mail is a *deliverability* decision; whether a
+person may opt out of it is a *consent* decision. They are allowed to disagree.
+
+Two further deliberate choices:
 
 - **Uncategorised mail stays on the primary channel.** Silently downgrading the
   deliverability of a call site nobody has classified yet is the sort of
@@ -242,6 +255,165 @@ discipline as the rest of the personal data:
   to it** — without that call an erased person's address outlives their account.
 
 Add both whenever a new log-like table starts holding addresses.
+
+## 2d. E-mail groups, unsubscribe and the `List-*` headers
+
+Gmail and Yahoo require a working one-click unsubscribe on bulk mail, and the
+older per-feature opt-out could not provide one: the eleven keys in
+`src/lib/notificationPrefs.ts` gate *in-app* notifications, they grew
+per-feature rather than per-kind (`mentorship` silenced an offer letter,
+`digest` silenced a KPI report), and nine of the 41 send sites had no per-user
+switch at all. Somebody who only wanted the automated meeting reminders to stop
+had to switch off e-mail entirely — which also stopped their password reset.
+
+### The taxonomy
+
+`src/lib/emailGroups.ts` is the single source of truth. Twelve groups, each one
+a kind of mail a reasonable person would describe the same way; **every
+`sendEmail` category belongs to exactly one group** (the module throws at import
+time if a category is claimed twice, because "which switch turns this mail off?"
+has to have one answer).
+
+| Group | Essential | Bulk | Carries |
+|-------|-----------|------|---------|
+| `account_security` | **yes** | no¹ | verification, password reset, invitation, account, security, ops alerts, retention notices |
+| `direct_messages` | no | no | a human wrote to you — in-app message mirror, mentor's direct mail |
+| `mentorship_lifecycle` | no | no | requests, decisions, assignments, mentor applications, goals |
+| `pipeline_updates` | no | no | stage moves, offers sent/decided, outcome letters |
+| `meeting_invites` | no | no | a specific meeting: invitation, request, its answer |
+| `meeting_reminders` | no | **yes** | "starts soon" mail, including project series |
+| `task_reminders` | no | **yes** | interaction logs, stage deadlines, weekly reports, missing documents |
+| `digests` | no | **yes** | unread-message, daily-activity, weekly-mentor roll-ups |
+| `reports_analytics` | no | **yes** | scheduled analytics/KPI reports |
+| `opportunities` | no | **yes** | company-need matches |
+| `inbound_requests` | no | no | public contact form, company inquiry, project join request |
+| `announcements` | no | **yes** | broadcasts, product news, re-engagement nudges |
+
+¹ except `retention-reminder`, the documented transport/consent split above.
+
+**Essential means essential.** `account_security` ignores every switch including
+the master `emailNotifications` one, carries **no** footer and **no** `List-*`
+headers. Advertising an opt-out on a password reset invites people to switch off
+the mail they cannot function without, and an opt-out we would not honour is
+worse than none at all.
+
+Preferences live in the **existing** `User.notificationPrefs` JSON column under
+prefixed keys (`email:digests`) — no schema change, no migration. The prefix is
+what makes that safe: the same blob holds the eleven legacy keys, and a bare
+`digests` key would have collided with the legacy `digest` family. Resolution is
+six ordered rules in `emailGroupAllowed()`; the two that matter operationally
+are that a legacy in-app opt-out still suppresses the group it used to (nobody
+is silently re-subscribed by this feature shipping), and that an explicit new
+opt-**in** beats a stale legacy opt-out (the user just told us so in the new UI).
+
+### Enforcement is central, not per call site
+
+`sendEmail()` does the check itself, from `category` + `userId`:
+
+```
+userId + category → group → may we send? → footer + List-* headers
+```
+
+The per-call-site `emailAllowed(...) && emailGroupAllowedForCategory(...)`
+guards stay, but they are an **optimisation** — several scheduled jobs return an
+`{ emailed: n }` counter that e2e specs assert, and it has to be truthful. The
+*guarantee* is the one in `sendEmail()`, because there are 41 send sites and the
+next one somebody adds will forget. It sits deliberately **ahead** of the
+demo-mode and SMTP short-circuits, so the promise holds on every environment and
+the `EmailLog` row records *why*: `Unsubscribed: digests` is auditable.
+
+**A mail is only unsubscribable when `sendEmail` is given a `userId`.** No
+`userId` ⇒ no preference to read, no token to mint, no footer, no headers. That
+is correct for a recipient who is not a `User` row (an invitee who has not
+registered, a mentor applicant, `ALERT_EMAIL_TO`, an operator-typed test
+address) — and it is also the trap: the parameter is *optional*, so a new call
+site that forgets it type-checks cleanly and ships mail with no opt-out at all.
+`e2e/email-groups-footer.unit.spec.ts` scans the source for `category:` literals
+to catch the neighbouring mistake (a category with no group), but the missing
+`userId` is only caught by review. **Pass the recipient's id — and check it is
+the *recipient's*, not the actor's.** Half of these send sites have both in
+scope, and swapping them still delivers the mail, just with somebody else's
+unsubscribe token in it.
+
+### The links and the headers
+
+Every non-essential mail to a known user gets a footer with two links and the
+RFC 8058 headers:
+
+| Header | Value | On which mail |
+|--------|-------|---------------|
+| `List-Unsubscribe` | `<https://…/api/unsubscribe/one-click?t=…>` (plus `<mailto:…>` when configured) | every non-essential mail |
+| `List-Unsubscribe-Post` | `List-Unsubscribe=One-Click` | every non-essential mail |
+| `List-Id` / `Precedence: bulk` / `Auto-Submitted` / `X-Auto-Response-Suppress` | — | **bulk groups only** |
+
+The list markers are bulk-only on purpose: a 1:1 notification is not a list, and
+`Precedence: bulk` on the primary channel is a negative signal on exactly the
+reputation the two-transport split exists to protect. Those mails also often
+expect a reply through the `reply+` address, which auto-response suppression
+would interfere with.
+
+Two implementation details that are not obvious and will bite anyone editing
+this:
+
+- **Do not use nodemailer's `list:` option.** Its `_formatListUrl` mangles
+  `list: { 'unsubscribe-post': … }` into `<http://List-Unsubscribe=One-Click>`.
+  Raw `headers` pass ASCII through verbatim, which is what RFC 8058 needs.
+- **The footer must stay one line.** `htmlToText()`'s anchor regex has no `s`
+  flag, so an `<a>` broken across lines loses its URL from the `text/plain`
+  part entirely — Gmail wants the visible opt-out in *both* MIME parts. It also
+  gets injected *inside* a `white-space:pre-wrap` wrapper on the outcome mail,
+  where newlines would render as blank lines.
+
+### The flow
+
+| Surface | Method | Who calls it |
+|---------|--------|--------------|
+| `/u/<token>` | GET (page), mutates from the browser | a human clicking the footer link |
+| `POST /api/unsubscribe` | POST | that page, on mount and for Undo |
+| `POST /api/unsubscribe/one-click?t=…` | POST | Gmail / Apple Mail / Outlook |
+| `GET /api/unsubscribe/one-click?t=…` | 302 → `/u/<token>` | link scanners (inert) |
+| `GET`/`POST /api/unsubscribe/prefs` | JSON | the inline preference centre |
+| `/account` | session | the twelve switches for a signed-in user |
+
+**The signed token is the only credential**, and there must never be a session
+check in `src/app/api/unsubscribe/**`: the link only ever reaches the person it
+is about (it arrives at that user's own registered address), the token cannot be
+guessed or re-pointed, and it can do exactly one thing — change that user's own
+notification preferences, reversibly. Demanding a password before somebody may
+stop being mailed is how you earn a spam complaint instead of an opt-out, and
+Gmail's RFC 8058 client cannot sign in at all. The paths are allowlisted in
+`src/middleware.ts` for the same reason.
+
+**Why the page mutates from the browser and the one-click route is POST-only:**
+mail clients and corporate link scanners (Outlook Safe Links, AV gateways) fetch
+every URL in a message on arrival. A mutating GET would unsubscribe people who
+never clicked. Scanners run no scripts, and they do not POST — so `GET` on the
+one-click route only redirects a human to the page. Same rationale as `/m/<token>`.
+
+**The tokens never expire** (`src/lib/unsubscribeToken.ts`). An opt-out link has
+to work when the mail is opened two years later, out of an archive, by someone
+who has finally had enough. "Your unsubscribe link has expired" is the kind of
+sentence that ends up in a screenshot.
+
+### Operational notes
+
+- **`UNSUBSCRIBE_MAILTO` is optional and is only advertised when set.** The
+  `mailto:` form of `List-Unsubscribe` is emitted only if that variable holds an
+  address, because `src/services/inboundMailBridge.ts` + `routeInboundEmail`
+  understand `reply+<token>@` and **nothing else** — they would black-hole an
+  unsubscribe message. An opt-out address nobody processes is a compliance
+  failure, not a courtesy, so the header entry is omitted rather than emitted
+  empty. Set it only once something actually drains that mailbox and acts on it.
+- Opt-outs are written to `ActivityLog` (`email.unsubscribe` /
+  `email.resubscribe`, with `one-click (RFC 8058)` in `detail` when a provider
+  did it). An opt-out that leaves no row cannot be proved to a recipient who
+  says they asked twice.
+- A suppressed mail is a `SKIPPED` `EmailLog` row with
+  `Unsubscribed: <group>` — visible on **Admin → Settings → Email health**, so
+  "why did they not get it?" is answerable without the DB.
+- Adding a category: put it in a group in `src/lib/emailGroups.ts` in the same
+  PR. An unmapped category fails **open** (it sends, ungated, with no footer) —
+  the fail-safe direction, but it means the gap is silent.
 
 ## 3. Inbound replies → Messages
 
@@ -348,6 +520,7 @@ handled and suppress the reminders permanently.
 | Var | Purpose |
 |-----|---------|
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Outbound SMTP |
+| `UNSUBSCRIBE_MAILTO` | Optional `mailto:` in `List-Unsubscribe`. Advertised only when set — nothing drains that mailbox by default (§2d) |
 | `INBOUND_EMAIL_DOMAIN` | Domain in the generated `reply+…@` address |
 | `INBOUND_SECRET` | Shared secret the inbound webhook checks (`x-inbound-secret`) |
 | `INBOUND_IMAP_HOST` / `INBOUND_IMAP_PORT` / `INBOUND_IMAP_USER` / `INBOUND_IMAP_PASS` | Reply mailbox the bridge drains (production only) |

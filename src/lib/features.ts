@@ -74,6 +74,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'stories', category: 'trust', icon: Quote, color: 'rose', title: C.stories.t, desc: C.stories.d },
     { key: 'inviteLinks', category: 'tracking', icon: Link2, color: 'teal', title: C.inviteLinks.t, desc: C.inviteLinks.d },
     { key: 'outcomeComms', category: 'trust', icon: MessageSquareHeart, color: 'rose', title: C.outcomeComms.t, desc: C.outcomeComms.d },
-    { key: 'emailGroups', category: 'trust', icon: MailMinus, color: 'slate', title: C.emailGroups.t, desc: C.emailGroups.d },
+    { key: 'emailGroups', category: 'trust', icon: MailMinus, color: 'teal', title: C.emailGroups.t, desc: C.emailGroups.d },
   ];
 }

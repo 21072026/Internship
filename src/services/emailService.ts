@@ -361,11 +361,37 @@ function unsubscribeHeaders(userId: string, group: EmailGroupId): Record<string,
   return h;
 }
 
+/**
+ * Does this mail get the consent machinery — the preference check, the footer
+ * and the List-* headers? All three ride together, and all three answer the
+ * same question, so the answer is computed once, here, rather than restated at
+ * each of the three use sites in sendEmail() below.
+ *
+ * Three ways to be exempt, each for its own reason:
+ *   • No group. An uncategorised or unmapped category fails OPEN, the same
+ *     fail-safe reasoning transportFor() uses — a taxonomy gap must never
+ *     swallow mail somebody is waiting for.
+ *   • No userId. The recipient is not a User row (an invitee who has not
+ *     registered yet, a mentor applicant, ALERT_EMAIL_TO, an operator-typed
+ *     test address): there is no preference to read and no token to mint.
+ *   • An essential group. Sign-in, security and legally required notices ignore
+ *     every switch, and advertising an opt-out on a password reset invites
+ *     people to switch off the mail they cannot function without.
+ *
+ * A named predicate rather than an inline expression because it is the one line
+ * that decides whether a mail is unsubscribable at all, and it is the property
+ * e2e/email-groups-footer.unit.spec.ts has to be able to ask about directly.
+ */
+function unsubscribable(groupId: EmailGroupId | null, userId?: string | null): boolean {
+  return !!groupId && !!userId && !isEssentialGroup(groupId);
+}
+
 /** Test seam for e2e/email-groups-footer.unit.spec.ts — not part of the mail API. */
 export const __testable = {
   UNSUB_FOOTER_MARKER,
   BULK_CATEGORIES,
   LEGACY_BULK_CHANNEL,
+  unsubscribable,
   unsubscribeFooterHtml,
   withUnsubscribeFooter,
   unsubscribeHeaders,
@@ -424,7 +450,7 @@ export async function sendEmail({
   const via = transport === 'bulk' ? bulkTransporter! : transporter;
 
   const groupId = group ?? groupForCategory(category);
-  const gated = !!groupId && !!userId && !isEssentialGroup(groupId);
+  const gated = unsubscribable(groupId, userId);
 
   // ── CENTRAL ENFORCEMENT ───────────────────────────────────────────────────
   //
