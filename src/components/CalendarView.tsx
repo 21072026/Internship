@@ -352,10 +352,18 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
                   ? 'border-blue-400 ring-1 ring-blue-300'
                   : k === todayKey
                     ? 'border-blue-300 bg-blue-50/40 dark:bg-blue-950/20'
-                    : 'border-gray-100 dark:border-gray-800'
-              } ${outside ? 'opacity-45' : ''}`}
+                    : outside
+                      ? 'border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-800/50'
+                      : 'border-gray-100 dark:border-gray-800'
+              }`}
             >
-              <div className="mb-0.5 text-[11px] text-gray-400">{d.getDate()}</div>
+              <div
+                className={`mb-0.5 text-[11px] ${outside ? 'text-gray-500 dark:text-gray-300' : 'text-gray-600 dark:text-gray-300'}`}
+                data-testid="calendar-day-number"
+                data-outside-month={outside ? 'true' : 'false'}
+              >
+                {d.getDate()}
+              </div>
               {/* Phones get dots — three chips in a 45px-wide cell is noise. */}
               <div className="flex flex-wrap gap-0.5 sm:hidden">
                 {evs.slice(0, 4).map((e) => (
@@ -492,7 +500,7 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
             className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition ${
               view === v
                 ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-300'
+                : 'text-gray-700 hover:text-gray-900'
             }`}
           >
             {t.calendar.views[v]}
