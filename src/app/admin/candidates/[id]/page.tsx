@@ -238,10 +238,18 @@ export default function AdminMenteeDetailPage() {
 
   const deleteHistory = useCallback(
     async (changeId: string) => {
-      await fetch(`/api/status-changes/${changeId}`, { method: 'DELETE' });
-      await load();
+      try {
+        const res = await fetch(`/api/status-changes/${changeId}`, { method: 'DELETE' });
+        if (!res.ok) {
+          toast(t.common.error, 'error');
+          return;
+        }
+        await load();
+      } catch {
+        toast(t.common.error, 'error');
+      }
     },
-    [load]
+    [load, toast, t.common.error]
   );
 
   useEffect(() => {
