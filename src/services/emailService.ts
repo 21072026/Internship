@@ -258,6 +258,18 @@ export async function runEmailHealthCheck(): Promise<EmailHealth> {
   return health;
 }
 
+// What actually happened to a message, mirroring the EmailLog row this call
+// writes (#1431). Returned rather than only recorded, because "did not throw"
+// is not the same as "was delivered": the two SKIPPED paths below return
+// normally, and four routes were reading that silence as success — reporting
+// `emailSent: true` for an account nobody could ever sign in to.
+//
+// The throw behaviour is deliberately unchanged: a real transport failure still
+// throws (and is recorded FAILED first), so every existing try/catch keeps
+// working exactly as before. 'FAILED' is in the union for callers that catch and
+// want to name the outcome; sendEmail itself never returns it.
+export type EmailDeliveryResult = 'SENT' | 'SKIPPED' | 'FAILED';
+
 export async function sendEmail({
   to,
   subject,
@@ -302,13 +314,13 @@ export async function sendEmail({
   if (IS_DEMO_MODE) {
     logger.info('Email not sent: demo mode', { to, subject, category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled');
-    return;
+    return 'SKIPPED';
   }
 
   if (!process.env.SMTP_USER) {
     logger.error('Email not sent: SMTP is not configured', { to, subject, category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)');
-    return;
+    return 'SKIPPED';
   }
 
   try {
@@ -332,6 +344,7 @@ export async function sendEmail({
   }
 
   await recordEmail(to, subject, category, 'SENT', transport);
+  return 'SENT';
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
@@ -387,7 +400,7 @@ export async function sendInvitationEmail({
   const registerUrl = `${appUrl}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
 
-  await sendEmail({
+  return await sendEmail({
     to,
     fromName: brand.name,
     category: 'invitation',
@@ -443,7 +456,7 @@ export async function sendPasswordResetEmail({
     : 'We received a request to reset your password. Click the button below to choose a new one.';
   const cta = isInitial ? 'Set password' : 'Reset password';
 
-  await sendEmail({
+  return await sendEmail({
     to,
     fromName: brand.name,
     category: 'password-reset',

@@ -42,9 +42,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const token = await createPasswordResetToken(user.id, 'RESET');
+  // Derived from what the transport actually reported, not from "did not
+  // throw" (#1431): sendEmail returns normally on the demo-mode and
+  // no-SMTP paths, and reading that silence as success is what told an admin
+  // an account was reachable when nobody could sign in to it.
   let emailSent = true;
   try {
-    await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
+    emailSent = (await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId })) === 'SENT';
   } catch (e) {
     console.error('Admin reset email failed:', e);
     emailSent = false;
