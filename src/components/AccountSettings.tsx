@@ -14,6 +14,7 @@ import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
 import { durationSince } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
+import { pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
 import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } from '@/lib/timezone';
@@ -62,6 +63,9 @@ export function AccountSettings() {
   const [browserNotif, setBrowserNotif] = useState(false);
   const [browserNotifSupported, setBrowserNotifSupported] = useState(false);
   const [browserNotifDenied, setBrowserNotifDenied] = useState(false);
+  // True once this browser holds a stored Web Push subscription, i.e. it will be
+  // notified with the app closed and not only while a tab is open.
+  const [pushActive, setPushActive] = useState(false);
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
@@ -142,16 +146,32 @@ export function AccountSettings() {
   useEffect(() => {
     const supported = canUseBrowserNotifications();
     setBrowserNotifSupported(supported);
-    if (supported) {
-      setBrowserNotifDenied(Notification.permission === 'denied');
-      setBrowserNotif(browserNotificationsPrefOn() && Notification.permission === 'granted');
-    }
+    if (!supported) return;
+    setBrowserNotifDenied(Notification.permission === 'denied');
+    const on = browserNotificationsPrefOn() && Notification.permission === 'granted';
+    setBrowserNotif(on);
+    // Re-assert the push subscription for someone who already said yes (#1464):
+    // a push endpoint is rotated by the browser, dropped when site data is
+    // cleared, and never existed for anyone who opted in before push shipped.
+    // Silent, and only ever for a user who has already granted permission.
+    if (on && pushSupported()) void registerPushSubscription().then(setPushActive);
   }, []);
 
+  // One switch covers both halves of "notify me" (#1464): the foreground
+  // notification a poll fires while a tab is open (#675 Kademe 1) and the Web
+  // Push subscription that delivers with the app closed (Kademe 2). Splitting
+  // them into two toggles would ask the user to understand the difference between
+  // a tab and a service worker, which is our problem, not theirs.
+  //
+  // `requestPermission()` stays inside this change handler on purpose: iOS
+  // silently ignores the prompt unless it is inside a user gesture, so moving it
+  // into an effect would break exactly the platform that needs push most (a
+  // home-screen PWA is the only place iOS delivers it at all).
   const toggleBrowserNotif = async (next: boolean) => {
     if (!next) {
       setBrowserNotif(false);
       setBrowserNotificationsPref(false);
+      if (pushSupported()) void unregisterPushSubscription();
       return;
     }
     let perm = Notification.permission;
@@ -160,6 +180,10 @@ export function AccountSettings() {
       setBrowserNotif(true);
       setBrowserNotificationsPref(true);
       setBrowserNotifDenied(false);
+      // Best effort by design: no VAPID keys on this deployment, or a browser
+      // that cannot do push, leaves the foreground notifications working.
+      const subscribed = await registerPushSubscription();
+      setPushActive(subscribed);
     } else {
       setBrowserNotif(false);
       setBrowserNotificationsPref(false);
@@ -671,8 +695,12 @@ export function AccountSettings() {
               />
               {t.account.browserNotifications}
             </label>
-            <p className="text-xs text-gray-400 mt-1">
-              {browserNotifDenied ? t.account.browserNotificationsDenied : t.account.browserNotificationsHint}
+            <p className="text-xs text-gray-400 mt-1" data-testid="browser-notif-hint">
+              {browserNotifDenied
+                ? t.account.browserNotificationsDenied
+                : pushActive
+                  ? t.account.pushNotificationsActive
+                  : t.account.browserNotificationsHint}
             </p>
           </div>
         )}

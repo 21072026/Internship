@@ -127,7 +127,9 @@ const nextConfig = {
   // webpack server bundle so they load as plain CJS at runtime.
   // imapflow/mailparser are Node-only too (net/tls, iconv) and are used by the
   // inbound mail bridge started from instrumentation.ts.
-  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth', 'imapflow', 'mailparser'],
+  // web-push is Node-only too (node:crypto, node:https) and does its own
+  // dynamic requires, so it stays out of the webpack server bundle (#1464).
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth', 'imapflow', 'mailparser', 'web-push'],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
