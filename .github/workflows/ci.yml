@@ -60,6 +60,27 @@ jobs:
       # re-enabling password changes and uploads on the public demo (#966).
       - name: demo write blocklist still matches the routes (#966)
         run: npm run check:demo-blocklist
+      # Nothing else in CI looks at k6/: `next lint` only visits src/, and
+      # tsconfig's include lists only *.ts|tsx. Without this, a typo in a k6
+      # script is first seen at 23:40 UTC when the nightly cron fires (#1449).
+      # `k6 archive` bundles and evaluates the init context — catching syntax
+      # errors, bad imports and thresholds naming a non-existent metric —
+      # without issuing a single request.
+      - name: Install k6 (for the k6 script parse check)
+        env:
+          K6_VERSION: v1.8.1
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/k6"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 --retry-delay 5 -o "$dir/k6.tgz" \
+            "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz"
+          tar -xzf "$dir/k6.tgz" --strip-components=1 -C "$dir"
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: k6 load scripts parse (#1449)
+        env:
+          K6_CHECK_REQUIRED: '1'
+        run: npm run check:k6
       # The deploy scripts never run in CI, so their one piece of decision logic
       # — "is this dump real?" — had no coverage at all until it broke prod
       # (#1200). Cheap to run here; the alternative is finding out on the server.

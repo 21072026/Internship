@@ -44,9 +44,13 @@ export async function POST(request: Request) {
   // it in an HTTP response body puts it in reverse-proxy logs, browser
   // devtools and every screen share — the same leak #875 closed for
   // /api/admin/users/[id]/reset-password. Neither admin screen ever read it.
+  // Derived from what the transport actually reported, not from "did not
+  // throw" (#1431): sendEmail returns normally on the demo-mode and
+  // no-SMTP paths, and reading that silence as success is what told an admin
+  // an account was reachable when nobody could sign in to it.
   let emailSent = true;
   try {
-    await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, purpose: 'SET_INITIAL', orgId: user.orgId });
+    emailSent = (await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, purpose: 'SET_INITIAL', orgId: user.orgId })) === 'SENT';
   } catch (e) {
     console.error('Source-user set-password email failed:', e);
     emailSent = false;

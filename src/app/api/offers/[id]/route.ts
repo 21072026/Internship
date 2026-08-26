@@ -15,6 +15,7 @@ import {
   transitionForAction,
 } from '@/lib/offers';
 import { notifyOfferSent, notifyOfferDecided } from '@/lib/offerNotify';
+import { validateOfferRequisition } from '@/lib/requisitions';
 
 const baseSelect = {
   id: true,
@@ -71,10 +72,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     if (!authorized) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    let result: typeof offer & { compensationNote?: string | null; history?: unknown[] } = offer;
+    let result: typeof offer & { compensationNote?: string | null; history?: unknown[]; requisitionTitle?: string | null } = offer;
     if (canSeeCompensation({ role, isOwnMenteeOffer })) {
       const withComp = await prisma.offer.findUnique({ where: { id }, select: { compensationNote: true } });
       result = { ...offer, compensationNote: withComp?.compensationNote ?? null };
+    }
+
+    if (offer.requisitionId) {
+      const requisition = await prisma.requisition.findFirst({
+        where: { id: offer.requisitionId, ...(offer.orgId ? { orgId: offer.orgId } : {}) },
+        select: { title: true },
+      });
+      result = { ...result, requisitionTitle: requisition?.title ?? null };
     }
 
     // Timeline history — ADMIN only (it also reveals actor identities).
@@ -207,9 +216,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
     const { position, requisitionId, companyId, startDate, compensationNote, expiresAt } = parsed.data;
+    const normalizedRequisitionId = requisitionId || null;
+    const effectiveCompanyId = companyId !== undefined ? companyId : offer.companyId;
+    if (requisitionId !== undefined || companyId !== undefined) {
+      const validation = await validateOfferRequisition(
+        requisitionId !== undefined ? normalizedRequisitionId : offer.requisitionId,
+        offer.orgId,
+        effectiveCompanyId,
+      );
+      if (!validation.ok) {
+        return NextResponse.json(
+          { error: validation.code === 'requisition_not_found' ? 'Requisition not found' : 'Requisition belongs to another company', code: validation.code },
+          { status: validation.status },
+        );
+      }
+    }
     const data: Prisma.OfferUncheckedUpdateInput = {};
     if (position !== undefined) data.position = position;
-    if (requisitionId !== undefined) data.requisitionId = requisitionId;
+    if (requisitionId !== undefined) data.requisitionId = normalizedRequisitionId;
     if (companyId !== undefined) data.companyId = companyId;
     if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
     if (compensationNote !== undefined) data.compensationNote = compensationNote;

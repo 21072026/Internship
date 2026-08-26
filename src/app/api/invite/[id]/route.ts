@@ -37,8 +37,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   let emailSent = false;
   if (invite.email) {
     try {
-      await sendInvitationEmail({ to: invite.email, token: invite.token, role: invite.role, orgId: resolveOrgId(session) });
-      emailSent = !!process.env.SMTP_USER;
+      // Same single source of truth as POST /api/invite (#1431).
+      emailSent = (await sendInvitationEmail({ to: invite.email, token: invite.token, role: invite.role, orgId: resolveOrgId(session) })) === 'SENT';
     } catch (e) {
       console.error('Resend invitation email failed (token still valid):', e);
     }
