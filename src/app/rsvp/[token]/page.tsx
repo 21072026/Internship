@@ -8,7 +8,10 @@ import { formatDateTime } from '@/lib/relativeTime';
 
 interface Meeting {
   title: string;
-  scheduledAt: string;
+  // Null for a link-only meeting: the API has always been able to return one,
+  // and a guest can now be added to one after the fact (#1430), so the page
+  // must not render `new Date(null)` as "Invalid Date".
+  scheduledAt: string | null;
   meetLink?: string | null;
   rsvp: string;
 }
@@ -59,15 +62,19 @@ export default function RsvpPage({ params }: { params: Promise<{ token: string }
           ) : (
             <>
               <h1 className="text-xl font-bold text-gray-900">{meeting.title}</h1>
-              <p className="text-gray-500 mt-1">{formatDateTime(new Date(meeting.scheduledAt), locale)}</p>
+              {meeting.scheduledAt && (
+                <p className="text-gray-500 mt-1">{formatDateTime(new Date(meeting.scheduledAt), locale)}</p>
+              )}
               {meeting.meetLink && (
                 <a href={meeting.meetLink} className="text-blue-600 hover:underline text-sm block mt-2">
                   {meeting.meetLink}
                 </a>
               )}
-              <a href={`/api/calendar/${token}`} className="block text-sm text-blue-600 hover:underline mt-2">
-                {t.rsvp.addToCalendar}
-              </a>
+              {meeting.scheduledAt && (
+                <a href={`/api/calendar/${token}`} className="block text-sm text-blue-600 hover:underline mt-2">
+                  {t.rsvp.addToCalendar}
+                </a>
+              )}
               {done ? (
                 <div className="mt-6 flex flex-col items-center gap-2">
                   {done === 'ACCEPTED' ? (
@@ -79,7 +86,7 @@ export default function RsvpPage({ params }: { params: Promise<{ token: string }
                     {done === 'ACCEPTED' ? t.rsvp.accepted : t.rsvp.declined}
                   </p>
                 </div>
-              ) : (
+              ) : !meeting.scheduledAt ? null : (
                 <div className="mt-6 flex justify-center gap-3">
                   <button
                     onClick={() => respond('yes')}

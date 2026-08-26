@@ -15,7 +15,7 @@ import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
-import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, type ZonedPerson } from '@/lib/timezone';
+import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -575,6 +575,76 @@ export async function sendMeetingInviteEmail({
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
         ` : ''}
         ${when ? timeZoneNote(timeZone) : ''}
+      </div>
+    `,
+  });
+}
+
+// The same invitation, addressed to someone who has no account here (#1430).
+//
+// Kept as a sibling of sendMeetingInviteEmail rather than a flag on it, because
+// three things genuinely differ for an outsider and each of them is a
+// correctness bug if it leaks through:
+//   - the timezone footer must NOT link to /account#timezone, a page a guest
+//     cannot reach (and would be asked to sign in for);
+//   - there is no saved zone to render on, so the time is printed on the
+//     organizer's clock and the mail says whose clock that is;
+//   - the mail has to say who invited them and to what, since an unexpected
+//     invitation from an unknown system otherwise reads as spam.
+export async function sendMeetingGuestInviteEmail({
+  to,
+  name,
+  title,
+  scheduledAt,
+  meetLink,
+  rsvpToken,
+  organizerTimeZone,
+  organizerName,
+}: {
+  to: string;
+  name?: string | null;
+  title: string;
+  scheduledAt: Date | null;
+  meetLink?: string | null;
+  rsvpToken: string;
+  // The clock the organizer picked the time on (Meeting.timeZone). A guest has
+  // no profile, so this — or the deployment default — is the only clock there is.
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+}) {
+  const url = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const yes = `${url}/rsvp/${rsvpToken}?r=yes`;
+  const no = `${url}/rsvp/${rsvpToken}?r=no`;
+  const zone = resolveTimeZone(organizerTimeZone);
+  const when = scheduledAt
+    ? `${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' })} (${zoneLabel(scheduledAt, zone)})`
+    : null;
+  const invitedBy = organizerName ? esc(organizerName) : null;
+
+  await sendEmail({
+    to,
+    subject: `Meeting invitation: ${title}`,
+    category: 'meeting-guest-invite',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">${esc(title)}</h2>
+        ${name ? `<p>Hi ${esc(name)},</p>` : ''}
+        <p>${invitedBy ? `${invitedBy} has invited you` : 'You are invited'} to a meeting.</p>
+        ${when ? `<p><strong>When:</strong> ${esc(when)}</p>` : ''}
+        ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
+        ${when ? `
+        <p style="margin-top: 20px;">Can you make it?</p>
+        <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
+        <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
+        <p style="margin-top:16px;"><a href="${url}/rsvp/${rsvpToken}" style="color:#2563eb;font-size:14px;">Open the invitation</a></p>
+        ` : ''}
+        ${when ? `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+          Times in this email are shown in ${esc(zone)}${invitedBy ? ` — the clock ${invitedBy} scheduled it on` : ''}.
+        </p>` : ''}
+        <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
+          You received this because someone entered your address when scheduling this meeting.
+          You do not need an account to reply — the buttons above are enough.
+        </p>
       </div>
     `,
   });
