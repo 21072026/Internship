@@ -8,7 +8,7 @@ import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { conversationForRelation } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { normalizeEmailVariants, canonicalEmail, resolveEmail } from '@/lib/localizedEmail';
 
@@ -118,7 +118,12 @@ export async function POST(request: Request) {
       });
       const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${rel.id}`;
       const senderName = session.user.name;
-      await notify(rel.menteeId, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
+      // Same category, same gate as the e-mail branch above (#1426). The
+      // mentee record already carries notificationPrefs from the select, so
+      // this costs no extra query.
+      if (notificationCategoryAllowed(rel.mentee, 'messages')) {
+        await notify(rel.menteeId, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
+      }
       sent++;
     }
 
