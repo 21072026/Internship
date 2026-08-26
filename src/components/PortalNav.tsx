@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks, FolderKanban, Users } from 'lucide-react';
+import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks, FolderKanban, Users, MailOpen } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 // Mentee portal sidebar navigation with active-route highlighting (mirrors the
@@ -23,6 +23,10 @@ export function PortalNav() {
     { href: '/messages', label: t.nav.messages, Icon: MessageSquare },
     { href: '/portal/interactions', label: t.nav.interactionLogs, Icon: BookOpen },
     { href: '/portal/notes', label: t.portal.notes.title, Icon: Lock },
+    // The career-tips archive (#1469). Linked from the sidebar and not only
+    // from the e-mail footer: the issues stay useful long after the mail is
+    // gone, and someone who unsubscribed can still read them here.
+    { href: '/newsletters', label: t.nav.newsletters, Icon: MailOpen },
   ];
 
   const isActive = (href: string) =>

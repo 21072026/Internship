@@ -128,6 +128,7 @@ export default function IntegrationsPage() {
           )}
           <p className="text-xs text-gray-400 mt-3">{t.integrations.apiHint} <code>GET /api/v1/candidates</code></p>
           <Link href="/admin/api-docs" className="inline-block text-sm text-blue-600 hover:underline mt-2">{t.integrations.apiDocsLink} →</Link>
+          <Link href="/admin/api-explorer" className="block text-sm text-blue-600 hover:underline mt-1">{t.integrations.apiExplorerLink} →</Link>
         </Card>
 
         <Card>

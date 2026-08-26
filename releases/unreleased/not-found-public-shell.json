@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **The 404 page keeps the public site shell** (#1409). `not-found.tsx` rendered a bare centred block, so a visitor who mistyped a URL lost the header, the language and theme switches and the footer — every route out of the page except a single \"back home\" button. It now renders inside `PublicShell` with direct links to register, apply as a mentor and the company page, plus a localized title and `noindex, nofollow` robots metadata."
+}

@@ -1,0 +1,149 @@
+name: Nightly k6 Load Test
+
+# Runs the k6 scenario in k6/nightly-load.js against a DEPLOYED environment every
+# night and emails a Turkish breach report **only when a threshold is exceeded**.
+# A green run is silent — that is the design, not an omission (same call the
+# maintainer made for e2e-full in 2026-08-23: nightly green heartbeats became
+# noise). Set the repository variable K6_REPORT_MODE=always for a green summary.
+#
+# WHY THIS EXISTS ALONGSIDE stress.yml. `stress.yml` is a flat weekly hammer with
+# one aggregate p95. This adds a staged VU ramp (where does latency start to
+# bend?), per-endpoint budgets, and a threshold engine that names exactly which
+# budget broke. Both are cheap; neither replaces the other.
+#
+# NO DRIFT GATE — on purpose. e2e-full and the deploy workflows skip a scheduled
+# firing when the commit has not changed, because re-testing the same code only
+# repeats the same verdict. A load test measures the *environment*, and an
+# environment degrades (a full disk, a bloated table, a noisy neighbour) without
+# any commit changing. Every night runs.
+#
+# Cadence: 23:40 UTC daily = 01:40 Europe/Berlin (CEST) / 02:40 Europe/Istanbul.
+# That window is deliberately empty on the Plesk box: the deploy drift checks run
+# at :23 and :53 past hours 0/6/12/18, `demo-reset` at 02:00 and 14:00, the weekly
+# `stress` at Mon 02:30, the server's mysqldump at 03:15 and `e2e-full` at 03:00.
+# GitHub's scheduler can lag several minutes, so treat the separation as generous
+# spacing rather than a precise slot — the in-app node-cron jobs (:05 hourly
+# email-health, :20 hourly unread digest, */15 meeting reminders) are ordinary
+# production background load and are *meant* to be part of what gets measured.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Target URL (defaults to the STRESS_TARGET_URL secret / production)'
+        required: false
+        type: string
+      peak_vus:
+        description: 'Peak virtual users (default 20)'
+        required: false
+        type: string
+  schedule:
+    - cron: '40 23 * * *'
+
+concurrency:
+  group: k6-load
+  cancel-in-progress: false
+
+jobs:
+  load:
+    name: k6 ramp & thresholds
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned rather than "latest": k6 v2 changes the end-of-test summary
+      # format by default, and scripts/k6-report-email.mjs reads the v1 shape
+      # (metrics[name].thresholds[expr].ok). Bumping the major here means
+      # updating that reader in the same PR. Installed from the release tarball
+      # so the run does not depend on a third-party action being allow-listed.
+      - name: Install k6
+        env:
+          K6_VERSION: v1.8.1
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/k6"
+          mkdir -p "$dir"
+          # Download to a file, then extract. Piping curl --retry straight into
+          # tar corrupts the stream on a mid-transfer retry (curl restarts at
+          # byte 0, tar has already consumed the partial gzip), and the resulting
+          # failure would be emailed as "the production target is unreachable".
+          curl -fsSL --retry 3 --retry-delay 5 -o "$dir/k6.tgz" \
+            "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz"
+          tar -xzf "$dir/k6.tgz" --strip-components=1 -C "$dir"
+          "$dir/k6" version
+          # Anchored: an unanchored "1.8.1" also matches "k6 v1.8.10", which is
+          # precisely the drift this is supposed to catch.
+          "$dir/k6" version | grep -qE "^k6 v${K6_VERSION#v}( |\\()" || {
+            echo "::error title=k6 version mismatch::expected ${K6_VERSION}"; exit 1;
+          }
+          echo "$dir" >> "$GITHUB_PATH"
+
+      # No continue-on-error: k6 exits 99 when a threshold breaks, and this job
+      # SHOULD go red then. The email does not depend on this step's exit code —
+      # it is decided by the summary artifact below, which handleSummary writes
+      # even on a threshold failure or an early abort.
+      - name: Run k6 load test
+        env:
+          # Manual override first, then the secret stress.yml already uses (one
+          # target for both load tests — a second secret would only drift), then
+          # production. Resolved inline in BOTH jobs rather than passed between
+          # them: a job output that holds a secret value is redacted on delivery,
+          # so routing it through `needs` would blank the email's target line
+          # exactly when STRESS_TARGET_URL is configured.
+          BASE_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://crm.ersah.in' }}
+          K6_PEAK_VUS: ${{ github.event.inputs.peak_vus || '20' }}
+          K6_SUMMARY_FILE: k6-summary.json
+        run: k6 run --quiet k6/nightly-load.js
+
+      - name: Upload k6 summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: k6-summary
+          path: k6-summary.json
+          retention-days: 14
+          # A run that died before k6 started writes no summary; the report job
+          # detects that gap itself and reports it as red.
+          if-no-files-found: warn
+
+  # Red-only Turkish summary email.
+  report:
+    name: Breach email (red runs)
+    runs-on: ubuntu-latest
+    needs: [load]
+    # !cancelled(), not always(): the two red cases this must distinguish — "a
+    # threshold broke" and "k6 never produced a summary" — are both failures.
+    # A run the maintainer cancelled on purpose has no summary either, and
+    # always() would mail them a "the load test crashed" alarm for it.
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Download k6 summary
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: k6-summary
+          path: k6-out
+
+      - name: Send breach email
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          K6_SUMMARY_FILE: k6-out/k6-summary.json
+          K6_TARGET_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://crm.ersah.in' }}
+          K6_REPORT_MODE: ${{ vars.K6_REPORT_MODE || 'failures' }}
+          K6_RUN_CONTEXT: 'k6-load · ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+        run: |
+          # Install from the lockfile so nodemailer matches the version the app
+          # pins (single source of truth); skip postinstall (prisma generate).
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/k6-report-email.mjs

@@ -151,8 +151,10 @@ export function OnboardingForm() {
                     ? 'bg-blue-600 text-white'
                     : idx === currentStep
                     ? 'bg-blue-600 text-white ring-4 ring-blue-100'
-                    : 'bg-gray-200 text-gray-500'
+                    : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-100'
                 }`}
+                data-testid="onboarding-step-badge"
+                data-step-state={idx < currentStep ? 'completed' : idx === currentStep ? 'current' : 'future'}
               >
                 {idx < currentStep ? '✓' : idx + 1}
               </div>
@@ -170,7 +172,9 @@ export function OnboardingForm() {
           {steps.map((step, idx) => (
             <span
               key={step}
-              className={`text-xs ${idx === currentStep ? 'text-blue-600 font-medium' : 'text-gray-400'}`}
+              className={`text-xs ${idx === currentStep ? 'text-blue-600 font-medium' : 'text-gray-600 dark:text-gray-300'}`}
+              data-testid="onboarding-step-label"
+              data-step-state={idx === currentStep ? 'current' : 'inactive'}
             >
               {step}
             </span>
@@ -197,7 +201,7 @@ export function OnboardingForm() {
           <Input
             label={t.onboarding.phone}
             type="tel"
-            placeholder="+1 (555) 000-0000"
+            placeholder="+90 5xx xxx xx xx"
             {...step1Form.register('phone')}
             error={step1Form.formState.errors.phone?.message}
           />

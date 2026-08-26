@@ -8,9 +8,11 @@ import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { notifyIfAllowed } from '@/lib/notify';
 import { withTenantScope } from '@/lib/orgContext';
+import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { generateMeetingLink } from '@/lib/meetingContext';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
+import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -23,6 +25,10 @@ const schema = z.object({
   // (#1210). Stored on the meeting so the invite can name the reading that was
   // actually agreed on. Invalid/absent falls back to the profile zone.
   timeZone: z.string().max(80).optional(),
+  // Outsiders with no account here (#1446). Each gets its own RSVP token and
+  // the same emailed yes/no buttons; see src/lib/meetingGuests.ts for why the
+  // whole batch is attached to ONE of the created rows.
+  guests: guestsField,
 });
 
 export async function GET() {
@@ -48,7 +54,23 @@ export async function GET() {
           : { relationId: { not: null }, relation: { menteeId: session.user.id } };
     const meetings = await prisma.meeting.findMany({
       where,
-      include: { relation: { include: { mentee: { select: { id: true, fullName: true } } } } },
+      include: {
+        relation: { include: { mentee: { select: { id: true, fullName: true } } } },
+        // The organizer has to be able to see whether the outsiders they invited
+        // said yes — otherwise the invite is send-and-forget (#1446). A MENTEE is
+        // not the organizer of their own meeting: the addresses were typed by
+        // their mentor, they are a third party's PII, and this same payload is
+        // rendered on /portal. So the list is included only for the roles that
+        // can actually invite.
+        ...(role === 'ADMIN' || role === 'MENTOR'
+          ? {
+              guests: {
+                select: { id: true, email: true, name: true, rsvp: true },
+                orderBy: { createdAt: 'asc' as const },
+              },
+            }
+          : {}),
+      },
       orderBy: { scheduledAt: 'desc' },
     });
     return NextResponse.json({ meetings });
@@ -63,12 +85,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Unlimited until #1446. Scheduling always mailed people, but only people the
+  // caller was already connected to; it can now mail addresses the caller typed,
+  // which is worth a cap of its own. Well above any real scheduling session.
+  const limited = enforceRateLimit(request, 'meeting-schedule', { limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
+
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
-    const { relationIds, title, scheduledAt, meetLink } = parsed.data;
+    const { relationIds, title, scheduledAt, meetLink, guests } = parsed.data;
 
     // `scheduledAt` normally arrives zone-qualified from the browser. A bare wall
     // clock ("2026-08-03T16:30") still has to be honoured for API clients and for
@@ -106,7 +134,20 @@ export async function POST(request: Request) {
     // unique — each participant confirms attendance individually.
     const link = meetLink || generateMeetingLink({ inviteeCount: relations.length });
 
+    // Guests are resolved once for the whole batch: they are invited to the
+    // shared room, not to each relation. Anyone with an account is dropped here
+    // and reached the normal way instead — see normalizeGuests.
+    const { guests: guestList, rejectedAsMembers } = await normalizeGuests(guests, [
+      ...relations.map((r) => r.mentee.email),
+      // The organizer's own address too. It would be caught anyway by the
+      // has-an-account lookup, but passing it explicitly makes the *reason*
+      // reported back to the UI the right one.
+      ...(session.user.email ? [session.user.email] : []),
+    ]);
+
     let created = 0;
+    // The row the guests hang off — the first one written in this batch.
+    let guestHostMeetingId: string | null = null;
     const notifiedMentees = new Set<string>();
     for (const rel of relations) {
       const rsvpToken = randomBytes(24).toString('hex');
@@ -121,6 +162,7 @@ export async function POST(request: Request) {
           createdById: session.user.id,
         },
       });
+      guestHostMeetingId ??= meeting.id;
       // Mirror into the calendars of whoever connected their own Google account
       // (#709). A no-op unless the operator enabled the integration and the
       // person opted in; unconnected users keep the e-mail + .ics path exactly
@@ -162,7 +204,23 @@ export async function POST(request: Request) {
       created++;
     }
 
+    // Guests are invited only once the meeting actually exists: a mail with a
+    // token that resolves to nothing is worse than no mail at all.
+    let invitedGuests: { id: string; email: string; name: string | null; rsvp: string }[] = [];
+    if (guestHostMeetingId && guestList.length > 0) {
+      invitedGuests = await inviteGuests({
+        meetingId: guestHostMeetingId,
+        guests: guestList,
+        invitedById: session.user.id,
+        title,
+        scheduledAt: when,
+        meetLink: link,
+        organizerTimeZone: organizerZone,
+        organizerName: session.user.name ?? null,
+      });
+    }
+
     if (created > 0) await dispatchWebhook('meeting.scheduled', { title, scheduledAt: when ? when.toISOString() : null, count: created });
-    return NextResponse.json({ created });
+    return NextResponse.json({ created, guestsInvited: invitedGuests.length, guests: invitedGuests, rejectedAsMembers });
   });
 }

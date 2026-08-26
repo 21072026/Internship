@@ -24,6 +24,11 @@ jobs:
       DATABASE_URL: 'mysql://user:pass@127.0.0.1:3306/db'
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: the release gate below dates each pending change from
+          # the commit that added its fragment, which a shallow clone hides
+          # (#1457). The repo's history is small — this costs a second.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -38,6 +43,12 @@ jobs:
       # next.config.js during the deploy build (#1275).
       - name: release fragments are well-formed (#1275)
         run: npm run check:release-fragments
+      # The version arithmetic runs in three places that must agree (build, this
+      # gate, compaction). When they silently disagreed, three merges in a row
+      # shipped under one version number and 45 changes were buried in a single
+      # changelog section (#1457).
+      - name: release version arithmetic (#1457)
+        run: npm run test:release
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # Prisma's filter grammar is data: an object where a scalar id belongs is
@@ -49,6 +60,41 @@ jobs:
       # re-enabling password changes and uploads on the public demo (#966).
       - name: demo write blocklist still matches the routes (#966)
         run: npm run check:demo-blocklist
+      # Nothing else in CI looks at k6/: `next lint` only visits src/, and
+      # tsconfig's include lists only *.ts|tsx. Without this, a typo in a k6
+      # script is first seen at 23:40 UTC when the nightly cron fires (#1449).
+      # `k6 archive` bundles and evaluates the init context — catching syntax
+      # errors, bad imports and thresholds naming a non-existent metric —
+      # without issuing a single request.
+      - name: Install k6 (for the k6 script parse check)
+        env:
+          K6_VERSION: v1.8.1
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/k6"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 --retry-delay 5 -o "$dir/k6.tgz" \
+            "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz"
+          tar -xzf "$dir/k6.tgz" --strip-components=1 -C "$dir"
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: k6 load scripts parse (#1449)
+        env:
+          K6_CHECK_REQUIRED: '1'
+        run: npm run check:k6
+      # The admin API explorer publishes what scripts/openapi-generate.cjs
+      # derives from src/app/api. A static analyser degrades silently: a route
+      # in a shape it does not recognise simply vanishes from the document, and
+      # a guard it cannot follow used to render as "no credential required".
+      # This re-derives the spec and fails on a dropped route, a duplicate
+      # operationId, an /api/admin endpoint that does not resolve to an ADMIN
+      # guard, leaked redacted comment text, or non-deterministic output. It is
+      # a guard, NOT a prerequisite for the steps above: nothing under src/
+      # imports the generated file - next.config.js inlines the document via
+      # env at build time - so lint and tsc do not depend on codegen having run
+      # (which is also why there is no prebuild hook: `npm start` in the
+      # production container has no src/ to scan).
+      - name: generated API description is complete and honest
+        run: npm run check:openapi
       # The deploy scripts never run in CI, so their one piece of decision logic
       # — "is this dump real?" — had no coverage at all until it broke prod
       # (#1200). Cheap to run here; the alternative is finding out on the server.

@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText,
   BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, ClipboardCheck, Settings, Webhook, Search, ListChecks,
-  ShieldCheck, Activity, LifeBuoy, Network, Video, ClipboardList, GraduationCap, BriefcaseBusiness, GitMerge, Quote, FileSignature, Tag as TagIcon, UserPlus,
+  ShieldCheck, Activity, LifeBuoy, Network, Video, ClipboardList, GraduationCap, BriefcaseBusiness, GitMerge, Quote, FileSignature, Tag as TagIcon, UserPlus, MailOpen,
+  Braces,
   type LucideIcon,
 } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
@@ -36,6 +37,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
   { href: '/admin/calendar', icon: CalendarDays, key: 'calendar' },
   { href: '/admin/announcements', icon: Megaphone, key: 'announcements' },
+  { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters' },
   { href: '/admin/testimonials', icon: Quote, key: 'testimonials' },
   { href: '/admin/email', icon: Mail, key: 'email' },
   { href: '/admin/documents', icon: FileText, key: 'documents' },
@@ -44,6 +46,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' },
   { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
   { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
+  { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer' },
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement' },
   { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms' },

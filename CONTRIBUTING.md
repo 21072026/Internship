@@ -63,6 +63,11 @@ npm run test:e2e      # Playwright (starts the app; needs a DB)
 
 - E2E tests live in `e2e/` (Playwright). Add one for each user-facing change.
 - Tests seed their own data via `e2e/helpers/db.ts` and clean up after.
+- Load tests live in `k6/` (k6, a standalone binary — not an npm dependency) and run on a
+  nightly cron. `npm run test:load` is **optional locally**; if you do run it, point
+  `BASE_URL` at your own dev server or the preview env, **never at production from a
+  laptop**. See [docs/testing.md](docs/testing.md) for the safety rules a k6 script here
+  must follow.
 
 ## Conventions
 
