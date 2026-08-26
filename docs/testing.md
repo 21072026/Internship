@@ -28,6 +28,13 @@ fragile under load — those catch that. They are not redundant with each other.
 the k6 scenario adds a *ramp* (where does latency start to bend?), *per-endpoint*
 budgets, and a threshold engine that names exactly which budget broke.
 
+## Async UI states
+
+Use `AsyncSection` for new asynchronous lists and panels: loading, error and empty are distinct states.
+Loading must never render the empty state, and errors should offer a retry when the caller can reload.
+The component owns presentation only; fetching, state and retry behavior stay in the caller.
+Choose the smallest matching `list`, `card` or `stats` skeleton variant.
+
 ## Stress / load test
 
 `scripts/stress-test.mjs` is a dependency-free (native `fetch`) load generator. It

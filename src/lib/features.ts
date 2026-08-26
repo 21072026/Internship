@@ -69,6 +69,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'requisitions', category: 'companies', icon: BriefcaseBusiness, color: 'purple', title: C.requisitions.t, desc: C.requisitions.d },
     { key: 'interviewRequests', category: 'companies', icon: CalendarCheck, color: 'blue', title: C.interviewRequests.t, desc: C.interviewRequests.d },
     { key: 'videoCalls', category: 'collaboration', icon: Video, color: 'green', title: C.videoCalls.t, desc: C.videoCalls.d },
+    { key: 'externalGuests', category: 'collaboration', icon: UserPlus, color: 'amber', title: C.externalGuests.t, desc: C.externalGuests.d },
     { key: 'demo', category: 'platform', icon: FlaskConical, color: 'amber', title: C.demo.t, desc: C.demo.d },
     { key: 'publicProfiles', category: 'platform', icon: Share2, color: 'blue', title: C.publicProfiles.t, desc: C.publicProfiles.d },
     { key: 'stories', category: 'trust', icon: Quote, color: 'rose', title: C.stories.t, desc: C.stories.d },

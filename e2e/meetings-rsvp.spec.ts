@@ -22,7 +22,12 @@ test('mentor schedules a meeting and the mentee can RSVP via the public link', a
     await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
 
     await page.goto('/mentor/meetings');
-    await page.getByText('Meeting Mentee').click(); // toggles the recipient checkbox
+    // The recipient's checkbox, not their name. Clicking the name stopped
+    // working when the name became a PersonHoverCard: its onClick
+    // preventDefault()s + stopPropagation()s so that opening the card does not
+    // toggle the <label> it sits inside — which left this spec ticking nothing
+    // and timing out on a permanently disabled "Send invite".
+    await page.locator('label', { hasText: 'Meeting Mentee' }).getByRole('checkbox').check();
     await page.getByLabel('Title').fill('Kickoff call');
     await page.getByLabel('Date', { exact: true }).fill('2026-07-01');
     await page.getByLabel('Time', { exact: true }).fill('10:00');

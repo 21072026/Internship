@@ -1877,11 +1877,59 @@ model Meeting {
   series       MeetingSeries?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   notes        PersonalNote[]
   googleEvents GoogleCalendarEventLink[]
+  guests       MeetingGuest[]
 
   @@index([relationId])
   @@index([projectId])
   @@index([conversationId])
   @@index([seriesId])
+}
+
+// An invitee who has no account here — a company contact, a parent, an external
+// interviewer (#1446). Everyone else on a meeting is reached through the
+// meeting's context (the relation's mentor/mentee, the project's members, the
+// conversation's participants); a guest is reached only by the address the
+// organizer typed, so the row IS the invitation.
+//
+// Guests hang off ONE Meeting row, never one per invitee the way the RELATION
+// context fans out: a bulk schedule writes N meeting rows sharing a single
+// room, and mailing the same outsider N times would be a bug, not thoroughness.
+// The write paths attach guests to the first row of the batch (`meetingId`),
+// which is also the row a guest's RSVP is counted against.
+//
+// `rsvpToken` is the guest's whole credential — same shape and entropy as
+// Meeting.rsvpToken (24 random bytes, hex) — so /rsvp/<token> and
+// /api/calendar/<token> work for them with no account and no login. It is
+// deliberately a SEPARATE column from Meeting.rsvpToken rather than a shared
+// token table: the two are looked up by different queries and a guest must not
+// be able to present a token that resolves to a participant's row.
+//
+// No `orgId`, deliberately: this is a child of Meeting, and Meeting itself is
+// not in TENANT_MODELS (src/lib/orgContext.ts) — both are reached only through a
+// scoped parent. Worth stating, because a model that is not anchored gets no
+// automatic tenant protection and every reader has to know that on purpose.
+model MeetingGuest {
+  id          String     @id @default(cuid())
+  meetingId   String
+  // Stored lowercased+trimmed so @@unique actually prevents a double invite
+  // ("Ada@X.com" and "ada@x.com" are one person to every mail server).
+  email       String
+  // Optional display name, purely so the email can open with "Hi <name>".
+  name        String?
+  rsvpToken   String     @unique
+  rsvp        RsvpStatus @default(PENDING)
+  // Who typed the address. Kept for the audit trail and so the RSVP
+  // notification can reach the organizer even when they were not the creator
+  // of the meeting row the guest hangs off.
+  invitedById String
+  createdAt   DateTime   @default(now())
+  respondedAt DateTime?
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  // No @@index([meetingId]): @@unique([meetingId, email]) already gives MySQL a
+  // leftmost-prefix index on meetingId, and a second one is dead weight.
+  @@unique([meetingId, email])
 }
 
 // A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;

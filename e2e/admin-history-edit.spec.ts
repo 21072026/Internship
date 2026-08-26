@@ -38,12 +38,33 @@ test('admin can add and delete stage-history entries', async ({ page }) => {
     expect(afterAdd[0].changedById).toBe(admin.id);
     expect(afterAdd[0].toStatus).toBe('HIRED_660');
 
+    await expect(page.getByRole('button', { name: 'Delete entry' })).toBeVisible();
+    let detailReloads = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'GET' && new URL(request.url()).pathname === `/api/users/${mentee.id}`) {
+        detailReloads += 1;
+      }
+    });
+    await page.route(`**/api/status-changes/${afterAdd[0].id}`, async (route) => {
+      await route.fulfill({ status: 500, json: { error: 'Failed' } });
+    }, { times: 1 });
+
+    await page.getByRole('button', { name: 'Delete entry' }).click();
+    await expect(page.getByRole('status')).toContainText('Something went wrong');
+    expect(detailReloads).toBe(0);
+    expect(await prisma.statusChange.findMany({ where: { relationId: rel.id } })).toHaveLength(1);
+
     // Delete it again.
     const removed = page.waitForResponse(
       (r) => r.url().includes('/api/status-changes/') && r.request().method() === 'DELETE'
     );
+    const reloaded = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === `/api/users/${mentee.id}` && r.request().method() === 'GET'
+    );
     await page.getByRole('button', { name: 'Delete entry' }).click();
     await removed;
+    await reloaded;
+    expect(detailReloads).toBe(1);
 
     const afterDelete = await prisma.statusChange.findMany({ where: { relationId: rel.id } });
     expect(afterDelete).toHaveLength(0);
