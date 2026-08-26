@@ -395,13 +395,25 @@ test.describe('the taxonomy covers what the app actually sends', () => {
     }
     return exportedConsts;
   }
+  // Same-file consts, by one literal regex into a map, rather than a regex built
+  // per identifier. The interpolated form worked, but it fed text scanned out of
+  // a source file straight into `new RegExp` — a regex-injection sink, and CodeQL
+  // is right that the `/^[A-Z][A-Z0-9_]*$/` guard above is a weaker argument than
+  // simply not building a pattern out of scanned input. The map is also less work:
+  // one pass per file instead of one compiled regex per send site.
+  const fileConsts = new Map<string, Map<string, string>>();
+  function constsIn(src: string): Map<string, string> {
+    let found = fileConsts.get(src);
+    if (!found) {
+      found = new Map();
+      for (const m of src.matchAll(/\bconst ([A-Z][A-Z0-9_]*)\s*=\s*'([a-z0-9-]+)'/g)) found.set(m[1], m[2]);
+      fileConsts.set(src, found);
+    }
+    return found;
+  }
   function resolveCategoryConst(src: string, id: string | null): string | null {
     if (!id || !/^[A-Z][A-Z0-9_]*$/.test(id)) return null;
-    return (
-      src.match(new RegExp(`\\bconst ${id}\\s*=\\s*'([a-z0-9-]+)'`))?.[1] ??
-      allExportedCategoryConsts().get(id) ??
-      null
-    );
+    return constsIn(src).get(id) ?? allExportedCategoryConsts().get(id) ?? null;
   }
 
   function sendSites(): SendSite[] {
