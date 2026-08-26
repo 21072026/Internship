@@ -94,8 +94,14 @@ uyandırır, bildirimi sayfa değil worker gösterir.
 
 1. Anahtar çiftini bir kez üret: `npx web-push generate-vapid-keys`
 2. `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` env'lerini ayarla
-   (bkz. `.env.example`). Prod/preview için GitHub secret'ı olarak ver; özel
-   anahtar hiçbir zaman repoya girmez.
+   (bkz. `.env.example`). Deploy edilen ortamlarda bunlar **sunucudaki env
+   dosyasına** yazılır (`/etc/internship-crm/prod.env`,
+   `/etc/internship-crm/preview.env`) — GitHub secret'ına değil; özel anahtar
+   hiçbir zaman repoya girmez. Konteynere geçmesi için `infra/deploy-prod.sh`
+   içindeki `app_env_args()` listesinde ve `infra/server/topic-deploy.sh`'in
+   `docker run` satırlarında da yer alması gerekir; bu PR ikisine de ekledi.
+   **Env dosyasına yazmak tek başına yetmez** — o listede olmayan bir değişken
+   uygulamaya hiç ulaşmaz.
 3. Kullanıcı `/account` → "Tarayıcı bildirimleri" anahtarını açar. Aynı anahtar
    hem ön plan bildirimini hem push aboneliğini yönetir.
 
