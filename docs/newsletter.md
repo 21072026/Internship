@@ -157,6 +157,26 @@ The e-mail body is hand-written table HTML with inline styles
 strips `<style>`. The **archive renders the fields natively** instead of
 embedding that HTML, which would fight both the app layout and dark mode.
 
+### Why the composer shows no thumbnail
+
+Picking a hero image shows its **name and size**, not a preview of it. A
+thumbnail would mean `URL.createObjectURL(file)` reaching an `src` attribute,
+and that flow — a DOM read (`input.files`) into a rendered URL — is CodeQL's
+`js/xss-through-dom` (high). In substance it is a false positive: the browser
+only ever mints `blob:` there. But neither a validating helper nor an inline
+`startsWith('blob:')` guard is a barrier CodeQL accepts — both were checked
+against the real query locally — so the choice was to remove the flow or to
+suppress a high-severity alert in a repo that has never suppressed one.
+
+The identical pattern is still live on main in `admin/announcements/page.tsx`
+and `components/MessageThread.tsx`; those are pre-existing alerts, which is the
+only reason they do not block a PR. If the thumbnail is wanted back, the
+decision to make is about those three places together, not about this one.
+
+The image itself is not invisible: it renders in the preview once the issue is
+saved, through `/api/newsletters/[id]/image` — a URL built from the issue id,
+with nothing DOM-derived in it.
+
 ## Privacy
 
 `NewsletterSend.email` is PII. It cascades on a hard delete, but

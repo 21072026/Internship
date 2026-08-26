@@ -86,7 +86,9 @@ export default function AdminNewslettersPage() {
   const [tab, setTab] = useState<Locale>(locale);
   const [audience, setAudience] = useState<NewsletterAudience>('MENTEE');
   const [templateKey, setTemplateKey] = useState<string | null>(null);
-  const [image, setImage] = useState<{ file: File; url: string } | null>(null);
+  // The picked hero image. Deliberately the File and nothing else — see the
+  // chip in the markup below for why no object URL is minted from it.
+  const [image, setImage] = useState<{ file: File } | null>(null);
   const [scheduleAt, setScheduleAt] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -137,10 +139,6 @@ export default function AdminNewslettersPage() {
       .catch(() => {});
   }, [fetchHistory]);
 
-  // Object URLs have to be released when the picked file is replaced or the
-  // page unmounts.
-  useEffect(() => () => { if (image) URL.revokeObjectURL(image.url); }, [image]);
-
   const patch = (changes: Partial<NewsletterIssueContent>) =>
     setBodies((prev) => ({ ...prev, [tab]: { ...(prev[tab] ?? emptyIssue()), ...changes } }));
 
@@ -173,7 +171,7 @@ export default function AdminNewslettersPage() {
       return;
     }
     setError(null);
-    setImage({ file, url: URL.createObjectURL(file) });
+    setImage({ file });
   };
 
   const loadPreview = async () => {
@@ -544,9 +542,25 @@ export default function AdminNewslettersPage() {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) pickImage(f); }}
             />
             {image ? (
-              <div className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} alt="" className="h-16 w-28 rounded-lg object-cover" />
+              <div className="flex flex-wrap items-center gap-3">
+                {/* The picked file is described, not rendered.
+                    A thumbnail would mean `URL.createObjectURL(file)` reaching an
+                    `src` attribute, and that flow — DOM read (`input.files`) into
+                    a rendered URL — is what CodeQL's js/xss-through-dom reports
+                    (high, #1470). In practice it is a false positive: the browser
+                    only ever mints `blob:` there. But neither a validating helper
+                    nor an inline `startsWith('blob:')` guard is a barrier CodeQL
+                    accepts (both verified locally against the real query), so the
+                    honest options were to remove the flow or to suppress a
+                    high-severity alert in a repo that has never suppressed one.
+                    The name and size are what an admin actually checks after
+                    picking a file, and the hero image itself is visible in the
+                    preview once the issue is saved. */}
+                <span className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                  <ImagePlus className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="max-w-[16rem] truncate" data-testid="newsletter-image-name">{image.file.name}</span>
+                  <span className="text-xs text-gray-400">{Math.round(image.file.size / 1024)} KB</span>
+                </span>
                 <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()}>{n.imageReplace}</Button>
                 <Button type="button" variant="ghost" onClick={() => { setImage(null); if (fileRef.current) fileRef.current.value = ''; }}>
                   {n.imageRemove}
