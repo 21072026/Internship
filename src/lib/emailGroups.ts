@@ -1,4 +1,4 @@
-// E-mail groups: the taxonomy a person actually unsubscribes from (#1290).
+// E-mail groups: the taxonomy a person actually unsubscribes from (#1444).
 //
 // The eleven legacy keys in notificationPrefs.ts gate *in-app* notifications and
 // were only ever a rough proxy for e-mail. They grew per-feature, not per-kind:

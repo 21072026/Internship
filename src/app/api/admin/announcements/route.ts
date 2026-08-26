@@ -247,6 +247,17 @@ export async function POST(request: Request) {
             // footer takes the same language the body was just rendered in.
             userId: u.id,
             locale: u.preferredLanguage,
+            // The preference columns this handler already selected for all of
+            // them, handed to the central check so it does not re-read the same
+            // two values once per recipient. On a thousand-user broadcast that
+            // was a thousand extra queries riding alongside a thousand EmailLog
+            // inserts inside this one Promise.all — the pool-timeout window the
+            // largest send in the product could least afford.
+            //
+            // Data, not a bypass: `sendEmail` still runs the same check on it,
+            // and the filter above uses the very same row, so the two cannot
+            // disagree about what this person chose.
+            prefs: u,
           }).then(
             () => { emailed++; },
             (e) => logger.error('Failed to send announcement email', { error: String(e) })

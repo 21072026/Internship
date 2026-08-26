@@ -5,7 +5,7 @@ import { makeUnsubscribeToken, verifyUnsubscribeToken } from '@/lib/unsubscribeT
 import { applyGroupPref } from '../applyUnsubscribe';
 
 // RFC 8058 one-click unsubscribe — the endpoint advertised in the
-// `List-Unsubscribe` / `List-Unsubscribe-Post` headers (#1290).
+// `List-Unsubscribe` / `List-Unsubscribe-Post` headers (#1444).
 //
 // Gmail, Apple Mail and Outlook render their own "Unsubscribe" button next to
 // the sender and POST this URL when it is pressed. There is no session, no

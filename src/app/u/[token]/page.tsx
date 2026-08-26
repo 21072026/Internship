@@ -13,7 +13,7 @@ import { getDictionary, type ClientDictionary } from '@/i18n/dictionaries';
 import type { EmailGroupId } from '@/lib/emailGroups';
 
 // Landing page for the unsubscribe link in every non-essential e-mail footer
-// (#1290). One click in the mail, and by the time this page has painted the
+// (#1444). One click in the mail, and by the time this page has painted the
 // person is already unsubscribed: no sign-in, no Save button, no confirmation
 // step. That is the whole point — an opt-out that asks you to log in first is
 // an opt-out most people give up on, and the ones who don't reach for the

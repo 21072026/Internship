@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { requireServerSecret } from '@/lib/serverSecret';
 import { isEmailGroupId, type EmailGroupId } from '@/lib/emailGroups';
 
-// Signed unsubscribe links for the footer of every non-essential e-mail (#1290).
+// Signed unsubscribe links for the footer of every non-essential e-mail (#1444).
 //
 // Construction is deliberately identical to src/lib/emailActionToken.ts — `~`
 // between the fields (an RFC 3986 unreserved character, so it survives a round

@@ -242,6 +242,12 @@ who ignored their messages. Read the statuses as:
 - **All `SENT`, and people still do not answer** — delivery is working and the
   problem is placement (spam folder) or genuinely no reply. `SENT` means our
   SMTP server accepted the message, **not** that it reached an inbox.
+- **`SKIPPED` with `Unsubscribed: <group>`** — the central check in `sendEmail()`
+  suppressed it. Note what this status cannot tell you: "records every attempt"
+  means every call that *reaches* `sendEmail()`. A recipient filtered out by a
+  call-site guard — which is how the scheduled jobs and the announcement
+  broadcast handle their bulk groups — never becomes an attempt and leaves **no
+  row at all**. See §2d, *The audit row is not the guarantee*.
 
 The body is deliberately not stored — metadata only.
 
@@ -316,11 +322,11 @@ userId + category → group → may we send? → footer + List-* headers
 
 The per-call-site `emailAllowed(...) && emailGroupAllowedForCategory(...)`
 guards stay, but they are an **optimisation** — several scheduled jobs return an
-`{ emailed: n }` counter that e2e specs assert, and it has to be truthful. The
-*guarantee* is the one in `sendEmail()`, because there are 41 send sites and the
-next one somebody adds will forget. It sits deliberately **ahead** of the
-demo-mode and SMTP short-circuits, so the promise holds on every environment and
-the `EmailLog` row records *why*: `Unsubscribed: digests` is auditable.
+`{ emailed: n }` counter that e2e specs assert, and it has to be truthful, so the
+guard has to run before the counter moves. The *guarantee* is the one in
+`sendEmail()`, because there are 41 send sites and the next one somebody adds
+will forget. It sits deliberately **ahead** of the demo-mode and SMTP
+short-circuits, so the promise holds on every environment.
 
 **A mail is only unsubscribable when `sendEmail` is given a `userId`.** No
 `userId` ⇒ no preference to read, no token to mint, no footer, no headers. That
@@ -334,6 +340,34 @@ to catch the neighbouring mistake (a category with no group), but the missing
 the *recipient's*, not the actor's.** Half of these send sites have both in
 scope, and swapping them still delivers the mail, just with somebody else's
 unsubscribe token in it.
+
+### The audit row is not the guarantee — read this before promising evidence
+
+When `sendEmail()` suppresses a mail it writes a `SKIPPED` `EmailLog` row whose
+error reads `Unsubscribed: <group>`. **That row only exists on send sites that
+have no call-site guard.** Where a guard sits in front, the loop `continue`s or
+the recipient list is `.filter()`ed and `sendEmail` is never entered — so there
+is no row *at all*: not `SENT`, not `SKIPPED`, no reason, nothing on **Admin →
+Settings → Email health**. And the guarded paths are precisely the bulk groups
+people actually unsubscribe from (`digests`, `task_reminders`,
+`meeting_reminders`, `opportunities`, `reports_analytics`, `announcements`), so
+`Unsubscribed: <group>` is the rare case rather than the rule. Do not send
+anyone to Email health expecting to find it.
+
+What *is* on record for those users: the current `notificationPrefs` value, and
+the `ActivityLog` opt-out row from whichever surface they used (below).
+
+**The known option, and what it costs.** Moving each guard to *after* the
+`sendEmail()` call — letting the central check suppress and record, and deriving
+the counter from the returned `'SENT' | 'SKIPPED'` — would produce the audit row
+on every path. The price is one extra `User` query per suppressed recipient: the
+guards read a batch the job has already loaded, while `sendEmail()` re-reads the
+preferences one recipient at a time. Four jobs put the guard ahead of a counter
+that e2e specs assert — `sendWeeklyMentorDigests`, `sendDailyActivityDigests`,
+`checkCompanyNeedMatches`, `sendWeeklyAnalyticsReport` — and
+`POST /api/admin/announcements` filters its recipient list the same way. N
+queries per run in exchange for full auditability is a maintainer decision, and
+it has deliberately **not** been taken here.
 
 ### The links and the headers
 
@@ -407,10 +441,19 @@ sentence that ends up in a screenshot.
 - Opt-outs are written to `ActivityLog` (`email.unsubscribe` /
   `email.resubscribe`, with `one-click (RFC 8058)` in `detail` when a provider
   did it). An opt-out that leaves no row cannot be proved to a recipient who
-  says they asked twice.
-- A suppressed mail is a `SKIPPED` `EmailLog` row with
-  `Unsubscribed: <group>` — visible on **Admin → Settings → Email health**, so
-  "why did they not get it?" is answerable without the DB.
+  says they asked twice. **A switch flipped on `/account` goes through
+  `PUT /api/profile`**, not through the token routes — it writes the same two
+  actions with `detail` naming the keys that moved
+  (`via=/account off=email:digests`), so one query over those two actions covers
+  all four surfaces. It used to log a bare `profile.update`, which recorded that
+  *something* in the profile changed and nothing about which mail stopped. The
+  delta is deliberately keys-only and self-truncating: `ActivityLog.detail` is
+  `VARCHAR(191)` and an oversized value is lost to P2000 (#1268).
+- A suppressed mail is a `SKIPPED` `EmailLog` row with `Unsubscribed: <group>`
+  on **Admin → Settings → Email health** — **only on the paths with no
+  call-site guard**. For the scheduled jobs and the announcement broadcast there
+  is no row of any kind; see *The audit row is not the guarantee* above before
+  going looking for one.
 - Adding a category: put it in a group in `src/lib/emailGroups.ts` in the same
   PR. An unmapped category fails **open** (it sends, ungated, with no footer) —
   the fail-safe direction, but it means the gap is silent.

@@ -69,7 +69,7 @@ test('the audit categories opt out through the account settings UI', async ({ pa
   }
 });
 
-// The per-group e-mail switches (#1290) live in the same card as the legacy
+// The per-group e-mail switches (#1444) live in the same card as the legacy
 // in-app list above and write into the same notificationPrefs JSON column, under
 // prefixed `email:<group>` keys. Two things have to hold, and only one of them
 // is visible: the switch persists, and it does NOT take the legacy keys with it.

@@ -58,7 +58,7 @@ export function AccountSettings() {
   const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null; createdAt: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
-  // Per-group e-mail preferences (#1290). These are NOT a second copy of
+  // Per-group e-mail preferences (#1444). These are NOT a second copy of
   // `notifPrefs`: they are the resolved *answers* for the twelve e-mail groups,
   // derived from the same JSON blob but flattened through the back-compat rules
   // in resolveEmailGroupPrefs (a legacy `mentorship: false` shows up here as
@@ -720,7 +720,7 @@ export function AccountSettings() {
             receive is a lockout rather than a choice. */}
         <p className="text-xs text-gray-400 mt-1">{t.emailGroups.account_security.desc}</p>
 
-        {/* Per-group e-mail opt-out (#1290). Driven by EMAIL_GROUPS so a new
+        {/* Per-group e-mail opt-out (#1444). Driven by EMAIL_GROUPS so a new
             group cannot ship without a switch here, exactly like the legacy
             list below is driven by NOTIFICATION_CATEGORIES. These switches are
             about E-MAIL only; the legacy list underneath is about the in-app

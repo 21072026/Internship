@@ -240,6 +240,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         locale: application.locale,
         orgId: application.orgId,
         registerUrl: `${appUrl}/auth/register?token=${result.invitation.token}`,
+        // no-user-row: this is the invited branch — the approval created an
+        // InvitationToken, not a User, so there is no id to mint an unsubscribe
+        // token from and nothing to gate on. The promoted branch above passes
+        // `user.id` precisely because there a User does exist.
       }).catch((e) => console.error('Mentor application approval email failed:', e));
     }
 

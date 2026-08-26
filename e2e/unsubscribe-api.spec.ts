@@ -3,7 +3,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { makeUnsubscribeToken } from '../src/lib/unsubscribeToken';
 import { EMAIL_GROUPS } from '../src/lib/emailGroups';
 
-// #1290 — the unsubscribe API. Every case here runs with NO SESSION: the signed
+// #1444 — the unsubscribe API. Every case here runs with NO SESSION: the signed
 // token in the mail footer is the only credential, and a request that needed a
 // login would be an unsubscribe nobody can complete from their inbox.
 //

@@ -6,7 +6,7 @@ import { EMAIL_GROUP_IDS, isEssentialGroup, type EmailGroupId } from '@/lib/emai
 import { verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
 import { applyGroupPref, readGroupState, type UnsubResult } from '../applyUnsubscribe';
 
-// The preference centre behind the /u/<token> page (#1290): read every group's
+// The preference centre behind the /u/<token> page (#1444): read every group's
 // state, then flip one switch at a time.
 //
 // No session, ever — the signed token is the credential, for the reasons spelled

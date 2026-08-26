@@ -32,6 +32,7 @@ import {
   isBulkGroup,
   isEssentialGroup,
   type EmailGroupId,
+  type EmailPrefUser,
 } from '@/lib/emailGroups';
 import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/lib/unsubscribeToken';
 
@@ -277,7 +278,7 @@ export async function runEmailHealthCheck(): Promise<EmailHealth> {
   return health;
 }
 
-// ── Per-group unsubscribe: footer + List-* headers (#1290) ──────────────────
+// ── Per-group unsubscribe: footer + List-* headers (#1444) ──────────────────
 //
 // Everything below is a pure string builder on purpose. Nothing in this repo
 // can inspect a rendered e-mail end to end (Playwright blanks SMTP_USER, so
@@ -420,6 +421,7 @@ export async function sendEmail({
   userId,
   group,
   locale,
+  prefs,
 }: {
   to: string;
   subject: string;
@@ -441,6 +443,12 @@ export async function sendEmail({
   // preference to read and no token to mint, which is exactly the right
   // behaviour for a recipient who is not a User row (an invitee who has not
   // registered, ALERT_EMAIL_TO, a mentor applicant, an arbitrary test address).
+  //
+  // Because it is optional, omitting it by accident compiles, delivers and looks
+  // healthy while shipping bulk mail with no opt-out at all — so every send in a
+  // non-essential group must either pass it or say on the call
+  // `// no-user-row: <why>`. e2e/email-groups-footer.unit.spec.ts scans the
+  // source for exactly that and names the file, the category and the fix.
   userId?: string | null;
   // Normally derived from `category`; an explicit value wins, for the rare send
   // whose taxonomy home the category cannot express.
@@ -449,6 +457,27 @@ export async function sendEmail({
   // English: a translated footer under an untranslated body reads as a bug, not
   // as a courtesy (the same convention timeZoneNote() follows).
   locale?: string | null;
+  // The two preference columns, when the caller has ALREADY read them for this
+  // recipient. Purely an economy measure, for the one path where it matters:
+  // the announcement broadcast selects `emailNotifications` +
+  // `notificationPrefs` for every active user in a single query and filters on
+  // them in memory, and without this the central check below re-read the same
+  // two columns once per recipient — a thousand extra pooled round trips on top
+  // of the thousand EmailLog inserts, all inside one Promise.all, against a
+  // default Prisma pool of a dozen-odd connections. That is where a P2024 pool
+  // timeout comes from, on the largest send the product makes.
+  //
+  // It is DATA, not a bypass flag, and the distinction is the whole reason this
+  // is safe to add: what is passed is the answer to "what did this user
+  // choose?", never "should I check?". Omitting it costs a query; it cannot
+  // skip the check, and there is deliberately no value of it — and no sibling
+  // flag — that means "send anyway". Do not add one.
+  //
+  // Deliberately NOT threaded through the scheduled jobs: the digests already
+  // run several queries per recipient, so one more changes nothing there, and
+  // every extra call site that hand-carries preference data is another place
+  // for the row and the decision to drift apart.
+  prefs?: EmailPrefUser;
 }) {
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
@@ -477,9 +506,13 @@ export async function sendEmail({
   // so the promise holds in every environment and the SKIPPED row records *why*:
   // "Unsubscribed: digests" is auditable, "Demo mode" is not.
   if (gated) {
-    const u = await prisma.user
-      .findUnique({ where: { id: userId! }, select: { emailNotifications: true, notificationPrefs: true } })
-      .catch(() => null);
+    // `prefs` when the caller already holds this recipient's row, a read
+    // otherwise. Same decision either way — see the parameter's note above.
+    const u =
+      prefs ??
+      (await prisma.user
+        .findUnique({ where: { id: userId! }, select: { emailNotifications: true, notificationPrefs: true } })
+        .catch(() => null));
     // Fail OPEN on a missing row or a DB error, exactly like notifyIfAllowed: a
     // preference lookup that breaks must not silently swallow the mail.
     if (u && !emailGroupAllowed(u, groupId!)) {
@@ -848,6 +881,9 @@ export async function sendMeetingGuestInviteEmail({
   await sendEmail({
     to,
     subject: `Meeting invitation: ${title}`,
+    // no-user-row: a guest is an address somebody typed into the scheduler,
+    // deliberately not an account here — there is no row to gate on and no
+    // token to mint, and the mail says so in its own closing line instead.
     category: 'meeting-guest-invite',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1107,8 +1143,9 @@ export async function sendMentorApplicationReceivedEmail({
   const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
   await sendEmail({
     to,
-    // The applicant is not a User row yet, so there is nothing to unsubscribe
-    // and no footer is emitted — see the note on `userId` in sendEmail.
+    // no-user-row: the applicant is a MentorApplication and nothing else yet —
+    // no User row exists to hold a preference, so there is nothing to
+    // unsubscribe and no footer is emitted (see `userId` in sendEmail).
     category: 'mentor-application-received',
     locale,
     fromName: brand.name,
@@ -1138,6 +1175,9 @@ export async function sendMentorApplicationUnderReviewEmail({
   const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
   await sendEmail({
     to,
+    // no-user-row: same recipient as the acknowledgement above — an application
+    // under review still has no account behind it, so there is no preference to
+    // read and no unsubscribe token to mint.
     category: 'mentor-application-received',
     locale,
     fromName: brand.name,
@@ -1169,7 +1209,10 @@ export async function sendMentorApplicationApprovedEmail({
   orgId?: string | null;
   registerUrl?: string | null;
   // Set only on the "existing account promoted in place" path — the invited
-  // path has no User row yet, so that copy ships without a footer.
+  // path has no User row yet, so that copy ships without a footer. The invited
+  // caller carries the `no-user-row:` marker itself: a marker here would exempt
+  // every call site of this sender at once, including the promoted one, which is
+  // the opposite of what the scan is for.
   userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
@@ -1210,7 +1253,9 @@ export async function sendMentorApplicationRejectedEmail({
   const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
   await sendEmail({
     to,
-    // A MentorApplication, not a User — nothing to unsubscribe from.
+    // no-user-row: a declined application never became a User row, so there is
+    // nothing to unsubscribe from — and this is the last mail it will ever
+    // produce, which is the one case where that is self-evidently fine.
     category: 'mentor-application',
     locale,
     fromName: brand.name,
@@ -1998,6 +2043,9 @@ async function sendMeetingGuestReminderEmail({
   const when = `${formatInTimeZone(scheduledAt, zone)} (${zoneLabel(scheduledAt, zone)})`;
   await sendEmail({
     to,
+    // no-user-row: the reminder half of the guest invite, addressed to the same
+    // account-less MeetingGuest — and it already stops on its own when the guest
+    // declines, which is the only "opt out" that address can express.
     category: 'meeting-guest-reminder',
     subject: `Reminder: ${title} starts soon`,
     html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

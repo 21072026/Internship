@@ -3,7 +3,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { makeUnsubscribeToken } from '../src/lib/unsubscribeToken';
 import { getDictionary } from '../src/i18n/dictionaries';
 
-// #1290 — the maintainer's headline requirement: clicking the unsubscribe link
+// #1444 — the maintainer's headline requirement: clicking the unsubscribe link
 // in a mail footer must unsubscribe you, immediately, with no sign-in and no
 // Save step. Every case below runs signed OUT; the signed token in the URL is
 // the only credential in play.

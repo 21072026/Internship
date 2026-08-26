@@ -10,7 +10,7 @@ Newest entries on top.
 
 ---
 
-## 2026-08-26 — E-posta grupları ve abonelikten çıkma: opsiyonel parametre sessiz hata üretir (#1290)
+## 2026-08-26 — E-posta grupları ve abonelikten çıkma: opsiyonel parametre sessiz hata üretir (#1444)
 
 **Bir sarmalayıcıya opsiyonel parametre eklemek çağıranları güncellemez — ve tip denetimi
 bunu görmez.** Bu işin ikinci yarısı tam olarak bu yüzden var oldu: `sendEmail()` ve ~15
@@ -98,6 +98,65 @@ paniğinden de "bilinen flake" diye geçiştirmekten de ucuz.
 işaretlemişti; CLAUDE.md smoke kümesini ~15-20 testte tutmayı söylüyor, yani tek bir
 özellik %20'sini alamaz. Özelliğin manşet vaadini (girişsiz, Save'siz abonelikten çıkma)
 tutup diğer ikisini tam süiteye bıraktım.
+
+*Aşağıdakiler aynı özellik üzerinde üç tur düşmanca gözden geçirmeden sonra öğrenildi
+(#1444), yukarıdaki ilk yazımdan sonra:*
+
+**Kaba bir eski anahtarı başka bir grubun postasının önüne `&&` ile koyan koruma, ayar
+ekranını yalancı çıkarır — ve düzeltmenin iki yarısı da gerekir.** On çağrı yerinde
+`emailAllowed(x, '<eski anahtar>')`, o anahtarın haritalandığı gruptan *farklı* bir grubun
+postasını kesiyordu: bir zamanlar uygulama-içi "Toplantı hatırlatmaları"nı kapatan biri
+`/account`'ta *Toplantı davetleri: AÇIK* görürken her toplantı isteği ve her yanıtı sessizce
+düşüyordu; aynı şekil eski `digest` anahtarının analitik raporunu ve fırsat uyarısını
+öldürmesinde de var. Yalnızca `&&` koşulunu silmek, eski kaba anahtarla çıkmış herkesi
+sessizce yeniden abone eder. Yalnızca anahtarı grubun `legacy` dizisine yazmak ise çağrı
+yerinin hâlâ yanlış grubu okumasını sürdürür — açık opt-in (kural 4) çağrı yerinde
+eziliyor, yani yalan bir adım sonraya taşınmış olur. İkisi birlikte doğru; ve bir eski
+anahtarın birkaç gruba yayılması bir taviz değil, eski anahtarların gerçekten kaba torbalar
+olduğunun kaydı.
+
+**`git add -A`, tek kullanımlık bir klonda `node_modules` SEMBOLİK BAĞINI commit'ledi.**
+`.gitignore`'daki `node_modules/` kalıbı sondaki eğik çizgi yüzünden yalnızca *dizini*
+eşliyor; aynı ada sahip bir sembolik bağ o kalıba düşmüyor ve indekse 120000 modunda bir
+girdi olarak giriyor. İki commit sonra `git show --stat` çıktısındaki `node_modules | 1 -`
+satırından fark edildi. Bağımlılıkları başka bir ağaçtan `ln -s` ile paylaşıyorsan
+`git add -A`'dan önce `git status --short` oku (ve bağın adını `.gitignore`'a ayrıca ekle).
+
+**Bir model ekleyen dalı birleştirdikten sonra bayat Prisma istemcisi ~20 hayali tip hatası
+uyduruyor.** `npx tsc --noEmit`, şemada duran alanlar için "Property does not exist" diyor
+ve hata listesi tamamen sahte. CLAUDE.md bunu dal *değiştirmek* için söylüyor; merge sonrası
+da aynı — tsc çıktısına inanmadan önce `npx prisma generate`.
+
+**CodeQL, ham sorgu girdisinin `NextResponse.redirect`'e ulaşmasını, girdi tek bir yol
+parçasına kodlanmış olsa bile işaretliyor.** `/api/unsubscribe/one-click`'in GET'i jetonu
+doğruluyor, sonra `encodeURIComponent(t)` ile `/u/<t>`'ye yönlendiriyordu; sömürülebilir
+olduğunu sanmıyorum ama analizci "url-redirection" diyor. Kodlayıcının tam olarak neyi
+kaçırdığını tartışmak yerine hedefi **doğrulanmış** jetondan yeniden üret
+(`makeUnsubscribeToken(scope.userId, scope.group)` — zaman bileşeni olmayan saf HMAC,
+yani kullanıcının kendi jetonunu baytı baytına üretir). Taint akışı tamamen kopuyor,
+"çağıranın gönderdiği hiçbir şey bu sink'e ulaşmıyor" okuyanın yerel olarak
+doğrulayabildiği bir özellik oluyor, ve bozuk jeton artık boş bir sıçrama yerine 400 alıyor.
+
+**Bir özelliğin etrafında kurulduğu garanti, tam olarak *silme* testi yazılacak şeydir.**
+Bu özelliğin tek vaadi "abonelikten çıkma gönderdiğimiz her postada geçerli" idi; on çağrı
+yeri bu vaadi ihlal ederken süitin tamamı yeşildi — yani garantiyi hiçbir test
+sormuyordu. Şimdi bir özellik testi `src/` içindeki her `emailAllowed(x,'K')` korumasını
+koruduğu kategoriyle eşleştiriyor ve çağrı yerinin cevabının `resolveEmailGroupPrefs`'in
+gösterdiğiyle aynı olmasını doğruluyor; eşleştirilemeyen koruma testi kırıyor (on tanesi tam
+olarak orada saklanmıştı) ve tek bir çağrı yerini eski hâline döndüren negatif kontrolle
+testin gerçekten kırıldığı kanıtlandı. Kural: yeni bir garanti yazdığında önce onu **silen**
+değişikliği hayal et; süit yeşil kalıyorsa test yok.
+
+**Yukarıdaki "`EmailLog` satırı nedenini yazıyor" cümlesi yalnızca çağrı-yeri koruması
+olmayan yollar için doğru.** Zamanlanmış işler ve duyuru yayını alıcıyı `continue`/`.filter()`
+ile daha önce eliyor, `sendEmail()`'e hiç girilmiyor — dolayısıyla insanların gerçekten
+çıktığı toplu gruplar (`digests`, `task_reminders`, `opportunities`, `announcements`, …) için
+`SKIPPED` satırı da yok, *hiçbir* satır yok. `docs/EMAIL_DELIVERABILITY.md` artık bunu
+böyle söylüyor (ve korumaları `sendEmail()` çağrısının arkasına taşıma seçeneğini, maliyetiyle
+birlikte, karar olarak bakıcıya bırakıyor); `/account`'taki bir kapatma da artık hangi
+anahtarların açılıp kapandığını yazan bir `email.unsubscribe` ActivityLog satırı bırakıyor.
+Ders: bir runbook'a "kanıt şurada" yazmadan önce o kanıtı yazan kod yolunu izle — aksi hâlde
+okuyanı hiç yazılmamış bir kanıtı aramaya gönderirsin.
 
 ## 2026-08-26 — Gece k6 yük testi: eşik yazmak kolay, eşiğin *ölçtüğünü* kanıtlamak zor (#1449)
 

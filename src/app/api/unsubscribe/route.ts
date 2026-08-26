@@ -8,7 +8,7 @@ import { isLocale, type Locale } from '@/i18n/config';
 import { verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
 import { applyGroupPref, readGroupState } from './applyUnsubscribe';
 
-// Unsubscribe from a mail footer (#1290).
+// Unsubscribe from a mail footer (#1444).
 //
 // THE SIGNED TOKEN IS THE ONLY CREDENTIAL. There is deliberately no
 // getServerSession and no requireUser anywhere in this directory, and there must
