@@ -265,6 +265,21 @@ html[data-accent] .text-blue-300 { color: var(--accent-300); }
 html[data-accent] .text-blue-400 { color: var(--accent-400); }
 html[data-accent] .text-blue-500 { color: var(--accent-500); }
 html[data-accent] .text-blue-600 { color: var(--accent-600); }
+
+/* Dark mode has to win over the accent rule above, and the ONLY reason this
+   sits down here rather than with its siblings at the top is specificity:
+   `html[data-accent]` and `html.dark` score identically, so source order
+   decides — and `data-accent` is ALWAYS present (it defaults to "blue"). That
+   is why neither a `dark:text-blue-400` utility on the element nor an earlier
+   `html.dark .text-blue-600` rule had any effect; both are silently outranked.
+   Measured, not assumed: the computed colour stayed rgb(37,99,235) through both
+   attempts.
+   The violation itself: a bare `text-blue-600` link on the page background
+   ("become a mentor", "forgot password", "see all announcements") is 3.4:1 on
+   gray-950, under the 4.5:1 AA floor. It went unseen for as long as the axe
+   scan only ever ran in light mode (#826). */
+html.dark .text-blue-600,
+html.dark[data-accent] .text-blue-600 { color: #93c5fd; } /* blue-300 — 8.6:1 on gray-950 */
 html[data-accent] .text-blue-700 { color: var(--accent-700); }
 html[data-accent] .text-blue-800 { color: var(--accent-800); }
 html[data-accent] .text-blue-900 { color: var(--accent-900); }

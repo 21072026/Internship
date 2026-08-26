@@ -27,6 +27,7 @@ somut bir **karar** ve gerekçesiyle.
 | Ticari lisans sözleşmesi | — | Kullanıma hazır taslak + Annex A iskeleti; yıllık abonelik ya da süresiz lisans + %20 bakım | [commercial-license-template.md](commercial-license-template.md) |
 | Hukuki/vergisel çerçeve | #549 | Faturalayan taraf **ilk satışa ertelendi** (aday: **bcsit GmbH** veya şahıs); SaaS abonelik faturalaması (KDV/USt dahil); klasik success-fee'den kaçın (AÜG riski) | [legal-tax-framework.md](legal-tax-framework.md) |
 | Mentee görünürlük rızası | #551 | Yalnızca kamuya-açık alanlar (ad, üniversite, beceri, hedef pozisyon); e-posta/telefon asla; anında geri çekilebilir | [talent-pool-consent-policy.md](talent-pool-consent-policy.md) |
+| Fırsat eşitliği verisi | #819 | Demografik veri **toplanmıyor**; ürün sahibi açık onayı gelmeden şema değişikliği yok. Kör inceleme modu ayrı ve gönderildi | [equal-opportunity-data.md](equal-opportunity-data.md) |
 | Ödeme altyapısı | #552 | Faz 1 manuel fatura; ölçeklenince Stripe Billing + webhook → entitlement | [payment-infrastructure.md](payment-infrastructure.md) |
 
 ## Veri erişim kuralı (#523 kalemi — zaten uygulandı)

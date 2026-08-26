@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { GraduationCap, User, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
-import { PIPELINE_GROUPS, type PipelineGroupKey } from '@/lib/pipeline';
+import { groupResolvedStages, type PipelineGroupKey } from '@/lib/pipeline';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
@@ -46,11 +46,13 @@ export default function AdminBoardPage() {
   const [search, setSearch] = useState('');
   const [hideEmpty, setHideEmpty] = useState(false);
   const [mobileStage, setMobileStage] = useState('');
-  const [collapsed, setCollapsed] = useState<Record<PipelineGroupKey, boolean>>({
-    pre: false,
-    internship: false,
-    result: false,
-  });
+  // Keyed by group, but by a plain string: a tenant with custom stages gets a
+  // "custom" group that isn't one of the three built-ins, and an unvisited key
+  // reads as undefined → expanded, which is the wanted default anyway.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // The groups the VIEWER actually has (#828) — built from the resolved stages,
+  // so a customized pipeline is not silently dropped on the desktop board.
+  const groups = useMemo(() => groupResolvedStages(stages), [stages]);
 
   const fetchRelations = useCallback(async () => {
     const res = await fetch('/api/mentorship');
@@ -193,6 +195,10 @@ export default function AdminBoardPage() {
     return (
       <div
         key={status}
+        // Keyed by stage so a test can name one column. Without it the only
+        // handle is the header text, which also matches every card's "Move to
+        // stage" <option> and trips strict mode (#828).
+        data-testid={`board-column-${status}`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(status); }}
         onDragLeave={() => setDragOver((s) => (s === status ? null : s))}
         onDrop={(e) => {
@@ -206,7 +212,7 @@ export default function AdminBoardPage() {
         }`}
       >
         <div className="flex items-center justify-between mb-3 px-1">
-          <span className="text-xs font-semibold text-gray-700">{label(status)}</span>
+          <span data-testid={`board-column-title-${status}`} className="text-xs font-semibold text-gray-700">{label(status)}</span>
           <span
             title={overLimit ? t.adminBoard.wipWarning : undefined}
             className={`text-xs rounded-full px-2 py-0.5 border ${
@@ -267,7 +273,7 @@ export default function AdminBoardPage() {
         </div>
       ) : (
       <div data-testid="board-columns" className="space-y-5">
-        {PIPELINE_GROUPS.map((group) => {
+        {groups.map((group) => {
           const statuses = hideEmpty
             ? group.statuses.filter((s) => itemsFor(s).length > 0)
             : group.statuses;

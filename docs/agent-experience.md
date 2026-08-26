@@ -10,6 +10,89 @@ Newest entries on top.
 
 ---
 
+## 2026-08-26 — Dış katılımcı daveti: "hesabı olmayan davetli" bir yetki üretme primitifi (#1446)
+
+**Playwright'ın beklediği tarayıcı sürümü ile `/opt/pw-browsers`'takinin farkı bu turda
+sadece symlink'le kapanmadı — dizin *düzeni* de değişmiş.** Beklenen
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`, kurulu olan
+`chromium_headless_shell-1194/chrome-linux/headless_shell`. Yani CLAUDE.md'deki "symlink at"
+tavsiyesi artık tek başına yetmiyor; iki isim birden köprülenmeli:
+
+```bash
+ln -sfn /opt/pw-browsers/chromium-1194 /opt/pw-browsers/chromium-1234
+mkdir -p /opt/pw-browsers/chromium_headless_shell-1234/chrome-headless-shell-linux64
+touch /opt/pw-browsers/chromium_headless_shell-1234/{INSTALLATION_COMPLETE,DEPENDENCIES_VALIDATED}
+ln -sfn /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell \
+        /opt/pw-browsers/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell
+# (aynı dizindeki .pak/.dat/.so dosyalarını da tek tek link'le — yoksa açılmıyor)
+```
+
+**E2E spec süreci `.env`'i okumuyor.** `playwright.config.ts` uygulamayı başlatırken ortamı
+kuruyor ama `e2e/helpers/db.ts`'in kendi `PrismaClient`'ı ayrı bir süreçte doğuyor ve
+`DATABASE_URL` bulamayınca "Validation Error Count: 1" ile ölüyor. Çalıştırmadan önce
+`export DATABASE_URL=...` şart.
+
+**Test koşarken kaynak dosyayı düzenleme.** Koşu sırasında `sed` ile yorum satırı bile
+değiştirmek dev sunucuyu yeniden derletiyor; React yeniden mount olunca formun state'i
+(`title`, seçili mentee) sıfırlanıyor ve buton `disabled` kalıyor — hata
+"element is not enabled" diye görünüyor, sanki testin locator'ı yanlışmış gibi. Düzenlemeleri
+bitir, sonra koş.
+
+**Asıl tasarım dersi: "hesabı olmayan davetli" masum bir alan değil, bir kimlik bilgisi
+üretme primitifi.** `MeetingGuest` satırı = giriş gerektirmeyen bir bearer token + seçilen
+adrese giden bir e-posta. Bu yüzden iki kural özelliğin kendisi kadar önemli:
+1. **Sistemde hesabı olan bir adrese asla misafir token'ı basma.** Yoksa "toplantı planla"
+   yetkisi, bir meslektaşın adresine kimliği doğrulanmamış bir bilet basma yetkisine dönüşür.
+2. **Rolü organizatörlükten ayrı kontrol et.** `loadAccessibleMeeting` katılımı kanıtlıyor ama
+   `accessible.organizer` yetmiyor: `/api/meetings/instant`'ın rol kapısı yok, yani bir MENTEE
+   toplantı yaratıp kendi toplantısının organizatörü olabiliyor. Kapı `MENTOR || ADMIN`.
+
+**Bir alt-ajanın "in tree" kodu okuması, tasarım turunu incelemeye çeviriyor — ve işe yarıyor.**
+Araştırma workflow'u koşarken paralel olarak yazdığım kod, tasarım ajanının önüne çıktı; dönen
+plan bir taslak değil, numaralı düzeltme listesi oldu (yukarıdaki rol açığı, MENTEE'ye misafir
+adreslerinin sızması, hatırlatma cron'unun misafirleri atlaması, `sanitize-db.mjs`'in
+temizlemediği PII). Bunların hiçbirini kendi başıma yakalamamıştım.
+
+**Kendi uydurduğun issue numarasını doğrula.** Kod boyunca `#1430` yazmıştım; o numara gerçekten
+vardı ama tamamen alakasız bir admin story'siydi. `issue_read` ile bakmak 15 saniye, 15 dosyada
+yanlış referans bırakmak kalıcı.
+
+---
+
+## 2026-08-25 — Mentör gözüyle site denetimi: hatalar "çalışmıyor"da değil, "yarım kalmış"ta (#1348)
+
+**Denetimi çalışan uygulamada yap, statik okuma bulguyu yarım bırakıyor.** Playbook'un yerel
+kurulumu (apt MariaDB + `db push` + `db seed` + `seed:demo`) burada ~5 dakikada ayağa kalkıyor;
+`mentor.aylin@demo.example.com` / `DemoPass123!` ile `locale=tr` çerezi eklenmiş bir Playwright
+bağlamında 19 mentör sayfasını gezmek, kodu okurken "muhtemelen" kalan üç bulguyu kesinleştirdi:
+menüdeki tür seçenekleri gerçekten `["Meeting","Feedback","Email"]` döndü, panoda 3 mentee'den
+yalnızca 1'i ekrana girdi, mentee detayının sağ sütunu tam boy boş çıktı. Ekran görüntüsü
+almadan bu üçü de "kod öyle görünüyor" seviyesinde kalırdı.
+
+**Playwright'ı repo kökünden çalıştır, `playwright` paketi yok — `@playwright/test` var.**
+Ve `/opt/pw-browsers/chromium/chrome-linux/chrome` **yok**; gerçek yol sürüm ekli:
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome` (`find /opt/pw-browsers -name chrome`).
+
+**En verimli bulgu kalıbı: "API'nin kabul ettiği ile arayüzün sunduğu arasındaki fark."**
+Bu turdaki bulguların yarısı bu şekilde çıktı — `POST /api/interactions` beş tür kabul ediyor,
+form üçünü gösteriyor; `PUT /api/mentorship/[id]` `companyId`/`stageDeadline` kabul ediyor ve
+mentörü yetkilendiriyor, ama o alanları yazan tek arayüz admin ekranı; `PUT /api/interactions/[id]`
+yazılmış ama hiçbir arayüz çağırmıyor. `grep -rn "api/<uç>" src --include=*.tsx` ile "bu ucu kim
+çağırıyor" sorusunu sormak, sayfaları tek tek okumaktan daha hızlı hata buluyor.
+
+**Aynı sorunun tersi: "veri giriliyor ama kimse okumuyor."** `AvailabilitySlot`'u yazan üç yer
+var (ekran, onboarding formu, checklist sayımı), **okuyan sıfır** — üstelik ana sayfa SSS'i
+mentee'ye o slotlardan talep açmayı vaat ediyor (`faqMentee2A`). Bir modelin tüketicisini
+`grep -rn "<model>\|/api/<uç>" src` ile saymak, ölü özellikleri tek komutta ortaya çıkarıyor.
+
+**`sub_issue_write` yanıtı ebeveynin TÜM gövdesini geri veriyor.** 17 bağlantı ≈ 90k token.
+Skill'in dediği gibi: önce hepsini oluştur, `child id → parent number` eşlemesini bir dosyaya
+yaz, bağlamayı en sona bırak. Ayrıca **issue numaraları ardışık gelmiyor** (paralel PR/issue
+trafiği araya giriyor): gövdede başka bir issue'ya atıf yapacaksan numarayı **oluşturduktan
+sonra** doldur, tahmin etme — bu turda iki gövdede yanlış numara oluştu ve sonradan düzeltildi.
+
+---
+
 ## 2026-08-24 — Telefon genişliğinde düzen denetimi: sıkışan satırlar sayfa taşması yapmaz (#1305)
 
 **"Yatay kaydırma var mı" kuralı bu hataların çoğunu KAÇIRIYOR.** Bildirilen bozukluk
@@ -4287,3 +4370,69 @@ CHANGELOG'un 45 değişiklik geride kalmasına izin verme.
 ihlalini dondurdu — katkıcının dokunmadığı bir sayfada. Baseline diff'lerinde "hangi
 kayıt eklendi?" sorusunu da sor; eklenen her satır, sistemin yakalaması gereken bir
 ihlalin kapıdan geçmesidir (#1333).
+
+## 2026-08-24 — katkı şartları üçlüsü, Google Takvim, etiket yönetimi, havuz
+
+**Chromium bu konteynerden deploy edilmiş ortamlara ulaşamıyor.** `curl` `crm-pr<N>.ersah.in`
+için 200 alırken Playwright'ın `page.goto`'su `ERR_CONNECTION_RESET` veriyor —
+`$HTTPS_PROXY` + `ignoreHTTPSErrors` ile de. Bunu iki kez "topic ortamı auto-merge ile
+yıkılmış" diye yanlış teşhis ettim; ortam ayaktaydı. **Deploy edilmiş bir ortamı buradan
+doğrulamanın yolu curl'dür**, NextAuth girişi dahil: `GET /api/auth/csrf` → çerez kavanozu
+→ `POST /api/auth/callback/credentials` (csrfToken+email+password) → korumalı uçlara istek.
+Bayrağın kapalı olduğunu preview'da böyle kanıtladım (#709).
+
+**`useT()` çıktısına bağımlı `useEffect` sonsuz render döngüsü yapar.** `useT()` her
+render'da yeni bir nesne referansı döndürüyor, dolayısıyla `[t]` / `[t.foo]` bağımlılığı
+effect'i her render'da yeniden ateşliyor ve içindeki her `setState` bir sonrakini
+planlıyor. Form barındıran bir sayfada bu, alanları kullanıcının elinin altında sıfırlıyor:
+`GoogleCalendarCard`'ı `/account`'a monte etmek `account-self-service.spec.ts:17`'yi
+**tutarlı biçimde** kırdı (flake değil). Çözüm: state'te *çeviri metnini* değil **anahtarı**
+tut, render sırasında çevir — effect'in bağımlılık dizisi gerçekten boş kalsın. Bu kod
+tabanında `useT()` çıktısına bağlanan her effect aynı gizli hatayı taşıyor.
+
+**Teşhis etmeden önce izole et.** Yukarıdaki hatayı varsaymak yerine tek dosyayı
+(`git checkout origin/main -- src/components/AccountSettings.tsx`) main'e döndürüp spec'i
+koşturdum: geçti; geri aldım: kaldı. Tek komutluk bu adım, "bilinen flake" diye geçiştirip
+CI'ya kırık göndermekten ucuz.
+
+**"Test edilemez" çoğu zaman "uç noktalar koda gömülü" demektir.** #709 aylarca yarım
+kaldı çünkü token takası yalnızca canlı Google'a karşı çalışıyordu. Google'ın
+token/revoke/API adreslerini env'e alıp (varsayılanlar gerçek Google) e2e'de yerel bir
+stub'a yöneltmek yeterliydi: `playwright.config.ts`'in `webServer`'ı **dizi kabul ediyor**,
+yani stub uygulamanın yanında ayrı bir süreç olarak kalkıyor ve ürün paketine hiç girmiyor.
+Stub'ın kanıtlayamadıklarını (Google'ın istek şeklimizi kabul etmesi, onay ekranı) runbook'a
+açıkça yazdım — bayrağın kapalı kalma gerekçesi o.
+
+**Kapıyı açmadan önce yarıçapını ölç.** #1026'nın proje kapısı, üyenin projeyi açtığı her
+testi kırar. Tahmin etmek yerine projeye dokunan on iki spec'i koşturdum: 5 kırık, 18 sağlam
+— ve beşine gerçek bir üyenin zaten sahip olduğu ön koşulu ekledim. Aynı gerekçe demo
+tohumlayıcısına da uygulanır: demo aylardır süren projeleri canlandırıyor, o insanlar
+şartları çoktan kabul etmiş olurdu.
+
+**`prisma format` User/Meeting'e sessizce ters-ilişki ekliyor.** Yeni bir model + elle
+yazılmış ilişki alanı eklediğinde `format` bir de kendi `ModelAdı ModelAdı?` satırını
+üretiyor ve `validate` "Ambiguous relation" diye patlıyor. #1025'te de #709'da da oldu:
+format'tan sonra `grep -n "YeniModel" prisma/schema.prisma` ile fazladan satırı sil.
+
+**MySQL'de `UNIQUE` her `NULL`'ı ayrı sayar.** `@@unique([userId, termsKey, version, projectId])`
+platform seviyesi satırları (projectId = NULL) tekilleştirmiyor — iki tık iki satır ekler.
+İdempotanlığı kodda (`findFirst` + `create`) kur ve nedenini yorumla.
+
+**Türkçe küçük harf, veritabanının collation'ı değil.** Etiket benzersizliği `tagKey()`
+(Türkçe-farkındalıklı `toLocaleLowerCase('tr')`) üzerinden karar veriliyor; çakışma kontrolü
+de JS'te yapılmalı. `İ`/`I` naif karşılaştırmayı bozan durum ve geçmesi, birleştirmenin
+onarmak için var olduğu dağılmayı yeniden yaratır (#845).
+
+**Yerel MariaDB oturum ortasında ölebiliyor.** İki kez düştü ve testler
+`Can't reach database server` ile patladı. Uzun bir oturumda test koşmadan önce
+`pgrep -f mariadbd` ile bak, gerekirse `setsid nohup mariadbd --user=root &` ile kaldır.
+Ayrıca: `pkill -f "next"` kendi kabuğunu da öldürüyor (exit 144) — playwright'ı doğrudan
+`setsid nohup` ile başlat, önce pkill deneme.
+
+**Bir story'yi almadan önce alt görevlerine bak.** #845 "orta zorluk, 4-6 gün" görünüyordu;
+alt görevi #887 modelleri, API'yi, sınırları, VE/VEYA filtresini, kaydedilmiş görünüm
+entegrasyonunu ve toplu etiketlemeyi zaten getirmişti. Gerçekte kalan tek parça yönetim
+ekranıydı. Aynı şekilde board temizliğinde: #869, #705, #714 yalnızca alt görevleri
+kapandığı için kapanmayı bekliyordu; #884'ün PR'ında `Closes #` boş bırakıldığı için
+GitHub bağlamamıştı. **`closed_by_pull_requests` boş olması işin yapılmadığı anlamına
+gelmez** — içerikten doğrula.

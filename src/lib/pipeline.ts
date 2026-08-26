@@ -108,7 +108,7 @@ export function pipelineOptions(locale: Locale = 'en') {
 // Logical groupings of the 13 stages, so the kanban board can collapse the
 // horizontal sprawl into three phases: before the internship, during it, and
 // the outcome. Every PipelineStatus belongs to exactly one group.
-export type PipelineGroupKey = 'pre' | 'internship' | 'result';
+export type PipelineGroupKey = 'pre' | 'internship' | 'result' | 'custom';
 
 export const PIPELINE_GROUPS: { key: PipelineGroupKey; statuses: PipelineStatus[] }[] = [
   {
@@ -124,6 +124,27 @@ export const PIPELINE_GROUPS: { key: PipelineGroupKey; statuses: PipelineStatus[
     statuses: ['JOB_SEEKING_500', 'HIREABLE_600', 'HIRED_660', 'EMPLOYED_700', 'INTERNSHIP_FOUND_ELSEWHERE_800'],
   },
 ];
+
+// Group the VIEWER'S resolved stages rather than the enum constant above.
+// A tenant with a customized pipeline (#747) has stage keys that appear in no
+// PIPELINE_GROUPS entry, so iterating the constant made those stages invisible
+// on the desktop admin board — while the phone list, which reads the resolved
+// stages, showed them (#828). Unknown keys land in a trailing "custom" group in
+// the tenant's own stage order; empty groups drop out, so a tenant that only
+// renamed the defaults still sees the familiar three phases.
+export function groupResolvedStages(
+  stages: ResolvedStage[],
+): { key: PipelineGroupKey; statuses: string[] }[] {
+  const grouped = new Set<string>(PIPELINE_GROUPS.flatMap((g) => g.statuses as string[]));
+  const byOrder = [...stages].sort((a, b) => a.order - b.order);
+  const out = PIPELINE_GROUPS.map((g) => ({
+    key: g.key,
+    statuses: byOrder.filter((s) => (g.statuses as string[]).includes(s.key)).map((s) => s.key),
+  })).filter((g) => g.statuses.length > 0);
+  const custom = byOrder.filter((s) => !grouped.has(s.key)).map((s) => s.key);
+  if (custom.length > 0) out.push({ key: 'custom' as PipelineGroupKey, statuses: custom });
+  return out;
+}
 
 // Mentee-facing "what to do now" guidance per stage — turns the journey from a
 // passive status display into actionable direction. Off-path statuses

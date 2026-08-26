@@ -27,6 +27,11 @@ import { signInAndSettle, gotoSettled } from './helpers/auth';
  */
 
 const PHONE = { width: 360, height: 800 };
+// The tier nothing measured (#828): between `sm:` and `lg:`, where the sidebar is
+// still hidden but two-column grids have already switched on. 768 is exactly
+// Tailwind's `md:` breakpoint, so it is the first width at which `md:` rules
+// apply — the worst case for a layout that assumes `md:` implies "roomy".
+const TABLET = { width: 768, height: 1024 };
 // Narrower than this and a truncated label stops carrying information.
 const MIN_TEXT_WIDTH = 110;
 
@@ -225,5 +230,102 @@ test('phone width: the mentor screens stay inside the viewport in German', async
     await prisma.activityLog.deleteMany({ where: { actorEmail: mentorEmail } });
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);
+  }
+});
+
+test('tablet width: the md: breakpoint does not break the role shells', async ({ page }) => {
+  // 768px is where `md:` turns on but the `lg:` sidebar has not: a two-column
+  // grid inside a full-width main is the shape most likely to overflow, and no
+  // spec had ever measured it (every viewport in the suite was a phone or a
+  // desktop). German again, for the longest labels.
+  const adminEmail = uniqueEmail('tablet-audit-admin');
+  const pw = 'MobileAudit123!';
+  await seedUser(adminEmail, pw, 'ADMIN', 'Tablet Audit Admin');
+
+  try {
+    await page.setViewportSize(TABLET);
+    await setLocale(page, 'de');
+    await signInAndSettle(page, adminEmail, pw, '/admin');
+
+    for (const path of ['/admin', '/admin/candidates', '/admin/mentors', '/admin/analytics']) {
+      await gotoSettled(page, path);
+      await settle(page);
+      expect(await auditLayout(page), `${path} at ${TABLET.width}px (de)`).toEqual([]);
+    }
+  } finally {
+    await prisma.activityLog.deleteMany({ where: { actorEmail: adminEmail } });
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('phone width: the profile pages hold together', async ({ page }) => {
+  // /portal/profile and /mentor/profile are the longest forms in the product and
+  // were never measured at phone width — the audit covered dashboards and lists
+  // only (#828). A form is where a label/field pair squeezes first.
+  const menteeEmail = uniqueEmail('profile-audit-mentee');
+  const mentorEmail = uniqueEmail('profile-audit-mentor');
+  const pw = 'MobileAudit123!';
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Profil Denetimi Mentee');
+  await seedUser(mentorEmail, pw, 'MENTOR', 'Profil Denetimi Mentor');
+  await prisma.user.update({
+    where: { id: mentee.id },
+    data: {
+      skills: ['TypeScript', 'React', 'Datenbankmodellierung'],
+      university: 'Orta Doğu Teknik Üniversitesi',
+      department: 'Bilgisayar Mühendisliği',
+    },
+  });
+
+  try {
+    await page.setViewportSize(PHONE);
+    await setLocale(page, 'de');
+    await signInAndSettle(page, menteeEmail, pw, '/portal');
+    await gotoSettled(page, '/portal/profile');
+    await settle(page);
+    expect(await auditLayout(page), `/portal/profile at ${PHONE.width}px (de)`).toEqual([]);
+
+    await page.context().clearCookies();
+    await setLocale(page, 'de');
+    await signInAndSettle(page, mentorEmail, pw, '/mentor');
+    await gotoSettled(page, '/mentor/profile');
+    await settle(page);
+    expect(await auditLayout(page), `/mentor/profile at ${PHONE.width}px (de)`).toEqual([]);
+  } finally {
+    await prisma.activityLog.deleteMany({ where: { actorEmail: { in: [menteeEmail, mentorEmail] } } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});
+
+test('phone width in dark mode: the retint does not change the geometry', async ({ page }) => {
+  // Dark mode and a phone viewport had never been combined (#828). They are not
+  // independent: globals.css retints by REMAPPING utility classes, and a rule
+  // that swaps a border for a ring, or a background for one with a different
+  // padding, moves boxes. This measures the same four rules with `.dark` on.
+  const adminEmail = uniqueEmail('dark-phone-admin');
+  const pw = 'MobileAudit123!';
+  await seedUser(adminEmail, pw, 'ADMIN', 'Dark Phone Admin');
+
+  try {
+    await page.setViewportSize(PHONE);
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await setLocale(page, 'de');
+    await page.evaluate(() => {
+      document.cookie = 'theme=dark; path=/; max-age=31536000';
+      try { localStorage.setItem('theme', 'dark'); } catch { /* ignore */ }
+    });
+    await signInAndSettle(page, adminEmail, pw, '/admin');
+
+    for (const path of ['/admin', '/admin/candidates', '/admin/board']) {
+      await gotoSettled(page, path);
+      await settle(page);
+      // The retint has to have actually happened, or this test measures light
+      // mode twice and passes for the wrong reason.
+      await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+      expect(await auditLayout(page), `${path} at ${PHONE.width}px (de, dark)`).toEqual([]);
+    }
+  } finally {
+    await prisma.activityLog.deleteMany({ where: { actorEmail: adminEmail } });
+    await cleanupByEmail(adminEmail);
   }
 });

@@ -18,9 +18,13 @@ import { counterpartPath, modeOf, type AppMode } from '@/lib/appMode';
 // account has only one shell — the switcher renders nothing at all rather than
 // a one-button group.
 const STYLES: Record<AppMode, { icon: typeof ShieldCheck; active: string }> = {
-  admin: { icon: ShieldCheck, active: 'text-blue-700 dark:text-blue-300' },
-  mentor: { icon: GraduationCap, active: 'text-green-700 dark:text-green-300' },
-  mentee: { icon: Sprout, active: 'text-purple-700 dark:text-purple-300' },
+  // `dark:!` rather than a plain `dark:` variant: globals.css retints these
+  // utilities with flat `html.dark .text-*` rules that outrank the variant, so
+  // the unforced version is silently inert and the active chip stays dark text
+  // on a dark-grey pill. Measured, not assumed (#826).
+  admin: { icon: ShieldCheck, active: 'text-blue-700 dark:!text-blue-200' },
+  mentor: { icon: GraduationCap, active: 'text-green-700 dark:!text-green-200' },
+  mentee: { icon: Sprout, active: 'text-purple-700 dark:!text-purple-200' },
 };
 
 export function ModeSwitcher({ modes }: { modes: AppMode[] }) {

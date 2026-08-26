@@ -19,14 +19,24 @@ const TAWK_EMOJI = 'https://cdn.jsdelivr.net/emojione/';
 // same one Permissions-Policy hands camera/microphone to.
 const JAAS = 'https://8x8.vc';
 
+// Growth analytics (#1242). Narrowed to the providers this build actually has:
+// NEXT_PUBLIC_* vars are inlined at build time, so unlike the JaaS host above we
+// CAN know here whether a provider is in play. A deployment with no analytics
+// configured therefore ships a CSP that allows no analytics host at all —
+// which was the objection that held #1221 back.
+const { analyticsCspHosts } = require('./src/lib/analyticsCsp.cjs');
+const ANALYTICS = analyticsCspHosts(process.env);
+const analyticsScript = ANALYTICS.script.join(' ');
+const analyticsConnect = ANALYTICS.connect.join(' ');
+
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${JAAS} ${TAWK} ${TAWK_EMOJI}`,
+  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${JAAS} ${TAWK} ${TAWK_EMOJI}${analyticsScript ? ` ${analyticsScript}` : ''}`,
   `style-src 'self' 'unsafe-inline' ${TAWK} ${TAWK_EMOJI}`,
   `img-src 'self' data: blob: ${TAWK} ${TAWK_EMOJI}`,
   `font-src 'self' ${TAWK}`,
   // wss: too — the chat holds a websocket open for incoming messages.
-  `connect-src 'self' ${TAWK} wss://*.tawk.to`,
+  `connect-src 'self' ${TAWK} wss://*.tawk.to${analyticsConnect ? ` ${analyticsConnect}` : ''}`,
   // The chat plays a notification sound; media-src has no fallback here other
   // than default-src 'self', which would block it.
   `media-src 'self' ${TAWK}`,
