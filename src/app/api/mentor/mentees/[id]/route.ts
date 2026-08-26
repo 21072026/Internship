@@ -97,13 +97,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
       let emailSent = true;
       try {
-        await sendPasswordResetEmail({
+        emailSent = (await sendPasswordResetEmail({
           to: email,
           token,
           fullName: mentee.fullName,
           purpose: 'SET_INITIAL',
           orgId: mentee.orgId,
-        });
+        })) === 'SENT';
       } catch (e) {
         console.error('Mentee activation email failed:', e);
         emailSent = false;
