@@ -4558,3 +4558,49 @@ ebeveynin **tüm gövdesini** geri veriyor; 20+ bağlamada bu ciddi bağlam yak�
 hepsini oluştur, `child id → parent number` eşlemesini diske yaz, bağlamayı en sona bırak.
 Bir de: yeni issue numaraları **atlamalı** veriliyor (1357 → 1359 → 1364), bu yüzden bir
 issue gövdesinde henüz oluşturulmamış bir numaraya atıf yapma — sonradan düzeltmek gerekti.
+
+## 2026-08-26 — E-posta bülteni modülü (#1469)
+
+**Bülten duyuru değil; aynı tabloya sığmıyor.** İlk refleks `Announcement`'ı genişletmekti.
+Dört yerde ayrışıyor: hedef kitle (rol bazlı), zamanlama, arşivin **eskimemesi** (duyuru
+feed'i hesap açılışından öncesini gizler — #1161; bülten tam tersine kalıcı olmalı) ve
+alıcı başına teslim kaydı. Beşincisi belirleyici oldu: gönderilmiş bir sayı **değiştirilemez**
+olmalı — duyuruda edit doğru (#1162, henüz okunacak bildirimi düzeltir), bültende yanlış
+(gönderilen kutuyu değiştirmez, yalnızca arşivi gerçekle çelişkiye sokar).
+
+**`(newsletterId, email)` üzerindeki tek unique kısıt üç problemi birden çözüyor:** yarıda
+ölen gönderim resume edilebiliyor, geçmiş `EmailLog`'un 90 günlük budamasından kurtuluyor,
+ve cron tick'i ile "şimdi gönder" düğmesi çakışsa bile kimse iki kez mail almıyor. Status
+üzerinde compare-and-set (`updateMany where status`) tek başına yeterli değil, çünkü çok
+süreçli ortamda atomik değil.
+
+**Abonelikten çıkanın satırını YAZMAMAK bilinçli.** Sayacı artır, satırı yazma: mail
+atmadığını kaydetmek için mail atmamasını isteyen kişinin adresini saklamak yanlış takas.
+
+**`anonymizeUser` cascade'i atlıyor.** `NewsletterSend.userId` FK'si cascade olsa da
+anonimleştirme user satırını **silmiyor**, yeniden yazıyor — adres bültende kalırdı.
+`forgetEmailLog()` içine adres+id ile silme eklemek gerekti (#1211'in aynısı, ikinci kez).
+
+**Client bundle'a `crypto` sızdırmamak için dosyayı ikiye böl.** `lib/newsletter.ts`'i
+composer (client component) tip ve limitler için import ediyor; HMAC token ve `env` okuyan
+URL üreticileri `lib/newsletterTokens.ts`'e taşındı. Bunu `tsc` yakalamıyor, `next build`
+yakalıyor — UI'yı yazmadan önce böl.
+
+**Cron'u `initCronJobs` içine koyma.** `newsletterDispatch` → `emailService` tek yönlü
+kalsın diye `initNewsletterCron()` ayrı export edildi ve `/api/cron/start` içinden
+çağrıldı. Aksi halde döngüsel import.
+
+**Playwright test runner `.env` okumuyor.** Uygulama (Next) okuyor, ama `helpers/db.ts`'in
+`PrismaClient`'ı okumuyor: `Environment variable not found: DATABASE_URL`. Kabuğa
+`export DATABASE_URL=…` gerekiyor — CI'da zaten export'lu olduğu için tarifte yazmıyor.
+
+**Chromium sürüm uyuşmazlığı bu turda 1194 vs 1234 çıktı** ve `executablePath` vermek
+yetmedi (config'e dokunmadan koşturmak istiyordum): beklenen düzeni symlink'le kurmak
+gerekti — `chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`
+→ 1194'ün `chrome-linux/headless_shell`'i. Headless shell dizininin **iç yapısı** normal
+chromium'unkinden farklı, dizini komple symlink'lemek çalışmıyor.
+
+**Önizlemeyi ikinci bir kod yolundan üretme.** Admin önizlemesi ve test gönderimi,
+dispatcher'ın kullandığı `renderNewsletterHtml`'i çağırıyor; tek fark hero görselin `src`'si
+(gerçek gönderimde `cid:`, önizlemede URL). Bunun için `imageCid` parametresini `imageSrc`'ye
+genelleştirmek yetti.
