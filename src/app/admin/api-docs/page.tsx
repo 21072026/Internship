@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { useT } from '@/i18n/client';
@@ -64,6 +65,16 @@ export default function ApiDocsPage() {
           <a href="/api/v1/openapi.json" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
             {base}/api/v1/openapi.json
           </a>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>{t.apiExplorer.title}</CardTitle></CardHeader>
+          {/* This page documents the PUBLIC /api/v1 surface by hand; the explorer
+              is the generated, interactive view of everything, internal included. */}
+          <p className="text-sm text-gray-600 mb-2">{t.apiExplorer.subtitle}</p>
+          <Link href="/admin/api-explorer" className="text-sm text-blue-600 hover:underline">
+            {t.apiDocs.explorerLink} →
+          </Link>
         </Card>
       </div>
     </div>

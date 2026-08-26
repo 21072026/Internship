@@ -50,6 +50,11 @@ function zoneOf(timezone: string | null | undefined) {
 // would not: an ADMIN in the org, a mentee with an ACTIVE relation to them, or a
 // mentor who opted into the directory (publicProfile + an active
 // MENTOR_DIRECTORY_VISIBILITY consent — the double opt-in from #937/#938).
+//
+// @openapi-ignore — this note names TENANT_MODELS and which models fall outside
+// the central isolation guarantee. That is a map for anyone hunting tenant leaks
+// and must not be republished in the admin API explorer next to x-source; it
+// stays here for developers reading the source.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -165,6 +170,11 @@ export async function POST(request: Request) {
 }
 
 // DELETE ?id= — remove one of the current mentor's slots.
+//
+// @openapi-ignore — same reason as the GET above (#1447): the paragraph below
+// describes a cross-tenant delete and the missing hop that allowed it, which is
+// a lead for anyone hunting the next instance. Useful to a developer reading the
+// source, not something to publish in the admin API explorer.
 //
 // The admin escape hatch is scoped to the admin's OWN organization (#1350): the
 // previous `role !== 'ADMIN'` test was global, so an admin who knew a cuid could

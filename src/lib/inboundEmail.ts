@@ -1,7 +1,9 @@
 import { prisma } from '@/lib/prisma';
+import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { conversationForRelation } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
+import { sendNewMessagePush } from '@/lib/messagePush';
 import { markThreadRead } from '@/lib/threadRead';
 import { logger } from '@/lib/logger';
 
@@ -47,7 +49,12 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
 
   const rel = await prisma.mentorshipRelation.findUnique({
     where: { id: relationId },
-    include: { mentor: { select: { id: true, email: true } }, mentee: { select: { id: true, email: true } } },
+    include: {
+      // notificationPrefs so the in-app reply notification can honour the
+      // recipient's "Messages" category (#1426).
+      mentor: { select: { id: true, email: true, notificationPrefs: true } },
+      mentee: { select: { id: true, email: true, notificationPrefs: true } },
+    },
   });
   if (!rel) return { ok: false, status: 404, reason: 'Thread not found' };
 
@@ -111,9 +118,18 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
     logger.error('Failed to mark thread read after inbound reply', { relationId, senderId, error: String(e) });
   }
 
-  const recipient = senderId === rel.mentor.id ? rel.mentee.id : rel.mentor.id;
+  const recipientUser = senderId === rel.mentor.id ? rel.mentee : rel.mentor;
   const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${relationId}`;
-  await notify(recipient, 'message.newByEmail', {}, link);
+  // An emailed reply is still a message, so it belongs to the same category
+  // (#1426). Someone who switched Messages off has said they do not want the
+  // bell for this conversation, whichever door the reply came through — and
+  // that goes for the background push as well (#1464), which is why it sits
+  // inside the same gate. sendNewMessagePush re-checks the preference itself,
+  // so this is about not doing the work, not about correctness.
+  if (notificationCategoryAllowed(recipientUser, 'messages')) {
+    await notify(recipientUser.id, 'message.newByEmail', {}, link);
+    await sendNewMessagePush(recipientUser.id, { link, byEmail: true, preview: body });
+  }
 
   return { ok: true, relationId, duplicate: false };
 }

@@ -68,3 +68,66 @@ test('the audit categories opt out through the account settings UI', async ({ pa
     await cleanupByEmail(email);
   }
 });
+
+/**
+ * #1426 — the "Messages" category silences e-mail but not the in-app bell.
+ *
+ * `notificationCategoryAllowed` and the `notifyIfAllowed` wrapper both exist and
+ * both document that a category switch covers every channel; the message paths
+ * simply called bare `notify()` four lines above an e-mail branch that did check.
+ * `notifCategoriesHint` promises users in all three locales that these switches
+ * apply to e-mail and in-app alike — this makes that true.
+ */
+test('turning Messages off stops the in-app notification too, not only the email', async ({ page }) => {
+  const mentorEmail = uniqueEmail('np-msg-mentor');
+  const menteeEmail = uniqueEmail('np-msg-mentee');
+  const optedInEmail = uniqueEmail('np-msg-optedin');
+  const pw = 'NotifPrefs123!';
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'NP Msg Mentor');
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'NP Msg Mentee');
+  const optedIn = await seedUser(optedInEmail, pw, 'MENTEE', 'NP Msg OptedIn');
+  const optedOutRelation = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE' },
+  });
+  const controlRelation = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: optedIn.id, status: 'ACTIVE' },
+  });
+  // One mentee opts out; the other is the control, so a test that silenced
+  // everything would not pass either.
+  await prisma.user.update({ where: { id: mentee.id }, data: { notificationPrefs: { messages: false } } });
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', mentorEmail);
+    await page.fill('input[type="password"]', pw);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
+
+    for (const relationId of [optedOutRelation.id, controlRelation.id]) {
+      const res = await page.request.post('/api/messages', {
+        data: { relationId, body: 'Preference check' },
+      });
+      expect(res.ok(), await res.text()).toBeTruthy();
+    }
+
+    // The opted-out mentee gets no bell row…
+    await expect
+      .poll(async () => prisma.notification.count({ where: { userId: mentee.id, type: { startsWith: 'message.' } } }), { timeout: 10_000 })
+      .toBe(0);
+    // …while the message itself was still delivered to the thread. Opting out of
+    // the notification is not opting out of the conversation.
+    expect(await prisma.message.count({ where: { relationId: optedOutRelation.id } })).toBe(1);
+
+    // The control mentee still gets one, proving the gate is selective.
+    await expect
+      .poll(async () => prisma.notification.count({ where: { userId: optedIn.id, type: { startsWith: 'message.' } } }), { timeout: 10_000 })
+      .toBe(1);
+  } finally {
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentee.id, optedIn.id] } } });
+    await prisma.message.deleteMany({ where: { relationId: { in: [optedOutRelation.id, controlRelation.id] } } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [optedOutRelation.id, controlRelation.id] } } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(optedInEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});

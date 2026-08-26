@@ -10,6 +10,75 @@ Newest entries on top.
 
 ---
 
+## 2026-08-26 — Admin API explorer: üretilen dokümanı nereden servis etmeli (#1447)
+
+**Prod imajında `src/` yok — bu, "route ağacını tara" fikrini baştan build-time'a
+mahkûm ediyor.** `Dockerfile` runner katmanı yalnızca `public/`, `.next/`,
+`node_modules/`, `package.json` ve `prisma/` kopyalıyor. İstek anında `src/app/api`
+diye bir şey olmadığı için çalışma zamanı taraması sessizce boş doküman üretir —
+dev'de kusursuz görünen, prod'da "bu uygulamanın hiç endpoint'i yok" diyen bir hata.
+Aynı katmana `next.config.js` de girmiyor; oraya güvenen bir türetme de çalışmaz.
+
+**Üretilen artefaktı repo'ya koymadan tsc'yi yeşil tutmanın yolu `nextConfig.env`.**
+İlk üç seçenek de kötüydü: commit'lemek her route ekleyen PR'a ~300 KB churn bindirir
+(tam olarak #1275'in çözdüğü sorun); gitignore'layıp `import`lamak temiz klonda
+`npx tsc --noEmit`'i kırar (ci.yml build'den *önce* tsc koşuyor); `prebuild` hook'u
+eklemek prod konteynerinde `npm start`'a yapamayacağı bir iş yükler. Doğru cevap
+dördüncüsü: `next.config.js` içinde türet, `env` üzerinden inline et. Böylece `src/`
+altında hiçbir dosya generated bir şeyi import etmiyor, artefakt gitignore'da kalıyor,
+değer `.next/required-server-files.json`'a gömüldüğü için `next start` config'e
+ihtiyaç duymuyor. Sürüm türetmesi (#1275) zaten bu deseni kullanıyordu — yeni bir
+mekanizma icat etmek yerine onu genişletmek yeterliydi.
+
+**Auth'u yalnızca handler gövdesinden sınıflayan bir tarayıcı yalan söyler.** Dört
+rota (`inbound-email`, `webhooks/jaas`, `health`, `admin/document-requirements`)
+korumasını modül kapsamındaki bir yardımcıda tutuyor ve yardımcının adı `require*`
+değil (`secretOk`, `adminSession`, `maySeeDetail`). Gövde taraması bunları
+"kimlik bilgisi gerekmiyor" diye yayımlar — bir admin ekranında bunu
+`POST /api/inbound-email`'in yanında görmek tam olarak istemediğin şey. Sınıflamadan
+önce modül kapsamı sembol tablosunu kurup bir tur inline et; ve statik çıktıyı CI'da
+doğrula (`check:openapi`), çünkü statik analiz **sessizce** bozulur: tanımadığı bir
+sözdizimindeki rota dokümandan öylece kaybolur.
+
+**swagger-ui'ın `persistAuthorization`'ı `preauthorizeApiKey` için hiçbir şey yapmıyor.**
+swagger-ui-dist 5.32'de ölçtüm: enjekte edilen anahtar anında "Authorized" oluyor ama
+`localStorage`'a hiçbir şey yazılmıyor, reload'da yetki gidiyor. Ajanların yazdığı
+"tarayıcıda kalır, yenilemeye dayanır" metni üç dilde de yanlıştı. İki ders: bir
+üçüncü-parti bayrağının ne yaptığını **ölç**, dokümanına değil; ve zaten ham bir
+credential'ı `localStorage`'a yazmasını istemezsin — bayrağı kapatmak hem doğru hem
+güvenli. Test tarafında: yetkiyi `localStorage`'dan okuyamazsın, Authorize diyalogundan
+okumalısın, ve Logout butonunun erişilebilir adı metni değil `aria-label`
+("Remove authorization").
+
+**`BASE_URL` ile Playwright koşmak webServer'ı atlıyor — onun env'ine bağlı specler
+sahte kırılıyor.** `e2e/rate-limit.spec.ts` sunucuda `TRUSTED_PROXY_COUNT=0` bekliyor;
+bunu `playwright.config.ts` yalnızca kendi başlattığı webServer için veriyor. Elle
+başlatılmış bir sunucuya `BASE_URL` ile bağlanınca spec "429 gelmedi" diye kırılıyor ve
+bir regresyon gibi görünüyor. Sunucuyu `env TRUSTED_PROXY_COUNT=0 npm start` ile
+başlatınca 5/5 geçti. `BASE_URL` modunda ayrıca `.env` yüklenmiyor: `export $(grep -v
+'^#' .env | xargs)` gerekiyor, yoksa `helpers/db.ts` "Environment variable not found:
+DATABASE_URL" veriyor.
+
+**Chromium symlink tarifi güncellendi: artık iç içe dizin gerekiyor.** Yüklü build 1194,
+`playwright@1.62` ise 1234 arıyor ve headless kabuğu **yeni** yerleşimde bekliyor:
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`.
+1194'te ise düz `chrome-linux/headless_shell` var, yani dizini komple symlink'lemek
+yetmiyor — gerçek bir dizin açıp içindeki her dosyayı tek tek link'lemek ve
+`headless_shell`'i `chrome-headless-shell` adıyla eklemek gerekti. `chromium-1234`
+tarafında düz symlink yeterli (yerleşim aynı).
+
+**Bayat `.next` "uygulama bozuk" gibi görünüyor.** Build'i iki kez koşup sonra sunucuyu
+yeniden başlatınca sayfa chunk'ı 400 + `MIME text/html` döndü, Swagger hiç mount olmadı
+ve tarayıcı oturumu "session closed" ile düştü — hepsi gerçek bir hata gibi. Sebep
+sadece chunk hash'lerinin değişmesiydi. Render hatası ararken önce `rm -rf .next` +
+tek build + tek sunucu; konsol hatalarını okumak (`page.on('console')`) bunu bir
+dakikada ayırt ediyor.
+
+**Merge çakışması CI'ı hiç başlatmıyor.** PR'da 15 dakika boyunca sıfır check run vardı
+ve sebebi kuyruk değil `mergeable_state: "dirty"` idi: GitHub merge commit'ini
+hesaplayamayınca `pull_request` workflow'larını tetiklemiyor. "CI neden koşmuyor" diye
+Actions kuyruğunu incelemek yerine ilk bakılacak yer PR'ın `mergeable_state`'i.
+
 ## 2026-08-26 — Gece k6 yük testi: eşik yazmak kolay, eşiğin *ölçtüğünü* kanıtlamak zor (#1449)
 
 **k6'i indirip gerçekten koştur — statik okuma bu işte yetmiyor.** Sabit URL çalışıyor:
@@ -68,6 +137,29 @@ Doğrusu `exclude`'a **dokunmamak** (o zaman `k6/foo.ts` gerçekten `TS2307` ver
 tarafı için ayrı bir kapı koymak: `k6 archive <betik> -O /dev/null` tek istek atmadan
 bundle + init-context değerlendirmesi yapıyor, var olmayan bir metriği adlandıran eşiği bile
 yakalıyor.
+
+**"Ortam bozuk" demeden önce zaman çizelgesine bak — ortam silinmiş olabilir.** Topic
+ortamına (`crm-pr1458.ersah.in`) k6 koşturdum, her istek
+`x509: certificate is valid for s.ersah.in` ile patladı. İlk teşhisim "yeni subdomain'in
+sertifikası henüz kesilmemiş" oldu ve bunu PR'a yorum olarak yazdım — **yanlıştı**. Gerçek
+sıralama: 14:26'da curl ile altı uç noktayı da 200 aldım, 14:26:40'ta PR auto-merge ile
+birleşti, 14:27:29'da `topic-teardown.sh` Plesk subdomain'ini sildi, 14:27:32'de k6 koşum
+başladı. Yani sertifika sorunu değil, **ortam artık yoktu**; sunucu varsayılan sertifikasını
+dönüyordu. Ders: bir PR ortamına karşı ölçüm yapıyorsan önce PR'ın hâlâ açık olduğunu doğrula,
+ve beklenmedik bir altyapı hatasında iş akışı loglarının zaman damgalarını kendi
+komutlarınınkiyle yan yana koy. Prod (`crm.ersah.in`) k6 ile sorunsuz — kalıcı doğrulamayı
+orada yap.
+
+**Auto-merge açtıysan branch'in ayağının altından kayabilir.** Baseline ölçümünü commit'leyip
+push ettiğimde PR çoktan birleşmişti (dokuz dakika önce); commit branch'te kaldı, main'e
+girmedi. Birleşmiş bir PR yeni iş taşıyamaz — branch'i güncel main'den yeniden kurup ayrı bir
+PR açmak gerekiyor. Auto-merge açıkken "bir şey daha ekleyeyim" refleksi bu tuzağa götürüyor.
+
+**Eşikleri "muhakemeyle koydum" diye bırakma; PR'ın kendi önizleme ortamı canlıya çıkınca
+gerçek bir taban ölç.** 1 VU'luk 40 saniyelik bir koşu (prod'a ihmal edilebilir yük) altı uç
+noktanın da 200 döndüğünü, Cloudflare'in k6 user-agent'ına challenge basmadığını ve p95'lerin
+156–777ms bandında olduğunu gösterdi — yani koyduğum bütçelerin tabanın 2–6 katı olduğunu.
+Bu tablo dokümana girdi; "sayılar nereden geliyor" sorusunun cevabı artık dosyada duruyor.
 
 **Kendi işini düşman gözüyle inceleten paralel ajanlar burada gerçekten karşılığını verdi:**
 dört bağımsız merceğin (k6 betiği / e-posta / workflow / güvenlik+doküman) bulduğu 20 kusurun
@@ -4558,6 +4650,74 @@ ebeveynin **tüm gövdesini** geri veriyor; 20+ bağlamada bu ciddi bağlam yak�
 hepsini oluştur, `child id → parent number` eşlemesini diske yaz, bağlamayı en sona bırak.
 Bir de: yeni issue numaraları **atlamalı** veriliyor (1357 → 1359 → 1364), bu yüzden bir
 issue gövdesinde henüz oluşturulmamış bir numaraya atıf yapma — sonradan düzeltmek gerekti.
+
+## 2026-08-26 — Canlı mesajlaşma, SSE ve web-push (#1464)
+
+**"Okunmadı" iki yerde saklanıyorsa ikisi de kapatılmak zorundadır.** Bildirilen hata
+"mavi ikon okuduktan sonra da duruyor"du; sebebi tek bir olayın iki bağımsız satırda
+yaşaması: `Message.readAt`/`ConversationParticipant.lastReadAt` (kırmızı sayaçlar) ve
+`notify()`'ın yazdığı `Notification` (zildeki mavi ikon/nokta). Thread'i açmak yalnızca
+ilkini kapatıyordu. Aynı olguyu iki tabloda tutan her yerde bu hatayı ara — düzeltmeyi
+**okuma yolunun tek giriş noktasına** (`markThreadRead`) koymak, dört ayrı çağıranın
+(ekran, e-posta cevabı, e-postadaki "okundu" linki, gelen mail köprüsü) hepsini birden
+onarıyor. Bildirimi `link` üzerinden eşleştirmek de şart: insanların zilinde **zaten
+duran** satırlar eski link biçimini (`/messages/<relationId>`) taşıyor.
+
+**SSE'de "olay geldi" asla tek yol olmamalı.** İlk sürümde thread yalnızca `message`
+olayında yeniden yükleniyordu ve Playwright testi tutarlı biçimde kırıldı: dev sunucusunda
+`/api/realtime/stream` **ilk istekte derleniyor** (1-3 sn), mesaj o aralıkta yayınlanıyor,
+dinleyici henüz yok — olay kayboluyor ve ekran sonsuza kadar boş kalıyor. Çözüm ikili:
+(1) istemci `ready` (yeni/yeniden bağlanma) ve `unread` (heartbeat'in veritabanı
+kontrolü) sinyallerinde de yeniden yüklüyor — hızlı yol `message`, **tek** yol değil;
+(2) test artık `messages-frame`'i değil `/api/realtime/stream` **yanıtını** bekliyor
+(sunucu dinleyiciyi yanıtı kurarken kaydediyor, yani başlıkların gelmesi "dinliyorum"un
+kanıtı). Bir push/stream mimarisinde "olayı kaçırdım" senaryosunu baştan tasarla.
+
+**Sunucu ile istemciyi ayrı ayrı kanıtla.** Playwright kırılınca önce sunucu tarafını
+düz Node ile doğruladım: NextAuth'a curl-benzeri giriş (`/api/auth/csrf` →
+`/api/auth/callback/credentials`) + `fetch` ile SSE gövdesini okumak, `event: ready`,
+`event: message`, `event: unread` çerçevelerini saniyeler içinde gösterdi. Yani hata
+istemcideydi. Aynı ayrım tarayıcı tarafında da işe yaradı: `playwright-core`'u doğrudan
+`executablePath: '/opt/pw-browsers/chromium'` ile sürüp mesajın **211 ms**'de düştüğünü
+ölçtüm. Playwright spec'i debug aracı olarak kullanmak yerine iki küçük probe yaz.
+
+**Web-push'u gerçek bir sahte push servisiyle test etmek mümkün.** `web-push`
+**yalnızca `https`** modülünü kullanıyor (`web-push-lib.js`), yani düz HTTP bir mock
+`EPROTO ... packet length too long` veriyor. Doğru kurulum: self-signed sertifikayla
+yerel bir HTTPS sunucusu + uygulamayı `NODE_EXTRA_CA_CERTS=<ca>+<mock.crt>` ile
+başlatmak (TLS doğrulamasını kapatmaya gerek yok). Böylece gerçek yolun tamamı ölçülüyor:
+`aes128gcm` gövde, `TTL`, `vapid` Authorization başlığı, 410 → aboneliğin **silinmesi**,
+bağlantı hatası → aboneliğin **korunması**, `notificationPrefs.messages=false` → hiç
+gönderilmemesi. Abonelik anahtarı için `crypto.createECDH('prime256v1')` yeter.
+
+**`pkill` yine kendi kabuğunu öldürdü (exit 144) — ve bu kez bir testi de yanlış
+kırdı.** `pkill -f fake-push.mjs` hem shell'i hem servisi indirdi; sonraki probe "opt-in
+sonrası push gelmiyor" dedi, oysa dinleyen kimse yoktu. Süreçleri **PID ile** kapat
+(`ps -eo pid,args | grep ... | kill`), ikinci bir mock gerekiyorsa **ikinci bir port** aç.
+Bonus: `sed 's/8443/8444/'` satır başına yalnızca ilk eşleşmeyi değiştirir — `listen()`
+ile log satırı aynı satırdaysa port değişir, mesaj yanlış kalır.
+
+**Yerel `@smoke` çalıştırmadan önce spec'lerin beklediği admini tohumla.**
+`invite.spec.ts` `admin@example.com / ChangeMe123!` bekliyor; `.env`'deki
+`SEED_ADMIN_*` başka bir adresse spec "regresyon" gibi kırılıyor.
+`SEED_ADMIN_EMAIL=admin@example.com SEED_ADMIN_PASSWORD='ChangeMe123!' npx prisma db seed`
+ile geçiyor. Ayrıca `/opt/pw-browsers` tuzağı büyüdü: Playwright artık
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`
+arıyor, kurulu olan `chromium_headless_shell-1194/chrome-linux/headless_shell` —
+dizinleri sembolik bağlamanın yanında **binary adını da** bağlamak gerekiyor.
+
+**Service worker'ın fetch handler'ı yeni bir uzun ömürlü GET'i sessizce zehirler.**
+`public/sw.js` her aynı-origin GET'i network-first cache'liyor; yarım saat açık kalan bir
+SSE yanıtı için bu, gövdeyi Cache API'ye yazmak ve sonraki çevrimdışı isabette
+`EventSource`'a eski akışın **sonlu** bir kopyasını vermek demek — "bağlantı kapandı" diye
+okunup yeniden bağlanma döngüsüne dönüşür. Yeni bir streaming ucu eklerken SW'de yolu
+açıkça atla (`/api/realtime/`, `accept: text/event-stream`).
+
+**Poll'a düşen bir liste kendi kendini aşağı kaydırır.** `MessageThreadView`'daki
+`scrollIntoView` effect'i `[messages]`'e bağlıydı; `load()` artık her tick'te çalıştığı
+için dizi her seferinde yeni referans oluyor ve thread'i geriye doğru okuyan kişi 20
+saniyede bir dibe çekiliyordu. Bağımlılığı **son mesajın id'sine** çevir. Canlı yenileme
+eklediğin her listede aynı kontrolü yap.
 
 ## 2026-08-26 — E-posta bülteni modülü (#1469)
 
