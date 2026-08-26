@@ -21,9 +21,14 @@ const newestCanonical = readFileSync(path.join(repoRoot, 'src', 'lib', 'releaseN
   .match(/^\s+version: '(.+?)',$/m)?.[1];
 const topEntryVersion: string = newestNoted ? newestNoted.version : newestCanonical ?? pkg.version;
 
+// Escape EVERY regex metacharacter, not just the dots: `\.` alone leaves a
+// backslash in the input unescaped (CodeQL js/incomplete-sanitization), and the
+// version string comes from package.json + fragment filenames, not a constant.
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 test('landing footer shows the app version linking to release notes', async ({ page }) => {
   await page.goto('/');
-  const link = page.getByRole('link', { name: new RegExp(`^v${version.replace(/\./g, '\\.')}`) });
+  const link = page.getByRole('link', { name: new RegExp(`^v${escapeRegExp(version)}`) });
   await expect(link).toBeVisible();
   await link.click();
   await page.waitForURL('**/release-notes');
