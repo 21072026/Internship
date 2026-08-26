@@ -434,7 +434,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
                   />
                   {t.profileForm.makePublic}
                 </label>
-                <p className="text-xs text-gray-400 mt-1">{t.profileForm.makePublicHint}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.profileForm.makePublicHint}</p>
                 {publicProfile && (
                   <label className="mt-2 flex items-center gap-2 text-sm text-gray-600">
                     <input
