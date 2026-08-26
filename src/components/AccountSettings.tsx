@@ -15,6 +15,7 @@ import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/l
 import { durationSince } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
+import { EMAIL_GROUPS, emailGroupPrefKey, resolveEmailGroupPrefs, type EmailGroupId } from '@/lib/emailGroups';
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
 import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } from '@/lib/timezone';
 import { GoogleCalendarCard } from '@/components/GoogleCalendarCard';
@@ -57,6 +58,13 @@ export function AccountSettings() {
   const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null; createdAt: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
+  // Per-group e-mail preferences (#1300). These are NOT a second copy of
+  // `notifPrefs`: they are the resolved *answers* for the twelve e-mail groups,
+  // derived from the same JSON blob but flattened through the back-compat rules
+  // in resolveEmailGroupPrefs (a legacy `mentorship: false` shows up here as
+  // `mentorship_lifecycle: false` even though no `email:` key exists yet). The
+  // blob itself stays the single stored truth and is what we PUT back.
+  const [groupPrefs, setGroupPrefs] = useState<Record<EmailGroupId, boolean>>(() => resolveEmailGroupPrefs({}));
   const [savingPrefs, setSavingPrefs] = useState(false);
   // Browser (foreground) notifications — per-device, not stored server-side (#675).
   const [browserNotif, setBrowserNotif] = useState(false);
@@ -110,6 +118,12 @@ export function AccountSettings() {
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
         setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
+        // resolveEmailGroupPrefs deliberately ignores emailNotifications: the
+        // master switch is its own visible control, and folding it in here would
+        // render every group as "off" for someone who killed e-mail entirely —
+        // and then persist that as an explicit opt-out the first time they
+        // touched any switch, losing choices they never made.
+        setGroupPrefs(resolveEmailGroupPrefs({ notificationPrefs: user.notificationPrefs }));
         // The language selector must reflect the EFFECTIVE locale, not just the
         // DB preference: getLocale() lets the `locale` cookie win, so a cookie of
         // `tr` with a `preferredLanguage` of `en`/null renders a Turkish UI while
@@ -293,6 +307,34 @@ export function AccountSettings() {
     } catch {
       setNotifPrefs(notifPrefs);
       flash('Failed', true);
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  // Instant save, same optimistic-with-rollback shape as togglePref and with no
+  // success toast, so flipping ten switches in a row does not fire ten toasts.
+  //
+  // The PUT sends the WHOLE merged blob on purpose: PUT /api/profile replaces the
+  // notificationPrefs JSON column outright, it does not merge. Posting only the
+  // `email:` keys would silently wipe every legacy in-app opt-out the user has.
+  const toggleGroup = async (id: EmailGroupId, next: boolean) => {
+    const previousPrefs = notifPrefs;
+    const previousGroup = groupPrefs[id];
+    const updated = { ...notifPrefs, [emailGroupPrefKey(id)]: next };
+    setGroupPrefs((p) => ({ ...p, [id]: next }));
+    setNotifPrefs(updated);
+    setSavingPrefs(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationPrefs: updated }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setNotifPrefs(previousPrefs);
+      setGroupPrefs((p) => ({ ...p, [id]: previousGroup }));
+      flash(t.unsubscribe.saveFailed, true);
     } finally {
       setSavingPrefs(false);
     }
@@ -639,24 +681,97 @@ export function AccountSettings() {
           {t.account.emailNotifications}
         </label>
         <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
+        {/* The master switch does not silence everything, and saying so here is
+            the honest reading: the account_security group ignores every
+            preference, because a password reset the account holder cannot
+            receive is a lockout rather than a choice. */}
+        <p className="text-xs text-gray-400 mt-1">{t.emailGroups.account_security.desc}</p>
 
-        <div className="mt-3 space-y-1.5 pl-6">
+        {/* Per-group e-mail opt-out (#1300). Driven by EMAIL_GROUPS so a new
+            group cannot ship without a switch here, exactly like the legacy
+            list below is driven by NOTIFICATION_CATEGORIES. These switches are
+            about E-MAIL only; the legacy list underneath is about the in-app
+            notifications, and keeping the two visually separate is the whole
+            point of the sub-headings. */}
+        <section className="mt-4 pt-4 border-t border-gray-100" data-testid="email-groups-section">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.sectionTitle}</h4>
+          <p className="text-xs text-gray-400 mt-1">{t.unsubscribe.sectionHint}</p>
+          {/* The group switches stay interactive while the master switch is off —
+              they mean something independent of it, and a user turning e-mail
+              back on should find the choices they made in the meantime intact. */}
+          {!emailNotifications && (
+            <p className="text-xs text-gray-500 mt-2" data-testid="email-groups-master-off">
+              {t.unsubscribe.masterOffNote}
+            </p>
+          )}
+          <div className="mt-3 space-y-2 pl-6">
+            {EMAIL_GROUPS.filter((g) => !g.essential).map((g) => (
+              <div key={g.id}>
+                <label className="flex items-center gap-2 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    data-testid={`email-group-toggle-${g.id}`}
+                    checked={groupPrefs[g.id] !== false}
+                    disabled={savingPrefs}
+                    onChange={(e) => toggleGroup(g.id, e.target.checked)}
+                  />
+                  {t.emailGroups[g.id].name}
+                </label>
+                {/* The description is a SIBLING of the <label>, never a child.
+                    e2e/notif-prefs.spec.ts finds the legacy switches with
+                    locator('label', { hasText: 'Mentorship updates' }), and
+                    Playwright's hasText is a case-insensitive SUBSTRING match:
+                    any description swallowed into a label becomes a second
+                    match and the spec dies on strict mode. */}
+                <p className="text-xs text-gray-400 ml-6">{t.emailGroups[g.id].desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Essential groups get a row with no <input> at all rather than a
+              disabled checkbox: a switch you cannot move is an invitation to
+              try, and there is nothing here to toggle. */}
+          <div className="mt-4">
+            <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.essentialHeading}</h5>
+            <p className="text-xs text-gray-400 mt-1">{t.unsubscribe.essentialHint}</p>
+            <div className="mt-2 space-y-1.5 pl-6">
+              {EMAIL_GROUPS.filter((g) => g.essential).map((g) => (
+                <div
+                  key={g.id}
+                  className="flex flex-wrap items-center gap-2 text-sm text-gray-600"
+                  data-testid={`email-group-essential-${g.id}`}
+                >
+                  <span>{t.emailGroups[g.id].name}</span>
+                  <Badge variant="default">{t.unsubscribe.alwaysSent}</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
           {/* Driven by NOTIFICATION_CATEGORIES (#668) so a new category can't
               ship without an opt-out toggle here. Category switches gate BOTH
               e-mail and in-app notifications (#886), so they stay interactive
-              even when the e-mail master switch above is off. */}
+              even when the e-mail master switch above is off. The labels are
+              asserted verbatim by e2e/notif-prefs.spec.ts — do not reword them,
+              and do not render this list twice. */}
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.legacyHeading}</h4>
+          <p className="text-xs text-gray-400">{t.unsubscribe.legacyHint}</p>
           <p className="text-xs text-gray-400">{t.account.notifCategoriesHint}</p>
-          {NOTIFICATION_CATEGORIES.map((cat) => (
-            <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={notifPrefs[cat] !== false}
-                disabled={savingPrefs}
-                onChange={(e) => togglePref(cat, e.target.checked)}
-              />
-              {(t.account.notifCategories as Record<string, string>)[cat]}
-            </label>
-          ))}
+          <div className="pl-6 space-y-1.5">
+            {NOTIFICATION_CATEGORIES.map((cat) => (
+              <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={notifPrefs[cat] !== false}
+                  disabled={savingPrefs}
+                  onChange={(e) => togglePref(cat, e.target.checked)}
+                />
+                {(t.account.notifCategories as Record<string, string>)[cat]}
+              </label>
+            ))}
+          </div>
         </div>
 
         {browserNotifSupported && (

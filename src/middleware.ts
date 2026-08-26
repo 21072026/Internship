@@ -17,6 +17,13 @@ function isAllowlisted(pathname: string) {
     pathname === '/api/impersonate/stop' ||
     // Public meeting RSVP (the unguessable token is the credential).
     pathname === '/api/rsvp' ||
+    // Public unsubscribe from a mail footer (the signed token IS the credential).
+    // Needed for the browser-side POST: a signed-in-but-unverified user — exactly
+    // the population most likely to want out of our mail — would otherwise get
+    // "Please verify your email address to make changes." on their own opt-out.
+    // Gmail's anonymous one-click POST already passed (token === null falls
+    // through), but a person clicking the link in a logged-in tab did not.
+    pathname.startsWith('/api/unsubscribe') ||
     // Public mentee application form.
     pathname === '/api/apply' ||
     // Public profile view counter.
