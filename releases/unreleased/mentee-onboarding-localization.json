@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Mentee onboarding headings are fully localized** (#1420). The profile setup title and subtitle now use the active EN/TR/DE dictionary instead of hard-coded English.",
+  "notes": {
+    "en": ["The mentee onboarding introduction now follows your selected language."],
+    "tr": ["Mentee onboarding giriş metni artık seçtiğiniz dilde gösteriliyor."],
+    "de": ["Die Einführung des Mentee-Onboardings wird jetzt in der ausgewählten Sprache angezeigt."]
+  }
+}
