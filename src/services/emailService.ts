@@ -1563,15 +1563,20 @@ export async function sendProjectJoinRequestEmail({
   requesterName: string;
   message?: string | null;
   // Preferences are honoured here rather than at the call site so no caller can
-  // forget: this is a 'mentorship'-category notification (someone wants in).
+  // forget: this is an inbound request (someone wants in), group
+  // inbound_requests.
   recipient: { emailNotifications?: boolean | null; notificationPrefs?: unknown };
   orgId?: string | null;
   userId?: string | null;
 }) {
-  // Both conjuncts, never one: the legacy 'mentorship' check is what existing
-  // opt-outs rely on, the group check is the new switch. Neither replaces the
-  // other (see the taxonomy note in src/lib/emailGroups.ts).
-  if (!to || !emailAllowed(recipient, 'mentorship') || !emailGroupAllowedForCategory(recipient, 'project-join-request')) return;
+  // One conjunct, on this mail's own group: 'project-join-request' is
+  // inbound_requests. The legacy 'mentorship' check that used to stand alongside
+  // it maps to mentorship_lifecycle, a different group, so it silently dropped
+  // mail that both preference surfaces reported as enabled. 'mentorship' is now
+  // listed in inbound_requests.legacy, which is where an old opt-out belongs:
+  // honoured, displayed, and overridable by an explicit opt-in (see the note on
+  // `legacy` in src/lib/emailGroups.ts).
+  if (!to || !emailGroupAllowedForCategory(recipient, 'project-join-request')) return;
   const brand = await emailBrand(orgId);
   await sendEmail({
     to,
@@ -2541,7 +2546,11 @@ export async function checkCompanyNeedMatches() {
       const link = `/p/${cand.id}`;
       for (const u of company.users) {
         await notify(u.id, 'need_match.newCandidate', { candidateName: cand.fullName }, link);
-        if (emailAllowed(u, 'digest') && emailGroupAllowedForCategory(u, 'company-need-alert')) {
+        // 'company-need-alert' is `opportunities`, not `digests` — the stray
+        // legacy 'digest' conjunct that used to stand here was reading another
+        // group's key and dropping alerts the surfaces showed as ON. It now
+        // lives in opportunities.legacy.
+        if (emailGroupAllowedForCategory(u, 'company-need-alert')) {
           await sendEmail({
             category: 'company-need-alert',
             userId: u.id,
@@ -2689,7 +2698,11 @@ export async function sendWeeklyAnalyticsReport() {
 
   let sent = 0;
   for (const a of admins) {
-    if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'analytics-report')) continue;
+    // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
+    // that used to stand here belonged to `digests` and killed the report while
+    // the preference surfaces showed it as ON. 'digest' is in
+    // reports_analytics.legacy now, so the old opt-out still holds visibly.
+    if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
     await sendEmail({
       category: 'analytics-report',
       userId: a.id,
@@ -2761,10 +2774,11 @@ export async function sendUnreadMessageDigests() {
 
   let sent = 0;
   for (const { recipient, items } of byRecipient.values()) {
-    // The legacy key here is 'messages' (kept verbatim — that is what existing
-    // opt-outs are recorded under), while the mail's taxonomy home is `digests`.
-    // Both are checked; neither is weakened.
-    if (!emailAllowed(recipient, 'messages') || !emailGroupAllowedForCategory(recipient, 'unread-digest')) continue;
+    // The mail's taxonomy home is `digests`, and that is the only thing checked
+    // here. The legacy 'messages' key existing opt-outs are recorded under maps
+    // to direct_messages, so as a conjunct it suppressed a digest the surfaces
+    // showed as ON; it is listed in digests.legacy instead.
+    if (!emailGroupAllowedForCategory(recipient, 'unread-digest')) continue;
     const rows = items
       .map((it) => {
         const safe = it.preview.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));

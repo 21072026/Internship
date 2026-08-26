@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
-import { verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
+import { makeUnsubscribeToken, verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
 import { applyGroupPref } from '../applyUnsubscribe';
 
 // RFC 8058 one-click unsubscribe — the endpoint advertised in the
@@ -97,6 +97,48 @@ export async function POST(request: Request) {
  */
 export async function GET(request: Request) {
   const t = new URL(request.url).searchParams.get('t') || '';
-  if (!t) return text('This unsubscribe link is not valid.', 400);
-  return NextResponse.redirect(new URL(`/u/${encodeURIComponent(t)}`, request.url), 302);
+  const scope = verifyUnsubscribeToken(t);
+  if (!scope) return text('This unsubscribe link is not valid.', 400);
+  // The redirect target is re-minted from the VERIFIED scope rather than built
+  // from the query string. Two reasons, and the second is why it is worth the
+  // extra HMAC:
+  //   • Nothing the caller sent reaches the redirect. `encodeURIComponent` on the
+  //     raw token was already enough to keep it inside one path segment, but
+  //     "user input cannot reach this sink at all" is a property a reader (and a
+  //     static analyser — CodeQL flags the tainted form as an open redirect)
+  //     can confirm locally, and the weaker version needs a paragraph of
+  //     reasoning about what the encoder happens to escape.
+  //   • A token that does not verify now gets a straight 400 instead of a
+  //     pointless bounce to a page whose only job would be to say the same thing.
+  // makeUnsubscribeToken is a pure HMAC over (userId, group) with no time
+  // component, so this reproduces the caller's own token byte for byte — the
+  // person still lands on exactly the URL the mail footer advertised.
+  const canonical = makeUnsubscribeToken(scope.userId, scope.group);
+  return NextResponse.redirect(new URL(`/u/${encodeURIComponent(canonical)}`, redirectBase(request)), 302);
+}
+
+/**
+ * The base for that redirect comes from the ENVIRONMENT, not from `request.url`.
+ *
+ * Behind the Plesk nginx that terminates TLS, the request this handler sees is
+ * plain http:// on an internal port, so a target built from it can hand the
+ * browser a cleartext hop carrying a never-expiring unsubscribe token in the
+ * path. Every other redirect under src/app/api/** resolves its base the same
+ * way, and this feature's own link builders (src/lib/unsubscribeToken.ts) use
+ * exactly this variable — so the redirect now lands on the same host the mail
+ * footer already pointed at. `request.url` stays only as the last fallback, for
+ * a deployment that never set the variable.
+ */
+function redirectBase(request: Request): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL;
+  if (configured) {
+    try {
+      // Parsed rather than concatenated: a stray trailing path or a typo in the
+      // variable must not turn a redirect into a 500 on the opt-out path.
+      return new URL(configured).toString();
+    } catch {
+      // fall through to the request's own origin
+    }
+  }
+  return request.url;
 }

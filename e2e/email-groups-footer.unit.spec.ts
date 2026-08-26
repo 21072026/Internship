@@ -13,7 +13,16 @@
 // the same reason given in e2e/email-hardening.spec.ts.
 import { test, expect } from '@playwright/test';
 import { __testable } from '@/services/emailService';
-import { EMAIL_GROUPS, groupForCategory, isBulkGroup, type EmailGroupId } from '@/lib/emailGroups';
+import {
+  EMAIL_GROUPS,
+  emailGroupAllowedForCategory,
+  emailGroupDef,
+  groupForCategory,
+  isBulkGroup,
+  resolveEmailGroupPrefs,
+  type EmailGroupId,
+} from '@/lib/emailGroups';
+import { NOTIFICATION_CATEGORIES, emailAllowed, type NotificationCategory } from '@/lib/notificationPrefs';
 import { verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -296,6 +305,104 @@ test.describe('the taxonomy covers what the app actually sends', () => {
     // If this drops to zero the regex stopped matching and the test is vacuous.
     expect(seen).toBeGreaterThan(20);
     expect(offenders).toEqual([]);
+  });
+
+  // The bug this test exists for (#1456): ten send sites `&&`-ed a legacy
+  // `emailAllowed(user, '<key>')` check whose key mapped to a DIFFERENT group
+  // than the mail behind it — `meetingReminders` (group meeting_reminders) in
+  // front of a meeting *invitation*, `digest` in front of the analytics report,
+  // `messages` in front of an enquiry from a public profile. Both preference
+  // surfaces render resolveEmailGroupPrefs(), which only knows the group→legacy
+  // mapping, so they showed "Meeting invites: ON" while every invite was
+  // dropped. Nothing failed: the mail simply never arrived.
+  //
+  // So the property, over the whole taxonomy rather than site by site: for a
+  // user whose ONLY recorded preference is one legacy key switched off, what a
+  // send site actually does must equal what the surfaces say it does. Asserted
+  // against the real guards in the real source, because the mismatch cannot
+  // exist anywhere else — emailGroupAllowedForCategory() and
+  // resolveEmailGroupPrefs() both go through emailGroupAllowed(), so a test
+  // written purely against the library would agree with itself and prove
+  // nothing.
+  test('every legacy key a send-site guard depends on is what the surfaces show', () => {
+    // Comments are stripped first: several of the fixed call sites now *quote*
+    // the old broken guard in prose to explain why it went, and a scan that
+    // reads prose would report the very bug the prose is describing.
+    const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+
+    // sendXEmail() → the category it sends, for the guards that name no category
+    // themselves (the guard sits at the call site, the `category:` literal lives
+    // in the sender).
+    const senderCategory = new Map<string, string>();
+    const service = strip(fs.readFileSync(path.join(SRC, 'services', 'emailService.ts'), 'utf8'));
+    for (const [, name, body] of service.matchAll(/export async function (send\w+)\(([\s\S]*?)(?=\nexport |$)/g)) {
+      const cat = body.match(/\bcategory:\s*'([a-z0-9-]+)'/);
+      if (cat) senderCategory.set(name, cat[1]);
+    }
+    expect(senderCategory.size).toBeGreaterThan(10);
+
+    const GUARD = /\bemailAllowed\(\s*([\w$.?]+)\s*,\s*'(\w+)'\s*\)/g;
+    const pairs: { where: string; key: NotificationCategory; category: string }[] = [];
+    const unpaired: string[] = [];
+
+    for (const file of walk(SRC)) {
+      const src = strip(fs.readFileSync(file, 'utf8'));
+      const rel = path.relative(process.cwd(), file);
+      const guards = [...src.matchAll(GUARD)];
+      for (const [i, g] of guards.entries()) {
+        const from = g.index! + g[0].length;
+        // The window ends at the next guard, so a site can never borrow the
+        // category of the one below it (the mentor/mentee pairs sit two lines
+        // apart), and at 1500 chars otherwise.
+        const to = Math.min(guards[i + 1]?.index ?? src.length, from + 1500);
+        const after = src.slice(from, to);
+        const candidates = [
+          after.match(/emailGroupAllowedForCategory\([^)]*'([a-z0-9-]+)'\s*\)/),
+          after.match(/\bcategory:\s*'([a-z0-9-]+)'/),
+          after.match(/\b(send\w*Email)\(/),
+        ].filter((m): m is RegExpMatchArray => !!m).sort((a, b) => a.index! - b.index!);
+        const first = candidates[0];
+        const category = !first ? null : senderCategory.get(first[1]) ?? first[1];
+        const where = `${rel}: emailAllowed(…, '${g[2]}')`;
+        // An unpaired guard is not a pass — it is a site this test cannot see,
+        // which is exactly how the original ten hid.
+        if (!category || !groupForCategory(category)) unpaired.push(`${where} → ${category ?? 'no category found'}`);
+        else pairs.push({ where, key: g[2] as NotificationCategory, category });
+      }
+    }
+
+    expect(unpaired).toEqual([]);
+    // Teeth: if the regexes stop matching, everything below passes vacuously.
+    expect(pairs.length).toBeGreaterThan(12);
+
+    const lies: string[] = [];
+    for (const { where, key, category } of pairs) {
+      // A key the regex captured that is not a real category would make
+      // emailAllowed() default to ON and the whole guard a no-op.
+      expect(NOTIFICATION_CATEGORIES as readonly string[], where).toContain(key);
+
+      const user = { notificationPrefs: { [key]: false } };
+      const group = groupForCategory(category)!;
+      // What the site does, spelled out the way the site spells it…
+      const sends = emailAllowed(user, key) && emailGroupAllowedForCategory(user, category);
+      // …against what /account and /u/<token> both render for that group.
+      const shown = resolveEmailGroupPrefs(user)[group];
+      if (shown !== sends) {
+        lies.push(
+          `${where} guards ${category} (${group}): surfaces show ${shown ? 'ON' : 'OFF'}, ` +
+            `the site ${sends ? 'sends' : 'drops'} it — add '${key}' to ${group}.legacy or drop the conjunct`
+        );
+      }
+    }
+    expect(lies).toEqual([]);
+
+    // And the mapping is only honest if the key really is in that group's
+    // `legacy` array — the same fact from the other side, so a future
+    // resolveEmailGroupPrefs() that stopped consulting `legacy` at all (making
+    // both sides agree on ON while the guard still drops the mail) cannot pass.
+    for (const { where, key, category } of pairs) {
+      expect(emailGroupDef(groupForCategory(category)!).legacy as readonly string[], where).toContain(key);
+    }
   });
 
   test('every group is reachable from at least one category the app sends', () => {

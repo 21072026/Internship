@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestEmail } from '@/services/emailService';
 import { parseUserDateTime } from '@/lib/timezone';
 
@@ -75,13 +75,14 @@ export async function POST(request: Request) {
       where: { id: recipient },
       select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, timezone: true },
     });
-    // Deliberately NOT extended with an `emailGroupAllowedForCategory` conjunct.
-    // The legacy key this check reads is `meetingReminders`, but the mail is a
-    // meeting *request* (group meeting_invites), and adding the reminders
-    // conjunct would let an opt-out from automated nagging silently swallow a
-    // named person asking you to attend something. The group that does apply is
-    // enforced centrally in sendEmail() from the category.
-    if (rcpt?.email && emailAllowed(rcpt, 'meetingReminders')) {
+    // Gated on this mail's OWN group: 'meeting-request' is meeting_invites.
+    // The check used to read `emailAllowed(rcpt, 'meetingReminders')`, a key that
+    // maps to meeting_reminders — a different group — so an old opt-out from
+    // automated nagging silently swallowed a named person asking you to attend
+    // something, while both preference surfaces showed "Meeting invites: ON".
+    // 'meetingReminders' is now in meeting_invites.legacy, so that opt-out still
+    // holds, is visible, and can be overridden by an explicit opt-in.
+    if (rcpt?.email && emailGroupAllowedForCategory(rcpt, 'meeting-request')) {
       try {
         await sendMeetingRequestEmail({
           to: rcpt.email,

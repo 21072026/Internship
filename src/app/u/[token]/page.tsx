@@ -2,8 +2,14 @@
 
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Lock, MailCheck, MailX, Undo2, XCircle } from 'lucide-react';
+import { Clock, Lock, MailCheck, MailX, Undo2, XCircle } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { isLocale, type Locale } from '@/i18n/config';
+// The whole dictionary set, not just the ambient one: this page is read signed
+// out, so the locale it must render in only arrives with the API answer (see
+// `recipientLocale` below). Same import TargetedEmailComposer already makes for
+// the same reason — it has to render copy in somebody else's language.
+import { getDictionary, type ClientDictionary } from '@/i18n/dictionaries';
 import type { EmailGroupId } from '@/lib/emailGroups';
 
 // Landing page for the unsubscribe link in every non-essential e-mail footer
@@ -22,6 +28,13 @@ import type { EmailGroupId } from '@/lib/emailGroups';
 // clicks. Gmail's own RFC 8058 one-click uses the separate POST-only endpoint
 // at /api/unsubscribe/one-click, which is why THIS page can be a plain GET.
 //
+// The page renders in the RECIPIENT's language, which the API tells it: the
+// footer link is written in the language we mail this person in, but the page it
+// opens is visited signed out, so there is no session and no locale cookie to
+// read on (say) a phone that has never used the app — a Turkish reader would get
+// a Turkish link and an English page. The locale is not in the URL on purpose:
+// the link is long enough already, and the server knows the answer anyway.
+//
 // The signed token in the path IS the credential, and it carries a scope: a
 // single group (auto-applied on mount) or 'all' (the preference-centre link
 // from the footer's second anchor, which must NOT unsubscribe anything on its
@@ -31,10 +44,15 @@ import type { EmailGroupId } from '@/lib/emailGroups';
 
 type GroupState = { id: EmailGroupId; enabled: boolean; essential: boolean };
 
+// 'rateLimited' is a phase of its own and not one more flavour of 'invalid'.
+// The limiter is keyed by client IP, and behind a corporate NAT an entire office
+// shares one: during an announcement blast the Nth person to click would be told
+// their unsubscribe link is broken, while no preference was written at all —
+// which is the exact moment an opt-out becomes a spam complaint.
 type Phase =
   | { state: 'pending' }
   | { state: 'ready'; group: string; applied: boolean }
-  | { state: 'error'; message: string };
+  | { state: 'error'; message: 'gone' | 'invalid' | 'rateLimited' };
 
 type UnsubResponse = {
   ok?: boolean;
@@ -44,11 +62,18 @@ type UnsubResponse = {
   groups?: GroupState[];
   error?: string;
   gone?: boolean;
+  locale?: string | null;
 };
 
 export default function UnsubscribePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
-  const t = useT();
+  const ambient = useT();
+
+  // null until the API answers, and null forever if that user has no stored
+  // preference — in which case the ambient (cookie or default) locale, which is
+  // the best guess available, keeps applying.
+  const [recipientLocale, setRecipientLocale] = useState<Locale | null>(null);
+  const t: ClientDictionary = recipientLocale ? getDictionary(recipientLocale) : ambient;
 
   const [phase, setPhase] = useState<Phase>({ state: 'pending' });
   const [groups, setGroups] = useState<GroupState[]>([]);
@@ -78,8 +103,15 @@ export default function UnsubscribePage({ params }: { params: Promise<{ token: s
     })
       .then(async (res) => {
         const data: UnsubResponse = await res.json().catch(() => ({}));
+        // The locale is worth having even on a failure: the dead end should be
+        // readable too. It only travels with a 200 today, so this is a no-op
+        // there — but it costs nothing and cannot mislead.
+        if (isLocale(data.locale ?? undefined)) setRecipientLocale(data.locale as Locale);
         if (!res.ok) {
-          setPhase({ state: 'error', message: data.gone ? 'gone' : 'invalid' });
+          setPhase({
+            state: 'error',
+            message: res.status === 429 ? 'rateLimited' : data.gone ? 'gone' : 'invalid',
+          });
           return;
         }
         setGroups(Array.isArray(data.groups) ? data.groups : []);
@@ -92,6 +124,16 @@ export default function UnsubscribePage({ params }: { params: Promise<{ token: s
       })
       .catch(() => setPhase({ state: 'error', message: 'invalid' }));
   }, [token]);
+
+  // The root layout stamped <html lang> from the ambient locale, which for a
+  // signed-out visitor is the default one. Once the API has told us what
+  // language this page is actually in, say so — a screen reader picks its voice
+  // from that attribute, and Turkish read out by an English voice is worse than
+  // useless. Depends on the locale STRING, never on `t`: useT() returns a fresh
+  // object every render, so a [t] dependency is an infinite render loop.
+  useEffect(() => {
+    if (recipientLocale) document.documentElement.lang = recipientLocale;
+  }, [recipientLocale]);
 
   const labels = t.emailGroups as Record<string, { name: string; desc: string } | undefined>;
   const groupName = (id: string) => labels[id]?.name ?? id;
@@ -182,16 +224,33 @@ export default function UnsubscribePage({ params }: { params: Promise<{ token: s
 
         {phase.state === 'error' && (
           <div
-            data-testid="unsubscribe-invalid"
+            data-testid={
+              phase.message === 'rateLimited' ? 'unsubscribe-rate-limited' : 'unsubscribe-invalid'
+            }
             className="rounded-2xl bg-white dark:bg-gray-900 p-6 sm:p-8 text-center shadow-sm"
           >
-            <div data-testid="unsub-error">
-              <XCircle className="mx-auto mb-3 h-10 w-10 text-red-600" aria-hidden />
+            {/* A 429 is a "come back in a moment", not a dead link: the clock in
+                amber rather than the red cross, and its own testid so a test can
+                tell the two apart. Nothing was written, and the copy says so.
+                Tell somebody their link is invalid while their opt-out silently
+                did nothing and they reach for the spam button instead. */}
+            <div data-testid={phase.message === 'rateLimited' ? 'unsub-rate-limited' : 'unsub-error'}>
+              {phase.message === 'rateLimited' ? (
+                <Clock className="mx-auto mb-3 h-10 w-10 text-amber-600" aria-hidden />
+              ) : (
+                <XCircle className="mx-auto mb-3 h-10 w-10 text-red-600" aria-hidden />
+              )}
               <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {t.unsubscribe.failedTitle}
+                {phase.message === 'rateLimited'
+                  ? t.unsubscribe.rateLimitedTitle
+                  : t.unsubscribe.failedTitle}
               </h1>
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {phase.message === 'gone' ? t.unsubscribe.gone : t.unsubscribe.invalid}
+                {phase.message === 'rateLimited'
+                  ? t.unsubscribe.rateLimited
+                  : phase.message === 'gone'
+                    ? t.unsubscribe.gone
+                    : t.unsubscribe.invalid}
               </p>
             </div>
             <Link

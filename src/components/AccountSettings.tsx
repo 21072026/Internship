@@ -75,6 +75,13 @@ export function AccountSettings() {
   // they are showing a default rather than an answer. Both lists stay disabled
   // until the stored truth has arrived.
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  // …and if that request never answers usefully, SAY SO. Both lists below are
+  // gated on `prefsLoaded`, so a 500 (or a `{}` body) used to leave twenty-three
+  // switches dead for the life of the page with nothing on screen explaining
+  // why — and the legacy list, which used to stay interactive, silently joined
+  // them. Disabled-and-honest still beats enabled-and-destructive; this is the
+  // "honest" half.
+  const [prefsLoadFailed, setPrefsLoadFailed] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
   // Browser (foreground) notifications — per-device, not stored server-side (#675).
   const [browserNotif, setBrowserNotif] = useState(false);
@@ -124,7 +131,10 @@ export function AccountSettings() {
     fetch('/api/profile')
       .then((r) => r.json())
       .then(({ user }) => {
-        if (!user) return;
+        if (!user) {
+          setPrefsLoadFailed(true);
+          return;
+        }
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
         setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
@@ -162,7 +172,8 @@ export function AccountSettings() {
         setActiveMenteeCount(typeof user.activeMenteeCount === 'number' ? user.activeMenteeCount : 0);
         setAvailability(user.availability ?? null);
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt ?? null });
-      });
+      })
+      .catch(() => setPrefsLoadFailed(true));
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
   }, []);
 
@@ -308,8 +319,16 @@ export function AccountSettings() {
   };
 
   const togglePref = async (cat: string, next: boolean) => {
+    const previousPrefs = notifPrefs;
+    const previousGroups = groupPrefs;
     const updated = { ...notifPrefs, [cat]: next };
     setNotifPrefs(updated);
+    // Re-resolve the twelve group answers from the new blob, exactly as the load
+    // did. A legacy category is still the back-compat default for the e-mail
+    // group it maps to, so unticking "Mentorship updates" here also turns the
+    // Mentorship group above off — and a group switch that keeps showing the old
+    // answer until the next reload is the page contradicting itself.
+    setGroupPrefs(resolveEmailGroupPrefs({ notificationPrefs: updated }));
     setSavingPrefs(true);
     try {
       const res = await fetch('/api/profile', {
@@ -318,7 +337,8 @@ export function AccountSettings() {
       });
       if (!res.ok) throw new Error();
     } catch {
-      setNotifPrefs(notifPrefs);
+      setNotifPrefs(previousPrefs);
+      setGroupPrefs(previousGroups);
       flash('Failed', true);
     } finally {
       setSavingPrefs(false);
@@ -717,6 +737,11 @@ export function AccountSettings() {
               {t.unsubscribe.masterOffNote}
             </p>
           )}
+          {prefsLoadFailed && (
+            <p className="text-xs text-red-600 mt-2" role="status" data-testid="prefs-load-failed-groups">
+              {t.account.prefsLoadFailed}
+            </p>
+          )}
           <div className="mt-3 space-y-2 pl-6">
             {EMAIL_GROUPS.filter((g) => !g.essential).map((g) => (
               <div key={g.id}>
@@ -770,8 +795,19 @@ export function AccountSettings() {
               asserted verbatim by e2e/notif-prefs.spec.ts — do not reword them,
               and do not render this list twice. */}
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.legacyHeading}</h4>
+          {/* ONE sentence about what these eleven switches do, because they do
+              two things: they gate the in-app notifications, and they are still
+              the back-compat default for the e-mail group each maps to — which
+              is what the group switch above overrides. This used to be two
+              paragraphs that contradicted each other ("in-app only", then "e-mail
+              and in-app alike"), and the reassuring one was the false one: a user
+              who unticked a category expecting their inbox untouched lost mail. */}
           <p className="text-xs text-gray-400">{t.unsubscribe.legacyHint}</p>
-          <p className="text-xs text-gray-400">{t.account.notifCategoriesHint}</p>
+          {prefsLoadFailed && (
+            <p className="text-xs text-red-600" role="status" data-testid="prefs-load-failed-legacy">
+              {t.account.prefsLoadFailed}
+            </p>
+          )}
           {/* `prefsLoaded` guards this list for the same reason it guards the
               group switches above: it writes the identical blob, and a click
               before GET /api/profile answers would PUT one key over the top of

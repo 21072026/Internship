@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { makeUnsubscribeToken } from '../src/lib/unsubscribeToken';
+import { getDictionary } from '../src/i18n/dictionaries';
 
 // #1290 — the maintainer's headline requirement: clicking the unsubscribe link
 // in a mail footer must unsubscribe you, immediately, with no sign-in and no
@@ -123,4 +124,37 @@ test('a token that does not verify gets a plain dead-end, not a stack trace', as
   await expect(page.getByTestId('unsub-open-settings')).toBeVisible();
   // No preference centre for a token that proves nothing about who this is.
   await expect(page.getByTestId('unsub-center')).toHaveCount(0);
+});
+
+// The page is read SIGNED OUT, so there is no session and no locale cookie to
+// infer a language from: it renders in whatever the API says the recipient's
+// language is. Before this it always rendered in the default locale, which meant
+// a Turkish reader got a Turkish footer link and an English page.
+test('the page renders in the recipient’s own language, not the default one', async ({ page }) => {
+  const email = uniqueEmail('unsub-locale');
+  const user = await seedUser(email, 'UnsubPass123', 'MENTEE', 'Unsub Locale');
+  try {
+    // The same thing the mail footer reads to pick the language it writes in.
+    await prisma.user.update({ where: { id: user.id }, data: { preferredLanguage: 'tr' } });
+
+    const token = makeUnsubscribeToken(user.id, 'digests');
+    await page.goto(`/u/${encodeURIComponent(token)}`);
+    await expect(page.getByTestId('unsub-center')).toBeVisible();
+
+    // Asserted against the dictionary rather than a pasted string, so rewording
+    // the copy cannot make this spec lie about which language is on screen.
+    const tr = getDictionary('tr');
+    const en = getDictionary('en');
+    await expect(page.getByText(tr.unsubscribe.centerTitle, { exact: true })).toBeVisible();
+    await expect(page.getByText(en.unsubscribe.centerTitle, { exact: true })).toHaveCount(0);
+    // The group names come from the same dictionary — the whole page moved, not
+    // one heading.
+    await expect(page.getByText(tr.emailGroups.digests.name, { exact: true })).toBeVisible();
+
+    // …and the document says so too, so a screen reader does not read Turkish
+    // out in an English voice.
+    await expect.poll(() => page.locator('html').getAttribute('lang')).toBe('tr');
+  } finally {
+    await cleanupByEmail(email);
+  }
 });

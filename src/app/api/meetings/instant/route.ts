@@ -8,7 +8,6 @@ import { sendMeetingInviteEmail } from '@/services/emailService';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
-import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { notify } from '@/lib/notify';
 import { generateMeetingLink, resolveMeetingContext, type Invitee } from '@/lib/meetingContext';
@@ -139,9 +138,13 @@ async function inviteAll(
         organizer ? { organizer, title } : { title },
         meetLink
       );
-      // The legacy check stays as-is; the group conjunct is what an unsubscribe
-      // from *meeting invites* now acts on. Both must pass.
-      if (!emailAllowed(inv, 'meetingReminders')) return;
+      // One check, on this mail's own group. The `emailAllowed(inv,
+      // 'meetingReminders')` conjunct that used to stand in front of it reads a
+      // key mapping to meeting_reminders, so an opt-out from the automated
+      // reminder blast killed the invitation too — invisibly, because the
+      // preference surfaces showed meeting_invites as ON. That key is now in
+      // meeting_invites.legacy, so the opt-out survives where it is displayed
+      // and an explicit opt-in can override it.
       if (!emailGroupAllowedForCategory(inv, 'meeting-invite')) return;
       // For a relation invite, use that relation's own token; otherwise any row
       // works (a project/chat meeting has exactly one).

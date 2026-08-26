@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { logActivity } from '@/lib/activity';
 import { isEssentialGroup } from '@/lib/emailGroups';
+import { prisma } from '@/lib/prisma';
+import { isLocale, type Locale } from '@/i18n/config';
 import { verifyUnsubscribeToken } from '@/lib/unsubscribeToken';
 import { applyGroupPref, readGroupState } from './applyUnsubscribe';
 
@@ -36,7 +38,44 @@ const schema = z.object({
   action: z.enum(['unsubscribe', 'resubscribe']).optional(),
 });
 
+/**
+ * The recipient's own UI language, for the /u page to render itself in.
+ *
+ * The footer link that leads here is written in the language we mail this person
+ * in, but the page it opens is visited SIGNED OUT: there is no session and no
+ * `locale` cookie on a phone that has never used the app, so the page would
+ * otherwise fall back to English under a Turkish link. The server already knows
+ * the answer, so it says it — rather than putting the locale in the URL, which
+ * would make an already long link longer and one more thing to get wrong.
+ *
+ * A second, tiny primary-key read on purpose: `applyUnsubscribe`'s narrow
+ * USER_SELECT is the list of columns an unsubscribe token is allowed to see, and
+ * widening it is not this route's call to make. Nothing here fails if the read
+ * does — the page falls back to the ambient locale.
+ */
+async function preferredLocale(userId: string): Promise<Locale | null> {
+  try {
+    const u = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { preferredLanguage: true },
+    });
+    const lang = u?.preferredLanguage ?? undefined;
+    return isLocale(lang) ? lang : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
+  // Rate limited, and deliberately kept that way — unlike /one-click, which must
+  // never answer 429 because a mail provider records that as a broken
+  // unsubscribe. This endpoint is reached from a browser, and every accepted
+  // request with an action writes an ActivityLog row, so an unbounded loop here
+  // is a write amplifier. The page has its own sentence for a 429 ("try again in
+  // a moment", honouring the Retry-After we send) instead of reporting it as an
+  // invalid link: behind one corporate NAT the whole office shares this bucket,
+  // and telling the Nth person their opt-out link is broken is how an opt-out
+  // turns into a spam complaint.
   const limited = enforceRateLimit(request, 'unsubscribe', { limit: 60, windowMs: 10 * 60 * 1000 });
   if (limited) return limited;
 
@@ -92,7 +131,8 @@ export async function POST(request: Request) {
   }
 
   // Nothing here that the signed token did not already prove: the address it was
-  // sent to, the name we greet that address by, and that user's own switches.
+  // sent to, the name we greet that address by, that user's own switches, and
+  // the language we already write to them in.
   return NextResponse.json({
     ok: true,
     group: scope.group,
@@ -102,5 +142,6 @@ export async function POST(request: Request) {
     email: state.email,
     emailNotifications: state.emailNotifications,
     groups: state.groups,
+    locale: await preferredLocale(scope.userId),
   });
 }

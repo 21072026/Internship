@@ -23,6 +23,7 @@ import {
   resolveEmailGroupPrefs,
   type EmailGroupId,
 } from '@/lib/emailGroups';
+import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 import {
   makeUnsubscribeToken,
   verifyUnsubscribeToken,
@@ -52,6 +53,30 @@ test.describe('the e-mail group taxonomy', () => {
         expect(groupForCategory(category), category).toBe(group.id);
       }
     }
+  });
+
+  test('every legacy key is a real in-app category, and may cover several groups', () => {
+    // Uniqueness is asserted for CATEGORIES (above) and deliberately NOT for
+    // legacy keys: the eleven old in-app keys were coarse catch-alls, and one of
+    // them genuinely suppressed several of the new groups — 'digest' was the only
+    // switch both a KPI report and a company-need alert ever had. A uniqueness
+    // assertion here would encode exactly the bug #1456 fixed, where a key
+    // guarding one group's send sites was mapped to another group's switch.
+    // What must hold instead: every listed key is a real category (a typo would
+    // silently make rule 5 a no-op, since prefs[typo] is never `false`).
+    const used = new Set<string>();
+    for (const group of EMAIL_GROUPS) {
+      for (const key of group.legacy) {
+        expect(NOTIFICATION_CATEGORIES as readonly string[], `${group.id}.legacy`).toContain(key);
+        used.add(key);
+      }
+    }
+    // Teeth against an empty or accidentally-cleared taxonomy.
+    expect(used.size).toBeGreaterThan(8);
+    // At least one key must span groups, or the mapping has drifted back to a
+    // one-key-one-group shape the old call sites already proved wrong.
+    const spanning = [...used].filter((k) => EMAIL_GROUPS.filter((g) => (g.legacy as readonly string[]).includes(k)).length > 1);
+    expect(spanning.sort()).toEqual(['digest', 'meetingReminders', 'mentorship', 'messages']);
   });
 
   test('exactly one group is essential, and the bulk set matches it', () => {
@@ -128,11 +153,30 @@ test.describe('emailGroupAllowed — the six resolution rules', () => {
     expect(emailGroupAllowed({ notificationPrefs: { documents: false } }, 'task_reminders')).toBe(false);
     expect(emailGroupAllowed({ notificationPrefs: { mentorship: false } }, 'mentorship_lifecycle')).toBe(false);
     expect(emailGroupAllowed({ notificationPrefs: { stageUpdates: false } }, 'pipeline_updates')).toBe(false);
-    // meetingReminders maps to meeting_reminders and NOT to meeting_invites:
-    // the bulk reminder blast goes quiet, the invitation that concerns you
-    // personally still arrives.
+    // A coarse legacy key can suppress SEVERAL groups, and 'meetingReminders' is
+    // the one that does it most visibly. It used to be asserted here as
+    // suppressing meeting_reminders and NOT meeting_invites — which read well but
+    // encoded the bug in #1456: the three invite send sites all guarded on this
+    // key, so the invitation was dropped anyway while the preference surfaces
+    // showed meeting_invites as ON. The key now covers both groups, so the
+    // suppression is the truth the surfaces tell.
     expect(emailGroupAllowed({ notificationPrefs: { meetingReminders: false } }, 'meeting_reminders')).toBe(false);
-    expect(emailGroupAllowed({ notificationPrefs: { meetingReminders: false } }, 'meeting_invites')).toBe(true);
+    expect(emailGroupAllowed({ notificationPrefs: { meetingReminders: false } }, 'meeting_invites')).toBe(false);
+    // …and it stops there: a key is listed on the groups whose mail it really
+    // guarded, not on everything.
+    expect(emailGroupAllowed({ notificationPrefs: { meetingReminders: false } }, 'direct_messages')).toBe(true);
+    // The same shape for the other coarse keys the audit turned up.
+    expect(emailGroupAllowed({ notificationPrefs: { mentorship: false } }, 'pipeline_updates')).toBe(false);
+    expect(emailGroupAllowed({ notificationPrefs: { mentorship: false } }, 'inbound_requests')).toBe(false);
+    expect(emailGroupAllowed({ notificationPrefs: { messages: false } }, 'inbound_requests')).toBe(false);
+    expect(emailGroupAllowed({ notificationPrefs: { messages: false } }, 'digests')).toBe(false);
+    expect(emailGroupAllowed({ notificationPrefs: { digest: false } }, 'opportunities')).toBe(false);
+    expect(emailGroupAllowed({ notificationPrefs: { digest: false } }, 'reports_analytics')).toBe(false);
+    // Rule 4 still wins over every one of them — that is what makes listing a
+    // key here a preference rather than a wall.
+    expect(
+      emailGroupAllowed({ notificationPrefs: { meetingReminders: false, 'email:meeting_invites': true } }, 'meeting_invites')
+    ).toBe(true);
   });
 
   test('RULE 6: anything unrecognisable in the JSON column defaults to ON', () => {
@@ -159,7 +203,12 @@ test.describe('resolveEmailGroupPrefs — the UI-facing resolver', () => {
     expect(resolved.account_security).toBe(true);
     expect(resolved.digests).toBe(false);
     expect(resolved.mentorship_lifecycle).toBe(false);
-    // Every other non-essential group is still ON, not collapsed to off.
+    // 'mentorship' is a coarse legacy key: it also guarded the offer mails and
+    // the project-join request, so it reads OFF for those groups too. That is the
+    // point of #1456 — the surfaces show every group the key really silences.
+    expect(resolved.pipeline_updates).toBe(false);
+    expect(resolved.inbound_requests).toBe(false);
+    // Groups it never guarded are still ON, not collapsed to off.
     expect(resolved.task_reminders).toBe(true);
     expect(resolved.direct_messages).toBe(true);
   });

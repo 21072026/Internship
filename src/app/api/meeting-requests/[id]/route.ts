@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { notify } from '@/lib/notify';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestDecisionEmail } from '@/services/emailService';
 import { generateMeetingLink } from '@/lib/meetingRoom';
 
@@ -22,12 +22,15 @@ async function emailDecision(
     where: { id: requestedById },
     select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, timezone: true },
   });
-  // Same reasoning as POST /api/meeting-requests: the legacy key here is
-  // `meetingReminders`, the mail is the answer to a request the person made
-  // (group meeting_invites), so no group conjunct is added on top of it — an
-  // opt-out from automated reminders must not swallow the reply someone is
-  // waiting for. sendEmail() enforces the right group from the category.
-  if (!user?.email || !emailAllowed(user, 'meetingReminders')) return;
+  // The mail is the answer to a request this person filed, so the switch that
+  // may silence it is the one for its own group: 'meeting-request-decision' is
+  // meeting_invites. What stood here was `emailAllowed(user, 'meetingReminders')`,
+  // a key belonging to a *different* group (meeting_reminders) — so an old
+  // opt-out from automated nagging swallowed the reply someone was waiting for
+  // while both preference surfaces kept showing "Meeting invites: ON".
+  // 'meetingReminders' is now in meeting_invites.legacy instead, which keeps that
+  // opt-out honoured and visible and lets an explicit opt-in override it.
+  if (!user?.email || !emailGroupAllowedForCategory(user, 'meeting-request-decision')) return;
   try {
     // `requestedById` is the requester — the one who asked and is owed the
     // answer. The accepting mentor/admin is the actor, not the recipient.

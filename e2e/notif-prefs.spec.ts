@@ -143,8 +143,9 @@ test('an e-mail group opts out through account settings without clobbering the l
  * `notificationCategoryAllowed` and the `notifyIfAllowed` wrapper both exist and
  * both document that a category switch covers every channel; the message paths
  * simply called bare `notify()` four lines above an e-mail branch that did check.
- * `notifCategoriesHint` promises users in all three locales that these switches
- * apply to e-mail and in-app alike — this makes that true.
+ * `unsubscribe.legacyHint` promises users in all three locales that these
+ * switches gate the in-app notifications as well as defaulting the e-mail group
+ * they map to — this makes the in-app half true.
  */
 test('turning Messages off stops the in-app notification too, not only the email', async ({ page }) => {
   const mentorEmail = uniqueEmail('np-msg-mentor');
@@ -197,5 +198,51 @@ test('turning Messages off stops the in-app notification too, not only the email
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(optedInEmail);
     await cleanupByEmail(mentorEmail);
+  }
+});
+
+/**
+ * A legacy category is still the back-compat default for the e-mail group it
+ * maps to (`mentorship` → `mentorship_lifecycle`), and both switch lists live in
+ * the same card. `groupPrefs` was resolved once at load and never recomputed on
+ * a legacy toggle, so unticking a category left the group switch above it
+ * showing the old answer until the page was reloaded — the card contradicting
+ * itself about mail that had in fact just been switched off.
+ */
+test('unticking a legacy category moves the e-mail group switch it maps to, with no reload', async ({ page }) => {
+  const email = uniqueEmail('np-resolve');
+  await seedUser(email, 'UserPass123', 'MENTEE', 'NP Resolve');
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', email);
+    await page.fill('input[type="password"]', 'UserPass123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    await page.goto('/account');
+    const group = page.getByTestId('email-group-toggle-mentorship_lifecycle');
+    // Enabled, not merely visible: the switches stay disabled until GET
+    // /api/profile has answered, and this assertion is what makes the checks
+    // below about the *resolved* state rather than the placeholder.
+    await expect(group).toBeEnabled({ timeout: 15_000 });
+    await expect(group).toBeChecked();
+
+    const legacy = page.locator('label', { hasText: 'Mentorship updates' }).getByRole('checkbox');
+    await legacy.uncheck();
+
+    // No page.reload() anywhere in here on purpose — that is the bug.
+    await expect(group).not.toBeChecked();
+    // Only the mapped group moved; the others are untouched.
+    await expect(page.getByTestId('email-group-toggle-digests')).toBeChecked();
+
+    await expect
+      .poll(async () => {
+        const me = await (await page.request.get('/api/profile')).json();
+        return me.user.notificationPrefs?.mentorship;
+      })
+      .toBe(false);
+  } finally {
+    await cleanupByEmail(email);
   }
 });

@@ -51,8 +51,34 @@ export interface EmailGroupDef {
   /** `sendEmail`'s `category` values that belong to this group. */
   categories: readonly string[];
   /**
-   * Legacy in-app keys whose "off" state used to suppress this group's mail.
+   * Legacy in-app keys whose "off" state also suppresses this group's mail.
    * Read only by resolution rule 5 (back-compat), never written.
+   *
+   * A key may appear in MORE THAN ONE group's array, and several do. The old
+   * keys were coarse catch-alls: `digest` was the only switch a KPI report and
+   * a company-need alert ever had, `messages` the only one an inbound enquiry
+   * had. One of them genuinely suppressed several of the new groups, and this
+   * array is where that has to be written down, because it is what
+   * resolveEmailGroupPrefs() renders in both preference surfaces.
+   *
+   * Listing a key here is one half of a two-part fix, and neither half works
+   * alone. Ten send sites used to `&&` a legacy check whose key mapped to a
+   * DIFFERENT group than the mail they guarded — `emailAllowed(u,
+   * 'meetingReminders')` in front of a meeting *invitation*. The surfaces read
+   * the mapping below, so they showed "Meeting invites: ON" while every invite
+   * was silently dropped.
+   *   - Listing the key here ALONE would make the UI tell the truth, but rule 4
+   *     lets a user opt back IN and the surviving call-site conjunct would keep
+   *     suppressing the mail anyway: the lie would just move one step later.
+   *   - Removing the call-site conjunct ALONE would silently re-subscribe
+   *     everybody who had opted out through the coarse old key.
+   * Together: the opt-out still holds by default (rule 5), an explicit opt-in
+   * now actually works (rule 4), and what the surfaces show is what happens.
+   * Do not "simplify" either half away.
+   *
+   * Rule 5 works at group grain, so a key added for one category also silences
+   * that group's siblings. That is deliberate: the group is the unit of consent
+   * here, and where the two readings differ we keep the existing opt-out.
    */
   legacy: readonly NotificationCategory[];
 }
@@ -93,7 +119,9 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     essential: false,
     bulk: false,
     categories: ['stage-update', 'offer', 'outcome'],
-    legacy: ['stageUpdates'],
+    // 'mentorship' as well as 'stageUpdates': both offer mails (offerNotify.ts)
+    // were gated on the coarse 'mentorship' key long before this taxonomy.
+    legacy: ['stageUpdates', 'mentorship'],
   },
   {
     id: 'meeting_invites',
@@ -108,7 +136,11 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // taxonomy, and the day someone invites a guest who does turn out to have an
     // account, the mail would silently ship without an opt-out.
     categories: ['meeting-invite', 'meeting-guest-invite', 'meeting-request', 'meeting-request-decision'],
-    legacy: [],
+    // 'meetingReminders' belongs here *as well as* to meeting_reminders: the
+    // three invite send sites (a meeting request, its answer, an instant-meeting
+    // invite) all gated on it, so for those readers it was the only opt-out
+    // there ever was.
+    legacy: ['meetingReminders'],
   },
   {
     id: 'meeting_reminders',
@@ -136,28 +168,34 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     essential: false,
     bulk: true,
     categories: ['unread-digest', 'activity-digest', 'mentor-digest'],
-    legacy: ['digest'],
+    // 'messages' as well as 'digest': the unread-message digest was gated on the
+    // messages key, which is the only opt-out its readers ever expressed.
+    legacy: ['digest', 'messages'],
   },
   {
     id: 'reports_analytics',
     essential: false,
     bulk: true,
     categories: ['analytics-report'],
-    legacy: [],
+    // 'digest' was the only switch the weekly analytics report ever had.
+    legacy: ['digest'],
   },
   {
     id: 'opportunities',
     essential: false,
     bulk: true,
     categories: ['company-need-alert'],
-    legacy: [],
+    // 'digest' was the only switch a company-need alert ever had.
+    legacy: ['digest'],
   },
   {
     id: 'inbound_requests',
     essential: false,
     bulk: false,
     categories: ['public-contact', 'company-inquiry', 'project-join-request', 'mentor-application-received'],
-    legacy: [],
+    // The two coarse keys these sites gated on: 'messages' for an enquiry
+    // through a public profile, 'mentorship' for a project join request.
+    legacy: ['messages', 'mentorship'],
   },
   {
     id: 'announcements',
