@@ -84,18 +84,20 @@ const securityHeaders = [
 // fragments into those canonical files through a normal PR.
 const pkg = require('./package.json');
 const release = require('./scripts/release-derive.cjs');
-const releaseFragments = release.readFragments(__dirname);
-releaseFragments.forEach(release.validateFragment);
-const derivedVersion = release.deriveVersion(pkg.version, releaseFragments);
-const unreleasedHighlights = release.unreleasedHighlights(releaseFragments);
+// One release per fragment (#1457): the timeline assigns each pending fragment
+// its own version, plus the date/time it was merged and the commit that brought
+// it in (read from git, or from RELEASE_STAMPS where .git is absent — the Docker
+// build, see .dockerignore). Throws on a malformed fragment, as before.
+const { version: derivedVersion, timeline } = release.resolveRelease(__dirname, pkg.version);
+const unreleasedEntries = release.unreleasedEntries(timeline);
 
 const nextConfig = {
   reactStrictMode: true,
   env: {
     APP_DERIVED_VERSION: derivedVersion,
-    // One synthetic RELEASE_NOTES entry for everything not yet compacted, or
+    // One RELEASE_NOTES entry PER not-yet-compacted change (newest first), or
     // '' when no pending fragment carries user-facing notes.
-    APP_UNRELEASED_NOTES: unreleasedHighlights ? JSON.stringify(unreleasedHighlights) : '',
+    APP_UNRELEASED_ENTRIES: unreleasedEntries.length ? JSON.stringify(unreleasedEntries) : '',
   },
   // pdf-parse/mammoth pull in Node-only deps (pdfjs) — keep them out of the
   // webpack server bundle so they load as plain CJS at runtime.

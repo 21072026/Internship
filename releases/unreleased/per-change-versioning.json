@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Every shipped change gets its own version, dated and traceable to its commit (#1457)** — the release-fragment mechanism (#1275) collapsed a whole compaction window into one section: the 2026-08-24 run buried 45 changes under `## [0.110.1-beta]`, and the 25 versions the app had actually served in between (0.86 → 0.110) were recorded nowhere. Worse, fragments were ordered by FILENAME, so a `patch` fragment whose name sorted before the last `minor` fragment's was erased by that minor's `patch = 0` reset — three consecutive merges all shipped as `0.114.0-beta`. Fragments are now ordered by MERGE order, read from the commit that added each one (`--diff-filter=A`, `--topo-order`), and each becomes its own release: its own version, the UTC minute it was merged and a link to its commit, in `CHANGELOG.md`, in `src/lib/releaseNotes.ts` and on `/release-notes`. That ordering is what makes the number a build displays the number the changelog later records — a fragment's version depends only on the fragments that shipped before it, so a later merge can never renumber an earlier one. Compaction now **fails closed** rather than date a release it cannot see (a shallow clone), so the workflows that stamp check out with `fetch-depth: 0`; `.git` is `.dockerignore`d, so `build-image.yml` resolves the stamps on the runner and passes them into the image as `RELEASE_STAMPS`. `scripts/release-resplit.mjs` re-split the one lumped section into its 45 dated releases, verified two ways: the replay lands back on the published `0.110.1-beta`, and every bullet and highlight survives unedited. New `npm run test:release` (13 cases, in CI) guards the arithmetic and both old failure modes.",
+  "notes": {
+    "en": [
+      "The release notes now list every change as its own version, with the date and time it went live and a link to the exact commit — instead of a single bundle per day."
+    ],
+    "tr": [
+      "Sürüm notları artık her değişikliği kendi sürüm numarasıyla, yayına girdiği tarih-saat ve ilgili commit bağlantısıyla listeliyor; eskiden hepsi tek bir günlük paket olarak görünüyordu."
+    ],
+    "de": [
+      "Die Release-Notes führen jede Änderung jetzt als eigene Version auf — mit Datum und Uhrzeit des Livegangs und einem Link auf den zugehörigen Commit, statt als ein Sammelpaket pro Tag."
+    ]
+  }
+}
