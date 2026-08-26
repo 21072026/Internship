@@ -265,6 +265,9 @@ docker run -d \
   -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
   -e JAAS_API_KEY_ID="${JAAS_API_KEY_ID:-}" \
   -e JAAS_PRIVATE_KEY="${JAAS_PRIVATE_KEY:-}" \
+  -e VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}" \
+  -e VAPID_PRIVATE_KEY="${VAPID_PRIVATE_KEY:-}" \
+  -e VAPID_SUBJECT="${VAPID_SUBJECT:-}" \
   "$IMAGE"
 
 # ── Container health (local) ─────────────────────────────────────────────────

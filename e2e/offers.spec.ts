@@ -24,9 +24,11 @@ async function seedScenario(prefix: string) {
   const admin = await seedUser(adminEmail, pw, 'ADMIN', 'Offer Admin');
   const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Offer Mentor');
   const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Offer Mentee');
-  const company = await prisma.company.create({ data: { name: `Offer Co ${Date.now()}` } });
+  const org = await prisma.organization.create({ data: { name: `Offer Org ${Date.now()}`, slug: `offer-${Date.now()}-${Math.round(Math.random() * 10000)}` } });
+  await prisma.user.updateMany({ where: { id: { in: [admin.id, mentor.id, mentee.id] } }, data: { orgId: org.id } });
+  const company = await prisma.company.create({ data: { name: `Offer Co ${Date.now()}`, orgId: org.id } });
   const relation = await prisma.mentorshipRelation.create({
-    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id },
+    data: { mentorId: mentor.id, menteeId: mentee.id, companyId: company.id, orgId: org.id },
   });
 
   return {
@@ -38,15 +40,18 @@ async function seedScenario(prefix: string) {
     mentor,
     mentee,
     company,
+    org,
     relation,
     cleanup: async () => {
       await prisma.auditLog.deleteMany({ where: { targetId: { in: await prisma.offer.findMany({ where: { relationId: relation.id }, select: { id: true } }).then((os) => os.map((o) => o.id)) } } });
       await prisma.offer.deleteMany({ where: { relationId: relation.id } });
+      await prisma.requisition.deleteMany({ where: { orgId: org.id } });
       await prisma.mentorshipRelation.deleteMany({ where: { id: relation.id } });
-      await prisma.company.deleteMany({ where: { id: company.id } });
+      await prisma.company.deleteMany({ where: { orgId: org.id } });
       await cleanupByEmail(menteeEmail);
       await cleanupByEmail(mentorEmail);
       await cleanupByEmail(adminEmail);
+      await prisma.organization.deleteMany({ where: { id: org.id } });
     },
   };
 }
@@ -54,6 +59,10 @@ async function seedScenario(prefix: string) {
 test('admin creates and sends an offer via the wizard; mentee accepts it and sees a persistent state', { tag: '@smoke' }, async ({ page }) => {
   const s = await seedScenario('wiz');
   try {
+    const otherCompany = await prisma.company.create({ data: { name: 'Other Offer Company', orgId: s.org.id } });
+    const open = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title: 'Open Frontend Requisition', status: 'OPEN', openings: 1, requiredSkills: [] } });
+    const closed = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title: 'Closed Requisition', status: 'FILLED', openings: 1, filled: 1, requiredSkills: [] } });
+    const other = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: otherCompany.id, title: 'Other Company Requisition', status: 'OPEN', openings: 1, requiredSkills: [] } });
     await signIn(page, s.adminEmail, s.pw, '/admin');
     await page.goto(`/admin/candidates/${s.mentee.id}`);
     await expect(page.getByTestId('offer-management-panel')).toBeVisible({ timeout: 10_000 });
@@ -62,6 +71,13 @@ test('admin creates and sends an offer via the wizard; mentee accepts it and see
     const modal = page.getByTestId('offer-wizard-modal');
     await expect(modal).toBeVisible();
     await modal.getByLabel('Position').fill('Frontend Developer');
+    const requisitionSelect = modal.getByTestId('offer-requisition-select');
+    await expect(requisitionSelect).toBeVisible();
+    await expect(requisitionSelect.locator('option')).toHaveText(['No requisition', 'Open Frontend Requisition']);
+    await expect(requisitionSelect).not.toContainText(closed.title);
+    await expect(requisitionSelect).not.toContainText(other.title);
+    await requisitionSelect.selectOption('');
+    await requisitionSelect.selectOption(open.id);
     await modal.getByRole('button', { name: 'Next' }).click();
     await modal.getByRole('button', { name: 'Next' }).click();
     const sent = page.waitForResponse((r) => r.url().includes('/api/offers/') && r.request().method() === 'PATCH');
@@ -71,6 +87,9 @@ test('admin creates and sends an offer via the wizard; mentee accepts it and see
     const offer = await prisma.offer.findFirstOrThrow({ where: { relationId: s.relation.id } });
     expect(offer.status).toBe('SENT');
     expect(offer.position).toBe('Frontend Developer');
+    expect(offer.requisitionId).toBe(open.id);
+    await expect(page.getByTestId(`offer-requisition-title-${offer.id}`)).toHaveText('Requisition (optional): Open Frontend Requisition');
+    await expect(page.getByTestId(`offer-row-${offer.id}`)).not.toContainText(open.id);
 
     // Mentee sees the offer and accepts it.
     await page.context().clearCookies();
@@ -93,6 +112,46 @@ test('admin creates and sends an offer via the wizard; mentee accepts it and see
 
     const auditActions = (await prisma.auditLog.findMany({ where: { targetId: offer.id }, orderBy: { createdAt: 'asc' } })).map((a) => a.action);
     expect(auditActions).toEqual(['offer.create', 'offer.send', 'offer.accept']);
+  } finally {
+    await s.cleanup();
+  }
+});
+
+test('offer create and draft edit validate requisitions and allow an optional cleared value', async ({ page }) => {
+  const s = await seedScenario('reqvalidation');
+  try {
+    const otherCompany = await prisma.company.create({ data: { name: 'Validation Other Company', orgId: s.org.id } });
+    const valid = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title: 'Valid Requisition', status: 'OPEN', openings: 1, requiredSkills: [] } });
+    const wrongCompany = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: otherCompany.id, title: 'Wrong Company', status: 'OPEN', openings: 1, requiredSkills: [] } });
+    await signIn(page, s.adminEmail, s.pw, '/admin');
+
+    const create = (requisitionId?: string | null) => page.request.post('/api/offers', { data: {
+      relationId: s.relation.id, position: 'API-created role', ...(requisitionId === undefined ? {} : { requisitionId }),
+    } });
+    const validCreate = await create(valid.id);
+    expect(validCreate.status()).toBe(201);
+    const validOfferId = (await validCreate.json()).offer.id as string;
+    expect((await create(null)).status()).toBe(201);
+    expect((await create()).status()).toBe(201);
+
+    const missingCreate = await create('missing-requisition-id');
+    expect(missingCreate.status()).toBe(404);
+    expect(await missingCreate.json()).toMatchObject({ code: 'requisition_not_found' });
+    const mismatchCreate = await create(wrongCompany.id);
+    expect(mismatchCreate.status()).toBe(400);
+    expect(await mismatchCreate.json()).toMatchObject({ code: 'requisition_company_mismatch' });
+
+    const validPatch = await page.request.patch(`/api/offers/${validOfferId}`, { data: { requisitionId: valid.id } });
+    expect(validPatch.status()).toBe(200);
+    const missingPatch = await page.request.patch(`/api/offers/${validOfferId}`, { data: { requisitionId: 'missing-requisition-id' } });
+    expect(missingPatch.status()).toBe(404);
+    expect(await missingPatch.json()).toMatchObject({ code: 'requisition_not_found' });
+    const mismatchPatch = await page.request.patch(`/api/offers/${validOfferId}`, { data: { requisitionId: wrongCompany.id } });
+    expect(mismatchPatch.status()).toBe(400);
+    expect(await mismatchPatch.json()).toMatchObject({ code: 'requisition_company_mismatch' });
+    const clearPatch = await page.request.patch(`/api/offers/${validOfferId}`, { data: { requisitionId: '' } });
+    expect(clearPatch.status()).toBe(200);
+    expect((await prisma.offer.findUniqueOrThrow({ where: { id: validOfferId } })).requisitionId).toBeNull();
   } finally {
     await s.cleanup();
   }

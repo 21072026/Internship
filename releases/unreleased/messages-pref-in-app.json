@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Fixed** — the **Messages** notification category silenced e-mail but not the in-app bell. Four message paths (direct messages, the mentor bulk composer, emailed replies, and public-profile contact) called `notify()` ungated, in some cases four lines above an e-mail branch that did check the same preference. All four now honour it, failing open on a missing user row.",
+  "notes": {
+    "en": ["Turning off the Messages notification category now also stops the in-app bell, not only the emails."],
+    "tr": ["Mesajlar bildirim kategorisini kapatmak artık yalnızca e-postaları değil, uygulama içi bildirimleri de susturuyor."],
+    "de": ["Das Abschalten der Kategorie „Nachrichten“ stoppt jetzt auch die In-App-Glocke, nicht nur die E-Mails."]
+  }
+}

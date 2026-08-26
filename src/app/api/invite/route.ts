@@ -193,8 +193,12 @@ export async function POST(request: Request) {
       let emailSent = false;
       if (email) {
         try {
-          await sendInvitationEmail({ to: email, token, role, orgId: resolveOrgId(session) });
-          emailSent = !!process.env.SMTP_USER;
+          // Was `!!process.env.SMTP_USER` — a guess that happened to be right
+          // about a missing SMTP_USER and wrong about demo mode, where nothing
+          // is delivered either. The transport now reports what it did, so
+          // there is one source of truth and a future skip reason (a
+          // suppression list, say) is covered without touching this line.
+          emailSent = (await sendInvitationEmail({ to: email, token, role, orgId: resolveOrgId(session) })) === 'SENT';
         } catch (mailErr) {
           console.error('Invitation email failed (token still valid):', mailErr);
         }

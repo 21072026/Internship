@@ -7,6 +7,8 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { canSeeCompensation } from '@/lib/offers';
+import { validateOfferRequisition } from '@/lib/requisitions';
+import { resolveOrgId } from '@/lib/orgScope';
 
 // Fields every authorized caller may see. compensationNote is added on top of
 // this only for ADMIN / the offer's own MENTEE — see canSeeCompensation().
@@ -79,7 +81,18 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ offers });
+    const requisitionIds = [...new Set(offers.flatMap((offer) => offer.requisitionId ? [offer.requisitionId] : []))];
+    const requisitions = requisitionIds.length
+      ? await prisma.requisition.findMany({
+          where: { id: { in: requisitionIds }, ...(resolveOrgId(session) ? { orgId: resolveOrgId(session)! } : {}) },
+          select: { id: true, title: true },
+        })
+      : [];
+    const titles = new Map(requisitions.map((requisition) => [requisition.id, requisition.title]));
+
+    return NextResponse.json({
+      offers: offers.map((offer) => ({ ...offer, requisitionTitle: offer.requisitionId ? titles.get(offer.requisitionId) ?? null : null })),
+    });
   });
 }
 
@@ -116,12 +129,21 @@ export async function POST(request: Request) {
     });
     if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
 
+    const effectiveCompanyId = companyId !== undefined ? companyId : relation.companyId;
+    const validation = await validateOfferRequisition(requisitionId, relation.orgId, effectiveCompanyId);
+    if (!validation.ok) {
+      return NextResponse.json(
+        { error: validation.code === 'requisition_not_found' ? 'Requisition not found' : 'Requisition belongs to another company', code: validation.code },
+        { status: validation.status },
+      );
+    }
+
     const offer = await prisma.offer.create({
       data: {
         orgId: relation.orgId,
         relationId,
         requisitionId: requisitionId || null,
-        companyId: companyId !== undefined ? companyId : relation.companyId,
+        companyId: effectiveCompanyId,
         status: 'DRAFT',
         position,
         startDate: startDate ? new Date(startDate) : null,

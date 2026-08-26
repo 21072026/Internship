@@ -258,6 +258,18 @@ export async function runEmailHealthCheck(): Promise<EmailHealth> {
   return health;
 }
 
+// What actually happened to a message, mirroring the EmailLog row this call
+// writes (#1431). Returned rather than only recorded, because "did not throw"
+// is not the same as "was delivered": the two SKIPPED paths below return
+// normally, and four routes were reading that silence as success — reporting
+// `emailSent: true` for an account nobody could ever sign in to.
+//
+// The throw behaviour is deliberately unchanged: a real transport failure still
+// throws (and is recorded FAILED first), so every existing try/catch keeps
+// working exactly as before. 'FAILED' is in the union for callers that catch and
+// want to name the outcome; sendEmail itself never returns it.
+export type EmailDeliveryResult = 'SENT' | 'SKIPPED' | 'FAILED';
+
 export async function sendEmail({
   to,
   subject,
@@ -302,13 +314,13 @@ export async function sendEmail({
   if (IS_DEMO_MODE) {
     logger.info('Email not sent: demo mode', { to, subject, category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled');
-    return;
+    return 'SKIPPED';
   }
 
   if (!process.env.SMTP_USER) {
     logger.error('Email not sent: SMTP is not configured', { to, subject, category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)');
-    return;
+    return 'SKIPPED';
   }
 
   try {
@@ -332,6 +344,7 @@ export async function sendEmail({
   }
 
   await recordEmail(to, subject, category, 'SENT', transport);
+  return 'SENT';
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
@@ -387,7 +400,7 @@ export async function sendInvitationEmail({
   const registerUrl = `${appUrl}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
 
-  await sendEmail({
+  return await sendEmail({
     to,
     fromName: brand.name,
     category: 'invitation',
@@ -443,7 +456,7 @@ export async function sendPasswordResetEmail({
     : 'We received a request to reset your password. Click the button below to choose a new one.';
   const cta = isInitial ? 'Set password' : 'Reset password';
 
-  await sendEmail({
+  return await sendEmail({
     to,
     fromName: brand.name,
     category: 'password-reset',
@@ -2138,23 +2151,45 @@ function candidateMatchesNeeds(
   });
 }
 
-// Premium CompanyNeed match alerts (Faz 1, #530). For every company holding the
-// COMPANY_NEED_MATCH_ALERTS entitlement, scan the consenting talent pool (the
-// same publicProfile-only visibility as talent-pool search) for candidates
+// Only an OPEN requisition is hiring: DRAFT is unpublished, and ON_HOLD /
+// FILLED / CANCELLED are all "do not send me candidates" (#1387).
+const ALERTABLE_REQUISITION_STATUS = 'OPEN';
+
+// Premium open-position match alerts (Faz 1, #530). For every company holding
+// the COMPANY_NEED_MATCH_ALERTS entitlement, scan the consenting talent pool
+// (the same publicProfile-only visibility as talent-pool search) for candidates
 // matching an open position, and notify the company's users once per candidate.
 // Repeat notifications are prevented by the CompanyNeedAlert dedupe row (the
 // unique [companyId, menteeId] insert is the marker — createMany/skipDuplicates
 // makes "insert-or-skip" atomic, so a candidate only ever alerts a company once).
+//
+// Positions come from BOTH tables (#1387). The job used to read CompanyNeed
+// only, so a role opened through the Requisition screen — the newer of the two,
+// and the one the product is migrating to — never matched anybody: a premium
+// company could have five open requisitions and receive nothing at all.
+// CompanyNeed is NOT dead and is not being dropped here: the admin company form
+// still writes those rows (src/app/api/companies/[id]/route.ts), and the
+// CompanyNeed→Requisition backfill is manual and runs in no deploy step. So this
+// adds a source rather than replacing one; the [companyId, menteeId] dedupe key
+// means a company with the same role in both tables still alerts once.
 export async function checkCompanyNeedMatches() {
   const companies = await prisma.company.findMany({
     where: {
       entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
-      needs: { some: {} },
+      OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }],
     },
     select: {
       id: true,
       name: true,
       needs: { select: { position: true } },
+      requisitions: {
+        where: { status: ALERTABLE_REQUISITION_STATUS },
+        // `openings`/`filled` so a role that is open-but-fully-staffed can be
+        // dropped: the API accepts status OPEN with filled === openings, and
+        // Prisma cannot compare two columns in a `where`, so it is filtered
+        // below in JS.
+        select: { title: true, openings: true, filled: true },
+      },
       users: {
         where: { role: 'COMPANY', isActive: true },
         select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
@@ -2181,11 +2216,25 @@ export async function checkCompanyNeedMatches() {
   let alerts = 0;
 
   for (const company of companies) {
-    const positions = company.needs.map((n) => n.position.toLowerCase().trim()).filter(Boolean);
+    // Requisition.title is the analogue of CompanyNeed.position, and the only
+    // field taken from it. `requiredSkills` is deliberately NOT folded in:
+    // candidateMatchesNeeds matches substrings in BOTH directions, so a short
+    // skill like "Go" or "R" would match almost every targetPosition and turn a
+    // premium alert into noise. Widening the match is a separate decision from
+    // fixing the missing source.
+    const positions = [
+      ...company.needs.map((n) => n.position),
+      ...company.requisitions.filter((r) => r.filled < r.openings).map((r) => r.title),
+    ]
+      .map((p) => (p ?? '').toLowerCase().trim())
+      .filter(Boolean);
+    // Still reachable after the OR filter above: a company can match on having
+    // open requisitions and then have every one of them fully staffed.
     if (positions.length === 0) continue;
+    const terms = [...new Set(positions)];
 
     for (const cand of pool) {
-      if (!candidateMatchesNeeds(positions, cand)) continue;
+      if (!candidateMatchesNeeds(terms, cand)) continue;
 
       // Atomic dedupe: the insert succeeds only the first time; count 0 means
       // this company was already alerted about this candidate — skip silently.

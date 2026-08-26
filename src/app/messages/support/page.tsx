@@ -9,6 +9,7 @@ import { relativeTime } from '@/lib/relativeTime';
 import { SupportAttachmentList } from '@/components/SupportAttachmentList';
 import { useMessagesHeaderTitle } from '@/components/MessagesShell';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
+import { useRealtime } from '@/hooks/useRealtime';
 import {
   MessageBubble,
   MessageComposer,
@@ -55,6 +56,12 @@ export default function SupportChatPage() {
       .catch(() => setTickets([]));
 
   useEffect(() => { load(); }, []);
+  // An admin reply writes a `support.replied` notification, which reaches us on
+  // the live stream (#1464) — so this thread refreshes itself like any other
+  // instead of only on mount. `tick` covers the polling fallback.
+  useRealtime((signal) => {
+    if (signal.type === 'notification' || signal.type === 'tick') void load();
+  });
   useEffect(() => { bottomRef.current?.scrollIntoView({ block: 'end' }); }, [tickets]);
 
   const send = async () => {

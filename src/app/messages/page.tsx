@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerDictionary } from '@/i18n/server';
 import { relativeTime } from '@/lib/relativeTime';
 import { StartConversationPicker } from '@/components/StartConversationPicker';
+import { MessagesLiveRefresh } from '@/components/MessagesLiveRefresh';
 import { conversationForRelation, createOrGetProjectConversation } from '@/lib/conversations';
 
 // Unified message inbox for every role: lists the viewer's conversation
@@ -116,6 +117,10 @@ export default async function MessagesInboxPage() {
 
   return (
     <div>
+      {/* This page's numbers are rendered on the server, so a message arriving
+          while it is on screen would otherwise go unnoticed until a navigation
+          (#1464). */}
+      <MessagesLiveRefresh />
       {/* Mobile gets its title from the shell header (see MessagesShell), so this
           block only shows where there is room for it. */}
       <div className="hidden lg:block mb-6">
