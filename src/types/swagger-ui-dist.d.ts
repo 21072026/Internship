@@ -1,4 +1,4 @@
-// Ambient types for swagger-ui-dist (#1444).
+// Ambient types for swagger-ui-dist (#1447).
 //
 // The package ships no TypeScript declarations and no @types package we want to
 // pull in, so `npx tsc --noEmit` (a required CI step) would fail on the two

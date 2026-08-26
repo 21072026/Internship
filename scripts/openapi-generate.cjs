@@ -29,6 +29,24 @@
 // admin-only) and the fallback classification is never "public" by omission -
 // see classifyAuth().
 //
+// ONE INPUT PER OPERATION. Every fact this generator derives - the guard, the
+// request body, the query keys, the response statuses, rate limiting, tenant
+// scoping, step-up auth - is read from the SAME text: the handler body with its
+// module-scope helpers textually inlined (`inlineHelpers`, the `resolved`
+// variable in buildSpec). It used to be split - the auth classifier read the
+// resolved text while the body/query/response probes read the raw handler - and
+// that split is exactly why POST /api/admin/announcements shipped with no
+// request body at all: it reads the payload through a module-scope readBody()
+// helper, so the raw text contains no `request.json()`. Two inputs means two
+// answers to "what does this handler do", and the document then contradicts
+// itself. Switching every probe to the resolved text was checked
+// operation-by-operation against the previous output: it added only facts that
+// are really true of the endpoint (the two announcement bodies; `?from=`/`?to=`
+// on /api/calendar-events and `?secret=` on /api/webhooks/jaas, both read in a
+// helper; and the 400/403/404/409s that eleven handlers return by handing a
+// helper's `{ status }` straight to NextResponse.json). Anything added here in
+// future must be held to the same bar - see the note above responsesFor().
+//
 // Run:   node scripts/openapi-generate.cjs   (npm run gen:openapi)
 // Check: node scripts/check-openapi.mjs      (npm run check:openapi)
 
@@ -41,8 +59,16 @@ const API_DIR = path.join('src', 'app', 'api');
 const OUT_FILE = path.join('src', 'generated', 'openapi.json');
 
 // Endpoints where an idle click in a "Try it out" panel is irreversible or fans
-// out real email. Flagged so the explorer can put an interstitial in front of
-// them (or drop the button entirely). Keyed "METHOD /api/path".
+// out real email. Keyed "METHOD /api/path"; scripts/check-openapi.mjs asserts
+// every key still resolves to a real operation, so a route rename cannot
+// silently drop the flag.
+//
+// What the explorer actually does with it: src/components/ApiExplorer.tsx
+// collects x-destructive (plus x-try-it: false, plus EVERY DELETE regardless of
+// annotation) into a matcher list and enforces it inside Swagger's
+// `requestInterceptor` - a synchronous window.confirm naming the resolved method
+// and URL, throwing to abort when declined, so the request is never sent. "Try
+// it out" is NOT hidden and Execute is not removed; the click is confirmed.
 const DESTRUCTIVE = new Set([
   'POST /api/admin/users/{id}/erase',
   'POST /api/admin/duplicates/merge',
@@ -56,7 +82,9 @@ const DESTRUCTIVE = new Set([
 ]);
 
 // src/middleware.ts (matcher '/api/:path*') answers 403 to every write from a
-// signed-in-but-unverified user, except this allowlist.
+// signed-in-but-unverified user, except this allowlist. Hand-copied from
+// isAllowlisted() there; scripts/check-openapi.mjs asserts every entry below
+// still appears in that file.
 const VERIFY_EXEMPT = [
   '/api/auth/',
   '/api/register',
@@ -66,6 +94,18 @@ const VERIFY_EXEMPT = [
   '/api/profile-view',
   '/api/inbound-email',
 ];
+
+/**
+ * Match the middleware's own semantics, which are EXACT equality for every
+ * entry except the '/api/auth/' prefix (`pathname.startsWith('/api/auth/')`).
+ *
+ * Prefix-matching all of them was wrong in one place, and wrong in the
+ * dangerous direction: POST /api/inbound-email/poll is not
+ * `pathname === '/api/inbound-email'`, so an unverified signed-in caller really
+ * does get 403 there - and the generated document was dropping both the 403 and
+ * the middleware note for it.
+ */
+const verifyExempt = (urlPath) => VERIFY_EXEMPT.some((e) => (e.endsWith('/') ? urlPath.startsWith(e) : urlPath === e));
 
 // ---------------------------------------------------------------------------
 // Path derivation
@@ -138,10 +178,41 @@ const REDACT_LINE = [
   /process\.env\./,
 ];
 
+// Explicit opt-out marker. Put `@openapi-ignore` anywhere in a route handler's
+// leading comment and NONE of that comment is published - the operation keeps
+// its derived summary (`GET /api/...`) and an empty description.
+//
+// Why a marker and not another REDACT_LINE pattern. The line-level patterns
+// above catch shapes that are always unpublishable (a credential env var, a
+// URL, an internal host). What triggered this is different: GET
+// /api/availability's comment explains the tenant-isolation MECHANISM - it names
+// the model allowlist and states which models fall outside the central
+// guarantee. Nothing in that text looks like a secret, so no regex would find
+// it, and since x-source names the exact file for every operation, publishing it
+// hands a reader a starting point for hunting isolation bugs. Broadening the
+// regex to the identifier of the week is whack-a-mole; letting the author of the
+// comment declare "this one is internal" is the right shape.
+//
+// The marker is spelled exactly `@openapi-ignore`, and route files depend on
+// that spelling - do not "improve" it.
+const IGNORE_MARKER = '@openapi-ignore';
+
+/**
+ * A comment block -> displayable prose, or '' when it opts out.
+ *
+ * The marker check covers everything the caller handed in. leadingComment()
+ * passes the whole contiguous comment block above the declaration, so marking
+ * any one line of it opts the block out - which is what you want, since the
+ * lines around a mechanism description are usually about the same mechanism.
+ */
 function sanitizeComment(text) {
+  if (String(text).includes(IGNORE_MARKER)) return '';
   const kept = String(text)
     .split('\n')
-    .map((l) => l.replace(/^\s*(\/\*\*|\*\/|\/\/|\*)\s?/, '').trimEnd())
+    // Strip the comment furniture: `/**`, a bare `/*` (no route uses single-star
+    // block comments today - closing it anyway, it is one `?`), `//`, a leading
+    // `*` continuation, and `*/` at either end of the line.
+    .map((l) => l.replace(/^\s*(\/\*\*?|\*\/|\/\/|\*)\s?/, '').replace(/\s*\*\/\s*$/, '').trimEnd())
     .filter((l) => !REDACT_LINE.some((re) => re.test(l)));
   return kept.join(' ').replace(/\s+/g, ' ').trim();
 }
@@ -283,6 +354,16 @@ const ROLE_LITERALS = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'];
  * rejected.
  */
 function guardConditions(text) {
+  // Hand-rolled paren matching over source TEXT, in a script that has already
+  // parsed the file with the TypeScript AST - which looks like an oversight and
+  // is not. The input here is not a source file: it is inlineHelpers() output,
+  // the handler body CONCATENATED with the source text of every module-scope
+  // helper it calls. That string is not a valid program (it is a block statement
+  // followed by loose declarations pulled from elsewhere in the file), so there
+  // is no node to walk. Re-parsing it would mean re-implementing the inlining as
+  // an AST transform, which is a much larger change than the two functions that
+  // read this text need. topLevelConjuncts() below is text-based for the same
+  // reason.
   const out = [];
   const re = /\bif\s*\(/g;
   let m;
@@ -296,14 +377,55 @@ function guardConditions(text) {
     if (depth !== 0) continue;
     const cond = text.slice(m.index + m[0].length, i - 1);
     const after = text.slice(i).replace(/^\s*\{?\s*/, '').slice(0, 200);
-    const rejects = /^return\s+NextResponse\s*\.\s*json\s*\(/.test(after) && /status:\s*40[13]|'(Unauthorized|Forbidden)'/.test(after);
+    // A rejection is either returned straight from the handler, or handed back
+    // through a gate helper that wraps it - `return { error: NextResponse.json(
+    // { error: 'Forbidden' }, { status: 403 }) }` (src/app/api/requisitions,
+    // mentor-applications, meeting-series). Missing the wrapped form left all
+    // four requisition operations at a vague "requires a session" when they are
+    // really ADMIN-or-COMPANY.
+    const rejects =
+      /^return\s+(?:NextResponse\s*\.\s*json\s*\(|\{\s*error\s*:\s*NextResponse\s*\.\s*json\s*\()/.test(after) &&
+      /status:\s*40[13]|'(Unauthorized|Forbidden)'/.test(after);
     out.push({ cond, rejects });
   }
   return out;
 }
 
 /**
- * Classify one handler. Returns { classes, roles, denied, notes, approximate }.
+ * Split a condition into its top-level `&&` conjuncts, ignoring `&&` nested
+ * inside parentheses, brackets, braces or a string literal.
+ *
+ * This is text, not AST, for the same reason guardConditions() is - see the note
+ * there.
+ */
+function topLevelConjuncts(cond) {
+  const parts = [];
+  let depth = 0;
+  let quote = null;
+  let start = 0;
+  for (let i = 0; i < cond.length; i += 1) {
+    const ch = cond[i];
+    if (quote) {
+      if (ch === '\\') i += 1;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') quote = ch;
+    else if (ch === '(' || ch === '[' || ch === '{') depth += 1;
+    else if (ch === ')' || ch === ']' || ch === '}') depth -= 1;
+    else if (depth === 0 && ch === '&' && cond[i + 1] === '&') {
+      parts.push(cond.slice(start, i));
+      i += 1;
+      start = i + 1;
+    }
+  }
+  parts.push(cond.slice(start));
+  return parts;
+}
+
+/**
+ * Classify one handler. Returns
+ * { classes, roles, denied, escape, notes, approximate }.
  *
  * `role === 'X'` is NOT a session-role check 87 times out of 323 in this repo -
  * the rest are Prisma `where` clauses and ProjectMember roles (there is no
@@ -349,18 +471,108 @@ function classifyAuth(text, ctx = {}) {
 
   const allow = new Set();
   const deny = new Set();
+  // Roles that BYPASS a non-role rule rather than being required by it - see
+  // `mixed` below.
+  const escape = new Set();
   let approximate = false;
 
+  // Everything in a reject condition that is not itself an access rule about
+  // the session role: a role comparison, a role-list `.includes()`, and "there
+  // is no session at all".
+  //
+  // NO_SESSION is pinned to exactly `!session`, `!session.user` and
+  // `!session?.user`. It is tempting to write `!\s*session[?.\w]*` - do not:
+  // that also swallows `!session.user.companyId`, which is a real extra
+  // requirement, and GET /api/company/analytics would then report COMPANY as
+  // simply allowed when a COMPANY user with no linked company is refused.
+  const ROLE_CMP = new RegExp(`(?:${anchorAlt})\\s*[!=]==\\s*'(?:${roleAlt})'|'(?:${roleAlt})'\\s*[!=]==\\s*(?:${anchorAlt})`, 'g');
+  const ROLE_INCLUDES = new RegExp(INCLUDES.source, 'g');
+  const NO_SESSION = /!\s*session(?:\s*\??\.\s*user)?(?!\s*[?.\w])/g;
+
+  /**
+   * Is there anything left in this fragment once every role test and the
+   * "no session at all" test are deleted from it?
+   *
+   * Paren-aware callers use this per top-level `&&` conjunct, and that is the
+   * whole point. The previous implementation deleted the role comparisons from
+   * the WHOLE condition text and then tested the residue for `&&`: deleting both
+   * sides of `A && B` leaves a bare `&&`, so a condition made ENTIRELY of role
+   * comparisons ("not ADMIN and not COMPANY -> reject") was misread as
+   * containing a non-role term. That is where 31 of the 49 role-session
+   * operations got their x-auth-approximate from.
+   */
+  const hasNonRoleTerm = (part) =>
+    part
+      .replace(ROLE_CMP, '')
+      .replace(ROLE_INCLUDES, '')
+      .replace(NO_SESSION, '')
+      .replace(/[\s()!|&,]/g, '') !== '';
+
   const guards = guardConditions(text);
-  const nonRole = (cond) => /&&/.test(cond.replace(new RegExp(`(?:${anchorAlt})\\s*[!=]==\\s*'(?:${roleAlt})'`, 'g'), ''));
+
+  // Does any REJECTING guard actually test the session? `getServerSession()`
+  // appearing in the text is not the same question.
+  //
+  // GET /api/health is the case that forced this. It calls getServerSession
+  // inside a maySeeDetail() helper, and its only use of the result is
+  // `if (!(await maySeeDetail(request))) return <the short answer>` - which is
+  // not a rejection, it is a narrower success body. The endpoint answers 200 to
+  // an anonymous caller always, and with HEALTH_TOKEN unset it hands everyone
+  // the full detail. hasSession alone therefore classified it "requires any
+  // signed-in session" and declared a 401 it cannot emit. In a document sold as
+  // the complete internal inventory the reader's question is "what is reachable
+  // anonymously", and this was the one endpoint that hid the answer - it also
+  // contradicted the route's own comment, "Liveness stays public - a monitor
+  // cannot log in".
+  //
+  // Session-derived aliases count too: a guard spelled `if (!user)` after
+  // `const user = session.user` is a session requirement.
+  const sessionRefs = ['\\bsession\\b'];
+  for (const m of text.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?[^;\n]*\bsession\b/g)) {
+    sessionRefs.push(`\\b${m[1]}\\b`);
+  }
+  for (const m of text.matchAll(/(?:const|let|var)\s*\{([^}]*)\}\s*=\s*session\b/g)) {
+    for (const part of m[1].split(',')) {
+      const name = part.split(':').pop().trim().replace(/^\.\.\./, '');
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) sessionRefs.push(`\\b${name}\\b`);
+    }
+  }
+  const SESSION_REF = new RegExp(sessionRefs.join('|'));
+  const sessionRequired = guards.some((g) => g.rejects && SESSION_REF.test(g.cond));
+
   for (const guard of guards) {
     if (!guard.rejects) continue;
     const negative = collect(guard.cond, NEGATIVE);
     const positive = collect(guard.cond, POSITIVE);
     const includes = [...guard.cond.matchAll(INCLUDES)];
-    // "not one of these -> reject" is the one unambiguous shape: these are
-    // exactly the roles the endpoint is for.
-    for (const r of negative) allow.add(r);
+    const conjuncts = topLevelConjuncts(guard.cond);
+    const mixed = conjuncts.some(hasNonRoleTerm);
+    // "not one of these -> reject" is USUALLY the one unambiguous shape: these
+    // are exactly the roles the endpoint is for. The exception turns on the
+    // operator, so work per top-level `&&` conjunct.
+    //
+    // `reject if C` means "allowed iff !C", so De Morgan decides it:
+    //   reject if (!session || role !== 'ADMIN' || impersonatorId)
+    //     -> allowed iff session AND role === 'ADMIN' AND !impersonatorId
+    //        ADMIN is REQUIRED (POST /api/admin/impersonate).
+    //   reject if (userId !== session.user.id && role !== 'ADMIN')
+    //     -> allowed iff userId === session.user.id OR role === 'ADMIN'
+    //        ADMIN is an ESCAPE HATCH over an ownership rule, not a requirement
+    //        (DELETE /api/avatar/{userId}, whose own summary reads "remove own
+    //        avatar (or admin removes anyone's)" - the generator used to print
+    //        "Requires a signed-in ADMIN session" directly above it).
+    //   reject if (!session || (role !== 'COMPANY' && role !== 'ADMIN'))
+    //     -> allowed iff session AND (COMPANY OR ADMIN); the inner `&&` is one
+    //        top-level conjunct made only of role tests, so both are required.
+    // A negative role comparison therefore only stops being a requirement when
+    // it shares the top level of `&&` with a conjunct that tests something other
+    // than the role or the presence of a session.
+    for (const [idx, part] of conjuncts.entries()) {
+      const negHere = collect(part, NEGATIVE);
+      if (!negHere.length) continue;
+      const escapes = conjuncts.some((other, i) => i !== idx && hasNonRoleTerm(other));
+      for (const r of negHere) (escapes ? escape : allow).add(r);
+    }
     for (const inc of includes) {
       const roles = listRoles(inc[2]);
       for (const r of roles) (inc[1] === '!' ? allow : deny).add(r);
@@ -370,10 +582,14 @@ function classifyAuth(text, ctx = {}) {
     // COMPANY session that is missing a company, and COMPANY is very much
     // allowed (GET /api/offers).
     if (positive.length) {
-      if (nonRole(guard.cond)) approximate = true;
+      if (mixed) approximate = true;
       else for (const r of positive) deny.add(r);
     }
-    if ((negative.length || includes.length) && nonRole(guard.cond)) approximate = true;
+    // A negated role LIST in a mixed conjunction is the same shape as `negative`
+    // above and would belong in `escape` too; the flag is the conservative
+    // stand-in because no route in this repo currently writes one, so routing it
+    // has never been exercised against real output.
+    if (includes.length && mixed) approximate = true;
   }
   // Positive `role === 'X'` comparisons OUTSIDE a rejecting guard are ignored
   // on purpose. They are usually branch logic, not access control, and reading
@@ -388,22 +604,49 @@ function classifyAuth(text, ctx = {}) {
   // was not resolvable (an imported guard, a re-export).
   if (/\b(?:requireAdmin[A-Za-z]*|adminSession)\s*\(/.test(text)) allow.add('ADMIN');
 
-  for (const r of deny) allow.delete(r);
+  for (const r of deny) {
+    allow.delete(r);
+    escape.delete(r);
+  }
+  // A role that is genuinely required is not also an escape hatch.
+  for (const r of allow) escape.delete(r);
   const roles = [...allow].sort();
   const denied = [...deny].sort();
+  const escapes = [...escape].sort();
 
   if (roles.length) classes.push(roles.length === 1 && roles[0] === 'ADMIN' ? 'admin-session' : 'role-session');
-  else if (hasSession) classes.push('any-session');
+  else if (hasSession && sessionRequired) classes.push('any-session');
+  else if (hasSession) {
+    notes.push(
+      'The session is read when one is present, but nothing here requires it: no guard rejects a caller merely for being anonymous. Any remaining restriction is per-record - see the route file named in x-source.',
+    );
+  }
   if (denied.length && hasSession) notes.push(`Rejects these roles outright: ${denied.join(', ')}.`);
 
   if (/authenticateApiKey\s*\(/.test(text)) classes.push('api-key');
 
   // Shared secret in a request header, compared in constant time.
+  //
+  // Claiming "requires this header" is a claim that a caller without it is
+  // REJECTED, so it is gated on the handler having a rejecting guard at all.
+  // GET /api/health reads x-health-token in constant time and rejects nobody:
+  // the token (like an ADMIN session) only decides how much detail comes back,
+  // and the endpoint answers 200 to an anonymous caller either way. Every route
+  // that really is secret-gated - inbound-email, inbound-email/poll,
+  // webhooks/jaas, cron/start - answers 401 from an `if`, so this costs them
+  // nothing. Deliberately NOT applied to the token classes below: an endpoint
+  // where an unguessable token is looked up straight in a `where` clause
+  // legitimately answers 404 rather than 401 for a bad token, and calling those
+  // "public" would be a lie in the dangerous direction.
   const headers = [...text.matchAll(/headers\s*\.\s*get\s*\(\s*'(x-[\w-]+)'/g)].map((m) => m[1]);
   const secretHeaders = headers.filter((h) => /(secret|token)/.test(h));
   if (secretHeaders.length && /timingSafeEqual|expected/.test(text)) {
-    classes.push(secretHeaders.includes('x-cron-secret') ? 'cron-secret' : 'shared-secret');
-    notes.push(`Requires the \`${secretHeaders[0]}\` request header.`);
+    if (guards.some((g) => g.rejects)) {
+      classes.push(secretHeaders.includes('x-cron-secret') ? 'cron-secret' : 'shared-secret');
+      notes.push(`Requires the \`${secretHeaders[0]}\` request header.`);
+    } else {
+      notes.push(`Compares the \`${secretHeaders[0]}\` request header when one is sent, but no guard rejects a caller that omits it.`);
+    }
   }
 
   // A signed, self-describing token in the body/query (consent renewal, email
@@ -437,6 +680,14 @@ function classifyAuth(text, ctx = {}) {
   }
 
   if (!classes.length) classes.push('public');
+  if (escapes.length && hasSession) {
+    // Deliberately NOT phrased as "checks on top of the role check": the role is
+    // the way AROUND the other check, not an extra hurdle in front of it.
+    const list = escapes.join(' or ');
+    notes.push(
+      `Access is decided by a non-role condition - typically ownership of the record being addressed - which a session with the ${list} role may bypass. ${list} is an escape hatch here, not a requirement: any signed-in caller that satisfies the condition is allowed.`,
+    );
+  }
   if (approximate) notes.push('Further per-record checks (ownership, tenancy, step-up auth) apply on top of the role check.');
 
   // Deterministic, most-restrictive-first ordering.
@@ -455,7 +706,7 @@ function classifyAuth(text, ctx = {}) {
     'public',
   ];
   const unique = [...new Set(classes)].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
-  return { classes: unique, roles, denied, notes, approximate };
+  return { classes: unique, roles, denied, escapes, notes, approximate };
 }
 
 const AUTH_PROSE = {
@@ -647,9 +898,18 @@ function objectSchema(ts, literal, sourceFile, nodes, depth) {
  * { contentTypes, schema, source } where source is
  * 'zod' | 'zod-partial' | 'form-data' | 'unknown', or null when the handler
  * reads no body at all.
+ *
+ * `resolvedText` is the handler with its module-scope helpers inlined and is
+ * what everything here probes; `handler.body` is only the fallback for a caller
+ * that has not resolved anything. Reading the raw handler instead is what made
+ * POST /api/admin/announcements and PATCH /api/admin/announcements/{id}
+ * document as taking no payload: both call a module-scope readBody(request)
+ * that does the request.json() / request.formData(), so nothing in the raw
+ * handler text looks like a body read. They really accept both JSON and
+ * multipart.
  */
-function requestBodyFor(ts, handler, sourceFile, nodes) {
-  const body = handler.body;
+function requestBodyFor(ts, handler, sourceFile, nodes, resolvedText) {
+  const body = resolvedText || handler.body;
   const readsJson = /\b(?:request|req)\s*\.\s*json\s*\(/.test(body);
   const readsForm = /\bformData\s*\(/.test(body);
   if (!readsJson && !readsForm) return null;
@@ -698,6 +958,13 @@ const PLAUSIBLE_QUERY = /^[A-Za-z][A-Za-z0-9_.-]{0,40}$/;
  * aliases is itself called `params`, so the identifier name is not a usable
  * signal - collect direct hits plus hits through any identifier assigned
  * `...searchParams`.
+ *
+ * Reads the RESOLVED text (helpers inlined), like every other probe here. That
+ * is not a guess: it adds exactly two keys over the raw-handler reading, and
+ * both are real - /api/calendar-events parses `?from=`/`?to=` in a module-scope
+ * parseRange(), and /api/webhooks/jaas accepts its shared secret as `?secret=`
+ * when the provider console cannot send a custom header. The second one matters:
+ * with the raw text the access note claimed the header was the only way in.
  */
 function queryParams(body) {
   const keys = new Set();
@@ -753,10 +1020,38 @@ function sharedResponses() {
   return out;
 }
 
-function responsesFor(handler, urlPath, authClasses) {
-  const body = handler.body;
+/**
+ * The statuses one operation really answers with.
+ *
+ * Reads the RESOLVED text, so a status produced by a module-scope gate helper
+ * and handed straight back (`return NextResponse.json({ error: gate.error },
+ * { status: gate.status })`) is declared. Eleven operations gained a status this
+ * way - the 404 on /api/admin/organizations/{id}/pipeline-stages and
+ * /api/admin/document-requirements, the 403 on the requisitions and
+ * mentor-application gates, the 400/404/409 on POST /api/meetings/{id}/end -
+ * each verified against the route file.
+ *
+ * Still incomplete, and deliberately silent about it rather than wrong: the
+ * literal-only `status:\s*(\d{3})` scan cannot see a status behind a ternary
+ * (`status: healthy ? 200 : 503`) or behind a variable it cannot constant-fold.
+ * Under-declaring a status the endpoint can emit is recoverable; declaring one
+ * it cannot is not - which is why the 401 below is added only for operations
+ * that actually have a rejecting session guard (see classifyAuth: an endpoint
+ * with no rejecting guard classifies `public` and gets no 401).
+ */
+function responsesFor(handler, urlPath, authClasses, resolvedText) {
+  const body = resolvedText || handler.body;
   const codes = new Set();
   for (const m of body.matchAll(/status:\s*(\d{3})/g)) codes.add(Number(m[1]));
+  // `{ status: healthy ? 200 : 503 }` - both arms are literal, so both are real.
+  // This is why GET /api/health used to omit the 503 it genuinely answers with
+  // when a subsystem probe fails. A status behind a plain variable
+  // (`status: gate.status`) is still invisible here, but since every probe now
+  // reads the resolved text the helper's own literal is usually picked up.
+  for (const m of body.matchAll(/status:\s*[^,;{}()]*?\?\s*(\d{3})\s*:\s*(\d{3})/g)) {
+    codes.add(Number(m[1]));
+    codes.add(Number(m[2]));
+  }
   const redirects = /NextResponse\s*\.\s*redirect\s*\(/.test(body);
   if (redirects) codes.add(303);
   // 18 handlers answer with a Buffer (avatars, CVs, attachments) or an .ics
@@ -766,7 +1061,7 @@ function responsesFor(handler, urlPath, authClasses) {
   const calendar = /'text\/calendar/.test(body);
   if (/NextResponse\s*\.\s*json\s*\(/.test(body) || (!codes.size && !redirects)) codes.add(200);
   if (authClasses.some((c) => c.endsWith('-session') || c === 'api-key')) codes.add(401);
-  if (WRITE_VERBS.has(handler.method) && !VERIFY_EXEMPT.some((p) => urlPath.startsWith(p))) codes.add(403);
+  if (WRITE_VERBS.has(handler.method) && !verifyExempt(urlPath)) codes.add(403);
   if (/enforceRateLimit\s*\(/.test(body)) codes.add(429);
 
   const binaryType = calendar ? 'text/calendar' : binary ? 'application/octet-stream' : null;
@@ -873,7 +1168,7 @@ function buildSpec(repoRoot) {
         .map((c) => (c === 'role-session' ? AUTH_PROSE[c] + auth.roles.join(', ') + '.' : AUTH_PROSE[c]))
         .join(' ');
       const parts = [description, `**Access** - ${authLine}`, ...auth.notes];
-      if (WRITE_VERBS.has(handler.method) && !VERIFY_EXEMPT.some((p) => urlPath.startsWith(p))) {
+      if (WRITE_VERBS.has(handler.method) && !verifyExempt(urlPath)) {
         parts.push('A signed-in user who has not verified their email address gets 403 on this write - enforced in middleware, before the handler runs.');
       }
       if (catchAll) {
@@ -890,17 +1185,17 @@ function buildSpec(repoRoot) {
         tags: [tagFor(urlPath)],
       };
 
-      const query = queryParams(handler.body);
+      const query = queryParams(resolved);
       if (query.length) op.parameters = query.map((name) => ({ name, in: 'query', required: false, schema: { type: 'string' } }));
 
-      const body = requestBodyFor(ts, handler, sourceFile, nodes);
+      const body = requestBodyFor(ts, handler, sourceFile, nodes, resolved);
       if (body) {
         op.requestBody = { required: true, content: Object.fromEntries(body.contentTypes.map((ct) => [ct, { schema: body.schema }])) };
         op['x-body-source'] = body.source;
         stats.byBodySource[body.source] = (stats.byBodySource[body.source] || 0) + 1;
       }
 
-      op.responses = responsesFor(handler, urlPath, auth.classes);
+      op.responses = responsesFor(handler, urlPath, auth.classes, resolved);
       // An explicit empty array means "this operation declares no scheme" -
       // read x-auth for how it is actually guarded (a shared-secret header, an
       // unguessable token, a SAML assertion, or genuinely nothing).
@@ -910,15 +1205,19 @@ function buildSpec(repoRoot) {
       if (auth.classes.length > 1) op['x-auth-alternatives'] = auth.classes.slice(1);
       if (auth.roles.length) op['x-roles'] = auth.roles;
       if (auth.denied.length) op['x-roles-denied'] = auth.denied;
+      // Roles that BYPASS a non-role guard rather than being required by it.
+      if (auth.escapes.length) op['x-role-escape'] = auth.escapes;
       if (auth.approximate) op['x-auth-approximate'] = true;
       op['x-internal'] = !urlPath.startsWith('/api/v1');
       op['x-source'] = source;
       if (catchAll) op['x-catch-all'] = true;
-      // The explorer hides "Try it out" for these: exercising the NextAuth
-      // surface from the page can destroy the caller's own session.
+      // Exercising the NextAuth surface from the page can destroy the caller's
+      // own session. The explorer folds this into the same gate as
+      // x-destructive: the request is confirmed in its requestInterceptor
+      // before being sent, not hidden. See the note above DESTRUCTIVE.
       if (auth.classes.includes('nextauth')) op['x-try-it'] = false;
       if (DESTRUCTIVE.has(`${handler.method} ${urlPath}`)) op['x-destructive'] = true;
-      if (/enforceRateLimit\s*\(/.test(handler.body)) op['x-rate-limited'] = true;
+      if (/enforceRateLimit\s*\(/.test(resolved)) op['x-rate-limited'] = true;
       if (/withTenantScope\s*\(/.test(resolved)) op['x-tenant-scoped'] = true;
       if (/adminPassword|verifyTotp/.test(resolved)) op['x-step-up-auth'] = true;
 
@@ -1006,11 +1305,14 @@ function generate(repoRoot = process.cwd(), outFile = OUT_FILE) {
 
 module.exports = {
   API_DIR,
+  VERIFY_EXEMPT,
+  DESTRUCTIVE,
   OUT_FILE,
   VERBS,
   urlPathFor,
   routeFiles,
   sanitizeComment,
+  IGNORE_MARKER,
   summaryAndDescription,
   collectModule,
   inlineHelpers,

@@ -160,9 +160,57 @@ read when you need the authoritative answer.
 | `x-internal` | `false` only for `/api/v1` |
 | `x-source` | the route file, for when you need the real answer |
 | `x-body-source` | `zod`, `zod-partial`, `form-data`, `unknown` |
-| `x-destructive` | irreversible, or sends real mail — put an interstitial in front of *Try it out* |
-| `x-catch-all`, `x-try-it` | the NextAuth catch-all; exercising it can end your own session |
+| `x-destructive` | irreversible, or sends real mail — the explorer puts a confirmation in front of *Try it out* (see below) |
+| `x-catch-all`, `x-try-it` | the NextAuth catch-all; exercising it can end your own session, so the explorer gates it too |
 | `x-rate-limited`, `x-tenant-scoped`, `x-step-up-auth` | secondary attributes |
+
+### The *Try it out* gate
+
+`ApiExplorer.tsx` enforces those two flags in its `requestInterceptor`, which
+Swagger UI calls after it has built the request and before it reaches `fetch`.
+A request is guarded when any of three things is true:
+
+* the operation carries `x-destructive`;
+* the operation carries `x-try-it: false`;
+* **the method is `DELETE`** — regardless of annotation. The generator's curated
+  `x-destructive` list marks exactly one of the 31 `DELETE` operations, and a
+  gate that trusted only the annotation would be wrong precisely where being
+  wrong costs the most, so here the method wins over the document.
+
+A guarded request pops a native `window.confirm` naming the method and the
+resolved URL. Declining throws out of the interceptor, so the request is never
+handed to `fetch` at all; Swagger catches the rejection and renders the
+cancellation in that operation's own response panel. `window.confirm` rather
+than the app's own `ConfirmDialog` on purpose: it is synchronous and modal, so
+there is no window in which a re-render or a second click can slip the request
+past it. `showMutatedRequest: false` is part of the same mechanism, not a
+cosmetic setting — Swagger's response panel reads the *mutated* request, which
+is only recorded after the interceptor returns, so on a cancelled request it
+would be null and the panel would throw while rendering.
+
+`e2e/api-explorer.spec.ts` covers this by watching the network: it declines the
+confirmation on `DELETE /api/admin/api-keys` and asserts no such request was
+ever sent.
+
+### Excluding a comment: `@openapi-ignore`
+
+A route comment that would be harmful to republish can opt out. Put the literal
+string `@openapi-ignore` anywhere in a handler's leading comment block and the
+generator leaves that comment out of the description; the comment stays in the
+source, where it is still worth reading.
+
+Use it for notes that are useful to a developer *because* they say where the
+guarantees stop — the kind of thing that reads as a to-do list to anyone probing
+the app. `src/app/api/availability/route.ts` is the worked example: its `GET`
+comment names `orgContext`'s `TENANT_MODELS` and spells out that every model
+outside that list falls beyond the central tenant-isolation guarantee. Next to
+`x-source`, which names the exact file for every route, that is a map. It stays
+in the file; it does not go in the document.
+
+Do **not** reach for it to tidy a description. Deleting a route from the reader's
+view is the failure mode this whole document exists to avoid; the marker removes
+a *comment*, and the operation, its guard class and its `x-source` are still
+published.
 
 ### Comment sanitising
 
@@ -179,6 +227,16 @@ The all-caps rule requires the `SECRET|TOKEN|KEY|PASSWORD` suffix on purpose:
 role and enum names (`MENTEE`, `COMPANY`, `IN_PROGRESS`) appear in comments over
 a hundred times and are legitimate documentation.
 
+**Any comment line containing a URL is dropped**, whether or not there is a
+secret anywhere near it. That is deliberate — it errs safe, because a URL in an
+internal note is as likely to be an internal host or a webhook endpoint with a
+token in the query string as it is to be a link to a spec. It is also blunt, and
+it has a visible casualty: the operator setup instructions in
+`src/app/api/webhooks/jaas/route.ts` (lines 12-16) are gutted, so the published
+description reads as a fragment. If you find a description that stops
+mid-thought, this rule is the first thing to suspect — open the `x-source` file
+and read the real comment.
+
 ---
 
 ## Authentication in the explorer
@@ -189,17 +247,36 @@ The document declares exactly two security schemes:
   You are already carrying it, and `servers: [{ url: '/' }]` keeps *Try it out*
   on the same origin, so requests run **as you, with your own permissions**. This
   covers the large majority of operations. It also means a *Try it out* on a
-  destructive endpoint really is destructive.
+  destructive endpoint really is destructive — the gate described above asks
+  first, but confirming it means the thing happens, to this environment's data.
 * **`bearerApiKey`** — an admin-issued `icrm_…` key, for the `/api/v1` surface.
   The explorer mints one through the **existing** `POST /api/admin/api-keys`
   route: no new token type and no new auth path, so every key created from the
   page lands in the admin activity log (`apikey.created`, level `warning`) like
   any other. The raw key is shown exactly once.
 
+  `ApiKey` has no `expiresAt` column, so nothing on the server ever retires a
+  key minted here — which is why the page revokes it for you. Navigating away
+  inside the app revokes it on unmount (an ordinary request on a page that is
+  still alive), and closing the tab or hard-reloading fires the same `DELETE`
+  with `keepalive` from a `pagehide` handler. That second path is genuinely best
+  effort — a killed browser or an offline machine leaves the key alive — so the
+  copy on the card still tells you to revoke it, and the *Revoke* button is
+  still there. (`navigator.sendBeacon` is not usable for this: it only sends
+  POST.)
+
 Endpoints guarded some other way (a shared-secret header, an unguessable token in
 the URL, a SAML assertion) declare `security: []` and carry the real mechanism in
 `x-auth` and in the description. Only two schemes are declared because only two
 are things a browser session can actually present.
+
+Those descriptions **name the header** — `x-cron-secret`, `x-inbound-secret`,
+`x-webhook-secret` — and that is on purpose. A header name is not a credential;
+the value is, and no value appears anywhere in this document (`check:openapi`
+re-scans the generated text to keep it that way). Withholding the name would buy
+nothing an attacker could not read off the route file, while costing the reader
+the difference between a callable endpoint and a mystery — which is the entire
+point of publishing an inventory.
 
 Two things that will surprise you in the UI:
 

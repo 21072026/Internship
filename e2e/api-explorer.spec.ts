@@ -94,6 +94,22 @@ test('Swagger UI renders the operations and the token button pre-authorizes it',
   const email = uniqueEmail('apiexp-ui');
   const pw = 'ApiExpPass123!';
   const admin = await seedUser(email, pw, 'ADMIN', 'API Explorer UI Admin');
+  // Every key this test causes to exist, by id, read off the mint response.
+  // The cleanup used to be `name: { startsWith: 'Swagger UI' }` — which is the
+  // exact name the page mints, so pointed at a real DATABASE_URL (CLAUDE.md
+  // documents running this suite against a deployed env) it would have deleted
+  // credentials real admins minted from this very page.
+  const mintedIds: string[] = [];
+  page.on('response', async (res) => {
+    if (res.request().method() !== 'POST' || !res.ok()) return;
+    if (new URL(res.url()).pathname !== '/api/admin/api-keys') return;
+    try {
+      const body = await res.json();
+      if (body && body.id) mintedIds.push(String(body.id));
+    } catch {
+      /* not JSON — nothing to clean up from it */
+    }
+  });
   try {
     await login(page, email, pw);
     await page.goto('/admin/api-explorer');
@@ -165,8 +181,154 @@ test('Swagger UI renders the operations and the token button pre-authorizes it',
       .poll(async () => (await page.request.get('/api/v1/candidates', { headers: { Authorization: `Bearer ${raw}` } })).status(), { timeout: 20_000 })
       .toBe(401);
   } finally {
-    // The minted keys are not tied to the user row, so clear them explicitly.
-    await prisma.apiKey.deleteMany({ where: { name: { startsWith: 'Swagger UI' } } });
+    // The minted keys are not tied to the user row, so clear them explicitly —
+    // by id, never by name. See `mintedIds` above.
+    if (mintedIds.length) await prisma.apiKey.deleteMany({ where: { id: { in: mintedIds } } });
+    await prisma.user.delete({ where: { id: admin.id } }).catch(() => {});
+    await cleanupByEmail(email);
+  }
+});
+
+test('a guarded operation asks before it fires, and declining sends nothing', async ({ page }) => {
+  const email = uniqueEmail('apiexp-gate');
+  const pw = 'ApiExpPass123!';
+  const admin = await seedUser(email, pw, 'ADMIN', 'API Explorer Gate Admin');
+
+  // The gate's only real claim is "declining means the request never left the
+  // browser", so watch the wire rather than the widget.
+  const sent: string[] = [];
+  page.on('request', (req) => {
+    if (req.method() === 'DELETE' && new URL(req.url()).pathname === '/api/admin/api-keys') sent.push(req.url());
+  });
+  // Playwright dismisses dialogs by default, which for window.confirm() is
+  // exactly "the admin clicked Cancel". Handle it only to read the text back.
+  const prompts: string[] = [];
+  page.on('dialog', async (d) => {
+    prompts.push(d.message());
+    await d.dismiss();
+  });
+
+  try {
+    await login(page, email, pw);
+    await page.goto('/admin/api-explorer');
+
+    // The page claims the gate exists. Everything below is that claim, checked.
+    await expect(page.getByTestId('api-explorer-gate-note')).toBeVisible();
+
+    const ui = page.getByTestId('api-explorer-ui');
+    await expect(ui.locator('.opblock-tag').first()).toBeVisible({ timeout: 60_000 });
+
+    // DELETE /api/admin/api-keys is the target for two reasons: it is a DELETE,
+    // so it exercises the half of the gate that does not depend on the
+    // generator's curated `x-destructive` list (which marks 1 of 31 DELETEs);
+    // and if the gate ever failed open, the request that escaped would be a
+    // no-op — `?id=` empty matches no row — instead of damage this test would
+    // have to repair. Scoped to the widget: AdminNav renders its own sidebar
+    // filter box, so an unscoped input selector hits that instead (CLAUDE.md).
+    await ui.locator('.filter input').fill('admin');
+    await ui.locator('.opblock-tag[data-tag="admin"]').click();
+    const op = ui.locator('.opblock.opblock-delete', {
+      has: page.locator('span.opblock-summary-path[data-path="/api/admin/api-keys"]'),
+    });
+    await expect(op).toHaveCount(1);
+    // Expanding is enough — `tryItOutEnabled: true` means the operation opens
+    // already in try-it-out mode, so clicking `.try-out__btn` (which reads
+    // "Cancel" at that point) would turn it OFF and remove Execute.
+    await op.locator('.opblock-summary').click();
+    await op.locator('button.execute').click();
+
+    // The confirmation actually happened, and it named the method and the
+    // resolved URL rather than a vague "are you sure".
+    await expect.poll(() => prompts.length, { timeout: 15_000 }).toBe(1);
+    expect(prompts[0]).toContain('DELETE');
+    expect(prompts[0]).toContain('/api/admin/api-keys');
+
+    // Declining renders the cancellation in the operation's own live-response
+    // panel (Swagger catches the thrown interceptor error) rather than hanging
+    // on a spinner. Locale-agnostic: the suite does not pin a language.
+    await expect(op.locator('.live-responses-table')).toContainText(/cancel|iptal|abgebrochen/i, {
+      timeout: 20_000,
+    });
+
+    // And the point of the whole exercise: nothing was sent. Checked after the
+    // panel rendered, so a request in flight would already have been seen.
+    expect(sent).toEqual([]);
+
+    // The gate must not have swallowed the explorer whole: an unguarded read on
+    // the same path prompts for nothing and comes back with a real response.
+    const readOp = ui.locator('.opblock.opblock-get', {
+      has: page.locator('span.opblock-summary-path[data-path="/api/admin/api-keys"]'),
+    });
+    await readOp.locator('.opblock-summary').click();
+    await readOp.locator('button.execute').click();
+    await expect(readOp.locator('.live-responses-table')).toContainText('200', { timeout: 20_000 });
+    expect(prompts).toHaveLength(1);
+  } finally {
+    await prisma.user.delete({ where: { id: admin.id } }).catch(() => {});
+    await cleanupByEmail(email);
+  }
+});
+
+test('a failed spec load is recoverable without reloading the page', async ({ page }) => {
+  const email = uniqueEmail('apiexp-retry');
+  const pw = 'ApiExpPass123!';
+  const admin = await seedUser(email, pw, 'ADMIN', 'API Explorer Retry Admin');
+  // The mint button creates a real credential even on the sad path, so track it
+  // by id and clean it up the same way the rendering test does.
+  const mintedIds: string[] = [];
+  page.on('response', async (res) => {
+    if (res.request().method() !== 'POST' || !res.ok()) return;
+    if (new URL(res.url()).pathname !== '/api/admin/api-keys') return;
+    try {
+      const body = await res.json();
+      if (body && body.id) mintedIds.push(String(body.id));
+    } catch {
+      /* not JSON — nothing to clean up from it */
+    }
+  });
+  try {
+    await login(page, email, pw);
+
+    // One handler for the whole test, switched by `mode` — re-routing the same
+    // URL mid-test races with the in-flight request and throws "Route is
+    // already handled".
+    let mode: 'slow' | 'fail' | 'pass' = 'slow';
+    await page.route('**/api/admin/openapi', async (route) => {
+      if (mode === 'fail') {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"boom"}' });
+        return;
+      }
+      if (mode === 'slow') await new Promise((r) => setTimeout(r, 10_000));
+      // A navigation while this handler was still sleeping already discarded
+      // the route; there is nothing left to continue.
+      await route.continue().catch(() => {});
+    });
+
+    // A slow spec fetch must not disable the mint button: the two are
+    // independent, and gating the button on the fetch meant a request that
+    // never settled left it dead for the life of the page.
+    await page.goto('/admin/api-explorer');
+    const generate = page.getByTestId('api-explorer-generate');
+    await expect(generate).toBeEnabled();
+    await generate.click();
+    await expect(page.getByTestId('api-explorer-key')).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId('api-explorer-revoke').click();
+    await page.getByRole('button', { name: /revoke|iptal et|sil|widerruf/i }).last().click();
+
+    // A failed spec fetch must offer a way back. It used to be terminal: the
+    // effect's mount guard had already flipped, so only a full page reload
+    // would try again.
+    mode = 'fail';
+    await page.goto('/admin/api-explorer');
+    const retry = page.getByTestId('api-explorer-retry');
+    await expect(retry).toBeVisible({ timeout: 20_000 });
+    mode = 'pass';
+    await retry.click();
+    await expect(page.getByTestId('api-explorer-ui').locator('.opblock-tag').first()).toBeVisible({
+      timeout: 60_000,
+    });
+  } finally {
+    if (mintedIds.length) await prisma.apiKey.deleteMany({ where: { id: { in: mintedIds } } });
     await prisma.user.delete({ where: { id: admin.id } }).catch(() => {});
     await cleanupByEmail(email);
   }

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { Check, Copy, KeyRound, ShieldAlert, Trash2 } from 'lucide-react';
+import { Check, Copy, KeyRound, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
 import { useT } from '@/i18n/client';
 import type { SwaggerUISystem } from 'swagger-ui-dist/swagger-ui-es-bundle.js';
 import 'swagger-ui-dist/swagger-ui.css';
@@ -39,6 +39,17 @@ import 'swagger-ui-dist/swagger-ui.css';
 //      dialog via `preauthorizeApiKey`, so nobody copy-pastes a credential.
 //      API keys authenticate `/api/v1/*` ONLY; everything else is session-only,
 //      and the copy on the page says so rather than implying otherwise.
+//      The key is a throwaway: it is revoked again when this component
+//      unmounts, so browsing away does not leave a live credential behind
+//      (see the `pagehide` effect).
+//
+// THE TRY-IT-OUT GATE
+//   `tryItOutEnabled: true` plus a session cookie means Execute is a real,
+//   authenticated request as the signed-in admin. The document flags the ones
+//   you must not fire by accident, and `requestInterceptor` is where that flag
+//   is actually enforced — see `buildGuards`. There is no Swagger plugin
+//   involved: the interceptor runs before the request is handed to fetch, so
+//   throwing from it is what "cancel" means.
 
 interface OpenApiSpec {
   paths?: Record<string, Record<string, unknown>>;
@@ -46,6 +57,61 @@ interface OpenApiSpec {
 }
 
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'patch', 'head', 'options', 'trace'];
+
+interface Guard {
+  method: string;
+  path: RegExp;
+}
+
+/**
+ * The operations that must not fire on a stray click, as matchers against a
+ * RESOLVED request URL. Three sources, deliberately OR-ed:
+ *
+ *   * `x-destructive` — the generator's curated list: irreversible, or sends
+ *     real mail (erase, import, bulk, merge, impersonate, email-test, cron).
+ *   * `x-try-it: false` — the NextAuth catch-all, whose own description says
+ *     not to exercise it: it can end the caller's own session.
+ *   * EVERY DELETE, annotated or not. The curated list marks exactly one of the
+ *     31 DELETE operations, and a gate that trusts an incomplete annotation is
+ *     a gate that is wrong precisely where it matters, so the method wins here.
+ */
+function buildGuards(spec: OpenApiSpec): Guard[] {
+  const guards: Guard[] = [];
+  for (const [path, item] of Object.entries(spec.paths ?? {})) {
+    if (!item || typeof item !== 'object') continue;
+    for (const [method, operation] of Object.entries(item)) {
+      if (!HTTP_METHODS.includes(method.toLowerCase())) continue;
+      const op = operation && typeof operation === 'object' ? (operation as Record<string, unknown>) : null;
+      const flagged =
+        method.toLowerCase() === 'delete' ||
+        (!!op && (op['x-destructive'] === true || op['x-try-it'] === false));
+      if (!flagged) continue;
+      // '/api/admin/users/{id}/erase' has to match the resolved
+      // '/api/admin/users/clx…/erase': escape the literal text first, then turn
+      // each now-escaped '\{param\}' back into a single-segment wildcard.
+      const source = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\{.*?\\\}/g, '[^/]+');
+      guards.push({ method: method.toUpperCase(), path: new RegExp(`^${source}$`) });
+    }
+  }
+  return guards;
+}
+
+/** Does this about-to-be-sent request hit a guarded operation? */
+function isGuarded(guards: Guard[], method: string | undefined, url: string | undefined): boolean {
+  const m = (method ?? 'get').toUpperCase();
+  // Any DELETE at all, including one no spec entry matches — see buildGuards.
+  if (m === 'DELETE') return true;
+  if (!url) return false;
+  let pathname: string;
+  try {
+    // `servers: [{ url: '/' }]` means Swagger hands us a same-origin URL that
+    // may be relative, so resolve it before comparing paths.
+    pathname = new URL(url, window.location.origin).pathname;
+  } catch {
+    return false;
+  }
+  return guards.some((g) => g.method === m && g.path.test(pathname));
+}
 
 function countOperations(spec: OpenApiSpec): { paths: number; operations: number } {
   const paths = spec.paths ?? {};
@@ -72,10 +138,15 @@ export function ApiExplorer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const uiRef = useRef<SwaggerUISystem | null>(null);
   const startedRef = useRef(false);
+  const guardsRef = useRef<Guard[]>([]);
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadError, setLoadError] = useState('');
   const [counts, setCounts] = useState<{ paths: number; operations: number } | null>(null);
+  // Bumped by the Retry button. Without it a failed spec fetch is terminal: the
+  // mount guard below has already flipped, so nothing short of a full page
+  // reload would try again.
+  const [attempt, setAttempt] = useState(0);
 
   const [minted, setMinted] = useState<MintedKey | null>(null);
   const [keyBusy, setKeyBusy] = useState(false);
@@ -84,6 +155,19 @@ export function ApiExplorer() {
   const [copyFailed, setCopyFailed] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
 
+  // The interceptor lives inside a `[]`-dep effect but has to render the
+  // current locale, so the dictionary is read through a ref rather than
+  // captured at mount.
+  const tRef = useRef(t);
+  tRef.current = t;
+
+  // Read by the leave-the-page sweep, which must not re-subscribe every time
+  // the key changes.
+  const mintedRef = useRef<MintedKey | null>(null);
+  useEffect(() => {
+    mintedRef.current = minted;
+  }, [minted]);
+
   useEffect(() => {
     // `reactStrictMode` double-invokes effects in dev, so the mount is guarded
     // by a ref. Note there is deliberately NO abort flag in the cleanup: with
@@ -91,6 +175,10 @@ export function ApiExplorer() {
     // mean nothing ever mounts, because the second pass returns early.
     if (startedRef.current) return;
     startedRef.current = true;
+
+    // Captured now rather than read in the cleanup: by the time the cleanup
+    // runs React may already have detached the node from the ref.
+    const node = containerRef.current;
 
     (async () => {
       // The spec is fetched here rather than handed to Swagger UI as a `url`
@@ -114,12 +202,15 @@ export function ApiExplorer() {
       }
       const spec = (await res.json()) as OpenApiSpec;
       setCounts(countOperations(spec));
+      // Built from the document that is actually on screen, so the gate can
+      // never disagree with the badges the reader is looking at.
+      guardsRef.current = buildGuards(spec);
 
       const { default: SwaggerUIBundle } = await import('swagger-ui-dist/swagger-ui-es-bundle.js');
-      if (!containerRef.current) return;
+      if (!node) return;
 
       uiRef.current = SwaggerUIBundle({
-        domNode: containerRef.current,
+        domNode: node,
         spec,
         validatorUrl: null,
         // ~190 endpoints: everything collapsed, a filter box, and the models
@@ -141,19 +232,69 @@ export function ApiExplorer() {
         displayRequestDuration: true,
         tagsSorter: 'alpha',
         operationsSorter: 'alpha',
+        // Required by the gate below, not a cosmetic choice. Swagger's response
+        // panel reads `mutatedRequestFor()` when this is true, and that entry is
+        // only written AFTER the interceptor returns — so on a cancelled request
+        // it is null and the panel throws while rendering. With this off the
+        // panel reads the pre-interceptor request, which is written before the
+        // interceptor runs and is identical anyway (the interceptor only sets
+        // `credentials`, which no request display shows).
+        showMutatedRequest: false,
         // Auth mode 1: the admin's existing NextAuth session cookie rides along
         // on every "Try it out" request. See the header comment.
         withCredentials: true,
-        requestInterceptor: (req: { credentials?: RequestCredentials }) => {
+        requestInterceptor: (req: { url?: string; method?: string; credentials?: RequestCredentials }) => {
           req.credentials = 'same-origin';
+          // THE GATE. This runs after Swagger has built the request and before
+          // it reaches fetch, so throwing here means the request is never sent —
+          // Swagger's own executeRequest catches the rejection and renders the
+          // message in the operation's response panel. `window.confirm` rather
+          // than the app's ConfirmDialog on purpose: it is synchronous and
+          // modal, so there is no window in which a re-render or a second click
+          // can slip the request past, and it names the origin itself.
+          if (isGuarded(guardsRef.current, req.method, req.url)) {
+            const tr = tRef.current.apiExplorer;
+            const resolved = (() => {
+              try {
+                return new URL(req.url ?? '', window.location.origin).href;
+              } catch {
+                return req.url ?? '';
+              }
+            })();
+            const ok = window.confirm(
+              tr.tryItConfirm.replace('{method}', (req.method ?? 'GET').toUpperCase()).replace('{url}', resolved)
+            );
+            if (!ok) throw new Error(tr.tryItCancelled);
+          }
           return req;
         },
       });
       setStatus('ready');
     })().catch((err: unknown) => {
+      // Release the mount guard so Retry can run the whole thing again.
+      startedRef.current = false;
       setLoadError(err instanceof Error ? err.message : String(err));
       setStatus('error');
     });
+
+    return () => {
+      // swagger-ui-dist 5.x exposes NO teardown: the ES bundle registers
+      // document/window listeners (popstate, keydown, click, copy) at module
+      // scope and offers nothing to unregister them, so those listeners — and
+      // the ~1.2 MB module itself — survive this cleanup for the tab's
+      // lifetime. What this DOES release is the React tree Swagger mounted and
+      // our reference to its system object, so the parsed document and the
+      // rendered operation tree can be collected. Do not read this as a full
+      // unmount; it is not one.
+      uiRef.current = null;
+      if (node) node.innerHTML = '';
+    };
+  }, [attempt]);
+
+  const retryLoad = useCallback(() => {
+    setLoadError('');
+    setStatus('loading');
+    setAttempt((n) => n + 1);
   }, []);
 
   const generateKey = useCallback(async () => {
@@ -195,6 +336,37 @@ export function ApiExplorer() {
       setKeyBusy(false);
     }
   }, [t, toast]);
+
+  // A key minted here is a throwaway for one visit, but `ApiKey` has no
+  // `expiresAt` column — nothing expires it, so an unrevoked one is a
+  // permanent global credential. Sweep it on the way out.
+  //
+  // Reliability, honestly: the unmount path (a client-side navigation inside the
+  // app, the common case) is an ordinary fetch on a page that is still alive, so
+  // it lands. The `pagehide` path — closing the tab, a hard reload, typing a new
+  // URL — is best effort: `keepalive` is what lets the browser finish it after
+  // the document is gone, and `sendBeacon` is not an option because it only ever
+  // sends POST. A killed process or an offline machine leaves the key alive,
+  // which is why the copy on the card still tells the admin to revoke it.
+  useEffect(() => {
+    const sweep = () => {
+      const key = mintedRef.current;
+      if (!key) return;
+      mintedRef.current = null;
+      void fetch(`/api/admin/api-keys?id=${encodeURIComponent(key.id)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        keepalive: true,
+      }).catch(() => {
+        /* nothing useful to say: the page is already going away */
+      });
+    };
+    window.addEventListener('pagehide', sweep);
+    return () => {
+      window.removeEventListener('pagehide', sweep);
+      sweep();
+    };
+  }, []);
 
   const copyKey = useCallback(async () => {
     if (!minted) return;
@@ -284,7 +456,10 @@ export function ApiExplorer() {
 
       <div className="mb-6 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
         <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
-        <p data-testid="api-explorer-warning">{t.apiExplorer.warning}</p>
+        <div>
+          <p data-testid="api-explorer-warning">{t.apiExplorer.warning}</p>
+          <p data-testid="api-explorer-gate-note" className="mt-1">{t.apiExplorer.tryItGateNote}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -347,7 +522,11 @@ export function ApiExplorer() {
               size="sm"
               onClick={generateKey}
               loading={keyBusy}
-              disabled={status === 'loading'}
+              // Deliberately NOT gated on `status`: a spec fetch that never
+              // settles used to leave this button disabled forever. Minting
+              // before Swagger has mounted is already handled — the key is
+              // shown and copyable, and `preauthorizeApiKey` is called only if
+              // there is a system object to call it on.
               data-testid="api-explorer-generate"
             >
               <KeyRound className="h-4 w-4" />
@@ -369,6 +548,10 @@ export function ApiExplorer() {
           <CardHeader><CardTitle>{t.apiExplorer.loadFailed}</CardTitle></CardHeader>
           <p className="text-sm text-red-600 break-words" role="alert">{loadError}</p>
           <p className="text-sm text-gray-500 mt-2">{t.apiExplorer.loadFailedHint}</p>
+          <Button className="mt-3" size="sm" variant="secondary" onClick={retryLoad} data-testid="api-explorer-retry">
+            <RotateCcw className="h-4 w-4" />
+            <span className="ml-1.5">{t.apiExplorer.retry}</span>
+          </Button>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <a href="/api/admin/openapi" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
               {t.apiExplorer.rawSpecLink} →

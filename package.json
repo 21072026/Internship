@@ -4,6 +4,9 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
+  "scarfSettings": {
+    "enabled": false
+  },
   "prisma": {
     "seed": "node prisma/seed.mjs"
   },

@@ -27,6 +27,15 @@
 //   8. the PUBLIC spec route still exists. It is a separate, hand-written
 //      document with its own security-scheme name, and this generator must
 //      never replace or shadow it.
+//   9. exactly one module under src/ reads APP_OPENAPI_SPEC, and it is the
+//      ADMIN-only route handler
+//  10. the VERIFY_EXEMPT allowlist still agrees with src/middleware.ts, in both
+//      directions and with the same match semantics
+//  11. every hardcoded DESTRUCTIVE key still names a real operation
+//
+// Checks 9-11 all exist for the same reason: each is a coupling between two
+// files that would otherwise break SILENTLY - no type error, no failing test,
+// just a document that has quietly started lying.
 //
 // What it does NOT catch: whether a derived request body matches what the
 // handler actually accepts. Bodies are best-effort by design; an operation the
@@ -35,7 +44,7 @@
 //
 // Run: node scripts/check-openapi.mjs   (npm run check:openapi)
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -86,7 +95,16 @@ for (const { urlPath, method, op } of operations) {
 // /api/admin/duplicates/check is deliberately ADMIN-or-MENTOR (mentors get
 // duplicate detection while inviting). "any-session" or "public" under
 // /api/admin/ never counts.
-const ADMIN_OK = new Set(['admin-session', 'cron-secret', 'shared-secret']);
+//
+// The set is deliberately just 'admin-session'. It used to also accept
+// 'cron-secret' and 'shared-secret', which would let an /api/admin/* route
+// guarded ONLY by a shared header pass this rule - and a shared secret is not an
+// ADMIN session: it has no user, no role, no audit identity, and it is handed to
+// monitors and schedulers. No route under /api/admin/ is classified that way
+// today (the secret-guarded routes all live under /api/cron, /api/inbound-email
+// and /api/webhooks), so narrowing costs nothing and closes the hole before
+// someone adds one.
+const ADMIN_OK = new Set(['admin-session']);
 for (const { urlPath, method, op } of operations) {
   if (!urlPath.startsWith('/api/admin/')) continue;
   const shared = op['x-auth'] === 'role-session' && (op['x-roles'] || []).includes('ADMIN');
@@ -108,6 +126,99 @@ for (const { urlPath, method, op } of operations) {
     for (const [re, why] of LEAKS) {
       if (re.test(value)) problems.push(`${method.toUpperCase()} ${urlPath}: ${field} ${why} - the comment sanitiser let it through`);
     }
+  }
+}
+
+// 9 - the inlining hazard.
+//
+// next.config.js hands the generated document to the bundle through
+// `nextConfig.env.APP_OPENAPI_SPEC`, and Next implements `env` with webpack's
+// DefinePlugin: the value is substituted into the source of EVERY module that
+// mentions the name. Today exactly one module does, and it is a server-only
+// route handler behind an ADMIN check, so nothing reaches the browser. The
+// moment a CLIENT component references it, the whole internal route inventory -
+// ~300 KB naming every endpoint, its guard and its source file - is inlined into
+// a publicly served /_next/static chunk, with no session check anywhere near it.
+// Nothing else in the toolchain notices: it builds, it type-checks, the page
+// works. Hence a grep with a single allowed file.
+const SPEC_ENV_OWNER = path.join('src', 'app', 'api', 'admin', 'openapi', 'route.ts');
+const SPEC_ENV_NAME = 'APP_OPENAPI_SPEC';
+const sourceFilesUnder = (dir, acc = []) => {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return acc;
+  }
+  for (const entry of entries) {
+    const abs = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      // src/generated holds the inspection copy of the document itself.
+      if (entry.name === 'generated' || entry.name === 'node_modules') continue;
+      sourceFilesUnder(abs, acc);
+    } else if (/\.(?:[cm]?[jt]sx?)$/.test(entry.name)) {
+      acc.push(abs);
+    }
+  }
+  return acc;
+};
+for (const abs of sourceFilesUnder(path.join(ROOT, 'src'))) {
+  const rel = path.relative(ROOT, abs);
+  if (!readFileSync(abs, 'utf8').includes(SPEC_ENV_NAME)) continue;
+  if (rel === SPEC_ENV_OWNER) continue;
+  problems.push(
+    `${rel} references ${SPEC_ENV_NAME} - next.config.js exposes it through \`env\`, so DefinePlugin inlines the whole internal API inventory into every module that names it. Only ${SPEC_ENV_OWNER} (server-only, ADMIN-gated) may read it; anywhere else and a public /_next/static chunk ships the document.`,
+  );
+}
+
+// 10 - VERIFY_EXEMPT is a hand-copy of the middleware allowlist.
+//
+// The generator uses it to decide whether an operation gets the "unverified
+// users get 403 on this write" note and the 403 response. Edit one file and not
+// the other and the document lies with nothing to catch it - which already
+// happened once in the other direction, when the generator prefix-matched all
+// seven entries while the middleware compares six of them for equality. So
+// check both the membership AND the match operator, in both directions.
+const middlewarePath = path.join(ROOT, 'src', 'middleware.ts');
+if (!existsSync(middlewarePath)) {
+  problems.push('src/middleware.ts is gone - VERIFY_EXEMPT in the generator is a copy of its allowlist and can no longer be verified');
+} else {
+  const middleware = readFileSync(middlewarePath, 'utf8');
+  const allowlist = middleware.slice(middleware.indexOf('function isAllowlisted'));
+  const body = allowlist.slice(0, allowlist.indexOf('\n}') + 1);
+  for (const entry of generator.VERIFY_EXEMPT) {
+    const quoted = entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const wanted = entry.endsWith('/')
+      ? new RegExp(`pathname\\s*\\.\\s*startsWith\\s*\\(\\s*'${quoted}'`)
+      : new RegExp(`pathname\\s*===\\s*'${quoted}'`);
+    if (!wanted.test(body)) {
+      problems.push(
+        `VERIFY_EXEMPT lists "${entry}" but src/middleware.ts does not ${entry.endsWith('/') ? "startsWith-match" : 'compare pathname ==='} it - the generator would drop the unverified-user 403 from writes that really get one`,
+      );
+    }
+  }
+  const declared = new Set(generator.VERIFY_EXEMPT);
+  const inMiddleware = [
+    ...body.matchAll(/pathname\s*(?:===\s*'([^']+)'|\.\s*startsWith\s*\(\s*'([^']+)')/g),
+  ].map((m) => m[1] || m[2]);
+  for (const entry of inMiddleware) {
+    if (entry.startsWith('/api/') && !declared.has(entry)) {
+      problems.push(
+        `src/middleware.ts exempts "${entry}" from the e-mail-verification gate but VERIFY_EXEMPT in scripts/openapi-generate.cjs does not - the document claims a 403 that endpoint never returns`,
+      );
+    }
+  }
+}
+
+// 11 - the DESTRUCTIVE list is nine hardcoded "METHOD /api/path" strings, and
+// the explorer's confirm gate is built from them. A route rename would leave the
+// key pointing at nothing and quietly un-flag the endpoint.
+const opKeys = new Set(operations.map(({ urlPath, method }) => `${method.toUpperCase()} ${urlPath}`));
+for (const key of generator.DESTRUCTIVE) {
+  if (!opKeys.has(key)) {
+    problems.push(
+      `DESTRUCTIVE lists "${key}" but no such operation exists - the path or verb was renamed and the explorer stopped confirming it. Fix the key in scripts/openapi-generate.cjs (or drop it if the endpoint is gone).`,
+    );
   }
 }
 
