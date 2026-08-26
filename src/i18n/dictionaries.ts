@@ -3152,6 +3152,10 @@ const en = {
     continue: 'Continue',
     back: 'Back',
     complete: 'Complete Profile',
+    mentee: {
+      title: 'Complete Your Profile',
+      subtitle: 'Help us match you with the right mentor and opportunities',
+    },
     mentor: {
       title: 'Set Up Your Mentor Profile',
       subtitle: 'A few quick steps so mentees know who you are and when you’re free',
@@ -6373,6 +6377,10 @@ const tr: Dict = {
     continue: 'Devam',
     back: 'Geri',
     complete: 'Profili Tamamla',
+    mentee: {
+      title: 'Profilini tamamla',
+      subtitle: 'Seni doğru mentor ve fırsatlarla eşleştirmemize yardımcı ol',
+    },
     mentor: {
       title: 'Mentor Profilini Oluştur',
       subtitle: 'Mentee\'lerin seni tanıması ve müsait olduğun zamanları görmesi için birkaç kısa adım',
@@ -9592,6 +9600,10 @@ const de: Dict = {
     continue: 'Weiter',
     back: 'Zurück',
     complete: 'Profil vervollständigen',
+    mentee: {
+      title: 'Vervollständige dein Profil',
+      subtitle: 'Hilf uns, dich mit dem passenden Mentor und den richtigen Möglichkeiten zusammenzubringen',
+    },
     mentor: {
       title: 'Richte dein Mentor-Profil ein',
       subtitle: 'Ein paar kurze Schritte, damit Mentees wissen, wer du bist und wann du verfügbar bist',
