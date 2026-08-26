@@ -6,10 +6,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { useRealtime } from '@/hooks/useRealtime';
 
 // Header shortcut to the message inbox, with an unread badge. Mentors/admins
 // previously had to drill into a mentee's detail page to find conversations;
 // this makes messaging reachable from anywhere in one click.
+//
+// The count is fed by the live stream (#1464) rather than a one-minute poll:
+// both directions were a minute late, so a message that arrived showed up late
+// and — worse — a message that had just been read kept its badge for the rest of
+// the minute. `useUnreadCounts` is not used here because this component also
+// wants a same-navigation refresh (see below), which needs its own fetch.
 export function MessagesButton() {
   const t = useT();
   const { status } = useSession();
@@ -18,7 +25,7 @@ export function MessagesButton() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/messages/unread');
+      const res = await fetch('/api/messages/unread', { cache: 'no-store' });
       if (!res.ok) return;
       const d = await res.json();
       setUnread(d.count ?? 0);
@@ -27,14 +34,13 @@ export function MessagesButton() {
     }
   }, []);
 
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-    load();
-    const id = setInterval(load, 60_000);
-    return () => clearInterval(id);
-  }, [status, load]);
+  useRealtime((signal) => {
+    if (signal.type === 'ready' || signal.type === 'unread') setUnread(signal.counts.messages);
+  });
 
-  // Re-check when navigating (e.g. after opening a thread and reading it).
+  // Re-check when navigating (e.g. after opening a thread and reading it). The
+  // stream reports the same drop, but only this covers the polling fallback,
+  // where the badge would otherwise hold a stale number until the next tick.
   useEffect(() => {
     if (status === 'authenticated') load();
   }, [pathname, status, load]);
@@ -50,7 +56,10 @@ export function MessagesButton() {
     >
       <MessageSquare className="h-5 w-5" />
       {unread > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+        <span
+          data-testid="messages-unread-badge"
+          className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center"
+        >
           {unread > 9 ? '9+' : unread}
         </span>
       )}

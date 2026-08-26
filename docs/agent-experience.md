@@ -4558,3 +4558,71 @@ ebeveynin **tüm gövdesini** geri veriyor; 20+ bağlamada bu ciddi bağlam yak�
 hepsini oluştur, `child id → parent number` eşlemesini diske yaz, bağlamayı en sona bırak.
 Bir de: yeni issue numaraları **atlamalı** veriliyor (1357 → 1359 → 1364), bu yüzden bir
 issue gövdesinde henüz oluşturulmamış bir numaraya atıf yapma — sonradan düzeltmek gerekti.
+
+## 2026-08-26 — Canlı mesajlaşma, SSE ve web-push (#1464)
+
+**"Okunmadı" iki yerde saklanıyorsa ikisi de kapatılmak zorundadır.** Bildirilen hata
+"mavi ikon okuduktan sonra da duruyor"du; sebebi tek bir olayın iki bağımsız satırda
+yaşaması: `Message.readAt`/`ConversationParticipant.lastReadAt` (kırmızı sayaçlar) ve
+`notify()`'ın yazdığı `Notification` (zildeki mavi ikon/nokta). Thread'i açmak yalnızca
+ilkini kapatıyordu. Aynı olguyu iki tabloda tutan her yerde bu hatayı ara — düzeltmeyi
+**okuma yolunun tek giriş noktasına** (`markThreadRead`) koymak, dört ayrı çağıranın
+(ekran, e-posta cevabı, e-postadaki "okundu" linki, gelen mail köprüsü) hepsini birden
+onarıyor. Bildirimi `link` üzerinden eşleştirmek de şart: insanların zilinde **zaten
+duran** satırlar eski link biçimini (`/messages/<relationId>`) taşıyor.
+
+**SSE'de "olay geldi" asla tek yol olmamalı.** İlk sürümde thread yalnızca `message`
+olayında yeniden yükleniyordu ve Playwright testi tutarlı biçimde kırıldı: dev sunucusunda
+`/api/realtime/stream` **ilk istekte derleniyor** (1-3 sn), mesaj o aralıkta yayınlanıyor,
+dinleyici henüz yok — olay kayboluyor ve ekran sonsuza kadar boş kalıyor. Çözüm ikili:
+(1) istemci `ready` (yeni/yeniden bağlanma) ve `unread` (heartbeat'in veritabanı
+kontrolü) sinyallerinde de yeniden yüklüyor — hızlı yol `message`, **tek** yol değil;
+(2) test artık `messages-frame`'i değil `/api/realtime/stream` **yanıtını** bekliyor
+(sunucu dinleyiciyi yanıtı kurarken kaydediyor, yani başlıkların gelmesi "dinliyorum"un
+kanıtı). Bir push/stream mimarisinde "olayı kaçırdım" senaryosunu baştan tasarla.
+
+**Sunucu ile istemciyi ayrı ayrı kanıtla.** Playwright kırılınca önce sunucu tarafını
+düz Node ile doğruladım: NextAuth'a curl-benzeri giriş (`/api/auth/csrf` →
+`/api/auth/callback/credentials`) + `fetch` ile SSE gövdesini okumak, `event: ready`,
+`event: message`, `event: unread` çerçevelerini saniyeler içinde gösterdi. Yani hata
+istemcideydi. Aynı ayrım tarayıcı tarafında da işe yaradı: `playwright-core`'u doğrudan
+`executablePath: '/opt/pw-browsers/chromium'` ile sürüp mesajın **211 ms**'de düştüğünü
+ölçtüm. Playwright spec'i debug aracı olarak kullanmak yerine iki küçük probe yaz.
+
+**Web-push'u gerçek bir sahte push servisiyle test etmek mümkün.** `web-push`
+**yalnızca `https`** modülünü kullanıyor (`web-push-lib.js`), yani düz HTTP bir mock
+`EPROTO ... packet length too long` veriyor. Doğru kurulum: self-signed sertifikayla
+yerel bir HTTPS sunucusu + uygulamayı `NODE_EXTRA_CA_CERTS=<ca>+<mock.crt>` ile
+başlatmak (TLS doğrulamasını kapatmaya gerek yok). Böylece gerçek yolun tamamı ölçülüyor:
+`aes128gcm` gövde, `TTL`, `vapid` Authorization başlığı, 410 → aboneliğin **silinmesi**,
+bağlantı hatası → aboneliğin **korunması**, `notificationPrefs.messages=false` → hiç
+gönderilmemesi. Abonelik anahtarı için `crypto.createECDH('prime256v1')` yeter.
+
+**`pkill` yine kendi kabuğunu öldürdü (exit 144) — ve bu kez bir testi de yanlış
+kırdı.** `pkill -f fake-push.mjs` hem shell'i hem servisi indirdi; sonraki probe "opt-in
+sonrası push gelmiyor" dedi, oysa dinleyen kimse yoktu. Süreçleri **PID ile** kapat
+(`ps -eo pid,args | grep ... | kill`), ikinci bir mock gerekiyorsa **ikinci bir port** aç.
+Bonus: `sed 's/8443/8444/'` satır başına yalnızca ilk eşleşmeyi değiştirir — `listen()`
+ile log satırı aynı satırdaysa port değişir, mesaj yanlış kalır.
+
+**Yerel `@smoke` çalıştırmadan önce spec'lerin beklediği admini tohumla.**
+`invite.spec.ts` `admin@example.com / ChangeMe123!` bekliyor; `.env`'deki
+`SEED_ADMIN_*` başka bir adresse spec "regresyon" gibi kırılıyor.
+`SEED_ADMIN_EMAIL=admin@example.com SEED_ADMIN_PASSWORD='ChangeMe123!' npx prisma db seed`
+ile geçiyor. Ayrıca `/opt/pw-browsers` tuzağı büyüdü: Playwright artık
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`
+arıyor, kurulu olan `chromium_headless_shell-1194/chrome-linux/headless_shell` —
+dizinleri sembolik bağlamanın yanında **binary adını da** bağlamak gerekiyor.
+
+**Service worker'ın fetch handler'ı yeni bir uzun ömürlü GET'i sessizce zehirler.**
+`public/sw.js` her aynı-origin GET'i network-first cache'liyor; yarım saat açık kalan bir
+SSE yanıtı için bu, gövdeyi Cache API'ye yazmak ve sonraki çevrimdışı isabette
+`EventSource`'a eski akışın **sonlu** bir kopyasını vermek demek — "bağlantı kapandı" diye
+okunup yeniden bağlanma döngüsüne dönüşür. Yeni bir streaming ucu eklerken SW'de yolu
+açıkça atla (`/api/realtime/`, `accept: text/event-stream`).
+
+**Poll'a düşen bir liste kendi kendini aşağı kaydırır.** `MessageThreadView`'daki
+`scrollIntoView` effect'i `[messages]`'e bağlıydı; `load()` artık her tick'te çalıştığı
+için dizi her seferinde yeni referans oluyor ve thread'i geriye doğru okuyan kişi 20
+saniyede bir dibe çekiliyordu. Bağımlılığı **son mesajın id'sine** çevir. Canlı yenileme
+eklediğin her listede aynı kontrolü yap.

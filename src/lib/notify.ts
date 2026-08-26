@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
 import { notificationCategoryAllowed, type NotificationCategory } from '@/lib/notificationPrefs';
+import { publishRealtime } from '@/lib/realtimeBus';
 
 // Interpolation values for the dictionary template keyed by the notification
 // `type` (see `notifications.events` in src/i18n/dictionaries.ts). Stored in
@@ -16,6 +17,10 @@ export async function notify(userId: string, type: string, params?: Notification
     await prisma.notification.create({
       data: { userId, type, params: (params ?? {}) as Prisma.InputJsonValue, link: link ?? null },
     });
+    // Live-update the bell for whoever has the app open (#1464). Signal only —
+    // the client refetches /api/notifications, so nothing about a notification's
+    // content travels on the stream.
+    publishRealtime([userId], { type: 'notification' });
   } catch (e) {
     logger.error('Failed to create notification', { userId, type, error: String(e) });
   }

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { conversationForRelation } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
+import { sendNewMessagePush } from '@/lib/messagePush';
 import { markThreadRead } from '@/lib/threadRead';
 import { logger } from '@/lib/logger';
 
@@ -114,6 +115,9 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   const recipient = senderId === rel.mentor.id ? rel.mentee.id : rel.mentor.id;
   const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${relationId}`;
   await notify(recipient, 'message.newByEmail', {}, link);
+  // A message relayed in from e-mail is still a new message (#1464), so it earns
+  // the same background push as one written in the app.
+  await sendNewMessagePush(recipient, { link, byEmail: true, preview: body });
 
   return { ok: true, relationId, duplicate: false };
 }
