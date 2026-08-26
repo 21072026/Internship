@@ -45,7 +45,7 @@ interface Relation {
   completedAt: string | null;
   stageDeadline?: string | null;
   mentor: { id: string; fullName: string; email: string };
-  company: { name: string; industry?: string } | null;
+  company: { id: string; name: string; industry?: string } | null;
   project: { id: string; name: string } | null;
   cohort: { id: string; name: string } | null;
   interactions: Interaction[];
@@ -542,6 +542,7 @@ export default function AdminMenteeDetailPage() {
           <OfferManagementPanel
             relationId={rel.id}
             menteeName={user.fullName}
+            companyId={rel.company?.id ?? null}
             companyName={rel.company?.name}
             pipelineStatus={rel.pipelineStatus}
             stages={stages}
