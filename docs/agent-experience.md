@@ -10,6 +10,75 @@ Newest entries on top.
 
 ---
 
+## 2026-08-26 — Admin API explorer: üretilen dokümanı nereden servis etmeli (#1447)
+
+**Prod imajında `src/` yok — bu, "route ağacını tara" fikrini baştan build-time'a
+mahkûm ediyor.** `Dockerfile` runner katmanı yalnızca `public/`, `.next/`,
+`node_modules/`, `package.json` ve `prisma/` kopyalıyor. İstek anında `src/app/api`
+diye bir şey olmadığı için çalışma zamanı taraması sessizce boş doküman üretir —
+dev'de kusursuz görünen, prod'da "bu uygulamanın hiç endpoint'i yok" diyen bir hata.
+Aynı katmana `next.config.js` de girmiyor; oraya güvenen bir türetme de çalışmaz.
+
+**Üretilen artefaktı repo'ya koymadan tsc'yi yeşil tutmanın yolu `nextConfig.env`.**
+İlk üç seçenek de kötüydü: commit'lemek her route ekleyen PR'a ~300 KB churn bindirir
+(tam olarak #1275'in çözdüğü sorun); gitignore'layıp `import`lamak temiz klonda
+`npx tsc --noEmit`'i kırar (ci.yml build'den *önce* tsc koşuyor); `prebuild` hook'u
+eklemek prod konteynerinde `npm start`'a yapamayacağı bir iş yükler. Doğru cevap
+dördüncüsü: `next.config.js` içinde türet, `env` üzerinden inline et. Böylece `src/`
+altında hiçbir dosya generated bir şeyi import etmiyor, artefakt gitignore'da kalıyor,
+değer `.next/required-server-files.json`'a gömüldüğü için `next start` config'e
+ihtiyaç duymuyor. Sürüm türetmesi (#1275) zaten bu deseni kullanıyordu — yeni bir
+mekanizma icat etmek yerine onu genişletmek yeterliydi.
+
+**Auth'u yalnızca handler gövdesinden sınıflayan bir tarayıcı yalan söyler.** Dört
+rota (`inbound-email`, `webhooks/jaas`, `health`, `admin/document-requirements`)
+korumasını modül kapsamındaki bir yardımcıda tutuyor ve yardımcının adı `require*`
+değil (`secretOk`, `adminSession`, `maySeeDetail`). Gövde taraması bunları
+"kimlik bilgisi gerekmiyor" diye yayımlar — bir admin ekranında bunu
+`POST /api/inbound-email`'in yanında görmek tam olarak istemediğin şey. Sınıflamadan
+önce modül kapsamı sembol tablosunu kurup bir tur inline et; ve statik çıktıyı CI'da
+doğrula (`check:openapi`), çünkü statik analiz **sessizce** bozulur: tanımadığı bir
+sözdizimindeki rota dokümandan öylece kaybolur.
+
+**swagger-ui'ın `persistAuthorization`'ı `preauthorizeApiKey` için hiçbir şey yapmıyor.**
+swagger-ui-dist 5.32'de ölçtüm: enjekte edilen anahtar anında "Authorized" oluyor ama
+`localStorage`'a hiçbir şey yazılmıyor, reload'da yetki gidiyor. Ajanların yazdığı
+"tarayıcıda kalır, yenilemeye dayanır" metni üç dilde de yanlıştı. İki ders: bir
+üçüncü-parti bayrağının ne yaptığını **ölç**, dokümanına değil; ve zaten ham bir
+credential'ı `localStorage`'a yazmasını istemezsin — bayrağı kapatmak hem doğru hem
+güvenli. Test tarafında: yetkiyi `localStorage`'dan okuyamazsın, Authorize diyalogundan
+okumalısın, ve Logout butonunun erişilebilir adı metni değil `aria-label`
+("Remove authorization").
+
+**`BASE_URL` ile Playwright koşmak webServer'ı atlıyor — onun env'ine bağlı specler
+sahte kırılıyor.** `e2e/rate-limit.spec.ts` sunucuda `TRUSTED_PROXY_COUNT=0` bekliyor;
+bunu `playwright.config.ts` yalnızca kendi başlattığı webServer için veriyor. Elle
+başlatılmış bir sunucuya `BASE_URL` ile bağlanınca spec "429 gelmedi" diye kırılıyor ve
+bir regresyon gibi görünüyor. Sunucuyu `env TRUSTED_PROXY_COUNT=0 npm start` ile
+başlatınca 5/5 geçti. `BASE_URL` modunda ayrıca `.env` yüklenmiyor: `export $(grep -v
+'^#' .env | xargs)` gerekiyor, yoksa `helpers/db.ts` "Environment variable not found:
+DATABASE_URL" veriyor.
+
+**Chromium symlink tarifi güncellendi: artık iç içe dizin gerekiyor.** Yüklü build 1194,
+`playwright@1.62` ise 1234 arıyor ve headless kabuğu **yeni** yerleşimde bekliyor:
+`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`.
+1194'te ise düz `chrome-linux/headless_shell` var, yani dizini komple symlink'lemek
+yetmiyor — gerçek bir dizin açıp içindeki her dosyayı tek tek link'lemek ve
+`headless_shell`'i `chrome-headless-shell` adıyla eklemek gerekti. `chromium-1234`
+tarafında düz symlink yeterli (yerleşim aynı).
+
+**Bayat `.next` "uygulama bozuk" gibi görünüyor.** Build'i iki kez koşup sonra sunucuyu
+yeniden başlatınca sayfa chunk'ı 400 + `MIME text/html` döndü, Swagger hiç mount olmadı
+ve tarayıcı oturumu "session closed" ile düştü — hepsi gerçek bir hata gibi. Sebep
+sadece chunk hash'lerinin değişmesiydi. Render hatası ararken önce `rm -rf .next` +
+tek build + tek sunucu; konsol hatalarını okumak (`page.on('console')`) bunu bir
+dakikada ayırt ediyor.
+
+**Merge çakışması CI'ı hiç başlatmıyor.** PR'da 15 dakika boyunca sıfır check run vardı
+ve sebebi kuyruk değil `mergeable_state: "dirty"` idi: GitHub merge commit'ini
+hesaplayamayınca `pull_request` workflow'larını tetiklemiyor. "CI neden koşmuyor" diye
+Actions kuyruğunu incelemek yerine ilk bakılacak yer PR'ın `mergeable_state`'i.
+
 ## 2026-08-26 — Gece k6 yük testi: eşik yazmak kolay, eşiğin *ölçtüğünü* kanıtlamak zor (#1449)
 
 **k6'i indirip gerçekten koştur — statik okuma bu işte yetmiyor.** Sabit URL çalışıyor:
