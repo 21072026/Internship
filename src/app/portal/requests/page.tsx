@@ -22,7 +22,9 @@ export default async function PortalRequestsPage() {
       id: true,
       // `timezone` (#1210): the meeting-request form shows a proposed slot on
       // the mentor's clock as well as the mentee's before it is sent.
-      mentor: { select: { fullName: true, timezone: true } },
+      // `id` (#1361): the request form reads the mentor's posted availability
+      // and offers those hours as concrete choices.
+      mentor: { select: { id: true, fullName: true, timezone: true } },
     },
   });
 
@@ -40,7 +42,11 @@ export default async function PortalRequestsPage() {
           <MeetingRequestsPanel
             relationId={activeRelation.id}
             mode="request"
-            counterpart={{ name: activeRelation.mentor.fullName, timezone: activeRelation.mentor.timezone }}
+            counterpart={{
+              id: activeRelation.mentor.id,
+              name: activeRelation.mentor.fullName,
+              timezone: activeRelation.mentor.timezone,
+            }}
           />
         </div>
       ) : (
