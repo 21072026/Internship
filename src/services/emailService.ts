@@ -15,7 +15,7 @@ import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
 import { getOrgBranding } from '@/lib/orgBranding';
-import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, type ZonedPerson } from '@/lib/timezone';
+import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -258,6 +258,18 @@ export async function runEmailHealthCheck(): Promise<EmailHealth> {
   return health;
 }
 
+// What actually happened to a message, mirroring the EmailLog row this call
+// writes (#1431). Returned rather than only recorded, because "did not throw"
+// is not the same as "was delivered": the two SKIPPED paths below return
+// normally, and four routes were reading that silence as success — reporting
+// `emailSent: true` for an account nobody could ever sign in to.
+//
+// The throw behaviour is deliberately unchanged: a real transport failure still
+// throws (and is recorded FAILED first), so every existing try/catch keeps
+// working exactly as before. 'FAILED' is in the union for callers that catch and
+// want to name the outcome; sendEmail itself never returns it.
+export type EmailDeliveryResult = 'SENT' | 'SKIPPED' | 'FAILED';
+
 export async function sendEmail({
   to,
   subject,
@@ -302,13 +314,13 @@ export async function sendEmail({
   if (IS_DEMO_MODE) {
     logger.info('Email not sent: demo mode', { to, subject, category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled');
-    return;
+    return 'SKIPPED';
   }
 
   if (!process.env.SMTP_USER) {
     logger.error('Email not sent: SMTP is not configured', { to, subject, category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)');
-    return;
+    return 'SKIPPED';
   }
 
   try {
@@ -332,6 +344,7 @@ export async function sendEmail({
   }
 
   await recordEmail(to, subject, category, 'SENT', transport);
+  return 'SENT';
 }
 
 // Connectivity-only check (auth + reachability), no message sent — used by the
@@ -387,7 +400,7 @@ export async function sendInvitationEmail({
   const registerUrl = `${appUrl}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
 
-  await sendEmail({
+  return await sendEmail({
     to,
     fromName: brand.name,
     category: 'invitation',
@@ -443,7 +456,7 @@ export async function sendPasswordResetEmail({
     : 'We received a request to reset your password. Click the button below to choose a new one.';
   const cta = isInitial ? 'Set password' : 'Reset password';
 
-  await sendEmail({
+  return await sendEmail({
     to,
     fromName: brand.name,
     category: 'password-reset',
@@ -575,6 +588,76 @@ export async function sendMeetingInviteEmail({
         <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
         ` : ''}
         ${when ? timeZoneNote(timeZone) : ''}
+      </div>
+    `,
+  });
+}
+
+// The same invitation, addressed to someone who has no account here (#1446).
+//
+// Kept as a sibling of sendMeetingInviteEmail rather than a flag on it, because
+// three things genuinely differ for an outsider and each of them is a
+// correctness bug if it leaks through:
+//   - the timezone footer must NOT link to /account#timezone, a page a guest
+//     cannot reach (and would be asked to sign in for);
+//   - there is no saved zone to render on, so the time is printed on the
+//     organizer's clock and the mail says whose clock that is;
+//   - the mail has to say who invited them and to what, since an unexpected
+//     invitation from an unknown system otherwise reads as spam.
+export async function sendMeetingGuestInviteEmail({
+  to,
+  name,
+  title,
+  scheduledAt,
+  meetLink,
+  rsvpToken,
+  organizerTimeZone,
+  organizerName,
+}: {
+  to: string;
+  name?: string | null;
+  title: string;
+  scheduledAt: Date | null;
+  meetLink?: string | null;
+  rsvpToken: string;
+  // The clock the organizer picked the time on (Meeting.timeZone). A guest has
+  // no profile, so this — or the deployment default — is the only clock there is.
+  organizerTimeZone?: string | null;
+  organizerName?: string | null;
+}) {
+  const url = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const yes = `${url}/rsvp/${rsvpToken}?r=yes`;
+  const no = `${url}/rsvp/${rsvpToken}?r=no`;
+  const zone = resolveTimeZone(organizerTimeZone);
+  const when = scheduledAt
+    ? `${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' })} (${zoneLabel(scheduledAt, zone)})`
+    : null;
+  const invitedBy = organizerName ? esc(organizerName) : null;
+
+  await sendEmail({
+    to,
+    subject: `Meeting invitation: ${title}`,
+    category: 'meeting-guest-invite',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">${esc(title)}</h2>
+        ${name ? `<p>Hi ${esc(name)},</p>` : ''}
+        <p>${invitedBy ? `${invitedBy} has invited you` : 'You are invited'} to a meeting.</p>
+        ${when ? `<p><strong>When:</strong> ${esc(when)}</p>` : ''}
+        ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
+        ${when ? `
+        <p style="margin-top: 20px;">Can you make it?</p>
+        <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
+        <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
+        <p style="margin-top:16px;"><a href="${url}/rsvp/${rsvpToken}" style="color:#2563eb;font-size:14px;">Open the invitation</a></p>
+        ` : ''}
+        ${when ? `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+          Times in this email are shown in ${esc(zone)}${invitedBy ? ` — the clock ${invitedBy} scheduled it on` : ''}.
+        </p>` : ''}
+        <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
+          You received this because someone entered your address when scheduling this meeting.
+          You do not need an account to reply — the buttons above are enough.
+        </p>
       </div>
     `,
   });
@@ -1502,6 +1585,11 @@ export async function sendMeetingReminders() {
           mentor: { select: participantSelect },
         },
       },
+      // External guests (#1446). Without this an outsider gets the invitation
+      // and then silence — and unlike a participant they have no dashboard, no
+      // in-app notification and no calendar feed to fall back on, so the
+      // reminder email is the *only* nudge they can get.
+      guests: { select: { email: true, name: true, rsvp: true } },
     },
   });
 
@@ -1572,8 +1660,69 @@ export async function sendMeetingReminders() {
         console.error('Meeting reminder email failed:', e);
       }
     }
+
+    // Guests, after the participants. No notify() — there is no userId — and no
+    // emailAllowed() — there are no notificationPrefs to consult. Someone who
+    // already declined is left alone: they answered, and a reminder for a
+    // meeting you said no to reads as not having been listened to.
+    for (const guest of m.guests) {
+      if (guest.rsvp === 'DECLINED') continue;
+      try {
+        await sendMeetingGuestReminderEmail({
+          to: guest.email,
+          name: guest.name,
+          title: m.title,
+          scheduledAt: m.scheduledAt!,
+          meetLink: m.meetLink,
+          organizerTimeZone: m.timeZone,
+          minutes,
+        });
+        emailed++;
+      } catch (e) {
+        console.error('Meeting guest reminder email failed:', e);
+      }
+    }
   }
   return { checked: meetings.length, reminded, notified, emailed };
+}
+
+// The reminder half of sendMeetingGuestInviteEmail — same reasons for being a
+// sibling rather than a flag: no /account link a guest could use, the
+// organizer's clock instead of a saved zone they don't have, and a line saying
+// why this arrived at all.
+async function sendMeetingGuestReminderEmail({
+  to,
+  name,
+  title,
+  scheduledAt,
+  meetLink,
+  organizerTimeZone,
+  minutes,
+}: {
+  to: string;
+  name?: string | null;
+  title: string;
+  scheduledAt: Date;
+  meetLink?: string | null;
+  organizerTimeZone?: string | null;
+  minutes: number;
+}) {
+  const zone = resolveTimeZone(organizerTimeZone);
+  const when = `${formatInTimeZone(scheduledAt, zone)} (${zoneLabel(scheduledAt, zone)})`;
+  await sendEmail({
+    to,
+    category: 'meeting-guest-reminder',
+    subject: `Reminder: ${title} starts soon`,
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      ${name ? `<p>Hi ${esc(name)},</p>` : ''}
+      <p>This is a reminder for <strong>${esc(title)}</strong>.</p>
+      <p><strong>When:</strong> ${esc(when)} (in about ${minutes} minute${minutes === 1 ? '' : 's'})</p>
+      ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
+      <p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
+        You were invited to this meeting as a guest — no account needed, just open the link above.
+      </p>
+    </div>`,
+  });
 }
 
 // --- Recurring project meetings (#51) ---------------------------------------
@@ -2002,23 +2151,45 @@ function candidateMatchesNeeds(
   });
 }
 
-// Premium CompanyNeed match alerts (Faz 1, #530). For every company holding the
-// COMPANY_NEED_MATCH_ALERTS entitlement, scan the consenting talent pool (the
-// same publicProfile-only visibility as talent-pool search) for candidates
+// Only an OPEN requisition is hiring: DRAFT is unpublished, and ON_HOLD /
+// FILLED / CANCELLED are all "do not send me candidates" (#1387).
+const ALERTABLE_REQUISITION_STATUS = 'OPEN';
+
+// Premium open-position match alerts (Faz 1, #530). For every company holding
+// the COMPANY_NEED_MATCH_ALERTS entitlement, scan the consenting talent pool
+// (the same publicProfile-only visibility as talent-pool search) for candidates
 // matching an open position, and notify the company's users once per candidate.
 // Repeat notifications are prevented by the CompanyNeedAlert dedupe row (the
 // unique [companyId, menteeId] insert is the marker — createMany/skipDuplicates
 // makes "insert-or-skip" atomic, so a candidate only ever alerts a company once).
+//
+// Positions come from BOTH tables (#1387). The job used to read CompanyNeed
+// only, so a role opened through the Requisition screen — the newer of the two,
+// and the one the product is migrating to — never matched anybody: a premium
+// company could have five open requisitions and receive nothing at all.
+// CompanyNeed is NOT dead and is not being dropped here: the admin company form
+// still writes those rows (src/app/api/companies/[id]/route.ts), and the
+// CompanyNeed→Requisition backfill is manual and runs in no deploy step. So this
+// adds a source rather than replacing one; the [companyId, menteeId] dedupe key
+// means a company with the same role in both tables still alerts once.
 export async function checkCompanyNeedMatches() {
   const companies = await prisma.company.findMany({
     where: {
       entitlements: { some: { feature: 'COMPANY_NEED_MATCH_ALERTS' } },
-      needs: { some: {} },
+      OR: [{ needs: { some: {} } }, { requisitions: { some: { status: ALERTABLE_REQUISITION_STATUS } } }],
     },
     select: {
       id: true,
       name: true,
       needs: { select: { position: true } },
+      requisitions: {
+        where: { status: ALERTABLE_REQUISITION_STATUS },
+        // `openings`/`filled` so a role that is open-but-fully-staffed can be
+        // dropped: the API accepts status OPEN with filled === openings, and
+        // Prisma cannot compare two columns in a `where`, so it is filtered
+        // below in JS.
+        select: { title: true, openings: true, filled: true },
+      },
       users: {
         where: { role: 'COMPANY', isActive: true },
         select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
@@ -2045,11 +2216,25 @@ export async function checkCompanyNeedMatches() {
   let alerts = 0;
 
   for (const company of companies) {
-    const positions = company.needs.map((n) => n.position.toLowerCase().trim()).filter(Boolean);
+    // Requisition.title is the analogue of CompanyNeed.position, and the only
+    // field taken from it. `requiredSkills` is deliberately NOT folded in:
+    // candidateMatchesNeeds matches substrings in BOTH directions, so a short
+    // skill like "Go" or "R" would match almost every targetPosition and turn a
+    // premium alert into noise. Widening the match is a separate decision from
+    // fixing the missing source.
+    const positions = [
+      ...company.needs.map((n) => n.position),
+      ...company.requisitions.filter((r) => r.filled < r.openings).map((r) => r.title),
+    ]
+      .map((p) => (p ?? '').toLowerCase().trim())
+      .filter(Boolean);
+    // Still reachable after the OR filter above: a company can match on having
+    // open requisitions and then have every one of them fully staffed.
     if (positions.length === 0) continue;
+    const terms = [...new Set(positions)];
 
     for (const cand of pool) {
-      if (!candidateMatchesNeeds(positions, cand)) continue;
+      if (!candidateMatchesNeeds(terms, cand)) continue;
 
       // Atomic dedupe: the insert succeeds only the first time; count 0 means
       // this company was already alerted about this candidate — skip silently.

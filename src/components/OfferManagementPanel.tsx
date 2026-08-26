@@ -25,6 +25,7 @@ interface Offer {
   declineNote: string | null;
   compensationNote?: string | null;
   requisitionId: string | null;
+  requisitionTitle: string | null;
   company: { id: string; name: string } | null;
   createdAt: string;
 }
@@ -50,6 +51,7 @@ interface OfferManagementPanelProps {
   relationId: string;
   menteeName: string;
   companyName?: string | null;
+  companyId: string | null;
   pipelineStatus: string;
   stages: ResolvedStage[];
   onMoveToStage: (stageKey: string) => void | Promise<void>;
@@ -64,6 +66,7 @@ export function OfferManagementPanel({
   relationId,
   menteeName,
   companyName,
+  companyId,
   pipelineStatus,
   stages,
   onMoveToStage,
@@ -131,6 +134,7 @@ export function OfferManagementPanel({
       id: o.id,
       position: o.position,
       requisitionId: o.requisitionId ?? '',
+      requisitionTitle: o.requisitionTitle,
       startDate: o.startDate ? o.startDate.slice(0, 10) : '',
       compensationNote: o.compensationNote ?? '',
       expiresAt: o.expiresAt ? o.expiresAt.slice(0, 10) : '',
@@ -210,6 +214,11 @@ export function OfferManagementPanel({
                     {o.startDate && `${t.offers.wizard.startDate}: ${formatDate(o.startDate, locale)} · `}
                     {o.expiresAt && `${t.offers.wizard.expiresAt}: ${formatDate(o.expiresAt, locale)}`}
                   </p>
+                  {o.requisitionTitle && (
+                    <p className="text-xs text-gray-500 mt-1" data-testid={`offer-requisition-title-${o.id}`}>
+                      {t.offers.wizard.requisitionId}: {o.requisitionTitle}
+                    </p>
+                  )}
                   {o.status === 'DECLINED' && o.declineReasonCode && (
                     <p className="text-xs text-red-600 mt-1">
                       {t.offers.declineReason}: {(t.offerDeclineReasons as Record<string, string>)[o.declineReasonCode] ?? o.declineReasonCode}
@@ -269,6 +278,7 @@ export function OfferManagementPanel({
         relationId={relationId}
         menteeName={menteeName}
         companyName={companyName}
+        companyId={companyId}
         existing={editing}
         onClose={() => setWizardOpen(false)}
         onSaved={load}

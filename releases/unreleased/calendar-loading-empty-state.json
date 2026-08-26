@@ -1,0 +1,10 @@
+{
+  "bump": "patch",
+  "changelog": "- **The calendar no longer flashes a false empty state** (#931). `CalendarView` rendered \"nothing scheduled\" while the range request was still in flight, and a failed request degraded silently into the same empty calendar. Loading, loaded-empty and error are now distinct: an in-flight range shows a skeleton overlay (`role=\"status\"`, `aria-live=\"polite\"`) over the grid so the layout does not jump, a failure shows an error overlay (`role=\"alert\"`) with Retry, and the per-cell/agenda empty texts are suppressed until the range that is actually displayed has settled. In-flight requests are cancelled with `AbortController` on range change, so an old month's events can never land in the new month's grid."
+  ,
+  "notes": {
+    "en": ["The calendar no longer says \"nothing scheduled\" while it is still loading, and if events fail to load it says so with a retry button instead of showing an empty month."],
+    "tr": ["Takvim artık yüklenirken \"planlanmış bir şey yok\" demiyor; etkinlikler yüklenemezse boş bir ay göstermek yerine hatayı bildirip tekrar dene düğmesi sunuyor."],
+    "de": ["Der Kalender zeigt während des Ladens nicht mehr \"nichts geplant\", und wenn Termine nicht geladen werden können, wird das mit einer Wiederholen-Schaltfläche gemeldet statt ein leerer Monat angezeigt."]
+  }
+}

@@ -35,6 +35,11 @@
  *   MentorApplication (fullName, email, phone, experience, motivation, linkedinUrl,
  *                      rejectReason)
  *   EmailLog (to, subject, error)
+ *   MeetingGuest (email, name, rsvpToken) — an external invitee's address, and
+ *                 the address is the ONLY identifier they have here: no account,
+ *                 no consent record, and no self-service erasure path. Rewritten
+ *                 per row (the email column is uniquely indexed per meeting) and
+ *                 the token re-minted, so no preview link opens a real meeting.
  *   ActivityLog (actorEmail, detail, ip, userAgent)
  *   AuditLog (detail)
  *   Notification (text, params)
@@ -70,6 +75,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -233,6 +239,23 @@ async function run() {
     if (count) console.log(`  blanked ${count} ${label}`);
   }
 
+  // External meeting guests, one row at a time: @@unique([meetingId, email])
+  // means a single updateMany to one address would collide the moment a meeting
+  // has two guests. The token is re-minted rather than kept, so a link copied
+  // out of preview cannot answer for a real invitation.
+  const guests = await prisma.meetingGuest.findMany({ select: { id: true } });
+  for (const [n, g] of guests.entries()) {
+    await prisma.meetingGuest.update({
+      where: { id: g.id },
+      data: {
+        email: `guest${n + 1}@${DEMO_DOMAIN}`,
+        name: null,
+        rsvpToken: randomBytes(24).toString('hex'),
+      },
+    });
+  }
+  if (guests.length) console.log(`  rewrote ${guests.length} meetingGuest`);
+
   // MentorApplication carries an applicant's own words plus their contact
   // details, and its email column is indexed, so it is rewritten per row to
   // keep the values distinct.
@@ -265,6 +288,11 @@ async function run() {
  */
 async function verify() {
   const problems = [];
+
+  const guestEmails = await prisma.meetingGuest.count({
+    where: { NOT: { email: { endsWith: `@${DEMO_DOMAIN}` } } },
+  });
+  if (guestEmails > 0) problems.push(`${guestEmails} meeting guests still have a non-demo email`);
 
   const realEmails = await prisma.user.count({ where: { NOT: { email: { endsWith: `@${DEMO_DOMAIN}` } } } });
   if (realEmails > 0) problems.push(`${realEmails} users still have a non-demo email`);
