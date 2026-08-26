@@ -23,6 +23,8 @@ interface Candidate {
 
 // Premium talent-pool search (Faz 1). Shows a locked upsell when the company
 // lacks the TALENT_POOL_SEARCH entitlement (API returns 403 feature_locked).
+const PAGE_SIZE = 24;
+
 export default function TalentPoolPage() {
   const t = useT();
   const tp = t.talentPool;
@@ -31,7 +33,13 @@ export default function TalentPoolPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
+  // The endpoint used to return an unpaginated, silently truncated list (#1392).
+  // `total` is now the count of the whole matching set, so the page can say how
+  // many results there are rather than implying the screen is all of them.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const hasFilters = Boolean(q.trim() || skill.trim());
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,17 +47,25 @@ export default function TalentPoolPage() {
       const params = new URLSearchParams();
       if (q) params.set('q', q);
       if (skill) params.set('skill', skill);
+      params.set('page', String(page));
+      params.set('pageSize', String(PAGE_SIZE));
       const res = await fetch(`/api/company/talent-pool?${params.toString()}`);
       if (res.status === 403) { setLocked(true); return; }
       const d = await res.json();
       setLocked(false);
       setCandidates(d.candidates ?? []);
+      setTotal(typeof d.total === 'number' ? d.total : (d.candidates?.length ?? 0));
     } catch {
       /* ignore */
     } finally {
       setLoading(false);
     }
-  }, [q, skill]);
+  }, [q, skill, page]);
+
+  // Any filter change goes back to page 1. Without this, retyping a filter while
+  // on page 3 asks for page 3 of a smaller result set and renders an empty grid
+  // — which looks exactly like the bug this change fixes.
+  useEffect(() => { setPage(1); }, [q, skill]);
 
   // Debounce searches; initial load on mount.
   useEffect(() => {
@@ -85,6 +101,7 @@ export default function TalentPoolPage() {
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            data-testid="talent-pool-search"
             placeholder={tp.searchPlaceholder}
             className="pl-10 w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
           />
@@ -93,6 +110,7 @@ export default function TalentPoolPage() {
           type="text"
           value={skill}
           onChange={(e) => setSkill(e.target.value)}
+          data-testid="talent-pool-skill"
           placeholder={tp.skillPlaceholder}
           className="sm:w-56 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
@@ -114,6 +132,13 @@ export default function TalentPoolPage() {
           />
         </Card>
       ) : (
+        <>
+        <p data-testid="talent-pool-total" className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+          {tp.showing
+            .replace('{from}', String((page - 1) * PAGE_SIZE + 1))
+            .replace('{to}', String(Math.min(page * PAGE_SIZE, total)))
+            .replace('{total}', String(total))}
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {candidates.map((c) => (
             <Card key={c.id}>
@@ -147,6 +172,32 @@ export default function TalentPoolPage() {
             </Card>
           ))}
         </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <button
+              type="button"
+              data-testid="talent-pool-prev"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t.common.prev}
+            </button>
+            <span className="text-sm text-gray-600 dark:text-gray-300" data-testid="talent-pool-page">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              data-testid="talent-pool-next"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {t.common.next}
+            </button>
+          </div>
+        )}
+        </>
       )}
     </div>
   );

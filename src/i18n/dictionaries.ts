@@ -150,6 +150,7 @@ const en = {
     },
   },
   talentPool: {
+    showing: 'Showing {from}–{to} of {total} candidates',
     navLink: 'Talent pool',
     title: 'Talent pool',
     subtitle: 'Search candidates who have opted into a public profile.',
@@ -3390,6 +3391,7 @@ const tr: Dict = {
     },
   },
   talentPool: {
+    showing: '{total} adaydan {from}–{to} gösteriliyor',
     navLink: 'Yetenek havuzu',
     title: 'Yetenek havuzu',
     subtitle: 'Herkese açık profil tercihini açan adayları ara.',
@@ -6608,6 +6610,7 @@ const de: Dict = {
     },
   },
   talentPool: {
+    showing: 'Zeige {from}–{to} von {total} Kandidaten',
     navLink: 'Talentpool',
     title: 'Talentpool',
     subtitle: 'Suche Kandidaten, die ein öffentliches Profil aktiviert haben.',
