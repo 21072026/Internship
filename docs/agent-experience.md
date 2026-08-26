@@ -4595,6 +4595,57 @@ kapandığı için kapanmayı bekliyordu; #884'ün PR'ında `Closes #` boş bır
 GitHub bağlamamıştı. **`closed_by_pull_requests` boş olması işin yapılmadığı anlamına
 gelmez** — içerikten doğrula.
 
+## 2026-08-25 — Admin yüzeyi denetimi (#1429): ölçerek issue açmak
+
+**Denetim için dev sunucusu değil prod build kullan.** `npm run build && npm run start` ile
+42 admin rotası tek turda, ilk-derleme gürültüsü olmadan gezildi (hepsi 200). Dev sunucuda
+ilk ziyaretteki derleme hem gecikmeyi ölçülemez kılıyor hem de Fast Refresh remount'u
+tıkla-sonra-doğrula adımlarını bozuyor (bkz. 2026-08-24 girdisi).
+
+**`curl` çerez kavanozunu ayrıştırırken `#HttpOnly_` satırlarını atlama.** NextAuth oturum
+çerezi kavanozda `#HttpOnly_localhost\tFALSE\t/...` olarak duruyor; "`#` ile başlayan satır
+yorumdur" filtresi tam olarak oturum çerezini siliyor ve elinde 0 uzunlukta bir cookie
+kalıyor. Satırı tab'la ayır, 6. ve 7. alanı al.
+
+**Çerez bantı (cookie banner) Playwright tıklamalarını yiyor.** `pointer events intercepted`
+hatası selector sorunu gibi görünüyor; çözüm ilk adımda "Necessary only"a tıklamak.
+
+**Selector tahmin etmek yerine önce DOM'u dök.** İlk etkileşim turumun yarısı yanlış
+düğme adlarında zaman aşımına düştü. Her sayfanın `button/input/select` listesini
+(metin + `data-testid`) basan 20 satırlık bir prob, akış scriptini yazmadan önce koşulmalı.
+
+**Prisma script'i proje kökünden koştur.** Scratchpad'den `import { PrismaClient }`
+`ERR_MODULE_NOT_FOUND` veriyor; dosyayı repo köküne kopyalayıp oradan çalıştır (ve sonra sil).
+
+**Kuadratik maliyeti iddia etme, iki noktada ölç.** 308 → 1 008 aday tohumlayıp aynı ucu
+çağırmak 371 ms → 4 385 ms verdi: "3,3× veri, 12× süre" cümlesi issue'da tek başına ikna
+edici. Daha da iyisi **yan etkiyi** ölçmek: tarama sürerken `/api/health` 9 ms'den 2 930
+ms'ye çıktı — "bir admin sekmesi tüm kullanıcıları bekletiyor" ifadesinin kanıtı bu.
+
+**API'nin kendi "başarılı" yanıtı kanıt değil; teslim kaydına bak.** Dört uç
+`emailSent: true` dönerken `/api/admin/email-log` aynı mesaj için `SKIPPED — SMTP not
+configured` gösteriyordu. `sendEmail` teslim imkânsızken **fırlatmıyor**, dolayısıyla
+"catch'e düşmediyse gönderilmiştir" varsayan her çağıran yanlış rapor veriyor (#1431).
+Aynı desen: "hata yoksa başarı" varsayımını her zaman ürünün kendi log'una karşı doğrula.
+
+**Konsol hatası saymadan önce sayfanın niyetini oku.** `/admin/analytics` premium katmanı
+kilitli ucu çağırıp **403'ü okuyarak** tespit ediyor; yani 42 rotalık taramada konsol hatası
+çıkan tek iki sayfa aslında tasarlanmış davranıştı. Yine de raporlanmaya değer (gerçek
+hataları gizliyor) ama "bug" diye değil, gürültü olarak (#1442).
+
+**Aynı gün paralel oturumlar issue numarasını kaydırıyor.** Story gövdesine alt görev
+numaralarını *önceden* yazdım; #1435'i başka bir oturum kaptı ve referanslar kaydı. Doğru
+sıra: **çocukları oluştur, sonra ebeveyn gövdesini yaz** (ya da oluşturup dönen numaralarla
+güncelle). Ayrıca dosyalamaya başlamadan hemen önce açık issue'ları yeniden listele: sabah
+18 açık issue vardı, 20 dakika sonra 86 (mentör/mentee/growth denetimleri aynı anda
+dosyalanıyordu).
+
+**"Bulgu yok" da bir bulgu — epic'e yaz.** Denetimin yarısı temiz çıkan alanları
+doğrulamakla geçti (rol kapıları, sayfa-1'e dönen filtreler, `all=1` dışa aktarım, SMTP'siz
+davet akışı). Bunları epic gövdesine "yeniden tartışılmasın" başlığıyla yazmak, bir sonraki
+denetimin aynı yolları tekrar yürümesini engelliyor — playbook'un yaptığı işin issue
+tarafındaki karşılığı.
+
 ## 2026-08-26 — Sürüm başına bir sürüm numarası (#1457)
 
 **Bir mekanizmanın "çalışıyor" görünmesi, doğru sayıyı ürettiği anlamına gelmiyor.** #1275
