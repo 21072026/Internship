@@ -59,6 +59,28 @@ export const TEXT_LIMITS = {
   weeklyReportBlockers: 5000,
   /** WeeklyReport.mentorComment — @db.Text */
   weeklyReportMentorComment: 5000,
+  // Newsletter issue (#1469). Deliberately tight: the whole point of the format
+  // is "little text, high quality" — a 20 000-character newsletter is a blog
+  // post nobody reads on a phone. The caps are the format, not a storage limit
+  // (Newsletter.content is Json/@db.Text and could hold far more).
+  /** Newsletter subject line — Newsletter.subject is VarChar(300) */
+  newsletterSubject: 200,
+  /** Hidden inbox-preview line shown next to the subject */
+  newsletterPreheader: 160,
+  /** The one or two sentences above the tips */
+  newsletterIntro: 600,
+  /** One tip's heading */
+  newsletterTipTitle: 120,
+  /** One tip's body — one or two sentences, never a paragraph */
+  newsletterTipBody: 400,
+  /** The "do this in ten minutes" line under the tips */
+  newsletterAction: 300,
+  /** The extra block only mentors are shown */
+  newsletterMentorNote: 600,
+  /** Call-to-action button label */
+  newsletterCtaLabel: 60,
+  /** Call-to-action target — same width as Announcement.link */
+  newsletterCtaUrl: 500,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;

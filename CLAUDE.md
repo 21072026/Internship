@@ -232,6 +232,14 @@ workaround, #636, and it compiled on every PR push).
   still-open question (`docs/legal/legal-tax-framework.md`). Contributor terms live in
   `CONTRIBUTING.md` (§ Contributor terms (IP)) and are confirmed via the PR template;
   rationale in [`docs/legal/licensing-strategy.md`](docs/legal/licensing-strategy.md).
+- **E-mail newsletter** (`/admin/newsletters`, #1469): scheduled career content, separate
+  from announcements — own audience (`MENTEE`/`MENTOR`/`BOTH`), own archive, own opt-out
+  category, one `NewsletterSend` row per recipient, and a **sent issue is immutable and
+  undeletable**. Curated issues live in `src/lib/newsletterContent.ts` (EN/TR/DE, house
+  style documented there). Full design in [`docs/newsletter.md`](docs/newsletter.md) — read
+  it before extending: `lib/newsletter.ts` is client-safe on purpose (the HMAC token and
+  URL builders live in `lib/newsletterTokens.ts`), and the cron is registered from
+  `/api/cron/start`, never from `initCronJobs`, to keep the import graph one-way.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

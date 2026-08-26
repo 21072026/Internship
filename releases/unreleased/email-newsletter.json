@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "- **E-mail newsletter module** (#1469). New `Newsletter` / `NewsletterImage` / `NewsletterSend` models plus a curated library of ten career issues in EN/TR/DE (`src/lib/newsletterContent.ts`). An issue is a fixed shape (subject, preheader, intro, 1-5 emoji tips, ten-minute action, optional CTA, mentor-only note) rendered as email-safe table HTML with an inline hero image; `MENTEE` / `MENTOR` / `BOTH` audiences, with mentors seeing the coaching block on a shared issue. Admin composer at `/admin/newsletters` (library picker, three language tabs, live preview through the real renderer, test send to self, schedule, cadence) with an immutable record of every send; reader archive at `/newsletters`; one-click unsubscribe at `/newsletter/unsubscribe` behind an HMAC token, a new `newsletter` notification category and `List-Unsubscribe` headers. Two cron jobs (`*/15` dispatch, daily 06:00 cadence queue), one `NewsletterSend` row per recipient so a resumed run never double-mails, and newsletter sends are cleared by both account-erasure paths.",
+  "notes": {
+    "en": [
+      "New career newsletter: short, emoji-led CV and interview issues, written once in English, Turkish and German and sent to each reader in their own language.",
+      "Read every past issue in the archive, and unsubscribe from the newsletter in one press without losing messages or reminders."
+    ],
+    "tr": [
+      "Yeni kariyer bülteni: CV ve mülakat ipuçlarını emojili kısa sayılar hâlinde ulaştırıyor; İngilizce, Türkçe ve Almanca bir kez yazılıyor, her okuyucuya kendi dilinde gidiyor.",
+      "Geçmiş bütün sayılar arşivden okunabiliyor; bülten aboneliği tek dokunuşla bırakılabiliyor, mesajlar ve hatırlatmalar gelmeye devam ediyor."
+    ],
+    "de": [
+      "Neuer Karriere-Newsletter: kurze Ausgaben mit Emoji-Tipps zu CV und Bewerbungsgesprächen — einmal auf Englisch, Türkisch und Deutsch geschrieben, an jede Leserin in ihrer Sprache verschickt.",
+      "Alle früheren Ausgaben stehen im Archiv, und die Abmeldung gelingt mit einem Klick, ohne Nachrichten oder Erinnerungen zu verlieren."
+    ]
+  }
+}

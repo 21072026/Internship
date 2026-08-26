@@ -16,6 +16,7 @@ import {
   checkReEngagementReminders,
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
+import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 
 export async function GET(request: Request) {
   try {
@@ -41,12 +42,21 @@ export async function GET(request: Request) {
     if (job === 're-engagement') {
       return NextResponse.json({ message: 'Re-engagement reminders ran', reEngagement: await checkReEngagementReminders() });
     }
+    // Newsletter (#1469), runnable on its own: dispatching a due issue and
+    // deciding whether the cadence should queue the next one are separate
+    // decisions, and an admin who just fixed SMTP wants only the first.
+    if (job === 'newsletters') {
+      return NextResponse.json({ message: 'Newsletter dispatch ran', newsletters: await dispatchDueNewsletters() });
+    }
+    if (job === 'newsletter-queue') {
+      return NextResponse.json({ message: 'Newsletter queue ran', newsletterQueue: await queueScheduledNewsletter() });
+    }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();
       return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });
     }
 
-    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports, reEngagement] = await Promise.all([
+    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
@@ -59,6 +69,7 @@ export async function GET(request: Request) {
       expireOffers(),
       sendWeeklyReportReminders(),
       checkReEngagementReminders(),
+      dispatchDueNewsletters(),
     ]);
 
     return NextResponse.json({
@@ -75,6 +86,7 @@ export async function GET(request: Request) {
       offers,
       weeklyReports,
       reEngagement,
+      newsletters,
     });
   } catch (error) {
     console.error('Cron error:', error);

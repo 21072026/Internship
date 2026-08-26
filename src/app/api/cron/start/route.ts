@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { initCronJobs } from '@/services/emailService';
+import { initNewsletterCron } from '@/lib/newsletterDispatch';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -27,5 +28,8 @@ export async function POST(request: Request) {
   if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   initCronJobs();
+  // Registered here rather than inside initCronJobs so the dependency stays
+  // one-way (newsletterDispatch imports emailService, never the reverse, #1469).
+  initNewsletterCron();
   return NextResponse.json({ ok: true, started: true });
 }
