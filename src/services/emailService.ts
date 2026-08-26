@@ -127,6 +127,10 @@ const BULK_CATEGORIES = new Set([
   'company-need-alert',
   'announcement',
   'document-reminder',
+  // Scheduled career content (#1469): the definition of bulk mail — many
+  // recipients, nothing urgent, and a reader who marks it as spam must not be
+  // able to drag the password-reset mail's reputation down with it.
+  'newsletter',
 ]);
 
 export type MailTransport = 'primary' | 'bulk';
@@ -278,6 +282,7 @@ export async function sendEmail({
   attachments,
   fromName,
   category,
+  headers,
 }: {
   to: string;
   subject: string;
@@ -294,6 +299,12 @@ export async function sendEmail({
   // so the dozens of existing call sites keep compiling; the ones that matter
   // for "did our mail get through?" pass it.
   category?: string;
+  // Extra SMTP headers. Added for the newsletter's List-Unsubscribe pair
+  // (#1469), which is what makes Gmail and Outlook render their own native
+  // "unsubscribe" control next to the sender — a reader who uses that never
+  // reaches for the spam button, and the spam button is what costs the whole
+  // sending domain. Nothing else needs it, hence optional.
+  headers?: Record<string, string>;
 }) {
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
@@ -332,6 +343,7 @@ export async function sendEmail({
       text: htmlToText(html),
       ...(replyTo ? { replyTo } : {}),
       ...(attachments?.length ? { attachments } : {}),
+      ...(headers && Object.keys(headers).length ? { headers } : {}),
     });
   } catch (e) {
     // Record, then rethrow unchanged: callers that already catch (and the ones

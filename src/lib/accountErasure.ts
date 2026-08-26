@@ -13,10 +13,18 @@ import { prisma } from '@/lib/prisma';
 // explicitly or an erased person's address survives in it (#1211). Read the
 // address BEFORE the row is deleted or rewritten, or there is nothing left to
 // match on.
+//
+// NewsletterSend (#1469) stores the address for the same reason and needs the
+// same treatment. Its FK to User cascades, so a hard delete would take it —
+// but `anonymizeUser` KEEPS the user row, and without this line the real
+// address would sit in the newsletter history of an account whose whole point
+// is that it no longer identifies anybody. Deleted by both address and id so
+// neither an already-detached row nor a renamed one is missed.
 async function forgetEmailLog(userId: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
   if (!user?.email) return;
   await prisma.emailLog.deleteMany({ where: { to: user.email } });
+  await prisma.newsletterSend.deleteMany({ where: { OR: [{ email: user.email }, { userId }] } });
 }
 
 export async function hardDeleteUser(userId: string): Promise<void> {

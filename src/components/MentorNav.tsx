@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardCheck, ClipboardList, Columns3, FolderGit2, Inbox, LayoutDashboard, Mail, MessageSquareText, User, UserPlus, Users } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardCheck, ClipboardList, Columns3, FolderGit2, Inbox, LayoutDashboard, Mail, MailOpen, MessageSquareText, User, UserPlus, Users } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 export function MentorNav() {
@@ -27,6 +27,9 @@ export function MentorNav() {
     { href: '/mentor/mentee-activity', label: t.nav.menteeActivity, Icon: Activity },
     { href: '/mentor/analytics', label: t.nav.analytics, Icon: BarChart3 },
     { href: '/mentor/feedback', label: t.nav.feedback, Icon: MessageSquareText },
+    // Mentors read the same archive; a shared issue shows them its coaching
+    // block, exactly as the e-mail does (#1469).
+    { href: '/newsletters', label: t.nav.newsletters, Icon: MailOpen },
   ];
 
   const isActive = (href: string) =>

@@ -2,7 +2,12 @@
 // switch applies to every channel that carries the category — e-mail AND
 // in-app rows (#886, via notifyIfAllowed) — while emailNotifications below
 // stays an e-mail-only master switch.
-export const NOTIFICATION_CATEGORIES = ['messages', 'announcements', 'deadlines', 'digest', 'meetingReminders', 'mentorship', 'documents', 'weeklyReports', 'interactions', 'goalsEvaluations', 'stageUpdates'] as const;
+// 'newsletter' (#1469) is the one category a reader is expected to turn off on
+// its own: the career-tips issues are the only mail here that is content rather
+// than something happening in their pipeline. Switching it off must never
+// silence a message, a meeting reminder or a stage update — which is exactly
+// why it is its own category and not folded into 'announcements'.
+export const NOTIFICATION_CATEGORIES = ['messages', 'announcements', 'deadlines', 'digest', 'meetingReminders', 'mentorship', 'documents', 'weeklyReports', 'interactions', 'goalsEvaluations', 'stageUpdates', 'newsletter'] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
 
 interface PrefUser {
