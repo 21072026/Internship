@@ -22,7 +22,7 @@ import { replyAddress } from '@/lib/replyToken';
 import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { withTenantScope } from '@/lib/orgContext';
@@ -338,14 +338,24 @@ export async function POST(request: Request) {
     );
 
     for (const recipient of recipients) {
-      await notify(recipient, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
-
-      // Mirror the message to the recipient's inbox (unless they opted out). The
-      // Reply-To routes email replies back into this thread via /api/inbound-email.
+      // Read the recipient's preferences BEFORE either channel (#1426). The
+      // "Messages" switch on /account is documented — in all three locales — as
+      // applying to e-mail and in-app alike, but the in-app insert below used to
+      // run ungated while the e-mail branch four lines down obeyed it. Someone
+      // who turned the category off still got the bell filling up.
       const rcpt = await prisma.user.findUnique({
         where: { id: recipient },
         select: { email: true, emailNotifications: true, notificationPrefs: true },
       });
+      // Fail OPEN on a missing row: `!rcpt || allowed`, never `rcpt && allowed`.
+      // A notification that vanishes because a lookup came back empty is worse
+      // than one that arrives despite an opt-out, and the default is ON anyway.
+      if (!rcpt || notificationCategoryAllowed(rcpt, 'messages')) {
+        await notify(recipient, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
+      }
+
+      // Mirror the message to the recipient's inbox (unless they opted out). The
+      // Reply-To routes email replies back into this thread via /api/inbound-email.
       if (rcpt?.email && emailAllowed(rcpt, 'messages')) {
         const sender = session.user.name ?? 'Your mentor';
         const safe = body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
