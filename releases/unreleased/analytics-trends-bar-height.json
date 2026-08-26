@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Fixed** — every bar in the admin analytics Trends chart rendered at 0px. The bars size themselves with percentage heights, but no ancestor had a definite height, so the percentages resolved to `auto`. The month labels kept rendering (text has intrinsic height), which made an empty chart look like missing data rather than a broken layout."
+}
