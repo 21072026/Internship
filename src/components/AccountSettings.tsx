@@ -154,7 +154,7 @@ export function AccountSettings() {
     // a push endpoint is rotated by the browser, dropped when site data is
     // cleared, and never existed for anyone who opted in before push shipped.
     // Silent, and only ever for a user who has already granted permission.
-    if (on && pushSupported()) registerPushSubscription().then(setPushActive);
+    if (on && pushSupported()) void registerPushSubscription().then(setPushActive);
   }, []);
 
   // One switch covers both halves of "notify me" (#1464): the foreground

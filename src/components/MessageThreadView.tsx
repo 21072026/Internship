@@ -168,15 +168,15 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
 
   // Live thread (#1464). The stream carries ids, not bodies, so a signal for
   // *this* thread simply replays the authorized fetch above — which also marks
-  // the new message read, exactly as opening the thread does. `tick` is the
-  // polling fallback (and the "tab came back to the foreground" nudge), where
-  // there is no per-thread information to filter on.
+  // the new message read, exactly as opening the thread does.
+  //
+  // A `message` event is the fast path, never the only path, and that is what
+  // keeps this self-healing: `tick` is the polling fallback and the "tab came
+  // back to the foreground" nudge; `ready` is a freshly (re)connected stream,
+  // which is exactly when an event may have been published while nobody was
+  // listening; `unread` is the heartbeat's database re-check noticing a change.
+  // None of the three says *which* thread moved, so they reload unconditionally.
   useRealtime((signal) => {
-    // `tick` is the polling fallback and the "tab came back" nudge; `ready` is a
-    // freshly (re)connected stream, which is exactly when an event may have been
-    // published while nobody was listening; `unread` is the heartbeat's database
-    // re-check noticing a change. Reloading on all three is what keeps this
-    // self-healing — a `message` event is the fast path, never the only path.
     if (signal.type === 'tick' || signal.type === 'ready' || signal.type === 'unread') { void load(); return; }
     if (signal.type !== 'message') return;
     const mine = target.kind === 'relation' ? signal.relationId === target.id : signal.conversationId === target.id;
