@@ -14,7 +14,12 @@ const { version, timeline } = release.resolveRelease(repoRoot, pkg.version);
 // its newest heading is the newest NOTED release — which is the app version
 // only when the latest change was user-visible.
 const newestNoted = [...timeline].reverse().find((entry: { notes?: unknown }) => entry.notes);
-const topEntryVersion: string = newestNoted ? newestNoted.version : pkg.version;
+// With nothing pending (or nothing pending that users can see) the newest entry
+// is the first one in releaseNotes.ts — which is NOT package.json's version when
+// the last compacted change was developer-facing only.
+const newestCanonical = readFileSync(path.join(repoRoot, 'src', 'lib', 'releaseNotes.ts'), 'utf8')
+  .match(/^\s+version: '(.+?)',$/m)?.[1];
+const topEntryVersion: string = newestNoted ? newestNoted.version : newestCanonical ?? pkg.version;
 
 test('landing footer shows the app version linking to release notes', async ({ page }) => {
   await page.goto('/');

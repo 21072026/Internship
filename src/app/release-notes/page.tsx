@@ -24,9 +24,11 @@ export default async function ReleaseNotesPage() {
         <div className="space-y-6">
           {getAllReleaseNotes().map((r) => (
             <div key={r.version} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
-              <div className="flex items-baseline justify-between gap-3 mb-3">
+              {/* Stacks on a phone: version + "2026-08-25 09:25 UTC · b174c20"
+                  side by side is wider than 360px (e2e/mobile-layout-audit). */}
+              <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-3 mb-3">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">v{r.version}</h2>
-                <span className="text-xs text-gray-400 text-right whitespace-nowrap">
+                <span className="text-xs text-gray-400 sm:text-right">
                   {r.date}
                   {r.time ? ` ${r.time} UTC` : ''}
                   {r.commit ? (

@@ -41,6 +41,20 @@ if (timeline.length === 0) {
   process.exit(0);
 }
 
+// Order comes from history, dates from the commits themselves — on a squash-only
+// main those agree. If they ever do not (a real merge commit landing an older
+// side-branch commit), say so rather than writing a changelog whose dates run
+// backwards while its versions climb.
+for (let i = 1; i < timeline.length; i += 1) {
+  const [prev, cur] = [timeline[i - 1], timeline[i]];
+  if (prev.iso && cur.iso && cur.iso < prev.iso) {
+    console.warn(
+      `!! ${cur.version} (${cur.file}) is dated ${cur.date} ${cur.time}, before ${prev.version} at ${prev.date} ${prev.time} — ` +
+        'history order and commit dates disagree (a non-squash merge?); the order below follows history.'
+    );
+  }
+}
+
 const version = timeline[timeline.length - 1].version;
 const today = new Date().toISOString().slice(0, 10);
 // Newest first, the order both canonical files are read in.

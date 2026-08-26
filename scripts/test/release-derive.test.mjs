@@ -131,10 +131,25 @@ test('unreleasedEntries: newest first, only the changes users can see', () => {
   assert.deepEqual(entries[0].highlights.tr, ['tr c.json']);
 });
 
-test('RELEASE_STAMPS wins over git, and malformed JSON falls back instead of throwing', () => {
+test('RELEASE_STAMPS wins over git, and a bad value degrades instead of throwing', () => {
   const given = stampsFor('x.json');
   assert.deepEqual(resolveStamps('/nonexistent', [frag('x.json', 'patch')], { RELEASE_STAMPS: JSON.stringify(given) }), given);
   assert.deepEqual(resolveStamps('/nonexistent', [frag('x.json', 'patch')], { RELEASE_STAMPS: '{oops' }), {});
+  assert.deepEqual(resolveStamps('/nonexistent', [frag('x.json', 'patch')], { RELEASE_STAMPS: '[1,2]' }), {});
+  // Half-written entries are dropped, not fed to sha.slice() as a crash: this
+  // value arrives from a shell substitution in build-image.yml.
+  const fragments = [frag('a.json', 'patch'), frag('b.json', 'minor')];
+  const mixed = JSON.stringify({
+    'a.json': { sha: 'not-a-sha', unix: 1 },
+    'b.json': { sha: 'abcdef1234', unix: 1700000000 },
+  });
+  const cleaned = resolveStamps('/nonexistent', fragments, { RELEASE_STAMPS: mixed });
+  assert.deepEqual(Object.keys(cleaned), ['b.json']);
+  const timeline = releaseTimeline('1.0.0', fragments, cleaned);
+  assert.deepEqual(timeline.map((e) => [e.file, e.version, e.commit]), [
+    ['b.json', '1.1.0', 'abcdef1'],
+    ['a.json', '1.1.1', ''],
+  ]);
 });
 
 test('validateFragment rejects the ways a fragment goes wrong', () => {
@@ -170,6 +185,49 @@ function repoWith(commits) {
   }
   return { root, run };
 }
+
+test('a non-ASCII fragment name is still matched (git c-quotes paths by default)', (t) => {
+  const { root } = repoWith([
+    { file: 'mentör-atama.json', bump: 'patch', committerDate: '2026-08-01T10:00:00+0000' },
+    { file: 'plain.json', bump: 'minor', committerDate: '2026-08-02T10:00:00+0000' },
+  ]);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { timeline } = resolveRelease(root, '1.0.0', {}, { requireStamps: true });
+  assert.deepEqual(
+    timeline.map((e) => [e.file, e.version]),
+    [['mentör-atama.json', '1.0.1'], ['plain.json', '1.1.0']]
+  );
+});
+
+test('a renamed fragment is dated by the rename, not left undatable', (t) => {
+  const { root, run } = repoWith([{ file: 'old-name.json', bump: 'minor', committerDate: '2026-08-01T10:00:00+0000' }]);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = path.join(root, 'releases', 'unreleased');
+  run(['mv', path.join(dir, 'old-name.json'), path.join(dir, 'new-name.json')]);
+  run(['commit', '-q', '-m', 'rename'], { GIT_COMMITTER_DATE: '2026-08-03T12:00:00+0000', GIT_AUTHOR_DATE: '2026-08-03T12:00:00+0000' });
+  // Without --no-renames git reports a rename, not an addition, and the
+  // fragment would look uncommitted — which sorts it last and renumbers what
+  // already shipped. requireStamps would then block compaction forever.
+  const { timeline } = resolveRelease(root, '1.0.0', {}, { requireStamps: true });
+  assert.deepEqual(timeline.map((e) => [e.file, e.date]), [['new-name.json', '2026-08-03']]);
+});
+
+test('a new fragment reusing a compacted slug does not inherit the old release', (t) => {
+  const { root, run } = repoWith([{ file: 'reused-slug.json', bump: 'minor', committerDate: '2026-08-01T10:00:00+0000' }]);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  // Compaction consumes the fragment...
+  run(['rm', '-q', path.join('releases', 'unreleased', 'reused-slug.json')]);
+  run(['commit', '-q', '-m', 'compact'], { GIT_COMMITTER_DATE: '2026-08-02T10:00:00+0000', GIT_AUTHOR_DATE: '2026-08-02T10:00:00+0000' });
+  // ...and months later the same slug is written again, not yet committed.
+  mkdirSync(path.join(root, 'releases', 'unreleased'), { recursive: true }); // git rm took the empty dir
+  writeFileSync(
+    path.join(root, 'releases', 'unreleased', 'reused-slug.json'),
+    JSON.stringify({ bump: 'patch', changelog: '- new work under an old name' })
+  );
+  const { timeline } = resolveRelease(root, '2.0.0', {});
+  assert.equal(timeline[0].date, '', 'the 2026-08-01 add-commit must not be reused');
+  assert.equal(timeline[0].commit, '');
+});
 
 test('git stamps come from the add-commit, ordered by history', (t) => {
   const { root } = repoWith([

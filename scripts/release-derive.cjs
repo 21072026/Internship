@@ -18,9 +18,9 @@
 // ONE FRAGMENT = ONE RELEASE (#1457). Every fragment gets its own version, and
 // that version is stamped with WHEN it shipped and WHICH commit brought it in.
 // Before #1457 a whole compaction window collapsed into a single CHANGELOG
-// section: the 2026-08-24 compaction wrote ~25 bullets under one heading and
-// the versions 0.86.0-beta … 0.110.0-beta — which the running app had actually
-// displayed, one per merge — were never recorded anywhere.
+// section: the 2026-08-24 compaction wrote 46 bullets from 45 fragments under
+// one `0.110.1-beta` heading, and the versions this arithmetic assigns across
+// that window (0.86.0-beta … 0.110.0-beta) were recorded nowhere.
 //
 // The order is the MERGE order, read from git (the commit that ADDED the
 // fragment file), not the filename order — that is what makes the version in
@@ -46,10 +46,20 @@ function readFragments(repoRoot) {
   return readdirSync(dir)
     .filter((f) => f.endsWith('.json'))
     .sort()
-    .map((file) => ({
-      file,
-      ...JSON.parse(readFileSync(path.join(dir, file), 'utf8')),
-    }));
+    .map((file) => {
+      let parsed;
+      try {
+        parsed = JSON.parse(readFileSync(path.join(dir, file), 'utf8'));
+      } catch (error) {
+        // Name the file: this runs in the CI gate, whose whole job is to point
+        // at the fragment that is wrong.
+        throw new Error(`${file}: invalid JSON — ${error.message}`);
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(`${file}: must be a JSON object`);
+      }
+      return { file, ...parsed };
+    });
 }
 
 /** Throws with a readable message when a fragment is malformed. */
@@ -125,7 +135,22 @@ function resolveStamps(repoRoot, fragments, env = process.env) {
   if (fromEnv && fromEnv.trim()) {
     try {
       const parsed = JSON.parse(fromEnv);
-      if (parsed && typeof parsed === 'object') return parsed;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        // Keep only well-formed entries. A half-written map must degrade to the
+        // undated fallback, never crash a build on `sha.slice` — this value
+        // arrives from a shell substitution in build-image.yml.
+        const clean = {};
+        for (const [file, stamp] of Object.entries(parsed)) {
+          if (
+            stamp && typeof stamp === 'object' &&
+            typeof stamp.sha === 'string' && /^[0-9a-f]{7,40}$/.test(stamp.sha) &&
+            Number.isFinite(stamp.unix)
+          ) {
+            clean[file] = { sha: stamp.sha, unix: stamp.unix, ...(Number.isFinite(stamp.order) ? { order: stamp.order } : {}) };
+          }
+        }
+        return clean;
+      }
     } catch {
       // A malformed hand-set env var must not fail the build — fall through.
     }
@@ -134,7 +159,19 @@ function resolveStamps(repoRoot, fragments, env = process.env) {
   const boundary = shallowBoundary(repoRoot);
   const wanted = new Set(fragments.map((f) => f.file));
   const log = git(repoRoot, [
-    'log', '--reverse', '--topo-order', '--diff-filter=A',
+    // -c core.quotepath=false: a non-ASCII fragment name is otherwise returned
+    // C-quoted ("ment\303\266r.json") and would not match the file on disk.
+    // --no-renames: a renamed fragment must count as an ADD under its new name,
+    // otherwise the rename commit dates nothing and the fragment looks
+    // uncommitted (which sorts it last and renumbers what already shipped).
+    '-c', 'core.quotepath=false',
+    // History order, not date order: the walk decides the sequence, so a
+    // committer clock that is off (several commits here carry laptop +02:00
+    // offsets) cannot reorder releases. Deliberately NOT --first-parent: on a
+    // branch that merged main, that would redate main's fragments to the merge.
+    // main itself is squash-only, so the two agree there — release-compact warns
+    // if a release ever ends up dated before the one it follows.
+    'log', '--reverse', '--topo-order', '--diff-filter=A', '--no-renames',
     '--format=C%H%x09%ct', '--name-only', '--', FRAGMENT_DIR,
   ]);
   const stamps = {};
@@ -150,6 +187,16 @@ function resolveStamps(repoRoot, fragments, env = process.env) {
     if (!commit || !file || !wanted.has(file)) continue;
     stamps[file] = { ...commit, order: (order += 1) };
   }
+  // A slug can be reused after its first release was compacted away: history
+  // then still holds the OLD add-commit for that name. Only a file git currently
+  // tracks may wear a stamp — an untracked one is new work and belongs last.
+  const tracked = new Set(
+    git(repoRoot, ['-c', 'core.quotepath=false', 'ls-files', '--', FRAGMENT_DIR])
+      .split('\n')
+      .map((l) => (l.trim() ? path.basename(l.trim()) : ''))
+      .filter(Boolean)
+  );
+  for (const file of Object.keys(stamps)) if (!tracked.has(file)) delete stamps[file];
   return stamps;
 }
 
@@ -163,6 +210,14 @@ function resolveStamps(repoRoot, fragments, env = process.env) {
 function assertStamped(repoRoot, fragments, stamps) {
   const unstamped = fragments.filter((f) => !stamps[f.file]);
   if (unstamped.length === 0) return;
+  // "Untracked" is only meaningful when git answered. Without git every
+  // fragment looks untracked, which would wave the whole set through.
+  if (!git(repoRoot, ['rev-parse', '--git-dir'])) {
+    throw new Error(
+      `cannot date ${unstamped.length} fragment(s) without git history: ${unstamped.map((f) => f.file).join(', ')}. ` +
+        `Run where the repository is available, or pass ${STAMPS_ENV}.`
+    );
+  }
   const tracked = unstamped.filter((f) =>
     git(repoRoot, ['ls-files', '--', path.join(FRAGMENT_DIR, f.file)])
   );
@@ -174,11 +229,14 @@ function assertStamped(repoRoot, fragments, stamps) {
   );
 }
 
-/** Sort key of one stamp: unstamped fragments (= not committed yet, so newest
- *  by definition) sort last. */
+/** Sort key of one stamp, as [walk order, committer date]: two axes, compared
+ *  lexicographically, so a map where only some entries carry `order` cannot mix
+ *  a 1..N counter with a ~1.7e9 timestamp. Unstamped fragments (= not committed
+ *  yet, so newest by definition) sort last on both. */
 function rank(stamp) {
-  if (!stamp) return Number.POSITIVE_INFINITY;
-  return typeof stamp.order === 'number' ? stamp.order : stamp.unix;
+  const INF = Number.POSITIVE_INFINITY;
+  if (!stamp) return [INF, INF];
+  return [Number.isFinite(stamp.order) ? stamp.order : INF, Number.isFinite(stamp.unix) ? stamp.unix : INF];
 }
 
 /** Fragments in merge order: stamped ones oldest-first, unstamped last,
@@ -190,9 +248,10 @@ function orderFragments(fragments, stamps = {}) {
       // History order when git gave us one, committer date when the stamps came
       // from RELEASE_STAMPS, filename as the final tie-break (two fragments in
       // one squash commit, or nothing stamped at all).
-      const ka = rank(a.stamp);
-      const kb = rank(b.stamp);
-      if (ka !== kb) return ka - kb;
+      const [oa, ua] = rank(a.stamp);
+      const [ob, ub] = rank(b.stamp);
+      if (oa !== ob) return oa - ob;
+      if (ua !== ub) return ua - ub;
       return a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
     });
 }
@@ -301,6 +360,7 @@ module.exports = {
   validateFragment,
   resolveStamps,
   assertStamped,
+  shallowBoundary,
   orderFragments,
   bumpVersion,
   utcStamp,
@@ -316,7 +376,17 @@ if (require.main === module) {
   const root = process.cwd();
   const fragments = readFragments(root);
   if (process.argv.includes('--stamps')) {
-    process.stdout.write(JSON.stringify(resolveStamps(root, fragments, {})));
+    const stamps = resolveStamps(root, fragments, {});
+    // Loud, not lossy: this output is what dates the releases inside the Docker
+    // image (.git never gets there). Silently empty stamps would ship undated
+    // versions in filename order.
+    if (fragments.length && Object.keys(stamps).length === 0) {
+      process.stderr.write(
+        `XX ${fragments.length} pending fragment(s) but no add-commit for any of them — shallow clone? (need fetch-depth: 0)\n`
+      );
+      process.exit(1);
+    }
+    process.stdout.write(JSON.stringify(stamps));
   } else {
     const base = require(path.join(root, 'package.json')).version;
     for (const e of releaseTimeline(base, fragments, resolveStamps(root, fragments))) {

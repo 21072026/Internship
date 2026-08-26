@@ -59,7 +59,12 @@ jobs:
       # filename order and the released versions would lose their dates (#1457).
       - name: Resolve release stamps
         id: stamps
-        run: echo "json=$(node scripts/release-derive.cjs --stamps)" >> "$GITHUB_OUTPUT"
+        run: |
+          # Assigned to a variable first, deliberately: inside `echo "x=$(cmd)"`
+          # a failing cmd is discarded by the shell and the step would go green
+          # with empty stamps, shipping undated versions in filename order.
+          STAMPS="$(node scripts/release-derive.cjs --stamps)"
+          echo "json=$STAMPS" >> "$GITHUB_OUTPUT"
 
       - name: Resolve image reference
         id: meta

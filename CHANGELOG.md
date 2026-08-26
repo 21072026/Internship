@@ -10,8 +10,8 @@ version is shown in the sidebar footer of every page (links to the
 
 Since #1457 **one shipped change = one section**: its own version, the UTC time
 it was merged and a link to the commit. Sections up to and including
-`0.85.0-beta` predate that and can group several changes; the entries between
-`0.85.1-beta` and `0.110.1-beta` were reconstructed from the release fragments'
+`0.85.0-beta` predate that and can group several changes; the entries from
+`0.86.0-beta` to `0.110.1-beta` were reconstructed from the release fragments'
 add-commits (the 2026-08-24 compaction had folded all 45 of them into a single
 `0.110.1-beta` section).
 
@@ -222,69 +222,69 @@ _Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/In
 
 ## [0.94.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
-
-- **Release fragments end the version-collision churn** (#1275). PRs no longer edit `package.json`'s version, `CHANGELOG.md` or `src/lib/releaseNotes.ts` — they add one JSON fragment under `releases/unreleased/` (new files cannot conflict). The displayed version is derived at build time from base+fragments (`next.config.js` → `APP_DERIVED_VERSION`), `/release-notes` shows pending notes as a synthetic entry, `check:release-fragments` validates fragments in CI, and the scheduled `release-compact.yml` folds them into the canonical files through a normal PR. This very entry is the first fragment.
-
-## [0.93.1-beta] - 2026-08-24
-
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
-
-- **Registration assigns the tenant at creation time (#1272).** Invited users inherit the inviter's org (carried on `InvitationToken.orgId`, set at invite time); token-less self-registration gets the default org via the new `defaultOrgId()` helper — the same upsert the deploy backfill uses. Previously every account was created org-less, so fail-closed org scoping (#1227) 403'd an invited COMPANY user's portal until the next deploy ran the backfill. The demo seeder now backfills the default org onto its rows too, so the demo company account survives demo resets between deploys.
-
-## [0.93.0-beta] - 2026-08-24
-
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
+_Shipped 2026-08-24 06:44 UTC · commit [55c8ed4](https://github.com/21072026/Internship/commit/55c8ed427f0ed579ae7c274b10812d0603c8b723)_
 
 - **Public profile showcase (#1091, #1094 — story #1086)**: `/p/[userId]` gains two proof sections. Projects (#1091): memberships in PUBLIC projects with functional-role badge and technology chips plus the completed-task count — private projects leak nothing (both queries filter `isPublic`), task titles are never shown, and a new `User.publicShowProjects` toggle (profile settings, default on) hides the section. Evaluation summary (#1094): the mentor→mentee criteria averaged over PUBLISHED evaluations plus the latest author-approved excerpt with the mentor's display-style name — rendered only when the mentee's and the author's TESTIMONIAL consents are active, raw scores/comment never leave the server, and with any gate down the section does not render at all.
 
-## [0.92.0-beta] - 2026-08-24
+## [0.93.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
-
-- **Notification coverage (#886)**: the silent mentee-facing events now create in-app notifications — interaction logged, meeting scheduled (recipient's timezone), goal assigned/completed (two-way), evaluation added (two-way, no scores/comments in the text). Stage changes now emit the same notification + `pipeline.stage_change` webhook from every write path (`PUT /api/mentorship/[id]`, non-backdated `POST /api/status-changes` — which now also keeps `pipelineStatus` in sync in one transaction — and bulk advance, one notification per person) via a shared `emitStageChange` service (#926). Company interest changes now also reach the candidate — only INTERESTED/SHORTLISTED, only with an active TALENT_POOL_VISIBILITY consent, and never with the company's name or note (#1101). Three new notification categories (interaction notes, goals & evaluations, stage updates) join /account; category toggles now gate in-app notifications too and stay usable when the e-mail master switch is off.
-
-## [0.91.0-beta] - 2026-08-24
-
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
-
-- **Consent-based mentor directory + structured matching preferences (#937, #938, #939 — story #900).** New `MENTOR_DIRECTORY_VISIBILITY` consent (mentor-only `/account` toggle; revocation delists immediately); `/mentors` mentee-facing directory (`GET /api/mentors`: publicProfile AND active consent — the talent-pool dual gate verbatim — strict select allowlist, never e-mail/phone/WhatsApp, COMPANY/SOURCE fail closed, skill/language/accepting filters + pagination, availability via `getMentorAvailability`); `MentorshipRequest` gains non-binding `preferredField`/`preferredLanguages`/`preferredMentorId` (validated against the same directory-visibility rule), surfaced as chips + a preselected (changeable) mentor in the admin queue. Three new e2e specs, each proven locally against a real DB.
-
-## [0.90.0-beta] - 2026-08-24
-
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
-
-- **Binding mentor capacity (#1188)**: the public application link now closes itself when the mentor's `mentorCapacity` is reached (counting active relations plus pending applications) or when the mentor paused new mentees — `POST /api/apply` refuses with a clear reason and the public page explains the closed state instead of showing a form. Applications now land as PENDING `MentorshipRequest`s in the mentor's new `/mentor/applications` inbox; accept starts the relation, decline notifies the applicant politely — both via the shared `decideMentorshipRequest` service the admin queue was refactored onto. A null capacity keeps the link open as before; landing copy (`audMentor1D`, `faqMentor2A`) updated to the now-true promise.
-
-## [0.89.0-beta] - 2026-08-24
-
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
-
-- **Mentee meeting visibility (#874)**: `GET /api/meetings` now serves MENTEE sessions their own relations' meetings (fail-closed for unlisted roles, #913); the portal dashboard gains an "Upcoming meetings" card with join link, in-app RSVP (reusing the meeting's own token credential) and per-meeting .ics download (#914); `/portal/calendar` renders the shared CalendarView for mentees plus a personal, rotatable/revocable ICS subscription feed (`User.icsFeedToken`, `/api/calendar/feed/<token>`, title+time only) (#915). Mentee-facing deadline events no longer link into /admin.
-
-## [0.88.0-beta] - 2026-08-24
-
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
+_Shipped 2026-08-24 06:26 UTC · commit [9cf5146](https://github.com/21072026/Internship/commit/9cf51463c0f3fdf69ae657f05bc83c4724995e9a)_
 
 - **Live landing numbers (#1099)**: new session-less `GET /api/public/stats` returns exactly three integers (active mentors, open public projects, candidates waiting for a mentor) — rate-limited, 10-minute in-process cache, zero PII. The hero gains a live status strip fed by the same cached helper; a zero count drops its piece and with all three at zero the strip is not rendered at all. Numbers are computed, never hand-written into copy (reusing the placeholder templates #1107 pre-seeded).
 
-## [0.87.1-beta] - 2026-08-24
+## [0.92.0-beta] - 2026-08-24
 
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
+_Shipped 2026-08-24 06:14 UTC · commit [d6f897d](https://github.com/21072026/Internship/commit/d6f897dc3f1d3aab6b6bb87e6f3c5e81e3d2c5be)_
+
+- **Consent-based testimonials (#1096, #1098, #1100 — story #1087)**: new `TESTIMONIAL` consent type (both roles; revoking unpublishes in the same request via `revokePublishedFor`), `Evaluation.sharedPublicly/publishedAt/publicExcerpt/excerptApprovedAt` and a `User.testimonialNameStyle` display preference (initials by default). `/admin/testimonials` moderation: only both-sides-consented evaluations enter the pool, the admin drafts an excerpt (original comment never edited), the AUTHOR approves the exact wording at `/testimonials/approve`, and only then can publish succeed — every move audit-logged. Public chain: session-less `GET /api/public/stories` (four server-side gates re-checked per request, no scores/comment/contact fields), `/stories` page (404 when empty), and a landing stories section that does not exist in the DOM until a real story is published (no placeholders, per the landing honesty rules).
+
+## [0.91.1-beta] - 2026-08-24
+
+_Shipped 2026-08-24 04:59 UTC · commit [3c726b0](https://github.com/21072026/Internship/commit/3c726b039b82ac93f20b0b343f43475dd6364e1e)_
 
 - **Landing founder identity (#1097)**: the transparency section gains a "Who is behind this?" block and the public footer a "Built and maintained by" line — both naming the founder (a natural person, per the licensing/IP rule: no company as owner) with a link to his public GitHub profile, in EN/TR/DE. Completes #1097; the GitHub links, business-model line and transparency strip landed earlier via #1107.
 
-## [0.87.0-beta] - 2026-08-24
+## [0.91.0-beta] - 2026-08-23
 
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
+_Shipped 2026-08-23 20:24 UTC · commit [3236bac](https://github.com/21072026/Internship/commit/3236bacb58de4047b82b927fd81e475e1f924055)_
+
+- **Binding mentor capacity (#1188)**: the public application link now closes itself when the mentor's `mentorCapacity` is reached (counting active relations plus pending applications) or when the mentor paused new mentees — `POST /api/apply` refuses with a clear reason and the public page explains the closed state instead of showing a form. Applications now land as PENDING `MentorshipRequest`s in the mentor's new `/mentor/applications` inbox; accept starts the relation, decline notifies the applicant politely — both via the shared `decideMentorshipRequest` service the admin queue was refactored onto. A null capacity keeps the link open as before; landing copy (`audMentor1D`, `faqMentor2A`) updated to the now-true promise.
+
+## [0.90.0-beta] - 2026-08-23
+
+_Shipped 2026-08-23 20:08 UTC · commit [d993a39](https://github.com/21072026/Internship/commit/d993a3976a5a1c71dda322414659d6e5c47b85ec)_
+
+- **Mentee meeting visibility (#874)**: `GET /api/meetings` now serves MENTEE sessions their own relations' meetings (fail-closed for unlisted roles, #913); the portal dashboard gains an "Upcoming meetings" card with join link, in-app RSVP (reusing the meeting's own token credential) and per-meeting .ics download (#914); `/portal/calendar` renders the shared CalendarView for mentees plus a personal, rotatable/revocable ICS subscription feed (`User.icsFeedToken`, `/api/calendar/feed/<token>`, title+time only) (#915). Mentee-facing deadline events no longer link into /admin.
+
+## [0.89.0-beta] - 2026-08-23
+
+_Shipped 2026-08-23 19:53 UTC · commit [401e29f](https://github.com/21072026/Internship/commit/401e29f214472d234c382c0225b424c78ee00c6c)_
+
+- **Notification coverage (#886)**: the silent mentee-facing events now create in-app notifications — interaction logged, meeting scheduled (recipient's timezone), goal assigned/completed (two-way), evaluation added (two-way, no scores/comments in the text). Stage changes now emit the same notification + `pipeline.stage_change` webhook from every write path (`PUT /api/mentorship/[id]`, non-backdated `POST /api/status-changes` — which now also keeps `pipelineStatus` in sync in one transaction — and bulk advance, one notification per person) via a shared `emitStageChange` service (#926). Company interest changes now also reach the candidate — only INTERESTED/SHORTLISTED, only with an active TALENT_POOL_VISIBILITY consent, and never with the company's name or note (#1101). Three new notification categories (interaction notes, goals & evaluations, stage updates) join /account; category toggles now gate in-app notifications too and stay usable when the e-mail master switch is off.
+
+## [0.88.0-beta] - 2026-08-23
+
+_Shipped 2026-08-23 19:06 UTC · commit [02f15d1](https://github.com/21072026/Internship/commit/02f15d15bbe61c00b89e34149c3bd33753c16c22)_
 
 - **Email delivery health (#1190)**: delivery health (last success, failures since, attempts in 24h) is now derived from the `EmailLog` ledger and surfaced on the admin settings page, `/api/admin/email-health` and the token-gated `/api/health` detail view. An hourly check writes a durable `email.health_alert` activity entry and sends a best-effort ops email (`ALERT_EMAIL_TO`) after 3 consecutive failures or when the last success goes stale while attempts continue. Error text is scrubbed of recipient addresses before it leaves the server.
 
-## [0.86.0-beta] - 2026-08-24
+## [0.87.0-beta] - 2026-08-23
 
-_Shipped 2026-08-24 10:54 UTC · commit [c12bf9b](https://github.com/21072026/Internship/commit/c12bf9bb8f9dd30b1b6a5c2e33b613b12ce3eb8e)_
+_Shipped 2026-08-23 17:52 UTC · commit [9fd52ec](https://github.com/21072026/Internship/commit/9fd52ecc9df7be5e1283bc5bf5ebb6bcedd456b3)_
 
-- **Consent-based testimonials (#1096, #1098, #1100 — story #1087)**: new `TESTIMONIAL` consent type (both roles; revoking unpublishes in the same request via `revokePublishedFor`), `Evaluation.sharedPublicly/publishedAt/publicExcerpt/excerptApprovedAt` and a `User.testimonialNameStyle` display preference (initials by default). `/admin/testimonials` moderation: only both-sides-consented evaluations enter the pool, the admin drafts an excerpt (original comment never edited), the AUTHOR approves the exact wording at `/testimonials/approve`, and only then can publish succeed — every move audit-logged. Public chain: session-less `GET /api/public/stories` (four server-side gates re-checked per request, no scores/comment/contact fields), `/stories` page (404 when empty), and a landing stories section that does not exist in the DOM until a real story is published (no placeholders, per the landing honesty rules).
+- **Consent-based mentor directory + structured matching preferences (#937, #938, #939 — story #900).** New `MENTOR_DIRECTORY_VISIBILITY` consent (mentor-only `/account` toggle; revocation delists immediately); `/mentors` mentee-facing directory (`GET /api/mentors`: publicProfile AND active consent — the talent-pool dual gate verbatim — strict select allowlist, never e-mail/phone/WhatsApp, COMPANY/SOURCE fail closed, skill/language/accepting filters + pagination, availability via `getMentorAvailability`); `MentorshipRequest` gains non-binding `preferredField`/`preferredLanguages`/`preferredMentorId` (validated against the same directory-visibility rule), surfaced as chips + a preselected (changeable) mentor in the admin queue. Three new e2e specs, each proven locally against a real DB.
+
+## [0.86.1-beta] - 2026-08-23
+
+_Shipped 2026-08-23 16:46 UTC · commit [5e38009](https://github.com/21072026/Internship/commit/5e380094195166f73a699535e035b6105ea408c8)_
+
+- **Registration assigns the tenant at creation time (#1272).** Invited users inherit the inviter's org (carried on `InvitationToken.orgId`, set at invite time); token-less self-registration gets the default org via the new `defaultOrgId()` helper — the same upsert the deploy backfill uses. Previously every account was created org-less, so fail-closed org scoping (#1227) 403'd an invited COMPANY user's portal until the next deploy ran the backfill. The demo seeder now backfills the default org onto its rows too, so the demo company account survives demo resets between deploys.
+
+## [0.86.0-beta] - 2026-08-23
+
+_Shipped 2026-08-23 12:25 UTC · commit [559ea7d](https://github.com/21072026/Internship/commit/559ea7dd83152f1ffd34c980dc9883ea13a3df52)_
+
+- **Release fragments end the version-collision churn** (#1275). PRs no longer edit `package.json`'s version, `CHANGELOG.md` or `src/lib/releaseNotes.ts` — they add one JSON fragment under `releases/unreleased/` (new files cannot conflict). The displayed version is derived at build time from base+fragments (`next.config.js` → `APP_DERIVED_VERSION`), `/release-notes` shows pending notes as a synthetic entry, `check:release-fragments` validates fragments in CI, and the scheduled `release-compact.yml` folds them into the canonical files through a normal PR. This very entry is the first fragment.
 
 ## [0.85.0-beta] - 2026-08-23
 

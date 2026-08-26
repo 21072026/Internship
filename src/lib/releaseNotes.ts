@@ -469,42 +469,8 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: '0.94.0-beta',
     date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
-    highlights: {
-      en: [
-        "Release notes now appear the moment a change goes live: the version number and the what's-new page update with every deployment instead of waiting for a manual bookkeeping step.",
-      ],
-      tr: [
-        "Sürüm notları artık bir değişiklik yayına girdiği anda görünüyor: sürüm numarası ve yenilikler sayfası, elle yapılan bir kayıt adımını beklemek yerine her dağıtımla birlikte güncelleniyor.",
-      ],
-      de: [
-        "Versionshinweise erscheinen jetzt in dem Moment, in dem eine Änderung live geht: Versionsnummer und Neuigkeiten-Seite aktualisieren sich mit jedem Deployment, statt auf einen manuellen Pflegeschritt zu warten.",
-      ],
-    },
-  },
-  {
-    version: '0.93.1-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
-    highlights: {
-      en: [
-        "Invited company users see their candidates immediately after registering — previously the portal could stay empty until the next deployment.",
-      ],
-      tr: [
-        "Davet edilen şirket kullanıcıları kayıttan hemen sonra adaylarını görüyor — önceden portal bir sonraki dağıtıma kadar boş kalabiliyordu.",
-      ],
-      de: [
-        "Eingeladene Unternehmensnutzer sehen ihre Kandidaten sofort nach der Registrierung — zuvor konnte das Portal bis zum nächsten Deployment leer bleiben.",
-      ],
-    },
-  },
-  {
-    version: '0.93.0-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
+    time: '06:44',
+    commit: '55c8ed4',
     highlights: {
       en: [
         "Public profiles became proof: your public projects with your role and completed-task count, and — with both sides' consent — your mentor's published evaluation average and an approved quote.",
@@ -518,10 +484,95 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
+    version: '0.93.0-beta',
+    date: '2026-08-24',
+    time: '06:26',
+    commit: '9cf5146',
+    highlights: {
+      en: [
+        "The landing hero now shows real, live numbers — active mentors, open projects and candidates waiting for a mentor — computed from the database and hidden entirely when there is nothing to show.",
+      ],
+      tr: [
+        "Landing hero artık gerçek, canlı sayılar gösteriyor — aktif mentorlar, açık projeler ve mentor bekleyen adaylar — veritabanından hesaplanıyor ve gösterecek bir şey yokken tamamen gizleniyor.",
+      ],
+      de: [
+        "Der Landing-Hero zeigt jetzt echte, live berechnete Zahlen — aktive Mentoren, offene Projekte und wartende Kandidaten — aus der Datenbank berechnet und komplett ausgeblendet, wenn es nichts zu zeigen gibt.",
+      ],
+    },
+  },
+  {
     version: '0.92.0-beta',
     date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
+    time: '06:14',
+    commit: 'd6f897d',
+    highlights: {
+      en: [
+        "Success stories, done right: a real evaluation excerpt can be published only with both sides' consent and the author's approval of the exact wording — shown with initials by default, withdrawable at any time, gone immediately.",
+      ],
+      tr: [
+        "Başarı hikâyeleri, doğru şekilde: gerçek bir değerlendirme alıntısı yalnızca iki tarafın rızası ve yazarın birebir metin onayıyla yayınlanır — varsayılan olarak baş harflerle gösterilir, istenildiği an geri alınır, anında yayından düşer.",
+      ],
+      de: [
+        "Erfolgsgeschichten, richtig gemacht: Ein echter Bewertungsauszug wird nur mit Einwilligung beider Seiten und Freigabe des exakten Wortlauts veröffentlicht — standardmäßig mit Initialen, jederzeit widerrufbar und sofort entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.91.1-beta',
+    date: '2026-08-24',
+    time: '04:59',
+    commit: '3c726b0',
+    highlights: {
+      en: [
+        "The landing page now says who builds InternshipCRM and why — a named founder with a public profile link, in the transparency section and the footer.",
+      ],
+      tr: [
+        "Landing sayfası artık InternshipCRM’i kimin, neden yaptığını söylüyor — şeffaflık bölümünde ve footer’da, herkese açık profil bağlantısıyla isimli kurucu.",
+      ],
+      de: [
+        "Die Landing-Seite sagt jetzt, wer InternshipCRM baut und warum — ein namentlich genannter Gründer mit öffentlichem Profil-Link, im Transparenzbereich und im Footer.",
+      ],
+    },
+  },
+  {
+    version: '0.91.0-beta',
+    date: '2026-08-23',
+    time: '20:24',
+    commit: '3236bac',
+    highlights: {
+      en: [
+        "Mentors are protected from unbounded commitment: set your own capacity and your application link closes itself when full; every application now waits for your accept or decline, and applicants hear back either way.",
+      ],
+      tr: [
+        "Mentorlar sınırsız bağlanmaktan korunuyor: kontenjanını kendin belirle, dolunca başvuru bağlantın kendini kapatır; her başvuru artık kabul/ret kararını bekler ve başvuran her iki durumda da haber alır.",
+      ],
+      de: [
+        "Mentoren sind vor unbegrenzter Bindung geschützt: Lege deine eigene Kapazität fest und dein Bewerbungslink schließt sich, wenn er voll ist; jede Bewerbung wartet nun auf dein Annehmen oder Ablehnen, und Bewerber erfahren es in beiden Fällen.",
+      ],
+    },
+  },
+  {
+    version: '0.90.0-beta',
+    date: '2026-08-23',
+    time: '20:08',
+    commit: 'd993a39',
+    highlights: {
+      en: [
+        "Mentees can finally see their meetings in the app: an upcoming-meetings card on the portal with join link, one-click RSVP and calendar download, plus a full calendar page with a personal feed you can subscribe to from Google/Outlook/Apple Calendar.",
+      ],
+      tr: [
+        "Mentee'ler toplantılarını artık uygulamada görüyor: portalda katıl linki, tek tıkla RSVP ve takvim indirme içeren yaklaşan toplantılar kartı; ayrıca Google/Outlook/Apple Takvim'den abone olunabilen kişisel akış bağlantısıyla tam bir takvim sayfası.",
+      ],
+      de: [
+        "Mentees sehen ihre Meetings endlich in der App: eine Karte mit anstehenden Meetings im Portal mit Beitrittslink, Ein-Klick-RSVP und Kalender-Download, dazu eine vollständige Kalenderseite mit persönlichem Feed zum Abonnieren in Google/Outlook/Apple Kalender.",
+      ],
+    },
+  },
+  {
+    version: '0.89.0-beta',
+    date: '2026-08-23',
+    time: '19:53',
+    commit: '401e29f',
     highlights: {
       en: [
         "Mentees are now notified in-app when a mentor logs an interaction, schedules a meeting, assigns a goal or writes an evaluation — and mentors when a mentee completes a goal or evaluates them. Stage changes notify from every screen, and companies' interest reaches consenting candidates without revealing the company. All of it can be switched off per category under Account.",
@@ -535,10 +586,27 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
-    version: '0.91.0-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
+    version: '0.88.0-beta',
+    date: '2026-08-23',
+    time: '19:06',
+    commit: '02f15d1',
+    highlights: {
+      en: [
+        "Email delivery problems no longer stay silent: the settings page shows the last successful delivery and failures since, and admins are alerted when sending keeps failing.",
+      ],
+      tr: [
+        "E-posta gönderim sorunları artık sessiz kalmıyor: ayarlar sayfası son başarılı gönderimi ve o zamandan beri olan hataları gösteriyor; gönderim sürekli başarısız olursa yöneticiler uyarılıyor.",
+      ],
+      de: [
+        "E-Mail-Zustellprobleme bleiben nicht mehr unbemerkt: Die Einstellungsseite zeigt die letzte erfolgreiche Zustellung und die Fehler seitdem; Admins werden gewarnt, wenn der Versand wiederholt fehlschlägt.",
+      ],
+    },
+  },
+  {
+    version: '0.87.0-beta',
+    date: '2026-08-23',
+    time: '17:52',
+    commit: '9fd52ec',
     highlights: {
       en: [
         "Mentees can now browse a mentor directory — only mentors who explicitly opted in are listed, and contact details are never shown.",
@@ -555,104 +623,36 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     },
   },
   {
-    version: '0.90.0-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
+    version: '0.86.1-beta',
+    date: '2026-08-23',
+    time: '16:46',
+    commit: '5e38009',
     highlights: {
       en: [
-        "Mentors are protected from unbounded commitment: set your own capacity and your application link closes itself when full; every application now waits for your accept or decline, and applicants hear back either way.",
+        "Invited company users see their candidates immediately after registering — previously the portal could stay empty until the next deployment.",
       ],
       tr: [
-        "Mentorlar sınırsız bağlanmaktan korunuyor: kontenjanını kendin belirle, dolunca başvuru bağlantın kendini kapatır; her başvuru artık kabul/ret kararını bekler ve başvuran her iki durumda da haber alır.",
+        "Davet edilen şirket kullanıcıları kayıttan hemen sonra adaylarını görüyor — önceden portal bir sonraki dağıtıma kadar boş kalabiliyordu.",
       ],
       de: [
-        "Mentoren sind vor unbegrenzter Bindung geschützt: Lege deine eigene Kapazität fest und dein Bewerbungslink schließt sich, wenn er voll ist; jede Bewerbung wartet nun auf dein Annehmen oder Ablehnen, und Bewerber erfahren es in beiden Fällen.",
-      ],
-    },
-  },
-  {
-    version: '0.89.0-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
-    highlights: {
-      en: [
-        "Mentees can finally see their meetings in the app: an upcoming-meetings card on the portal with join link, one-click RSVP and calendar download, plus a full calendar page with a personal feed you can subscribe to from Google/Outlook/Apple Calendar.",
-      ],
-      tr: [
-        "Mentee'ler toplantılarını artık uygulamada görüyor: portalda katıl linki, tek tıkla RSVP ve takvim indirme içeren yaklaşan toplantılar kartı; ayrıca Google/Outlook/Apple Takvim'den abone olunabilen kişisel akış bağlantısıyla tam bir takvim sayfası.",
-      ],
-      de: [
-        "Mentees sehen ihre Meetings endlich in der App: eine Karte mit anstehenden Meetings im Portal mit Beitrittslink, Ein-Klick-RSVP und Kalender-Download, dazu eine vollständige Kalenderseite mit persönlichem Feed zum Abonnieren in Google/Outlook/Apple Kalender.",
-      ],
-    },
-  },
-  {
-    version: '0.88.0-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
-    highlights: {
-      en: [
-        "The landing hero now shows real, live numbers — active mentors, open projects and candidates waiting for a mentor — computed from the database and hidden entirely when there is nothing to show.",
-      ],
-      tr: [
-        "Landing hero artık gerçek, canlı sayılar gösteriyor — aktif mentorlar, açık projeler ve mentor bekleyen adaylar — veritabanından hesaplanıyor ve gösterecek bir şey yokken tamamen gizleniyor.",
-      ],
-      de: [
-        "Der Landing-Hero zeigt jetzt echte, live berechnete Zahlen — aktive Mentoren, offene Projekte und wartende Kandidaten — aus der Datenbank berechnet und komplett ausgeblendet, wenn es nichts zu zeigen gibt.",
-      ],
-    },
-  },
-  {
-    version: '0.87.1-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
-    highlights: {
-      en: [
-        "The landing page now says who builds InternshipCRM and why — a named founder with a public profile link, in the transparency section and the footer.",
-      ],
-      tr: [
-        "Landing sayfası artık InternshipCRM’i kimin, neden yaptığını söylüyor — şeffaflık bölümünde ve footer’da, herkese açık profil bağlantısıyla isimli kurucu.",
-      ],
-      de: [
-        "Die Landing-Seite sagt jetzt, wer InternshipCRM baut und warum — ein namentlich genannter Gründer mit öffentlichem Profil-Link, im Transparenzbereich und im Footer.",
-      ],
-    },
-  },
-  {
-    version: '0.87.0-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
-    highlights: {
-      en: [
-        "Email delivery problems no longer stay silent: the settings page shows the last successful delivery and failures since, and admins are alerted when sending keeps failing.",
-      ],
-      tr: [
-        "E-posta gönderim sorunları artık sessiz kalmıyor: ayarlar sayfası son başarılı gönderimi ve o zamandan beri olan hataları gösteriyor; gönderim sürekli başarısız olursa yöneticiler uyarılıyor.",
-      ],
-      de: [
-        "E-Mail-Zustellprobleme bleiben nicht mehr unbemerkt: Die Einstellungsseite zeigt die letzte erfolgreiche Zustellung und die Fehler seitdem; Admins werden gewarnt, wenn der Versand wiederholt fehlschlägt.",
+        "Eingeladene Unternehmensnutzer sehen ihre Kandidaten sofort nach der Registrierung — zuvor konnte das Portal bis zum nächsten Deployment leer bleiben.",
       ],
     },
   },
   {
     version: '0.86.0-beta',
-    date: '2026-08-24',
-    time: '10:54',
-    commit: 'c12bf9b',
+    date: '2026-08-23',
+    time: '12:25',
+    commit: '559ea7d',
     highlights: {
       en: [
-        "Success stories, done right: a real evaluation excerpt can be published only with both sides' consent and the author's approval of the exact wording — shown with initials by default, withdrawable at any time, gone immediately.",
+        "Release notes now appear the moment a change goes live: the version number and the what's-new page update with every deployment instead of waiting for a manual bookkeeping step.",
       ],
       tr: [
-        "Başarı hikâyeleri, doğru şekilde: gerçek bir değerlendirme alıntısı yalnızca iki tarafın rızası ve yazarın birebir metin onayıyla yayınlanır — varsayılan olarak baş harflerle gösterilir, istenildiği an geri alınır, anında yayından düşer.",
+        "Sürüm notları artık bir değişiklik yayına girdiği anda görünüyor: sürüm numarası ve yenilikler sayfası, elle yapılan bir kayıt adımını beklemek yerine her dağıtımla birlikte güncelleniyor.",
       ],
       de: [
-        "Erfolgsgeschichten, richtig gemacht: Ein echter Bewertungsauszug wird nur mit Einwilligung beider Seiten und Freigabe des exakten Wortlauts veröffentlicht — standardmäßig mit Initialen, jederzeit widerrufbar und sofort entfernt.",
+        "Versionshinweise erscheinen jetzt in dem Moment, in dem eine Änderung live geht: Versionsnummer und Neuigkeiten-Seite aktualisieren sich mit jedem Deployment, statt auf einen manuellen Pflegeschritt zu warten.",
       ],
     },
   },

@@ -30,7 +30,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { releaseTimeline, utcStamp } = require('./release-derive.cjs');
+const { releaseTimeline, shallowBoundary } = require('./release-derive.cjs');
 
 const REPO_URL = 'https://github.com/21072026/Internship';
 const LUMPED = '0.110.1-beta';
@@ -38,6 +38,15 @@ const BASE = '0.85.0-beta'; // the version the lumped window started from
 const dryRun = process.argv.includes('--dry-run');
 const root = process.cwd();
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+
+// A shallow clone reports its graft commit as having ADDED every file it
+// carries, so `--diff-filter=A` would credit whole batches of releases to one
+// unrelated commit and date them wrong. That is exactly what this script must
+// not write into published history — refuse instead of guessing.
+if (git('rev-parse', '--is-shallow-repository').trim() !== 'false') {
+  throw new Error('shallow clone: cannot attribute releases to their real commits — run `git fetch --unshallow` first');
+}
+const boundary = shallowBoundary(root);
 
 const clPath = path.join(root, 'CHANGELOG.md');
 const rnPath = path.join(root, 'src', 'lib', 'releaseNotes.ts');
@@ -75,6 +84,7 @@ for (const filePath of files) {
   const line = git('log', '--diff-filter=A', '--format=%H%x09%ct', '-1', `${compaction}^`, '--', filePath).trim();
   if (!line) throw new Error(`no add-commit for ${filePath}`);
   const [sha, unix] = line.split('\t');
+  if (boundary.has(sha)) throw new Error(`${file}: add-commit ${sha.slice(0, 7)} is a shallow boundary — its real date is not in this clone`);
   fragments.push({ file, ...fragment });
   stamps[file] = { sha, unix: Number(unix) };
 }
