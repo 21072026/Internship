@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2, Repeat } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
 
 // The calendar (#1110).
@@ -87,6 +89,9 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
   const locale = useLocale();
   const [events, setEvents] = useState<Ev[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [settledKey, setSettledKey] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [view, setView] = useState<CalendarViewMode>(initialView ?? 'month');
   const [cursor, setCursor] = useState(() => startOfDay(new Date()));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -127,32 +132,55 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
   }, [view, cursor]);
 
   const fetchKey = `${range.start.toISOString()}|${range.end.toISOString()}`;
-  const load = useCallback(async () => {
-    setLoading(true);
-    const qs = new URLSearchParams({ from: range.start.toISOString(), to: range.end.toISOString() });
-    try {
-      const res = await fetch(`/api/calendar-events?${qs}`);
-      const d = res.ok ? await res.json() : { events: [] };
-      setEvents(d.events ?? []);
-    } catch {
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-    // `fetchKey` stands in for the range: two different Date objects for the
-    // same instant must not trigger a refetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchKey]);
   useEffect(() => {
+    const controller = new AbortController();
+    const [from, to] = fetchKey.split('|');
+
+    const load = async () => {
+      setLoading(true);
+      setLoadError(false);
+      const qs = new URLSearchParams({ from, to });
+      try {
+        const res = await fetch(`/api/calendar-events?${qs}`, { signal: controller.signal });
+        if (!res.ok) throw new Error('Failed to load calendar events');
+        const d = await res.json();
+        setEvents(d.events ?? []);
+        setSettledKey(fetchKey);
+      } catch {
+        if (!controller.signal.aborted) {
+          setLoadError(true);
+          setSettledKey(fetchKey);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+
     load();
-  }, [load]);
+    return () => controller.abort();
+  }, [fetchKey, retryKey]);
+
+  // A range change is pending immediately, before its effect runs. Events from
+  // the previous range stay in memory but are not rendered as if they belonged
+  // to the new range.
+  const requestPending = loading || settledKey !== fetchKey;
+  const currentError = !requestPending && loadError;
+  const displayedEvents = useMemo(
+    () => (!requestPending && !currentError ? events : []),
+    [currentError, events, requestPending]
+  );
+  const retry = useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
+    setRetryKey((key) => key + 1);
+  }, []);
 
   const byDay = useMemo(() => {
     const map: Record<string, Ev[]> = {};
-    for (const e of events) (map[dayKey(new Date(e.date))] ||= []).push(e);
+    for (const e of displayedEvents) (map[dayKey(new Date(e.date))] ||= []).push(e);
     for (const list of Object.values(map)) list.sort((a, b) => a.date.localeCompare(b.date));
     return map;
-  }, [events]);
+  }, [displayedEvents]);
 
   // `h23` — the app writes times as "18:30" throughout (the recurring rule, the
   // time inputs); a 12-hour calendar next to a 24-hour form reads as a bug.
@@ -278,7 +306,9 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
           <span className="text-xs text-gray-400">{d.getDate()}</span>
         </div>
         {evs.length === 0 ? (
-          <p className={`text-xs text-gray-400 ${compact ? '' : 'py-1'}`}>{t.calendar.nothingScheduled}</p>
+          requestPending || currentError ? null : (
+            <p className={`text-xs text-gray-400 ${compact ? '' : 'py-1'}`}>{t.calendar.nothingScheduled}</p>
+          )
         ) : (
           <ul className="space-y-0.5">
             {evs.map((e) => (
@@ -354,7 +384,9 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
             {dayLong(new Date(`${selectedDay}T00:00:00`))}
           </h3>
           {(byDay[selectedDay] ?? []).length === 0 ? (
-            <p className="text-sm text-gray-400">{t.calendar.nothingScheduled}</p>
+            requestPending || currentError ? null : (
+              <p className="text-sm text-gray-400">{t.calendar.nothingScheduled}</p>
+            )
           ) : (
             <ul className="space-y-0.5">
               {(byDay[selectedDay] ?? []).map((e) => (
@@ -383,7 +415,7 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
 
   const agendaGroups = useMemo(() => {
     const now = Date.now();
-    const upcoming = events.filter((e) => new Date(e.date).getTime() >= now - DAY_MS);
+    const upcoming = displayedEvents.filter((e) => new Date(e.date).getTime() >= now - DAY_MS);
     const groups: { key: string; date: Date; items: Ev[] }[] = [];
     for (const e of upcoming) {
       const d = new Date(e.date);
@@ -393,12 +425,14 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
       else groups.push({ key: k, date: d, items: [e] });
     }
     return groups;
-  }, [events]);
+  }, [displayedEvents]);
 
   const agendaView = (
     <div data-testid="calendar-agenda">
       {agendaGroups.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-400">{t.calendar.agendaEmpty}</p>
+        requestPending || currentError ? null : (
+          <p className="py-6 text-center text-sm text-gray-400">{t.calendar.agendaEmpty}</p>
+        )
       ) : (
         <ul className="space-y-3">
           {agendaGroups.map((g) => (
@@ -466,12 +500,39 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
         ))}
       </div>
 
-      {view === 'month' && monthView}
-      {view === 'week' && weekView}
-      {view === 'day' && dayView}
-      {view === 'agenda' && agendaView}
+      <div className="relative min-h-40">
+        {view === 'month' && monthView}
+        {view === 'week' && weekView}
+        {view === 'day' && dayView}
+        {view === 'agenda' && agendaView}
 
-      {!loading && events.length === 0 && view !== 'agenda' && (
+        {requestPending && (
+          <div
+            data-testid="calendar-loading"
+            role="status"
+            aria-live="polite"
+            className="absolute inset-0 z-10 rounded-lg bg-white/90 p-4 dark:bg-gray-900/90"
+          >
+            <span className="sr-only">{t.common.loading}</span>
+            <SkeletonRows rows={3} />
+          </div>
+        )}
+
+        {currentError && (
+          <div
+            data-testid="calendar-load-error"
+            role="alert"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-white/95 p-6 text-center dark:bg-gray-900/95"
+          >
+            <p className="text-sm text-red-500">{t.calendar.loadError}</p>
+            <Button data-testid="calendar-retry" variant="outline" size="sm" onClick={retry}>
+              {t.errorBoundary.retry}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {!requestPending && !currentError && events.length === 0 && view !== 'agenda' && (
         <p className="mt-4 text-center text-sm text-gray-400">{t.calendar.empty}</p>
       )}
 
