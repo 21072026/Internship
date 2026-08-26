@@ -17,6 +17,7 @@ import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestInviteField';
 import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
 import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface Relation {
   id: string;
@@ -114,15 +115,14 @@ export function MeetingsManager() {
   ];
 
   const copyLink = async (m: Meeting) => {
-    if (!m.meetLink) return;
-    try {
-      await navigator.clipboard.writeText(m.meetLink);
-      setCopiedId(m.id);
-      setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
-    } catch {
-      // Clipboard blocked (e.g. insecure context) — select-and-copy fallback.
-      window.prompt(t.meetings.copyLink, m.meetLink);
-    }
+   if (!m.meetLink) return;
+
+   const didCopy = await copyToClipboard(m.meetLink);
+
+   if (!didCopy) return;
+
+   setCopiedId(m.id);
+   setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
   };
 
   const schedule = async () => {
