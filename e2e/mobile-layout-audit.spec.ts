@@ -329,3 +329,15 @@ test('phone width in dark mode: the retint does not change the geometry', async 
     await cleanupByEmail(adminEmail);
   }
 });
+
+test('phone width: /release-notes fits, one release per card', async ({ page }) => {
+  // Public, no sign-in. Each release now carries a meta line — the version on
+  // one side, "2026-08-25 09:25 UTC · b174c20" on the other (#1457) — which is
+  // wider than 360px if the row is not allowed to stack. German because its
+  // release-note strings are the longest.
+  await page.setViewportSize(PHONE);
+  await setLocale(page, 'de');
+  await gotoSettled(page, '/release-notes');
+  await settle(page);
+  expect(await auditLayout(page), `/release-notes at ${PHONE.width}px (de)`).toEqual([]);
+});

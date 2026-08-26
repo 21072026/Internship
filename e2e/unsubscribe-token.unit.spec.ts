@@ -38,9 +38,9 @@ import {
 process.env.NEXTAUTH_SECRET ||= 'unit-test-secret';
 
 test.describe('the e-mail group taxonomy', () => {
-  test('has twelve groups with unique ids and no category in two of them', () => {
-    expect(EMAIL_GROUPS).toHaveLength(12);
-    expect(new Set(EMAIL_GROUP_IDS).size).toBe(12);
+  test('has thirteen groups with unique ids and no category in two of them', () => {
+    expect(EMAIL_GROUPS).toHaveLength(13);
+    expect(new Set(EMAIL_GROUP_IDS).size).toBe(13);
     expect(EMAIL_GROUP_IDS).toEqual(EMAIL_GROUPS.map((g) => g.id));
 
     const seen = new Set<string>();
@@ -199,7 +199,7 @@ test.describe('resolveEmailGroupPrefs — the UI-facing resolver', () => {
       emailNotifications: false,
       notificationPrefs: { 'email:digests': false, mentorship: false },
     });
-    expect(Object.keys(resolved)).toHaveLength(12);
+    expect(Object.keys(resolved)).toHaveLength(13);
     expect(resolved.account_security).toBe(true);
     expect(resolved.digests).toBe(false);
     expect(resolved.mentorship_lifecycle).toBe(false);

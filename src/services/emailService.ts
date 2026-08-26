@@ -422,6 +422,7 @@ export async function sendEmail({
   group,
   locale,
   prefs,
+  headers,
 }: {
   to: string;
   subject: string;
@@ -478,6 +479,18 @@ export async function sendEmail({
   // every extra call site that hand-carries preference data is another place
   // for the row and the decision to drift apart.
   prefs?: EmailPrefUser;
+  // Extra SMTP headers, from a caller that owns its own opt-out presentation.
+  // Added for the newsletter's List-Unsubscribe pair
+  // (#1469), which is what makes Gmail and Outlook render their own native
+  // "unsubscribe" control next to the sender — a reader who uses that never
+  // reaches for the spam button, and the spam button is what costs the whole
+  // sending domain. Nothing else needs it, hence optional.
+  //
+  // These WIN over the pair this function computes for a gated send, and such a
+  // caller also gets no footer: a send that brought its own List-Unsubscribe has
+  // said it owns the opt-out, and two of them is worse than either. See the merge
+  // in the body below.
+  headers?: Record<string, string>;
 }) {
   // No SMTP on this environment. This used to be a bare console.log + return,
   // which made a misconfigured or broken mail setup indistinguishable from a
@@ -553,12 +566,28 @@ export async function sendEmail({
   // mangles `list: { 'unsubscribe-post': … }` into
   // `<http://List-Unsubscribe=One-Click>`. Raw `headers` pass ASCII through
   // verbatim, which is what RFC 8058 needs.
+  // A caller that supplied its own `List-Unsubscribe` owns the opt-out for this
+  // message, and gets neither our footer nor our header pair. The newsletter
+  // (#1469) is that caller: it renders its own unsubscribe link in the body and
+  // points its header at its own route. Adding a second link and a second
+  // List-Unsubscribe would not be twice as good — a duplicate header is resolved
+  // arbitrarily by the client, so the two mechanisms would disagree about which
+  // one a native "Unsubscribe" button actually hit.
+  //
+  // Keyed on the header rather than a new boolean deliberately: the condition IS
+  // the evidence. A caller cannot claim to own the opt-out without shipping the
+  // thing that provides it, and there is no flag to set stale.
+  const callerOwnsOptOut = !!headers && Object.keys(headers).some((k) => k.toLowerCase() === 'list-unsubscribe');
   let body = html;
-  let headers: Record<string, string> | undefined;
-  if (gated) {
+  let computed: Record<string, string> | undefined;
+  if (gated && !callerOwnsOptOut) {
     body = withUnsubscribeFooter(html, unsubscribeFooterHtml(userId!, groupId!, locale));
-    headers = unsubscribeHeaders(userId!, groupId!);
+    computed = unsubscribeHeaders(userId!, groupId!);
   }
+  // Caller last: an explicit header beats one we derived. Note the group check
+  // above still ran either way — owning the *presentation* of an opt-out is not
+  // permission to ignore the recipient's stored choice.
+  const mergedHeaders = { ...(computed ?? {}), ...(headers ?? {}) };
 
   try {
     await via.sendMail({
@@ -569,7 +598,7 @@ export async function sendEmail({
       text: htmlToText(body),
       ...(replyTo ? { replyTo } : {}),
       ...(attachments?.length ? { attachments } : {}),
-      ...(headers ? { headers } : {}),
+      ...(mergedHeaders && Object.keys(mergedHeaders).length ? { headers: mergedHeaders } : {}),
     });
   } catch (e) {
     // Record, then rethrow unchanged: callers that already catch (and the ones

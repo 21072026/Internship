@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -8,18 +9,22 @@ test.afterAll(async () => {
 test('a fresh mentor is redirected to the onboarding wizard exactly once', async ({ page }) => {
   const email = uniqueEmail('mentorwizard');
   const mentor = await seedUser(email, 'WizardPass123!', 'MENTOR', 'Wizard Mentor');
-  // seedUser marks mentors as already onboarded by default (so the other
-  // ~30 specs seeding a mentor aren't sent to the wizard); this test is
-  // specifically about a genuinely fresh one, so undo that.
-  await prisma.user.update({ where: { id: mentor.id }, data: { mentorOnboardingSeenAt: null } });
 
   try {
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', email);
-    await page.fill('input[type="password"]', 'WizardPass123!');
-    await page.click('button[type="submit"]');
+    // Establish the session before making this mentor "fresh". Sign-in itself
+    // can issue two dashboard navigations (the session effect and the explicit
+    // post-submit redirect); putting the one-shot marker at null before that
+    // lets the first request consume it while the second renders /mentor.
+    await signInAndSettle(page, email, 'WizardPass123!', '/mentor');
+    const fresh = await prisma.user.update({
+      where: { id: mentor.id },
+      data: { mentorOnboardingSeenAt: null },
+      select: { id: true, role: true, mentorOnboardingSeenAt: true },
+    });
+    expect(fresh).toEqual({ id: mentor.id, role: 'MENTOR', mentorOnboardingSeenAt: null });
 
     // First dashboard visit redirects to the wizard.
+    await page.goto('/mentor');
     await page.waitForURL((u) => u.pathname === '/onboarding', { timeout: 20_000 });
     await expect(page.getByRole('heading', { name: /mentor profile/i })).toBeVisible({ timeout: 10_000 });
 
@@ -65,13 +70,16 @@ test('a fresh mentor is redirected to the onboarding wizard exactly once', async
 test('skipping the wizard returns to the dashboard and never redirects again', async ({ page }) => {
   const email = uniqueEmail('mentorskip');
   const mentor = await seedUser(email, 'SkipPass123!', 'MENTOR', 'Skip Mentor');
-  await prisma.user.update({ where: { id: mentor.id }, data: { mentorOnboardingSeenAt: null } });
 
   try {
-    await page.goto('/auth/signin');
-    await page.fill('input[type="email"], input[name="email"]', email);
-    await page.fill('input[type="password"]', 'SkipPass123!');
-    await page.click('button[type="submit"]');
+    await signInAndSettle(page, email, 'SkipPass123!', '/mentor');
+    const fresh = await prisma.user.update({
+      where: { id: mentor.id },
+      data: { mentorOnboardingSeenAt: null },
+      select: { id: true, role: true, mentorOnboardingSeenAt: true },
+    });
+    expect(fresh).toEqual({ id: mentor.id, role: 'MENTOR', mentorOnboardingSeenAt: null });
+    await page.goto('/mentor');
     await page.waitForURL((u) => u.pathname === '/onboarding', { timeout: 20_000 });
 
     await page.getByTestId('mentor-onboarding-skip').click();
@@ -101,8 +109,19 @@ test('the existing mentee onboarding flow is unchanged', { tag: '@smoke' }, asyn
     // Mentees still land on the portal, not an automatic onboarding redirect.
     await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
 
+    const localized = [
+      { locale: 'en', title: 'Complete Your Profile', subtitle: 'Help us match you with the right mentor and opportunities' },
+      { locale: 'tr', title: 'Profilini tamamla', subtitle: 'Seni doğru mentor ve fırsatlarla eşleştirmemize yardımcı ol' },
+      { locale: 'de', title: 'Vervollständige dein Profil', subtitle: 'Hilf uns, dich mit dem passenden Mentor und den richtigen Möglichkeiten zusammenzubringen' },
+    ];
+    for (const { locale, title, subtitle } of localized) {
+      await page.evaluate((value) => { document.cookie = `locale=${value};path=/`; }, locale);
+      await page.goto('/onboarding');
+      await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(subtitle, { exact: true })).toBeVisible();
+    }
+    await page.evaluate(() => { document.cookie = 'locale=en;path=/'; });
     await page.goto('/onboarding');
-    await expect(page.getByRole('heading', { name: 'Complete Your Profile' })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByLabel(/Full Name/i)).toHaveValue('Unchanged Mentee');
   } finally {
     await cleanupByEmail(email);

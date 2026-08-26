@@ -3,6 +3,7 @@ import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { conversationForRelation } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
+import { sendNewMessagePush } from '@/lib/messagePush';
 import { markThreadRead } from '@/lib/threadRead';
 import { logger } from '@/lib/logger';
 
@@ -121,9 +122,13 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${relationId}`;
   // An emailed reply is still a message, so it belongs to the same category
   // (#1426). Someone who switched Messages off has said they do not want the
-  // bell for this conversation, whichever door the reply came through.
+  // bell for this conversation, whichever door the reply came through — and
+  // that goes for the background push as well (#1464), which is why it sits
+  // inside the same gate. sendNewMessagePush re-checks the preference itself,
+  // so this is about not doing the work, not about correctness.
   if (notificationCategoryAllowed(recipientUser, 'messages')) {
     await notify(recipientUser.id, 'message.newByEmail', {}, link);
+    await sendNewMessagePush(recipientUser.id, { link, byEmail: true, preview: body });
   }
 
   return { ok: true, relationId, duplicate: false };

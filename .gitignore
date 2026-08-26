@@ -156,3 +156,12 @@ e2e/.state/
 # Database dumps — real personal data, never in the repo (infra/backup-db.sh)
 *.sql.gz
 /backups/
+
+# Generated OpenAPI description of the internal API (scripts/openapi-generate.cjs,
+# npm run gen:openapi). Derived from src/app/api, so committing it would put a
+# ~500 KB diff in every PR that adds or renames a route — the same churn the
+# release fragments exist to avoid (releases/README.md), and a file nobody would
+# review. It is a convenience artefact for inspecting the output: the server gets
+# the document through next.config.js -> nextConfig.env, so nothing imports this
+# file and `npx tsc --noEmit` on a fresh clone never looks for it.
+/src/generated/openapi.json

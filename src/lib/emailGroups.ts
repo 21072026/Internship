@@ -31,6 +31,7 @@ export type EmailGroupId =
   | 'reports_analytics'
   | 'opportunities'
   | 'inbound_requests'
+  | 'newsletter'
   | 'announcements';
 
 export interface EmailGroupDef {
@@ -196,6 +197,25 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // The two coarse keys these sites gated on: 'messages' for an enquiry
     // through a public profile, 'mentorship' for a project join request.
     legacy: ['messages', 'mentorship'],
+  },
+  {
+    // The scheduled career newsletter (#1469), which landed on main while this
+    // was in review. Its own group rather than a corner of `announcements`: an
+    // announcement is operational ("the platform is down on Friday") and a
+    // newsletter is content somebody chose to publish, and wanting one without
+    // the other is the most ordinary preference a reader has. It is also the
+    // single most canonically "bulk" mail the product sends, so it is the one
+    // that most needs its own switch.
+    //
+    // `legacy: ['newsletter']` is what joins the two mechanisms: the newsletter
+    // module shipped its own opt-out writing that key, so rule 5 makes this
+    // group read OFF for anyone who already used it, and rule 4 lets them turn
+    // it back on from either surface.
+    id: 'newsletter',
+    essential: false,
+    bulk: true,
+    categories: ['newsletter'],
+    legacy: ['newsletter'],
   },
   {
     id: 'announcements',

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { makeUnsubscribeToken } from '../src/lib/unsubscribeToken';
+import { EMAIL_GROUPS } from '../src/lib/emailGroups';
 import { getDictionary } from '../src/i18n/dictionaries';
 
 // #1444 — the maintainer's headline requirement: clicking the unsubscribe link
@@ -73,9 +74,14 @@ test('the preference centre offers every non-essential group and saves instantly
     await expect(page.getByTestId('unsub-center')).toBeVisible();
     await expect(page.getByTestId('unsubscribe-preferences')).toBeVisible();
 
-    // Eleven of the twelve groups are switchable; account_security is a
-    // read-only "always sent" row with no input at all.
-    await expect(page.locator('[data-testid^="unsub-group-toggle-"]')).toHaveCount(11);
+    // Every non-essential group is switchable; account_security is a read-only
+    // "always sent" row with no input at all. Derived from the taxonomy rather
+    // than hard-coded: this read "11" until the newsletter group arrived, and a
+    // count that has to be hand-edited whenever a group is added fails for the
+    // one reason that is never the bug it is meant to catch.
+    const switchable = EMAIL_GROUPS.filter((g) => !g.essential).length;
+    expect(switchable).toBeGreaterThan(5);
+    await expect(page.locator('[data-testid^="unsub-group-toggle-"]')).toHaveCount(switchable);
     await expect(page.getByTestId('unsub-group-toggle-account_security')).toHaveCount(0);
     await expect(page.getByTestId('unsub-group-essential-account_security')).toBeVisible();
 

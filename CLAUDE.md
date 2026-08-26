@@ -232,6 +232,14 @@ workaround, #636, and it compiled on every PR push).
   still-open question (`docs/legal/legal-tax-framework.md`). Contributor terms live in
   `CONTRIBUTING.md` (§ Contributor terms (IP)) and are confirmed via the PR template;
   rationale in [`docs/legal/licensing-strategy.md`](docs/legal/licensing-strategy.md).
+- **E-mail newsletter** (`/admin/newsletters`, #1469): scheduled career content, separate
+  from announcements — own audience (`MENTEE`/`MENTOR`/`BOTH`), own archive, own opt-out
+  category, one `NewsletterSend` row per recipient, and a **sent issue is immutable and
+  undeletable**. Curated issues live in `src/lib/newsletterContent.ts` (EN/TR/DE, house
+  style documented there). Full design in [`docs/newsletter.md`](docs/newsletter.md) — read
+  it before extending: `lib/newsletter.ts` is client-safe on purpose (the HMAC token and
+  URL builders live in `lib/newsletterTokens.ts`), and the cron is registered from
+  `/api/cron/start`, never from `initCronJobs`, to keep the import graph one-way.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.
@@ -249,8 +257,18 @@ workaround, #636, and it compiled on every PR push).
   The displayed version is derived at build time from base+fragments (`next.config.js` →
   `src/lib/version.ts`), so it is correct immediately after every merge; a scheduled workflow
   (`release-compact.yml`) later folds fragments into the canonical files through a normal PR.
-  `npm run check:release-fragments` validates fragments in CI. A shipped change without a
-  fragment is a checklist failure — reviewers will call it out.
+  `npm run check:release-fragments` validates fragments in CI (and prints the version each
+  pending change will ship as); `npm run test:release` guards the arithmetic. A shipped change
+  without a fragment is a checklist failure — reviewers will call it out.
+  **One fragment = one release (#1457):** each fragment gets its own version number, dated to
+  the minute (UTC) and linked to the commit that added it — in `CHANGELOG.md`, in
+  `src/lib/releaseNotes.ts` and on `/release-notes`. The order is the **merge** order read
+  from git, not the filename order: filename order let a `patch` fragment be swallowed by a
+  later `minor`'s `patch = 0` reset (three merges in a row shipped as `0.114.0-beta`) and the
+  compaction buried a whole cron window — 45 changes — under one heading. Consequences to know:
+  a shallow clone cannot date a release, so anything that stamps checks out with
+  `fetch-depth: 0` and compaction **fails closed**; `.git` is `.dockerignore`d, so
+  `build-image.yml` resolves the stamps on the runner and passes them in as `RELEASE_STAMPS`.
 - **k6 load tests** (`k6/`, added 2026-08-26): a k6 script here points at a **live shared
   environment**, so the safety rules are hard constraints, not preferences — **GET only**
   (nothing may mutate a row), **never authenticated** (bcrypt is expensive and the

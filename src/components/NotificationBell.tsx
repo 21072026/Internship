@@ -9,6 +9,7 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { showBrowserNotification } from '@/lib/browserNotifications';
 import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
 import { renderNotification } from '@/lib/notificationText';
+import { useRealtime } from '@/hooks/useRealtime';
 
 interface Note {
   id: string;
@@ -59,9 +60,18 @@ export function NotificationBell() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     load();
+    // Kept as a backstop under the live stream (#1464): the stream carries the
+    // unread *count*, but the dropdown's rows are fetched, and a run of the
+    // hourly crons can create rows with nobody publishing.
     const id = setInterval(load, 60_000);
     return () => clearInterval(id);
   }, [status, load]);
+
+  // A new row arrived, or the viewer read a thread and its message.* rows were
+  // retired with it (#1464) — either way the bell's contents just changed.
+  useRealtime((signal) => {
+    if (signal.type === 'notification' || signal.type === 'read' || signal.type === 'tick') void load();
+  });
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {

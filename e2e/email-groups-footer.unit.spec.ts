@@ -377,9 +377,31 @@ test.describe('the taxonomy covers what the app actually sends', () => {
   // string. Resolved rather than waved through: "the category is not a literal
   // here" must not become a way for a send site to be invisible to this scan.
   // Only SCREAMING_CASE module consts are resolved; anything else is reported.
+  //
+  // The const is not always declared in the file that uses it: the newsletter
+  // (#1469) defines NEWSLETTER_EMAIL_CATEGORY in src/lib/newsletter.ts and
+  // imports it into the dispatcher. Same-file lookup alone made that send site
+  // read as "no category", which made the newsletter invisible to every check
+  // below — so the search falls back to the exported declaration anywhere under
+  // src/. Cross-file resolution is cached because sendSites() is called per test.
+  let exportedConsts: Map<string, string> | null = null;
+  function allExportedCategoryConsts(): Map<string, string> {
+    if (exportedConsts) return exportedConsts;
+    exportedConsts = new Map();
+    for (const file of walk(SRC)) {
+      for (const m of fs.readFileSync(file, 'utf8').matchAll(/\bexport const ([A-Z][A-Z0-9_]*)\s*=\s*'([a-z0-9-]+)'/g)) {
+        exportedConsts.set(m[1], m[2]);
+      }
+    }
+    return exportedConsts;
+  }
   function resolveCategoryConst(src: string, id: string | null): string | null {
     if (!id || !/^[A-Z][A-Z0-9_]*$/.test(id)) return null;
-    return src.match(new RegExp(`\\bconst ${id}\\s*=\\s*'([a-z0-9-]+)'`))?.[1] ?? null;
+    return (
+      src.match(new RegExp(`\\bconst ${id}\\s*=\\s*'([a-z0-9-]+)'`))?.[1] ??
+      allExportedCategoryConsts().get(id) ??
+      null
+    );
   }
 
   function sendSites(): SendSite[] {
@@ -428,7 +450,14 @@ test.describe('the taxonomy covers what the app actually sends', () => {
    */
   const MARKER_MIN_REASON = 20;
   function markerReason(text: string): string | null {
-    const reason = text.match(/\/\/\s*no-user-row:\s*(\S[^\n]*)/)?.[1]?.trim();
+    // Two markers, because there are two honest reasons and only one of them is
+    // "there is nobody to ask". `no-user-row:` means the recipient is not a User
+    // (an applicant, a guest, an operator-typed address). `no-opt-out:` means the
+    // recipient IS a User but this particular copy deliberately carries no
+    // unsubscribe — the admin's self-addressed newsletter test being the case that
+    // forced the distinction. Folding that into `no-user-row:` would have written a
+    // false reason into the source, which is worse than the check it satisfied.
+    const reason = text.match(/\/\/\s*no-(?:user-row|opt-out):\s*(\S[^\n]*)/)?.[1]?.trim();
     return reason && reason.length >= MARKER_MIN_REASON ? reason : null;
   }
 
@@ -477,6 +506,8 @@ test.describe('the taxonomy covers what the app actually sends', () => {
     // validator directly, because a scan that accepts a bare `// no-user-row:`
     // is a scan anybody can silence in one line.
     expect(markerReason('// no-user-row: the applicant has no account here yet')).toBeTruthy();
+    expect(markerReason('// no-opt-out: a self-addressed test copy, deliberately without one')).toBeTruthy();
+    expect(markerReason('// no-opt-out:')).toBeNull();
     expect(markerReason('// no-user-row:')).toBeNull();
     expect(markerReason('// no-user-row: because')).toBeNull();
     expect(markerReason('userId: user.id,')).toBeNull();
@@ -574,7 +605,7 @@ test.describe('the taxonomy covers what the app actually sends', () => {
         `${site.file}:${site.line}: ${site.fn} sends '${category}' (group ${group}, non-essential) without a userId — ` +
           "this mail ships with no unsubscribe footer, no List-Unsubscribe header and no preference check. " +
           "Pass the recipient's User.id as `userId`, or, if the recipient genuinely has no User row, " +
-          'say so on the call with `// no-user-row: <why>`'
+          'say so on the call with `// no-user-row: <why>` (no account) or `// no-opt-out: <why>` (deliberately no unsubscribe)'
       );
     }
 
@@ -686,12 +717,13 @@ test.describe('the taxonomy covers what the app actually sends', () => {
   });
 
   test('every group is reachable from at least one category the app sends', () => {
-    const used = new Set<string>();
-    for (const file of walk(SRC)) {
-      const src = fs.readFileSync(file, 'utf8');
-      if (!src.includes('sendEmail(') && !src.includes('emailService')) continue;
-      for (const m of src.matchAll(/\bcategory:\s*'([a-z0-9-]+)'/g)) used.add(m[1]);
-    }
+    // Deliberately the SAME oracle the scan above uses, not a second regex. This
+    // test used to grep for literal `category: '...'` only, so a send site whose
+    // category is a module const was invisible to it — which is exactly how the
+    // newsletter (#1469) could arrive on main, ship real mail, and still leave
+    // this test asserting that no send site used its category. Two definitions of
+    // "what the app sends" is one more than the codebase can keep true.
+    const used = new Set<string>(sendSites().map((site) => site.category).filter((c): c is string => !!c));
     const reachable = new Set<EmailGroupId>();
     for (const category of used) {
       const g = groupForCategory(category);
