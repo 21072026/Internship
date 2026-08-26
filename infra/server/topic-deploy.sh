@@ -248,6 +248,10 @@ fi
 
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
+# OPERATOR_* (#1396) is forwarded like the rest: same host, same operator, so a
+# topic env shows the real /imprint a reviewer is here to look at. Absent from
+# the env file it renders the "no imprint published" state, which is the other
+# half worth being able to see.
 docker run -d \
   --name "$CONTAINER" \
   -p "${PORT}:3000" \
@@ -265,6 +269,14 @@ docker run -d \
   -e JAAS_APP_ID="${JAAS_APP_ID:-}" \
   -e JAAS_API_KEY_ID="${JAAS_API_KEY_ID:-}" \
   -e JAAS_PRIVATE_KEY="${JAAS_PRIVATE_KEY:-}" \
+  -e OPERATOR_NAME="${OPERATOR_NAME:-}" \
+  -e OPERATOR_ADDRESS="${OPERATOR_ADDRESS:-}" \
+  -e OPERATOR_EMAIL="${OPERATOR_EMAIL:-}" \
+  -e OPERATOR_PHONE="${OPERATOR_PHONE:-}" \
+  -e OPERATOR_RESPONSIBLE="${OPERATOR_RESPONSIBLE:-}" \
+  -e OPERATOR_VAT_ID="${OPERATOR_VAT_ID:-}" \
+  -e OPERATOR_REGISTER="${OPERATOR_REGISTER:-}" \
+  -e OPERATOR_DPO="${OPERATOR_DPO:-}" \
   "$IMAGE"
 
 # ── Container health (local) ─────────────────────────────────────────────────
