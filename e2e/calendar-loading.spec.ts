@@ -95,7 +95,7 @@ test('does not flash the empty state while a navigated range is loading', async 
     await page.goto('/mentor/calendar');
     await expect(page.getByText('Calendar Event Owner', { exact: true }).first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'next' }).click();
+    await page.getByRole('button', { name: 'next', exact: true }).click();
     await expect(page.getByTestId('calendar-loading')).toBeVisible();
     await expect(page.getByText(EMPTY_TEXT, { exact: false })).toHaveCount(0);
     await expect(page.getByText('Calendar Event Owner', { exact: true })).toHaveCount(0);
