@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Added** — a mentee requesting a meeting now picks from their mentor's posted weekly hours, expanded into concrete date-times for the next three weeks and resolved in the mentor's time zone (DST-correct). The mentor's request list marks which requests landed on their own hours. A mentor who has posted no hours is unchanged: the free-text request stays. Closes the loop the landing FAQ has been promising — until now nothing in the product read an availability slot.",
+  "notes": {
+    "en": ["Ask for a meeting by picking one of your mentor's available hours instead of typing a time and hoping."],
+    "tr": ["Artık saat yazıp ummak yerine mentörünün müsait saatlerinden birini seçerek toplantı isteyebilirsin."],
+    "de": ["Frage ein Meeting an, indem du eine der freien Zeiten deiner Mentorin oder deines Mentors wählst, statt eine Zeit zu raten."]
+  }
+}

@@ -99,14 +99,29 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'meeting_invites',
     essential: false,
     bulk: false,
-    categories: ['meeting-invite', 'meeting-request', 'meeting-request-decision'],
+    // 'meeting-guest-invite' is the same invitation addressed to someone with no
+    // account here (#1446). It belongs to this group because that is what it is,
+    // and classifying it costs nothing: sendMeetingGuestInviteEmail has no
+    // recipient User row to pass, so no footer, no List-* header and no
+    // preference lookup can fire for it. Leaving it out of the map instead would
+    // be the worse choice — an unclassified category is invisible to the
+    // taxonomy, and the day someone invites a guest who does turn out to have an
+    // account, the mail would silently ship without an opt-out.
+    categories: ['meeting-invite', 'meeting-guest-invite', 'meeting-request', 'meeting-request-decision'],
     legacy: [],
   },
   {
     id: 'meeting_reminders',
     essential: false,
     bulk: true,
-    categories: ['meeting-reminder', 'meeting-series-reminder'],
+    // 'meeting-guest-reminder' (#1446) is the account-less sibling of
+    // 'meeting-reminder' and is classified with it, which is also what puts it on
+    // the bulk relay — its own invitation ('meeting-guest-invite', a non-bulk
+    // group) stays on the primary channel, so the mail a guest must actually
+    // receive keeps the better reputation while the recurring nudge does not
+    // spend it. No header or footer is affected either way: a guest has no User
+    // row, so `gated` is false and sendEmail emits none of the List-* markers.
+    categories: ['meeting-reminder', 'meeting-guest-reminder', 'meeting-series-reminder'],
     legacy: ['meetingReminders'],
   },
   {

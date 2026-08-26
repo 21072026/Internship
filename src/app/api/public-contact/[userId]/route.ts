@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { notify } from '@/lib/notify';
 import { sendPublicContactEmail } from '@/services/emailService';
@@ -52,7 +52,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
   if (!owner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const preview = message.length > 300 ? `${message.slice(0, 300)}…` : message;
-  await notify(owner.id, 'public_contact.message', { name, email, preview });
+  // Gated on the same category as the e-mail below (#1426) — the owner already
+  // carries notificationPrefs from the select above.
+  if (notificationCategoryAllowed(owner, 'messages')) {
+    await notify(owner.id, 'public_contact.message', { name, email, preview });
+  }
 
   // Email the owner too (#668) — an outside enquiry is the most time-sensitive
   // thing a public profile receives and used to be in-app only. Opt-out
