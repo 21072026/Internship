@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { subscribeRealtimeClient, type RealtimeSignal } from '@/lib/realtimeClient';
-import type { UnreadCounts } from '@/lib/unreadCounts';
 
 /**
  * Subscribe a component to the live message stream (#1464).
@@ -24,16 +23,4 @@ export function useRealtime(handler: (signal: RealtimeSignal) => void) {
     if (status !== 'authenticated') return;
     return subscribeRealtimeClient((signal) => handlerRef.current(signal));
   }, [status]);
-}
-
-/**
- * The viewer's two unread counters, kept live. `null` until the first signal
- * arrives, so a badge can render nothing rather than a momentary zero.
- */
-export function useUnreadCounts(): UnreadCounts | null {
-  const [counts, setCounts] = useState<UnreadCounts | null>(null);
-  useRealtime((signal) => {
-    if (signal.type === 'ready' || signal.type === 'unread') setCounts(signal.counts);
-  });
-  return counts;
 }

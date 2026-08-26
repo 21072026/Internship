@@ -15,8 +15,8 @@ import { useRealtime } from '@/hooks/useRealtime';
 // The count is fed by the live stream (#1464) rather than a one-minute poll:
 // both directions were a minute late, so a message that arrived showed up late
 // and — worse — a message that had just been read kept its badge for the rest of
-// the minute. `useUnreadCounts` is not used here because this component also
-// wants a same-navigation refresh (see below), which needs its own fetch.
+// the minute. It still keeps a fetch of its own for the same-navigation refresh
+// below, which no signal can stand in for.
 export function MessagesButton() {
   const t = useT();
   const { status } = useSession();

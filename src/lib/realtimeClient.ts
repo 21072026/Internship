@@ -219,8 +219,3 @@ export function subscribeRealtimeClient(subscriber: Subscriber): () => void {
     }
   };
 }
-
-/** True while an SSE stream is actually delivering (diagnostics/tests). */
-export function realtimeStreaming(): boolean {
-  return streaming;
-}
