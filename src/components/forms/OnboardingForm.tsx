@@ -197,7 +197,7 @@ export function OnboardingForm() {
           <Input
             label={t.onboarding.phone}
             type="tel"
-            placeholder="+1 (555) 000-0000"
+            placeholder="+90 5xx xxx xx xx"
             {...step1Form.register('phone')}
             error={step1Form.formState.errors.phone?.message}
           />
