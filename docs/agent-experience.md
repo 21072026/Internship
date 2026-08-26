@@ -10,6 +10,72 @@ Newest entries on top.
 
 ---
 
+## 2026-08-26 — Gece k6 yük testi: eşik yazmak kolay, eşiğin *ölçtüğünü* kanıtlamak zor (#1449)
+
+**k6'i indirip gerçekten koştur — statik okuma bu işte yetmiyor.** Sabit URL çalışıyor:
+`https://github.com/grafana/k6/releases/download/v1.8.1/k6-v1.8.1-linux-amd64.tar.gz`,
+`tar -xz --strip-components=1`. 20 saniyede kuruluyor. Yerel bir stub HTTP sunucusu
+(30 satır Node) + `K6_SMOKE=1` ile senaryonun tamamı 40 saniyede sınanıyor. Bu olmadan
+`maxRedirects` hatası fark edilmezdi: `ramping-vus` **`maxDuration` kabul etmiyor** (o alan
+arrival-rate/per-vu-iterations executor'larına ait) ve k6 init'te `json: unknown field
+"maxDuration"` ile ölüyor — sadece okuyarak bulunmaz.
+
+**Bir eşiğin gerçekten kırmızıya döndüğünü, kırılmayı *simüle ederek* kanıtla.** Üç stub
+varyasyonu üç ayrı hatayı ortaya çıkardı: yavaş stub (2s gecikme) → `abortOnFail` +
+`delayAbortEval: '1m'` kombinasyonunun kümülatif oran üzerinde ~150 istekte 4 hatayla koşuyu
+öldürdüğü; kapalı port → hata yollarının doğru olduğu; **302 veren stub → `maxRedirects: 1`
+ile koşunun tamamen yeşil kaldığı**. Sonuncusu en sinsisi: "zinciri kovalama" niyetiyle 1
+yazılıyor, ama pratikte olan yönlendirmeler zaten tek sıçramalı, yani yakalaması gereken tek
+şeyi yutuyor. Doğrusu `maxRedirects: 0`; k6 3xx'i hata saymayıp `res.status` olarak döndürüyor,
+`check` de onu kırmızıya çeviriyor.
+
+**"Kaç örnek üzerinden?" sorusunu her oran eşiğine sor.** `http_req_failed{ep:health}:
+rate<0.005` kulağa titiz geliyor; tam koşuda `ep:health` ~220 istek yapıyor, yani eşik
+aslında "bütün gece en fazla BİR başarısız prob" demek. İki alakasız blip = her gece uyarı
+e-postası. Aynı hesap `checks: rate>0.99` için de geçerliydi: istek başına tam bir check
+çalıştığı için bu oran ≈ 1 − hata oranı, dolayısıyla 0.99'luk bir checks kapısı belgelenmiş
+%2'lik hata bütçesini sessizce %1'e indiriyordu.
+
+**`{ep:…}` alt-metriği özet JSON'una ancak bir eşik onu adlandırırsa giriyor.** Bu yüzden her
+uç noktaya `http_reqs{ep:…}: ['count>0']` eklendi: hem "bu uç nokta gerçekten çağrıldı mı"
+iddiası (örneklenmemiş bir trend'in `p(95)` eşiği sessizce GEÇİYOR, `count>0` ise kırmızıya
+dönüyor), hem de uyarı e-postasındaki uç nokta tablosunun veri kaynağı. Bir eşiğin adlandırdığı
+her istatistik ayrıca `options.summaryTrendStats` içinde olmalı — k6 eşiği yine değerlendirir
+ama özet o değeri taşımaz, e-postaya rakamsız bir ihlal düşer.
+
+**Sırrı job output'undan geçirme.** `outputs: target: ${{ steps.x.outputs.url }}` ile bir
+`secrets.*` değeri publish edilirse GitHub onu redakte ediyor; `needs.job.outputs.target`
+boş string olarak geliyor. Yani hedef URL, sır **ayarlıysa** (üretim yapılandırması)
+kayboluyor, ayarlı değilken (test) çalışıyor — sessizce yalnızca üretimde bozulan sınıftan.
+Çözüm: aynı ifadeyi iki job'da da inline hesapla.
+
+**`curl --retry | tar` boruda bozuluyor.** `--retry` transfer ortasındaki bir kopmada baştan
+başlıyor ama boruyu geri saramıyor; `tar` `<yarım gzip><tam gzip>` alıp ölüyor. Önce `-o`
+ile dosyaya indir, sonra aç. Aynı şekilde `grep -q "1.8.1"` sürüm koruması işe yaramıyor —
+`k6 v1.8.10` da eşleşiyor; `grep -qE "^k6 v1\.8\.1( |\()"` gerekiyor.
+
+**Rapor betiği "hiç eşik yoksa" durumunu ayrıca ele almalı.** `breaches.length === 0` hem
+"her şey yolunda" hem de "hiçbir şey ölçülmedi" demek. Biri `options.thresholds`'ı düşürürse
+k6 exit 0 veriyor, job yeşil, özet ayrışıyor ve kırmızıya özel uyarı **sonsuza kadar susuyor**.
+Değerlendirilen eşik sayısını say ve sıfırsa kırmızı say — `e2e-report-email.mjs`'deki
+`E2E_EXPECTED_REPORTS` korumasının aynısı.
+
+**`k6/` dizinini hiçbir CI kapısı görmüyor.** `next lint` yalnızca `src/`'ye uğruyor,
+`tsconfig.json`'ın `include`'u sadece `*.ts|tsx` listeliyor. İlk refleks `tsconfig`'in
+`exclude`'una `"k6"` eklemekti — bu tam ters etki yapıyor: `.ts` dosyaları da programdan
+çıktığı için "dosyalar `.js` kalsın çünkü `.ts` tsc'yi düşürür" kuralı yalana dönüyor.
+Doğrusu `exclude`'a **dokunmamak** (o zaman `k6/foo.ts` gerçekten `TS2307` veriyor) ve `.js`
+tarafı için ayrı bir kapı koymak: `k6 archive <betik> -O /dev/null` tek istek atmadan
+bundle + init-context değerlendirmesi yapıyor, var olmayan bir metriği adlandıran eşiği bile
+yakalıyor.
+
+**Kendi işini düşman gözüyle inceleten paralel ajanlar burada gerçekten karşılığını verdi:**
+dört bağımsız merceğin (k6 betiği / e-posta / workflow / güvenlik+doküman) bulduğu 20 kusurun
+neredeyse tamamı somut ve doğruydu, ve yarısı ancak k6'i kurup koşturarak bulunabilirdi.
+Doküman denetimini ayrı bir mercek yapmak da işe yaradı: rampanın 6d00s sürdüğü hâlde yedi
+ayrı yerde "~6d30s" yazdığı böyle çıktı.
+---
+
 ## 2026-08-26 — Dış katılımcı daveti: "hesabı olmayan davetli" bir yetki üretme primitifi (#1446)
 
 **Playwright'ın beklediği tarayıcı sürümü ile `/opt/pw-browsers`'takinin farkı bu turda
