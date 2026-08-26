@@ -595,6 +595,18 @@ export default function AdminNewslettersPage() {
             <iframe
               title={n.preview}
               srcDoc={previewHtml}
+              // Fully sandboxed: no allow-* token at all, so the preview document
+              // gets an opaque origin and script, forms and navigation are all
+              // disabled (CodeQL flagged this srcdoc as an HTML sink, #1470).
+              //
+              // `srcDoc` renders composed HTML *inside the admin's own page*.
+              // Every value in it is escaped by renderNewsletterHtml, but "our
+              // own renderer escapes it" is one bug away from being false, and
+              // the blast radius without this attribute is an admin session. An
+              // e-mail body needs none of the capabilities being withheld — mail
+              // clients do not run script either, so a preview that could is not
+              // a faithful preview.
+              sandbox=""
               data-testid="newsletter-preview"
               className="h-[520px] w-full rounded-xl border border-gray-200 bg-white dark:border-gray-700"
             />

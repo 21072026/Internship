@@ -143,6 +143,15 @@ test** goes only to the requesting admin's own registered address. A preview
 built by a second code path is a preview of nothing; a test send to a typed
 address is an open relay.
 
+The preview `<iframe>` carries an **empty `sandbox`** — no `allow-*` token, so
+the mail HTML gets an opaque origin with script, forms and navigation all
+disabled. `srcdoc` renders that HTML inside the admin's own page, and while
+every value in it is escaped by the renderer, "our own renderer escapes it" is
+one bug away from being false and the blast radius without the attribute is an
+admin session. Mail clients do not run script either, so nothing is lost. An
+e2e assertion pins the attribute, because losing it is silent — the preview
+looks identical either way.
+
 The e-mail body is hand-written table HTML with inline styles
 (`src/lib/newsletterEmail.ts`) — Outlook renders with Word's engine and Gmail
 strips `<style>`. The **archive renders the fields natively** instead of

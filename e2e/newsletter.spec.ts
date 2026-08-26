@@ -131,6 +131,31 @@ test('one-click unsubscribe keeps the next issue away from that reader', async (
   }
 });
 
+test('the composer preview renders the real mail inside a sandboxed frame', async ({ page }) => {
+  const adminEmail = uniqueEmail('nl-preview-admin');
+  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Preview Admin');
+
+  try {
+    await signInAndSettle(page, adminEmail, 'AdminPass123', '/admin');
+    await gotoSettled(page, '/admin/newsletters');
+    await page.getByTestId('newsletter-template-interview-star').click();
+    await page.getByTestId('newsletter-preview-btn').click();
+
+    // The preview is rendered by the same server code that renders the real
+    // mail, so the issue's own subject has to appear inside the frame.
+    const frame = page.frameLocator('[data-testid="newsletter-preview"]');
+    await expect(frame.locator('h1')).toContainText('STAR', { timeout: 15_000 });
+
+    // …and the frame stays fully sandboxed: an empty `sandbox` gives the mail
+    // HTML an opaque origin with no script, forms or navigation. Asserted
+    // because losing this attribute is silent — the preview looks identical
+    // either way, and only the blast radius changes.
+    await expect(page.getByTestId('newsletter-preview')).toHaveAttribute('sandbox', '');
+  } finally {
+    await cleanupByEmail(adminEmail);
+  }
+});
+
 test('the unsubscribe page works with no session and refuses a forged token', async ({ page }) => {
   // Public by design: it has to work months later, on a phone, with no login.
   await gotoSettled(page, '/newsletter/unsubscribe?token=not-a-real-token');
