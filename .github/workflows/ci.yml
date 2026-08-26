@@ -49,6 +49,20 @@ jobs:
       # re-enabling password changes and uploads on the public demo (#966).
       - name: demo write blocklist still matches the routes (#966)
         run: npm run check:demo-blocklist
+      # The admin API explorer publishes what scripts/openapi-generate.cjs
+      # derives from src/app/api. A static analyser degrades silently: a route
+      # in a shape it does not recognise simply vanishes from the document, and
+      # a guard it cannot follow used to render as "no credential required".
+      # This re-derives the spec and fails on a dropped route, a duplicate
+      # operationId, an /api/admin endpoint that does not resolve to an ADMIN
+      # guard, leaked redacted comment text, or non-deterministic output. It is
+      # a guard, NOT a prerequisite for the steps above: nothing under src/
+      # imports the generated file - next.config.js inlines the document via
+      # env at build time - so lint and tsc do not depend on codegen having run
+      # (which is also why there is no prebuild hook: `npm start` in the
+      # production container has no src/ to scan).
+      - name: generated API description is complete and honest
+        run: npm run check:openapi
       # The deploy scripts never run in CI, so their one piece of decision logic
       # — "is this dump real?" — had no coverage at all until it broke prod
       # (#1200). Cheap to run here; the alternative is finding out on the server.
