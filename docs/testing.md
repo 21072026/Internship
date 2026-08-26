@@ -162,6 +162,24 @@ deliberately match the ones production has been held to since `stress.yml` shipp
 Per-endpoint budgets are tighter than the aggregate *because they are allowed to be*: holding
 `/auth/signin` to the landing page's 2500ms would make it untestable.
 
+#### Measured baseline (2026-08-26, production, 1 VU)
+
+The budgets above were set by reasoning about what each endpoint does, then sanity-checked
+against an unloaded production baseline. They are **not** derived from a loaded run, so treat
+the first few nightly results as calibration rather than as a verdict:
+
+| `ep` | baseline p95 | budget | headroom |
+|------|--------------|--------|----------|
+| `health` | 156ms | 800ms | 81% |
+| `stories_api` | 164ms | 1200ms | 86% |
+| `signin` | 539ms | 1500ms | 64% |
+| `features` | 677ms | 1500ms | 55% |
+| `landing` | 777ms | 2000ms | 61% |
+
+Roughly 2–6× baseline. That is deliberate: latency at 20 VU is higher than at 1 VU, and a
+budget with no room for the load the test itself applies would fire every night. If the real
+nightly numbers land far from these, move the budgets — and say so in the comment next to them.
+
 ### Safety rules (these are hard constraints)
 
 A k6 script in this repo points at a **live, shared environment**, so:
