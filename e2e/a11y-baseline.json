@@ -1,25 +1,20 @@
 {
-  "/": {
-    "color-contrast": 1
-  },
+  "/": {},
+  "/#dark": {},
   "/auth/signin": {},
-  "/portal": {
-    "color-contrast": 1
-  },
-  "/portal/profile": {
-    "color-contrast": 1
-  },
-  "/mentor": {
-    "color-contrast": 1
-  },
+  "/auth/signin#dark": {},
+  "/portal": {},
+  "/portal#dark": {},
+  "/portal/profile": {},
+  "/portal/profile#dark": {},
+  "/mentor": {},
+  "/mentor#dark": {},
   "/mentor/mentees": {},
-  "/admin": {
-    "color-contrast": 1
-  },
-  "/admin/candidates": {
-    "color-contrast": 1
-  },
-  "/company": {
-    "color-contrast": 1
-  }
+  "/mentor/mentees#dark": {},
+  "/admin": {},
+  "/admin#dark": {},
+  "/admin/candidates": {},
+  "/admin/candidates#dark": {},
+  "/company": {},
+  "/company#dark": {}
 }

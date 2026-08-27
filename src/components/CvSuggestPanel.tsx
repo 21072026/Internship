@@ -114,7 +114,7 @@ export function CvSuggestPanel({
           </Button>
         )}
       </div>
-      <p className="text-xs text-gray-400 mt-1">{c.hint}</p>
+      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{c.hint}</p>
 
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       {aiError && <p className="text-xs text-red-600 mt-2">{aiError}</p>}
@@ -126,7 +126,7 @@ export function CvSuggestPanel({
           {LINK_FIELDS.filter((f) => sugg[f]).map((f) => (
             <div key={f} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-gray-400">{fieldLabel(f)}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{fieldLabel(f)}</p>
                 <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{sugg[f]}</p>
               </div>
               {applyBtn(f, () => { onApplyField(f, sugg[f]!); setApplied((a) => ({ ...a, [f]: true })); })}
@@ -136,7 +136,7 @@ export function CvSuggestPanel({
           {sugg.skills.length > 0 && (
             <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <p className="text-xs text-gray-400">{c.skills} ({sugg.skills.length})</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{c.skills} ({sugg.skills.length})</p>
                 {applyBtn('skills', () => { onApplySkills(sugg.skills); setApplied((a) => ({ ...a, skills: true })); }, true)}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -157,7 +157,7 @@ export function CvSuggestPanel({
           {aiFilled.map((f) => (
             <div key={f} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-gray-400">{fieldLabel(f)}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{fieldLabel(f)}</p>
                 <p className="text-sm text-gray-800 dark:text-gray-200 truncate">{(aiSugg as unknown as Record<string, string>)[f]}</p>
               </div>
               {applyBtn(`ai-${f}`, () => { onApplyField(f, (aiSugg as unknown as Record<string, string>)[f]); setApplied((a) => ({ ...a, [`ai-${f}`]: true })); })}
@@ -167,7 +167,7 @@ export function CvSuggestPanel({
           {aiSugg.skills.length > 0 && (
             <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <p className="text-xs text-gray-400">{c.skills} ({aiSugg.skills.length})</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{c.skills} ({aiSugg.skills.length})</p>
                 {applyBtn('ai-skills', () => { onApplySkills(aiSugg.skills); setApplied((a) => ({ ...a, 'ai-skills': true })); }, true)}
               </div>
               <div className="flex flex-wrap gap-1.5">

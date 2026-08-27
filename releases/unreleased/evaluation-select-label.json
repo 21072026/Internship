@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Accessibility:** Added an accessible label to the evaluation type selector (#1413).",
+  "notes": {
+    "en": ["The evaluation type selector is now announced correctly by screen readers."],
+    "tr": ["Değerlendirme türü seçim alanı artık ekran okuyucular tarafından doğru okunur."],
+    "de": ["Das Auswahlfeld für den Bewertungstyp wird jetzt von Screenreadern korrekt angekündigt."]
+  }
+}

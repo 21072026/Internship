@@ -88,6 +88,13 @@ export async function POST(request: Request) {
         message: message || null,
         locale: a.preferredLanguage,
         orgId: a.orgId,
+        // The admin being written to on this iteration. `email` / `contactName`
+        // are the enquiring company's, from an unauthenticated public form.
+        // No call-site preference check exists here and the select deliberately
+        // stays narrow (no notificationPrefs): sendEmail() reads the preferences
+        // itself from this id, so the inbound_requests opt-out is honoured
+        // without a second query per admin in this route.
+        userId: a.id,
       });
     } catch (e) {
       // A mail failure must not turn a captured enquiry into a 500 for the

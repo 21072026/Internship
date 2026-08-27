@@ -18,9 +18,13 @@ import { counterpartPath, modeOf, type AppMode } from '@/lib/appMode';
 // account has only one shell — the switcher renders nothing at all rather than
 // a one-button group.
 const STYLES: Record<AppMode, { icon: typeof ShieldCheck; active: string }> = {
-  admin: { icon: ShieldCheck, active: 'text-blue-700 dark:text-blue-300' },
-  mentor: { icon: GraduationCap, active: 'text-green-700 dark:text-green-300' },
-  mentee: { icon: Sprout, active: 'text-purple-700 dark:text-purple-300' },
+  // `dark:!` rather than a plain `dark:` variant: globals.css retints these
+  // utilities with flat `html.dark .text-*` rules that outrank the variant, so
+  // the unforced version is silently inert and the active chip stays dark text
+  // on a dark-grey pill. Measured, not assumed (#826).
+  admin: { icon: ShieldCheck, active: 'text-blue-700 dark:!text-blue-200' },
+  mentor: { icon: GraduationCap, active: 'text-green-700 dark:!text-green-200' },
+  mentee: { icon: Sprout, active: 'text-purple-700 dark:!text-purple-200' },
 };
 
 export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
@@ -32,7 +36,7 @@ export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
 
   return (
     <div className="px-4 pt-2" data-testid="mode-switcher">
-      <p id="mode-switch-label" className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+      <p id="mode-switch-label" className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400">
         {t.modeSwitch.label}
       </p>
       <div
@@ -48,7 +52,7 @@ export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
           const classes = `flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
             isActive
               ? `bg-white dark:bg-gray-700 shadow-sm ${active}`
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+              : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
           }`;
 
           // The active segment is inert on purpose: it is a state indicator, and
@@ -72,7 +76,7 @@ export function ModeSwitcher({ modes }: { modes: AppMode[] }) {
         })}
       </div>
       {(current === 'mentor' || current === 'mentee') && (
-        <p className="px-1 pt-1.5 text-[11px] leading-snug text-gray-400 dark:text-gray-500">
+        <p className="px-1 pt-1.5 text-[11px] leading-snug text-gray-600 dark:text-gray-400">
           {current === 'mentor' ? t.modeSwitch.mentorHint : t.modeSwitch.menteeHint}
         </p>
       )}

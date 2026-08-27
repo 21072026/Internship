@@ -9,6 +9,8 @@ import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
 import { Card } from '@/components/ui/Card';
+import { ArchivedNotice } from '@/components/ArchivedNotice';
+import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 
 export default async function PortalGoalsPage() {
   const session = await getServerSession(authOptions);
@@ -18,16 +20,18 @@ export default async function PortalGoalsPage() {
   if (!session?.user?.id) redirect('/auth/signin');
   const { t } = await getServerDictionary();
 
-  const [user, activeRelation] = await Promise.all([
+  const [user, relations] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { targetPosition: true },
     }),
-    prisma.mentorshipRelation.findFirst({
-      where: { menteeId: session.user.id, status: 'ACTIVE' },
-      select: { id: true },
+    // ACTIVE, else the latest COMPLETED one shown read-only (#1408).
+    prisma.mentorshipRelation.findMany({
+      where: menteeRelationWhere(session.user.id),
+      select: { id: true, status: true, startDate: true, completedAt: true },
     }),
   ]);
+  const { relation, isArchived } = pickMenteeRelation(relations);
 
   return (
     <div>
@@ -37,11 +41,16 @@ export default async function PortalGoalsPage() {
         <p className="text-gray-500 mt-1">{t.portal.goalsSubtitle}</p>
       </div>
 
-      {activeRelation ? (
+      {relation ? (
         <div className="space-y-6">
-          <GoalsPanel relationId={activeRelation.id} />
-          <EvaluationPanel relationId={activeRelation.id} audience="MENTOR" />
-          <WeeklyReportsPanel relationId={activeRelation.id} mode="mentee" />
+          {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
+          <GoalsPanel relationId={relation.id} readOnly={isArchived} />
+          {/* Deliberately still writable on an archive: the feedback a mentee
+              gives about their mentor is most likely to be written once the
+              mentorship is over, and /api/evaluations accepts it. Only the
+              actions that need a live mentorship are closed above and below. */}
+          <EvaluationPanel relationId={relation.id} audience="MENTOR" />
+          <WeeklyReportsPanel relationId={relation.id} mode="mentee" readOnly={isArchived} />
         </div>
       ) : (
         <Card>

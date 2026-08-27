@@ -94,7 +94,7 @@ export function JourneyTracker({ status }: { status: string }) {
         <>
           <div className="flex items-center justify-between text-sm mb-1">
             <span className="font-semibold text-gray-900 dark:text-gray-100">{label(status)}</span>
-            <span className="text-gray-400 dark:text-gray-500">{pct}%</span>
+            <span className="text-gray-500 dark:!text-gray-400">{pct}%</span>
           </div>
           <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mb-4">
             <div className="h-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
@@ -118,12 +118,33 @@ export function JourneyTracker({ status }: { status: string }) {
               const current = i === idx;
               return (
                 <li key={s} className="flex items-center gap-2 text-sm">
-                  <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] ${
-                    done ? 'bg-green-500 text-white' : current ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'
-                  }`}>
+                  {/* `dark:!` throughout, not a plain `dark:` variant (#1415).
+                      globals.css remaps these base classes with flat
+                      `html.dark .text-gray-500` rules whose specificity (0,2,1)
+                      beats the variant's `.dark .dark\:text-gray-400` (0,2,0),
+                      so the unforced version is silently inert — it looks
+                      applied in the source and changes nothing in the browser.
+                      Measured, not assumed; the e2e asserts the composited
+                      contrast in both themes.
+
+                      The future badge deliberately drops `dark:bg-gray-800`:
+                      globals.css already remaps `bg-gray-100` to #374151 under
+                      html.dark, and that flat rule wins anyway. Keeping the
+                      variant only implied a control that did not exist. */}
+                  <span
+                    data-testid="journey-stage-badge"
+                    data-stage-state={done ? 'done' : current ? 'current' : 'future'}
+                    className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] ${
+                      done ? 'bg-green-500 text-white' : current ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 dark:!text-gray-200'
+                    }`}
+                  >
                     {done ? <Check className="h-3 w-3" /> : i + 1}
                   </span>
-                  <span className={current ? 'font-medium text-gray-900 dark:text-gray-100' : done ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600'}>
+                  <span
+                    data-testid="journey-stage-label"
+                    data-stage-state={done ? 'done' : current ? 'current' : 'future'}
+                    className={current ? 'font-medium text-gray-900 dark:text-gray-100' : done ? 'text-gray-600 dark:!text-gray-300' : 'text-gray-500 dark:!text-gray-400'}
+                  >
                     {label(s)}
                   </span>
                 </li>

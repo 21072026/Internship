@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma';
+import { markThreadNotificationsRead } from '@/lib/messageNotifications';
+import { publishRealtime } from '@/lib/realtimeBus';
 
 /**
  * Mark everything `userId` has received in a thread as read (#1204).
@@ -16,6 +18,14 @@ import { prisma } from '@/lib/prisma';
  * Both thread layers are covered (#1156): a 1:1 chat lives on the conversation,
  * while `relationId` still annotates the mentorship-scoped features, and a given
  * message may carry either link or both.
+ *
+ * Reading a thread also retires the notification rows it produced (#1464). The
+ * blue "new message from X" row in the bell is the *same fact* as the red counter
+ * in the inbox, so clearing one and not the other is what made the unread badge
+ * look stuck after the message had been read and answered. Doing it here rather
+ * than in the messages route means every way of reading a thread — opening it,
+ * answering by e-mail, the "mark as read" link in the notification mail — clears
+ * both signals.
  */
 export async function markThreadRead(
   userId: string,
@@ -47,6 +57,25 @@ export async function markThreadRead(
     await prisma.conversationParticipant.updateMany({
       where: { conversationId: thread.conversationId, userId, OR: [{ lastReadAt: null }, { lastReadAt: { lt: now } }] },
       data: { lastReadAt: now },
+    });
+  }
+
+  // The bell's unread rows for this thread are the same fact as the counters
+  // above — see the note in messageNotifications.ts.
+  const notificationsCleared = await markThreadNotificationsRead(userId, thread);
+
+  // Tell this user's other open tabs, so their badges drop now instead of on the
+  // next heartbeat. Addressed to the reader alone: nobody else's view changed.
+  //
+  // Only when something actually moved: a thread that is open re-reads itself on
+  // every live signal and every poll tick, and publishing "I read it" each time
+  // would spend a pair of COUNT queries per tick per open tab to announce that
+  // nothing changed.
+  if (count > 0 || notificationsCleared > 0) {
+    publishRealtime([userId], {
+      type: 'read',
+      relationId: thread.relationId ?? null,
+      conversationId: thread.conversationId ?? null,
     });
   }
 

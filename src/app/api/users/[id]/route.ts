@@ -69,7 +69,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
             orderBy: { startDate: 'desc' },
             include: {
               mentor: { select: { id: true, fullName: true, email: true } },
-              company: { select: { name: true, industry: true } },
+              company: { select: { id: true, name: true, industry: true } },
               project: { select: { id: true, name: true } },
               cohort: { select: { id: true, name: true } },
               interactions: { orderBy: { date: 'desc' } },

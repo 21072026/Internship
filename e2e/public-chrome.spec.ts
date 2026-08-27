@@ -26,6 +26,7 @@ const PUBLIC_PAGES = [
   '/release-notes',
   '/privacy',
   '/terms',
+  '/imprint',
   '/code-of-conduct',
 ];
 

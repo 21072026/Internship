@@ -25,6 +25,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get('q') || '').trim().slice(0, 100);
   const skill = (searchParams.get('skill') || '').trim().slice(0, 60).toLowerCase();
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const pageSize = Math.min(60, Math.max(1, parseInt(searchParams.get('pageSize') || '24', 10) || 24));
 
   // Visibility = publicProfile opt-in AND an active TALENT_POOL_VISIBILITY
   // consent (#527, GDPR basis for company-facing exposure). Revoking the
@@ -45,43 +47,63 @@ export async function GET(request: Request) {
     ];
   }
 
-  const rows = await prisma.user.findMany({
-    where,
-    take: 60,
-    orderBy: { updatedAt: 'desc' },
-    select: {
-      id: true, fullName: true, university: true, department: true,
-      graduationYear: true, city: true, targetPosition: true, skills: true, avatarUrl: true,
-    },
-  });
-
-  // skills is a JSON array — filter in JS when a skill query is given.
-  let candidates = skill
-    ? rows.filter((r) => Array.isArray(r.skills) && (r.skills as string[]).some((s) => String(s).toLowerCase().includes(skill)))
-    : rows;
-
   // Early-access window (#531): a candidate who became hireable (HIREABLE_600)
   // within the last N days is visible ONLY to premium companies holding the
   // EARLY_ACCESS entitlement (admins always see everyone). Non-entitled
   // subscribers see them once the window closes. The window length is an admin
   // setting; '0' disables it. Candidates who never became hireable, or whose
   // window has closed, are unaffected.
+  //
+  // Expressed as part of `where` rather than as a post-filter (#1392) so it
+  // narrows the set the DB counts and paginates. Filtering it afterwards is
+  // what made the old count wrong in the first place.
   const windowDays = parseInt(await getSetting('earlyAccessWindowDays'), 10) || 0;
   const hasEarlyAccess = session.user.role === 'ADMIN' || (await hasFeature(session.user.companyId, 'EARLY_ACCESS'));
-  if (windowDays > 0 && !hasEarlyAccess && candidates.length > 0) {
+  if (windowDays > 0 && !hasEarlyAccess) {
     const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
-    const recent = await prisma.statusChange.findMany({
-      where: {
-        toStatus: 'HIREABLE_600',
-        createdAt: { gte: cutoff },
-        relation: { menteeId: { in: candidates.map((c) => c.id) } },
+    where.NOT = {
+      menteeRelations: {
+        some: { statusChanges: { some: { toStatus: 'HIREABLE_600', createdAt: { gte: cutoff } } } },
       },
-      select: { relation: { select: { menteeId: true } } },
-    });
-    const embargoed = new Set(recent.map((s) => s.relation.menteeId));
-    candidates = candidates.filter((c) => !embargoed.has(c.id));
+    };
   }
 
-  return NextResponse.json({ candidates });
+  const select = {
+    id: true, fullName: true, university: true, department: true,
+    graduationYear: true, city: true, targetPosition: true, skills: true, avatarUrl: true,
+  } as const;
+  const orderBy = { updatedAt: 'desc' } as const;
+
+  // Two branches, the same shape as /api/candidates (#1392). The filter used to
+  // run AFTER `take: 60`, so a skill held only by the 61st-most-recently-updated
+  // mentee simply did not exist as far as the search was concerned — and the
+  // response carried no total, so nothing on screen could hint that the answer
+  // was partial. Raising the cap would only move the threshold; the count has to
+  // come from the same set the page is sliced from.
+  let candidates;
+  let total: number;
+  if (!skill) {
+    // Nothing needs JS: the database can count and paginate.
+    total = await prisma.user.count({ where });
+    candidates = await prisma.user.findMany({
+      where,
+      select,
+      orderBy,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+  } else {
+    // `skills` is a JSON array and MySQL cannot match inside one, so this branch
+    // has to fetch the visible set and filter in memory — then total and slice
+    // from the FILTERED rows, never from a truncated read.
+    const rows = await prisma.user.findMany({ where, select, orderBy });
+    const filtered = rows.filter(
+      (r) => Array.isArray(r.skills) && (r.skills as string[]).some((s) => String(s).toLowerCase().includes(skill))
+    );
+    total = filtered.length;
+    candidates = filtered.slice((page - 1) * pageSize, page * pageSize);
+  }
+
+  return NextResponse.json({ candidates, total, page, pageSize });
   });
 }

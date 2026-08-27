@@ -22,6 +22,8 @@ import { missingRequirementsForUser } from '@/lib/documentRequirements';
 import type { Locale } from '@/i18n/config';
 import { FileWarning } from 'lucide-react';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { ArchivedNotice } from '@/components/ArchivedNotice';
+import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 
 // #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
 // deep links and the back button work and the phone page stays short:
@@ -31,17 +33,20 @@ import { PersonHoverCard } from '@/components/PersonHoverCard';
 // NotesPanel lives ONLY on /portal/notes now (it used to render twice), and the
 // read-only profile card moved out entirely — /portal/profile is the profile.
 async function getMenteeData(menteeId: string, locale: Locale) {
-  const [user, activeRelation, visibilityConsent, projects, missingDocuments] = await Promise.all([
+  const [user, relations, visibilityConsent, projects, missingDocuments] = await Promise.all([
     prisma.user.findUnique({
       where: { id: menteeId },
       select: { university: true, skills: true },
     }),
-    prisma.mentorshipRelation.findFirst({
-      where: { menteeId, status: 'ACTIVE' },
+    // ACTIVE, else the latest COMPLETED one shown as an archive (#1408) — a
+    // finished mentorship is a record, not an empty portal.
+    prisma.mentorshipRelation.findMany({
+      where: menteeRelationWhere(menteeId),
       select: {
         id: true,
         status: true,
         startDate: true,
+        completedAt: true,
         pipelineStatus: true,
         mentor: { select: { id: true, fullName: true, publicProfile: true } },
       },
@@ -59,7 +64,8 @@ async function getMenteeData(menteeId: string, locale: Locale) {
     missingRequirementsForUser(menteeId, locale),
   ]);
 
-  return { user, activeRelation, visibilityDecided: !!visibilityConsent, projects, missingDocuments };
+  const { relation, isArchived } = pickMenteeRelation(relations);
+  return { user, relation, isArchived, visibilityDecided: !!visibilityConsent, projects, missingDocuments };
 }
 
 export default async function PortalDashboard() {
@@ -69,7 +75,7 @@ export default async function PortalDashboard() {
   // in which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const { user, activeRelation, visibilityDecided, projects, missingDocuments } = await getMenteeData(session.user.id, locale);
+  const { user, relation, isArchived, visibilityDecided, projects, missingDocuments } = await getMenteeData(session.user.id, locale);
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
 
@@ -105,13 +111,13 @@ export default async function PortalDashboard() {
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center justify-between">
           <div>
             <p className="font-medium text-yellow-800">{t.portal.completeProfile}</p>
-            <p className="text-sm text-yellow-600 mt-0.5">
+            <p className="text-sm text-yellow-800 mt-0.5">
               {t.portal.completeProfileHint}
             </p>
           </div>
           <Link
             href="/onboarding"
-            className="bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-600 transition-colors flex-shrink-0 ml-4"
+            className="bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-yellow-800 transition-colors flex-shrink-0 ml-4"
           >
             {t.portal.completeProfileCta}
           </Link>
@@ -136,11 +142,14 @@ export default async function PortalDashboard() {
         </div>
       )}
 
-      {!activeRelation && <MentorshipRequestPanel />}
+      {/* Also offered to a mentee whose mentorship is archived (#1408): finishing
+          one round is a reason to ask for the next mentor, not a reason to lose
+          the way to ask. */}
+      {(!relation || isArchived) && <MentorshipRequestPanel />}
 
       {/* Offer card (#809) — kept above the fold: an offer needing a decision is
           the single most time-sensitive thing a mentee can see here. */}
-      {activeRelation && (
+      {relation && !isArchived && (
         <div className="mb-6">
           <OfferCard />
         </div>
@@ -148,9 +157,9 @@ export default async function PortalDashboard() {
 
       {/* Journey / pipeline stage — the "where am I" strip stays on the summary
           (#692); the full mentorship detail lives on /portal/journey. */}
-      {activeRelation && (
+      {relation && (
         <div className="mb-6">
-          <JourneyTracker status={activeRelation.pipelineStatus} />
+          <JourneyTracker status={relation.pipelineStatus} />
         </div>
       )}
 
@@ -168,33 +177,36 @@ export default async function PortalDashboard() {
             <CardTitle>{t.portal.myMentorship}</CardTitle>
           </div>
         </CardHeader>
-        {!activeRelation ? (
+        {!relation ? (
           <div className="text-center py-8">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <User className="h-8 w-8 text-gray-400" />
             </div>
             <p className="text-gray-500 font-medium">{t.portal.noMentor}</p>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {t.portal.noMentorHint}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <StatusBadge status={activeRelation.status} />
+              <StatusBadge status={relation.status} />
               <span className="text-xs text-gray-400">
-                {t.portal.since} {formatDate(activeRelation.startDate, locale)}
+                {isArchived && relation.completedAt
+                  ? `${t.portal.archived.completedOn} ${formatDate(relation.completedAt, locale)}`
+                  : `${t.portal.since} ${formatDate(relation.startDate, locale)}`}
               </span>
             </div>
+            {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
             <div className="p-4 bg-blue-50 rounded-xl">
               <p className="text-xs font-medium text-blue-500 uppercase tracking-wide mb-2">
                 {t.portal.yourMentor}
               </p>
               <p className="font-semibold text-gray-900">
-                <PersonHoverCard personId={activeRelation.mentor.id} name={activeRelation.mentor.fullName} role="MENTOR" />
+                <PersonHoverCard personId={relation.mentor.id} name={relation.mentor.fullName} role="MENTOR" />
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={`/messages/${activeRelation.id}`} className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
+                <Link href={`/messages/${relation.id}`} className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
                   <MessageCircle className="h-4 w-4" />
                   {t.portal.messageMentor}
                 </Link>
@@ -202,8 +214,8 @@ export default async function PortalDashboard() {
                   <Route className="h-4 w-4" />
                   {t.portal.tabs.journey}
                 </Link>
-                {activeRelation.mentor.publicProfile === true && (
-                  <Link href={`/p/${activeRelation.mentor.id}`} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
+                {relation.mentor.publicProfile === true && (
+                  <Link href={`/p/${relation.mentor.id}`} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
                     <ExternalLink className="h-4 w-4" />
                     {t.portal.viewMentorProfile}
                   </Link>

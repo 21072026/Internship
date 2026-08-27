@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorshipDecisionEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -124,7 +125,11 @@ export async function decideMentorshipRequest(opts: {
     // Email both sides (#668) — the decision used to be in-app only, so a mentee
     // who wasn't logged in never learned they had a mentor. Opt-out respected;
     // failures are logged and never fail the approval.
-    if (req.mentee.email && emailAllowed(req.mentee, 'mentorship')) {
+    if (
+      req.mentee.email &&
+      emailAllowed(req.mentee, 'mentorship') &&
+      emailGroupAllowedForCategory(req.mentee, 'mentorship-decision')
+    ) {
       try {
         await sendMentorshipDecisionEmail({
           to: req.mentee.email,
@@ -132,18 +137,29 @@ export async function decideMentorshipRequest(opts: {
           approved: true,
           mentorName: mentor.fullName,
           orgId: req.mentee.orgId,
+          // The mentee is the recipient of the decision mail — not `actorId`,
+          // which is the admin (or the mentor) who pressed the button.
+          userId: req.menteeId,
         });
       } catch (e) {
         console.error('Mentorship approval email failed:', e);
       }
     }
-    if (mentor.email && mentorId !== actorId && emailAllowed(mentor, 'mentorship')) {
+    if (
+      mentor.email &&
+      mentorId !== actorId &&
+      emailAllowed(mentor, 'mentorship') &&
+      emailGroupAllowedForCategory(mentor, 'mentee-assigned')
+    ) {
       try {
         await sendMenteeAssignedEmail({
           to: mentor.email,
           mentorName: mentor.fullName,
           menteeName: req.mentee.fullName,
           orgId: mentor.orgId,
+          // This half of the pair goes to the MENTOR, so the token and the
+          // preference lookup are the mentor's, not the mentee's.
+          userId: mentor.id,
         });
       } catch (e) {
         console.error('Mentee assignment email failed:', e);
@@ -175,13 +191,18 @@ export async function decideMentorshipRequest(opts: {
     request,
   });
   await notify(req.menteeId, 'mentorship_request.rejected', {}, '/portal');
-  if (req.mentee.email && emailAllowed(req.mentee, 'mentorship')) {
+  if (
+    req.mentee.email &&
+    emailAllowed(req.mentee, 'mentorship') &&
+    emailGroupAllowedForCategory(req.mentee, 'mentorship-decision')
+  ) {
     try {
       await sendMentorshipDecisionEmail({
         to: req.mentee.email,
         fullName: req.mentee.fullName,
         approved: false,
         orgId: req.mentee.orgId,
+        userId: req.menteeId,
       });
     } catch (e) {
       console.error('Mentorship rejection email failed:', e);

@@ -351,6 +351,7 @@ model User {
   cvFile                            CvFile?
   avatarFile                        AvatarFile?
   notifications                     Notification[]
+  pushSubscriptions                 PushSubscription[]
   conversationParticipants          ConversationParticipant[]
   ownedProjects                     Project[]                     @relation("ProjectOwner")
   projectMemberships                ProjectMember[]               @relation("ProjectMemberships")
@@ -392,6 +393,7 @@ model User {
   ownedRequisitions                 Requisition[]                 @relation("RequisitionOwner")
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
+  newsletterSends                   NewsletterSend[]
 
   @@index([role])
   @@index([referredById])
@@ -715,6 +717,45 @@ model Notification {
   @@index([announcementId])
 }
 
+// One Web Push endpoint a user has granted us (#1464, #675 Kademe 2).
+//
+// A push subscription belongs to a *browser profile*, not to a person: the same
+// user signing in on a laptop and a phone produces two rows, and clearing site
+// data produces a third while orphaning the first. `endpoint` is therefore the
+// identity — it is what the push service hands out and what we POST to — and it
+// is unique so a re-subscribe updates the row instead of accumulating duplicates
+// that would each deliver the same notification.
+model PushSubscription {
+  id           String   @id @default(cuid())
+  userId       String
+  // The push service's URL for this browser. VarChar(500), not the VARCHAR(191)
+  // default: FCM/Mozilla/Apple endpoints are comfortably longer than 191 chars,
+  // and 500 * 4 bytes stays inside InnoDB's 3072-byte key limit for the unique
+  // index below.
+  endpoint     String   @unique @db.VarChar(500)
+  // The subscription's public key and auth secret, used to encrypt each payload
+  // for this endpoint (RFC 8291). Base64url, so plain VarChar.
+  p256dh       String   @db.VarChar(255)
+  auth         String   @db.VarChar(255)
+  // Which browser this is, so /account can list "Chrome on Android" rather than
+  // an opaque endpoint. Free-form and untrusted — display only.
+  userAgent    String?  @db.VarChar(255)
+  createdAt    DateTime @default(now())
+  // Bumped every time the browser re-confirms the subscription, so a row that
+  // has not been seen for months can be recognised as dead weight.
+  lastSeenAt   DateTime @default(now())
+  // Consecutive delivery failures that were NOT a definitive 404/410 (those
+  // delete the row immediately). A transient outage must not drop a valid
+  // subscription, but a permanently broken one must not be retried forever.
+  failureCount Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // No explicit @@index([userId]): MySQL maintains one for the foreign key
+  // already, and declaring it makes `db push` try to rename that index — see the
+  // same note on ConversationParticipant.
+}
+
 // One row per broadcast admin announcement (distinct from the per-recipient
 // Notification rows it fans out to) — lets the admin UI show a history of
 // what was sent, by whom, and to how many people.
@@ -757,6 +798,143 @@ model AnnouncementImage {
   uploadedAt     DateTime @default(now())
 
   announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-mail newsletter (#1440)
+//
+// Distinct from Announcement on purpose, even though both broadcast a body to
+// many people. An announcement is operational and time-bound ("the meeting has
+// started") — read a week late it is noise, which is why the reader feed hides
+// anything older than the account. A newsletter issue is *content*: career tips
+// that are as useful in November as they were in August, sent on a schedule,
+// addressed to a role (mentees, mentors, or both) rather than to everyone, and
+// unsubscribable on its own without silencing the operational mail.
+//
+// Which is also why the two cannot share a table: targeting, scheduling, an
+// archive that stays readable, and a per-recipient delivery record are all
+// things Announcement deliberately does not have.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum NewsletterAudience {
+  // The default. Everything in the curated library is written for the person
+  // looking for a placement.
+  MENTEE
+  // Mentor-facing issues (how to coach a CV review, what to ask in a mock
+  // interview). Never sent to mentees.
+  MENTOR
+  // One issue, both audiences — mentors additionally get the `mentorNote`
+  // block, so the same content reaches a coach with a coaching angle.
+  BOTH
+}
+
+enum NewsletterStatus {
+  // Being written. Never sent by the scheduler, whatever `scheduledAt` says.
+  DRAFT
+  // Queued: the dispatcher picks it up once `scheduledAt` has passed.
+  SCHEDULED
+  // Claimed by a dispatch run. A row stuck here means a run died mid-send —
+  // resuming is safe because NewsletterSend is unique per (issue, address).
+  SENDING
+  SENT
+  // Pulled before it went out. Kept rather than deleted: "we decided not to
+  // send this" is itself part of the record.
+  CANCELED
+}
+
+model Newsletter {
+  id String @id @default(cuid())
+
+  // The curated library entry this issue started from
+  // (src/lib/newsletterContent.ts), or null when an admin wrote it from
+  // scratch. Only ever a provenance marker: the content below is a full copy,
+  // so editing the library never rewrites an issue that already went out.
+  templateKey String? @db.VarChar(64)
+
+  audience NewsletterAudience @default(MENTEE)
+  status   NewsletterStatus   @default(DRAFT)
+
+  // The canonical (default-locale) subject line — the fallback for a reader
+  // whose language this issue was never written in, and what the admin history
+  // and the activity log show.
+  subject String @db.VarChar(300)
+
+  // { en?: NewsletterIssueContent, tr?: …, de?: … } — the whole issue per
+  // language: subject, preheader, intro, tips[], optional CTA and mentorNote.
+  // Shape and normalisation live in src/lib/newsletter.ts; Json rather than a
+  // table of blocks because an issue is only ever read and written whole.
+  content Json
+
+  // When the dispatcher should send it. Null for a draft.
+  scheduledAt DateTime?
+  // When the dispatch run actually finished. The archive orders by this.
+  sentAt      DateTime?
+
+  createdById String
+
+  // Filled in by the dispatch run. Kept as counters next to the per-recipient
+  // rows below so the history list needs no aggregate query per issue.
+  recipientCount Int @default(0)
+  sentCount      Int @default(0)
+  failedCount    Int @default(0)
+  skippedCount   Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  image NewsletterImage?
+  sends NewsletterSend[]
+
+  // The dispatcher's own query: "SCHEDULED and due".
+  @@index([status, scheduledAt])
+  @@index([sentAt])
+  @@index([createdAt])
+}
+
+// The hero image of an issue, stored in the database like AnnouncementImage
+// (no object storage, so it survives a container redeploy). Attached to the
+// e-mail inline via cid: and served to the archive from
+// /api/newsletters/[id]/image.
+model NewsletterImage {
+  id           String   @id @default(cuid())
+  newsletterId String   @unique
+  contentType  String
+  size         Int
+  data         Bytes
+  uploadedAt   DateTime @default(now())
+
+  newsletter Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
+}
+
+// One row per recipient per issue — the delivery record ("gönderilmiş bülten
+// geçmişi"). EmailLog already logs every outgoing message, but it is keyed by
+// address and pruned after 90 days, so it cannot answer "who has already been
+// sent issue X?" — which is exactly what makes a resumed dispatch safe.
+//
+// The @@unique below is that guarantee: a second run over the same issue
+// re-sends to nobody.
+model NewsletterSend {
+  id           String  @id @default(cuid())
+  newsletterId String
+  // Null once the account is hard-deleted through a path that predates this
+  // table; normally set. PII in `email` is cleared by both erasure modes —
+  // see forgetEmailLog in src/lib/accountErasure.ts.
+  userId       String?
+  email        String  @db.VarChar(320)
+  // The language this recipient was actually served, which is worth keeping:
+  // it is the only place the per-reader resolution is visible afterwards.
+  locale       String  @db.VarChar(8)
+
+  status EmailStatus @default(SENT)
+  error  String?     @db.Text
+  sentAt DateTime    @default(now())
+
+  newsletter Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([newsletterId, email])
+  @@index([userId])
+  @@index([sentAt])
 }
 
 // A user's profile picture, stored in the database (same approach as CvFile).
@@ -1877,11 +2055,59 @@ model Meeting {
   series       MeetingSeries?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   notes        PersonalNote[]
   googleEvents GoogleCalendarEventLink[]
+  guests       MeetingGuest[]
 
   @@index([relationId])
   @@index([projectId])
   @@index([conversationId])
   @@index([seriesId])
+}
+
+// An invitee who has no account here — a company contact, a parent, an external
+// interviewer (#1446). Everyone else on a meeting is reached through the
+// meeting's context (the relation's mentor/mentee, the project's members, the
+// conversation's participants); a guest is reached only by the address the
+// organizer typed, so the row IS the invitation.
+//
+// Guests hang off ONE Meeting row, never one per invitee the way the RELATION
+// context fans out: a bulk schedule writes N meeting rows sharing a single
+// room, and mailing the same outsider N times would be a bug, not thoroughness.
+// The write paths attach guests to the first row of the batch (`meetingId`),
+// which is also the row a guest's RSVP is counted against.
+//
+// `rsvpToken` is the guest's whole credential — same shape and entropy as
+// Meeting.rsvpToken (24 random bytes, hex) — so /rsvp/<token> and
+// /api/calendar/<token> work for them with no account and no login. It is
+// deliberately a SEPARATE column from Meeting.rsvpToken rather than a shared
+// token table: the two are looked up by different queries and a guest must not
+// be able to present a token that resolves to a participant's row.
+//
+// No `orgId`, deliberately: this is a child of Meeting, and Meeting itself is
+// not in TENANT_MODELS (src/lib/orgContext.ts) — both are reached only through a
+// scoped parent. Worth stating, because a model that is not anchored gets no
+// automatic tenant protection and every reader has to know that on purpose.
+model MeetingGuest {
+  id          String     @id @default(cuid())
+  meetingId   String
+  // Stored lowercased+trimmed so @@unique actually prevents a double invite
+  // ("Ada@X.com" and "ada@x.com" are one person to every mail server).
+  email       String
+  // Optional display name, purely so the email can open with "Hi <name>".
+  name        String?
+  rsvpToken   String     @unique
+  rsvp        RsvpStatus @default(PENDING)
+  // Who typed the address. Kept for the audit trail and so the RSVP
+  // notification can reach the organizer even when they were not the creator
+  // of the meeting row the guest hangs off.
+  invitedById String
+  createdAt   DateTime   @default(now())
+  respondedAt DateTime?
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  // No @@index([meetingId]): @@unique([meetingId, email]) already gives MySQL a
+  // leftmost-prefix index on meetingId, and a second one is dead weight.
+  @@unique([meetingId, email])
 }
 
 // A recurring-meeting rule. Auto-generated Meeting rows reference this via seriesId;

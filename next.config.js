@@ -19,14 +19,24 @@ const TAWK_EMOJI = 'https://cdn.jsdelivr.net/emojione/';
 // same one Permissions-Policy hands camera/microphone to.
 const JAAS = 'https://8x8.vc';
 
+// Growth analytics (#1242). Narrowed to the providers this build actually has:
+// NEXT_PUBLIC_* vars are inlined at build time, so unlike the JaaS host above we
+// CAN know here whether a provider is in play. A deployment with no analytics
+// configured therefore ships a CSP that allows no analytics host at all —
+// which was the objection that held #1221 back.
+const { analyticsCspHosts } = require('./src/lib/analyticsCsp.cjs');
+const ANALYTICS = analyticsCspHosts(process.env);
+const analyticsScript = ANALYTICS.script.join(' ');
+const analyticsConnect = ANALYTICS.connect.join(' ');
+
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${JAAS} ${TAWK} ${TAWK_EMOJI}`,
+  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${JAAS} ${TAWK} ${TAWK_EMOJI}${analyticsScript ? ` ${analyticsScript}` : ''}`,
   `style-src 'self' 'unsafe-inline' ${TAWK} ${TAWK_EMOJI}`,
   `img-src 'self' data: blob: ${TAWK} ${TAWK_EMOJI}`,
   `font-src 'self' ${TAWK}`,
   // wss: too — the chat holds a websocket open for incoming messages.
-  `connect-src 'self' ${TAWK} wss://*.tawk.to`,
+  `connect-src 'self' ${TAWK} wss://*.tawk.to${analyticsConnect ? ` ${analyticsConnect}` : ''}`,
   // The chat plays a notification sound; media-src has no fallback here other
   // than default-src 'self', which would block it.
   `media-src 'self' ${TAWK}`,
@@ -74,24 +84,54 @@ const securityHeaders = [
 // fragments into those canonical files through a normal PR.
 const pkg = require('./package.json');
 const release = require('./scripts/release-derive.cjs');
-const releaseFragments = release.readFragments(__dirname);
-releaseFragments.forEach(release.validateFragment);
-const derivedVersion = release.deriveVersion(pkg.version, releaseFragments);
-const unreleasedHighlights = release.unreleasedHighlights(releaseFragments);
+// One release per fragment (#1457): the timeline assigns each pending fragment
+// its own version, plus the date/time it was merged and the commit that brought
+// it in (read from git, or from RELEASE_STAMPS where .git is absent — the Docker
+// build, see .dockerignore). Throws on a malformed fragment, as before.
+const { version: derivedVersion, timeline } = release.resolveRelease(__dirname, pkg.version);
+const unreleasedEntries = release.unreleasedEntries(timeline);
+
+// Admin API explorer: the OpenAPI description of every route under
+// src/app/api is derived HERE, at config load, exactly like the release
+// fragments above. It has to happen at build time - the Docker runner stage
+// copies only public/, .next/, node_modules/, package.json and prisma/, so
+// src/app/api does not exist when a request arrives - and it is inlined into
+// the server bundle through `env` below, which is also why nothing under src/
+// imports a generated file: `npx tsc --noEmit` on a fresh clone has nothing to
+// miss. Failure degrades to an empty spec (the endpoint then answers 503 with
+// "rebuild") rather than taking the whole config down with it, and buildSpec()
+// returns null instead of throwing when src/app/api is missing. The runner stage
+// ships neither src/ nor this file, so it never runs in the production container
+// at all - `next start` uses the config baked into required-server-files.json -
+// but a partial checkout must not be able to turn a docs generator into a build
+// failure. See docs/api-explorer.md.
+const openapi = require('./scripts/openapi-generate.cjs');
+let openapiSpec = '';
+try {
+  const built = openapi.buildSpec(__dirname);
+  if (built) openapiSpec = JSON.stringify(built.spec);
+} catch (error) {
+  console.warn(`next.config: OpenAPI derivation failed (${error.message}); /api/admin/openapi will report that it needs a rebuild.`);
+}
 
 const nextConfig = {
   reactStrictMode: true,
   env: {
     APP_DERIVED_VERSION: derivedVersion,
-    // One synthetic RELEASE_NOTES entry for everything not yet compacted, or
+    // The whole internal API description, ~300 KB of JSON. Read by
+    // src/app/api/admin/openapi/route.ts and served to admins only.
+    APP_OPENAPI_SPEC: openapiSpec,
+    // One RELEASE_NOTES entry PER not-yet-compacted change (newest first), or
     // '' when no pending fragment carries user-facing notes.
-    APP_UNRELEASED_NOTES: unreleasedHighlights ? JSON.stringify(unreleasedHighlights) : '',
+    APP_UNRELEASED_ENTRIES: unreleasedEntries.length ? JSON.stringify(unreleasedEntries) : '',
   },
   // pdf-parse/mammoth pull in Node-only deps (pdfjs) — keep them out of the
   // webpack server bundle so they load as plain CJS at runtime.
   // imapflow/mailparser are Node-only too (net/tls, iconv) and are used by the
   // inbound mail bridge started from instrumentation.ts.
-  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth', 'imapflow', 'mailparser'],
+  // web-push is Node-only too (node:crypto, node:https) and does its own
+  // dynamic requires, so it stays out of the webpack server bundle (#1464).
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth', 'imapflow', 'mailparser', 'web-push'],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

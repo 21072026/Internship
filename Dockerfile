@@ -21,10 +21,18 @@ RUN npx prisma generate
 # pass 'preview' to get the green accent; production defaults to 'production'.
 ARG NEXT_PUBLIC_APP_ENV=production
 
+# Release stamps (#1457): which commit added each pending release fragment, and
+# when. next.config.js turns them into one dated, sha-stamped release per
+# pending change. .dockerignore excludes .git, so the build cannot read them
+# itself — build-image.yml computes them on the runner. Empty is valid (a hand
+# rolled `docker build`): the versions are still derived, just undated.
+ARG RELEASE_STAMPS=""
+
 # Provide dummy env vars so Next.js can analyse routes without a live DB.
 # Real secrets are injected at runtime via `docker run -e`.
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV \
+    RELEASE_STAMPS=$RELEASE_STAMPS \
     DATABASE_URL="mysql://build:build@127.0.0.1:3306/build" \
     NEXTAUTH_SECRET="build-placeholder" \
     NEXTAUTH_URL="http://localhost:3000"

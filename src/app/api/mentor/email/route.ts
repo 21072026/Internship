@@ -8,7 +8,8 @@ import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { conversationForRelation } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { normalizeEmailVariants, canonicalEmail, resolveEmail } from '@/lib/localizedEmail';
 
@@ -90,12 +91,27 @@ export async function POST(request: Request) {
         .split('\n')
         .map((l) => `<p>${l || '&nbsp;'}</p>`)
         .join('')}</div>`;
-      if (emailAllowed(rel.mentee, 'messages')) {
+      if (emailAllowed(rel.mentee, 'messages') && emailGroupAllowedForCategory(rel.mentee, 'mentor-direct')) {
         try {
           // Reply-To routes mentee replies back into this thread (inbound email).
           // The recipient is baked into the token so a reply still threads when
           // the mentee answers from a different address than their profile one.
-          await sendEmail({ to: rel.mentee.email, subject: personalSubject, html, replyTo: replyAddress(rel.id, rel.mentee.id) });
+          //
+          // `locale` is the mentee's own language because the body already is:
+          // resolveEmail() above picked the mentee's translation of the message,
+          // so the unsubscribe footer matches the language of the mail it sits
+          // under. `userId` is the MENTEE's id, never session.user.id — the
+          // mentor is the author here, the mentee is the recipient whose
+          // preferences and unsubscribe token this mail must carry.
+          await sendEmail({
+            to: rel.mentee.email,
+            subject: personalSubject,
+            html,
+            replyTo: replyAddress(rel.id, rel.mentee.id),
+            category: 'mentor-direct',
+            userId: rel.mentee.id,
+            locale: rel.mentee.preferredLanguage,
+          });
         } catch (e) {
           console.error('Mentor email failed for', rel.mentee.email, e);
         }
@@ -118,7 +134,12 @@ export async function POST(request: Request) {
       });
       const link = conversation ? `/messages/c/${conversation.id}` : `/messages/${rel.id}`;
       const senderName = session.user.name;
-      await notify(rel.menteeId, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
+      // Same category, same gate as the e-mail branch above (#1426). The
+      // mentee record already carries notificationPrefs from the select, so
+      // this costs no extra query.
+      if (notificationCategoryAllowed(rel.mentee, 'messages')) {
+        await notify(rel.menteeId, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
+      }
       sent++;
     }
 

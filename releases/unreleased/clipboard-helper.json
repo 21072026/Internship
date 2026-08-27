@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Copy buttons share one clipboard helper with a fallback** (#701). Four call sites (invitation link, mentee setup link, application link, meeting link) each called `navigator.clipboard.writeText` directly, so in any context where the modern Clipboard API is unavailable — an insecure origin, an older browser, a denied permission — the copy silently did nothing while the UI still flashed success. `src/lib/clipboard.ts` now feature-detects the API, falls back to a hidden `textarea` + `execCommand('copy')`, guards both `navigator` and `document` for SSR, always removes the temporary node, and returns a boolean the callers check before showing the copied state."
+}

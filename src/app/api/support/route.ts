@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { markSupportNotificationsRead } from '@/lib/messageNotifications';
 import { notify } from '@/lib/notify';
 import {
   buildSupportAttachments,
@@ -53,6 +54,9 @@ export async function GET() {
       where: { ticket: { requesterId: session.user.id }, senderId: { not: session.user.id }, readAt: null },
       data: { readAt: new Date() },
     });
+    // Opening the support thread retires its bell rows too (#1464) — same rule
+    // as every other thread: reading the message IS reading the notification.
+    await markSupportNotificationsRead(session.user.id);
 
     return NextResponse.json({ tickets, me: session.user.id });
   });

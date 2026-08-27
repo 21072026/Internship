@@ -109,7 +109,7 @@ export function DocumentsManager({
       {error && <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">{error}</div>}
 
       {docs.length === 0 ? (
-        <p className="text-sm text-gray-400 mb-4">{t.documents.none}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{t.documents.none}</p>
       ) : (
         <div className="divide-y divide-gray-50 mb-4">
           {docs.map((d) => (
@@ -117,7 +117,7 @@ export function DocumentsManager({
               <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-800 truncate">{d.title}</p>
-                <p className="text-xs text-gray-400">{kb(d.size)} · v{d.version}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{kb(d.size)} · v{d.version}</p>
               </div>
               {!templates && <Badge variant="info">{typeLabel(d.type)}</Badge>}
               <a href={`/api/documents/${d.id}`} target="_blank" rel="noopener noreferrer" aria-label={t.documents.download} className="text-gray-400 hover:text-blue-600"><Download className="h-4 w-4" /></a>
@@ -131,9 +131,14 @@ export function DocumentsManager({
 
       {canUpload && (
         <form onSubmit={upload} className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3">
-          <input ref={fileRef} type="file" required className="text-sm max-w-[200px]" />
+          {/* aria-label, not a visible <label>: the row is a compact inline
+              form and both controls are self-evident sighted — but a file input
+              with no accessible name is a `label` CRITICAL, and a screen reader
+              reaching it hears only "button". Found by the a11y gate the moment
+              it started running on PRs (#826). */}
+          <input ref={fileRef} type="file" required aria-label={t.documents.fileField} className="text-sm max-w-[200px]" />
           {!templates && (
-            <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
+            <select aria-label={t.documents.typeField} value={type} onChange={(e) => setType(e.target.value)} className="rounded-lg border border-gray-300 px-2 py-2 text-sm">
               {DOCUMENT_TYPES.map((ty) => <option key={ty} value={ty}>{typeLabel(ty)}</option>)}
             </select>
           )}
