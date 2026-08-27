@@ -127,11 +127,17 @@ uyduruyor.** `npx tsc --noEmit`, şemada duran alanlar için "Property does not 
 ve hata listesi tamamen sahte. CLAUDE.md bunu dal *değiştirmek* için söylüyor; merge sonrası
 da aynı — tsc çıktısına inanmadan önce `npx prisma generate`.
 
-**CodeQL, ham sorgu girdisinin `NextResponse.redirect`'e ulaşmasını, girdi tek bir yol
-parçasına kodlanmış olsa bile işaretliyor.** `/api/unsubscribe/one-click`'in GET'i jetonu
-doğruluyor, sonra `encodeURIComponent(t)` ile `/u/<t>`'ye yönlendiriyordu; sömürülebilir
-olduğunu sanmıyorum ama analizci "url-redirection" diyor. Kodlayıcının tam olarak neyi
-kaçırdığını tartışmak yerine hedefi **doğrulanmış** jetondan yeniden üret
+**DÜZELTME (aynı gün, sonradan): aşağıdaki yönlendirme CodeQL uyarısı DEĞİLDİ.** Uyarıyı
+okumadan diffteki tek yönlendirme sink'ine bakıp çıkarım yaptım, iki kez üst üste yanlış
+tahmin ettim ve ikisi için de gereksiz push attım. Gerçek uyarı `applyUnsubscribe.ts`'te
+**remote property injection**'dı (aşağıdaki ayrı maddeye bakın). Yönlendirmeyi yine de
+sıkılaştırdım ve kalması iyi — ama bu madde "CodeQL bunu işaretledi" diye değil, "istek
+girdisini sink'ten uzak tutmak zaten doğru" diye duruyor. Ders: uyarıyı **okumadan** düzeltme
+yazma; okumanın yolu aşağıda.
+
+`/api/unsubscribe/one-click`'in GET'i jetonu
+doğruluyor, sonra `encodeURIComponent(t)` ile `/u/<t>`'ye yönlendiriyordu. Kodlayıcının tam
+olarak neyi kaçırdığını tartışmak yerine hedefi **doğrulanmış** jetondan yeniden üret
 (`makeUnsubscribeToken(scope.userId, scope.group)` — zaman bileşeni olmayan saf HMAC,
 yani kullanıcının kendi jetonunu baytı baytına üretir). Taint akışı tamamen kopuyor,
 "çağıranın gönderdiği hiçbir şey bu sink'e ulaşmıyor" okuyanın yerel olarak
@@ -157,6 +163,43 @@ birlikte, karar olarak bakıcıya bırakıyor); `/account`'taki bir kapatma da a
 anahtarların açılıp kapandığını yazan bir `email.unsubscribe` ActivityLog satırı bırakıyor.
 Ders: bir runbook'a "kanıt şurada" yazmadan önce o kanıtı yazan kod yolunu izle — aksi hâlde
 okuyanı hiç yazılmamış bir kanıtı aramaya gönderirsin.
+
+**CodeQL'in workflow run'ı HER ZAMAN `success` diyor; uyarı ayrı bir *check run*'da ve
+açıklaması PR'ın *inceleme yorumu* olarak duruyor.** Bu PR'ın geçmişindeki altı CodeQL
+workflow run'ının hepsi yeşil; buna rağmen check run üç kez "1 new high" ile kırmızıydı.
+`get_check_run` çağrısı da yardımcı olmuyor: `output.text` boş dönüyor, artifact yok. Uyarıyı
+gerçekten okumanın yolu **PR'ın inceleme başlıklarına bakmak** —
+`pull_request_read(method: 'get_review_comments')` — çünkü `github-advanced-security` uyarıyı
+oraya, ilgili satıra yorum olarak yazıyor. Benim durumumda uyarı ilk commit'ten beri, saat
+14:08'den beri orada duruyordu; ben check-run annotation'larına bakıp iki tur körlemesine
+tahmin ettim.
+
+**Ve bu dosya bunu bana zaten söylüyordu.** 2026-08-01 tarihli "CodeQL merge'ü check olarak
+değil, *konuşma* olarak bloke ediyor" maddesi ile #1005 maddesindeki "doğru cevap Security
+sekmesinden okumak" cümlesi tam olarak bu tuzağı anlatıyor. CLAUDE.md bu dosyayı **oturum
+başında okumayı** söylüyor; okumadım ve iki gereksiz push'la ödedim. Retrospektifi yazmak
+kadar okumak da işin parçası.
+
+**Bir base dalını merge ettiğinde PR'ını kapılayan check listesi de değişmiş olabilir.**
+`check:openapi` main'e Swagger PR'ıyla (#1463) geldi; benim dalımda merge'e kadar yoktu.
+Bildiğim kontrolleri kaç kez koştursam da yakalanamazdı, çünkü kontrolün kendisi yeniydi —
+ve gerçek bir boşluk yakaladı (middleware unsubscribe yollarını doğrulama kapısından muaf
+tutuyor, `VERIFY_EXEMPT` tutmuyordu, yani doküman o uçların asla dönmediği bir 403'ü ilan
+ediyordu). Merge sonrası **`.github/workflows/ci.yml`'i yeniden oku**, hatırladığın listeye
+güvenme.
+
+**Uyarı, "zaten güvenli" savunulabilir olduğunda bile haklı olabilir.** Gerçek uyarı
+`prefs[emailGroupPrefKey(group)] = enabled` idi: `group` iki çağrının ikisinde de taksonomiye
+kısıtlı (`z.enum([...EMAIL_GROUP_IDS])` ve `verifyUnsubscribeToken` içindeki `isEmailGroupId`),
+yani sömürülebilir değildi. Ama CodeQL bir zod parse'ını sanitizer saymıyor ve saymak zorunda
+da değil: "yukarıda bir doğrulayıcı bunu daralttı" okuyanın gidip kontrol etmesi gereken bir
+iddia, "yazılan property adı sabitten kurulmuş donmuş bir tablodan okunuyor" ise yazmanın
+kendisinde görünüyor. Bu PR'daki üç güvenlik düzeltmesinin üçü de aynı biçimdeydi (yolu tek
+parçaya kodlayan encoder, regex'ten önceki charset guard, yukarıdaki zod enum) ve üçünde de
+doğru hamle savunmak değil **savunma ihtiyacını ortadan kaldırmak** oldu. Bonus: `obj[k] = v`
+prototip setter'ını tetikleyen atamadır, dolayısıyla eski biçimin regresyonu bozuk bir tercih
+yazmakla kalmaz, süreç ömrü boyunca her nesneyi bozardı — bu yüzden akümülatör artık
+null-prototip.
 
 ## 2026-08-26 — Admin API explorer: üretilen dokümanı nereden servis etmeli (#1447)
 
