@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 // #822 — evaluation criteria as org data instead of hardcoded arrays.
 //
@@ -98,7 +98,14 @@ test('an admin defines the org’s own criteria; they replace the built-ins and 
     // The built-in keys are still accepted (a form rendered a moment earlier
     // must not fail on submit), but the org's own keys are what the form asks
     // for and what a new record is stamped with.
-    await signInAndSettle(page, mentorEmail, 'MentorPass123', '/mentor');
+    //
+    // Switching identity on the SAME page while still authenticated as admin
+    // needs the "different user" helper (see helpers/auth.ts): plain
+    // signInAndSettle's goto('/auth/signin') can land while the outgoing
+    // page's session cookie is still being re-issued, so /auth/signin sees
+    // `authenticated` and router.replace()s to /admin mid-fill, detaching the
+    // submit button Playwright is about to click.
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const res = await page.request.post('/api/evaluations', {
       data: { relationId: relation.id, scores: { ownership: 5, craft: 4 } },
     });
@@ -136,7 +143,14 @@ test('retiring a criterion keeps it readable on the evaluations that were scored
       data: { scope: 'MENTEE', criteria: [{ key: 'punctuality', labels: { en: 'Punctuality' } }] },
     });
 
-    await signInAndSettle(page, mentorEmail, 'MentorPass123', '/mentor');
+    // Switching identity on the SAME page while still authenticated needs the
+    // "different user" helper for every re-login below (see helpers/auth.ts):
+    // plain signInAndSettle's goto('/auth/signin') can land while the
+    // outgoing page's session cookie is still being re-issued, so
+    // /auth/signin sees `authenticated` and router.replace()s to the previous
+    // user's dashboard mid-fill, detaching the submit button Playwright is
+    // about to click.
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     const res = await page.request.post('/api/evaluations', {
       data: { relationId: relation.id, scores: { punctuality: 5 } },
     });
@@ -144,7 +158,7 @@ test('retiring a criterion keeps it readable on the evaluations that were scored
 
     // The org rewrites its framework — the old criterion is retired, not
     // deleted, so the record it scored keeps its label.
-    await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
+    await signInAsFreshUser(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
     await page.request.put('/api/admin/evaluation-templates', {
       data: { scope: 'MENTEE', criteria: [{ key: 'impact', labels: { en: 'Impact' } }] },
     });
@@ -152,7 +166,7 @@ test('retiring a criterion keeps it readable on the evaluations that were scored
     expect(retired).not.toBeNull();
     expect(retired?.active).toBe(false);
 
-    await signInAndSettle(page, mentorEmail, 'MentorPass123', '/mentor');
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     await page.goto(`/mentor/mentees/${relation.id}`);
     // Asked for today: Impact. Still readable from the past: Punctuality.
     await expect(page.getByText('Impact', { exact: true }).first()).toBeVisible({ timeout: 20_000 });

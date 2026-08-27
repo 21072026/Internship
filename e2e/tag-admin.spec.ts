@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
 
 /**
  * Tag management (#845).
@@ -124,8 +124,14 @@ test('renaming onto an existing name is refused, and a non-admin cannot manage t
     expect(self.status()).toBe(400);
     expect(await prisma.tag.count({ where: { id: one.id } })).toBe(1);
 
-    // A mentee may apply labels but not rewrite the vocabulary.
-    await signInAndSettle(page, menteeEmail, PASSWORD, '/portal');
+    // A mentee may apply labels but not rewrite the vocabulary. Switching
+    // identity on the SAME page while still authenticated as admin needs the
+    // "different user" helper (#1465-class race, see helpers/auth.ts):
+    // signInAndSettle's plain goto('/auth/signin') can land while the old
+    // page's session cookie is still being re-issued, so /auth/signin sees
+    // `authenticated` and router.replace()s to /admin mid-fill, detaching the
+    // submit button Playwright is about to click.
+    await signInAsFreshUser(page, menteeEmail, PASSWORD, '/portal');
     const forbidden = await page.request.patch(`/api/tags/${one.id}`, { data: { name: `Hijacked ${stamp}` } });
     expect(forbidden.status()).toBe(401);
     await page.goto('/admin/tags');

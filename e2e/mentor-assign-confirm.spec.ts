@@ -165,7 +165,11 @@ test('the /admin/mentorship assign form asks for confirmation before assigning a
     await page.goto('/admin/mentorship');
     await page.getByRole('button', { name: 'Assign mentorship' }).click();
 
-    await page.getByLabel('Mentor').selectOption(mentor.id);
+    // Exact + the trailing "*" of the required-field label: an unqualified
+    // getByLabel('Mentor') substring-matches the dialog's own accessible name
+    // too ("Assign mentorship" contains "mentor"), which resolved to 2
+    // elements (the dialog and the <select>) and made selectOption ambiguous.
+    await page.getByLabel('Mentor*', { exact: true }).selectOption(mentor.id);
     await page.getByLabel('Mentee').selectOption(newMentee.id);
 
     // Cancel first: no request, mentorship modal stays open, relation not created.
@@ -179,7 +183,7 @@ test('the /admin/mentorship assign form asks for confirmation before assigning a
     const afterCancel = await prisma.mentorshipRelation.findFirst({ where: { mentorId: mentor.id, menteeId: newMentee.id } });
     expect(afterCancel).toBeNull();
     // The underlying assign form is still open and the selection survived.
-    await expect(page.getByLabel('Mentor')).toHaveValue(mentor.id);
+    await expect(page.getByLabel('Mentor*', { exact: true })).toHaveValue(mentor.id);
 
     const postRequest = page.waitForRequest((r) => r.method() === 'POST' && r.url().includes('/api/mentorship'), { timeout: 10_000 });
     await page.getByRole('button', { name: 'Assign', exact: true }).click();
