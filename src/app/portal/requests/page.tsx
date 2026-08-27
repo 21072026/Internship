@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { getServerDictionary } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { PortalTabs } from '@/components/PortalTabs';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { Card } from '@/components/ui/Card';
@@ -37,7 +36,6 @@ export default async function PortalRequestsPage() {
 
   return (
     <div>
-      <PortalTabs />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.tabs.requests}</h1>
         {/* "Ask your mentor a question or request a meeting" would contradict the

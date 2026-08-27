@@ -17,6 +17,7 @@ import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { availableModes, canUsePortal } from '@/lib/dualRole';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
+import { PortalTabs } from '@/components/PortalTabs';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -92,7 +93,10 @@ export default async function PortalLayout({ children }: { children: React.React
       }
     >
       <PipelineStagesProvider stages={customStages}>
-        <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
+        <EvaluationCriteriaProvider criteria={customCriteria}>
+  <PortalTabs />
+  {children}
+</EvaluationCriteriaProvider>
       </PipelineStagesProvider>
     </ResponsiveShell>
   );

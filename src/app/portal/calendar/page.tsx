@@ -2,7 +2,6 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { getServerDictionary } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
-import { PortalTabs } from '@/components/PortalTabs';
 import { CalendarView } from '@/components/CalendarView';
 import { IcsFeedCard } from '@/components/IcsFeedCard';
 
@@ -23,7 +22,6 @@ export default async function PortalCalendarPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.calendarTitle}</h1>
         <p className="text-gray-500 mt-1">{t.portal.calendarSubtitle}</p>
       </div>
-      <PortalTabs />
       <CalendarView />
       <IcsFeedCard />
     </div>
