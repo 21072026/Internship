@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { transliterate } from '@/lib/transliterate';
 
 export const REQUISITION_STATUSES = ['DRAFT', 'OPEN', 'ON_HOLD', 'FILLED', 'CANCELLED'] as const;
 export type RequisitionStatus = (typeof REQUISITION_STATUSES)[number];
@@ -48,11 +49,12 @@ export function normalizeSkills(skills: string[]): string[] {
   const normalized: string[] = [];
   for (const value of skills) {
     const skill = value.trim();
-    if (!skill || seen.has(skill.toLocaleLowerCase())) continue;
+    if (!skill || seen.has(transliterate(skill).toLowerCase())) continue;
     if (skill.length > REQUISITION_LIMITS.skill) throw new Error('skill_too_long');
-    seen.add(skill.toLocaleLowerCase());
+    seen.add(transliterate(skill).toLowerCase());
     normalized.push(skill);
   }
+
   return normalized;
 }
 

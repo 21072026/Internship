@@ -67,12 +67,12 @@ test.describe.serial('Story #806 requisitions', () => {
 
     const created = await page.request.post('/api/requisitions', { data: {
       title: `Backend ${stamp}`, status: 'OPEN', openings: 2, filled: 1,
-      requiredSkills: [' React ', '', 'react', ' TypeScript '], ownerId: ownerA2.id,
+      requiredSkills: [' React ', '', 'react', ' TypeScript ', 'İngilizce', 'ingilizce', 'Işletme', 'ışletme', 'IT', 'it', 'ıt'],
     } });
     expect(created.status()).toBe(201);
     const body = await created.json();
     expect(body.requisition.companyId).toBe(companyA.id);
-    expect(body.requisition.requiredSkills).toEqual(['React', 'TypeScript']);
+    expect(body.requisition.requiredSkills).toEqual(['React', 'TypeScript', 'İngilizce', 'Işletme', 'IT']);
     const list = await (await page.request.get('/api/requisitions')).json();
     expect(list.requisitions.some((item: { id: string }) => item.id === foreignReqId)).toBe(false);
     const paged = await (await page.request.get('/api/requisitions?page=1&pageSize=1')).json();
