@@ -351,7 +351,6 @@ export default function CandidatesPage() {
             options={[{ value: '', label: t.candidates.allYears }, ...gradYears]}
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
-            placeholder={t.candidates.allGradYears}
           />
           <Input
             data-testid="candidates-city-filter"
