@@ -165,3 +165,7 @@ e2e/.state/
 # the document through next.config.js -> nextConfig.env, so nothing imports this
 # file and `npx tsc --noEmit` on a fresh clone never looks for it.
 /src/generated/openapi.json
+
+# Isolated worktrees created by Claude Code's background Agent tool for
+# in-progress work — internal tooling state, not a project artifact.
+/.claude/worktrees/
