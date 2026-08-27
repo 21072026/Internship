@@ -50,6 +50,12 @@ komutluk bir denetim.
 uymuyor (#1426). `grep -rn "await notify("` ile tüm çağrı yerlerini tarayıp kategorisi olanla
 olmayanı ayırmak, bu tür yarım çalışan ayarları toplu bulmanın yolu.
 
+**`weekly-reports.spec.ts:22` yerelde dev sunucuya karşı 60 sn test bütçesini aşıyor.** Beş
+tarayıcı bağlamı, cron hatırlatıcıları ve yazdırma sayfası tek testte; dev derlemeleriyle
+bütçeye sığmıyor ve hata teardown'da (`context.close`) görünüyor — yanıltıcı. **Aynı test
+stash'lenmiş (dokunulmamış) ağaçta da aynı şekilde düşüyor**: suçlamadan önce iki dalda koştur,
+hakem CI (orada prod build koşuyor).
+
 **Konteyner kurulumu playbook'a uyuyor, iki not:** `mariadb-server` apt ile kuruluyor
 (`apt-get update` şart) ve `service mariadb start` yetiyor; scratchpad'den `@prisma/client`
 import eden bir script **çözülmüyor** — dosyayı repo köküne kopyalayıp koşturup silmek en
