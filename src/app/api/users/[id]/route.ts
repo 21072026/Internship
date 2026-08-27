@@ -9,6 +9,7 @@ import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { notify } from '@/lib/notify';
 import { roleHome } from '@/lib/roleHome';
 import { sendRoleChangeEmail } from '@/services/emailService';
+import { isStageTransition } from '@/lib/stageChange';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -91,7 +92,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       const { password, ...rest } = user;
 
       return NextResponse.json({
-        user: { ...rest, pendingActivation: isPendingActivation({ password }) },
+        user: {
+          ...rest,
+          menteeRelations: rest.menteeRelations.map((relation) => ({
+            ...relation,
+            statusChanges: relation.statusChanges.filter((change) =>
+              isStageTransition(change.fromStatus, change.toStatus)
+            ),
+          })),
+          pendingActivation: isPendingActivation({ password }),
+        },
       });
     });
   } catch (error) {

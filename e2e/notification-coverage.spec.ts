@@ -147,11 +147,14 @@ test('every stage-write path emits the same notification + keeps pipelineStatus 
   expect(relAfter2.pipelineStatus).toBe('APPROVAL_PENDING_220');
   await expect.poll(() => menteeCount('stage.changed'), { timeout: 5_000 }).toBe(1);
 
-  // No-op "change" to the current stage: history row ok, no notification (#894).
+  // No-op "change" to the current stage: no history row and no notification.
+  const changesBeforeNoop = await prisma.statusChange.count({ where: { relationId } });
   const noop = await page.request.post('/api/status-changes', {
     data: { relationId, fromStatus: 'APPROVAL_PENDING_220', toStatus: 'APPROVAL_PENDING_220' },
   });
-  expect(noop.status()).toBe(201);
+  expect(noop.status()).toBe(200);
+  expect(await noop.json()).toMatchObject({ change: null, changed: false });
+  expect(await prisma.statusChange.count({ where: { relationId } })).toBe(changesBeforeNoop);
   await expect.poll(() => menteeCount('stage.changed'), { timeout: 5_000 }).toBe(1);
 
   // Path 2: bulk advance → exactly one more notification for the person.
