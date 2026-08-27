@@ -206,8 +206,21 @@ app_env_args() {
     -e JAAS_PRIVATE_KEY="${JAAS_PRIVATE_KEY:-}" \
     -e VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY:-}" \
     -e VAPID_PRIVATE_KEY="${VAPID_PRIVATE_KEY:-}" \
-    -e VAPID_SUBJECT="${VAPID_SUBJECT:-}"
+    -e VAPID_SUBJECT="${VAPID_SUBJECT:-}" \
+    -e OPERATOR_NAME="${OPERATOR_NAME:-}" \
+    -e OPERATOR_ADDRESS="${OPERATOR_ADDRESS:-}" \
+    -e OPERATOR_EMAIL="${OPERATOR_EMAIL:-}" \
+    -e OPERATOR_PHONE="${OPERATOR_PHONE:-}" \
+    -e OPERATOR_RESPONSIBLE="${OPERATOR_RESPONSIBLE:-}" \
+    -e OPERATOR_VAT_ID="${OPERATOR_VAT_ID:-}" \
+    -e OPERATOR_REGISTER="${OPERATOR_REGISTER:-}" \
+    -e OPERATOR_DPO="${OPERATOR_DPO:-}"
 }
+# OPERATOR_* (#1396) publishes /imprint and names the GDPR controller on
+# /privacy. They live in the env file rather than the source because the project
+# is AGPL and other people run their own instances. This forwarding line is the
+# whole feature on a deployed host: unset here, the container would keep saying
+# "no imprint published" no matter what the env file holds.
 mapfile -d '' -t APP_ENV_ARGS < <(app_env_args)
 
 # Wait for /api/health?db=1 and assert what it says. Used for the canary, for

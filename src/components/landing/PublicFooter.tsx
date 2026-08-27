@@ -46,6 +46,10 @@ export async function PublicFooter() {
       links: [
         { href: '/privacy', label: t.privacy.title },
         { href: '/terms', label: t.terms.title },
+        // Who runs this deployment, and the one address a visitor can write to
+        // (#1396). A site that collects registrations and enquiry forms without
+        // naming its operator anywhere is the state this replaces.
+        { href: '/imprint', label: n.imprint },
       ],
     },
   ];
