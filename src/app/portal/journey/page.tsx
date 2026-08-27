@@ -12,10 +12,13 @@ import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { User, Building2, BookOpen, ExternalLink, MessageCircle } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { ArchivedNotice } from '@/components/ArchivedNotice';
+import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 
-async function getActiveRelation(menteeId: string) {
-  return prisma.mentorshipRelation.findFirst({
-    where: { menteeId, status: 'ACTIVE' },
+// ACTIVE, else the latest COMPLETED one shown as an archive (#1408).
+async function getMenteeRelation(menteeId: string) {
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: menteeRelationWhere(menteeId),
     include: {
       mentor: {
         // `timezone` (#1210): the meeting-request form shows a proposed slot on
@@ -29,6 +32,7 @@ async function getActiveRelation(menteeId: string) {
       },
     },
   });
+  return pickMenteeRelation(relations);
 }
 
 export default async function PortalJourneyPage() {
@@ -38,7 +42,7 @@ export default async function PortalJourneyPage() {
   // in which case session is null here — redirect instead of crashing.
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
-  const activeRelation = await getActiveRelation(session.user.id);
+  const { relation, isArchived } = await getMenteeRelation(session.user.id);
 
   return (
     <div>
@@ -48,9 +52,9 @@ export default async function PortalJourneyPage() {
         <p className="text-gray-500 mt-1">{t.portal.journeySubtitle}</p>
       </div>
 
-      {activeRelation && (
+      {relation && (
         <div className="mb-6">
-          <JourneyTracker status={activeRelation.pipelineStatus} />
+          <JourneyTracker status={relation.pipelineStatus} />
         </div>
       )}
 
@@ -63,7 +67,7 @@ export default async function PortalJourneyPage() {
           </div>
         </CardHeader>
 
-        {!activeRelation ? (
+        {!relation ? (
           <div className="text-center py-8">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <User className="h-8 w-8 text-gray-400" />
@@ -77,11 +81,15 @@ export default async function PortalJourneyPage() {
         ) : (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <StatusBadge status={activeRelation.status} />
+              <StatusBadge status={relation.status} />
               <span className="text-xs text-gray-400">
-                {t.portal.since} {formatDate(activeRelation.startDate, locale)}
+                {isArchived && relation.completedAt
+                  ? `${t.portal.archived.completedOn} ${formatDate(relation.completedAt, locale)}`
+                  : `${t.portal.since} ${formatDate(relation.startDate, locale)}`}
               </span>
             </div>
+
+            {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
 
             {/* Mentor */}
             <div className="p-4 bg-blue-50 rounded-xl">
@@ -89,22 +97,22 @@ export default async function PortalJourneyPage() {
                 {t.portal.yourMentor}
               </p>
               <p className="font-semibold text-gray-900">
-                <PersonHoverCard personId={activeRelation.mentor.id} name={activeRelation.mentor.fullName} role="MENTOR" />
+                <PersonHoverCard personId={relation.mentor.id} name={relation.mentor.fullName} role="MENTOR" />
               </p>
-              <a href={`mailto:${activeRelation.mentor.email}`} className="text-sm text-gray-600 hover:text-blue-600 hover:underline break-all">{activeRelation.mentor.email}</a>
-              {activeRelation.mentor.phone && (
-                <p className="text-sm text-gray-600">{activeRelation.mentor.phone}</p>
+              <a href={`mailto:${relation.mentor.email}`} className="text-sm text-gray-600 hover:text-blue-600 hover:underline break-all">{relation.mentor.email}</a>
+              {relation.mentor.phone && (
+                <p className="text-sm text-gray-600">{relation.mentor.phone}</p>
               )}
-              {activeRelation.mentor.department && (
-                <p className="text-sm text-gray-500 mt-1">{activeRelation.mentor.department}</p>
+              {relation.mentor.department && (
+                <p className="text-sm text-gray-500 mt-1">{relation.mentor.department}</p>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={`/messages/${activeRelation.id}`} className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
+                <Link href={`/messages/${relation.id}`} className="inline-flex items-center gap-1.5 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
                   <MessageCircle className="h-4 w-4" />
                   {t.portal.messageMentor}
                 </Link>
-                {activeRelation.mentor.publicProfile === true && (
-                  <Link href={`/p/${activeRelation.mentor.id}`} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
+                {relation.mentor.publicProfile === true && (
+                  <Link href={`/p/${relation.mentor.id}`} className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors">
                     <ExternalLink className="h-4 w-4" />
                     {t.portal.viewMentorProfile}
                   </Link>
@@ -113,33 +121,33 @@ export default async function PortalJourneyPage() {
             </div>
 
             {/* Company */}
-            {activeRelation.company && (
+            {relation.company && (
               <div className="p-4 bg-green-50 rounded-xl">
                 <p className="text-xs font-medium text-green-500 uppercase tracking-wide mb-2">
                   {t.portal.assignedCompany}
                 </p>
-                <p className="font-semibold text-gray-900">{activeRelation.company.name}</p>
-                {activeRelation.company.industry && (
-                  <p className="text-sm text-gray-600">{activeRelation.company.industry}</p>
+                <p className="font-semibold text-gray-900">{relation.company.name}</p>
+                {relation.company.industry && (
+                  <p className="text-sm text-gray-600">{relation.company.industry}</p>
                 )}
-                {activeRelation.company.contactEmail && (
-                  <p className="text-sm text-gray-600">{activeRelation.company.contactEmail}</p>
+                {relation.company.contactEmail && (
+                  <p className="text-sm text-gray-600">{relation.company.contactEmail}</p>
                 )}
-                {activeRelation.company.description && (
-                  <p className="text-sm text-gray-500 mt-2">{activeRelation.company.description}</p>
+                {relation.company.description && (
+                  <p className="text-sm text-gray-500 mt-2">{relation.company.description}</p>
                 )}
               </div>
             )}
 
             {/* Recent Interactions */}
-            {activeRelation.interactions.length > 0 && (
+            {relation.interactions.length > 0 && (
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
                   <BookOpen className="h-4 w-4" />
                   {t.portal.recentInteractions}
                 </p>
                 <div className="space-y-2">
-                  {activeRelation.interactions.map((interaction) => (
+                  {relation.interactions.map((interaction) => (
                     <div
                       key={interaction.id}
                       className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0"

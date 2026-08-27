@@ -46,6 +46,19 @@ export const SETTING_DEFAULTS = {
   // installation; an org setting rather than a per-reviewer toggle, because a
   // bias control people opt into is one the reviewers who most need it skip.
   blindReview: 'false',
+  // Newsletter cadence (#1469). 'off' (default) means nothing is ever queued
+  // automatically and every issue is scheduled by hand. 'weekly' / 'biweekly' /
+  // 'monthly' let the daily queue job pick the next unused issue from the
+  // curated library and SCHEDULE it — never send it directly, so an admin
+  // always has the morning to read, edit or cancel what will go out.
+  //
+  // Off by default on purpose: the library ships in the repo, but which day a
+  // real audience gets mail is a decision for whoever owns that audience.
+  newsletterSchedule: 'off',
+  // Who an auto-queued issue targets: MENTEE (default), MENTOR or BOTH.
+  newsletterAudience: 'MENTEE',
+  // Local hour of day an auto-queued issue is scheduled for (0-23).
+  newsletterSendHour: '9',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

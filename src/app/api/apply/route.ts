@@ -6,6 +6,7 @@ import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
@@ -147,12 +148,18 @@ export async function POST(request: Request) {
   // Notify the mentor — honoring their email opt-out (#668: this send used to
   // ignore notificationPrefs entirely, so a mentor with email notifications off
   // still received it).
-  if (emailAllowed(mentor, 'mentorship')) {
+  if (emailAllowed(mentor, 'mentorship') && emailGroupAllowedForCategory(mentor, 'mentorship-request')) {
     try {
       await sendEmail({
         to: mentor.email,
         subject: `New application: ${fullName}`,
         html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
+        category: 'mentorship-request',
+        // The MENTOR is the recipient. The applicant (`mentee`, created a few
+        // lines above) is the subject of the mail, and using their id here would
+        // both mint the wrong unsubscribe token and let a stranger's public
+        // application form switch off a mentor's mail.
+        userId: mentor.id,
       });
     } catch (e) {
       console.error('Mentor notification email failed:', e);

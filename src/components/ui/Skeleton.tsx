@@ -1,6 +1,6 @@
 // Lightweight loading placeholders to improve perceived performance.
 export function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded bg-gray-100 ${className}`} />;
+  return <div className={`animate-pulse rounded bg-gray-100 dark:bg-gray-800 ${className}`} />;
 }
 
 // A vertical stack of row-shaped skeletons for list/table loading states.

@@ -8,6 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { withTenantScope } from '@/lib/orgContext';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -221,7 +222,10 @@ export async function POST(request: Request) {
       : undefined;
     await Promise.all(
       users
-        .filter((u) => u.email && emailAllowed(u, 'announcements'))
+        // Both conjuncts: the group check is what makes `emailed` truthful once
+        // people can unsubscribe from announcements. Without it the counter
+        // would keep counting mails that sendEmail() then declines to deliver.
+        .filter((u) => u.email && emailAllowed(u, 'announcements') && emailGroupAllowedForCategory(u, 'announcement'))
         .map((u) => {
           const preferredLanguage = u.preferredLanguage ?? undefined;
           const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
@@ -231,7 +235,30 @@ export async function POST(request: Request) {
           // translated while the message itself went out in one language.
           const safe = escapeHtml(resolveAnnouncementText({ text, translations }, u.preferredLanguage));
           const html = `<h2>${t.announcements.emailSubject}</h2><p>${safe.replace(/\n/g, '<br>')}</p>${imageHtml}${link ? `<p><a href="${link}">${t.announcements.emailOpenLink}</a></p>` : ''}`;
-          return sendEmail({ to: u.email, category: 'announcement', subject: t.announcements.emailSubject, html, attachments }).then(
+          return sendEmail({
+            to: u.email,
+            category: 'announcement',
+            subject: t.announcements.emailSubject,
+            html,
+            attachments,
+            // One mail per recipient in the broadcast, each with its own
+            // unsubscribe token — this is the highest-volume mail the product
+            // sends and the one people most want a working opt-out for. The
+            // footer takes the same language the body was just rendered in.
+            userId: u.id,
+            locale: u.preferredLanguage,
+            // The preference columns this handler already selected for all of
+            // them, handed to the central check so it does not re-read the same
+            // two values once per recipient. On a thousand-user broadcast that
+            // was a thousand extra queries riding alongside a thousand EmailLog
+            // inserts inside this one Promise.all — the pool-timeout window the
+            // largest send in the product could least afford.
+            //
+            // Data, not a bypass: `sendEmail` still runs the same check on it,
+            // and the filter above uses the very same row, so the two cannot
+            // disagree about what this person chose.
+            prefs: u,
+          }).then(
             () => { emailed++; },
             (e) => logger.error('Failed to send announcement email', { error: String(e) })
           );

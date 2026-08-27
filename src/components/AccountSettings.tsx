@@ -14,7 +14,9 @@ import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
 import { durationSince } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
+import { pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
+import { EMAIL_GROUPS, emailGroupPrefKey, resolveEmailGroupPrefs, type EmailGroupId } from '@/lib/emailGroups';
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
 import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } from '@/lib/timezone';
 import { GoogleCalendarCard } from '@/components/GoogleCalendarCard';
@@ -57,11 +59,38 @@ export function AccountSettings() {
   const [me, setMe] = useState<{ id: string; fullName: string; avatarUrl: string | null; createdAt: string | null } | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
+  // Per-group e-mail preferences (#1444). These are NOT a second copy of
+  // `notifPrefs`: they are the resolved *answers* for the twelve e-mail groups,
+  // derived from the same JSON blob but flattened through the back-compat rules
+  // in resolveEmailGroupPrefs (a legacy `mentorship: false` shows up here as
+  // `mentorship_lifecycle: false` even though no `email:` key exists yet). The
+  // blob itself stays the single stored truth and is what we PUT back.
+  const [groupPrefs, setGroupPrefs] = useState<Record<EmailGroupId, boolean>>(() => resolveEmailGroupPrefs({}));
+  // Has GET /api/profile come back yet? Both switch lists below write the WHOLE
+  // notificationPrefs blob back (PUT /api/profile replaces that column, it does
+  // not merge), and until this is true `notifPrefs` is still the empty initial
+  // object. A click in that window would therefore PUT `{ 'email:digests':
+  // false }` and silently delete every key the user actually had — a legacy
+  // in-app opt-out, another group, all of it. The switches also render
+  // optimistically "on" during that window, so they are not merely unsaveable,
+  // they are showing a default rather than an answer. Both lists stay disabled
+  // until the stored truth has arrived.
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  // …and if that request never answers usefully, SAY SO. Both lists below are
+  // gated on `prefsLoaded`, so a 500 (or a `{}` body) used to leave twenty-three
+  // switches dead for the life of the page with nothing on screen explaining
+  // why — and the legacy list, which used to stay interactive, silently joined
+  // them. Disabled-and-honest still beats enabled-and-destructive; this is the
+  // "honest" half.
+  const [prefsLoadFailed, setPrefsLoadFailed] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
   // Browser (foreground) notifications — per-device, not stored server-side (#675).
   const [browserNotif, setBrowserNotif] = useState(false);
   const [browserNotifSupported, setBrowserNotifSupported] = useState(false);
   const [browserNotifDenied, setBrowserNotifDenied] = useState(false);
+  // True once this browser holds a stored Web Push subscription, i.e. it will be
+  // notified with the app closed and not only while a tab is open.
+  const [pushActive, setPushActive] = useState(false);
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [twoFaSetup, setTwoFaSetup] = useState<{ secret: string; otpauth: string } | null>(null);
   const [twoFaCode, setTwoFaCode] = useState('');
@@ -106,10 +135,22 @@ export function AccountSettings() {
     fetch('/api/profile')
       .then((r) => r.json())
       .then(({ user }) => {
-        if (!user) return;
+        if (!user) {
+          setPrefsLoadFailed(true);
+          return;
+        }
         setEmail(user.email);
         setEmailNotifications(user.emailNotifications !== false);
         setNotifPrefs((user.notificationPrefs && typeof user.notificationPrefs === 'object') ? user.notificationPrefs : {});
+        // resolveEmailGroupPrefs deliberately ignores emailNotifications: the
+        // master switch is its own visible control, and folding it in here would
+        // render every group as "off" for someone who killed e-mail entirely —
+        // and then persist that as an explicit opt-out the first time they
+        // touched any switch, losing choices they never made.
+        setGroupPrefs(resolveEmailGroupPrefs({ notificationPrefs: user.notificationPrefs }));
+        // Set only after both of the above: this is what unlocks the switches,
+        // and it must never be true while `notifPrefs` is still the placeholder.
+        setPrefsLoaded(true);
         // The language selector must reflect the EFFECTIVE locale, not just the
         // DB preference: getLocale() lets the `locale` cookie win, so a cookie of
         // `tr` with a `preferredLanguage` of `en`/null renders a Turkish UI while
@@ -135,23 +176,40 @@ export function AccountSettings() {
         setActiveMenteeCount(typeof user.activeMenteeCount === 'number' ? user.activeMenteeCount : 0);
         setAvailability(user.availability ?? null);
         setMe({ id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl ?? null, createdAt: user.createdAt ?? null });
-      });
+      })
+      .catch(() => setPrefsLoadFailed(true));
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
   }, []);
 
   useEffect(() => {
     const supported = canUseBrowserNotifications();
     setBrowserNotifSupported(supported);
-    if (supported) {
-      setBrowserNotifDenied(Notification.permission === 'denied');
-      setBrowserNotif(browserNotificationsPrefOn() && Notification.permission === 'granted');
-    }
+    if (!supported) return;
+    setBrowserNotifDenied(Notification.permission === 'denied');
+    const on = browserNotificationsPrefOn() && Notification.permission === 'granted';
+    setBrowserNotif(on);
+    // Re-assert the push subscription for someone who already said yes (#1464):
+    // a push endpoint is rotated by the browser, dropped when site data is
+    // cleared, and never existed for anyone who opted in before push shipped.
+    // Silent, and only ever for a user who has already granted permission.
+    if (on && pushSupported()) void registerPushSubscription().then(setPushActive);
   }, []);
 
+  // One switch covers both halves of "notify me" (#1464): the foreground
+  // notification a poll fires while a tab is open (#675 Kademe 1) and the Web
+  // Push subscription that delivers with the app closed (Kademe 2). Splitting
+  // them into two toggles would ask the user to understand the difference between
+  // a tab and a service worker, which is our problem, not theirs.
+  //
+  // `requestPermission()` stays inside this change handler on purpose: iOS
+  // silently ignores the prompt unless it is inside a user gesture, so moving it
+  // into an effect would break exactly the platform that needs push most (a
+  // home-screen PWA is the only place iOS delivers it at all).
   const toggleBrowserNotif = async (next: boolean) => {
     if (!next) {
       setBrowserNotif(false);
       setBrowserNotificationsPref(false);
+      if (pushSupported()) void unregisterPushSubscription();
       return;
     }
     let perm = Notification.permission;
@@ -160,6 +218,10 @@ export function AccountSettings() {
       setBrowserNotif(true);
       setBrowserNotificationsPref(true);
       setBrowserNotifDenied(false);
+      // Best effort by design: no VAPID keys on this deployment, or a browser
+      // that cannot do push, leaves the foreground notifications working.
+      const subscribed = await registerPushSubscription();
+      setPushActive(subscribed);
     } else {
       setBrowserNotif(false);
       setBrowserNotificationsPref(false);
@@ -281,7 +343,43 @@ export function AccountSettings() {
   };
 
   const togglePref = async (cat: string, next: boolean) => {
+    const previousPrefs = notifPrefs;
+    const previousGroups = groupPrefs;
     const updated = { ...notifPrefs, [cat]: next };
+    setNotifPrefs(updated);
+    // Re-resolve the twelve group answers from the new blob, exactly as the load
+    // did. A legacy category is still the back-compat default for the e-mail
+    // group it maps to, so unticking "Mentorship updates" here also turns the
+    // Mentorship group above off — and a group switch that keeps showing the old
+    // answer until the next reload is the page contradicting itself.
+    setGroupPrefs(resolveEmailGroupPrefs({ notificationPrefs: updated }));
+    setSavingPrefs(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationPrefs: updated }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setNotifPrefs(previousPrefs);
+      setGroupPrefs(previousGroups);
+      flash('Failed', true);
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  // Instant save, same optimistic-with-rollback shape as togglePref and with no
+  // success toast, so flipping ten switches in a row does not fire ten toasts.
+  //
+  // The PUT sends the WHOLE merged blob on purpose: PUT /api/profile replaces the
+  // notificationPrefs JSON column outright, it does not merge. Posting only the
+  // `email:` keys would silently wipe every legacy in-app opt-out the user has.
+  const toggleGroup = async (id: EmailGroupId, next: boolean) => {
+    const previousPrefs = notifPrefs;
+    const previousGroup = groupPrefs[id];
+    const updated = { ...notifPrefs, [emailGroupPrefKey(id)]: next };
+    setGroupPrefs((p) => ({ ...p, [id]: next }));
     setNotifPrefs(updated);
     setSavingPrefs(true);
     try {
@@ -291,8 +389,9 @@ export function AccountSettings() {
       });
       if (!res.ok) throw new Error();
     } catch {
-      setNotifPrefs(notifPrefs);
-      flash('Failed', true);
+      setNotifPrefs(previousPrefs);
+      setGroupPrefs((p) => ({ ...p, [id]: previousGroup }));
+      flash(t.unsubscribe.saveFailed, true);
     } finally {
       setSavingPrefs(false);
     }
@@ -639,24 +738,117 @@ export function AccountSettings() {
           {t.account.emailNotifications}
         </label>
         <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
+        {/* The master switch does not silence everything, and saying so here is
+            the honest reading: the account_security group ignores every
+            preference, because a password reset the account holder cannot
+            receive is a lockout rather than a choice. */}
+        <p className="text-xs text-gray-400 mt-1">{t.emailGroups.account_security.desc}</p>
 
-        <div className="mt-3 space-y-1.5 pl-6">
+        {/* Per-group e-mail opt-out (#1444). Driven by EMAIL_GROUPS so a new
+            group cannot ship without a switch here, exactly like the legacy
+            list below is driven by NOTIFICATION_CATEGORIES. These switches are
+            about E-MAIL only; the legacy list underneath is about the in-app
+            notifications, and keeping the two visually separate is the whole
+            point of the sub-headings. */}
+        <section className="mt-4 pt-4 border-t border-gray-100" data-testid="email-groups-section">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.sectionTitle}</h4>
+          <p className="text-xs text-gray-400 mt-1">{t.unsubscribe.sectionHint}</p>
+          {/* The group switches stay interactive while the master switch is off —
+              they mean something independent of it, and a user turning e-mail
+              back on should find the choices they made in the meantime intact. */}
+          {!emailNotifications && (
+            <p className="text-xs text-gray-500 mt-2" data-testid="email-groups-master-off">
+              {t.unsubscribe.masterOffNote}
+            </p>
+          )}
+          {prefsLoadFailed && (
+            <p className="text-xs text-red-600 mt-2" role="status" data-testid="prefs-load-failed-groups">
+              {t.account.prefsLoadFailed}
+            </p>
+          )}
+          <div className="mt-3 space-y-2 pl-6">
+            {EMAIL_GROUPS.filter((g) => !g.essential).map((g) => (
+              <div key={g.id}>
+                <label className="flex items-center gap-2 text-sm text-gray-600">
+                  <input
+                    type="checkbox"
+                    data-testid={`email-group-toggle-${g.id}`}
+                    checked={groupPrefs[g.id] !== false}
+                    disabled={savingPrefs || !prefsLoaded}
+                    onChange={(e) => toggleGroup(g.id, e.target.checked)}
+                  />
+                  {t.emailGroups[g.id].name}
+                </label>
+                {/* The description is a SIBLING of the <label>, never a child.
+                    e2e/notif-prefs.spec.ts finds the legacy switches with
+                    locator('label', { hasText: 'Mentorship updates' }), and
+                    Playwright's hasText is a case-insensitive SUBSTRING match:
+                    any description swallowed into a label becomes a second
+                    match and the spec dies on strict mode. */}
+                <p className="text-xs text-gray-400 ml-6">{t.emailGroups[g.id].desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Essential groups get a row with no <input> at all rather than a
+              disabled checkbox: a switch you cannot move is an invitation to
+              try, and there is nothing here to toggle. */}
+          <div className="mt-4">
+            <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.essentialHeading}</h5>
+            <p className="text-xs text-gray-400 mt-1">{t.unsubscribe.essentialHint}</p>
+            <div className="mt-2 space-y-1.5 pl-6">
+              {EMAIL_GROUPS.filter((g) => g.essential).map((g) => (
+                <div
+                  key={g.id}
+                  className="flex flex-wrap items-center gap-2 text-sm text-gray-600"
+                  data-testid={`email-group-essential-${g.id}`}
+                >
+                  <span>{t.emailGroups[g.id].name}</span>
+                  <Badge variant="default">{t.unsubscribe.alwaysSent}</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5">
           {/* Driven by NOTIFICATION_CATEGORIES (#668) so a new category can't
               ship without an opt-out toggle here. Category switches gate BOTH
               e-mail and in-app notifications (#886), so they stay interactive
-              even when the e-mail master switch above is off. */}
-          <p className="text-xs text-gray-400">{t.account.notifCategoriesHint}</p>
-          {NOTIFICATION_CATEGORIES.map((cat) => (
-            <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={notifPrefs[cat] !== false}
-                disabled={savingPrefs}
-                onChange={(e) => togglePref(cat, e.target.checked)}
-              />
-              {(t.account.notifCategories as Record<string, string>)[cat]}
-            </label>
-          ))}
+              even when the e-mail master switch above is off. The labels are
+              asserted verbatim by e2e/notif-prefs.spec.ts — do not reword them,
+              and do not render this list twice. */}
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.legacyHeading}</h4>
+          {/* ONE sentence about what these eleven switches do, because they do
+              two things: they gate the in-app notifications, and they are still
+              the back-compat default for the e-mail group each maps to — which
+              is what the group switch above overrides. This used to be two
+              paragraphs that contradicted each other ("in-app only", then "e-mail
+              and in-app alike"), and the reassuring one was the false one: a user
+              who unticked a category expecting their inbox untouched lost mail. */}
+          <p className="text-xs text-gray-400">{t.unsubscribe.legacyHint}</p>
+          {prefsLoadFailed && (
+            <p className="text-xs text-red-600" role="status" data-testid="prefs-load-failed-legacy">
+              {t.account.prefsLoadFailed}
+            </p>
+          )}
+          {/* `prefsLoaded` guards this list for the same reason it guards the
+              group switches above: it writes the identical blob, and a click
+              before GET /api/profile answers would PUT one key over the top of
+              everything the user actually had. */}
+          <div className="pl-6 space-y-1.5">
+            {NOTIFICATION_CATEGORIES.map((cat) => (
+              <label key={cat} className="flex items-center gap-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={notifPrefs[cat] !== false}
+                  disabled={savingPrefs || !prefsLoaded}
+                  onChange={(e) => togglePref(cat, e.target.checked)}
+                />
+                {(t.account.notifCategories as Record<string, string>)[cat]}
+              </label>
+            ))}
+          </div>
         </div>
 
         {browserNotifSupported && (
@@ -671,8 +863,12 @@ export function AccountSettings() {
               />
               {t.account.browserNotifications}
             </label>
-            <p className="text-xs text-gray-400 mt-1">
-              {browserNotifDenied ? t.account.browserNotificationsDenied : t.account.browserNotificationsHint}
+            <p className="text-xs text-gray-400 mt-1" data-testid="browser-notif-hint">
+              {browserNotifDenied
+                ? t.account.browserNotificationsDenied
+                : pushActive
+                  ? t.account.pushNotificationsActive
+                  : t.account.browserNotificationsHint}
             </p>
           </div>
         )}

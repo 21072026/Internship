@@ -10,6 +10,10 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
+import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestInviteField';
+import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
+import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface Meeting {
   id: string;
@@ -17,6 +21,7 @@ interface Meeting {
   title: string;
   scheduledAt: string | null;
   meetLink?: string | null;
+  guests?: MeetingGuest[];
 }
 
 // Schedule a meeting for one mentorship relation, straight from the candidate
@@ -40,6 +45,7 @@ export function MeetingSchedulerPanel({
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [meetLink, setMeetLink] = useState('');
+  const [guests, setGuests] = useState<PendingGuest[]>([]);
   const [busy, setBusy] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // Time optional: a date gives the meeting a time (+ RSVP); no date → no-time
@@ -60,13 +66,13 @@ export function MeetingSchedulerPanel({
 
   const copyLink = async (m: Meeting) => {
     if (!m.meetLink) return;
-    try {
-      await navigator.clipboard.writeText(m.meetLink);
-      setCopiedId(m.id);
-      setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
-    } catch {
-      window.prompt(t.meetings.copyLink, m.meetLink);
-    }
+
+    const didCopy = await copyToClipboard(m.meetLink);
+
+    if (!didCopy) return;
+
+    setCopiedId(m.id);
+    setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
   };
 
   const schedule = async () => {
@@ -76,13 +82,21 @@ export function MeetingSchedulerPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // `timeZone`: the clock the date/time inputs were read on (#1210).
-        body: JSON.stringify({ relationIds: [relationId], title, scheduledAt, meetLink, timeZone: browserTimeZone() ?? undefined }),
+        body: JSON.stringify({
+          relationIds: [relationId],
+          title,
+          scheduledAt,
+          meetLink,
+          timeZone: browserTimeZone() ?? undefined,
+          guests: guests.length > 0 ? guests : undefined,
+        }),
       });
       if (res.ok) {
         setTitle('');
         setDate('');
         setTime('');
         setMeetLink('');
+        setGuests([]);
         await load();
       }
     } finally {
@@ -141,6 +155,15 @@ export function MeetingSchedulerPanel({
           <Input label={t.meetings.meetLink} placeholder="https://meet.google.com/abc-defg-hij" hint={t.meetings.meetLinkHint} value={meetLink} onChange={(e) => setMeetLink(e.target.value)} />
         </div>
         <div className="sm:col-span-2">
+          <GuestInviteField
+            guests={guests}
+            onChange={setGuests}
+            max={MAX_GUESTS_PER_MEETING}
+            disabled={busy}
+            testIdPrefix="cand-guest"
+          />
+        </div>
+        <div className="sm:col-span-2">
           <Button onClick={schedule} loading={busy} disabled={!title}>
             {t.meetings.sendInvite}
           </Button>
@@ -159,6 +182,7 @@ export function MeetingSchedulerPanel({
                     {m.meetLink}
                   </a>
                 )}
+                <MeetingGuestList guests={m.guests ?? []} />
               </div>
               {m.meetLink && (
                 <Button variant="outline" size="sm" onClick={() => copyLink(m)} aria-label={t.meetings.copyLink}>

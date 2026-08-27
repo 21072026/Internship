@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorshipRequestEmail } from '@/services/emailService';
 import { getMenteeRequestGate } from '@/lib/requestGate';
 import { withTenantScope } from '@/lib/orgContext';
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
     ].filter((l): l is string => l !== null);
     const emailMessage = [message, ...preferenceLines].filter(Boolean).join('\n') || null;
     for (const a of admins) {
-      if (!a.email || !emailAllowed(a, 'mentorship')) continue;
+      if (!a.email || !emailAllowed(a, 'mentorship') || !emailGroupAllowedForCategory(a, 'mentorship-request')) continue;
       try {
         await sendMentorshipRequestEmail({
           to: a.email,
@@ -153,6 +154,10 @@ export async function POST(request: Request) {
           targetPosition,
           message: emailMessage,
           orgId: a.orgId,
+          // One mail per admin, so the id is the admin being written to on this
+          // iteration — not session.user.id, which is the mentee who filed the
+          // request and is not a recipient of this mail at all.
+          userId: a.id,
         });
       } catch (e) {
         console.error('Mentorship request admin email failed:', e);

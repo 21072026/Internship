@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
@@ -12,6 +13,7 @@ export interface OfferDraftFields {
   id?: string;
   position: string;
   requisitionId: string;
+  requisitionTitle?: string | null;
   startDate: string; // yyyy-mm-dd
   compensationNote: string;
   expiresAt: string; // yyyy-mm-dd
@@ -24,6 +26,7 @@ interface OfferWizardModalProps {
   relationId: string;
   menteeName: string;
   companyName?: string | null;
+  companyId: string | null;
   existing?: OfferDraftFields | null;
   onClose: () => void;
   onSaved: () => void;
@@ -33,12 +36,15 @@ interface OfferWizardModalProps {
 // (issue #809). Creating always lands the offer in DRAFT first; "Save and
 // send" chains the create/edit call with a PATCH { action: 'send' } so the
 // two writes stay in the same place as every other transition.
-export function OfferWizardModal({ open, relationId, menteeName, companyName, existing, onClose, onSaved }: OfferWizardModalProps) {
+export function OfferWizardModal({ open, relationId, menteeName, companyName, companyId, existing, onClose, onSaved }: OfferWizardModalProps) {
   const t = useT();
   const toast = useToast();
   const [step, setStep] = useState(1);
   const [fields, setFields] = useState<OfferDraftFields>(existing ?? EMPTY);
   const [busy, setBusy] = useState<'draft' | 'send' | null>(null);
+  const [requisitions, setRequisitions] = useState<{ id: string; title: string }[]>([]);
+  const [requisitionsLoading, setRequisitionsLoading] = useState(false);
+  const [requisitionsError, setRequisitionsError] = useState(false);
   const dialogRef = useModalFocus<HTMLDivElement>(open, onClose);
 
   useEffect(() => {
@@ -47,6 +53,34 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, ex
       setStep(1);
     }
   }, [open, existing]);
+
+  useEffect(() => {
+    if (!open || !companyId) {
+      setRequisitions([]);
+      setRequisitionsLoading(false);
+      setRequisitionsError(false);
+      return;
+    }
+    const controller = new AbortController();
+    setRequisitions([]);
+    setRequisitionsLoading(true);
+    setRequisitionsError(false);
+    const params = new URLSearchParams({ status: 'OPEN', companyId });
+    fetch(`/api/requisitions?${params.toString()}`, { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setRequisitions(data.requisitions ?? []);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setRequisitionsError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRequisitionsLoading(false);
+      });
+    return () => controller.abort();
+  }, [open, companyId]);
 
   if (!open) return null;
 
@@ -126,10 +160,21 @@ export function OfferWizardModal({ open, relationId, menteeName, companyName, ex
               value={fields.position}
               onChange={(e) => set({ position: e.target.value })}
             />
-            <Input
+            <Select
               label={t.offers.wizard.requisitionId}
               value={fields.requisitionId}
               onChange={(e) => set({ requisitionId: e.target.value })}
+              disabled={!companyId || requisitionsLoading}
+              hint={requisitionsLoading ? t.offers.wizard.requisitionLoading : undefined}
+              error={requisitionsError ? t.offers.wizard.requisitionLoadError : undefined}
+              options={[
+                { value: '', label: t.offers.wizard.noRequisition },
+                ...(!requisitions.some((item) => item.id === fields.requisitionId) && fields.requisitionId && existing?.requisitionTitle
+                  ? [{ value: fields.requisitionId, label: existing.requisitionTitle }]
+                  : []),
+                ...requisitions.map((item) => ({ value: item.id, label: item.title })),
+              ]}
+              data-testid="offer-requisition-select"
             />
           </div>
         )}

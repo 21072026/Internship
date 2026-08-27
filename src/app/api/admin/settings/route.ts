@@ -25,6 +25,12 @@ const schema = z.object({
   earlyAccessWindowDays: z.string().regex(/^\d{1,3}$/).optional(),
   premiumAnalytics: z.enum(['true', 'false']).optional(),
   aiMonthlyQuota: z.string().regex(/^\d{1,6}$/).optional(),
+  // Newsletter cadence (#1469). Edited from /admin/newsletters rather than the
+  // settings page — the three of them only mean anything next to the issue
+  // history they drive.
+  newsletterSchedule: z.enum(['off', 'weekly', 'biweekly', 'monthly']).optional(),
+  newsletterAudience: z.enum(['MENTEE', 'MENTOR', 'BOTH']).optional(),
+  newsletterSendHour: z.string().regex(/^(?:[0-9]|1[0-9]|2[0-3])$/).optional(),
 });
 
 // PUT — upsert one or more settings.

@@ -10,15 +10,20 @@ import {
   canPostToConversation,
   conversationForRelation,
   directCounterpartId,
+  directKeyFor,
   latestMentorshipFor,
 } from '@/lib/conversations';
+import { markThreadRead } from '@/lib/threadRead';
+import { publishRealtime } from '@/lib/realtimeBus';
+import { sendNewMessagePush } from '@/lib/messagePush';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { sendEmail } from '@/services/emailService';
 import { logger } from '@/lib/logger';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { ALLOWED_DOC_MIME, MAX_DOC_BYTES } from '@/lib/documentAccess';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
 import { withTenantScope } from '@/lib/orgContext';
@@ -98,20 +103,6 @@ export async function GET(request: Request) {
           },
     );
 
-    // Mark the viewer's incoming unread messages as read.
-    await prisma.message.updateMany({
-      where: { ...scope, senderId: { not: session.user.id }, readAt: null },
-      data: { readAt: new Date() },
-    });
-
-    // Conversations also carry a per-participant read cursor.
-    if (conversation) {
-      await prisma.conversationParticipant.updateMany({
-        where: { conversationId: conversation.id, userId: session.user.id },
-        data: { lastReadAt: new Date() },
-      });
-    }
-
     // A group chat is a room, so it has to say who is in it (#51): the roster is
     // the project's team, annotated onto the participant list so the chat header
     // can show "6 people · who they are" instead of an anonymous thread.
@@ -150,7 +141,26 @@ export async function GET(request: Request) {
     // else says hello), and since the mentorship thread hands over to the
     // conversation (#1156) that has to be answerable here too.
     const counterpartId = conversation ? directCounterpartId(conversation, session.user.id) : null;
-    const mentorId = counterpartId ? (await latestMentorshipFor(session.user.id, counterpartId))?.mentorId ?? null : null;
+    const counterpartMentorship = counterpartId ? await latestMentorshipFor(session.user.id, counterpartId) : null;
+    const mentorId = counterpartMentorship?.mentorId ?? null;
+
+    // Opening a thread is what marks it read, and that is one helper for every
+    // entry point (#1204) — the two message counters, the conversation cursor,
+    // AND the bell rows this thread produced (#1464). Both ids are handed over
+    // whenever both can be resolved: a 1:1 thread has been addressed by relation
+    // and by conversation over its life, so a notification sitting in the bell
+    // may carry either link and only clearing one of them is what left the blue
+    // unread icon standing after the message had been read.
+    const siblingConversationId = rel
+      ? (await prisma.conversation.findUnique({
+          where: { directKey: directKeyFor(rel.mentorId, rel.menteeId) },
+          select: { id: true },
+        }))?.id ?? null
+      : null;
+    await markThreadRead(session.user.id, {
+      relationId: rel?.id ?? counterpartMentorship?.id ?? null,
+      conversationId: conversation?.id ?? siblingConversationId,
+    });
 
     // Can the person on the other side of a 1:1 thread actually read this?
     // An account that cannot sign in never sees an in-app message, and a
@@ -301,19 +311,57 @@ export async function POST(request: Request) {
     // conversation the mentorship thread now redirects to.
     const replyRelationId = rel?.id ?? stampRelationId;
 
+    // Push the thread to whoever has it open — the recipients, and the sender's
+    // own other tabs (#1464). Ids only: the client refetches through the GET
+    // above, so there is exactly one authorized way to read a message. Published
+    // before the e-mail fan-out below, which is the slow part of this handler.
+    publishRealtime([...recipients, session.user.id], {
+      type: 'message',
+      conversationId: threadConversationId,
+      relationId: rel?.id ?? stampRelationId,
+      senderId: session.user.id,
+    });
+
     // Store the raw sender name (or the Generic variant when there is none) —
     // the sentence is rendered in the recipient's locale at display time.
     const senderName = session.user.name;
-    for (const recipient of recipients) {
-      await notify(recipient, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
 
-      // Mirror the message to the recipient's inbox (unless they opted out). The
-      // Reply-To routes email replies back into this thread via /api/inbound-email.
+    // Same event, third channel (#1464): the bell reaches an open tab, the
+    // e-mail below reaches an inbox, and this reaches a phone with the app
+    // closed. Started here and awaited *after* the loop, all at once: a push is
+    // an HTTPS round trip to someone else's service, so doing them one per
+    // recipient inside the loop would add that latency N times to a group
+    // chat's POST. Still awaited before responding, so a slow push service
+    // cannot log after the response is gone; never able to fail the send,
+    // because sendNewMessagePush swallows everything.
+    const pushes = recipients.map((recipient) =>
+      sendNewMessagePush(recipient, { senderName, link, preview: body }),
+    );
+
+    for (const recipient of recipients) {
+      // Read the recipient's preferences BEFORE either channel (#1426). The
+      // "Messages" switch on /account is documented — in all three locales — as
+      // applying to e-mail and in-app alike, but the in-app insert below used to
+      // run ungated while the e-mail branch four lines down obeyed it. Someone
+      // who turned the category off still got the bell filling up.
       const rcpt = await prisma.user.findUnique({
         where: { id: recipient },
         select: { email: true, emailNotifications: true, notificationPrefs: true },
       });
-      if (rcpt?.email && emailAllowed(rcpt, 'messages')) {
+      // Fail OPEN on a missing row: `!rcpt || allowed`, never `rcpt && allowed`.
+      // A notification that vanishes because a lookup came back empty is worse
+      // than one that arrives despite an opt-out, and the default is ON anyway.
+      if (!rcpt || notificationCategoryAllowed(rcpt, 'messages')) {
+        await notify(recipient, senderName ? 'message.new' : 'message.newGeneric', senderName ? { from: senderName } : {}, link);
+      }
+
+      // Mirror the message to the recipient's inbox (unless they opted out). The
+      // Reply-To routes email replies back into this thread via /api/inbound-email.
+      // Both conjuncts: #1426's legacy 'messages' key gates the bell above AND
+      // this mail, while the group check is the e-mail-only switch. The bell
+      // deliberately does NOT consult the group — turning off `direct_messages`
+      // e-mail is not a request to go silent inside the app.
+      if (rcpt?.email && emailAllowed(rcpt, 'messages') && emailGroupAllowedForCategory(rcpt, 'message')) {
         const sender = session.user.name ?? 'Your mentor';
         const safe = body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
         const attachCount = fileBufs.length;
@@ -331,6 +379,13 @@ export async function POST(request: Request) {
         sendEmail({
           to: rcpt.email,
           category: 'message',
+          // `recipient` is the OTHER party's id (otherParticipant / the
+          // participants minus the sender), which is exactly whose preferences
+          // and unsubscribe token this mail must carry — passing the sender's id
+          // here would mint a token that lets one user switch off another's mail.
+          // No `locale`: the body below is hard-coded English, and a translated
+          // footer under an English message reads as a bug rather than a courtesy.
+          userId: recipient,
           subject: `New message from ${sender}`,
           html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>Reply to this email or open the conversation in the app.</p>${actions}`,
           // Project DMs with no mentorship behind them get the same notification
@@ -341,6 +396,8 @@ export async function POST(request: Request) {
         }).catch((e) => logger.error('Failed to mirror message email', { error: String(e) }));
       }
     }
+
+    await Promise.all(pushes);
 
     return NextResponse.json({ message }, { status: 201 });
   });

@@ -18,7 +18,19 @@ const badgeVariant: Record<ReportStatus, 'info' | 'success' | 'warning' | 'purpl
   DRAFT: 'info', SUBMITTED: 'purple', APPROVED: 'success', CHANGES_REQUESTED: 'warning',
 };
 
-export function WeeklyReportsPanel({ relationId, mode }: { relationId: string; mode: 'mentee' | 'mentor' }) {
+// `readOnly` is not cosmetic here: POST /api/weekly-reports already answers 409
+// `inactive_relation` for a mentorship that is not ACTIVE, so on an archive
+// (#1408) an open compose form could only ever produce an error. The diary
+// itself stays readable.
+export function WeeklyReportsPanel({
+  relationId,
+  mode,
+  readOnly = false,
+}: {
+  relationId: string;
+  mode: 'mentee' | 'mentor';
+  readOnly?: boolean;
+}) {
   const t = useT().weeklyReports;
   const locale = useLocale();
   const [reports, setReports] = useState<Report[]>([]);
@@ -51,8 +63,11 @@ export function WeeklyReportsPanel({ relationId, mode }: { relationId: string; m
 
   useEffect(() => { void load(); }, [load]);
   const current = reports.find((report) => report.weekStart.slice(0, 10) === currentWeekStart);
-  const editable = !current || current.status === 'DRAFT' || current.status === 'CHANGES_REQUESTED';
-  const historyReports = mode === 'mentee' ? reports.filter((report) => report.id !== current?.id) : reports;
+  const editable = !readOnly && (!current || current.status === 'DRAFT' || current.status === 'CHANGES_REQUESTED');
+  // The mentee view lifts the current week out of the history into the compose
+  // section — but on an archive there is no compose section, so a report filed
+  // in the week the mentorship ended would otherwise be invisible.
+  const historyReports = mode === 'mentee' && !readOnly ? reports.filter((report) => report.id !== current?.id) : reports;
 
   async function save(status: 'DRAFT' | 'SUBMITTED') {
     setSaving(true); setMessage('');
@@ -78,7 +93,7 @@ export function WeeklyReportsPanel({ relationId, mode }: { relationId: string; m
   return (
     <Card data-testid="weekly-reports-panel">
       <CardHeader><div className="flex flex-wrap items-center justify-between gap-3"><CardTitle>{t.title}</CardTitle><Link href={`/weekly-reports/print?relationId=${encodeURIComponent(relationId)}`} className="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"><Printer className="h-4 w-4" />{t.printDiary}</Link></div></CardHeader>
-      {mode === 'mentee' && (
+      {mode === 'mentee' && !readOnly && (
         <section className="mb-6 space-y-3" data-testid="current-weekly-report">
           <h3 className="font-medium text-gray-900 dark:text-gray-100">{t.current}</h3>
           {current?.mentorComment && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><strong>{t.mentorComment}:</strong> {current.mentorComment}</p>}
@@ -100,7 +115,7 @@ export function WeeklyReportsPanel({ relationId, mode }: { relationId: string; m
             {report.hoursSpent !== null && <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t.hours}: {report.hoursSpent}</p>}
             {report.blockers && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-500 dark:text-gray-400"><strong>{t.blockers}:</strong> {report.blockers}</p>}
             {report.mentorComment && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-500 dark:text-gray-400"><strong>{t.mentorComment}:</strong> {report.mentorComment}</p>}
-            {mode === 'mentor' && report.status === 'SUBMITTED' && <div className="mt-4 space-y-2"><Textarea aria-label={t.mentorComment} value={comments[report.id] || ''} onChange={(e) => setComments((p) => ({ ...p, [report.id]: e.target.value }))} placeholder={t.commentPlaceholder} maxLength={TEXT_LIMITS.weeklyReportMentorComment} showCounter rows={3} /><div className="flex flex-wrap gap-2"><Button size="sm" loading={saving} onClick={() => void review(report, 'APPROVED')}>{t.approve}</Button><Button size="sm" variant="outline" loading={saving} onClick={() => void review(report, 'CHANGES_REQUESTED')}>{t.requestChanges}</Button></div></div>}
+            {mode === 'mentor' && !readOnly && report.status === 'SUBMITTED' && <div className="mt-4 space-y-2"><Textarea aria-label={t.mentorComment} value={comments[report.id] || ''} onChange={(e) => setComments((p) => ({ ...p, [report.id]: e.target.value }))} placeholder={t.commentPlaceholder} maxLength={TEXT_LIMITS.weeklyReportMentorComment} showCounter rows={3} /><div className="flex flex-wrap gap-2"><Button size="sm" loading={saving} onClick={() => void review(report, 'APPROVED')}>{t.approve}</Button><Button size="sm" variant="outline" loading={saving} onClick={() => void review(report, 'CHANGES_REQUESTED')}>{t.requestChanges}</Button></div></div>}
           </article>
         ))}
         {hasMore && <Button data-testid="weekly-reports-load-more" variant="outline" loading={loadingMore} onClick={() => void load(page + 1, true)}>{t.loadMore}</Button>}

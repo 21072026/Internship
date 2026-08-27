@@ -16,6 +16,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
+import { copyToClipboard } from '@/lib/clipboard';
 
 const inviteSchema = z.object({
   // Optional since #670: an empty address mints a shareable link instead of
@@ -85,15 +86,14 @@ export default function InvitePage() {
     }
   };
 
-  const copyLink = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const copyLink = async (url: string) => {
+     const didCopy = await copyToClipboard(url);
+
+     if (!didCopy) return;
+
       setCopied(url);
       setTimeout(() => setCopied(null), 1500);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
+    };
 
   // Pickers for the auto-connect fields. The mentor picker carries
   // capacity/availability (#942) so the admin can see load before pre-linking

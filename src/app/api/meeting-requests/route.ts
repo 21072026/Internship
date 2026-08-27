@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestEmail } from '@/services/emailService';
 import { parseUserDateTime } from '@/lib/timezone';
 
@@ -36,6 +37,12 @@ export async function POST(request: Request) {
 
   const rel = await getThreadIfAllowed(session.user, parsed.data.relationId);
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  // A finished mentorship takes no new ones (#1408) — the portal hides the form
+  // on an archive, and this keeps a hand-rolled request from doing more.
+  if (menteeWriteClosed(rel, session.user.id)) {
+    return NextResponse.json(INACTIVE_RELATION_ERROR, { status: 409 });
+  }
 
   // The panel sends a zone-qualified instant; a bare wall clock is anchored to
   // the requester's zone rather than the container's UTC (#1061).
@@ -75,7 +82,14 @@ export async function POST(request: Request) {
       where: { id: recipient },
       select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, timezone: true },
     });
-    if (rcpt?.email && emailAllowed(rcpt, 'meetingReminders')) {
+    // Gated on this mail's OWN group: 'meeting-request' is meeting_invites.
+    // The check used to read `emailAllowed(rcpt, 'meetingReminders')`, a key that
+    // maps to meeting_reminders — a different group — so an old opt-out from
+    // automated nagging silently swallowed a named person asking you to attend
+    // something, while both preference surfaces showed "Meeting invites: ON".
+    // 'meetingReminders' is now in meeting_invites.legacy, so that opt-out still
+    // holds, is visible, and can be overridden by an explicit opt-in.
+    if (rcpt?.email && emailGroupAllowedForCategory(rcpt, 'meeting-request')) {
       try {
         await sendMeetingRequestEmail({
           to: rcpt.email,
@@ -87,6 +101,9 @@ export async function POST(request: Request) {
           orgId: rcpt.orgId,
           timeZone: rcpt.timezone,
           requesterTimeZone: requester?.timezone ?? null,
+          // The other party, i.e. whoever is being asked to attend — not
+          // `session.user.id`, who is the person asking.
+          userId: recipient,
         });
       } catch (e) {
         console.error('Meeting request email failed:', e);

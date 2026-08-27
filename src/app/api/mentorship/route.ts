@@ -10,6 +10,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { scopeForRole, logScopeDenial } from '@/lib/authzScope';
 import { notify } from '@/lib/notify';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
 
@@ -228,25 +229,39 @@ export async function POST(request: Request) {
     await notify(mentee.id, 'mentorship_request.mentorAssigned', { mentorName: mentor.fullName }, '/portal');
     await notify(mentor.id, 'mentorship_request.menteeAssigned', { menteeName: mentee.fullName }, '/mentor');
 
-    if (mentee.email && emailAllowed(mentee, 'mentorship')) {
+    // Both halves of the pair are notified, so both `userId`s matter and they are
+    // not interchangeable: the "you have a mentor" mail is addressed to the
+    // mentee and the "you have a new mentee" mail to the mentor. Swapping them
+    // would hand each person an unsubscribe token for the other's account.
+    if (
+      mentee.email &&
+      emailAllowed(mentee, 'mentorship') &&
+      emailGroupAllowedForCategory(mentee, 'mentor-assigned')
+    ) {
       try {
         await sendMentorAssignedEmail({
           to: mentee.email,
           menteeName: mentee.fullName,
           mentorName: mentor.fullName,
           orgId: mentee.orgId,
+          userId: mentee.id,
         });
       } catch (e) {
         console.error('Mentor assignment email failed:', e);
       }
     }
-    if (mentor.email && emailAllowed(mentor, 'mentorship')) {
+    if (
+      mentor.email &&
+      emailAllowed(mentor, 'mentorship') &&
+      emailGroupAllowedForCategory(mentor, 'mentee-assigned')
+    ) {
       try {
         await sendMenteeAssignedEmail({
           to: mentor.email,
           mentorName: mentor.fullName,
           menteeName: mentee.fullName,
           orgId: mentor.orgId,
+          userId: mentor.id,
         });
       } catch (e) {
         console.error('Mentee assignment email failed:', e);

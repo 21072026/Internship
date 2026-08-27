@@ -222,6 +222,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           fullName: user.fullName,
           locale: application.locale,
           orgId: user.orgId,
+          // Only this branch has a User row to hang preferences and an
+          // unsubscribe token off: the applicant already had an account and it
+          // was promoted in place. The `invited` branch below deliberately
+          // passes none — the recipient is an e-mail address on a MentorApplication
+          // with no user yet, so there is nothing to unsubscribe and the
+          // register link is the only way they get in.
+          userId: user.id,
         }).catch((e) => console.error('Mentor application approval email failed:', e));
       }
       await notify(user.id, 'mentor_application.approved', {}, '/mentor');
@@ -233,6 +240,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         locale: application.locale,
         orgId: application.orgId,
         registerUrl: `${appUrl}/auth/register?token=${result.invitation.token}`,
+        // no-user-row: this is the invited branch — the approval created an
+        // InvitationToken, not a User, so there is no id to mint an unsubscribe
+        // token from and nothing to gate on. The promoted branch above passes
+        // `user.id` precisely because there a User does exist.
       }).catch((e) => console.error('Mentor application approval email failed:', e));
     }
 

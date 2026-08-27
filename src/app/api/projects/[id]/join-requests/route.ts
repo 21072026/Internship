@@ -131,6 +131,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           message: joinRequest.message,
           recipient: r,
           orgId: project.orgId,
+          // The owner/admin being told about the request. `joinRequest.user` is
+          // the applicant and is filtered out of `recipients` above precisely
+          // because they are not one. The wrapper's own guard already reads `r`
+          // via `recipient`, so this id must name the same person.
+          userId: r.id,
         });
       } catch (e) {
         console.error('Join request email failed:', e);

@@ -1,163 +1,658 @@
 // User-facing release notes (EN/TR/DE) — friendly, feature-level summaries for
 // end users. Distinct from CHANGELOG.md, which is the developer-facing,
-// commit-level record. Add a new entry here (newest first) alongside each
-// notable release; bump APP_VERSION in package.json to match.
+// commit-level record. Entries are NOT hand-written: a PR ships its notes as a
+// release fragment and the compaction workflow writes the entry here, one per
+// shipped change (see releases/README.md).
 
 import type { Locale } from '@/i18n/config';
-import { APP_VERSION } from '@/lib/version';
 
 export interface ReleaseNote {
   version: string;
-  date: string; // ISO date (release day)
+  date: string; // ISO date (the day the change shipped)
+  time?: string; // UTC HH:MM the change was merged (#1457)
+  commit?: string; // short sha of the commit that brought it in (#1457)
   highlights: Record<Locale, string[]>;
 }
 
-// Release fragments (#1275): PRs ship user-facing notes as files under
-// releases/unreleased/ instead of editing this array (see releases/README.md).
-// next.config.js merges pending fragment notes into APP_UNRELEASED_NOTES at
-// build time; here they become one synthetic entry carrying the derived
-// version, so /release-notes and the landing count stay correct between a
-// merge and the scheduled compaction PR that folds fragments into this file.
-function unreleasedEntry(): ReleaseNote | null {
-  const raw = process.env.APP_UNRELEASED_NOTES;
-  if (!raw) return null;
+// Release fragments (#1275, per-change versions in #1457): PRs ship user-facing
+// notes as files under releases/unreleased/ instead of editing this array.
+// next.config.js turns the pending fragments into one entry PER CHANGE at build
+// time — each with its own derived version, merge date/time and commit — and
+// inlines them as APP_UNRELEASED_ENTRIES, so /release-notes and the landing
+// count are right between a merge and the scheduled compaction PR that folds
+// the same entries into this file.
+function unreleasedEntries(): ReleaseNote[] {
+  const raw = process.env.APP_UNRELEASED_ENTRIES;
+  if (!raw) return [];
   try {
-    return { version: APP_VERSION, date: '', highlights: JSON.parse(raw) };
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as ReleaseNote[]) : [];
   } catch {
-    return null;
+    return [];
   }
 }
 
-/** Canonical entries plus the pending (not yet compacted) one, newest first. */
+/** Canonical entries plus the pending (not yet compacted) ones, newest first. */
 export function getAllReleaseNotes(): ReleaseNote[] {
-  const pending = unreleasedEntry();
-  return pending ? [pending, ...RELEASE_NOTES] : RELEASE_NOTES;
+  return [...unreleasedEntries(), ...RELEASE_NOTES];
 }
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: '0.110.1-beta',
     date: '2026-08-24',
+    time: '21:47',
+    commit: 'b0d36f4',
     highlights: {
       en: [
-        "Interviews can now be scored blind: with the setting on, an interviewer sees a candidate's work and a stable anonymous label instead of their name, photo and university, and only learns who it was after submitting their scores.",
-        "Admin and mentor pipeline boards now show left and right scroll hints when columns extend beyond the visible area; the hints update with the scroll position and support dark mode.",
-        "Label candidates however your team actually thinks about them, then filter the list by any or all of those labels — and save that filter as a view. Mentors can tag their own mentees.",
+        "Deadline notifications now take mentors directly to the correct mentee page.",
+      ],
+      tr: [
+        "Son tarih bildirimleri artık mentörleri doğrudan doğru mentee sayfasına yönlendiriyor.",
+      ],
+      de: [
+        "Benachrichtigungen zu Fristen führen Mentoren jetzt direkt zur richtigen Mentee-Seite.",
+      ],
+    },
+  },
+  {
+    version: '0.110.0-beta',
+    date: '2026-08-24',
+    time: '21:37',
+    commit: '30d79fc',
+    highlights: {
+      en: [
+        "Admins get a contributor-terms report: who has accepted, who is on an outdated version, who has not accepted at all — filterable and exportable to Excel.",
+      ],
+      tr: [
+        "Yöneticiler için katkı şartları raporu: kim kabul etmiş, kim eski sürümde kalmış, kim hiç kabul etmemiş — filtrelenebilir ve Excel'e aktarılabilir.",
+      ],
+      de: [
+        "Für Admins ein Bericht zu den Beitragsbedingungen: wer akzeptiert hat, wer auf einer veralteten Fassung steht, wer gar nicht akzeptiert hat — filterbar und nach Excel exportierbar.",
+      ],
+    },
+  },
+  {
+    version: '0.109.0-beta',
+    date: '2026-08-24',
+    time: '21:07',
+    commit: 'c6343ee',
+    highlights: {
+      en: [
+        "Projects can now carry their own contributor terms: members read and accept them once per project, and a project with no IP question can skip asking altogether.",
+      ],
+      tr: [
+        "Projeler artık kendi katkı şartlarını taşıyabiliyor: üyeler proje başına bir kez okuyup kabul ediyor, IP sorusu olmayan bir proje ise hiç sormayabiliyor.",
+      ],
+      de: [
+        "Projekte können jetzt eigene Beitragsbedingungen haben: Mitglieder lesen und akzeptieren sie einmal pro Projekt, und ein Projekt ohne IP-Frage fragt gar nicht erst.",
+      ],
+    },
+  },
+  {
+    version: '0.108.0-beta',
+    date: '2026-08-24',
+    time: '20:56',
+    commit: 'aac75ae',
+    highlights: {
+      en: [
         "People's names are clickable almost everywhere now — click one for a card with who they are and a way to message them.",
         "Project owners can look up who is asking to join, and mentors can look up applicants, before deciding.",
-        "Success stories, done right: a real evaluation excerpt can be published only with both sides' consent and the author's approval of the exact wording — shown with initials by default, withdrawable at any time, gone immediately.",
-        "Contributor terms now live in the app: read the text in force at /contributor-terms, accept it once with a single checkbox, and download or re-read what you accepted at any time.",
-        "Admins get a contributor-terms report: who has accepted, who is on an outdated version, who has not accepted at all — filterable and exportable to Excel.",
-        "The public demo now updates with every release instead of standing still — what you see there is what shipped.",
-        "Email delivery problems no longer stay silent: the settings page shows the last successful delivery and failures since, and admins are alerted when sending keeps failing.",
-        "Invite someone without knowing their email: leave the address empty and share the link yourself. Whoever registers with it becomes your mentee automatically — and mentors now have their own invite page.",
-        "Analytics now shows the two numbers HR reports upward: conversion between stages — with the biggest drop-off flagged — and time-to-hire, stated together with the population it was measured over rather than as a bare average. Mentor capacity sits alongside, using the same availability rule as the assignment screen.",
-        "Interviews can now be scored on a shared rubric instead of a free-text note: each interviewer scores blind, and the panel only sees each other once everyone has submitted — with the criteria they disagreed on flagged for the calibration conversation.",
-        "The landing page now says who builds InternshipCRM and why — a named founder with a public profile link, in the transparency section and the footer.",
-        "The landing hero now shows real, live numbers — active mentors, open projects and candidates waiting for a mentor — computed from the database and hidden entirely when there is nothing to show.",
-        "The meetings page no longer flashes \"no mentees assigned\" while it is still loading, and when something fails to load it says so with a retry button instead of pretending the list is empty.",
-        "Mentees can finally see their meetings in the app: an upcoming-meetings card on the portal with join link, one-click RSVP and calendar download, plus a full calendar page with a personal feed you can subscribe to from Google/Outlook/Apple Calendar.",
-        "Mentors are protected from unbounded commitment: set your own capacity and your application link closes itself when full; every application now waits for your accept or decline, and applicants hear back either way.",
-        "Mentees can now browse a mentor directory — only mentors who explicitly opted in are listed, and contact details are never shown.",
-        "When requesting a mentor, mentees can state a subject area, mentoring languages and an optional preferred mentor; admins see these hints in the approval queue, nothing is auto-assigned.",
-        "Deadline notifications now take mentors directly to the correct mentee page.",
-        "Mentors can now review all feedback received from their mentees in one place, including overall and criterion averages, recent trends, and individual comments. Only feedback received by the signed-in mentor is shown.",
-        "\"Referred by\" and \"Source\" are now one field — pick the person or the source who brought a candidate in, and add a new source right there without leaving the screen.",
-        "Phone layouts fixed: mentor, activity-log and mentee rows no longer squeeze the name and e-mail away, and the beta badge is no longer clipped.",
+      ],
+      tr: [
+        "Kişi isimleri artık neredeyse her yerde tıklanabilir — tıklayınca kim olduğunu gösteren ve mesaj göndermenizi sağlayan bir kart açılır.",
+        "Proje sahipleri katılma talebi gönderenleri, mentörler ise başvuranları karar vermeden önce inceleyebilir.",
+      ],
+      de: [
+        "Personennamen sind jetzt fast überall anklickbar — ein Klick öffnet eine Karte mit Kurzprofil und Nachrichten-Button.",
+        "Projekt-Owner sehen, wer beitreten möchte, und Mentor:innen sehen Bewerbende — jeweils vor der Entscheidung.",
+      ],
+    },
+  },
+  {
+    version: '0.107.3-beta',
+    date: '2026-08-24',
+    time: '20:53',
+    commit: '4ed3ec5',
+    highlights: {
+      en: [
         "Dialogs are now fully keyboard-accessible: focus moves into the dialog when it opens, stays inside while you Tab through it, Escape closes it, and focus returns to the control you opened it from.",
-        "Mentees are now notified in-app when a mentor logs an interaction, schedules a meeting, assigns a goal or writes an evaluation — and mentors when a mentee completes a goal or evaluates them. Stage changes notify from every screen, and companies' interest reaches consenting candidates without revealing the company. All of it can be switched off per category under Account.",
-        "Notification links now use consistent, role-appropriate destinations.",
-        "Notifications now open the correct page for your role and relationship context, including mentor, mentee, dual-role, meeting, and document-reminder flows.",
-        "Organisations can now define their own evaluation criteria — add, reorder or retire them from Settings, in all three languages, without a code change. Nothing changes for anyone who keeps the built-in criteria, and past evaluations keep the labels they were written with.",
-        "A \"no\" now comes with an answer: candidates see where they stand and what they can do next, mentors get a ready-to-edit message instead of a blank page, and finding an internship elsewhere is treated as the good news it is.",
-        "The privacy notice now names the live-chat provider on the home page and exactly what it receives — your IP and what you type, only if you accept marketing cookies.",
-        "Projects can now carry their own contributor terms: members read and accept them once per project, and a project with no IP question can skip asking altogether.",
-        "Public profiles became proof: your public projects with your role and completed-task count, and — with both sides' consent — your mentor's published evaluation average and an approved quote.",
-        "Invited company users see their candidates immediately after registering — previously the portal could stay empty until the next deployment.",
-        "Release notes now appear the moment a change goes live: the version number and the what's-new page update with every deployment instead of waiting for a manual bookkeeping step.",
-        "Admins can now see the signup funnel at a glance — how many people registered, verified and became active in the last 7 and 30 days — with a warning that points at e-mail delivery when verification suddenly drops.",
-        "Set how long anyone may wait at each pipeline stage, and the deadline is applied automatically wherever a candidate is moved — so a stalled candidate now surfaces instead of quietly waiting. Counted in calendar days; a stage you leave empty simply has no rule.",
+      ],
+      tr: [
+        "İletişim kutuları artık klavyeyle tam erişilebilir: kutu açılınca odak içine geçiyor, Tab ile gezerken içeride kalıyor, Esc kapatıyor ve kapanınca odak kutuyu açtığınız düğmeye geri dönüyor.",
+      ],
+      de: [
+        "Dialoge sind jetzt vollständig per Tastatur bedienbar: Der Fokus springt beim Öffnen hinein, bleibt beim Tabben darin, Escape schließt, und danach kehrt der Fokus zum auslösenden Element zurück.",
+      ],
+    },
+  },
+  {
+    version: '0.107.2-beta',
+    date: '2026-08-24',
+    time: '20:46',
+    commit: '4a87a47',
+    highlights: {
+      en: [
+        "The meetings page no longer flashes \"no mentees assigned\" while it is still loading, and when something fails to load it says so with a retry button instead of pretending the list is empty.",
+      ],
+      tr: [
+        "Toplantılar sayfası artık yüklenirken \"atanmış mentee yok\" yazısını bir an gösterip kaybolmuyor; bir şey yüklenemezse listeyi boş göstermek yerine hatayı bildirip tekrar dene düğmesi sunuyor.",
+      ],
+      de: [
+        "Die Besprechungsseite zeigt beim Laden nicht mehr kurz \"keine Mentees zugewiesen\", und wenn etwas nicht geladen werden kann, wird das mit einer Wiederholen-Schaltfläche gemeldet, statt eine leere Liste vorzutäuschen.",
+      ],
+    },
+  },
+  {
+    version: '0.107.1-beta',
+    date: '2026-08-24',
+    time: '20:43',
+    commit: 'cb3fdb5',
+    highlights: {
+      en: [
         "Mobile controls are easier to tap: primary actions, icon buttons, candidate filters, tabs, inputs, selects, and related controls now provide at least 44×44 pixel touch areas without enlarging their visible icons.",
       ],
       tr: [
-        "Mülakatlar artık kör puanlanabiliyor: ayar açıkken görüşmeci, adayın adı, fotoğrafı ve üniversitesi yerine sabit bir anonim etiket görür ve kim olduğunu ancak puanlarını gönderdikten sonra öğrenir.",
-        "Admin ve mentor pipeline board’larında sütunlar görünür alanın dışına taştığında sol ve sağ kaydırma ipuçları gösterilir; ipuçları kaydırma konumuna göre güncellenir ve dark mode’u destekler.",
-        "Adayları ekibinizin gerçekten düşündüğü gibi etiketleyin, listeyi bu etiketlerin herhangi birine ya da hepsine göre süzün ve bu süzgeci görünüm olarak kaydedin. Mentorlar kendi mentee'lerini etiketleyebilir.",
-        "Kişi isimleri artık neredeyse her yerde tıklanabilir — tıklayınca kim olduğunu gösteren ve mesaj göndermenizi sağlayan bir kart açılır.",
-        "Proje sahipleri katılma talebi gönderenleri, mentörler ise başvuranları karar vermeden önce inceleyebilir.",
-        "Başarı hikâyeleri, doğru şekilde: gerçek bir değerlendirme alıntısı yalnızca iki tarafın rızası ve yazarın birebir metin onayıyla yayınlanır — varsayılan olarak baş harflerle gösterilir, istenildiği an geri alınır, anında yayından düşer.",
-        "Katkı şartları artık uygulamanın içinde: yürürlükteki metni /contributor-terms adresinde oku, tek kutuyla bir kez kabul et, kabul ettiğini istediğin zaman indir ya da yeniden görüntüle.",
-        "Yöneticiler için katkı şartları raporu: kim kabul etmiş, kim eski sürümde kalmış, kim hiç kabul etmemiş — filtrelenebilir ve Excel'e aktarılabilir.",
-        "Herkese açık demo artık her sürümle birlikte güncelleniyor; orada gördüğünüz şey yayınlanan sürüm.",
-        "E-posta gönderim sorunları artık sessiz kalmıyor: ayarlar sayfası son başarılı gönderimi ve o zamandan beri olan hataları gösteriyor; gönderim sürekli başarısız olursa yöneticiler uyarılıyor.",
-        "Birini e-postasını bilmeden davet et: adresi boş bırak, bağlantıyı kendin paylaş. Bağlantıyla kaydolan kişi otomatik olarak senin mentee’n olur — mentörlerin artık kendi davet sayfası da var.",
-        "Analitikte artık İK’nın yönetime sunduğu iki sayı var: aşamalar arası dönüşüm — en yüksek kayıp noktası işaretli — ve time-to-hire, çıplak bir ortalama olarak değil hangi popülasyon üzerinden ölçüldüğüyle birlikte. Yanında mentör kapasitesi, atama ekranının kullandığı uygunluk kuralının aynısıyla.",
-        "Mülakatlar artık serbest metin not yerine ortak bir rubrikle puanlanabiliyor: her görüşmeci kör puanlıyor ve panel, ancak herkes gönderdikten sonra birbirini görüyor — üzerinde anlaşamadıkları kriterler kalibrasyon konuşması için işaretlenmiş halde.",
-        "Landing sayfası artık InternshipCRM’i kimin, neden yaptığını söylüyor — şeffaflık bölümünde ve footer’da, herkese açık profil bağlantısıyla isimli kurucu.",
-        "Landing hero artık gerçek, canlı sayılar gösteriyor — aktif mentorlar, açık projeler ve mentor bekleyen adaylar — veritabanından hesaplanıyor ve gösterecek bir şey yokken tamamen gizleniyor.",
-        "Toplantılar sayfası artık yüklenirken \"atanmış mentee yok\" yazısını bir an gösterip kaybolmuyor; bir şey yüklenemezse listeyi boş göstermek yerine hatayı bildirip tekrar dene düğmesi sunuyor.",
-        "Mentee'ler toplantılarını artık uygulamada görüyor: portalda katıl linki, tek tıkla RSVP ve takvim indirme içeren yaklaşan toplantılar kartı; ayrıca Google/Outlook/Apple Takvim'den abone olunabilen kişisel akış bağlantısıyla tam bir takvim sayfası.",
-        "Mentorlar sınırsız bağlanmaktan korunuyor: kontenjanını kendin belirle, dolunca başvuru bağlantın kendini kapatır; her başvuru artık kabul/ret kararını bekler ve başvuran her iki durumda da haber alır.",
-        "Mentee'ler artık bir mentor dizinine göz atabiliyor — yalnızca açıkça onay veren mentorlar listeleniyor ve iletişim bilgileri asla gösterilmiyor.",
-        "Mentor talep ederken mentee'ler alan, mentorluk dili ve isteğe bağlı tercih edilen mentor belirtebiliyor; yöneticiler bu ipuçlarını onay kuyruğunda görüyor, hiçbir şey otomatik atanmıyor.",
-        "Son tarih bildirimleri artık mentörleri doğrudan doğru mentee sayfasına yönlendiriyor.",
-        "Mentörler artık mentee’lerinden aldıkları tüm değerlendirmeleri tek ekranda; genel ve kriter ortalamaları, son dönem eğilimi ve tek tek yorumlarla birlikte görebilir. Yalnızca oturum açan mentöre gelen değerlendirmeler gösterilir.",
-        "\"Getiren kişi\" ile \"Kaynak\" tek alan oldu — adayı kim getirdiyse onu seç, listede yoksa yeni kaynağı ekrandan çıkmadan hemen ekle.",
-        "Telefon görünümü düzeltildi: mentor, aktivite günlüğü ve mentee satırları artık isim ile e-postayı sıkıştırmıyor, beta rozeti de kırpılmıyor.",
-        "İletişim kutuları artık klavyeyle tam erişilebilir: kutu açılınca odak içine geçiyor, Tab ile gezerken içeride kalıyor, Esc kapatıyor ve kapanınca odak kutuyu açtığınız düğmeye geri dönüyor.",
-        "Mentor bir etkileşim kaydı girdiğinde, toplantı planladığında, hedef atadığında veya değerlendirme yazdığında mentee artık uygulama içinde bildirim alıyor — mentee hedef tamamlayınca veya değerlendirme yazınca da mentor. Aşama değişimi hangi ekrandan yapılırsa yapılsın bildiriyor; firma ilgisi, rıza veren adaylara firma kimliği gizli kalarak ulaşıyor. Hepsi Hesap sayfasından kategori bazında kapatılabiliyor.",
-        "Bildirim bağlantıları artık role uygun ve tutarlı hedefler kullanıyor.",
-        "Bildirimler artık mentör, mentee, çift rollü kullanıcı, toplantı ve belge hatırlatma akışlarında rolünüze ve ilişki bağlamınıza uygun doğru sayfayı açar.",
-        "Kurumlar artık kendi değerlendirme kriterlerini tanımlayabiliyor — Ayarlar’dan üç dilde ekle, sırala ya da emekliye ayır; kod değişikliği gerekmiyor. Yerleşik kriterlerle devam edenler için hiçbir şey değişmiyor ve geçmiş değerlendirmeler yazıldıkları etiketleri koruyor.",
-        "Artık \"hayır\" da bir cevapla geliyor: adaylar durumlarını ve bundan sonra ne yapabileceklerini görüyor, mentörler boş sayfa yerine düzenlemeye hazır bir mesaj alıyor ve başka yerde staj bulmak hak ettiği gibi iyi haber olarak karşılanıyor.",
-        "Gizlilik bildirimi artık ana sayfadaki canlı sohbet sağlayıcısını ve ona tam olarak neyin gittiğini yazıyor: IP adresin ve yazdıkların, yalnızca pazarlama çerezlerini kabul edersen.",
-        "Projeler artık kendi katkı şartlarını taşıyabiliyor: üyeler proje başına bir kez okuyup kabul ediyor, IP sorusu olmayan bir proje ise hiç sormayabiliyor.",
-        "Herkese açık profiller kanıta dönüştü: rolün ve tamamlanan görev sayınla herkese açık projelerin, ve — iki tarafın rızasıyla — mentorunun yayınlanmış değerlendirme ortalaması ile onaylı bir alıntı.",
-        "Davet edilen şirket kullanıcıları kayıttan hemen sonra adaylarını görüyor — önceden portal bir sonraki dağıtıma kadar boş kalabiliyordu.",
-        "Sürüm notları artık bir değişiklik yayına girdiği anda görünüyor: sürüm numarası ve yenilikler sayfası, elle yapılan bir kayıt adımını beklemek yerine her dağıtımla birlikte güncelleniyor.",
-        "Yöneticiler artık kayıt hunisini tek bakışta görüyor — son 7 ve 30 günde kaç kişi kaydoldu, doğruladı ve aktifleşti — doğrulama ani düşerse e-posta teslimatını işaret eden bir uyarıyla birlikte.",
-        "Her aşamada en fazla ne kadar beklenebileceğini bir kez tanımla; aday nereden taşınırsa taşınsın son tarih otomatik uygulanır — böylece takılan aday sessizce beklemek yerine görünür olur. Takvim günü sayılır; boş bıraktığın aşamanın kuralı yoktur.",
         "Mobil kontroller artık daha kolay kullanılabiliyor: ana aksiyonlar, ikon düğmeleri, aday filtreleri, sekmeler, giriş ve seçim alanları ile ilgili kontroller, görsel ikonları büyütmeden en az 44×44 piksellik dokunma alanı sunuyor.",
       ],
       de: [
-        "Interviews lassen sich jetzt blind bewerten: Ist die Einstellung aktiv, sieht die interviewende Person statt Name, Foto und Hochschule ein stabiles anonymes Kürzel — und erfährt erst nach Abgabe der Bewertung, um wen es ging.",
-        "In den Pipeline-Boards für Admins und Mentoren zeigen nun Hinweise am linken und rechten Rand, wenn weitere Spalten außerhalb des sichtbaren Bereichs liegen; sie passen sich der Scrollposition an und unterstützen den Dark Mode.",
-        "Versieh Kandidatinnen und Kandidaten mit euren eigenen Labels, filtere die Liste nach einem oder allen davon und speichere den Filter als Ansicht. Mentorinnen und Mentoren können ihre eigenen Mentees taggen.",
-        "Personennamen sind jetzt fast überall anklickbar — ein Klick öffnet eine Karte mit Kurzprofil und Nachrichten-Button.",
-        "Projekt-Owner sehen, wer beitreten möchte, und Mentor:innen sehen Bewerbende — jeweils vor der Entscheidung.",
-        "Erfolgsgeschichten, richtig gemacht: Ein echter Bewertungsauszug wird nur mit Einwilligung beider Seiten und Freigabe des exakten Wortlauts veröffentlicht — standardmäßig mit Initialen, jederzeit widerrufbar und sofort entfernt.",
+        "Mobile Bedienelemente lassen sich leichter antippen: Hauptaktionen, Symbolschaltflächen, Kandidatenfilter, Tabs, Eingabe- und Auswahlfelder sowie zugehörige Steuerelemente bieten jetzt mindestens 44×44 Pixel große Touch-Flächen, ohne die sichtbaren Symbole zu vergrößern.",
+      ],
+    },
+  },
+  {
+    version: '0.107.0-beta',
+    date: '2026-08-24',
+    time: '20:34',
+    commit: '31f010f',
+    highlights: {
+      en: [
+        "Contributor terms now live in the app: read the text in force at /contributor-terms, accept it once with a single checkbox, and download or re-read what you accepted at any time.",
+      ],
+      tr: [
+        "Katkı şartları artık uygulamanın içinde: yürürlükteki metni /contributor-terms adresinde oku, tek kutuyla bir kez kabul et, kabul ettiğini istediğin zaman indir ya da yeniden görüntüle.",
+      ],
+      de: [
         "Die Beitragsbedingungen sind jetzt in der App: den geltenden Text unter /contributor-terms lesen, einmal per Häkchen akzeptieren und das Akzeptierte jederzeit herunterladen oder nachlesen.",
-        "Für Admins ein Bericht zu den Beitragsbedingungen: wer akzeptiert hat, wer auf einer veralteten Fassung steht, wer gar nicht akzeptiert hat — filterbar und nach Excel exportierbar.",
+      ],
+    },
+  },
+  {
+    version: '0.106.3-beta',
+    date: '2026-08-24',
+    time: '20:26',
+    commit: 'd99e463',
+    highlights: {
+      en: [
+        "Notification links now use consistent, role-appropriate destinations.",
+      ],
+      tr: [
+        "Bildirim bağlantıları artık role uygun ve tutarlı hedefler kullanıyor.",
+      ],
+      de: [
+        "Benachrichtigungslinks führen jetzt konsistent zu rollengerechten Zielen.",
+      ],
+    },
+  },
+  {
+    version: '0.106.2-beta',
+    date: '2026-08-24',
+    time: '20:26',
+    commit: '3958cba',
+    highlights: {
+      en: [
+        "Notifications now open the correct page for your role and relationship context, including mentor, mentee, dual-role, meeting, and document-reminder flows.",
+      ],
+      tr: [
+        "Bildirimler artık mentör, mentee, çift rollü kullanıcı, toplantı ve belge hatırlatma akışlarında rolünüze ve ilişki bağlamınıza uygun doğru sayfayı açar.",
+      ],
+      de: [
+        "Benachrichtigungen öffnen jetzt die richtige Seite für Ihre Rolle und den jeweiligen Beziehungskontext, einschließlich Mentor-, Mentee-, Doppelrollen-, Meeting- und Dokumenterinnerungsabläufen.",
+      ],
+    },
+  },
+  {
+    version: '0.106.1-beta',
+    date: '2026-08-24',
+    time: '20:26',
+    commit: 'cd59f4b',
+    highlights: {
+      en: [
+        "Admin and mentor pipeline boards now show left and right scroll hints when columns extend beyond the visible area; the hints update with the scroll position and support dark mode.",
+      ],
+      tr: [
+        "Admin ve mentor pipeline board’larında sütunlar görünür alanın dışına taştığında sol ve sağ kaydırma ipuçları gösterilir; ipuçları kaydırma konumuna göre güncellenir ve dark mode’u destekler.",
+      ],
+      de: [
+        "In den Pipeline-Boards für Admins und Mentoren zeigen nun Hinweise am linken und rechten Rand, wenn weitere Spalten außerhalb des sichtbaren Bereichs liegen; sie passen sich der Scrollposition an und unterstützen den Dark Mode.",
+      ],
+    },
+  },
+  {
+    version: '0.106.0-beta',
+    date: '2026-08-24',
+    time: '20:25',
+    commit: 'bea228b',
+    highlights: {
+      en: [
+        "Mentors can now review all feedback received from their mentees in one place, including overall and criterion averages, recent trends, and individual comments. Only feedback received by the signed-in mentor is shown.",
+      ],
+      tr: [
+        "Mentörler artık mentee’lerinden aldıkları tüm değerlendirmeleri tek ekranda; genel ve kriter ortalamaları, son dönem eğilimi ve tek tek yorumlarla birlikte görebilir. Yalnızca oturum açan mentöre gelen değerlendirmeler gösterilir.",
+      ],
+      de: [
+        "Mentoren können jetzt alle Rückmeldungen ihrer Mentees an einem Ort sehen – einschließlich Gesamt- und Kriteriendurchschnitten, der jüngsten Entwicklung und einzelner Kommentare. Angezeigt wird nur Feedback für den angemeldeten Mentor.",
+      ],
+    },
+  },
+  {
+    version: '0.105.8-beta',
+    date: '2026-08-24',
+    time: '19:45',
+    commit: '77cbcd1',
+    highlights: {
+      en: [
+        "The privacy notice now names the live-chat provider on the home page and exactly what it receives — your IP and what you type, only if you accept marketing cookies.",
+      ],
+      tr: [
+        "Gizlilik bildirimi artık ana sayfadaki canlı sohbet sağlayıcısını ve ona tam olarak neyin gittiğini yazıyor: IP adresin ve yazdıkların, yalnızca pazarlama çerezlerini kabul edersen.",
+      ],
+      de: [
+        "Die Datenschutzerklärung nennt jetzt den Live-Chat-Anbieter auf der Startseite und was er genau erhält — deine IP-Adresse und deine Eingaben, nur wenn du Marketing-Cookies zustimmst.",
+      ],
+    },
+  },
+  {
+    version: '0.105.6-beta',
+    date: '2026-08-24',
+    time: '19:25',
+    commit: '08dc49d',
+    highlights: {
+      en: [
+        "The public demo now updates with every release instead of standing still — what you see there is what shipped.",
+      ],
+      tr: [
+        "Herkese açık demo artık her sürümle birlikte güncelleniyor; orada gördüğünüz şey yayınlanan sürüm.",
+      ],
+      de: [
         "Die öffentliche Demo wird jetzt mit jedem Release aktualisiert — was dort zu sehen ist, ist der ausgelieferte Stand.",
-        "E-Mail-Zustellprobleme bleiben nicht mehr unbemerkt: Die Einstellungsseite zeigt die letzte erfolgreiche Zustellung und die Fehler seitdem; Admins werden gewarnt, wenn der Versand wiederholt fehlschlägt.",
-        "Lade jemanden ein, ohne die E-Mail-Adresse zu kennen: Feld leer lassen und den Link selbst weitergeben. Wer sich damit registriert, wird automatisch dein Mentee — und Mentor:innen haben jetzt eine eigene Einladungsseite.",
+      ],
+    },
+  },
+  {
+    version: '0.105.0-beta',
+    date: '2026-08-24',
+    time: '17:56',
+    commit: 'c77a3c0',
+    highlights: {
+      en: [
+        "Label candidates however your team actually thinks about them, then filter the list by any or all of those labels — and save that filter as a view. Mentors can tag their own mentees.",
+      ],
+      tr: [
+        "Adayları ekibinizin gerçekten düşündüğü gibi etiketleyin, listeyi bu etiketlerin herhangi birine ya da hepsine göre süzün ve bu süzgeci görünüm olarak kaydedin. Mentorlar kendi mentee'lerini etiketleyebilir.",
+      ],
+      de: [
+        "Versieh Kandidatinnen und Kandidaten mit euren eigenen Labels, filtere die Liste nach einem oder allen davon und speichere den Filter als Ansicht. Mentorinnen und Mentoren können ihre eigenen Mentees taggen.",
+      ],
+    },
+  },
+  {
+    version: '0.103.0-beta',
+    date: '2026-08-24',
+    time: '15:44',
+    commit: '5b124be',
+    highlights: {
+      en: [
+        "Interviews can now be scored blind: with the setting on, an interviewer sees a candidate's work and a stable anonymous label instead of their name, photo and university, and only learns who it was after submitting their scores.",
+      ],
+      tr: [
+        "Mülakatlar artık kör puanlanabiliyor: ayar açıkken görüşmeci, adayın adı, fotoğrafı ve üniversitesi yerine sabit bir anonim etiket görür ve kim olduğunu ancak puanlarını gönderdikten sonra öğrenir.",
+      ],
+      de: [
+        "Interviews lassen sich jetzt blind bewerten: Ist die Einstellung aktiv, sieht die interviewende Person statt Name, Foto und Hochschule ein stabiles anonymes Kürzel — und erfährt erst nach Abgabe der Bewertung, um wen es ging.",
+      ],
+    },
+  },
+  {
+    version: '0.102.0-beta',
+    date: '2026-08-24',
+    time: '15:15',
+    commit: '0e35ece',
+    highlights: {
+      en: [
+        "Set how long anyone may wait at each pipeline stage, and the deadline is applied automatically wherever a candidate is moved — so a stalled candidate now surfaces instead of quietly waiting. Counted in calendar days; a stage you leave empty simply has no rule.",
+      ],
+      tr: [
+        "Her aşamada en fazla ne kadar beklenebileceğini bir kez tanımla; aday nereden taşınırsa taşınsın son tarih otomatik uygulanır — böylece takılan aday sessizce beklemek yerine görünür olur. Takvim günü sayılır; boş bıraktığın aşamanın kuralı yoktur.",
+      ],
+      de: [
+        "Lege einmal fest, wie lange jemand in einer Phase warten darf — die Frist wird überall automatisch gesetzt, wo Kandidat:innen verschoben werden, sodass Steckengebliebene sichtbar werden statt still zu warten. Gezählt in Kalendertagen; eine leer gelassene Phase hat keine Regel.",
+      ],
+    },
+  },
+  {
+    version: '0.101.1-beta',
+    date: '2026-08-24',
+    time: '14:35',
+    commit: '17bf246',
+    highlights: {
+      en: [
+        "Phone layouts fixed: mentor, activity-log and mentee rows no longer squeeze the name and e-mail away, and the beta badge is no longer clipped.",
+      ],
+      tr: [
+        "Telefon görünümü düzeltildi: mentor, aktivite günlüğü ve mentee satırları artık isim ile e-postayı sıkıştırmıyor, beta rozeti de kırpılmıyor.",
+      ],
+      de: [
+        "Telefon-Layouts korrigiert: In Mentor-, Aktivitäts- und Mentee-Zeilen werden Name und E-Mail nicht mehr zusammengedrückt, und das Beta-Abzeichen wird nicht mehr abgeschnitten.",
+      ],
+    },
+  },
+  {
+    version: '0.101.0-beta',
+    date: '2026-08-24',
+    time: '14:34',
+    commit: 'ed29227',
+    highlights: {
+      en: [
+        "Analytics now shows the two numbers HR reports upward: conversion between stages — with the biggest drop-off flagged — and time-to-hire, stated together with the population it was measured over rather than as a bare average. Mentor capacity sits alongside, using the same availability rule as the assignment screen.",
+      ],
+      tr: [
+        "Analitikte artık İK’nın yönetime sunduğu iki sayı var: aşamalar arası dönüşüm — en yüksek kayıp noktası işaretli — ve time-to-hire, çıplak bir ortalama olarak değil hangi popülasyon üzerinden ölçüldüğüyle birlikte. Yanında mentör kapasitesi, atama ekranının kullandığı uygunluk kuralının aynısıyla.",
+      ],
+      de: [
         "Die Analytics zeigt jetzt die beiden Zahlen, die HR nach oben berichtet: die Konversion zwischen den Phasen — mit markiertem größtem Verlust — und die Time-to-Hire, angegeben samt der Population, über die gemessen wurde, statt als nackter Durchschnitt. Daneben die Mentor-Kapazität, nach derselben Verfügbarkeitsregel wie im Zuweisungsdialog.",
+      ],
+    },
+  },
+  {
+    version: '0.100.0-beta',
+    date: '2026-08-24',
+    time: '14:01',
+    commit: 'cff9f16',
+    highlights: {
+      en: [
+        "Interviews can now be scored on a shared rubric instead of a free-text note: each interviewer scores blind, and the panel only sees each other once everyone has submitted — with the criteria they disagreed on flagged for the calibration conversation.",
+      ],
+      tr: [
+        "Mülakatlar artık serbest metin not yerine ortak bir rubrikle puanlanabiliyor: her görüşmeci kör puanlıyor ve panel, ancak herkes gönderdikten sonra birbirini görüyor — üzerinde anlaşamadıkları kriterler kalibrasyon konuşması için işaretlenmiş halde.",
+      ],
+      de: [
         "Interviews lassen sich jetzt anhand einer gemeinsamen Rubrik bewerten statt in Freitext: Alle bewerten blind, und das Panel sieht einander erst, wenn alle abgegeben haben — mit den Kriterien, bei denen es uneinig war, für das Kalibrierungsgespräch markiert.",
-        "Die Landing-Seite sagt jetzt, wer InternshipCRM baut und warum — ein namentlich genannter Gründer mit öffentlichem Profil-Link, im Transparenzbereich und im Footer.",
+      ],
+    },
+  },
+  {
+    version: '0.99.0-beta',
+    date: '2026-08-24',
+    time: '13:29',
+    commit: 'fb7e7ab',
+    highlights: {
+      en: [
+        "A \"no\" now comes with an answer: candidates see where they stand and what they can do next, mentors get a ready-to-edit message instead of a blank page, and finding an internship elsewhere is treated as the good news it is.",
+      ],
+      tr: [
+        "Artık \"hayır\" da bir cevapla geliyor: adaylar durumlarını ve bundan sonra ne yapabileceklerini görüyor, mentörler boş sayfa yerine düzenlemeye hazır bir mesaj alıyor ve başka yerde staj bulmak hak ettiği gibi iyi haber olarak karşılanıyor.",
+      ],
+      de: [
+        "Ein \"Nein\" kommt jetzt mit einer Antwort: Kandidat:innen sehen, wo sie stehen und was sie als Nächstes tun können, Mentor:innen bekommen eine fertige Nachricht zum Bearbeiten statt einer leeren Seite, und ein Praktikum anderswo gilt als das, was es ist — eine gute Nachricht.",
+      ],
+    },
+  },
+  {
+    version: '0.98.0-beta',
+    date: '2026-08-24',
+    time: '13:29',
+    commit: 'fb7e7ab',
+    highlights: {
+      en: [
+        "Organisations can now define their own evaluation criteria — add, reorder or retire them from Settings, in all three languages, without a code change. Nothing changes for anyone who keeps the built-in criteria, and past evaluations keep the labels they were written with.",
+      ],
+      tr: [
+        "Kurumlar artık kendi değerlendirme kriterlerini tanımlayabiliyor — Ayarlar’dan üç dilde ekle, sırala ya da emekliye ayır; kod değişikliği gerekmiyor. Yerleşik kriterlerle devam edenler için hiçbir şey değişmiyor ve geçmiş değerlendirmeler yazıldıkları etiketleri koruyor.",
+      ],
+      de: [
+        "Organisationen können jetzt eigene Bewertungskriterien definieren — in den Einstellungen hinzufügen, sortieren oder stilllegen, in allen drei Sprachen, ohne Codeänderung. Wer die eingebauten Kriterien behält, merkt keinen Unterschied, und frühere Bewertungen behalten die Labels, mit denen sie geschrieben wurden.",
+      ],
+    },
+  },
+  {
+    version: '0.97.0-beta',
+    date: '2026-08-24',
+    time: '12:44',
+    commit: 'a974a49',
+    highlights: {
+      en: [
+        "Invite someone without knowing their email: leave the address empty and share the link yourself. Whoever registers with it becomes your mentee automatically — and mentors now have their own invite page.",
+      ],
+      tr: [
+        "Birini e-postasını bilmeden davet et: adresi boş bırak, bağlantıyı kendin paylaş. Bağlantıyla kaydolan kişi otomatik olarak senin mentee’n olur — mentörlerin artık kendi davet sayfası da var.",
+      ],
+      de: [
+        "Lade jemanden ein, ohne die E-Mail-Adresse zu kennen: Feld leer lassen und den Link selbst weitergeben. Wer sich damit registriert, wird automatisch dein Mentee — und Mentor:innen haben jetzt eine eigene Einladungsseite.",
+      ],
+    },
+  },
+  {
+    version: '0.96.0-beta',
+    date: '2026-08-24',
+    time: '12:28',
+    commit: '8ede0a7',
+    highlights: {
+      en: [
+        "\"Referred by\" and \"Source\" are now one field — pick the person or the source who brought a candidate in, and add a new source right there without leaving the screen.",
+      ],
+      tr: [
+        "\"Getiren kişi\" ile \"Kaynak\" tek alan oldu — adayı kim getirdiyse onu seç, listede yoksa yeni kaynağı ekrandan çıkmadan hemen ekle.",
+      ],
+      de: [
+        "„Geworben von“ und „Quelle“ sind jetzt ein Feld — wähle die Person oder die Quelle, die eine Kandidatin gebracht hat, und lege eine neue Quelle direkt dort an.",
+      ],
+    },
+  },
+  {
+    version: '0.95.0-beta',
+    date: '2026-08-24',
+    time: '10:54',
+    commit: 'c12bf9b',
+    highlights: {
+      en: [
+        "Admins can now see the signup funnel at a glance — how many people registered, verified and became active in the last 7 and 30 days — with a warning that points at e-mail delivery when verification suddenly drops.",
+      ],
+      tr: [
+        "Yöneticiler artık kayıt hunisini tek bakışta görüyor — son 7 ve 30 günde kaç kişi kaydoldu, doğruladı ve aktifleşti — doğrulama ani düşerse e-posta teslimatını işaret eden bir uyarıyla birlikte.",
+      ],
+      de: [
+        "Admins sehen den Registrierungs-Funnel jetzt auf einen Blick — wie viele sich in den letzten 7 und 30 Tagen registriert, verifiziert und aktiviert haben — mit einer Warnung, die auf die E-Mail-Zustellung verweist, wenn die Verifizierung einbricht.",
+      ],
+    },
+  },
+  {
+    version: '0.94.0-beta',
+    date: '2026-08-24',
+    time: '06:44',
+    commit: '55c8ed4',
+    highlights: {
+      en: [
+        "Public profiles became proof: your public projects with your role and completed-task count, and — with both sides' consent — your mentor's published evaluation average and an approved quote.",
+      ],
+      tr: [
+        "Herkese açık profiller kanıta dönüştü: rolün ve tamamlanan görev sayınla herkese açık projelerin, ve — iki tarafın rızasıyla — mentorunun yayınlanmış değerlendirme ortalaması ile onaylı bir alıntı.",
+      ],
+      de: [
+        "Öffentliche Profile wurden zum Beleg: deine öffentlichen Projekte mit Rolle und Zahl abgeschlossener Aufgaben, und — mit Einwilligung beider Seiten — der veröffentlichte Bewertungsdurchschnitt deines Mentors samt freigegebenem Zitat.",
+      ],
+    },
+  },
+  {
+    version: '0.93.0-beta',
+    date: '2026-08-24',
+    time: '06:26',
+    commit: '9cf5146',
+    highlights: {
+      en: [
+        "The landing hero now shows real, live numbers — active mentors, open projects and candidates waiting for a mentor — computed from the database and hidden entirely when there is nothing to show.",
+      ],
+      tr: [
+        "Landing hero artık gerçek, canlı sayılar gösteriyor — aktif mentorlar, açık projeler ve mentor bekleyen adaylar — veritabanından hesaplanıyor ve gösterecek bir şey yokken tamamen gizleniyor.",
+      ],
+      de: [
         "Der Landing-Hero zeigt jetzt echte, live berechnete Zahlen — aktive Mentoren, offene Projekte und wartende Kandidaten — aus der Datenbank berechnet und komplett ausgeblendet, wenn es nichts zu zeigen gibt.",
-        "Die Besprechungsseite zeigt beim Laden nicht mehr kurz \"keine Mentees zugewiesen\", und wenn etwas nicht geladen werden kann, wird das mit einer Wiederholen-Schaltfläche gemeldet, statt eine leere Liste vorzutäuschen.",
-        "Mentees sehen ihre Meetings endlich in der App: eine Karte mit anstehenden Meetings im Portal mit Beitrittslink, Ein-Klick-RSVP und Kalender-Download, dazu eine vollständige Kalenderseite mit persönlichem Feed zum Abonnieren in Google/Outlook/Apple Kalender.",
+      ],
+    },
+  },
+  {
+    version: '0.92.0-beta',
+    date: '2026-08-24',
+    time: '06:14',
+    commit: 'd6f897d',
+    highlights: {
+      en: [
+        "Success stories, done right: a real evaluation excerpt can be published only with both sides' consent and the author's approval of the exact wording — shown with initials by default, withdrawable at any time, gone immediately.",
+      ],
+      tr: [
+        "Başarı hikâyeleri, doğru şekilde: gerçek bir değerlendirme alıntısı yalnızca iki tarafın rızası ve yazarın birebir metin onayıyla yayınlanır — varsayılan olarak baş harflerle gösterilir, istenildiği an geri alınır, anında yayından düşer.",
+      ],
+      de: [
+        "Erfolgsgeschichten, richtig gemacht: Ein echter Bewertungsauszug wird nur mit Einwilligung beider Seiten und Freigabe des exakten Wortlauts veröffentlicht — standardmäßig mit Initialen, jederzeit widerrufbar und sofort entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.91.1-beta',
+    date: '2026-08-24',
+    time: '04:59',
+    commit: '3c726b0',
+    highlights: {
+      en: [
+        "The landing page now says who builds InternshipCRM and why — a named founder with a public profile link, in the transparency section and the footer.",
+      ],
+      tr: [
+        "Landing sayfası artık InternshipCRM’i kimin, neden yaptığını söylüyor — şeffaflık bölümünde ve footer’da, herkese açık profil bağlantısıyla isimli kurucu.",
+      ],
+      de: [
+        "Die Landing-Seite sagt jetzt, wer InternshipCRM baut und warum — ein namentlich genannter Gründer mit öffentlichem Profil-Link, im Transparenzbereich und im Footer.",
+      ],
+    },
+  },
+  {
+    version: '0.91.0-beta',
+    date: '2026-08-23',
+    time: '20:24',
+    commit: '3236bac',
+    highlights: {
+      en: [
+        "Mentors are protected from unbounded commitment: set your own capacity and your application link closes itself when full; every application now waits for your accept or decline, and applicants hear back either way.",
+      ],
+      tr: [
+        "Mentorlar sınırsız bağlanmaktan korunuyor: kontenjanını kendin belirle, dolunca başvuru bağlantın kendini kapatır; her başvuru artık kabul/ret kararını bekler ve başvuran her iki durumda da haber alır.",
+      ],
+      de: [
         "Mentoren sind vor unbegrenzter Bindung geschützt: Lege deine eigene Kapazität fest und dein Bewerbungslink schließt sich, wenn er voll ist; jede Bewerbung wartet nun auf dein Annehmen oder Ablehnen, und Bewerber erfahren es in beiden Fällen.",
+      ],
+    },
+  },
+  {
+    version: '0.90.0-beta',
+    date: '2026-08-23',
+    time: '20:08',
+    commit: 'd993a39',
+    highlights: {
+      en: [
+        "Mentees can finally see their meetings in the app: an upcoming-meetings card on the portal with join link, one-click RSVP and calendar download, plus a full calendar page with a personal feed you can subscribe to from Google/Outlook/Apple Calendar.",
+      ],
+      tr: [
+        "Mentee'ler toplantılarını artık uygulamada görüyor: portalda katıl linki, tek tıkla RSVP ve takvim indirme içeren yaklaşan toplantılar kartı; ayrıca Google/Outlook/Apple Takvim'den abone olunabilen kişisel akış bağlantısıyla tam bir takvim sayfası.",
+      ],
+      de: [
+        "Mentees sehen ihre Meetings endlich in der App: eine Karte mit anstehenden Meetings im Portal mit Beitrittslink, Ein-Klick-RSVP und Kalender-Download, dazu eine vollständige Kalenderseite mit persönlichem Feed zum Abonnieren in Google/Outlook/Apple Kalender.",
+      ],
+    },
+  },
+  {
+    version: '0.89.0-beta',
+    date: '2026-08-23',
+    time: '19:53',
+    commit: '401e29f',
+    highlights: {
+      en: [
+        "Mentees are now notified in-app when a mentor logs an interaction, schedules a meeting, assigns a goal or writes an evaluation — and mentors when a mentee completes a goal or evaluates them. Stage changes notify from every screen, and companies' interest reaches consenting candidates without revealing the company. All of it can be switched off per category under Account.",
+      ],
+      tr: [
+        "Mentor bir etkileşim kaydı girdiğinde, toplantı planladığında, hedef atadığında veya değerlendirme yazdığında mentee artık uygulama içinde bildirim alıyor — mentee hedef tamamlayınca veya değerlendirme yazınca da mentor. Aşama değişimi hangi ekrandan yapılırsa yapılsın bildiriyor; firma ilgisi, rıza veren adaylara firma kimliği gizli kalarak ulaşıyor. Hepsi Hesap sayfasından kategori bazında kapatılabiliyor.",
+      ],
+      de: [
+        "Mentees werden jetzt in der App benachrichtigt, wenn ihr Mentor eine Interaktion protokolliert, ein Meeting plant, ein Ziel zuweist oder eine Bewertung schreibt — und Mentoren, wenn ein Mentee ein Ziel abschließt oder sie bewertet. Phasenwechsel benachrichtigen von jedem Screen aus, und Unternehmensinteresse erreicht einwilligende Kandidaten ohne Preisgabe des Unternehmens. Alles ist unter Konto pro Kategorie abschaltbar.",
+      ],
+    },
+  },
+  {
+    version: '0.88.0-beta',
+    date: '2026-08-23',
+    time: '19:06',
+    commit: '02f15d1',
+    highlights: {
+      en: [
+        "Email delivery problems no longer stay silent: the settings page shows the last successful delivery and failures since, and admins are alerted when sending keeps failing.",
+      ],
+      tr: [
+        "E-posta gönderim sorunları artık sessiz kalmıyor: ayarlar sayfası son başarılı gönderimi ve o zamandan beri olan hataları gösteriyor; gönderim sürekli başarısız olursa yöneticiler uyarılıyor.",
+      ],
+      de: [
+        "E-Mail-Zustellprobleme bleiben nicht mehr unbemerkt: Die Einstellungsseite zeigt die letzte erfolgreiche Zustellung und die Fehler seitdem; Admins werden gewarnt, wenn der Versand wiederholt fehlschlägt.",
+      ],
+    },
+  },
+  {
+    version: '0.87.0-beta',
+    date: '2026-08-23',
+    time: '17:52',
+    commit: '9fd52ec',
+    highlights: {
+      en: [
+        "Mentees can now browse a mentor directory — only mentors who explicitly opted in are listed, and contact details are never shown.",
+        "When requesting a mentor, mentees can state a subject area, mentoring languages and an optional preferred mentor; admins see these hints in the approval queue, nothing is auto-assigned.",
+      ],
+      tr: [
+        "Mentee'ler artık bir mentor dizinine göz atabiliyor — yalnızca açıkça onay veren mentorlar listeleniyor ve iletişim bilgileri asla gösterilmiyor.",
+        "Mentor talep ederken mentee'ler alan, mentorluk dili ve isteğe bağlı tercih edilen mentor belirtebiliyor; yöneticiler bu ipuçlarını onay kuyruğunda görüyor, hiçbir şey otomatik atanmıyor.",
+      ],
+      de: [
         "Mentees können jetzt ein Mentorenverzeichnis durchsuchen — gelistet sind nur Mentoren, die ausdrücklich zugestimmt haben, Kontaktdaten werden nie angezeigt.",
         "Bei der Mentor-Anfrage können Mentees Fachgebiet, Mentoring-Sprachen und optional einen Wunsch-Mentor angeben; Admins sehen diese Hinweise in der Warteschlange, nichts wird automatisch zugewiesen.",
-        "Benachrichtigungen zu Fristen führen Mentoren jetzt direkt zur richtigen Mentee-Seite.",
-        "Mentoren können jetzt alle Rückmeldungen ihrer Mentees an einem Ort sehen – einschließlich Gesamt- und Kriteriendurchschnitten, der jüngsten Entwicklung und einzelner Kommentare. Angezeigt wird nur Feedback für den angemeldeten Mentor.",
-        "„Geworben von“ und „Quelle“ sind jetzt ein Feld — wähle die Person oder die Quelle, die eine Kandidatin gebracht hat, und lege eine neue Quelle direkt dort an.",
-        "Telefon-Layouts korrigiert: In Mentor-, Aktivitäts- und Mentee-Zeilen werden Name und E-Mail nicht mehr zusammengedrückt, und das Beta-Abzeichen wird nicht mehr abgeschnitten.",
-        "Dialoge sind jetzt vollständig per Tastatur bedienbar: Der Fokus springt beim Öffnen hinein, bleibt beim Tabben darin, Escape schließt, und danach kehrt der Fokus zum auslösenden Element zurück.",
-        "Mentees werden jetzt in der App benachrichtigt, wenn ihr Mentor eine Interaktion protokolliert, ein Meeting plant, ein Ziel zuweist oder eine Bewertung schreibt — und Mentoren, wenn ein Mentee ein Ziel abschließt oder sie bewertet. Phasenwechsel benachrichtigen von jedem Screen aus, und Unternehmensinteresse erreicht einwilligende Kandidaten ohne Preisgabe des Unternehmens. Alles ist unter Konto pro Kategorie abschaltbar.",
-        "Benachrichtigungslinks führen jetzt konsistent zu rollengerechten Zielen.",
-        "Benachrichtigungen öffnen jetzt die richtige Seite für Ihre Rolle und den jeweiligen Beziehungskontext, einschließlich Mentor-, Mentee-, Doppelrollen-, Meeting- und Dokumenterinnerungsabläufen.",
-        "Organisationen können jetzt eigene Bewertungskriterien definieren — in den Einstellungen hinzufügen, sortieren oder stilllegen, in allen drei Sprachen, ohne Codeänderung. Wer die eingebauten Kriterien behält, merkt keinen Unterschied, und frühere Bewertungen behalten die Labels, mit denen sie geschrieben wurden.",
-        "Ein \"Nein\" kommt jetzt mit einer Antwort: Kandidat:innen sehen, wo sie stehen und was sie als Nächstes tun können, Mentor:innen bekommen eine fertige Nachricht zum Bearbeiten statt einer leeren Seite, und ein Praktikum anderswo gilt als das, was es ist — eine gute Nachricht.",
-        "Die Datenschutzerklärung nennt jetzt den Live-Chat-Anbieter auf der Startseite und was er genau erhält — deine IP-Adresse und deine Eingaben, nur wenn du Marketing-Cookies zustimmst.",
-        "Projekte können jetzt eigene Beitragsbedingungen haben: Mitglieder lesen und akzeptieren sie einmal pro Projekt, und ein Projekt ohne IP-Frage fragt gar nicht erst.",
-        "Öffentliche Profile wurden zum Beleg: deine öffentlichen Projekte mit Rolle und Zahl abgeschlossener Aufgaben, und — mit Einwilligung beider Seiten — der veröffentlichte Bewertungsdurchschnitt deines Mentors samt freigegebenem Zitat.",
+      ],
+    },
+  },
+  {
+    version: '0.86.1-beta',
+    date: '2026-08-23',
+    time: '16:46',
+    commit: '5e38009',
+    highlights: {
+      en: [
+        "Invited company users see their candidates immediately after registering — previously the portal could stay empty until the next deployment.",
+      ],
+      tr: [
+        "Davet edilen şirket kullanıcıları kayıttan hemen sonra adaylarını görüyor — önceden portal bir sonraki dağıtıma kadar boş kalabiliyordu.",
+      ],
+      de: [
         "Eingeladene Unternehmensnutzer sehen ihre Kandidaten sofort nach der Registrierung — zuvor konnte das Portal bis zum nächsten Deployment leer bleiben.",
+      ],
+    },
+  },
+  {
+    version: '0.86.0-beta',
+    date: '2026-08-23',
+    time: '12:25',
+    commit: '559ea7d',
+    highlights: {
+      en: [
+        "Release notes now appear the moment a change goes live: the version number and the what's-new page update with every deployment instead of waiting for a manual bookkeeping step.",
+      ],
+      tr: [
+        "Sürüm notları artık bir değişiklik yayına girdiği anda görünüyor: sürüm numarası ve yenilikler sayfası, elle yapılan bir kayıt adımını beklemek yerine her dağıtımla birlikte güncelleniyor.",
+      ],
+      de: [
         "Versionshinweise erscheinen jetzt in dem Moment, in dem eine Änderung live geht: Versionsnummer und Neuigkeiten-Seite aktualisieren sich mit jedem Deployment, statt auf einen manuellen Pflegeschritt zu warten.",
-        "Admins sehen den Registrierungs-Funnel jetzt auf einen Blick — wie viele sich in den letzten 7 und 30 Tagen registriert, verifiziert und aktiviert haben — mit einer Warnung, die auf die E-Mail-Zustellung verweist, wenn die Verifizierung einbricht.",
-        "Lege einmal fest, wie lange jemand in einer Phase warten darf — die Frist wird überall automatisch gesetzt, wo Kandidat:innen verschoben werden, sodass Steckengebliebene sichtbar werden statt still zu warten. Gezählt in Kalendertagen; eine leer gelassene Phase hat keine Regel.",
-        "Mobile Bedienelemente lassen sich leichter antippen: Hauptaktionen, Symbolschaltflächen, Kandidatenfilter, Tabs, Eingabe- und Auswahlfelder sowie zugehörige Steuerelemente bieten jetzt mindestens 44×44 Pixel große Touch-Flächen, ohne die sichtbaren Symbole zu vergrößern.",
       ],
     },
   },

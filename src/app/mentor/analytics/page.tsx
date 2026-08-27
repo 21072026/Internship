@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BarChart3, Users, BookOpen, Target, TrendingUp, Award } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
-import { SkeletonRows } from '@/components/ui/Skeleton';
+import { AsyncSection } from '@/components/ui/AsyncSection';
 import { useResolvedStages } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
 
@@ -46,13 +46,24 @@ export default function MentorAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch('/api/mentor/analytics')
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(setData)
-      .catch((e) => { console.error('[mentor/analytics]', e); setError(t.common.error); })
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/mentor/analytics');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setData(await response.json());
+    } catch (loadError) {
+      console.error('[mentor/analytics]', loadError);
+      setError(t.common.error);
+    } finally {
+      setLoading(false);
+    }
   }, [t.common.error]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const ma = t.mentorAnalytics;
 
@@ -65,15 +76,16 @@ export default function MentorAnalyticsPage() {
         <p className="text-gray-500 dark:text-gray-400 mt-1">{ma.subtitle}</p>
       </div>
 
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <Card><SkeletonRows rows={6} /></Card>
-      ) : data ? (
+      <AsyncSection
+        loading={loading}
+        error={error}
+        empty={!data}
+        emptyText={<p className="py-4 text-center text-sm text-gray-400 dark:text-gray-500">{ma.noData}</p>}
+        retryText={t.errorBoundary.retry}
+        onRetry={load}
+        skeleton="stats"
+      >
+        {data ? (
         <>
           {/* Summary stats */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4 mb-8">
@@ -177,7 +189,8 @@ export default function MentorAnalyticsPage() {
             <Link href="/mentor/mentees" className="text-blue-600 hover:underline">{ma.viewMentees}</Link>
           </div>
         </>
-      ) : null}
+        ) : null}
+      </AsyncSection>
     </div>
   );
 }

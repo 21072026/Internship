@@ -67,6 +67,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           )}
           {...props}
         >
+          {/* A placeholder renders a disabled empty option; do not also pass an empty-value option. */}
           {placeholder && (
             <option value="" disabled>
               {placeholder}
