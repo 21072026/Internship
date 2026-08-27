@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { getServerDictionary } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { PortalTabs } from '@/components/PortalTabs';
 import { GoalsPanel } from '@/components/GoalsPanel';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
@@ -35,7 +34,6 @@ export default async function PortalGoalsPage() {
 
   return (
     <div>
-      <PortalTabs />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.tabs.goals}</h1>
         <p className="text-gray-500 mt-1">{t.portal.goalsSubtitle}</p>

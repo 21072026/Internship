@@ -8,7 +8,6 @@ import { OfferCard } from '@/components/OfferCard';
 import { JourneyTracker } from '@/components/JourneyTracker';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
 import { ReferralLinkCard } from '@/components/ReferralLinkCard';
-import { PortalTabs } from '@/components/PortalTabs';
 import { getServerDictionary } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -89,7 +88,6 @@ export default async function PortalDashboard() {
         <p className="text-gray-500 mt-1">{t.portal.dashSubtitle}</p>
       </div>
 
-      <PortalTabs />
 
       {/* Half an hour before a meeting, and for as long as it runs (#51 follow-up). */}
       <UpcomingMeetingBanner />

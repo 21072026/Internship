@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { getServerDictionary } from '@/i18n/server';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { PortalTabs } from '@/components/PortalTabs';
 import { JourneyTracker } from '@/components/JourneyTracker';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -46,7 +45,6 @@ export default async function PortalJourneyPage() {
 
   return (
     <div>
-      <PortalTabs />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.tabs.journey}</h1>
         <p className="text-gray-500 mt-1">{t.portal.journeySubtitle}</p>

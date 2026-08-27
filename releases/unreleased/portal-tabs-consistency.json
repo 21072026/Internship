@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Mentee portal:** Kept the portal tab bar in one consistent place on every portal page (#1424).",
+  "notes": {
+    "en": ["Portal navigation tabs now stay visible and in the same position on every portal page."],
+    "tr": ["Portal gezinme sekmeleri artık tüm portal sayfalarında görünür ve aynı konumda kalır."],
+    "de": ["Die Portal-Navigation bleibt jetzt auf allen Portalseiten sichtbar und an derselben Stelle."]
+  }
+}
