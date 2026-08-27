@@ -86,7 +86,7 @@ export function UpcomingMeetings() {
 
       {/* Loading ≠ empty (#891): no "no meetings" while the fetch is in flight. */}
       {meetings === null ? (
-        <p className="py-4 text-sm text-gray-400" data-testid="upcoming-meetings-loading">{t.common.loading}</p>
+        <p className="py-4 text-sm text-gray-600 dark:text-gray-400" data-testid="upcoming-meetings-loading">{t.common.loading}</p>
       ) : failed ? (
         <p className="py-4 text-sm text-red-500">{t.common.error}</p>
       ) : upcoming.length === 0 && linkOnly.length === 0 ? (

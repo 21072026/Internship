@@ -10,6 +10,34 @@ Newest entries on top.
 
 ---
 
+## 2026-08-27 — Devralınan bir PR'ı bitirmek: kapının tek örnek göstermesi tuzağı (#1336)
+
+**a11y kapısı sayfa başına tek bir örnek selector raporluyor, o yüzden "düzelt → CI → sıradaki"
+döngüsü sonsuza kadar sürebilir.** #1336 tam olarak buna beş tur harcadı. Kırıcı olan şey şu:
+kapı sayfadaki *tüm* ihlalleri sayıyor ama rapora bir tanesini yazıyor. Doğru hamle, selector'ı
+takip etmek değil, sayfanın render ettiği **bütün ağacı** taramak:
+`grep -rn 'text-gray-400' src/components/{ProfileForm,CvManager,CvSuggestPanel,DocumentsManager,TemplatesLibrary}.tsx`
+— `/portal/profile` sadece `ProfileForm` render ediyor ama o da yedi bileşen çağırıyor.
+İkon (`<svg>`) sınıflarını listeden çıkar: axe'ın `color-contrast` kuralı SVG'ye bakmıyor.
+
+**Baseline dosyasını elle budama.** `e2e/a11y-scan.spec.ts` her sayfa için iki anahtar yazıyor
+(`/x` ve `/x#dark`), yani gerçek bir üretim **18** anahtar veriyor. 9 anahtarlı elle düzeltilmiş
+bir dosya kapıyı bozmuyor (eksik anahtar `{}` sayılıyor, en katısı) ama bir sonraki meşru
+regenerate 9 satırı ilgisiz gürültü olarak geri ekliyor. Aynı şey `docs/a11y-audit.md` için de
+geçerli — şablon `**Totals**` satırından sonra **iki** boş satır üretiyor.
+
+**`dark:` varyantı `globals.css`'in düz override'ının altında ölü kalabilir.** `darkMode: 'class'`
+ile `dark:text-gray-300` → `.dark .text-gray-300` (0,2,0); `html.dark .text-gray-600` ise (0,2,1)
+ve kazanıyor. Yani `text-gray-600 dark:text-gray-300` yazıp "koyu temada gri-300 olur" sanmak
+yanlış. İki seçenek var: `dark:!` ile sabitle (CLAUDE.md konvansiyonu) ya da ölü sınıfı sil.
+
+**Bu konteynerde a11y taramasını yerelde koşmak 30 saniye, CI turu ise ~7 dakika.** Kurulum:
+apt MariaDB (playbook) + `npm run build` + `CI=1 npx playwright test e2e/a11y-scan.spec.ts`.
+Playwright tarayıcı sürüm uyuşmazlığı için **üç** sembolik bağ gerekiyor, ikisi değil:
+`chromium-1234 → chromium-1194`, `chromium_headless_shell-1234 → …-1194` ve
+`…-1194/chrome-linux` → `chrome-headless-shell-linux64` (headless shell dizin *adını* da
+arıyor, sadece dosya adını değil).
+
 ## 2026-08-26 — E-posta grupları ve abonelikten çıkma: opsiyonel parametre sessiz hata üretir (#1444)
 
 **Bir sarmalayıcıya opsiyonel parametre eklemek çağıranları güncellemez — ve tip denetimi
@@ -200,6 +228,21 @@ doğru hamle savunmak değil **savunma ihtiyacını ortadan kaldırmak** oldu. B
 prototip setter'ını tetikleyen atamadır, dolayısıyla eski biçimin regresyonu bozuk bir tercih
 yazmakla kalmaz, süreç ömrü boyunca her nesneyi bozardı — bu yüzden akümülatör artık
 null-prototip.
+
+---
+
+## 2026-08-26 — A11y kapısı: selector’dan bileşene git, baseline’ı değil elemanı düzelt (#1333)
+
+**`/portal/profile` bu turda sadece `ProfileForm` render ediyor,** o yüzden kapının verdiği
+selector (`.pt-4.border-t.border-gray-100 ... .text-gray-400`) için tüm sayfayı kazmaya gerek
+yok: `grep -n "text-gray-400" src/components/ProfileForm.tsx` kalan adayları tek komutta çıkarıyor.
+Bir elemanı düzeltince kapı başka elemana ilerliyorsa aynı dosyadaki kalan düşük-kontrast
+yardımcı metinleri topluca temizlemek, tekrar tekrar CI beklemekten hızlı.
+
+**Bu sandbox'ta CI-şekilli Playwright koşusu için `DATABASE_URL` gerçekten export edilmiş olmalı.**
+`CI=1 npx playwright test ...` `npm run start` ile production build'i açıyor; env yoksa Next
+uygulaması ilk Prisma çağrısında kalkmadan düşüyor ve gerçek a11y sonucuna hiç ulaşılmıyor.
+
 
 ## 2026-08-26 — Admin API explorer: üretilen dokümanı nereden servis etmeli (#1447)
 
