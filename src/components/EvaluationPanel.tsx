@@ -132,7 +132,7 @@ export function EvaluationPanel({
               </label>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2">
             <span className="text-sm text-gray-700">{t.evaluation.type}:</span>
             <select
               value={type}
@@ -142,7 +142,7 @@ export function EvaluationPanel({
               <option value="INTERIM">{t.evaluation.interim}</option>
               <option value="FINAL">{t.evaluation.final}</option>
             </select>
-          </div>
+          </label>
           <Textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
