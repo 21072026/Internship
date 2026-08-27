@@ -53,6 +53,17 @@ async function settle(page: Page) {
     .toBe(0);
 }
 
+/**
+ * The public-page equivalent of `settle()`. /release-notes has no account
+ * shell (there is no `account-menu-button` to wait for — that testid only
+ * exists on the authenticated role shells) and it is server-rendered with no
+ * client fetch, so there are no skeleton rows either; waiting for the main
+ * heading to paint is enough signal that the DOM the audit measures is there.
+ */
+async function settlePublic(page: Page) {
+  await page.getByRole('heading', { level: 1 }).first().waitFor({ state: 'visible', timeout: 20_000 });
+}
+
 async function auditLayout(page: Page) {
   return page.evaluate((minTextWidth) => {
     const problems: string[] = [];
@@ -338,6 +349,6 @@ test('phone width: /release-notes fits, one release per card', async ({ page }) 
   await page.setViewportSize(PHONE);
   await setLocale(page, 'de');
   await gotoSettled(page, '/release-notes');
-  await settle(page);
+  await settlePublic(page);
   expect(await auditLayout(page), `/release-notes at ${PHONE.width}px (de)`).toEqual([]);
 });

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, uniqueEmail } from './helpers/db';
+import { submitSignInForm } from './helpers/auth';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
 
 const stamp = `${Date.now()}-${Math.round(Math.random() * 10000)}`;
@@ -14,10 +15,16 @@ let orgA: { id: string }; let orgB: { id: string }; let companyA: { id: string }
 let adminA: { id: string }; let mentorA: { id: string }; let mentee: { id: string };
 let relation: { id: string; pipelineStatus: string }; let reqA: { id: string }; let reqB: { id: string };
 
+// This spec re-signs in as a different role many times on the SAME `page`
+// (see the calls below), which a bare `clearCookies()` + `goto` + `fill` +
+// `click` cannot do reliably: the outgoing page keeps talking to
+// /api/auth/session and re-issues the session cookie, so /auth/signin can see
+// `authenticated` and router.replace() to the *previous* user's dashboard
+// mid-fill — detaching the submit button Playwright is about to click. Reuse
+// the shared helper (helpers/auth.ts) instead of duplicating that race here.
 async function login(page: Page, email: string) {
-  await page.context().clearCookies(); await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email); await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]'); await page.waitForURL((url) => !url.pathname.startsWith('/auth/signin'));
+  await submitSignInForm(page, email, password);
+  await page.waitForURL((url) => !url.pathname.startsWith('/auth/signin'));
 }
 
 test.describe.serial('Story #807 shortlist and interview requests', () => {

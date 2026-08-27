@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { prisma, seedUser, cleanupByEmail, uniqueEmail, acceptContributorTerms } from './helpers/db';
 import { signInAsFreshUser, gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
@@ -140,6 +140,12 @@ test('a project owner can open the card of someone asking to join', async ({ pag
       joinRequests: { create: [{ userId: applicant.id, functionalRole: 'TESTER' }] },
     },
   });
+
+  // Opening a project is behind its contributor-terms gate (#1026); without
+  // this the owner never sees the internal view at all (the whole page
+  // renders the "accept terms" gate instead), so the join-requests panel —
+  // and the trigger this test waits for — never mounts.
+  await acceptContributorTerms(owner.id, { projectId: project.id });
 
   try {
     await signInAsFreshUser(page, ownerEmail, pw, '/mentor');
