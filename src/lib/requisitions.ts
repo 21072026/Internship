@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { transliterate } from '@/lib/transliterate';
 
 export const REQUISITION_STATUSES = ['DRAFT', 'OPEN', 'ON_HOLD', 'FILLED', 'CANCELLED'] as const;
 export type RequisitionStatus = (typeof REQUISITION_STATUSES)[number];
@@ -42,18 +43,21 @@ export function protectedFields(body: unknown): string[] {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
   return PROTECTED_REQUISITION_FIELDS.filter((field) => field in body);
 }
+
 export function normalizeSkills(skills: string[]): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const value of skills) {
     const skill = value.trim();
-    if (!skill || seen.has(skill.toLocaleLowerCase('tr'))) continue;
+    if (!skill || seen.has(transliterate(skill).toLowerCase())) continue;
     if (skill.length > REQUISITION_LIMITS.skill) throw new Error('skill_too_long');
-    seen.add(skill.toLocaleLowerCase('tr'));
+    seen.add(transliterate(skill).toLowerCase());
     normalized.push(skill);
   }
+
   return normalized;
 }
+
 export function closedAtForStatus(status: string, previous: Date | null = null): Date | null {
   if (status === 'FILLED' || status === 'CANCELLED') return previous ?? new Date();
   return null;

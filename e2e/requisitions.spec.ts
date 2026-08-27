@@ -67,7 +67,7 @@ test.describe.serial('Story #806 requisitions', () => {
 
     const created = await page.request.post('/api/requisitions', { data: {
       title: `Backend ${stamp}`, status: 'OPEN', openings: 2, filled: 1,
-      requiredSkills: [' React ', '', 'react', ' TypeScript ', 'İngilizce', 'ingilizce', 'Işletme', 'ışletme', 'IT', 'ıt'],
+      requiredSkills: [' React ', '', 'react', ' TypeScript ', 'İngilizce', 'ingilizce', 'Işletme', 'ışletme', 'IT', 'it', 'ıt'],
     } });
     expect(created.status()).toBe(201);
     const body = await created.json();
