@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Requisitions:** Fixed Turkish-aware de-duplication for required skills (#1389).",
+  "notes": {
+    "en": ["Required skills now de-duplicate correctly for Turkish characters."],
+    "tr": ["Zorunlu yetkinlikler Türkçe karakterlerde artık doğru şekilde tekilleştiriliyor."],
+    "de": ["Erforderliche Kenntnisse werden bei türkischen Zeichen jetzt korrekt zusammengeführt."]
+  }
+}

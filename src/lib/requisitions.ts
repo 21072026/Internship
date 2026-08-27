@@ -42,20 +42,18 @@ export function protectedFields(body: unknown): string[] {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
   return PROTECTED_REQUISITION_FIELDS.filter((field) => field in body);
 }
-
 export function normalizeSkills(skills: string[]): string[] {
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const value of skills) {
     const skill = value.trim();
-    if (!skill || seen.has(skill.toLocaleLowerCase())) continue;
+    if (!skill || seen.has(skill.toLocaleLowerCase('tr'))) continue;
     if (skill.length > REQUISITION_LIMITS.skill) throw new Error('skill_too_long');
-    seen.add(skill.toLocaleLowerCase());
+    seen.add(skill.toLocaleLowerCase('tr'));
     normalized.push(skill);
   }
   return normalized;
 }
-
 export function closedAtForStatus(status: string, previous: Date | null = null): Date | null {
   if (status === 'FILLED' || status === 'CANCELLED') return previous ?? new Date();
   return null;
