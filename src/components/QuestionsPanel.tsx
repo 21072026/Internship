@@ -16,7 +16,19 @@ interface Q {
 
 // mode='ask' → mentee asks questions + reads answers.
 // mode='answer' → mentor answers open questions.
-export function QuestionsPanel({ relationId, mode }: { relationId: string; mode: 'ask' | 'answer' }) {
+// `readOnly` closes the compose form while keeping the history readable — what
+// an archived mentorship needs (#1408): the mentee still reads what they asked
+// and what their mentor answered, but a finished mentorship takes no new
+// questions (the API agrees, see /api/questions).
+export function QuestionsPanel({
+  relationId,
+  mode,
+  readOnly = false,
+}: {
+  relationId: string;
+  mode: 'ask' | 'answer';
+  readOnly?: boolean;
+}) {
   const t = useT();
   const [items, setItems] = useState<Q[]>([]);
   const [question, setQuestion] = useState('');
@@ -65,7 +77,7 @@ export function QuestionsPanel({ relationId, mode }: { relationId: string; mode:
         <CardTitle className="flex items-center gap-2"><HelpCircle className="h-4 w-4 text-gray-400" />{t.portal.qa.title}</CardTitle>
       </CardHeader>
 
-      {mode === 'ask' && (
+      {mode === 'ask' && !readOnly && (
         <form onSubmit={ask} className="space-y-2 mb-4">
           <Textarea
             value={question}
@@ -90,7 +102,7 @@ export function QuestionsPanel({ relationId, mode }: { relationId: string; mode:
                 <Badge variant={q.answer ? 'success' : 'warning'}>{q.answer ? t.portal.qa.answered : t.portal.qa.open}</Badge>
               </div>
               {q.answer && <p className="text-sm text-gray-600 mt-2 pl-3 border-l-2 border-green-200 whitespace-pre-wrap">{q.answer}</p>}
-              {mode === 'answer' && !q.answer && (
+              {mode === 'answer' && !readOnly && !q.answer && (
                 <div className="mt-2 flex flex-wrap items-end gap-2">
                   <Textarea
                     value={drafts[q.id] ?? ''}

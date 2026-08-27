@@ -2978,6 +2978,13 @@ const en = {
       privacy: 'The feed contains only titles and times. Generating a new link disables the old one immediately.',
     },
     journeySubtitle: 'Your pipeline stage and mentorship details',
+    // Shown when the mentorship is COMPLETED and the portal renders it as an
+    // archive instead of an empty "no mentor yet" state (#1408).
+    archived: {
+      title: 'This mentorship is complete',
+      hint: 'Your record stays here — your mentor, company, stage history and feedback. New questions, meeting requests and weekly reports are closed.',
+      completedOn: 'Completed',
+    },
     goalsSubtitle: 'Goals, weekly reports, evaluations and interview prep',
     requestsSubtitle: 'Ask your mentor a question or request a meeting',
     noRelationSection: 'These appear once you are matched with a mentor.',
@@ -6170,6 +6177,11 @@ const tr: Dict = {
       privacy: 'Akış yalnızca başlık ve saat içerir. Yeni bağlantı üretmek eskisini anında devre dışı bırakır.',
     },
     journeySubtitle: 'Süreç aşaman ve mentorluk detayların',
+    archived: {
+      title: 'Bu mentorluk tamamlandı',
+      hint: 'Kaydın burada duruyor — mentörün, şirketin, aşama geçmişin ve geri bildirimlerin. Yeni soru, toplantı talebi ve haftalık rapor kapalı.',
+      completedOn: 'Tamamlandı',
+    },
     goalsSubtitle: 'Hedefler, haftalık raporlar, değerlendirmeler ve mülakat hazırlığı',
     requestsSubtitle: 'Mentoruna soru sor veya görüşme talep et',
     noRelationSection: 'Bunlar bir mentorla eşleştiğinde görünür.',
@@ -9360,6 +9372,11 @@ const de: Dict = {
       privacy: 'Der Feed enthält nur Titel und Uhrzeiten. Ein neuer Link deaktiviert den alten sofort.',
     },
     journeySubtitle: 'Deine Prozessphase und Mentoring-Details',
+    archived: {
+      title: 'Dieses Mentoring ist abgeschlossen',
+      hint: 'Deine Aufzeichnungen bleiben hier — Mentor, Unternehmen, Phasenverlauf und Feedback. Neue Fragen, Terminanfragen und Wochenberichte sind geschlossen.',
+      completedOn: 'Abgeschlossen',
+    },
     goalsSubtitle: 'Ziele, Wochenberichte, Bewertungen und Interview-Vorbereitung',
     requestsSubtitle: 'Stell deinem Mentor eine Frage oder bitte um ein Meeting',
     noRelationSection: 'Diese erscheinen, sobald du einem Mentor zugeordnet bist.',

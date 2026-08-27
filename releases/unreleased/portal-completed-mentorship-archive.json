@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "**A completed mentorship no longer empties the mentee's portal** (#1408) — `/portal`, `/portal/journey`, `/portal/goals` and `/portal/requests` each asked for `status: 'ACTIVE'` and nothing else, so the moment a mentorship was marked `COMPLETED` the mentee's mentor, company, stage bar, goals, evaluations and question history vanished and the portal told them \"no mentor assigned yet — an admin will assign you one once your profile is reviewed\". Finishing the programme is its success case, and it read as a data loss. The four pages now resolve the relation through `pickMenteeRelation()` (ACTIVE, else the most recently completed one) and render the finished mentorship as a labelled archive: the record stays readable while the actions that need a live mentorship — asking a question, requesting a meeting, moving goals, filing a weekly report — are closed, in the UI *and* in `/api/questions`, `/api/meeting-requests` and `/api/goals`, which now answer `409 inactive_relation` to a mentee writing on a mentorship that has ended. Mentor and admin writes are untouched: the certificate flow keys off exactly the COMPLETED state, and a mentee's evaluation of their mentor stays open because it is usually written after the mentorship ends. The \"request a mentor\" panel is offered on an archive too, so finishing one round is a way into the next rather than a dead end.",
+  "notes": {
+    "en": [
+      "When your mentorship is completed, your portal now keeps the whole record — your mentor, company, stage history, goals and feedback — marked as completed, instead of resetting to \"no mentor assigned yet\". New questions, meeting requests and weekly reports are closed on a finished mentorship, and you can ask for a new mentor from the same screen."
+    ],
+    "tr": [
+      "Mentorluğun tamamlandığında portalın artık tüm kaydını koruyor — mentörün, şirketin, aşama geçmişin, hedeflerin ve geri bildirimlerin \"tamamlandı\" etiketiyle duruyor; eskisi gibi \"henüz mentör atanmadı\" ekranına düşmüyor. Biten bir mentorlukta yeni soru, toplantı talebi ve haftalık rapor kapalı; aynı ekrandan yeni mentör talep edebilirsin."
+    ],
+    "de": [
+      "Wenn dein Mentoring abgeschlossen ist, bleibt im Portal jetzt der gesamte Verlauf erhalten — Mentor, Unternehmen, Phasenverlauf, Ziele und Feedback, als abgeschlossen gekennzeichnet, statt auf \"noch kein Mentor zugewiesen\" zurückzufallen. Neue Fragen, Terminanfragen und Wochenberichte sind bei einem beendeten Mentoring geschlossen, und du kannst auf demselben Bildschirm einen neuen Mentor anfragen."
+    ]
+  }
+}
