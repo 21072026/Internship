@@ -78,7 +78,7 @@ export function TemplatesLibrary() {
               <Icon className="h-5 w-5 text-gray-400 flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-800 truncate">{tpl.title[base]}</p>
-                <p className="text-xs text-gray-400 truncate">{tpl.summary[base]}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{tpl.summary[base]}</p>
               </div>
               <button
                 type="button"

@@ -90,7 +90,7 @@ export function CvManager({ targetUserId, initialCvUrl, onChange }: { targetUser
           </Button>
         )}
       </div>
-      <p className="text-xs text-gray-400 mt-1">{t.cv.hint}</p>
+      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.cv.hint}</p>
     </div>
   );
 }

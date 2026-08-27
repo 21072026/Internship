@@ -109,7 +109,7 @@ export function DocumentsManager({
       {error && <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">{error}</div>}
 
       {docs.length === 0 ? (
-        <p className="text-sm text-gray-400 mb-4">{t.documents.none}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{t.documents.none}</p>
       ) : (
         <div className="divide-y divide-gray-50 mb-4">
           {docs.map((d) => (
@@ -117,7 +117,7 @@ export function DocumentsManager({
               <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-800 truncate">{d.title}</p>
-                <p className="text-xs text-gray-400">{kb(d.size)} · v{d.version}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">{kb(d.size)} · v{d.version}</p>
               </div>
               {!templates && <Badge variant="info">{typeLabel(d.type)}</Badge>}
               <a href={`/api/documents/${d.id}`} target="_blank" rel="noopener noreferrer" aria-label={t.documents.download} className="text-gray-400 hover:text-blue-600"><Download className="h-4 w-4" /></a>

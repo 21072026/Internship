@@ -62,7 +62,12 @@ export function OnboardingChecklist() {
               href={s.href}
               data-testid={`onboarding-step-${s.key}`}
               className={`flex min-h-11 items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-white dark:hover:bg-gray-800 ${
-                s.done ? 'text-gray-600 dark:text-gray-300' : 'text-gray-800 dark:text-gray-200'
+                // No `dark:` variant on the done branch: globals.css's flat
+                // `html.dark .text-gray-600` (0,2,1) outranks Tailwind's
+                // `.dark .text-gray-300` (0,2,0), so the variant would be dead
+                // code. The override already renders the dimmer #9ca3af that
+                // the completed state wants, and it clears AA on the dark box.
+                s.done ? 'text-gray-600' : 'text-gray-800 dark:text-gray-200'
               }`}
             >
               {s.done ? (

@@ -9,6 +9,7 @@ below is a candidate for its own good-first-issue.
 
 **Totals** — critical: 0 · serious: 0 · moderate: 0 · minor: 0
 
+
 **The gate** (`e2e/a11y-baseline.json`): the counts of *critical* and *serious*
 violations that exist today are frozen per page. A new one fails the scan;
 moderate/minor findings are listed here but never gate.

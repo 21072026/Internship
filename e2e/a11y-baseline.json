@@ -1,11 +1,20 @@
 {
   "/": {},
+  "/#dark": {},
   "/auth/signin": {},
+  "/auth/signin#dark": {},
   "/portal": {},
+  "/portal#dark": {},
   "/portal/profile": {},
+  "/portal/profile#dark": {},
   "/mentor": {},
+  "/mentor#dark": {},
   "/mentor/mentees": {},
+  "/mentor/mentees#dark": {},
   "/admin": {},
+  "/admin#dark": {},
   "/admin/candidates": {},
-  "/company": {}
+  "/admin/candidates#dark": {},
+  "/company": {},
+  "/company#dark": {}
 }
