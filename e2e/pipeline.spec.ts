@@ -29,8 +29,11 @@ test('mentor can change a mentee pipeline stage and it persists', { tag: '@smoke
     // Open the mentee detail page and move the stage forward
     await page.goto(`/mentor/mentees/${relation.id}`);
     await expect(page.getByLabel('Pipeline stage')).toBeVisible();
+    const stageUpdated = page.waitForResponse(
+      (response) => response.url().includes(`/api/mentorship/${relation.id}`) && response.request().method() === 'PUT'
+    );
     await page.getByLabel('Pipeline stage').selectOption('INTERNSHIP_IN_PROGRESS_450');
-    await page.waitForTimeout(1800);
+    expect((await stageUpdated).ok()).toBeTruthy();
 
     // Persisted in the DB
     const updated = await prisma.mentorshipRelation.findUnique({ where: { id: relation.id } });

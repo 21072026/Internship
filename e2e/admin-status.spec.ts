@@ -84,6 +84,50 @@ test('same-stage writes are no-ops and legacy no-op history stays hidden for cus
     expect(await prisma.statusChange.count({ where: { relationId: relation.id } })).toBe(2);
     expect(await notificationCount()).toBe(beforeNotifications);
 
+    const backdatedNoOp = await page.request.post('/api/status-changes', {
+      data: {
+        relationId: relation.id,
+        fromStatus: 'custom-review',
+        toStatus: 'custom-review',
+        createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+      },
+    });
+    expect(backdatedNoOp.status()).toBe(200);
+    expect(await backdatedNoOp.json()).toMatchObject({ change: null, changed: false });
+    expect(await prisma.statusChange.count({ where: { relationId: relation.id } })).toBe(2);
+
+    const backdatedReturn = await page.request.post('/api/status-changes', {
+      data: {
+        relationId: relation.id,
+        fromStatus: 'custom-interview',
+        toStatus: 'custom-review',
+        createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+      },
+    });
+    expect(backdatedReturn.status()).toBe(201);
+    expect((await backdatedReturn.json()).changed).toBe(true);
+    expect(await prisma.statusChange.findFirst({
+      where: { relationId: relation.id, fromStatus: 'custom-interview', toStatus: 'custom-review' },
+    })).toBeTruthy();
+    expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relation.id } })).pipelineStatus).toBe('custom-review');
+    expect(await notificationCount()).toBe(beforeNotifications);
+
+    const backdatedPastMove = await page.request.post('/api/status-changes', {
+      data: {
+        relationId: relation.id,
+        fromStatus: 'custom-start',
+        toStatus: 'custom-archived',
+        createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+      },
+    });
+    expect(backdatedPastMove.status()).toBe(201);
+    expect((await backdatedPastMove.json()).changed).toBe(true);
+    expect(await prisma.statusChange.findFirst({
+      where: { relationId: relation.id, fromStatus: 'custom-start', toStatus: 'custom-archived' },
+    })).toBeTruthy();
+    expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relation.id } })).pipelineStatus).toBe('custom-review');
+    expect(await notificationCount()).toBe(beforeNotifications);
+
     const changed = await page.request.post('/api/status-changes', {
       data: { relationId: relation.id, fromStatus: 'client-stale-stage', toStatus: 'custom-interview' },
     });
@@ -122,7 +166,7 @@ test('same-stage writes are no-ops and legacy no-op history stays hidden for cus
     }));
 
     await page.goto(`/admin/candidates/${mentee.id}`);
-    await expect(page.getByText('custom-start')).toBeVisible();
+    await expect(page.getByText('custom-start').first()).toBeVisible();
     await expect(page.getByText('custom-interview').first()).toBeVisible();
     await expect(page.getByText('custom-final').first()).toBeVisible();
     await expect(page.locator('li').filter({ hasText: /custom-review\s*→\s*custom-review/ })).toHaveCount(0);

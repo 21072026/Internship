@@ -39,11 +39,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
     }
 
-    // The live row is authoritative for current-stage moves; a client-supplied
-    // `fromStatus` must not turn selecting the current stage into audit noise.
-    // Keep the explicit equality check too for backdated corrections, where
-    // the target may differ from today's live stage but from → to is still no-op.
-    if (toStatus === relation.pipelineStatus || !isStageTransition(fromStatus, toStatus)) {
+    const isBackdated = !!createdAt;
+    // Live moves compare against the authoritative current row. Backdated
+    // corrections describe an old hop, so only their own from → to decides
+    // whether they are a no-op.
+    if (
+      (!isBackdated && toStatus === relation.pipelineStatus) ||
+      (isBackdated && !isStageTransition(fromStatus, toStatus))
+    ) {
       return NextResponse.json({ change: null, changed: false });
     }
 
@@ -58,7 +61,6 @@ export async function POST(request: Request) {
     // (#926): pipelineStatus is updated in the same transaction — the audit
     // row and the live stage can never diverge — and the mentee notification
     // + pipeline.stage_change webhook fire like on every other write path.
-    const isBackdated = !!createdAt;
     const applyToRelation = !isBackdated && toStatus !== relation.pipelineStatus;
 
     const [change] = await prisma.$transaction([
