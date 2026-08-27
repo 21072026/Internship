@@ -232,3 +232,52 @@ test('the preference centre reads every group and refuses the essential one', as
     await cleanupByEmail(email);
   }
 });
+
+/**
+ * CodeQL "remote property injection" (alert 23) pointed at the preference write:
+ * a property name derived from a request value. Both callers already constrained
+ * the group to the taxonomy, so nothing hostile could reach it — but the write
+ * now indexes a frozen table and accumulates into a null-prototype object, and
+ * this pins that shut from the outside.
+ *
+ * The `__proto__` case is the one worth a test rather than an argument: a plain
+ * `obj[k] = v` with that key mutates the prototype instead of storing anything,
+ * so a regression would not merely write a junk preference — it would corrupt
+ * every object in the process for the lifetime of the server.
+ */
+test('a hostile group name cannot write a property, let alone the prototype', async ({ request }) => {
+  const email = uniqueEmail('unsub-proto');
+  const user = await seedUser(email, 'UnsubPass123', 'MENTEE', 'Unsub Proto');
+  try {
+    const token = makeUnsubscribeToken(user.id, 'digests');
+
+    for (const group of ['__proto__', 'constructor', 'prototype', 'email:digests']) {
+      const res = await request.post('/api/unsubscribe/prefs', {
+        data: { token, group, enabled: false },
+      });
+      // Rejected at the schema, before anything is written.
+      expect(res.status(), `group=${group}`).toBe(400);
+    }
+
+    // Nothing was stored under any of those names, and the blob is still a
+    // plain object with only the keys this feature owns.
+    const prefs = await prefsOf(user.id);
+    for (const key of ['__proto__', 'constructor', 'prototype', 'email:__proto__']) {
+      expect(Object.prototype.hasOwnProperty.call(prefs, key), `stored ${key}`).toBe(false);
+    }
+    // The global prototype is intact — a polluted Object.prototype would make
+    // this true for every object in the process.
+    expect(({} as Record<string, unknown>).enabled).toBeUndefined();
+
+    // And the legitimate write still works, so the guard is not just refusing
+    // everything.
+    const ok = await request.post('/api/unsubscribe/prefs', {
+      data: { token, group: 'digests', enabled: false },
+    });
+    expect(ok.status()).toBe(200);
+    expect((await prefsOf(user.id))['email:digests']).toBe(false);
+  } finally {
+    await prisma.activityLog.deleteMany({ where: { actorId: user.id } });
+    await cleanupByEmail(email);
+  }
+});

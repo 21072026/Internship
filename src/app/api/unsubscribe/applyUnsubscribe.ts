@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   EMAIL_GROUPS,
+  EMAIL_GROUP_IDS,
   emailGroupPrefKey,
   isEssentialGroup,
   resolveEmailGroupPrefs,
@@ -67,11 +68,37 @@ function toResult(u: PrefUserRow): UnsubResult {
  * corrupt blob would leave somebody unable to unsubscribe at all.
  */
 function prefsObject(raw: unknown): Record<string, unknown> {
+  // Null-prototype accumulator. Every key written below comes from PREF_KEY, so
+  // none of them can be `__proto__` — but `obj[k] = v` on an ordinary object is
+  // the assignment that triggers the prototype setter, and an object with no
+  // prototype removes the question instead of answering it. The spread that
+  // seeds it is already safe (spread defines own properties rather than
+  // assigning through setters, and JSON.parse likewise makes `__proto__` an
+  // ordinary own key), so this guards the write, not the read.
+  const out: Record<string, unknown> = Object.create(null);
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    return { ...(raw as Record<string, unknown>) };
+    Object.assign(out, raw as Record<string, unknown>);
   }
-  return {};
+  return out;
 }
+
+/**
+ * groupId -> the JSON key it is stored under, resolved once at module load.
+ *
+ * The write below indexes THIS table rather than calling emailGroupPrefKey() on
+ * a value that arrived in a request. Both callers already constrain the group to
+ * the taxonomy — `z.enum([...EMAIL_GROUP_IDS])` in the prefs route, and an
+ * `isEmailGroupId` check inside verifyUnsubscribeToken for the signed one — so
+ * nothing hostile could reach the old form either. CodeQL flagged it anyway
+ * (remote property injection), and it was right to: "a validator upstream
+ * narrowed this" is a claim a reader has to go and check, while "the property
+ * name is read out of a frozen table built from a constant" is visible at the
+ * write itself. Same reason the one-click redirect stopped deriving its target
+ * from the request: prefer the version that needs no argument.
+ */
+const PREF_KEY: Readonly<Record<EmailGroupId, string>> = Object.freeze(
+  Object.fromEntries(EMAIL_GROUP_IDS.map((id) => [id, emailGroupPrefKey(id)])) as Record<EmailGroupId, string>
+);
 
 /** null when the user no longer exists. */
 export async function readGroupState(userId: string): Promise<UnsubResult | null> {
@@ -118,11 +145,13 @@ export async function applyGroupPref(
     if (targets.length === 0) return toResult(user);
 
     const prefs = prefsObject(user.notificationPrefs);
-    for (const id of targets) prefs[emailGroupPrefKey(id)] = enabled;
+    for (const id of targets) prefs[PREF_KEY[id]] = enabled;
 
     const updated = await tx.user.update({
       where: { id: userId },
-      data: { notificationPrefs: prefs as Prisma.InputJsonValue },
+      // Back to an ordinary object for the driver. Safe by construction now:
+      // every key is either one PREF_KEY supplied or one that was already stored.
+      data: { notificationPrefs: { ...prefs } as Prisma.InputJsonValue },
       select: USER_SELECT,
     });
     return toResult(updated);
