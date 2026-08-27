@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Async UI states**: centralize loading, error, retry and empty presentation with shared skeleton variants.",
+  "notes": {
+    "en": ["Interaction history and mentor analytics now distinguish loading, errors and genuinely empty results, with a retry option when loading fails."],
+    "tr": ["Etkileşim geçmişi ve mentor analitiği artık yükleme, hata ve gerçek boş sonuçları ayrı gösteriyor; yükleme başarısız olursa yeniden deneme sunuyor."],
+    "de": ["Interaktionsverlauf und Mentor-Analysen unterscheiden jetzt zwischen Laden, Fehlern und tatsächlich leeren Ergebnissen und bieten bei Ladefehlern einen erneuten Versuch."]
+  }
+}

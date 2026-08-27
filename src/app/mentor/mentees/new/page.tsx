@@ -10,6 +10,7 @@ import { ArrowLeft } from 'lucide-react';
 import { ReferrerPicker } from '@/components/ReferrerPicker';
 import { encodeReferrer } from '@/lib/referrer';
 import { useT } from '@/i18n/client';
+import { copyToClipboard } from '@/lib/clipboard';
 
 export default function NewMenteePage() {
   const t = useT();
@@ -96,10 +97,13 @@ export default function NewMenteePage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  navigator.clipboard?.writeText(setPasswordUrl);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
+                onClick={async () => {
+                 const didCopy = await copyToClipboard(setPasswordUrl);
+
+                 if (!didCopy) return;
+
+                 setCopied(true);
+                 setTimeout(() => setCopied(false), 2000);
                 }}
               >
                 {copied ? t.mentor.copied : t.mentor.copyLink}

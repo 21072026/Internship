@@ -14,6 +14,10 @@ import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { useSearchParams } from 'next/navigation';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestInviteField';
+import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
+import { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface Relation {
   id: string;
@@ -28,6 +32,10 @@ interface Meeting {
   meetLink?: string | null;
   rsvp: 'PENDING' | 'ACCEPTED' | 'DECLINED';
   relation: { mentee: { id: string; fullName: string } };
+  // Present only on the row a bulk schedule attached its guests to (#1446) —
+  // every other row of the batch has an empty list, which is correct: the
+  // outsider was invited once, to the shared room.
+  guests?: MeetingGuest[];
 }
 
 const RSVP_VARIANT = { PENDING: 'warning', ACCEPTED: 'success', DECLINED: 'danger' } as const;
@@ -54,6 +62,7 @@ export function MeetingsManager() {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [meetLink, setMeetLink] = useState('');
+  const [guests, setGuests] = useState<PendingGuest[]>([]);
   // Time is optional. With a date the meeting has a time (defaulting to
   // midnight if no clock time) and expects an RSVP; with no date it's a
   // no-time meeting (just a link, no RSVP).
@@ -106,15 +115,14 @@ export function MeetingsManager() {
   ];
 
   const copyLink = async (m: Meeting) => {
-    if (!m.meetLink) return;
-    try {
-      await navigator.clipboard.writeText(m.meetLink);
-      setCopiedId(m.id);
-      setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
-    } catch {
-      // Clipboard blocked (e.g. insecure context) — select-and-copy fallback.
-      window.prompt(t.meetings.copyLink, m.meetLink);
-    }
+   if (!m.meetLink) return;
+
+   const didCopy = await copyToClipboard(m.meetLink);
+
+   if (!didCopy) return;
+
+   setCopiedId(m.id);
+   setTimeout(() => setCopiedId((cur) => (cur === m.id ? null : cur)), 1800);
   };
 
   const schedule = async () => {
@@ -126,15 +134,35 @@ export function MeetingsManager() {
         headers: { 'Content-Type': 'application/json' },
         // `timeZone`: the clock the organizer typed the time on — their browser's,
         // which is what the date/time inputs are read in (#1210).
-        body: JSON.stringify({ relationIds: chosen, title, scheduledAt, meetLink, timeZone: browserTimeZone() ?? undefined }),
+        body: JSON.stringify({
+          relationIds: chosen,
+          title,
+          scheduledAt,
+          meetLink,
+          timeZone: browserTimeZone() ?? undefined,
+          guests: guests.length > 0 ? guests : undefined,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
-        setResult(t.meetings.scheduledCount.replace('{n}', String(data.created)));
+        // Two counts, not one: "3 mentees" and "2 outsiders" are different
+        // facts, and an organizer who typed an address needs to see it landed.
+        const lines = [t.meetings.scheduledCount.replace('{n}', String(data.created))];
+        if (data.guestsInvited > 0) {
+          lines.push(t.meetings.guests.invited.replace('{n}', String(data.guestsInvited)));
+        }
+        // An address that turned out to belong to an account is not an error —
+        // that person IS invited, just through the normal path. Say so, or the
+        // organizer sees their guest silently vanish from the list.
+        for (const email of (data.rejectedAsMembers ?? []) as string[]) {
+          lines.push(t.meetings.guests.isMember.replace('{email}', email));
+        }
+        setResult(lines.join(' '));
         setTitle('');
         setDate('');
         setTime('');
         setMeetLink('');
+        setGuests([]);
         setSelected({});
         await load();
       } else {
@@ -260,6 +288,9 @@ export function MeetingsManager() {
               value={meetLink}
               onChange={(e) => setMeetLink(e.target.value)}
             />
+            {/* Outsiders are additive to the selection above, never a
+                replacement for it: this endpoint schedules against relations. */}
+            <GuestInviteField guests={guests} onChange={setGuests} max={MAX_GUESTS_PER_MEETING} disabled={busy} testIdPrefix="guest" />
             <Button onClick={schedule} loading={busy} disabled={chosen.length === 0 || !title}>
               {t.meetings.sendInvite}
             </Button>
@@ -294,6 +325,7 @@ export function MeetingsManager() {
                         {m.meetLink}
                       </a>
                     )}
+                    <MeetingGuestList guests={m.guests ?? []} />
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {m.meetLink && (

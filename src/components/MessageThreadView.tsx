@@ -17,6 +17,7 @@ import {
 } from '@/components/MessageThread';
 import { useMessagesHeaderTitle } from '@/components/MessagesShell';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
+import { useRealtime } from '@/hooks/useRealtime';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { LanguageBadge } from '@/components/LanguageBadge';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -164,9 +165,34 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   }, [target.kind, target.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live thread (#1464). The stream carries ids, not bodies, so a signal for
+  // *this* thread simply replays the authorized fetch above — which also marks
+  // the new message read, exactly as opening the thread does.
+  //
+  // A `message` event is the fast path, never the only path, and that is what
+  // keeps this self-healing: `tick` is the polling fallback and the "tab came
+  // back to the foreground" nudge; `ready` is a freshly (re)connected stream,
+  // which is exactly when an event may have been published while nobody was
+  // listening; `unread` is the heartbeat's database re-check noticing a change.
+  // None of the three says *which* thread moved, so they reload unconditionally.
+  useRealtime((signal) => {
+    if (signal.type === 'tick' || signal.type === 'ready' || signal.type === 'unread') { void load(); return; }
+    if (signal.type !== 'message') return;
+    const mine = target.kind === 'relation' ? signal.relationId === target.id : signal.conversationId === target.id;
+    if (mine) void load();
+  });
   // `block: 'end'` keeps this inside the bubble scroller instead of nudging the
   // page: on mobile the list is the only scrollable box (see MessagesShell).
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages]);
+  //
+  // Keyed on the *last message id*, not the array: `load()` now also runs on a
+  // live signal and on every poll tick (#1464), each of which produces a fresh
+  // array with identical contents. Scrolling on that would drag someone reading
+  // back through the thread down to the bottom every few seconds.
+  const lastMessageId = messages.length ? messages[messages.length - 1].id : null;
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [lastMessageId]);
 
   const addFiles = (list: FileList | File[]) => {
     const picked = Array.from(list).filter(Boolean);

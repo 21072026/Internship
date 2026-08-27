@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Fixed** — premium open-position match alerts scanned only the legacy `CompanyNeed` table, so a role opened through the Requisition screen never matched anybody: a premium company could have several open requisitions and receive nothing. The job now reads both sources. Only requisitions with status `OPEN` and unfilled openings alert, and the existing per-(company, candidate) dedupe means a role present in both tables still alerts once.",
+  "notes": {
+    "en": ["Premium match alerts now also cover roles opened as requisitions, not only positions added through the company form."],
+    "tr": ["Premium eşleşme uyarıları artık yalnızca şirket formundan eklenen pozisyonları değil, iş talebi olarak açılan rolleri de kapsıyor."],
+    "de": ["Premium-Treffer-Benachrichtigungen decken jetzt auch als Requisition eröffnete Rollen ab, nicht nur über das Firmenformular angelegte Positionen."]
+  }
+}

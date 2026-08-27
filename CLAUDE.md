@@ -32,6 +32,9 @@ npx prisma db seed   # create first ADMIN (see seed env vars below)
 npm run test:e2e         # full Playwright suite (starts the app itself)
 npm run test:e2e:smoke   # critical-path subset only (tests tagged @smoke)
 npm run test:e2e:headed  # full suite, with a visible browser
+
+npm run test:stress      # weekly flat GET hammer     (BASE_URL=… ; Node, no deps)
+npm run test:load        # nightly k6 ramp            (BASE_URL=… ; needs the k6 binary)
 ```
 
 **E2E tests** (Playwright) live in `e2e/`. The PR quality gate
@@ -51,6 +54,18 @@ commit only repeats the same verdict); `workflow_dispatch` always runs. A Turkis
 email (`scripts/e2e-report-email.mjs` → `ALERT_EMAIL_TO`) goes out **only when the run is
 red** — the failing tests with error snippets. Set the repo variable
 `E2E_REPORT_MODE=always` to restore the "✅ N/N test geçti" green heartbeat.
+
+**Load tests (k6)** live in `k6/` and are the *non-functional* net: the app can be
+correct and still be too slow. `k6/nightly-load.js` runs **nightly at 23:40 UTC**
+(`.github/workflows/k6-load.yml`) against the deployed target (`STRESS_TARGET_URL`,
+default prod) — a 6m00s VU ramp to a peak of 20, **anonymous GET only**, with
+per-endpoint latency budgets declared in `options.thresholds` (each carrying its
+reasoning as a comment). A Turkish breach email (`scripts/k6-report-email.mjs`) goes
+out **only when a threshold fails**; green is silent. Deliberately **no drift gate** —
+unlike e2e-full, a load test measures the *environment*, which degrades without any
+commit changing. The older `scripts/stress-test.mjs` (weekly, flat concurrency) stays:
+it is a different shape of test, not a predecessor. Full details, including **how to
+add a new k6 scenario**, in [`docs/testing.md`](docs/testing.md).
 
 ## Architecture
 
@@ -217,6 +232,14 @@ workaround, #636, and it compiled on every PR push).
   still-open question (`docs/legal/legal-tax-framework.md`). Contributor terms live in
   `CONTRIBUTING.md` (§ Contributor terms (IP)) and are confirmed via the PR template;
   rationale in [`docs/legal/licensing-strategy.md`](docs/legal/licensing-strategy.md).
+- **E-mail newsletter** (`/admin/newsletters`, #1469): scheduled career content, separate
+  from announcements — own audience (`MENTEE`/`MENTOR`/`BOTH`), own archive, own opt-out
+  category, one `NewsletterSend` row per recipient, and a **sent issue is immutable and
+  undeletable**. Curated issues live in `src/lib/newsletterContent.ts` (EN/TR/DE, house
+  style documented there). Full design in [`docs/newsletter.md`](docs/newsletter.md) — read
+  it before extending: `lib/newsletter.ts` is client-safe on purpose (the HMAC token and
+  URL builders live in `lib/newsletterTokens.ts`), and the cron is registered from
+  `/api/cron/start`, never from `initCronJobs`, to keep the import graph one-way.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.
@@ -234,8 +257,40 @@ workaround, #636, and it compiled on every PR push).
   The displayed version is derived at build time from base+fragments (`next.config.js` →
   `src/lib/version.ts`), so it is correct immediately after every merge; a scheduled workflow
   (`release-compact.yml`) later folds fragments into the canonical files through a normal PR.
-  `npm run check:release-fragments` validates fragments in CI. A shipped change without a
-  fragment is a checklist failure — reviewers will call it out.
+  `npm run check:release-fragments` validates fragments in CI (and prints the version each
+  pending change will ship as); `npm run test:release` guards the arithmetic. A shipped change
+  without a fragment is a checklist failure — reviewers will call it out.
+  **One fragment = one release (#1457):** each fragment gets its own version number, dated to
+  the minute (UTC) and linked to the commit that added it — in `CHANGELOG.md`, in
+  `src/lib/releaseNotes.ts` and on `/release-notes`. The order is the **merge** order read
+  from git, not the filename order: filename order let a `patch` fragment be swallowed by a
+  later `minor`'s `patch = 0` reset (three merges in a row shipped as `0.114.0-beta`) and the
+  compaction buried a whole cron window — 45 changes — under one heading. Consequences to know:
+  a shallow clone cannot date a release, so anything that stamps checks out with
+  `fetch-depth: 0` and compaction **fails closed**; `.git` is `.dockerignore`d, so
+  `build-image.yml` resolves the stamps on the runner and passes them in as `RELEASE_STAMPS`.
+- **k6 load tests** (`k6/`, added 2026-08-26): a k6 script here points at a **live shared
+  environment**, so the safety rules are hard constraints, not preferences — **GET only**
+  (nothing may mutate a row), **never authenticated** (bcrypt is expensive and the
+  failed-login bucket would lock the runner's IP out), never an endpoint that mails, calls
+  an AI provider or increments a counter, and **never a rate-limited route** (all VUs share
+  the runner's single IP, so `/api/public/stats` at 60/10min and `/api/v1/*` at 120/min are
+  excluded — a 429 in a report means the mix drifted, not that the app is sick). Keep the
+  files **`.js`**: a `.ts` under `k6/` is pulled into `npx tsc --noEmit` and fails on the
+  missing `k6/*` module types — deliberately left un-excluded in `tsconfig.json` so the rule
+  enforces itself. The `.js` files themselves are linted and typechecked by **nothing**
+  (`next lint` only visits `src/`, tsconfig's `include` only `*.ts|tsx`), which is why
+  `npm run check:k6` (a `k6 archive` parse, wired into `ci.yml`) exists — without it a
+  mistyped threshold key first surfaces at 23:40 UTC as a crash email. Tag every request `{ ep: '<name>' }` and give each tag both a
+  `http_req_duration{ep:…}` budget and `http_reqs{ep:…}: ['count>0']` — a tagged sub-metric
+  only reaches the JSON summary when a threshold names it, and the alert email's
+  per-endpoint table is built from exactly those. Validate a change with
+  `K6_SMOKE=1 K6_PEAK_VUS=3 npm run test:load` (~40s) instead of the full 6-minute ramp.
+  `BASE_URL` defaults to **preview**, not prod, so a reflexive `npm run test:load` cannot
+  ramp the live site. A new scenario gets **its own workflow** — `k6-load.yml` hardcodes one
+  summary filename, so a second `k6 run` step there would overwrite the first one's summary.
+  **Writing a new k6 test is expected** when a change puts real load on a new surface —
+  follow the checklist at the end of the k6 section in `docs/testing.md`.
 - **E2E locator pitfalls** (hit repeatedly): `AdminNav` renders its own sidebar
   `input[type="search"]` filter box present on every admin page — an unscoped
   `input[type="search"]` selector in a new test will hit that instead of a page-level search

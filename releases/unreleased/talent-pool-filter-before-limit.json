@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Fixed** — talent-pool search read 60 rows from the database and only then applied the skill filter, so a skill held by nobody in the 60 most recently updated candidates returned nothing at all — and the response carried no total, so an incomplete answer looked identical to an empty one. The search now counts and paginates over the whole matching set, the early-access embargo is part of the database filter rather than a post-filter, and the screen shows the result count with a pager.",
+  "notes": {
+    "en": ["Talent-pool search now searches the whole pool, shows how many candidates matched, and pages through them."],
+    "tr": ["Yetenek havuzu araması artık havuzun tamamında arıyor, kaç aday eşleştiğini gösteriyor ve sayfalar arasında geziniyor."],
+    "de": ["Die Talentpool-Suche durchsucht jetzt den gesamten Pool, zeigt die Trefferzahl und blättert durch die Ergebnisse."]
+  }
+}

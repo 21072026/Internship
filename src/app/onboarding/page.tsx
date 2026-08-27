@@ -12,8 +12,13 @@ export default async function OnboardingPage() {
     redirect('/auth/signin');
   }
 
+  if (session.user.role !== 'MENTOR' && session.user.role !== 'MENTEE') {
+    redirect('/');
+  }
+
+  const { t } = await getServerDictionary();
+
   if (session.user.role === 'MENTOR') {
-    const { t } = await getServerDictionary();
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
@@ -29,18 +34,12 @@ export default async function OnboardingPage() {
     );
   }
 
-  if (session.user.role !== 'MENTEE') {
-    redirect('/');
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Complete Your Profile</h1>
-          <p className="text-gray-500 mt-2">
-            Help us match you with the right mentor and opportunities
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">{t.onboarding.mentee.title}</h1>
+          <p className="text-gray-500 mt-2">{t.onboarding.mentee.subtitle}</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <OnboardingForm />

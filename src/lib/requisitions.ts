@@ -68,3 +68,20 @@ export async function validateRequisitionOwner(ownerId: string | null | undefine
     select: { id: true },
   });
 }
+
+export async function validateOfferRequisition(
+  requisitionId: string | null | undefined,
+  orgId: string | null,
+  companyId: string | null,
+) {
+  if (!requisitionId) return { ok: true as const };
+  const requisition = await prisma.requisition.findFirst({
+    where: { id: requisitionId, ...(orgId ? { orgId } : {}) },
+    select: { companyId: true },
+  });
+  if (!requisition) return { ok: false as const, status: 404, code: 'requisition_not_found' as const };
+  if (requisition.companyId !== companyId) {
+    return { ok: false as const, status: 400, code: 'requisition_company_mismatch' as const };
+  }
+  return { ok: true as const };
+}

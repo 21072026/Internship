@@ -105,6 +105,12 @@ interface FunnelKpi {
   journeys: number;
 }
 
+// Height of the bar area inside the `h-44` (176px) trends track: the track
+// minus the month label line and its gap. Pinned rather than flex-derived
+// because the bars size themselves with percentage heights, and a percentage
+// only resolves against a definite height (#1425).
+const BAR_AREA_PX = 150;
+
 export default function AdminAnalyticsPage() {
   const t = useT();
   const label = useStageLabel();
@@ -533,18 +539,35 @@ export default function AdminAnalyticsPage() {
         return (
           <Card className="mt-6">
             <CardHeader><CardTitle>{t.analytics.trends}</CardTitle></CardHeader>
-            <div className="flex items-end gap-3 h-44 px-2">
+            {/* A percentage height needs an ancestor with a DEFINITE height,
+                or it computes to `auto` — 0px for an empty div. The column had
+                no height of its own, so all twelve bars collapsed while the
+                month labels (text, so intrinsic height) kept rendering. That is
+                why this read as a data problem rather than a layout one (#1425).
+
+                `h-full` on the column is necessary but not sufficient: a height
+                that comes from `flex-1` is a used value, not a definite one, so
+                percentages inside it still resolve to auto. I measured that —
+                the first attempt kept `flex-1` on the bar row and the bars were
+                still 0px. Hence the explicit row height below; `BAR_AREA_PX` is
+                the `h-44` track (176px) minus the label line and its gap.
+                (The working chart in src/app/mentor/feedback/page.tsx gets away
+                with percentages because its bars are direct children of the
+                definite-height column, with no flex-sized row in between.) */}
+            <div className="flex items-end gap-3 h-44 px-2" data-testid="analytics-trend-chart">
               {data.trends.months.map((m, i) => (
-                <div key={m} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                  <div className="flex items-end gap-1 flex-1 w-full justify-center">
+                <div key={m} className="flex h-full flex-1 flex-col items-center justify-end gap-1 min-w-0">
+                  <div className="flex w-full items-end justify-center gap-1" style={{ height: BAR_AREA_PX }}>
                     <div
                       className="w-3 sm:w-4 bg-blue-500 rounded-t"
                       style={{ height: `${(data.trends!.newRelations[i] / max) * 100}%` }}
+                      data-testid={`trend-bar-new-${i}`}
                       title={`${t.analytics.trendNewRelations}: ${data.trends!.newRelations[i]}`}
                     />
                     <div
                       className="w-3 sm:w-4 bg-emerald-400 rounded-t"
                       style={{ height: `${(data.trends!.interactions[i] / max) * 100}%` }}
+                      data-testid={`trend-bar-interactions-${i}`}
                       title={`${t.analytics.trendInteractions}: ${data.trends!.interactions[i]}`}
                     />
                   </div>

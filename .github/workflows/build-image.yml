@@ -49,6 +49,22 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
+          # Full history: the release stamps below are read from the commit that
+          # added each pending fragment (#1457).
+          fetch-depth: 0
+
+      # .dockerignore excludes .git, so `next build` inside the image cannot ask
+      # git when each pending change shipped. Resolve it here and hand the answer
+      # to the build as one JSON line; without it the build would fall back to
+      # filename order and the released versions would lose their dates (#1457).
+      - name: Resolve release stamps
+        id: stamps
+        run: |
+          # Assigned to a variable first, deliberately: inside `echo "x=$(cmd)"`
+          # a failing cmd is discarded by the shell and the step would go green
+          # with empty stamps, shipping undated versions in filename order.
+          STAMPS="$(node scripts/release-derive.cjs --stamps)"
+          echo "json=$STAMPS" >> "$GITHUB_OUTPUT"
 
       - name: Resolve image reference
         id: meta
@@ -79,6 +95,7 @@ jobs:
           build-args: |
             GIT_SHA=${{ inputs.ref }}
             NEXT_PUBLIC_APP_ENV=${{ inputs.app_env }}
+            RELEASE_STAMPS=${{ steps.stamps.outputs.json }}
           # Layer cache lives in the Actions cache, so repeat builds of the same
           # dependency set skip the expensive `npm ci` layer.
           cache-from: type=gha,scope=${{ inputs.app_env }}
