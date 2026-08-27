@@ -20,13 +20,18 @@ interface MReq {
 
 // mode='request' → the mentee proposes meetings + sees status.
 // mode='manage'  → the mentor accepts/declines pending requests.
+// `readOnly` keeps the list of past requests visible but closes the form — an
+// archived mentorship (#1408) takes no new meeting requests, and /api/meeting-
+// requests rejects them too.
 export function MeetingRequestsPanel({
   relationId,
   mode,
   counterpart,
+  readOnly = false,
 }: {
   relationId: string;
   mode: 'request' | 'manage';
+  readOnly?: boolean;
   /**
    * The other side of the relation. A mentee proposing a slot is proposing it
    * on their own clock to somebody who may be on another one, so the proposal
@@ -130,7 +135,9 @@ export function MeetingRequestsPanel({
     <Card>
       <CardHeader><CardTitle>{mode === 'manage' ? t.portal.meetingRequests.titleManage : t.portal.meetingRequests.title}</CardTitle></CardHeader>
 
-      {mode === 'request' && hasOffers && (
+      {/* Picking one of the mentor's offered slots is a write action like the
+          form below, so an archived mentorship closes both (#1408). */}
+      {mode === 'request' && !readOnly && hasOffers && (
         <div className="mb-4" data-testid="slot-offers">
           <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             {t.portal.meetingRequests.pickSlot}
@@ -172,7 +179,7 @@ export function MeetingRequestsPanel({
         </div>
       )}
 
-      {mode === 'request' && (
+      {mode === 'request' && !readOnly && (
         <form onSubmit={submit} className="flex flex-wrap items-end gap-2 mb-4">
           <div className="flex-1 min-w-[160px]"><Input label={t.portal.meetingRequests.topic} value={topic} onChange={(e) => setTopic(e.target.value)} /></div>
           <div className="min-w-[180px]">
@@ -218,7 +225,7 @@ export function MeetingRequestsPanel({
                   )}
                 </p>
               </div>
-              {mode === 'manage' ? (
+              {mode === 'manage' && !readOnly ? (
                 <div className="flex gap-2 flex-shrink-0">
                   <Button size="sm" loading={busy} onClick={() => handle(r.id, 'accept')}>{t.portal.meetingRequests.accept}</Button>
                   <Button size="sm" variant="outline" loading={busy} onClick={() => handle(r.id, 'decline')}>{t.portal.meetingRequests.decline}</Button>

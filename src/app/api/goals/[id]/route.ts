@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
 
@@ -28,6 +29,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const goal = await goalIfAllowed(session.user.id, session.user.role, id);
   if (!goal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  // Same rule as creating one (#1408): a mentee cannot move the goals of a
+  // mentorship that has ended. Mentor and admin are untouched.
+  if (menteeWriteClosed(goal.relation, session.user.id)) {
+    return NextResponse.json(INACTIVE_RELATION_ERROR, { status: 409 });
+  }
 
   const parsed = patchSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

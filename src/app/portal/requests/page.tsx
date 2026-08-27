@@ -7,6 +7,8 @@ import { PortalTabs } from '@/components/PortalTabs';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { MeetingRequestsPanel } from '@/components/MeetingRequestsPanel';
 import { Card } from '@/components/ui/Card';
+import { ArchivedNotice } from '@/components/ArchivedNotice';
+import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 
 export default async function PortalRequestsPage() {
   const session = await getServerSession(authOptions);
@@ -16,10 +18,14 @@ export default async function PortalRequestsPage() {
   if (!session?.user?.id) redirect('/auth/signin');
   const { t } = await getServerDictionary();
 
-  const activeRelation = await prisma.mentorshipRelation.findFirst({
-    where: { menteeId: session.user.id, status: 'ACTIVE' },
+  // ACTIVE, else the latest COMPLETED one shown read-only (#1408).
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: menteeRelationWhere(session.user.id),
     select: {
       id: true,
+      status: true,
+      startDate: true,
+      completedAt: true,
       // `timezone` (#1210): the meeting-request form shows a proposed slot on
       // the mentor's clock as well as the mentee's before it is sent.
       // `id` (#1361): the request form reads the mentor's posted availability
@@ -27,25 +33,30 @@ export default async function PortalRequestsPage() {
       mentor: { select: { id: true, fullName: true, timezone: true } },
     },
   });
+  const { relation, isArchived } = pickMenteeRelation(relations);
 
   return (
     <div>
       <PortalTabs />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.tabs.requests}</h1>
-        <p className="text-gray-500 mt-1">{t.portal.requestsSubtitle}</p>
+        {/* "Ask your mentor a question or request a meeting" would contradict the
+            archive notice below it, where both are closed. */}
+        {!isArchived && <p className="text-gray-500 mt-1">{t.portal.requestsSubtitle}</p>}
       </div>
 
-      {activeRelation ? (
+      {relation ? (
         <div className="space-y-6">
-          <QuestionsPanel relationId={activeRelation.id} mode="ask" />
+          {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
+          <QuestionsPanel relationId={relation.id} mode="ask" readOnly={isArchived} />
           <MeetingRequestsPanel
-            relationId={activeRelation.id}
+            relationId={relation.id}
             mode="request"
+            readOnly={isArchived}
             counterpart={{
-              id: activeRelation.mentor.id,
-              name: activeRelation.mentor.fullName,
-              timezone: activeRelation.mentor.timezone,
+              id: relation.mentor.id,
+              name: relation.mentor.fullName,
+              timezone: relation.mentor.timezone,
             }}
           />
         </div>

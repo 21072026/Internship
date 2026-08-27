@@ -442,6 +442,61 @@ sonra** doldur, tahmin etme — bu turda iki gövdede yanlış numara oluştu ve
 
 ---
 
+## 2026-08-25 — Mentee gözüyle portal denetimi (#1395): kapının görmediği yerde borç birikiyor
+
+**Bir rolü "gerçekten" denetlemek üç kullanıcı gerektiriyor, bir tane değil.** `seed:demo`'nun
+sekiz mentee'sinin hepsi `ACTIVE` ilişkili — yani en pahalı bulgu bu veriyle hiç görünmüyor.
+Elle iki durum daha kurdum: ilişkisi **olmayan** bir mentee (`prisma.user.create` ile) ve
+ilişkisi `COMPLETED`'a çevrilmiş bir mentee (tek `UPDATE`). İkincisi portalın dört sayfasını
+birden boşalttı — mentee'ye "henüz mentör atanmadı, yönetici sana mentör atayacak" diyor
+(#1408). Rol denetiminde "veri var / veri yok / veri bitti" üç ayrı senaryodur.
+
+**a11y baseline'ının boş olması sayfanın temiz olduğu anlamına gelmiyor.**
+`e2e/a11y-scan.spec.ts` mentee bağlamını `signInAsFreshUser` + `seedUser` ile kuruyor;
+`seedUser` `MentorshipRelation` üretmediği için `JourneyTracker`, teklif kartı, mentör kartı
+ve dolu takvim taramada **hiç render edilmiyor**. `/portal#dark` baseline'ı bu yüzden `{}`.
+İlişkili bir mentee ile aynı sayfa koyu temada 9, `/portal/calendar` açık temada 27 serious
+`color-contrast` veriyor; `/portal/goals`'ta bir de **critical `select-name`** var
+(`EvaluationPanel.tsx:137` — etiket `<span>`, `<label>` değil). Kapıyı okurken sorulacak soru
+"baseline ne diyor" değil, **"kapı hangi durumu görüyor"** (#1412).
+
+**Yerel axe koşmak playwright spec'i yazmaktan hızlı.** `node_modules/axe-core/axe.min.js`'i
+`page.addScriptTag({content})` ile enjekte edip `window.axe.run` çağırmak, spec altyapısına
+dokunmadan 12 rotayı × 2 temayı tek script'te ölçtü. Tema için `documentElement.classList
+.toggle('dark', …)` yeterli — çerez/ayar akışını taklit etmek gerekmiyor.
+
+**Çeviri sızıntısını aramanın en ucuz yolu TR çerezi + kelime listesi.** `locale=tr` çereziyle
+gezip gövde metninde İngilizce belirteç aramak, portalın on bir ekranından tam ikisini
+işaretledi: `/portal/interactions` (sayfanın tamamı, #1418) ve `/onboarding` mentee dalı
+(#1420 — **aynı dosyadaki mentör dalı çevrili**). Grep tek başına bunu bulmuyor: `>Metin<`
+kalıbı `/onboarding`'i yakaladı ama sayfanın hangi rolün gördüğü ancak tarayıcıda belli oldu.
+
+**"Aynı bileşen iki rolde" farkı bulgu üretir.** Mentörün girdiği `InteractionLog.subject`
+mentör ekranlarında kalın başlık olarak duruyor, mentee tarafında hiç render edilmiyor
+(#1421). İki rolün aynı veriyi gösterdiği yerleri karşılaştırmak (grep `\.subject`) tek
+komutluk bir denetim.
+
+**`notifyIfAllowed` ile çıplak `notify()` ayrımı sessiz bir hata sınıfı.** `/account` her
+`NOTIFICATION_CATEGORIES` girdisi için anahtar basıyor, ama `message.new` çıplak `notify()`
+çağırıyor — e-posta tarafı `emailAllowed(rcpt,'messages')`'a uyarken uygulama içi satır
+uymuyor (#1426). `grep -rn "await notify("` ile tüm çağrı yerlerini tarayıp kategorisi olanla
+olmayanı ayırmak, bu tür yarım çalışan ayarları toplu bulmanın yolu.
+
+**`weekly-reports.spec.ts:22` yerelde dev sunucuya karşı 60 sn test bütçesini aşıyor.** Beş
+tarayıcı bağlamı, cron hatırlatıcıları ve yazdırma sayfası tek testte; dev derlemeleriyle
+bütçeye sığmıyor ve hata teardown'da (`context.close`) görünüyor — yanıltıcı. **Aynı test
+stash'lenmiş (dokunulmamış) ağaçta da aynı şekilde düşüyor**: suçlamadan önce iki dalda koştur,
+hakem CI (orada prod build koşuyor).
+
+**Konteyner kurulumu playbook'a uyuyor, iki not:** `mariadb-server` apt ile kuruluyor
+(`apt-get update` şart) ve `service mariadb start` yetiyor; scratchpad'den `@prisma/client`
+import eden bir script **çözülmüyor** — dosyayı repo köküne kopyalayıp koşturup silmek en
+kısa yol. `sub_issue_write` her yanıtta **ebeveynin tüm gövdesini** döndürüyor: 16 bağlama
+~80k token; önce hepsini oluştur, `child_id → parent` haritasını diske yaz, bağlamayı en
+sona bırak (skill de bunu söylüyor, gerçekten önemli).
+
+---
+
 ## 2026-08-24 — Telefon genişliğinde düzen denetimi: sıkışan satırlar sayfa taşması yapmaz (#1305)
 
 **"Yatay kaydırma var mı" kuralı bu hataların çoğunu KAÇIRIYOR.** Bildirilen bozukluk

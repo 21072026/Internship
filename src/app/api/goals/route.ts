@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { INACTIVE_RELATION_ERROR, menteeWriteClosed } from '@/lib/menteeRelation';
 import { withTenantScope } from '@/lib/orgContext';
 import { notifyIfAllowed } from '@/lib/notify';
 import type { Role } from '@prisma/client';
@@ -47,6 +48,12 @@ export async function POST(request: Request) {
 
   const rel = await relationIfAllowed(session.user.id, session.user.role, parsed.data.relationId);
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  // A finished mentorship takes no new ones (#1408) — the portal hides the form
+  // on an archive, and this keeps a hand-rolled request from doing more.
+  if (menteeWriteClosed(rel, session.user.id)) {
+    return NextResponse.json(INACTIVE_RELATION_ERROR, { status: 409 });
+  }
 
   const goal = await prisma.goal.create({
     data: {
