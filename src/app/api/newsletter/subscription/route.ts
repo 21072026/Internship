@@ -5,7 +5,12 @@ import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
-import { emailAllowed } from '@/lib/notificationPrefs';
+// The SEND decides with the group predicate, so the state this reports must use
+// the same one. `emailAllowed(x, 'newsletter')` reads only the legacy key, which
+// disagrees with the send for anyone who opted out through the newsletter's own
+// link and then re-enabled the group: the API would answer "not subscribed"
+// about mail that is still going out.
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { withNewsletterPref } from '@/lib/newsletter';
 
 /**
@@ -54,5 +59,5 @@ export async function PUT(request: Request) {
   // Reports the EFFECTIVE state, not what was asked for: someone with the
   // master e-mail switch off is still not going to receive it, and saying
   // "done, it is on" would be a lie the archive would then display.
-  return NextResponse.json({ ok: true, subscribed: emailAllowed(updated, 'newsletter') });
+  return NextResponse.json({ ok: true, subscribed: emailGroupAllowedForCategory(updated, 'newsletter') });
 }

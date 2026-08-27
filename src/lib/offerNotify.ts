@@ -4,7 +4,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendOfferSentEmail, sendOfferDecisionEmail } from '@/services/emailService';
 
 // SENT — notify + (opt-in) email the mentee; they are the one who must act.
@@ -37,7 +37,12 @@ export async function notifyOfferSent(offerId: string): Promise<void> {
   if (!offer) return;
   const mentee = offer.relation.mentee;
   await notify(mentee.id, 'offer_sent.new', { position: offer.position }, '/portal');
-  if (mentee.email && emailAllowed(mentee, 'mentorship')) {
+  // 'offer' is pipeline_updates. The `emailAllowed(mentee, 'mentorship')`
+  // conjunct that used to stand here reads a key mapping to
+  // mentorship_lifecycle, so it dropped offer letters that both preference
+  // surfaces reported as enabled; 'mentorship' now sits in
+  // pipeline_updates.legacy, where it is honoured *and* shown.
+  if (mentee.email && emailGroupAllowedForCategory(mentee, 'offer')) {
     await sendOfferSentEmail({
       to: mentee.email,
       fullName: mentee.fullName,
@@ -47,6 +52,8 @@ export async function notifyOfferSent(offerId: string): Promise<void> {
       expiresAt: offer.expiresAt,
       locale: mentee.preferredLanguage,
       orgId: offer.relation.orgId,
+      // The mentee is the one being made the offer, so they are the recipient.
+      userId: mentee.id,
     }).catch((e) => console.error('sendOfferSentEmail failed:', e));
   }
 }
@@ -76,7 +83,9 @@ export async function notifyOfferDecided(offerId: string, outcome: 'ACCEPTED' | 
   const admin = offer.createdBy;
   const menteeName = offer.relation.mentee.fullName;
   await notify(admin.id, `offer_${outcome.toLowerCase()}.admin`, { menteeName, position: offer.position }, `/admin/candidates`);
-  if (admin.email && emailAllowed(admin, 'mentorship')) {
+  // Same as notifyOfferSent above: the mail's own group decides, and the stray
+  // 'mentorship' conjunct now lives in pipeline_updates.legacy instead.
+  if (admin.email && emailGroupAllowedForCategory(admin, 'offer')) {
     await sendOfferDecisionEmail({
       to: admin.email,
       fullName: admin.fullName,
@@ -85,6 +94,10 @@ export async function notifyOfferDecided(offerId: string, outcome: 'ACCEPTED' | 
       outcome,
       locale: admin.preferredLanguage,
       orgId: offer.relation.orgId,
+      // The offer's CREATOR is the recipient here — the mentee only decided it.
+      // `offer.relation.mentee` is selected in this query for the name in the
+      // body, which makes mixing the two up easy and expensive.
+      userId: admin.id,
     }).catch((e) => console.error('sendOfferDecisionEmail failed:', e));
   }
 }

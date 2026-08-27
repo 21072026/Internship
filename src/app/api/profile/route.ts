@@ -137,6 +137,90 @@ const PROFILE_SELECT = {
   createdAt: true,
 } as const;
 
+// ── Auditing a notification change made on /account ────────────────────────
+//
+// The three unsubscribe token routes each write an `email.unsubscribe` /
+// `email.resubscribe` ActivityLog row, but a switch flipped on /account comes
+// through here instead, and this endpoint only ever logged a bare
+// 'profile.update'. That left "I stopped getting the weekly digest around
+// August" unanswerable: the scheduled jobs guard at the call site, so a
+// suppressed digest leaves no EmailLog row either (see
+// docs/EMAIL_DELIVERABILITY.md § 2d), and the current notificationPrefs value
+// was the only evidence — with no when and no how.
+//
+// `ActivityLog.detail` is VARCHAR(191) in this schema and an oversized value is
+// silently lost to P2000 (#1268), so the row records the changed *keys*, never
+// the blob, and shrinks itself to fit.
+const NOTIFICATION_DETAIL_MAX = 180;
+
+function boolPrefs(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, boolean> = {};
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof v === 'boolean') out[key] = v;
+  }
+  return out;
+}
+
+interface NotificationState {
+  emailNotifications: boolean;
+  notificationPrefs: unknown;
+}
+
+// Which switches went off, which went on, and which keys the write dropped
+// altogether (a PUT replaces the whole column, so a key can vanish and fall
+// back to its group default — that is a change too, and a silent one).
+function notificationDelta(before: NotificationState, after: NotificationState) {
+  const off: string[] = [];
+  const on: string[] = [];
+  const cleared: string[] = [];
+  if (before.emailNotifications !== after.emailNotifications) {
+    (after.emailNotifications ? on : off).push('emailNotifications');
+  }
+  const b = boolPrefs(before.notificationPrefs);
+  const a = boolPrefs(after.notificationPrefs);
+  for (const [key, value] of Object.entries(a)) {
+    if (b[key] === value) continue;
+    (value ? on : off).push(key);
+  }
+  for (const key of Object.keys(b)) {
+    if (!(key in a)) cleared.push(key);
+  }
+  return { off, on, cleared };
+}
+
+function renderDelta(lists: Array<[string, string[]]>, keep: number): string {
+  const parts: string[] = [];
+  let budget = keep;
+  let dropped = 0;
+  for (const [label, keys] of lists) {
+    const shown = keys.slice(0, Math.max(0, budget));
+    budget -= shown.length;
+    dropped += keys.length - shown.length;
+    if (shown.length > 0) parts.push(`${label}=${shown.join(',')}`);
+  }
+  if (dropped > 0) parts.push(`+${dropped}`);
+  return parts.join(' ');
+}
+
+// 'via=/account' so the row is distinguishable from the token routes', whose
+// detail carries a group id or 'one-click (RFC 8058)'.
+function notificationDetail(delta: ReturnType<typeof notificationDelta>): string | null {
+  const lists: Array<[string, string[]]> = [
+    ['off', delta.off],
+    ['on', delta.on],
+    ['cleared', delta.cleared],
+  ];
+  const total = lists.reduce((n, [, keys]) => n + keys.length, 0);
+  if (total === 0) return null;
+  for (let keep = total; keep > 0; keep--) {
+    const rendered = `via=/account ${renderDelta(lists, keep)}`;
+    if (rendered.length <= NOTIFICATION_DETAIL_MAX) return rendered;
+  }
+  // A pathologically long single key: still say that something moved.
+  return `via=/account ${total} keys changed`;
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -208,6 +292,17 @@ export async function PUT(request: Request) {
 
       const { cvUrl, birthDate, ...rest } = parsed.data;
 
+      // Read the switches back only when this write touches them; every other
+      // profile save keeps its single query.
+      const touchesNotifications =
+        parsed.data.notificationPrefs !== undefined || parsed.data.emailNotifications !== undefined;
+      const before = touchesNotifications
+        ? await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { emailNotifications: true, notificationPrefs: true },
+          })
+        : null;
+
       const user = await prisma.user.update({
         where: { id: session.user.id },
         data: {
@@ -220,7 +315,33 @@ export async function PUT(request: Request) {
         select: PROFILE_SELECT,
       });
 
-      await logActivity({ action: 'profile.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
+      const delta = before ? notificationDelta(before, user) : null;
+      const detail = delta ? notificationDetail(delta) : null;
+      if (delta && detail) {
+        // Reuse the token routes' action names so "who asked us to stop?" is one
+        // query across all four opt-out surfaces. A single /account toggle sends
+        // one changed key, so a mixed on+off write is a bulk client, not a human
+        // clicking; it lands under 'email.unsubscribe' because the opt-out is the
+        // half somebody will come asking about. A `cleared=` key is a fall back
+        // to the group default, which for a dropped opt-out means back ON.
+        await logActivity({
+          action: delta.off.length > 0 ? 'email.unsubscribe' : 'email.resubscribe',
+          actorId: session.user.id,
+          actorEmail: session.user.email ?? null,
+          targetType: 'user',
+          targetId: session.user.id,
+          detail,
+          request,
+        });
+      }
+      // Still record the plain profile edit when the write changed anything else
+      // (or changed nothing at all) — this row predates the delta one.
+      const changedOtherFields = Object.keys(parsed.data).some(
+        (field) => field !== 'notificationPrefs' && field !== 'emailNotifications'
+      );
+      if (changedOtherFields || !detail) {
+        await logActivity({ action: 'profile.update', actorId: session.user.id, actorEmail: session.user.email ?? null });
+      }
       return NextResponse.json({ user });
     });
   } catch (error) {

@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { emailAllowed } from '@/lib/notificationPrefs';
+// The SEND decides with the group predicate, so the state this reports must use
+// the same one. `emailAllowed(x, 'newsletter')` reads only the legacy key, which
+// disagrees with the send for anyone who opted out through the newsletter's own
+// link and then re-enabled the group: the API would answer "not subscribed"
+// about mail that is still going out.
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import {
   audienceIncludesRole,
   canonicalNewsletterContent,
@@ -106,6 +111,6 @@ export async function GET(request: Request) {
     pageSize,
     // So the archive can offer "turn these back on" to someone who left, and
     // say nothing to someone who is still subscribed.
-    subscribed: emailAllowed(me, 'newsletter'),
+    subscribed: emailGroupAllowedForCategory(me, 'newsletter'),
   });
 }

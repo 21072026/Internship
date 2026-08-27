@@ -24,6 +24,17 @@ import { bulkMissingRequirements } from '@/lib/documentRequirements';
 import { utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
+import {
+  BULK_GROUP_CATEGORIES,
+  emailGroupAllowed,
+  emailGroupAllowedForCategory,
+  groupForCategory,
+  isBulkGroup,
+  isEssentialGroup,
+  type EmailGroupId,
+  type EmailPrefUser,
+} from '@/lib/emailGroups';
+import { emailPreferencesUrl, oneClickUnsubscribeUrl, unsubscribeUrl } from '@/lib/unsubscribeToken';
 
 // Resolved branding for a transactional email (#546). When no orgId is given
 // (single-tenant, or a caller without tenant context) this returns the product
@@ -115,23 +126,28 @@ const bulkTransporter = bulkConfigured
 // default is deliberate: an uncategorised mail is more likely to be something
 // a person is waiting for than a digest, and quietly downgrading its
 // deliverability is the kind of regression nobody notices until it matters.
-const BULK_CATEGORIES = new Set([
-  'unread-digest',
-  'activity-digest',
-  'mentor-digest',
-  'analytics-report',
-  'meeting-reminder',
-  'interaction-reminder',
-  'stage-deadline',
-  'retention-reminder',
-  'company-need-alert',
-  'announcement',
-  'document-reminder',
-  // Scheduled career content (#1469): the definition of bulk mail — many
-  // recipients, nothing urgent, and a reader who marks it as spam must not be
-  // able to drag the password-reset mail's reputation down with it.
-  'newsletter',
-]);
+//
+// This used to be a hand-maintained list, and it had already drifted from the
+// group taxonomy it is supposed to mirror. It is now DERIVED from the groups
+// marked `bulk: true` in src/lib/emailGroups.ts, so "which mail is automated
+// volume?" is answered in exactly one place.
+//
+// One deliberate exception, unioned in below: 'retention-reminder' belongs to an
+// ESSENTIAL group (a legally required notice — never unsubscribable, no List-*
+// headers, no footer) that nevertheless belongs on the bulk relay. Which
+// transport carries a mail is a *deliverability* decision; whether a person may
+// opt out of it is a *consent* decision. They are allowed to disagree, and
+// silently moving a dated blast back onto the relay that carries password
+// resets would spend the reputation the channel split exists to protect.
+//
+// Diff vs. the hard-coded set this replaced (asserted in
+// e2e/email-groups-footer.unit.spec.ts): every previous entry is still here,
+// plus three additions the taxonomy already classes as automated volume —
+//   + 'weekly-report'            (task_reminders; was on primary by oversight)
+//   + 'meeting-series-reminder'  (new category, split out of 'meeting-reminder')
+//   + 're-engagement'           (new category; that mail had none at all)
+const LEGACY_BULK_CHANNEL = new Set(['retention-reminder']);
+const BULK_CATEGORIES = new Set<string>([...BULK_GROUP_CATEGORIES, ...LEGACY_BULK_CHANNEL]);
 
 export type MailTransport = 'primary' | 'bulk';
 
@@ -262,6 +278,126 @@ export async function runEmailHealthCheck(): Promise<EmailHealth> {
   return health;
 }
 
+// ── Per-group unsubscribe: footer + List-* headers (#1444) ──────────────────
+//
+// Everything below is a pure string builder on purpose. Nothing in this repo
+// can inspect a rendered e-mail end to end (Playwright blanks SMTP_USER, so
+// sendEmail short-circuits to a SKIPPED EmailLog row, and EmailLog stores no
+// body), so the footer and the headers are unit-tested against these functions
+// directly — see e2e/email-groups-footer.unit.spec.ts. They are exported through
+// `__testable` at the bottom of this block rather than individually, to keep the
+// module's public surface honest about what is API and what is test seam.
+
+const UNSUB_FOOTER_MARKER = 'data-unsub-footer="1"';
+
+// ONE LINE, no internal newlines — and that is load-bearing twice over:
+//   • htmlToText's anchor regex has no `s` flag, so an <a> broken across lines
+//     loses its URL from the text/plain part entirely. Gmail wants the visible
+//     opt-out in BOTH MIME parts, so a silently URL-less plain text half would
+//     defeat the whole point.
+//   • src/lib/outcomeComms.server.ts renders its body inside a
+//     `white-space:pre-wrap` div, and this footer is injected *inside* that
+//     wrapper — newlines in the markup would render as blank lines there. The
+//     footer's own `white-space:normal` defuses the inherited pre-wrap.
+function unsubscribeFooterHtml(userId: string, group: EmailGroupId, locale?: string | null): string {
+  const dict = getDictionary(resolveLocale(locale));
+  const U = dict.unsubscribe;
+  const name = dict.emailGroups[group].name;
+  const unsub = unsubscribeUrl(userId, group);
+  const prefs = emailPreferencesUrl(userId);
+  const line = esc(U.footerLine.replace('{group}', name));
+  const off = esc(U.footerUnsubscribe.replace('{group}', name));
+  const all = esc(U.footerManage);
+  return `<div ${UNSUB_FOOTER_MARKER} style="margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;line-height:1.6;white-space:normal;"><div style="margin-bottom:4px;">${line}</div><div><a href="${unsub}" style="color:#9ca3af;text-decoration:underline;">${off}</a> · <a href="${prefs}" style="color:#9ca3af;text-decoration:underline;">${all}</a></div></div>`;
+}
+
+// Injected *inside* the template's own 600px wrapper div where there is one, so
+// the footer sits in the same column as the body instead of full-bleed under it.
+// The marker check makes it idempotent: a template that already carries a footer
+// (or a body that was passed through twice) never gets a second one.
+function withUnsubscribeFooter(html: string, footer: string): string {
+  if (html.includes(UNSUB_FOOTER_MARKER)) return html;
+  const trimmed = html.trimEnd();
+  const CLOSE = '</div>';
+  return trimmed.endsWith(CLOSE)
+    ? `${trimmed.slice(0, -CLOSE.length)}${footer}${CLOSE}`
+    : `${html}${footer}`;
+}
+
+// RFC 2919 wants a globally unique id in a namespace we own. The app host is
+// stable, ASCII and always present; a group id is already a dot-atom.
+function listIdHost(): string {
+  try {
+    return new URL(appUrl()).host;
+  } catch {
+    return 'localhost';
+  }
+}
+
+function unsubscribeHeaders(userId: string, group: EmailGroupId): Record<string, string> {
+  const one = oneClickUnsubscribeUrl(userId, group);
+  // The mailto: form is advertised ONLY when a mailbox is configured, because
+  // src/services/inboundMailBridge.ts + routeInboundEmail understand
+  // `reply+<token>@` and nothing else — they would black-hole an unsubscribe
+  // message. An opt-out address nobody processes is a compliance failure, not a
+  // courtesy, so the header entry is omitted rather than emitted empty.
+  const mailto = process.env.UNSUBSCRIBE_MAILTO;
+  const h: Record<string, string> = {
+    // https FIRST: RFC 8058 one-click keys off the https URI, and RFC 2369
+    // ordering is preference order, so browser-capable clients pick it.
+    'List-Unsubscribe': mailto ? `<${one}>, <mailto:${mailto}?subject=unsubscribe>` : `<${one}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
+  // Only automated volume gets the list markers. A 1:1 notification is not a
+  // list, and `Precedence: bulk` on the primary channel is a negative signal on
+  // exactly the reputation the two-transport split exists to protect — plus
+  // these mails often expect a reply through the `reply+` address, which an
+  // auto-response suppression header would interfere with.
+  if (isBulkGroup(group)) {
+    h['List-Id'] = `<${group}.${listIdHost()}>`;
+    h['Precedence'] = 'bulk';
+    h['Auto-Submitted'] = 'auto-generated';
+    h['X-Auto-Response-Suppress'] = 'OOF, AutoReply';
+  }
+  return h;
+}
+
+/**
+ * Does this mail get the consent machinery — the preference check, the footer
+ * and the List-* headers? All three ride together, and all three answer the
+ * same question, so the answer is computed once, here, rather than restated at
+ * each of the three use sites in sendEmail() below.
+ *
+ * Three ways to be exempt, each for its own reason:
+ *   • No group. An uncategorised or unmapped category fails OPEN, the same
+ *     fail-safe reasoning transportFor() uses — a taxonomy gap must never
+ *     swallow mail somebody is waiting for.
+ *   • No userId. The recipient is not a User row (an invitee who has not
+ *     registered yet, a mentor applicant, ALERT_EMAIL_TO, an operator-typed
+ *     test address): there is no preference to read and no token to mint.
+ *   • An essential group. Sign-in, security and legally required notices ignore
+ *     every switch, and advertising an opt-out on a password reset invites
+ *     people to switch off the mail they cannot function without.
+ *
+ * A named predicate rather than an inline expression because it is the one line
+ * that decides whether a mail is unsubscribable at all, and it is the property
+ * e2e/email-groups-footer.unit.spec.ts has to be able to ask about directly.
+ */
+function unsubscribable(groupId: EmailGroupId | null, userId?: string | null): boolean {
+  return !!groupId && !!userId && !isEssentialGroup(groupId);
+}
+
+/** Test seam for e2e/email-groups-footer.unit.spec.ts — not part of the mail API. */
+export const __testable = {
+  UNSUB_FOOTER_MARKER,
+  BULK_CATEGORIES,
+  LEGACY_BULK_CHANNEL,
+  unsubscribable,
+  unsubscribeFooterHtml,
+  withUnsubscribeFooter,
+  unsubscribeHeaders,
+  htmlToText,
+};
 // What actually happened to a message, mirroring the EmailLog row this call
 // writes (#1431). Returned rather than only recorded, because "did not throw"
 // is not the same as "was delivered": the two SKIPPED paths below return
@@ -282,6 +418,10 @@ export async function sendEmail({
   attachments,
   fromName,
   category,
+  userId,
+  group,
+  locale,
+  prefs,
   headers,
 }: {
   to: string;
@@ -299,11 +439,57 @@ export async function sendEmail({
   // so the dozens of existing call sites keep compiling; the ones that matter
   // for "did our mail get through?" pass it.
   category?: string;
-  // Extra SMTP headers. Added for the newsletter's List-Unsubscribe pair
+  // The recipient's User.id. Supplying it is what turns on central unsubscribe
+  // enforcement, the footer and the List-* headers — without it there is no
+  // preference to read and no token to mint, which is exactly the right
+  // behaviour for a recipient who is not a User row (an invitee who has not
+  // registered, ALERT_EMAIL_TO, a mentor applicant, an arbitrary test address).
+  //
+  // Because it is optional, omitting it by accident compiles, delivers and looks
+  // healthy while shipping bulk mail with no opt-out at all — so every send in a
+  // non-essential group must either pass it or say on the call
+  // `// no-user-row: <why>`. e2e/email-groups-footer.unit.spec.ts scans the
+  // source for exactly that and names the file, the category and the fix.
+  userId?: string | null;
+  // Normally derived from `category`; an explicit value wins, for the rare send
+  // whose taxonomy home the category cannot express.
+  group?: EmailGroupId;
+  // The recipient's language, for the FOOTER ONLY. Omit it when the body is
+  // English: a translated footer under an untranslated body reads as a bug, not
+  // as a courtesy (the same convention timeZoneNote() follows).
+  locale?: string | null;
+  // The two preference columns, when the caller has ALREADY read them for this
+  // recipient. Purely an economy measure, for the one path where it matters:
+  // the announcement broadcast selects `emailNotifications` +
+  // `notificationPrefs` for every active user in a single query and filters on
+  // them in memory, and without this the central check below re-read the same
+  // two columns once per recipient — a thousand extra pooled round trips on top
+  // of the thousand EmailLog inserts, all inside one Promise.all, against a
+  // default Prisma pool of a dozen-odd connections. That is where a P2024 pool
+  // timeout comes from, on the largest send the product makes.
+  //
+  // It is DATA, not a bypass flag, and the distinction is the whole reason this
+  // is safe to add: what is passed is the answer to "what did this user
+  // choose?", never "should I check?". Omitting it costs a query; it cannot
+  // skip the check, and there is deliberately no value of it — and no sibling
+  // flag — that means "send anyway". Do not add one.
+  //
+  // Deliberately NOT threaded through the scheduled jobs: the digests already
+  // run several queries per recipient, so one more changes nothing there, and
+  // every extra call site that hand-carries preference data is another place
+  // for the row and the decision to drift apart.
+  prefs?: EmailPrefUser;
+  // Extra SMTP headers, from a caller that owns its own opt-out presentation.
+  // Added for the newsletter's List-Unsubscribe pair
   // (#1469), which is what makes Gmail and Outlook render their own native
   // "unsubscribe" control next to the sender — a reader who uses that never
   // reaches for the spam button, and the spam button is what costs the whole
   // sending domain. Nothing else needs it, hence optional.
+  //
+  // These WIN over the pair this function computes for a gated send, and such a
+  // caller also gets no footer: a send that brought its own List-Unsubscribe has
+  // said it owns the opt-out, and two of them is worse than either. See the merge
+  // in the body below.
   headers?: Record<string, string>;
 }) {
   // No SMTP on this environment. This used to be a bare console.log + return,
@@ -315,6 +501,44 @@ export async function sendEmail({
   // bulk transport is not configured, so a single-SMTP setup is unchanged.
   const transport = transportFor(category);
   const via = transport === 'bulk' ? bulkTransporter! : transporter;
+
+  const groupId = group ?? groupForCategory(category);
+  const gated = unsubscribable(groupId, userId);
+
+  // ── CENTRAL ENFORCEMENT ───────────────────────────────────────────────────
+  //
+  // This — not the call sites — is the guarantee that an unsubscribe applies to
+  // every mail we send. There are 41 send sites in this codebase and nine of
+  // them had no per-user preference check at all before this change; the next
+  // one somebody adds will forget too. The per-call-site checks stay (they keep
+  // the scheduled jobs' returned `{ emailed: n }` counters truthful, which
+  // several e2e specs assert), but they are an optimisation. This is the one
+  // that cannot be forgotten.
+  //
+  // Deliberately placed AHEAD of the demo-mode and SMTP short-circuits below,
+  // so the promise holds in every environment and the SKIPPED row records *why*:
+  // "Unsubscribed: digests" is auditable, "Demo mode" is not.
+  if (gated) {
+    // `prefs` when the caller already holds this recipient's row, a read
+    // otherwise. Same decision either way — see the parameter's note above.
+    const u =
+      prefs ??
+      (await prisma.user
+        .findUnique({ where: { id: userId! }, select: { emailNotifications: true, notificationPrefs: true } })
+        .catch(() => null));
+    // Fail OPEN on a missing row or a DB error, exactly like notifyIfAllowed: a
+    // preference lookup that breaks must not silently swallow the mail.
+    if (u && !emailGroupAllowed(u, groupId!)) {
+      logger.info('Email not sent: unsubscribed', { to, category, group: groupId });
+      await recordEmail(to, subject, category, 'SKIPPED', transport, `Unsubscribed: ${groupId}`);
+      // 'SKIPPED', never a bare return: #1431 made this function report what
+      // actually happened, because four routes had been reading "did not throw"
+      // as "was delivered". A suppressed send is the newest way for a mail not
+      // to arrive, so it owes callers the same honest answer as the demo-mode
+      // and no-SMTP paths below.
+      return 'SKIPPED';
+    }
+  }
 
   // Public demo (#966): never deliver. The demo accounts are synthetic
   // @demo.example.com addresses, but a visitor can type any address into an
@@ -334,16 +558,47 @@ export async function sendEmail({
     return 'SKIPPED';
   }
 
+  // The footer and the headers ride together and only on gated (non-essential,
+  // known-recipient) mail. Advertising an opt-out on a password reset invites
+  // people to switch off the mail they cannot function without.
+  //
+  // Note this is deliberately NOT nodemailer's `list:` option: `_formatListUrl`
+  // mangles `list: { 'unsubscribe-post': … }` into
+  // `<http://List-Unsubscribe=One-Click>`. Raw `headers` pass ASCII through
+  // verbatim, which is what RFC 8058 needs.
+  // A caller that supplied its own `List-Unsubscribe` owns the opt-out for this
+  // message, and gets neither our footer nor our header pair. The newsletter
+  // (#1469) is that caller: it renders its own unsubscribe link in the body and
+  // points its header at its own route. Adding a second link and a second
+  // List-Unsubscribe would not be twice as good — a duplicate header is resolved
+  // arbitrarily by the client, so the two mechanisms would disagree about which
+  // one a native "Unsubscribe" button actually hit.
+  //
+  // Keyed on the header rather than a new boolean deliberately: the condition IS
+  // the evidence. A caller cannot claim to own the opt-out without shipping the
+  // thing that provides it, and there is no flag to set stale.
+  const callerOwnsOptOut = !!headers && Object.keys(headers).some((k) => k.toLowerCase() === 'list-unsubscribe');
+  let body = html;
+  let computed: Record<string, string> | undefined;
+  if (gated && !callerOwnsOptOut) {
+    body = withUnsubscribeFooter(html, unsubscribeFooterHtml(userId!, groupId!, locale));
+    computed = unsubscribeHeaders(userId!, groupId!);
+  }
+  // Caller last: an explicit header beats one we derived. Note the group check
+  // above still ran either way — owning the *presentation* of an opt-out is not
+  // permission to ignore the recipient's stored choice.
+  const mergedHeaders = { ...(computed ?? {}), ...(headers ?? {}) };
+
   try {
     await via.sendMail({
       from: fromHeader(fromName, transport),
       to,
       subject,
-      html,
-      text: htmlToText(html),
+      html: body,
+      text: htmlToText(body),
       ...(replyTo ? { replyTo } : {}),
       ...(attachments?.length ? { attachments } : {}),
-      ...(headers && Object.keys(headers).length ? { headers } : {}),
+      ...(mergedHeaders && Object.keys(mergedHeaders).length ? { headers: mergedHeaders } : {}),
     });
   } catch (e) {
     // Record, then rethrow unchanged: callers that already catch (and the ones
@@ -557,6 +812,7 @@ export async function sendMeetingInviteEmail({
   timeZone,
   organizerTimeZone,
   organizerName,
+  userId,
 }: {
   to: string;
   fullName?: string | null;
@@ -574,6 +830,9 @@ export async function sendMeetingInviteEmail({
   // so both sides can confirm they agreed on the same instant.
   organizerTimeZone?: string | null;
   organizerName?: string | null;
+  // The invitee's User.id when they are one, so the invite carries a working
+  // per-group unsubscribe. Omitted by callers that only hold an address.
+  userId?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
@@ -585,6 +844,8 @@ export async function sendMeetingInviteEmail({
 
   await sendEmail({
     to,
+    userId,
+    category: 'meeting-invite',
     subject: `Meeting invitation: ${title}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -649,6 +910,9 @@ export async function sendMeetingGuestInviteEmail({
   await sendEmail({
     to,
     subject: `Meeting invitation: ${title}`,
+    // no-user-row: a guest is an address somebody typed into the scheduler,
+    // deliberately not an account here — there is no row to gate on and no
+    // token to mint, and the mail says so in its own closing line instead.
     category: 'meeting-guest-invite',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -751,12 +1015,14 @@ export async function sendMentorshipDecisionEmail({
   approved,
   mentorName,
   orgId,
+  userId,
 }: {
   to: string;
   fullName?: string | null;
   approved: boolean;
   mentorName?: string | null;
   orgId?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const heading = approved ? 'Your mentorship request was approved' : 'Update on your mentorship request';
@@ -766,6 +1032,8 @@ export async function sendMentorshipDecisionEmail({
 
   await sendEmail({
     to,
+    userId,
+    category: 'mentorship-decision',
     fromName: brand.name,
     subject: approved ? `Your mentorship request was approved` : `Update on your mentorship request`,
     html: `
@@ -784,15 +1052,19 @@ export async function sendMenteeAssignedEmail({
   mentorName,
   menteeName,
   orgId,
+  userId,
 }: {
   to: string;
   mentorName?: string | null;
   menteeName: string;
   orgId?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   await sendEmail({
     to,
+    userId,
+    category: 'mentee-assigned',
     fromName: brand.name,
     subject: `New mentee assigned: ${menteeName}`,
     html: `
@@ -814,15 +1086,19 @@ export async function sendMentorAssignedEmail({
   menteeName,
   mentorName,
   orgId,
+  userId,
 }: {
   to: string;
   menteeName?: string | null;
   mentorName: string;
   orgId?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   await sendEmail({
     to,
+    userId,
+    category: 'mentor-assigned',
     fromName: brand.name,
     subject: `You have a mentor: ${mentorName}`,
     html: `
@@ -844,6 +1120,7 @@ export async function sendMentorshipRequestEmail({
   targetPosition,
   message,
   orgId,
+  userId,
 }: {
   to: string;
   adminName?: string | null;
@@ -851,10 +1128,13 @@ export async function sendMentorshipRequestEmail({
   targetPosition?: string | null;
   message?: string | null;
   orgId?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   await sendEmail({
     to,
+    userId,
+    category: 'mentorship-request',
     fromName: brand.name,
     subject: `New mentorship request: ${menteeName}`,
     html: `
@@ -892,6 +1172,11 @@ export async function sendMentorApplicationReceivedEmail({
   const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
   await sendEmail({
     to,
+    // no-user-row: the applicant is a MentorApplication and nothing else yet —
+    // no User row exists to hold a preference, so there is nothing to
+    // unsubscribe and no footer is emitted (see `userId` in sendEmail).
+    category: 'mentor-application-received',
+    locale,
     fromName: brand.name,
     subject: M.received.subject,
     html: `
@@ -919,6 +1204,11 @@ export async function sendMentorApplicationUnderReviewEmail({
   const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
   await sendEmail({
     to,
+    // no-user-row: same recipient as the acknowledgement above — an application
+    // under review still has no account behind it, so there is no preference to
+    // read and no unsubscribe token to mint.
+    category: 'mentor-application-received',
+    locale,
     fromName: brand.name,
     subject: M.underReview.subject,
     html: `
@@ -940,18 +1230,28 @@ export async function sendMentorApplicationApprovedEmail({
   locale,
   orgId,
   registerUrl,
+  userId,
 }: {
   to: string;
   fullName: string;
   locale?: string | null;
   orgId?: string | null;
   registerUrl?: string | null;
+  // Set only on the "existing account promoted in place" path — the invited
+  // path has no User row yet, so that copy ships without a footer. The invited
+  // caller carries the `no-user-row:` marker itself: a marker here would exempt
+  // every call site of this sender at once, including the promoted one, which is
+  // the opposite of what the scan is for.
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
   const isNewAccount = !!registerUrl;
   await sendEmail({
     to,
+    userId,
+    category: 'mentor-application',
+    locale,
     fromName: brand.name,
     subject: M.approved.subject,
     html: `
@@ -982,6 +1282,11 @@ export async function sendMentorApplicationRejectedEmail({
   const M = getDictionary(resolveLocale(locale)).mentorApplicationEmail;
   await sendEmail({
     to,
+    // no-user-row: a declined application never became a User row, so there is
+    // nothing to unsubscribe from — and this is the last mail it will ever
+    // produce, which is the one case where that is self-evidently fine.
+    category: 'mentor-application',
+    locale,
     fromName: brand.name,
     subject: M.rejected.subject,
     html: `
@@ -1010,6 +1315,7 @@ export async function sendOfferSentEmail({
   expiresAt,
   locale,
   orgId,
+  userId,
 }: {
   to: string;
   fullName: string;
@@ -1019,6 +1325,7 @@ export async function sendOfferSentEmail({
   expiresAt?: Date | null;
   locale?: string | null;
   orgId?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const loc = resolveLocale(locale);
@@ -1027,6 +1334,9 @@ export async function sendOfferSentEmail({
   const expires = formatOfferDate(expiresAt, loc);
   await sendEmail({
     to,
+    userId,
+    category: 'offer',
+    locale,
     fromName: brand.name,
     subject: M.sent.subject.replace('{position}', position),
     html: `
@@ -1050,6 +1360,7 @@ export async function sendOfferDecisionEmail({
   outcome,
   locale,
   orgId,
+  userId,
 }: {
   to: string;
   fullName: string;
@@ -1058,12 +1369,16 @@ export async function sendOfferDecisionEmail({
   outcome: 'ACCEPTED' | 'DECLINED' | 'EXPIRED';
   locale?: string | null;
   orgId?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const M = getDictionary(resolveLocale(locale)).offerEmail;
   const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
   await sendEmail({
     to,
+    userId,
+    category: 'offer',
+    locale,
     fromName: brand.name,
     subject: copy.subject.replace('{mentee}', menteeName),
     html: `
@@ -1124,6 +1439,7 @@ export async function sendMeetingRequestEmail({
   orgId,
   timeZone,
   requesterTimeZone,
+  userId,
 }: {
   to: string;
   fullName?: string | null;
@@ -1136,11 +1452,14 @@ export async function sendMeetingRequestEmail({
   // The clock the requester proposed on. Worth naming here above all: the
   // mentor is being asked to agree to a time somebody else picked (#1210).
   requesterTimeZone?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const when = proposedAt ? formatInTimeZone(proposedAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
   await sendEmail({
     to,
+    userId,
+    category: 'meeting-request',
     fromName: brand.name,
     subject: `Meeting request: ${topic}`,
     html: `
@@ -1167,6 +1486,7 @@ export async function sendMeetingRequestDecisionEmail({
   link,
   orgId,
   timeZone,
+  userId,
 }: {
   to: string;
   fullName?: string | null;
@@ -1177,11 +1497,14 @@ export async function sendMeetingRequestDecisionEmail({
   link: string;
   orgId?: string | null;
   timeZone?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
   await sendEmail({
     to,
+    userId,
+    category: 'meeting-request-decision',
     fromName: brand.name,
     subject: accepted ? `Meeting confirmed: ${topic}` : `Meeting request declined: ${topic}`,
     html: `
@@ -1212,6 +1535,7 @@ export async function sendPublicContactEmail({
   fromEmail,
   message,
   orgId,
+  userId,
 }: {
   to: string;
   ownerName?: string | null;
@@ -1219,10 +1543,13 @@ export async function sendPublicContactEmail({
   fromEmail: string;
   message: string;
   orgId?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   await sendEmail({
     to,
+    userId,
+    category: 'public-contact',
     fromName: brand.name,
     replyTo: fromEmail,
     subject: `New message from your public profile: ${fromName}`,
@@ -1252,6 +1579,7 @@ export async function sendCompanyInquiryEmail({
   message,
   locale,
   orgId,
+  userId,
 }: {
   to: string;
   adminName?: string | null;
@@ -1263,11 +1591,15 @@ export async function sendCompanyInquiryEmail({
   message?: string | null;
   locale?: string | null;
   orgId?: string | null;
+  userId?: string | null;
 }) {
   const brand = await emailBrand(orgId);
   const M = getDictionary(resolveLocale(locale)).companyInquiryEmail;
   await sendEmail({
     to,
+    userId,
+    category: 'company-inquiry',
+    locale,
     fromName: brand.name,
     replyTo: fromEmail,
     subject: `${M.subject}: ${companyName}`,
@@ -1296,6 +1628,7 @@ export async function sendProjectJoinRequestEmail({
   message,
   recipient,
   orgId,
+  userId,
 }: {
   to: string;
   fullName?: string | null;
@@ -1304,14 +1637,25 @@ export async function sendProjectJoinRequestEmail({
   requesterName: string;
   message?: string | null;
   // Preferences are honoured here rather than at the call site so no caller can
-  // forget: this is a 'mentorship'-category notification (someone wants in).
+  // forget: this is an inbound request (someone wants in), group
+  // inbound_requests.
   recipient: { emailNotifications?: boolean | null; notificationPrefs?: unknown };
   orgId?: string | null;
+  userId?: string | null;
 }) {
-  if (!to || !emailAllowed(recipient, 'mentorship')) return;
+  // One conjunct, on this mail's own group: 'project-join-request' is
+  // inbound_requests. The legacy 'mentorship' check that used to stand alongside
+  // it maps to mentorship_lifecycle, a different group, so it silently dropped
+  // mail that both preference surfaces reported as enabled. 'mentorship' is now
+  // listed in inbound_requests.legacy, which is where an old opt-out belongs:
+  // honoured, displayed, and overridable by an explicit opt-in (see the note on
+  // `legacy` in src/lib/emailGroups.ts).
+  if (!to || !emailGroupAllowedForCategory(recipient, 'project-join-request')) return;
   const brand = await emailBrand(orgId);
   await sendEmail({
     to,
+    userId,
+    category: 'project-join-request',
     fromName: brand.name,
     subject: `Join request: ${requesterName} → ${projectName}`,
     html: `
@@ -1392,7 +1736,7 @@ export async function checkMentorInteractionReminders() {
   let emailed = 0;
   for (const relations of byMentor.values()) {
     const mentor = relations[0].mentor;
-    if (!mentor.email || !emailAllowed(mentor, 'deadlines')) continue;
+    if (!mentor.email || !emailAllowed(mentor, 'deadlines') || !emailGroupAllowedForCategory(mentor, 'interaction-reminder')) continue;
 
     const rows = relations
       .map((relation) => {
@@ -1410,6 +1754,7 @@ export async function checkMentorInteractionReminders() {
     try {
       await sendEmail({
         category: 'interaction-reminder',
+        userId: mentor.id,
         to: mentor.email,
         subject: relations.length === 1
           ? `Reminder: Log interaction with ${relations[0].mentee.fullName}`
@@ -1480,7 +1825,7 @@ export async function checkStageDeadlineReminders() {
     // does (#817) — opting out of deadline mail and still being pinged in-app
     // for the identical event is not a preference anyone chose.
     await notifyIfAllowed(rel.mentorId, 'deadlines', 'deadline.stagePassed', { menteeName: rel.mentee.fullName }, `/mentor/mentees/${rel.id}`);
-    if (emailAllowed(rel.mentor, 'deadlines')) {
+    if (emailAllowed(rel.mentor, 'deadlines') && emailGroupAllowedForCategory(rel.mentor, 'stage-deadline')) {
       const preferredLanguage = rel.mentor.preferredLanguage ?? undefined;
       const locale = isLocale(preferredLanguage) ? preferredLanguage : defaultLocale;
       const emailText = getDictionary(locale).notifications.deadlineEmail;
@@ -1489,6 +1834,8 @@ export async function checkStageDeadlineReminders() {
       const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
       await sendEmail({
         category: 'stage-deadline',
+        userId: rel.mentorId,
+        locale: rel.mentor.preferredLanguage,
         to: rel.mentor.email,
         subject,
         html: `<p>${greeting}</p><p>${body}</p>`,
@@ -1533,10 +1880,11 @@ export async function sendWeeklyReportReminders(now = new Date()) {
       await notify(relation.mentee.id, 'weekly_report_reminder.due', {}, '/portal');
     }
     reminded++;
-    if (emailAllowed(relation.mentee, 'weeklyReports')) {
+    if (emailAllowed(relation.mentee, 'weeklyReports') && emailGroupAllowedForCategory(relation.mentee, 'weekly-report')) {
       const brand = await emailBrand(relation.orgId);
       await sendEmail({
         to: relation.mentee.email, fromName: brand.name, category: 'weekly-report', subject: copy.reminderSubject,
+        userId: relation.mentee.id, locale: relation.mentee.preferredLanguage,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.reminderHeading)}<p>${copy.reminderGreeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${copy.reminderBody.replace('{date}', formattedWeek)}</p>${ctaBlock(brand, `${appUrl()}/portal`, copy.reminderCta)}</div>`,
       }).then(() => { emailed++; }).catch((error) => logger.error('Weekly report reminder email failed', { relationId: relation.id, error: String(error) }));
     }
@@ -1643,11 +1991,12 @@ export async function sendMeetingReminders() {
       );
       notified++;
 
-      if (!user.email || !emailAllowed(user, 'meetingReminders')) continue;
+      if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-reminder')) continue;
       try {
         const brand = await emailBrand(user.orgId);
         await sendEmail({
           category: 'meeting-reminder',
+          userId: user.id,
           to: user.email,
           fromName: brand.name,
           subject: `Reminder: ${m.title} starts soon`,
@@ -1723,6 +2072,9 @@ async function sendMeetingGuestReminderEmail({
   const when = `${formatInTimeZone(scheduledAt, zone)} (${zoneLabel(scheduledAt, zone)})`;
   await sendEmail({
     to,
+    // no-user-row: the reminder half of the guest invite, addressed to the same
+    // account-less MeetingGuest — and it already stops on its own when the guest
+    // declines, which is the only "opt out" that address can express.
     category: 'meeting-guest-reminder',
     subject: `Reminder: ${title} starts soon`,
     html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1842,11 +2194,14 @@ export async function sendProjectMeetingSeriesReminders() {
         );
         notified++;
 
-        if (!user.email || !emailAllowed(user, 'meetingReminders')) continue;
+        if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-series-reminder')) continue;
         try {
           const brand = await emailBrand(series.project?.orgId ?? null);
           await sendEmail({
-            category: 'meeting-reminder',
+            // Split out of 'meeting-reminder' so the recurring project blast is
+            // distinguishable in the delivery log; same group either way.
+            category: 'meeting-series-reminder',
+            userId: user.id,
             to: user.email,
             fromName: brand.name,
             subject:
@@ -1907,7 +2262,7 @@ export async function sendWeeklyMentorDigests() {
   let sent = 0;
   for (const m of mentors) {
     if (m.mentorRelations.length === 0) continue;
-    if (!emailAllowed(m, 'digest')) continue;
+    if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'mentor-digest')) continue;
     const stale = m.mentorRelations.filter(
       (r) => !r.interactions[0] || r.interactions[0].date < fourteenDaysAgo
     ).length;
@@ -1917,6 +2272,7 @@ export async function sendWeeklyMentorDigests() {
     try {
       await sendEmail({
         category: 'mentor-digest',
+        userId: m.id,
         to: m.email,
         subject: 'Your weekly mentoring summary',
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1988,12 +2344,13 @@ export async function sendDailyActivityDigests() {
     select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
   });
   for (const m of mentors) {
-    if (!emailAllowed(m, 'digest')) continue;
+    if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'activity-digest')) continue;
     const items = await getMentorMenteeActivity(m.id, since);
     if (items.length === 0) continue;
     try {
       await sendEmail({
         category: 'activity-digest',
+        userId: m.id,
         to: m.email,
         subject: 'Daily mentee activity',
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
@@ -2017,10 +2374,11 @@ export async function sendDailyActivityDigests() {
   const adminItems = await getSystemMenteeActivity(since);
   if (adminItems.length > 0) {
     for (const a of admins) {
-      if (!emailAllowed(a, 'digest')) continue;
+      if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
       try {
         await sendEmail({
           category: 'activity-digest',
+          userId: a.id,
           to: a.email,
           subject: 'Daily mentee activity (all mentees)',
           html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
@@ -2125,6 +2483,11 @@ export async function checkReEngagementReminders() {
     try {
       await sendEmail({
         to: p.email,
+        // The bespoke leave link in the body stays: it revokes the
+        // RE_ENGAGEMENT_POOL *consent*, which is a stronger and different action
+        // than "stop this group of mail". The group footer is additive.
+        category: 're-engagement',
+        userId: p.id,
         subject: 'Tekrar görüşelim mi? / Shall we talk again?',
         html: `<p>Merhaba ${p.fullName},</p>
 <p>Daha önce seninle yeni bir dönem açıldığında tekrar iletişime geçmemizi kabul etmiştin. O zaman geldi.</p>
@@ -2260,9 +2623,14 @@ export async function checkCompanyNeedMatches() {
       const link = `/p/${cand.id}`;
       for (const u of company.users) {
         await notify(u.id, 'need_match.newCandidate', { candidateName: cand.fullName }, link);
-        if (emailAllowed(u, 'digest')) {
+        // 'company-need-alert' is `opportunities`, not `digests` — the stray
+        // legacy 'digest' conjunct that used to stand here was reading another
+        // group's key and dropping alerts the surfaces showed as ON. It now
+        // lives in opportunities.legacy.
+        if (emailGroupAllowedForCategory(u, 'company-need-alert')) {
           await sendEmail({
             category: 'company-need-alert',
+            userId: u.id,
             to: u.email,
             subject: 'A candidate matches your open position',
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -2346,11 +2714,13 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             );
             notified++;
 
-            if (!recipient.email || !emailAllowed(recipient, 'documents')) continue;
+            if (!recipient.email || !emailAllowed(recipient, 'documents') || !emailGroupAllowedForCategory(recipient, 'document-reminder')) continue;
             try {
               const brand = await emailBrand(recipient.orgId);
               await sendEmail({
                 category: 'document-reminder',
+                userId: recipient.id,
+                locale: recipient.preferredLanguage,
                 to: recipient.email,
                 fromName: brand.name,
                 subject: t.reminderSubject.replace('{requirement}', label),
@@ -2405,9 +2775,14 @@ export async function sendWeeklyAnalyticsReport() {
 
   let sent = 0;
   for (const a of admins) {
-    if (!emailAllowed(a, 'digest')) continue;
+    // 'analytics-report' is `reports_analytics`; the legacy 'digest' conjunct
+    // that used to stand here belonged to `digests` and killed the report while
+    // the preference surfaces showed it as ON. 'digest' is in
+    // reports_analytics.legacy now, so the old opt-out still holds visibly.
+    if (!emailGroupAllowedForCategory(a, 'analytics-report')) continue;
     await sendEmail({
       category: 'analytics-report',
+      userId: a.id,
       to: a.email,
       subject: 'Weekly analytics report — Internship CRM',
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -2476,7 +2851,11 @@ export async function sendUnreadMessageDigests() {
 
   let sent = 0;
   for (const { recipient, items } of byRecipient.values()) {
-    if (!emailAllowed(recipient, 'messages')) continue;
+    // The mail's taxonomy home is `digests`, and that is the only thing checked
+    // here. The legacy 'messages' key existing opt-outs are recorded under maps
+    // to direct_messages, so as a conjunct it suppressed a digest the surfaces
+    // showed as ON; it is listed in digests.legacy instead.
+    if (!emailGroupAllowedForCategory(recipient, 'unread-digest')) continue;
     const rows = items
       .map((it) => {
         const safe = it.preview.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
@@ -2502,6 +2881,7 @@ export async function sendUnreadMessageDigests() {
     try {
       await sendEmail({
         to: recipient.email!,
+        userId: recipient.id,
         category: 'unread-digest',
         subject: `You have ${items.length} unread message${items.length === 1 ? '' : 's'}`,
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">

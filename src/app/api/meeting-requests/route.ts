@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import { notify } from '@/lib/notify';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMeetingRequestEmail } from '@/services/emailService';
 import { parseUserDateTime } from '@/lib/timezone';
 
@@ -75,7 +75,14 @@ export async function POST(request: Request) {
       where: { id: recipient },
       select: { fullName: true, email: true, orgId: true, emailNotifications: true, notificationPrefs: true, timezone: true },
     });
-    if (rcpt?.email && emailAllowed(rcpt, 'meetingReminders')) {
+    // Gated on this mail's OWN group: 'meeting-request' is meeting_invites.
+    // The check used to read `emailAllowed(rcpt, 'meetingReminders')`, a key that
+    // maps to meeting_reminders — a different group — so an old opt-out from
+    // automated nagging silently swallowed a named person asking you to attend
+    // something, while both preference surfaces showed "Meeting invites: ON".
+    // 'meetingReminders' is now in meeting_invites.legacy, so that opt-out still
+    // holds, is visible, and can be overridden by an explicit opt-in.
+    if (rcpt?.email && emailGroupAllowedForCategory(rcpt, 'meeting-request')) {
       try {
         await sendMeetingRequestEmail({
           to: rcpt.email,
@@ -87,6 +94,9 @@ export async function POST(request: Request) {
           orgId: rcpt.orgId,
           timeZone: rcpt.timezone,
           requesterTimeZone: requester?.timezone ?? null,
+          // The other party, i.e. whoever is being asked to attend — not
+          // `session.user.id`, who is the person asking.
+          userId: recipient,
         });
       } catch (e) {
         console.error('Meeting request email failed:', e);

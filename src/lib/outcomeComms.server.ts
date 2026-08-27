@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { notifyIfAllowed } from '@/lib/notify';
 import { getSetting } from '@/lib/settings';
 import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendEmail } from '@/services/emailService';
 import { getDictionary } from '@/i18n/dictionaries';
 import { locales, type Locale } from '@/i18n/config';
@@ -88,6 +89,7 @@ export async function emitOutcomeComms(opts: {
     // mentee's own language, with their opt-out respected.
     const mentee = relation.mentee;
     if (!mentee.email || !emailAllowed(mentee, 'stageUpdates')) return;
+    if (!emailGroupAllowedForCategory(mentee, 'outcome')) return;
     const dict = getDictionary(localeOf(mentee.preferredLanguage));
     const tpl = (dict.emailTemplates as Record<string, { subject: string; body: string }>)[
       OUTCOME_TEMPLATE_KEY[kind]
@@ -101,6 +103,11 @@ export async function emitOutcomeComms(opts: {
       subject,
       html: `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;white-space:pre-wrap">${esc(body)}</div>`,
       category: 'outcome',
+      // The mentee is the only recipient — the mentor gets an in-app
+      // notification above, never a copy of this mail. The body is rendered from
+      // the mentee's own dictionary, so the footer takes the same language.
+      userId: mentee.id,
+      locale: mentee.preferredLanguage,
     });
     // Logged on the relation like every other mentor→mentee email, so the
     // history shows what the candidate was actually told.

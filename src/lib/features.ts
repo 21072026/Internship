@@ -14,7 +14,7 @@ import {
   GitBranch, Users, Building2, CalendarClock, FileText, Target,
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
-  Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailOpen,
+  Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus, MailOpen,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -76,5 +76,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'newsletter', category: 'collaboration', icon: MailOpen, color: 'indigo', title: C.newsletter.t, desc: C.newsletter.d },
     { key: 'inviteLinks', category: 'tracking', icon: Link2, color: 'teal', title: C.inviteLinks.t, desc: C.inviteLinks.d },
     { key: 'outcomeComms', category: 'trust', icon: MessageSquareHeart, color: 'rose', title: C.outcomeComms.t, desc: C.outcomeComms.d },
+    { key: 'emailGroups', category: 'trust', icon: MailMinus, color: 'teal', title: C.emailGroups.t, desc: C.emailGroups.d },
   ];
 }

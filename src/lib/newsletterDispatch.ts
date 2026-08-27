@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
-import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { getSetting } from '@/lib/settings';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -224,7 +224,14 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
   const recipients = users.filter((u) => u.email && !already.has(u.email));
 
   await pooled(recipients, async (user) => {
-    if (!emailAllowed(user, 'newsletter')) {
+    // The group check, not the bare legacy key. They agree today — 'newsletter'
+    // is the `newsletter` group's own legacy key — but only this form honours an
+    // explicit opt-back-IN: someone who used the newsletter's own unsubscribe
+    // (which writes `newsletter: false`) and later re-enabled "Career newsletter"
+    // in the preference centre has `email:newsletter: true`, and the bare key
+    // would keep suppressing them while both surfaces showed the group as ON.
+    // That mismatch is the same one this PR removed from ten other call sites.
+    if (!emailGroupAllowedForCategory(user, 'newsletter')) {
       skipped++;
       return;
     }
@@ -247,6 +254,13 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
         subject,
         html,
         category: NEWSLETTER_EMAIL_CATEGORY,
+        // The recipient, so the `newsletter` group is enforced centrally as well
+        // as by the guard above. This send keeps its OWN opt-out presentation —
+        // it supplies a List-Unsubscribe below, which suppresses the generic
+        // footer and header pair — but owning the presentation is not a reason
+        // to sit outside the one check that cannot be forgotten.
+        userId: user.id,
+        prefs: user,
         attachments,
         headers: {
           // Both halves matter: the URL alone gets a "click to unsubscribe"

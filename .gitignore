@@ -38,6 +38,12 @@ bower_components
 build/Release
 
 # Dependency directories
+# Both spellings on purpose: the trailing slash matches a directory, the bare
+# name also catches a *symlink* called node_modules. An agent working in a
+# throwaway clone symlinks it to a shared install to avoid a second npm install,
+# and `git add -A` then commits that symlink — an absolute path out of somebody's
+# container — straight past the slash-only rule. That happened once (#1444).
+node_modules
 node_modules/
 jspm_packages/
 

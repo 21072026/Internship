@@ -10,6 +10,154 @@ Newest entries on top.
 
 ---
 
+## 2026-08-26 — E-posta grupları ve abonelikten çıkma: opsiyonel parametre sessiz hata üretir (#1444)
+
+**Bir sarmalayıcıya opsiyonel parametre eklemek çağıranları güncellemez — ve tip denetimi
+bunu görmez.** Bu işin ikinci yarısı tam olarak bu yüzden var oldu: `sendEmail()` ve ~15
+`send*Email()` sarmalayıcısı `userId?: string | null` aldı, ama 20 harici çağrı yerine
+kimse eklemedi. `npx tsc --noEmit` temiz geçti, uygulama çalıştı, postalar gitti — ve
+hepsi altbilgisiz, `List-Unsubscribe` başlığı olmadan gitti. Yani özelliğin önlemek için
+var olduğu hatanın ta kendisi, üstelik hiçbir aracın yakalayamadığı biçimde. **Bir davranışı
+"opsiyonel" yaparsan varsayılanın sessizce yanlış olmadığından emin ol**; olamıyorsa çağrı
+yerlerini aynı PR'da tara (`grep -rn "sendEmail({\|send[A-Z][A-Za-z]*Email({" src`) ve
+sayıyı tut — benim sayım 6 `sendEmail` + 36 sarmalayıcı çağrısıydı, hepsini tek tek
+gerekçelendirdim.
+
+**Alıcı ile eylemi yapan aynı kapsamda olduğunda `userId` karıştırmak sessiz bir güvenlik
+hatasıdır.** Postanın gönderilmesi değişmiyor; yalnızca içine **başkasının** abonelikten
+çıkma jetonu gömülüyor. Riskli yerler ikisinin birlikte durduğu yerlerdi:
+`mentor/email` (yazan mentör, alan mentee), `messages` (`session.user.id` vs `recipient`),
+`apply` ve `public-contact` (formu dolduran anonim, alan profil sahibi),
+`offerNotify.notifyOfferDecided` (karar veren mentee, alan `offer.createdBy`),
+`mentorship` (iki taraf da postalanıyor). Her birine tuzağı adıyla anan bir yorum yazdım.
+
+**Denetimi tek bir gönderim fonksiyonunda topla, 41 çağrı yerine dağıtma.** Çağrı yeri
+kontrolleri (`emailAllowed` + `emailGroupAllowedForCategory`) duruyor çünkü zamanlanmış
+işlerin döndürdüğü `{ emailed: n }` sayacını e2e spec'leri doğruluyor — ama garanti
+`sendEmail()`'de. Kanıt: bu değişiklikten önce 41 gönderim yerinin **dokuzunda** hiç
+kullanıcı tercihi kontrolü yoktu. Merkezi kontrolü demo-modu ve SMTP kısa-devrelerinin
+**önüne** koymak da bilinçli: söz her ortamda tutuluyor ve `EmailLog` satırı nedenini
+(`Unsubscribed: digests`) yazıyor.
+
+**nodemailer'ın `list:` seçeneği RFC 8058'i bozuyor.** `_formatListUrl`,
+`list: { 'unsubscribe-post': ... }` ifadesini `<http://List-Unsubscribe=One-Click>` haline
+getiriyor. Ham `headers` kullan; ASCII'yi olduğu gibi geçiriyor.
+
+**`htmlToText`'in bağlantı regex'inde `s` bayrağı yok.** Bu yüzden satır sonu içeren bir
+`<a>` hiç eşleşmiyor, sonraki genel etiket-silme onu yiyor ve URL `text/plain` yarısından
+tamamen kayboluyor. Gmail çıkış bağlantısını **iki** MIME parçasında da istiyor, dolayısıyla
+altbilgi tek satır olmak zorunda — ve testi de bunu doğrulamalı, gözle bakmak yetmez.
+
+**Bir "test edilemez" davranışı adlandırılmış saf fonksiyon yapmak testi mümkün kılıyor.**
+"Zorunlu (essential) posta altbilgi ve `List-*` başlığı almaz" garantisi `sendEmail()`
+içinde satır içi bir ifadeydi; DB olmadan çağrılamadığı için hiçbir test soramıyordu.
+`unsubscribable(groupId, userId)` diye çıkarıp `__testable` üzerinden açtım — üç satırlık
+değişiklik, üç yeni test. Aynı mantık: e-postanın kendisi uçtan uca denetlenemiyor
+(Playwright `SMTP_USER`'ı boşaltıyor, `EmailLog` gövde tutmuyor), o yüzden altbilgi/başlık
+kurucularını doğrudan test et.
+
+**DB'siz koşabilen spec'leri DB'siz koş.** Bu konteynerde MySQL yok; `BASE_URL=...` vermek
+`playwright.config.ts`'in `webServer`'ını **tamamen atlıyor** ve `globalSetup` yalnızca bir
+JSON dosyası yazdığı için DB istemiyor. Sonuç: `BASE_URL=http://127.0.0.1:9 npx playwright
+test e2e/*.unit.spec.ts` saniyeler içinde 31 birim testi koşuyor, tarayıcı bile açılmıyor
+(hiçbiri `page` fixture'ı kullanmadığı için). DB'ye bağlı spec'leri "yazıldı ama
+koşulmadı" diye ayrı raporla.
+
+**Kaynağı tarayan test, taksonomi boşluğunu yakalar.** Bir `category` dizgisi grup
+haritasında yoksa posta gidiyor ama grup yok, dolayısıyla altbilgi de yok — sessiz.
+`src` altında posta gönderen dosyalardaki `category: '...'` sabitlerini tarayıp her birinin
+bir gruba düştüğünü doğrulayan test bunu yakalıyor; `category:` aynı zamanda çerez onayı ve
+özellik kataloğunda da alan adı olduğu için dosyayı `sendEmail(`/`emailService` içeriğine
+göre süzmek gerekiyor. Testin boşa dönmediğini de doğrula (`expect(seen).toBeGreaterThan(20)`).
+
+**İyimser varsayılan + tüm bloğu yazan PUT = ilk fetch'ten önceki veri kaybı penceresi.**
+Yazdığım yeni test `/account`'ta gerçek bir hata buldu: grup anahtarları `groupPrefs`'in
+"hepsi açık" başlangıç değeriyle **hemen** etkileşime açık render ediliyor, ama
+`notifPrefs` `GET /api/profile` dönene kadar `{}`. O aralıkta bir tık
+`{ 'email:digests': false }` gönderiyor ve `PUT /api/profile` kolonu **birleştirmediği için
+değiştirdiği** için kullanıcının bütün eski `notificationPrefs` anahtarları siliniyordu.
+Aynı açık, aynı bloğu yazan eski uygulama-içi liste için de vardı (bu değişiklikten önce de).
+Düzeltme `prefsLoaded` bayrağı: saklanan gerçek gelmeden hiçbir anahtar yazılabilir olmasın.
+Testte `toBeVisible()` yetmiyor — `toBeEnabled()` de doğrulanmalı, çünkü `uncheck()` zaten
+"enabled" bekliyor ve koruma kaldırılırsa regresyonu gizler.
+
+**Bu konteynerde MariaDB apt ile 2 dakikada kalkıyor, ama önce `apt-get update` şart.**
+Bayat liste 404 veriyor (playbook bunu söylüyor, doğrulandı). Playwright tarayıcı sürümü
+uyuşmazlığı (`chromium_headless_shell-1234` bekleniyor, `-1194` kurulu) `playwright install`
+ile değil sembolik bağla çözülüyor — ve headless shell'in beklediği dosya adı
+`chrome-headless-shell`, kurulu isim `headless_shell`, ikisini de bağlamak gerekiyor.
+
+**Bir spec'in senin yüzünden mi kırıldığını izole ederek kanıtla.**
+`account-self-service.spec.ts:17` bu ortamda tutarlı biçimde kırılıyor.
+`git checkout HEAD~1 -- src/components/AccountSettings.tsx` ile özellik öncesi dosyayla
+koşturdum: **aynı şekilde kırıldı**. Yani önceden var olan bir sorun; CLAUDE.md aynı dosyayı
+zaten aralıklı flake olarak listeliyor. Tek komutluk bu adım, "benim değişikliğim kırdı"
+paniğinden de "bilinen flake" diye geçiştirmekten de ucuz.
+
+**Aynı özellikten üç `@smoke` etiketi PR kapısını şişiriyor.** İlk yarı üç kritik yol
+işaretlemişti; CLAUDE.md smoke kümesini ~15-20 testte tutmayı söylüyor, yani tek bir
+özellik %20'sini alamaz. Özelliğin manşet vaadini (girişsiz, Save'siz abonelikten çıkma)
+tutup diğer ikisini tam süiteye bıraktım.
+
+*Aşağıdakiler aynı özellik üzerinde üç tur düşmanca gözden geçirmeden sonra öğrenildi
+(#1444), yukarıdaki ilk yazımdan sonra:*
+
+**Kaba bir eski anahtarı başka bir grubun postasının önüne `&&` ile koyan koruma, ayar
+ekranını yalancı çıkarır — ve düzeltmenin iki yarısı da gerekir.** On çağrı yerinde
+`emailAllowed(x, '<eski anahtar>')`, o anahtarın haritalandığı gruptan *farklı* bir grubun
+postasını kesiyordu: bir zamanlar uygulama-içi "Toplantı hatırlatmaları"nı kapatan biri
+`/account`'ta *Toplantı davetleri: AÇIK* görürken her toplantı isteği ve her yanıtı sessizce
+düşüyordu; aynı şekil eski `digest` anahtarının analitik raporunu ve fırsat uyarısını
+öldürmesinde de var. Yalnızca `&&` koşulunu silmek, eski kaba anahtarla çıkmış herkesi
+sessizce yeniden abone eder. Yalnızca anahtarı grubun `legacy` dizisine yazmak ise çağrı
+yerinin hâlâ yanlış grubu okumasını sürdürür — açık opt-in (kural 4) çağrı yerinde
+eziliyor, yani yalan bir adım sonraya taşınmış olur. İkisi birlikte doğru; ve bir eski
+anahtarın birkaç gruba yayılması bir taviz değil, eski anahtarların gerçekten kaba torbalar
+olduğunun kaydı.
+
+**`git add -A`, tek kullanımlık bir klonda `node_modules` SEMBOLİK BAĞINI commit'ledi.**
+`.gitignore`'daki `node_modules/` kalıbı sondaki eğik çizgi yüzünden yalnızca *dizini*
+eşliyor; aynı ada sahip bir sembolik bağ o kalıba düşmüyor ve indekse 120000 modunda bir
+girdi olarak giriyor. İki commit sonra `git show --stat` çıktısındaki `node_modules | 1 -`
+satırından fark edildi. Bağımlılıkları başka bir ağaçtan `ln -s` ile paylaşıyorsan
+`git add -A`'dan önce `git status --short` oku (ve bağın adını `.gitignore`'a ayrıca ekle).
+
+**Bir model ekleyen dalı birleştirdikten sonra bayat Prisma istemcisi ~20 hayali tip hatası
+uyduruyor.** `npx tsc --noEmit`, şemada duran alanlar için "Property does not exist" diyor
+ve hata listesi tamamen sahte. CLAUDE.md bunu dal *değiştirmek* için söylüyor; merge sonrası
+da aynı — tsc çıktısına inanmadan önce `npx prisma generate`.
+
+**CodeQL, ham sorgu girdisinin `NextResponse.redirect`'e ulaşmasını, girdi tek bir yol
+parçasına kodlanmış olsa bile işaretliyor.** `/api/unsubscribe/one-click`'in GET'i jetonu
+doğruluyor, sonra `encodeURIComponent(t)` ile `/u/<t>`'ye yönlendiriyordu; sömürülebilir
+olduğunu sanmıyorum ama analizci "url-redirection" diyor. Kodlayıcının tam olarak neyi
+kaçırdığını tartışmak yerine hedefi **doğrulanmış** jetondan yeniden üret
+(`makeUnsubscribeToken(scope.userId, scope.group)` — zaman bileşeni olmayan saf HMAC,
+yani kullanıcının kendi jetonunu baytı baytına üretir). Taint akışı tamamen kopuyor,
+"çağıranın gönderdiği hiçbir şey bu sink'e ulaşmıyor" okuyanın yerel olarak
+doğrulayabildiği bir özellik oluyor, ve bozuk jeton artık boş bir sıçrama yerine 400 alıyor.
+
+**Bir özelliğin etrafında kurulduğu garanti, tam olarak *silme* testi yazılacak şeydir.**
+Bu özelliğin tek vaadi "abonelikten çıkma gönderdiğimiz her postada geçerli" idi; on çağrı
+yeri bu vaadi ihlal ederken süitin tamamı yeşildi — yani garantiyi hiçbir test
+sormuyordu. Şimdi bir özellik testi `src/` içindeki her `emailAllowed(x,'K')` korumasını
+koruduğu kategoriyle eşleştiriyor ve çağrı yerinin cevabının `resolveEmailGroupPrefs`'in
+gösterdiğiyle aynı olmasını doğruluyor; eşleştirilemeyen koruma testi kırıyor (on tanesi tam
+olarak orada saklanmıştı) ve tek bir çağrı yerini eski hâline döndüren negatif kontrolle
+testin gerçekten kırıldığı kanıtlandı. Kural: yeni bir garanti yazdığında önce onu **silen**
+değişikliği hayal et; süit yeşil kalıyorsa test yok.
+
+**Yukarıdaki "`EmailLog` satırı nedenini yazıyor" cümlesi yalnızca çağrı-yeri koruması
+olmayan yollar için doğru.** Zamanlanmış işler ve duyuru yayını alıcıyı `continue`/`.filter()`
+ile daha önce eliyor, `sendEmail()`'e hiç girilmiyor — dolayısıyla insanların gerçekten
+çıktığı toplu gruplar (`digests`, `task_reminders`, `opportunities`, `announcements`, …) için
+`SKIPPED` satırı da yok, *hiçbir* satır yok. `docs/EMAIL_DELIVERABILITY.md` artık bunu
+böyle söylüyor (ve korumaları `sendEmail()` çağrısının arkasına taşıma seçeneğini, maliyetiyle
+birlikte, karar olarak bakıcıya bırakıyor); `/account`'taki bir kapatma da artık hangi
+anahtarların açılıp kapandığını yazan bir `email.unsubscribe` ActivityLog satırı bırakıyor.
+Ders: bir runbook'a "kanıt şurada" yazmadan önce o kanıtı yazan kod yolunu izle — aksi hâlde
+okuyanı hiç yazılmamış bir kanıtı aramaya gönderirsin.
+
 ## 2026-08-26 — Admin API explorer: üretilen dokümanı nereden servis etmeli (#1447)
 
 **Prod imajında `src/` yok — bu, "route ağacını tara" fikrini baştan build-time'a

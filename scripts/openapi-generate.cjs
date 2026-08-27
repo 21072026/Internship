@@ -93,6 +93,14 @@ const VERIFY_EXEMPT = [
   '/api/apply',
   '/api/profile-view',
   '/api/inbound-email',
+  // The unsubscribe surface (#1444). Two entries, mirroring the two clauses in
+  // src/middleware.ts exactly: an exact match for the bare path and a prefix for
+  // everything under it. A single prefix entry would also exempt a future
+  // sibling like /api/unsubscribe-all, which is the mistake the middleware side
+  // was narrowed to avoid — and this list is checked against that one, so the
+  // two have to be wrong or right together.
+  '/api/unsubscribe',
+  '/api/unsubscribe/',
 ];
 
 /**

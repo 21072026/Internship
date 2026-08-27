@@ -182,6 +182,12 @@ export async function POST(request: Request) {
           // it differs from the invitee's — see sendMeetingInviteEmail.
           organizerTimeZone: organizerZone,
           organizerName: session.user.name ?? null,
+          // The invitee — never `session.user.id`, which is the organizer who is
+          // not a recipient of this mail. There is no call-site preference check
+          // on this path and never was; supplying the id is what puts it under
+          // sendEmail's central enforcement (group meeting_invites), which is
+          // the entire point of the change.
+          userId: rel.mentee.id,
         });
       } catch (e) {
         console.error('Meeting invite email failed:', e);

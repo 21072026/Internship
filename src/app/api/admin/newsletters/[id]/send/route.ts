@@ -83,6 +83,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         subject: `[TEST] ${subject}`,
         html,
         category: NEWSLETTER_EMAIL_CATEGORY,
+        // no-opt-out: a test copy an admin sends to themselves to check their own
+        // formatting, not a subscription. The admin has a User row, so this is not
+        // a `no-user-row:` case — passing it would render a working unsubscribe in
+        // a mail whose whole purpose is to be clicked around, and an admin who
+        // silences the newsletter by reflex while proofreading it would have no
+        // idea why the next issue never arrived.
         attachments: issue.image
           ? [{
               filename: newsletterImageFilename(issue.image.contentType),

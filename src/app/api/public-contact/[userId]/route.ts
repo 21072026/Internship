@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { TEXT_LIMITS } from '@/lib/textLimits';
-import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
+import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { notify } from '@/lib/notify';
 import { sendPublicContactEmail } from '@/services/emailService';
 
@@ -61,7 +62,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
   // thing a public profile receives and used to be in-app only. Opt-out
   // respected; a mail failure must not turn into a 500 for the sender (which
   // would also leak that the profile exists), so it is logged and swallowed.
-  if (owner.email && emailAllowed(owner, 'messages')) {
+  // Gated on this mail's own group only: 'public-contact' is inbound_requests.
+  // The `emailAllowed(owner, 'messages')` conjunct that used to stand here reads
+  // a key mapping to direct_messages, so somebody who had silenced in-app chat
+  // notifications stopped receiving enquiries their public profile advertised —
+  // with inbound_requests displayed as ON. 'messages' is now in
+  // inbound_requests.legacy, so that opt-out is honoured where it is visible.
+  // The in-app row above keeps its own 'messages' check: that one IS a chat-bell
+  // notification, and the legacy keys still govern the in-app channel (#1426).
+  if (owner.email && emailGroupAllowedForCategory(owner, 'public-contact')) {
     try {
       await sendPublicContactEmail({
         to: owner.email,
@@ -70,6 +79,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
         fromEmail: email,
         message,
         orgId: owner.orgId,
+        // The profile owner. `email`/`name` above are the anonymous sender's,
+        // supplied by an unauthenticated form — they are not a User at all, and
+        // this is the one send site where confusing the two would hand a
+        // stranger an unsubscribe token for somebody else's account.
+        userId: owner.id,
       });
     } catch (e) {
       console.error('Public contact email failed:', e);
