@@ -166,7 +166,7 @@ export default async function MentorDashboard() {
           </CardHeader>
           <div className="space-y-4">
             {activeRelations.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">{t.mentor.noActiveMentees}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-center py-4">{t.mentor.noActiveMentees}</p>
             )}
             {activeRelations.map((rel) => {
               const lastInteraction = rel.interactions[0];
@@ -230,7 +230,7 @@ export default async function MentorDashboard() {
           </CardHeader>
           <div className="space-y-3">
             {recentInteractions.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">{t.mentor.noInteractionsYet}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-center py-4">{t.mentor.noInteractionsYet}</p>
             )}
             {recentInteractions.map((interaction) => (
               <div key={interaction.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">

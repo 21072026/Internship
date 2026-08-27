@@ -66,7 +66,7 @@ export function CvManager({ targetUserId, initialCvUrl, onChange }: { targetUser
             <FileText className="h-4 w-4" /> {t.cv.view}
           </a>
         ) : (
-          <span className="text-sm text-gray-400">{t.cv.none}</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">{t.cv.none}</span>
         )}
 
         <input

@@ -241,7 +241,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
     }
   });
 
-  if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
+  if (loading) return <div className="text-center py-12 text-gray-600 dark:text-gray-400">{t.common.loading}</div>;
 
   return (
     <div>
@@ -434,7 +434,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
                   />
                   {t.profileForm.makePublic}
                 </label>
-                <p className="text-xs text-gray-400 mt-1">{t.profileForm.makePublicHint}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.profileForm.makePublicHint}</p>
                 {publicProfile && (
                   <label className="mt-2 flex items-center gap-2 text-sm text-gray-600">
                     <input

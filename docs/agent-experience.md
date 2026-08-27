@@ -201,6 +201,21 @@ prototip setter'ını tetikleyen atamadır, dolayısıyla eski biçimin regresyo
 yazmakla kalmaz, süreç ömrü boyunca her nesneyi bozardı — bu yüzden akümülatör artık
 null-prototip.
 
+---
+
+## 2026-08-26 — A11y kapısı: selector’dan bileşene git, baseline’ı değil elemanı düzelt (#1333)
+
+**`/portal/profile` bu turda sadece `ProfileForm` render ediyor,** o yüzden kapının verdiği
+selector (`.pt-4.border-t.border-gray-100 ... .text-gray-400`) için tüm sayfayı kazmaya gerek
+yok: `grep -n "text-gray-400" src/components/ProfileForm.tsx` kalan adayları tek komutta çıkarıyor.
+Bir elemanı düzeltince kapı başka elemana ilerliyorsa aynı dosyadaki kalan düşük-kontrast
+yardımcı metinleri topluca temizlemek, tekrar tekrar CI beklemekten hızlı.
+
+**Bu sandbox'ta CI-şekilli Playwright koşusu için `DATABASE_URL` gerçekten export edilmiş olmalı.**
+`CI=1 npx playwright test ...` `npm run start` ile production build'i açıyor; env yoksa Next
+uygulaması ilk Prisma çağrısında kalkmadan düşüyor ve gerçek a11y sonucuna hiç ulaşılmıyor.
+
+
 ## 2026-08-26 — Admin API explorer: üretilen dokümanı nereden servis etmeli (#1447)
 
 **Prod imajında `src/` yok — bu, "route ağacını tara" fikrini baştan build-time'a
