@@ -9,9 +9,13 @@ test('mentor dashboard surfaces a needs-attention queue for stale/overdue/unansw
   const mentorEmail = uniqueEmail('attn-mentor');
   const menteeEmail = uniqueEmail('attn-mentee');
   const okMenteeEmail = uniqueEmail('attn-ok-mentee');
+  const todoMenteeEmail = uniqueEmail('attn-todo-mentee');
+  const selfTodoMenteeEmail = uniqueEmail('attn-self-todo-mentee');
   const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Attention Mentor');
   const mentee = await seedUser(menteeEmail, 'x', 'MENTEE', 'Needs Attention Mentee');
   const okMentee = await seedUser(okMenteeEmail, 'x', 'MENTEE', 'Fine Mentee');
+  const todoMentee = await seedUser(todoMenteeEmail, 'x', 'MENTEE', 'Todo Mentee');
+  const selfTodoMentee = await seedUser(selfTodoMenteeEmail, 'x', 'MENTEE', 'Self Todo Mentee');
 
   // Overdue stage deadline + unanswered question + pending meeting request, no interactions logged.
   const rel = await prisma.mentorshipRelation.create({
@@ -38,6 +42,27 @@ test('mentor dashboard surfaces a needs-attention queue for stale/overdue/unansw
   });
   await prisma.goal.create({ data: { relationId: okRel.id, title: 'Finish portfolio site' } });
 
+  // Same shape, but the open work is a to-do the mentor handed out (a
+  // ProjectTask) instead of a Goal row — which is how the shared pool works.
+  // It must count as open work, so this relation stays out of the queue too.
+  const todoRel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: todoMentee.id, status: 'ACTIVE' } });
+  await prisma.interactionLog.create({
+    data: { relationId: todoRel.id, type: 'Meeting', notes: 'Recent sync', date: new Date() },
+  });
+  const todo = await prisma.projectTask.create({
+    data: { title: 'Update your CV', assigneeId: todoMentee.id, createdById: mentor.id },
+  });
+
+  // A line the mentee wrote for themselves is private — the mentor can't see it
+  // on the list, so it must not silently clear the flag either.
+  const selfTodoRel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: selfTodoMentee.id, status: 'ACTIVE' } });
+  await prisma.interactionLog.create({
+    data: { relationId: selfTodoRel.id, type: 'Meeting', notes: 'Recent sync', date: new Date() },
+  });
+  const selfTodo = await prisma.projectTask.create({
+    data: { title: 'Read a chapter', assigneeId: selfTodoMentee.id, createdById: selfTodoMentee.id },
+  });
+
   try {
     await page.goto('/auth/signin');
     await page.fill('input[type="email"], input[name="email"]', mentorEmail);
@@ -59,12 +84,21 @@ test('mentor dashboard surfaces a needs-attention queue for stale/overdue/unansw
     // The healthy relation is not in the attention queue (it may still
     // legitimately appear elsewhere on the dashboard, e.g. "My mentees").
     await expect(queue.getByText('Fine Mentee')).toHaveCount(0);
+    // An open to-do is open work: no "no open goal" flag, so nothing left to
+    // put this relation in the queue.
+    await expect(queue.getByText('Todo Mentee', { exact: true })).toHaveCount(0);
+    // …but a private, self-written to-do is not visible open work to the mentor.
+    const selfRow = queue.getByRole('link', { name: /Self Todo Mentee/ });
+    await expect(selfRow.getByText(/No open goal/i)).toBeVisible();
   } finally {
     await prisma.meetingRequest.deleteMany({ where: { relationId: rel.id } });
     await prisma.mentorQuestion.deleteMany({ where: { relationId: rel.id } });
-    await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [rel.id, okRel.id] } } });
+    await prisma.projectTask.deleteMany({ where: { id: { in: [todo.id, selfTodo.id] } } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: { in: [rel.id, okRel.id, todoRel.id, selfTodoRel.id] } } });
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(okMenteeEmail);
+    await cleanupByEmail(todoMenteeEmail);
+    await cleanupByEmail(selfTodoMenteeEmail);
     await cleanupByEmail(mentorEmail);
   }
 });
