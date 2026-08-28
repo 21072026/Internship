@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { RoleConvertButton } from '@/components/RoleConvertButton';
@@ -35,7 +36,7 @@ import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 
-interface Interaction { id: string; date: string; notes: string; type: string }
+interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } }
 interface Relation {
   id: string;
@@ -527,6 +528,7 @@ export default function AdminMenteeDetailPage() {
                         <InteractionTypeBadge type={i.type} className="text-xs flex-shrink-0" />
                         <div>
                           <p className="text-gray-700">{i.notes}</p>
+                          <AutoLoggedBadge autoLogged={i.autoLogged} className="text-xs mt-1" />
                           <p className="text-xs text-gray-400">{formatDate(i.date, locale)}</p>
                         </div>
                       </div>

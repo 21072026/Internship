@@ -5,6 +5,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { prisma } from '@/lib/prisma';
 import { loadAccessibleMeeting } from '@/lib/meetingAccess';
+import { logEndedMeetingInteractions } from '@/lib/meetingAutoLog';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
 
 // POST — a participant says "this meeting is over" and the dashboard banner
@@ -85,6 +86,15 @@ async function endMeetingRow(user: { id: string; role: string }, meetingId: stri
         update: {},
         create: { seriesId: row.seriesId, occurrenceAt: row.scheduledAt, endedById: user.id },
       });
+    }
+    // A meeting that is over belongs in the interaction log (#1489) — the
+    // mentor should not have to re-type a meeting this app scheduled itself.
+    // Best-effort: the meeting is already ended, and failing to write the log
+    // must not turn that click into a 500 (the sweep re-attempts it anyway).
+    try {
+      await logEndedMeetingInteractions(meetingId);
+    } catch (e) {
+      console.error('[Meetings] Auto-log after end failed:', e);
     }
   }
   return NextResponse.json({ ok: true });

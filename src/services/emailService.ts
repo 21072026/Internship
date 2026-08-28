@@ -3,6 +3,7 @@ import cron from 'node-cron';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
@@ -2962,6 +2963,14 @@ export function initCronJobs() {
       const s = await sendProjectMeetingSeriesReminders();
       if (s.reminded) {
         console.log(`[Cron] Project meeting reminders. Occurrences: ${s.reminded}, in-app: ${s.notified}, emails: ${s.emailed}`);
+      }
+      // Meetings that took place get their interaction log written for them
+      // (#1489). Rides this tick because it watches the same rows: a meeting
+      // ended by hand is logged on the click, this catches the ones nobody
+      // ended, two hours after they started.
+      const a = await sweepMeetingInteractionLogs();
+      if (a.logged) {
+        console.log(`[Cron] Meeting interaction logs written: ${a.logged}`);
       }
     } catch (e) {
       console.error('[Cron] Meeting reminder error:', e);

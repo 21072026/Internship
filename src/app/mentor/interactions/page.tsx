@@ -7,6 +7,7 @@ import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
+import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 
 interface Interaction {
   id: string;
@@ -14,6 +15,7 @@ interface Interaction {
   subject?: string | null;
   notes: string;
   type: string;
+  autoLogged?: boolean;
   relation: {
     mentee: { fullName: string };
     mentor: { fullName: string };
@@ -116,6 +118,7 @@ export default function MentorInteractionsPage() {
                     <span className="text-sm font-medium text-gray-700">
                       {t.mentor.withMentee.replace('{name}', interaction.relation.mentee.fullName)}
                     </span>
+                    <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs" />
                   </div>
                   {interaction.subject && (
                     <p className="text-sm font-medium text-gray-800">{interaction.subject}</p>

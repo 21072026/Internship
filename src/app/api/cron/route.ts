@@ -16,6 +16,7 @@ import {
   checkReEngagementReminders,
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
+import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 
 export async function GET(request: Request) {
@@ -39,6 +40,12 @@ export async function GET(request: Request) {
     if (job === 'stage-deadlines') {
       return NextResponse.json({ message: 'Stage deadline reminders ran', deadlines: await checkStageDeadlineReminders() });
     }
+    // Meeting auto-logs (#1489), runnable on its own: after a deploy an admin
+    // wants the backlog of already-held meetings logged now, not one batch per
+    // quarter-hourly tick.
+    if (job === 'meeting-logs') {
+      return NextResponse.json({ message: 'Meeting interaction logs ran', meetingLogs: await sweepMeetingInteractionLogs() });
+    }
     if (job === 're-engagement') {
       return NextResponse.json({ message: 'Re-engagement reminders ran', reEngagement: await checkReEngagementReminders() });
     }
@@ -56,10 +63,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });
     }
 
-    const [interactions, meetings, projectMeetings, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
+    const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
       checkMentorInteractionReminders(),
       sendMeetingReminders(),
       sendProjectMeetingSeriesReminders(),
+      sweepMeetingInteractionLogs(),
       sendWeeklyMentorDigests(),
       checkStageDeadlineReminders(),
       checkRetentionReminders(),
@@ -77,6 +85,7 @@ export async function GET(request: Request) {
       interactions,
       meetings,
       projectMeetings,
+      meetingLogs,
       digests,
       deadlines,
       retention,

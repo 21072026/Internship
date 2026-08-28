@@ -8,12 +8,14 @@ import { useLocale } from '@/i18n/client';
 import { useT } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { AsyncSection } from '@/components/ui/AsyncSection';
+import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 
 interface Interaction {
   id: string;
   date: string;
   notes: string;
   type: string;
+  autoLogged?: boolean;
   relation: {
     mentor: { fullName: string };
     mentee: { fullName: string };
@@ -75,6 +77,7 @@ export default function PortalInteractionsPage() {
                 <InteractionTypeBadge type={interaction.type} className="flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
+                  <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-2" />
                   <p className="text-xs text-gray-400 mt-2">
                     {formatDate(interaction.date, locale, {
                       weekday: 'long',

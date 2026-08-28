@@ -1998,8 +1998,22 @@ model InteractionLog {
   // 500 (Prisma P2000) *after* the mentor's email had already been sent.
   notes      String          @db.Text
   type       InteractionType
+  // Written by the system rather than typed by a mentor (#1489) — a meeting
+  // that took place is logged on its own, so the interaction history is the
+  // history and not "whatever anybody remembered to re-type afterwards".
+  // A plain boolean and not just `meetingId != null`: the link below is
+  // SetNull, so deleting the meeting must not turn its log into a hand-written
+  // one retroactively.
+  autoLogged Boolean         @default(false)
+  // Which meeting produced this log. Also the idempotency key: @unique means
+  // one meeting can never write two logs, whichever path gets there first (the
+  // "end meeting" click or the sweep that catches meetings nobody ended).
+  // SetNull rather than Cascade — deleting the meeting row must not delete the
+  // record that the meeting happened (same reasoning as PersonalNote).
+  meetingId  String?         @unique
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 }
 
 enum RsvpStatus {
@@ -2053,6 +2067,7 @@ model Meeting {
   project      Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   conversation Conversation?             @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   series       MeetingSeries?            @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  interaction  InteractionLog?
   notes        PersonalNote[]
   googleEvents GoogleCalendarEventLink[]
   guests       MeetingGuest[]

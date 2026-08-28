@@ -31,6 +31,7 @@ import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
+import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 
@@ -40,6 +41,7 @@ interface InteractionLog {
   subject?: string | null;
   notes: string;
   type: string;
+  autoLogged?: boolean;
 }
 
 interface RelationDetail {
@@ -465,6 +467,7 @@ export default function MenteeDetailPage() {
                     <p className="text-sm font-medium text-gray-900">{interaction.subject}</p>
                   )}
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
+                  <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-1" />
                   <p className="text-xs text-gray-400 mt-1">
                     {formatDate(interaction.date, locale)}
                   </p>
