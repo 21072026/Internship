@@ -15,6 +15,267 @@ it was merged and a link to the commit. Sections up to and including
 add-commits (the 2026-08-24 compaction had folded all 45 of them into a single
 `0.110.1-beta` section).
 
+## [0.126.0-beta] - 2026-08-28
+
+_Shipped 2026-08-28 10:01 UTC · commit [053857d](https://github.com/21072026/Internship/commit/053857d83cb4e2d328696422dfc05f4abf393cfc)_
+
+- **"Keep me signed in" (#1495).** New `TrustedDevice` model: a rotating, hashed, revocable persistent-login token per device, 30-day sliding / 90-day absolute expiry, with replay of a superseded token treated as theft (device revoked + `auth.device_token_reuse` logged). The 12h session JWT is unchanged — `POST /api/auth/remember/refresh` verifies and rotates the device cookie and mints a single-use grant that the new `remember` NextAuth provider trades for a session, so tokens keep being issued in exactly one place. Devices are listed and revocable under Account → sessions, and are revoked on sign-out, password change, password reset and "sign out of all devices".
+
+## [0.125.1-beta] - 2026-08-28
+
+_Shipped 2026-08-28 07:18 UTC · commit [7c8abb7](https://github.com/21072026/Internship/commit/7c8abb7586c644fb6cbf25538c8f89a4c3c4f7ae)_
+
+- **Attention queue counts to-dos as open work** (#1491). `getAttentionItems` derived `no_open_goal` from `Goal` rows only, so a mentee whose work was handed out as to-dos (everything from the shared pool is a `ProjectTask`, not a `Goal`) was permanently flagged "no open goal". Open to-dos visible to the mentor now suppress the flag, and the label names both.
+
+## [0.125.0-beta] - 2026-08-28
+
+_Shipped 2026-08-28 07:04 UTC · commit [0cbe2c9](https://github.com/21072026/Internship/commit/0cbe2c91ef5a92dd43eda2c138d9d9bf4615ce24)_
+
+- **A meeting that took place logs itself as an interaction** (#1489). Relation meetings write their own `InteractionLog` (`type: Meeting`, `autoLogged`, unique `meetingId`) — on the "meeting is over" click, and via a quarter-hourly sweep for the ones nobody ended (2h grace, DECLINED invitations skipped). The auto entry is marked in the UI, editable and deletable like any other, and is filtered out of the calendar's logged-meeting feed so a meeting is never listed twice.
+
+## [0.124.3-beta] - 2026-08-27
+
+_Shipped 2026-08-27 17:41 UTC · commit [acc4b75](https://github.com/21072026/Internship/commit/acc4b7515a3eab72b3720611fd36f8901f6a99d5)_
+
+- **Mentee portal:** Kept the portal tab bar in one consistent place on every portal page (#1424).
+
+## [0.124.2-beta] - 2026-08-27
+
+_Shipped 2026-08-27 17:40 UTC · commit [866f832](https://github.com/21072026/Internship/commit/866f832dbfed3e70cde49d8d087bf294504a01e5)_
+
+- **Pipeline history integrity**: ignore same-stage writes and hide legacy no-op transitions while preserving custom stage keys.
+
+## [0.124.1-beta] - 2026-08-27
+
+_Shipped 2026-08-27 16:43 UTC · commit [75030fb](https://github.com/21072026/Internship/commit/75030fb90f2c012b57ac271e2715818b36245d98)_
+
+- **Requisitions:** Fixed Turkish-aware de-duplication for required skills (#1389).
+
+## [0.124.0-beta] - 2026-08-27
+
+_Shipped 2026-08-27 11:45 UTC · commit [17d8500](https://github.com/21072026/Internship/commit/17d8500ac22c64cf64d635cb04a93e1b933a57d2)_
+
+- **Imprint page and a named controller** (#1396). New `/imprint` (EN/TR/DE), linked from the public footer, published from `OPERATOR_*` env vars (`src/lib/imprint.ts`) so a self-hosted instance never inherits ours. The privacy notice now names the controller and a real contact address instead of the placeholder saying the operator would supply them before production use; `PRIVACY_POLICY_VERSION` → 2026-08-25.
+
+## [0.123.5-beta] - 2026-08-27
+
+_Shipped 2026-08-27 11:26 UTC · commit [abd78e1](https://github.com/21072026/Internship/commit/abd78e13db7965b164908060afab62ae89e89619)_
+
+- **Accessible color contrast**: raise low-contrast helper, loading, empty-state, mode-switch, and profile-completion text to WCAG AA-compliant palette tones.
+
+## [0.123.4-beta] - 2026-08-27
+
+_Shipped 2026-08-27 11:02 UTC · commit [cc6af7c](https://github.com/21072026/Internship/commit/cc6af7c214e89482525f3883931f6c6e2e56ac7b)_
+
+- **Accessibility:** Added an accessible label to the evaluation type selector (#1413).
+
+## [0.123.3-beta] - 2026-08-27
+
+_Shipped 2026-08-27 06:50 UTC · commit [5997a24](https://github.com/21072026/Internship/commit/5997a2497bfaebd152d3f51b4a8d5e777609bc0f)_
+
+**Fixed** — the upcoming stages in the mentee journey tracker were below the WCAG AA contrast threshold in both themes (measured 2.54:1 and 2.31:1 in light, 2.35:1 and 2.13:1 in dark). The dark half was worse than it looked in the source: the badge's `dark:bg-gray-800` never applied, because a flat `html.dark` rule in globals.css outranks the variant. Now 4.83:1–8.33:1 across both themes.
+
+## [0.123.2-beta] - 2026-08-27
+
+_Shipped 2026-08-27 01:41 UTC · commit [38da361](https://github.com/21072026/Internship/commit/38da3618af1f5597793bdf76603167cb29ec4950)_
+
+**A completed mentorship no longer empties the mentee's portal** (#1408) — `/portal`, `/portal/journey`, `/portal/goals` and `/portal/requests` each asked for `status: 'ACTIVE'` and nothing else, so the moment a mentorship was marked `COMPLETED` the mentee's mentor, company, stage bar, goals, evaluations and question history vanished and the portal told them "no mentor assigned yet — an admin will assign you one once your profile is reviewed". Finishing the programme is its success case, and it read as a data loss. The four pages now resolve the relation through `pickMenteeRelation()` (ACTIVE, else the most recently completed one) and render the finished mentorship as a labelled archive: the record stays readable while the actions that need a live mentorship — asking a question, requesting a meeting, moving goals, filing a weekly report — are closed, in the UI *and* in `/api/questions`, `/api/meeting-requests` and `/api/goals`, which now answer `409 inactive_relation` to a mentee writing on a mentorship that has ended. Mentor and admin writes are untouched: the certificate flow keys off exactly the COMPLETED state, and a mentee's evaluation of their mentor stays open because it is usually written after the mentorship ends. The "request a mentor" panel is offered on an archive too, so finishing one round is a way into the next rather than a dead end.
+
+## [0.123.1-beta] - 2026-08-27
+
+_Shipped 2026-08-27 00:40 UTC · commit [d417b8e](https://github.com/21072026/Internship/commit/d417b8e915aa23f63ae7ef13177194b7391e6574)_
+
+- **Candidates:** Removed the duplicate disabled graduation-year filter option (#1441).
+
+## [0.123.0-beta] - 2026-08-26
+
+_Shipped 2026-08-26 14:03 UTC · commit [a1586c7](https://github.com/21072026/Internship/commit/a1586c71fc6fa3351aa298bf8c2edc85d1b7b873)_
+
+**Per-group e-mail unsubscribe with RFC 8058 one-click** (#1444) — every mail the app sends now belongs to exactly one of twelve e-mail groups (`src/lib/emailGroups.ts`), and each non-essential group has its own switch. `sendEmail` enforces the group centrally, before the demo/SMTP short-circuits, so an opt-out applies to all 41 send sites and not only the ones that remembered to check — nine of them had no per-user guard at all. Non-essential mail carries a one-line unsubscribe footer (in both MIME parts) plus `List-Unsubscribe` / `List-Unsubscribe-Post: List-Unsubscribe=One-Click`; bulk groups additionally get `List-Id`, `Precedence: bulk` and auto-response suppression. `account_security` mail advertises nothing and ignores every switch — an unsubscribable password reset is a lockout, not a preference. The signed token has no expiry (an opt-out that expires fails exactly when someone is annoyed enough to use it) and `/u/<token>` applies the choice and renders the whole preference centre with no login and no Save button; the mutation runs from the browser so Outlook Safe Links and antivirus gateways prefetching the URL cannot unsubscribe anyone. Preferences live in the existing `User.notificationPrefs` JSON under prefixed `email:<group>` keys, so there is no schema change, and the eleven legacy in-app keys still gate in-app notifications and still suppress the group they used to suppress. The bulk SMTP channel list is now derived from the taxonomy instead of hand-maintained. `sendEmail` accepts an optional pre-resolved `prefs` so a caller that already loaded the row does not pay for a second read: the announcement broadcast selects every recipient's preferences in one query and now passes them through, which halves the pooled query count on the largest send the product makes (1000 recipients previously meant 1000 duplicate point reads inside a single `Promise.all`, doubling the window for a pool timeout). The parameter is data and not a bypass — omitting it costs a query, it cannot skip the check. The account-settings switches (both the new e-mail groups and the older in-app categories) now stay disabled until `GET /api/profile` answers: they write the whole `notificationPrefs` blob back and `PUT /api/profile` replaces that column, so a click before the fetch resolved used to persist one key over the top of every preference the user actually had.
+
+## [0.122.2-beta] - 2026-08-26
+
+_Shipped 2026-08-26 23:47 UTC · commit [0c00c88](https://github.com/21072026/Internship/commit/0c00c883b18e423a5c428b5cb453c371bd91aaa5)_
+
+- **Copy buttons share one clipboard helper with a fallback** (#701). Four call sites (invitation link, mentee setup link, application link, meeting link) each called `navigator.clipboard.writeText` directly, so in any context where the modern Clipboard API is unavailable — an insecure origin, an older browser, a denied permission — the copy silently did nothing while the UI still flashed success. `src/lib/clipboard.ts` now feature-detects the API, falls back to a hidden `textarea` + `execCommand('copy')`, guards both `navigator` and `document` for SSR, always removes the temporary node, and returns a boolean the callers check before showing the copied state.
+
+## [0.122.1-beta] - 2026-08-26
+
+_Shipped 2026-08-26 23:35 UTC · commit [dc1c8e2](https://github.com/21072026/Internship/commit/dc1c8e2f27807efeffc40fd982cda38f0fc623a7)_
+
+**Fixed** — every bar in the admin analytics Trends chart rendered at 0px. The bars size themselves with percentage heights, but no ancestor had a definite height, so the percentages resolved to `auto`. The month labels kept rendering (text has intrinsic height), which made an empty chart look like missing data rather than a broken layout.
+
+## [0.122.0-beta] - 2026-08-26
+
+_Shipped 2026-08-26 23:12 UTC · commit [d11ba53](https://github.com/21072026/Internship/commit/d11ba531887194881a1e783bc76f8dcfe4bd5645)_
+
+- **Every shipped change gets its own version, dated and traceable to its commit (#1457)** — the release-fragment mechanism (#1275) collapsed a whole compaction window into one section: the 2026-08-24 run buried 45 changes under `## [0.110.1-beta]`, and the 25 versions the app had actually served in between (0.86 → 0.110) were recorded nowhere. Worse, fragments were ordered by FILENAME, so a `patch` fragment whose name sorted before the last `minor` fragment's was erased by that minor's `patch = 0` reset — three consecutive merges all shipped as `0.114.0-beta`. Fragments are now ordered by MERGE order, read from the commit that added each one (`--diff-filter=A`, `--topo-order`), and each becomes its own release: its own version, the UTC minute it was merged and a link to its commit, in `CHANGELOG.md`, in `src/lib/releaseNotes.ts` and on `/release-notes`. That ordering is what makes the number a build displays the number the changelog later records — a fragment's version depends only on the fragments that shipped before it, so a later merge can never renumber an earlier one. Compaction now **fails closed** rather than date a release it cannot see (a shallow clone), so the workflows that stamp check out with `fetch-depth: 0`; `.git` is `.dockerignore`d, so `build-image.yml` resolves the stamps on the runner and passes them into the image as `RELEASE_STAMPS`. `scripts/release-resplit.mjs` re-split the one lumped section into its 45 dated releases, verified two ways: the replay lands back on the published `0.110.1-beta`, and every bullet and highlight survives unedited. New `npm run test:release` (13 cases, in CI) guards the arithmetic and both old failure modes.
+
+## [0.121.1-beta] - 2026-08-26
+
+_Shipped 2026-08-26 22:58 UTC · commit [1348ceb](https://github.com/21072026/Internship/commit/1348ceb7eb0a6cbbef0c8f6e3218687c2e305087)_
+
+- **The 404 page keeps the public site shell** (#1409). `not-found.tsx` rendered a bare centred block, so a visitor who mistyped a URL lost the header, the language and theme switches and the footer — every route out of the page except a single "back home" button. It now renders inside `PublicShell` with direct links to register, apply as a mentor and the company page, plus a localized title and `noindex, nofollow` robots metadata.
+
+## [0.121.0-beta] - 2026-08-26
+
+_Shipped 2026-08-26 17:31 UTC · commit [a8612c0](https://github.com/21072026/Internship/commit/a8612c03ec65701729268fecf23eee53c4a985e7)_
+
+**Fixed** — reading a message now clears the *notification* it produced (#1464). Two independent unread signals describe the same event (the message counters and the `Notification` row `notify()` writes), and opening a thread only ever cleared the first one — so the blue "new message from X" row survived reading the message and even answering it, until the reader happened to open the bell. `markThreadRead()` now retires both, which covers every way of reading a thread (opening it, replying by e-mail, the "mark as read" link in the notification mail); the pinned support thread does the same for `support.replied`.
+**Added** — live messaging over SSE. An in-process bus (`src/lib/realtimeBus.ts`) plus `GET /api/realtime/stream` push a signal to whoever has a thread, the inbox or the header badge on screen; the client shares one `EventSource` per tab and falls back to polling `/api/messages/unread` when the stream is blocked. Chosen over a WebSocket/SignalR-style channel because everything needed is one-directional and SSE survives the Plesk reverse proxy with one header, no broker and no extra dependency. The stream re-reads the unread counters from the database on every 25s heartbeat, so a missed event self-heals rather than leaving a stale badge. Details and the reasoning in `docs/realtime-and-push.md`.
+**Added** — background Web Push for new messages (#675 Kademe 2): `PushSubscription` model, `web-push` + VAPID env, `POST/DELETE /api/push/subscribe`, `GET /api/push/config`, and `push`/`notificationclick`/`pushsubscriptionchange` handlers in `public/sw.js`. Wired to the existing "Browser notifications" switch on /account, composed in the recipient's language from the same dictionary template the bell renders, and self-pruning (404/410 deletes the endpoint). Entirely optional: with no VAPID keys configured every send is a no-op and the app behaves exactly as before.
+
+## [0.120.0-beta] - 2026-08-26
+
+_Shipped 2026-08-26 16:42 UTC · commit [bd4ccec](https://github.com/21072026/Internship/commit/bd4ccec69f73a1f0f9b89ee7f57c8c7d3dc24da6)_
+
+- **Interactive API explorer for admins** (#1447). New page `/admin/api-explorer` mounts real Swagger UI, bundled from `swagger-ui-dist` in `node_modules` (no CDN — `script-src` is `'self'`) with `validatorUrl: null` so the spec never leaves the origin. It is driven by the ADMIN-only `GET /api/admin/openapi`, which describes the whole surface including the internal admin/cron/webhook endpoints. Two auth modes: "Try it out" rides the caller's existing NextAuth session cookie (`withCredentials` plus a `requestInterceptor` pinning `credentials: 'same-origin'`), and a Bearer key for `/api/v1/*` can be minted in-page through the existing `POST /api/admin/api-keys` and pushed into the Authorize dialog with `preauthorizeApiKey` — no copy-paste, no new auth path. Linked from `/admin/integrations` and `/admin/api-docs`; the ~1.2 MB bundle is `await import()`ed inside an effect so no other route pays for it.
+
+## [0.119.2-beta] - 2026-08-26
+
+_Shipped 2026-08-26 15:41 UTC · commit [d6d6bd2](https://github.com/21072026/Internship/commit/d6d6bd2d7a65d534b7b5e80ec738fd83f3af64e3)_
+
+- **Mentee onboarding headings are fully localized** (#1420). The profile setup title and subtitle now use the active EN/TR/DE dictionary instead of hard-coded English.
+
+## [0.119.1-beta] - 2026-08-26
+
+_Shipped 2026-08-26 14:52 UTC · commit [fb61482](https://github.com/21072026/Internship/commit/fb61482b71c0cef6adfe82a50c87a8882e5d8e1c)_
+
+**Fixed** — the **Messages** notification category silenced e-mail but not the in-app bell. Four message paths (direct messages, the mentor bulk composer, emailed replies, and public-profile contact) called `notify()` ungated, in some cases four lines above an e-mail branch that did check the same preference. All four now honour it, failing open on a missing user row.
+
+## [0.119.0-beta] - 2026-08-26
+
+_Shipped 2026-08-26 16:54 UTC · commit [f44a4e6](https://github.com/21072026/Internship/commit/f44a4e6f11e0cf13683864ba89374e9b101d2112)_
+
+- **E-mail newsletter module** (#1469). New `Newsletter` / `NewsletterImage` / `NewsletterSend` models plus a curated library of ten career issues in EN/TR/DE (`src/lib/newsletterContent.ts`). An issue is a fixed shape (subject, preheader, intro, 1-5 emoji tips, ten-minute action, optional CTA, mentor-only note) rendered as email-safe table HTML with an inline hero image; `MENTEE` / `MENTOR` / `BOTH` audiences, with mentors seeing the coaching block on a shared issue. Admin composer at `/admin/newsletters` (library picker, three language tabs, live preview through the real renderer, test send to self, schedule, cadence) with an immutable record of every send; reader archive at `/newsletters`; one-click unsubscribe at `/newsletter/unsubscribe` behind an HMAC token, a new `newsletter` notification category and `List-Unsubscribe` headers. Two cron jobs (`*/15` dispatch, daily 06:00 cadence queue), one `NewsletterSend` row per recipient so a resumed run never double-mails, and newsletter sends are cleared by both account-erasure paths.
+
+## [0.118.4-beta] - 2026-08-26
+
+_Shipped 2026-08-26 14:27 UTC · commit [00acb82](https://github.com/21072026/Internship/commit/00acb82fb0851f0c8dd30918648e52414e5ae73e)_
+
+**Fixed** — four endpoints reported `emailSent: true` when nothing had been delivered. `sendEmail` returns normally (recording a SKIPPED row) when SMTP is unconfigured or demo mode is on, and the callers read that silence as success — so creating a company or source login, resetting a password, or activating a mentee claimed the set-password link was on its way while the delivery log said SKIPPED, leaving an account nobody could sign in to. `sendEmail` and its wrappers now return `'SENT' | 'SKIPPED' | 'FAILED'`, all six routes derive `emailSent` from that, and the invite routes' `!!process.env.SMTP_USER` guess is gone — it was right about a missing SMTP_USER and wrong about demo mode.
+
+## [0.118.3-beta] - 2026-08-26
+
+_Shipped 2026-08-26 14:26 UTC · commit [df2f097](https://github.com/21072026/Internship/commit/df2f0973c3016b3a371a0a85ae9a4ba75c81178e)_
+
+**Nightly k6 load test** — a new `k6/` source directory with `k6/nightly-load.js`: a 6-minute staged VU ramp (peak 20) over the public, anonymous, read-only surface (`/`, `/auth/signin`, `/features`, `/api/public/stories`, `/api/health`, `/api/health?db=1`), with per-endpoint latency budgets on top of the aggregate error-rate and p95/p99 gates that `stress.yml` already enforces. Runs at 23:40 UTC via `.github/workflows/k6-load.yml` — no drift gate, because a load test measures the environment rather than the commit. `scripts/k6-report-email.mjs` emails a Turkish breach report (threshold, actual vs limit, per-endpoint table) **only when a threshold fails**; a green run is silent, and `K6_REPORT_MODE=always` restores a green summary. The verdict is read from k6's summary artifact rather than its exit code, so a crash that produced no summary is red rather than silent. `npm run test:load` runs it locally; `K6_SMOKE=1` collapses the ramp to ~40s for validating a script change.
+
+## [0.118.2-beta] - 2026-08-26
+
+_Shipped 2026-08-26 14:14 UTC · commit [2173cd7](https://github.com/21072026/Internship/commit/2173cd753393aea0e6b6d01d807a09e615d973c8)_
+
+**Fixed** — talent-pool search read 60 rows from the database and only then applied the skill filter, so a skill held by nobody in the 60 most recently updated candidates returned nothing at all — and the response carried no total, so an incomplete answer looked identical to an empty one. The search now counts and paginates over the whole matching set, the early-access embargo is part of the database filter rather than a post-filter, and the screen shows the result count with a pager.
+
+## [0.118.1-beta] - 2026-08-26
+
+_Shipped 2026-08-26 13:41 UTC · commit [59ebadc](https://github.com/21072026/Internship/commit/59ebadc64afd8e766283a8aaaed852fc53d30a44)_
+
+- **Mentee calendar and onboarding contrast now meets AA targets** (#1417). Month day numbers, inactive calendar view tabs, onboarding step labels and future-step badges use accessible light/dark colours.
+
+## [0.118.0-beta] - 2026-08-26
+
+_Shipped 2026-08-26 12:46 UTC · commit [a7c65b8](https://github.com/21072026/Internship/commit/a7c65b83b4ab7880ddc1f0d7383760889ff2a4b5)_
+
+**Added** — a company requesting an interview for a shortlisted candidate can now attach an optional note (up to 1000 characters) and up to 5 proposed time slots, added or removed inline before submitting. Both stay optional — submitting with neither still creates a plain request, unchanged from before.
+
+## [0.117.5-beta] - 2026-08-26
+
+_Shipped 2026-08-26 12:44 UTC · commit [6981f37](https://github.com/21072026/Internship/commit/6981f373b60ea6cbf0b7b37b5befb2bbb48f3b29)_
+
+- **Offer requisitions are selected safely** (#1407). The offer wizard now lists company-scoped open requisitions, validates the selection on create and draft edit, and shows requisition titles in offer management.
+
+## [0.117.4-beta] - 2026-08-26
+
+_Shipped 2026-08-26 11:43 UTC · commit [b8c404c](https://github.com/21072026/Internship/commit/b8c404cda2e02dc2a10c67b117772c812e61a205)_
+
+**Fixed** — premium open-position match alerts scanned only the legacy `CompanyNeed` table, so a role opened through the Requisition screen never matched anybody: a premium company could have several open requisitions and receive nothing. The job now reads both sources. Only requisitions with status `OPEN` and unfilled openings alert, and the existing per-(company, candidate) dedupe means a role present in both tables still alerts once.
+
+## [0.117.3-beta] - 2026-08-26
+
+_Shipped 2026-08-26 10:43 UTC · commit [8f3313f](https://github.com/21072026/Internship/commit/8f3313f65031194c83ca4205bfc1efba40937534)_
+
+- **Async UI states**: centralize loading, error, retry and empty presentation with shared skeleton variants.
+
+## [0.117.2-beta] - 2026-08-26
+
+_Shipped 2026-08-26 10:42 UTC · commit [dd17c87](https://github.com/21072026/Internship/commit/dd17c875a687e05973088bc76f689bb647421346)_
+
+- **Candidate history deletion**: surface failed stage-history deletes and avoid reloading stale candidate data.
+
+## [0.117.1-beta] - 2026-08-26
+
+_Shipped 2026-08-26 10:39 UTC · commit [31d150c](https://github.com/21072026/Internship/commit/31d150c1927ec636d931fd10176ca9e18bda0c1e)_
+
+- **The calendar no longer flashes a false empty state** (#931). `CalendarView` rendered "nothing scheduled" while the range request was still in flight, and a failed request degraded silently into the same empty calendar. Loading, loaded-empty and error are now distinct: an in-flight range shows a skeleton overlay (`role="status"`, `aria-live="polite"`) over the grid so the layout does not jump, a failure shows an error overlay (`role="alert"`) with Retry, and the per-cell/agenda empty texts are suppressed until the range that is actually displayed has settled. In-flight requests are cancelled with `AbortController` on range change, so an old month's events can never land in the new month's grid.
+
+## [0.117.0-beta] - 2026-08-26
+
+_Shipped 2026-08-26 08:11 UTC · commit [2df864e](https://github.com/21072026/Internship/commit/2df864e2b9f4a2143c049670b1803f5bc19c4507)_
+
+- **Invite people from outside the platform to a meeting** (#1446). The meeting scheduler (both `/mentor/meetings` · `/admin/meetings` and the candidate detail panel) gains an email chip field: type an address and that person is invited to the same room with the same Yes/No RSVP buttons — no account, no sign-up. New `MeetingGuest` model carries its own unguessable `rsvpToken`, so `/rsvp/<token>` and `/api/calendar/<token>` work for a guest exactly as they do for a participant, while a guest's answer is recorded against their own row and never onto the participant's. `POST /api/meetings` takes a `guests` array; `GET|POST|DELETE /api/meetings/[id]/guests` adds, lists and withdraws invitations after the fact (deleting the row kills the token). Guests are reminded by the meeting cron too — they have no dashboard to fall back on — unless they already declined. Guarded by: a per-meeting cap of 20, new rate limits on scheduling, the public RSVP read and the public `.ics`, a MENTOR/ADMIN gate on top of meeting participation (being the organizer is not enough — `/api/meetings/instant` lets a mentee create a meeting), and a rule that an address belonging to an existing account is never minted a guest token: that person is reached the normal way and the organizer is told so. `scripts/sanitize-db.mjs` scrubs guest addresses and re-mints their tokens, since a guest's email is the PII of someone with no account and no self-service erasure path.
+- Fixed `e2e/meetings-rsvp.spec.ts`, which had been failing on `main`: it ticked the invitee by clicking their name, and that stopped toggling the checkbox when the name became a `PersonHoverCard` (whose `onClick` `preventDefault()`s so opening the card does not toggle the `<label>` around it). It now targets the checkbox.
+
+## [0.116.0-beta] - 2026-08-26
+
+_Shipped 2026-08-26 07:39 UTC · commit [5b4b898](https://github.com/21072026/Internship/commit/5b4b8988f54bc8cd25520a269ed766392a8e7312)_
+
+**Added** — a mentee requesting a meeting now picks from their mentor's posted weekly hours, expanded into concrete date-times for the next three weeks and resolved in the mentor's time zone (DST-correct). The mentor's request list marks which requests landed on their own hours. A mentor who has posted no hours is unchanged: the free-text request stays. Closes the loop the landing FAQ has been promising — until now nothing in the product read an availability slot.
+
+## [0.115.0-beta] - 2026-08-25
+
+_Shipped 2026-08-25 09:25 UTC · commit [b174c20](https://github.com/21072026/Internship/commit/b174c20b245caa33f6d10c9a3beba43586f0ed96)_
+
+**Added** — the availability screen now states which time zone the weekly hours are read in (the mentor's profile zone), prompts for one when none is saved, and groups slots by day. **Fixed** — an interval overlapping one already on that weekday, exact repeats included, is refused with 409 and the message names the interval it collided with; previously the same hours could be added twice.
+
+## [0.114.3-beta] - 2026-08-25
+
+_Shipped 2026-08-25 09:15 UTC · commit [361ec61](https://github.com/21072026/Internship/commit/361ec618f1c9ee781eaa7fada7bce5fe505c7094)_
+
+**Fixed** — `GET /api/availability?mentorId=` returned any mentor's weekly hours to any signed-in account, across organizations: `AvailabilitySlot` carries no `orgId` and is not a tenant-anchored model, so the central isolation middleware never saw the query. Reading another mentor's hours now requires being an admin in the same organization, a mentee with an active relation to that mentor, or the mentor having opted into the directory. The admin delete escape hatch is scoped to the admin's own organization for the same reason.
+
+## [0.114.2-beta] - 2026-08-25
+
+_Shipped 2026-08-25 01:36 UTC · commit [d1133e4](https://github.com/21072026/Internship/commit/d1133e4facae6fceac410805c2642cf95a9f337e)_
+
+**Fixed** — the desktop admin board iterated the built-in stage list, so an organization with a customized pipeline saw its stages on a phone but no columns at all on a desktop. It now groups the organization's own resolved stages; stage keys outside the built-in phases get their own group. Added a 768px tablet layout tier, phone-width audits of the profile pages, a dark-mode phone audit, and board tests that seed 3-stage and 13-stage custom pipelines.
+
+## [0.114.1-beta] - 2026-08-25
+
+_Shipped 2026-08-25 01:36 UTC · commit [d1133e4](https://github.com/21072026/Internship/commit/d1133e4facae6fceac410805c2642cf95a9f337e)_
+
+**The accessibility gate now actually gates** (#826) — the 9-page axe scan shipped in #862 carried no `@smoke` tag while the PR job runs `--grep @smoke`, so the baseline comparison only ever ran in the scheduled suite and a PR introducing a new *serious* violation was never blocked (#1333 is that failure realised). It now runs as its own CI step, outside the grep. Regenerating the baseline also **says out loud what got wider**, in the console and in the audit report, so a violation can no longer freeze itself in silently on a page nobody touched. And the scan now runs **twice per page, light and dark** — dark results keyed `<page>#dark` so they gate independently. That immediately surfaced six previously invisible serious contrast failures; four are fixed here.
+
+## [0.114.0-beta] - 2026-08-24
+
+_Shipped 2026-08-24 23:48 UTC · commit [29e072a](https://github.com/21072026/Internship/commit/29e072a02b4d3daff8f007b9de993582ccb0d2f2)_
+
+**Growth analytics, off by default** (#1242, #966) — a dependency-free, multi-provider layer (Plausible / GA4 / PostHog) that resolves the two objections that held #1221 back. **CSP no longer loosens unconditionally**: provider hosts are added only when that provider's `NEXT_PUBLIC_*` variable is set, so a deployment with no analytics configured allows no analytics host at all. **The loader is mounted on the public shell, never the root layout**, so nothing runs on signed-in CRM pages where a pageview would carry a mentee's name to a vendor — and nothing loads at all without the visitor's `analytics` cookie consent, re-read live on the consent-change event. PostHog's autocapture, session recording and localStorage persistence are forced off in code rather than left to the dashboard.
+
+## [0.113.0-beta] - 2026-08-24
+
+_Shipped 2026-08-24 23:03 UTC · commit [6c0e748](https://github.com/21072026/Internship/commit/6c0e7487396064b1f5f77e77a7582f86cd252ad4)_
+
+**Talent re-engagement pool** (#834) — candidates who did not place this cycle can be given an explicit "we'll write in September" date instead of sitting in the pipeline forever. Joining requires the person's own consent (new `ConsentType.RE_ENGAGEMENT_POOL`) and **never touches `User.consentAt`**, so it cannot extend how long data is kept — the two permissions are deliberately separate and a test asserts it. One click from the e-mail (signed token, no login) leaves the pool and revokes the permission. An idempotent cron sends the reminder once per date. Pooled candidates drop out of the aging report's `overdue` list — which is what stops that report rotting — and appear in a `pooledCount` instead, with their own admin page at `/admin/re-engagement`.
+
+## [0.112.0-beta] - 2026-08-24
+
+_Shipped 2026-08-24 22:42 UTC · commit [6c8b027](https://github.com/21072026/Internship/commit/6c8b027acd88c420428e54f6ae773ee574fcbb0f)_
+
+**Tag management** (#845, completing the story #887 started) — a new admin screen at `/admin/tags` lists the org's labels with how many people carry each, and lets an admin **rename** one (in place, so the tag keeps its id and nobody loses the label or has a saved view silently empty), **recolour** it, **merge** it into another, or delete it behind a confirmation that names the usage count. New `PATCH /api/tags/:id` and `POST /api/tags/:id/merge`, both ADMIN-only and org-scoped. Merge moves everyone onto the target — carrying over the original tagger rather than the admin doing the merge — and the `(userId, tagId)` unique means someone who already had both simply keeps one.
+
+## [0.111.0-beta] - 2026-08-24
+
+_Shipped 2026-08-24 22:17 UTC · commit [3ba4083](https://github.com/21072026/Internship/commit/3ba40837423edb975b7fc1bcbfb54588e316fdbd)_
+
+**Google Calendar, connected by the user** (#709) — the last open piece of the meetings epic. `/account` gains a "Connect Google Calendar" card: connect your own Google account and the meetings you are part of are mirrored onto your calendar; disconnect revokes the access at Google rather than only forgetting it here. Refresh tokens are encrypted at rest (new `src/lib/secretBox.ts`, AES-256-GCM keyed from `NEXTAUTH_SECRET` via HKDF), the OAuth `state` is HMAC-signed and bound to the session that started the flow, and the meeting→event mapping is per (meeting, user) so each participant gets the event on their own calendar. Gated behind `GOOGLE_CALENDAR_ENABLED` (default off) and separate from merely having credentials; unconnected users keep the in-app calendar, `.ics` and reminders unchanged. The token exchange and calendar write are now covered by an e2e that points Google's endpoints at a local stub.
+
+## [0.110.2-beta] - 2026-08-24
+
+_Shipped 2026-08-24 22:13 UTC · commit [c50bdb8](https://github.com/21072026/Internship/commit/c50bdb86475cf4027048e4b1e139210b85067b2c)_
+
+- **Candidate filter accessibility**: add localized accessible names to the graduation-year and source filters on the admin candidate list.
+
 ## [0.110.1-beta] - 2026-08-24
 
 _Shipped 2026-08-24 21:47 UTC · commit [b0d36f4](https://github.com/21072026/Internship/commit/b0d36f484100a431ef542b23e4e8820b5cf41536)_
