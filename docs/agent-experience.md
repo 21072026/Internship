@@ -5200,3 +5200,47 @@ ebeveyne eşzamanlı ekleme yarış riski taşıdığı için turları *farklı*
 **Bu repoda semantik `search_issues` her sorguya 0 döndürdü.** Mükerrer kontrolünü
 `list_issues` + `state: OPEN` ile yaptım (18 açık kayıt, hepsi tek sayfa). Semantik arama
 boş dönüyorsa "mükerrer yok" diye okumak yanlış — listeye bak.
+
+## 2026-08-28 — Yapılan toplantıyı etkileşim kaydına otomatik yazmak (#1489)
+
+**"Otomatik ekle" isteğinde asıl iş, *ne zaman* olduğunu tanımlamak.** Kod tarafı kısa;
+zor olan "toplantı gerçekleşti"nin tanımı. Burada iki sinyal var ve ikisi de tek başına
+yetmiyor: `Meeting.endedAt` (birinin "toplantı bitti" tıklaması — güvenilir ama çoğu zaman
+kimse tıklamıyor) ve saatin geçmesi (herkeste var ama toplantının yapıldığını kanıtlamıyor).
+İkisini birden yazmak gerekti: tıklama anında + tıklanmayanlar için 2 saat toleranslı
+süpürme. `rsvp: DECLINED` olanları dışarıda bırakmak da aynı ailedan bir karar —
+yapılmamış bir toplantıyı mentee'nin kendi geçmişine "yapıldı" diye yazmak, eksik
+kayıttan daha kötü.
+
+**Süpürmeye geriye bakış penceresi koymayı unutma.** Penceresiz ilk tick, kurulumdaki
+*tüm* geçmiş toplantılar için yer tutucu kayıt üretir — aylarca öncesi bir anda mentee
+yolculuklarına düşer. 30 günlük `gte` filtresi bunu kapatıyor; süpürme geçmişi yeniden
+kurmak için değil, tıklama yolunun kaçırdığını yakalamak için var.
+
+**Unique FK = idempotency anahtarı.** `InteractionLog.meetingId @unique` sayesinde
+"tıklama mı, cron mu önce yazdı" sorusu ortadan kalkıyor: ikinci yazan P2002 alıp sessizce
+`false` dönüyor. Ayrı bir `autoLogged` boolean'ı tutmak fazlalık gibi görünüyor ama
+`onDelete: SetNull` yüzünden şart — toplantı satırı silindiğinde kayıt elde yazılmış gibi
+görünmemeli.
+
+**Yeni bir kayıt türü eklerken *okuyan* yerleri de tara.** `type: 'Meeting'` etkileşimleri
+`/api/calendar-events` içinde "logged" olayı olarak zaten takvime düşüyormuş; otomatik kayıt
+eklenince aynı toplantı takvimde iki kez görünecekti (planlanan + kayıt). `grep -rn
+"type: 'Meeting'" src` bunu bir dakikada gösteriyor — şema alanını eklemeden önce yapılacak
+iş. Aynı tarama `checkMentorInteractionReminders`'ın da davranışını değiştirdiğini gösterdi
+(bu sefer istenen yönde: toplantı yapılmışsa "etkileşim yok" uyarısı gitmiyor).
+
+**Cron içinde webhook varsa batch'i küçük tut.** `dispatchWebhook` başına 5 sn timeout var;
+200'lük bir süpürme partisi, asılı kalan tek bir endpoint'te 15 dakikalık tick'i aşabilirdi.
+50 (+ kardeş satırlar için 25) sınırı bunu kapatıyor, kalan iş bir sonraki tick'e kalıyor.
+
+**Kutuda tekrar eden iki kurulum adımı:** `npm install` (bağımlılıklar preinstall değil) ve
+Chromium sürüm uyuşmazlığı — bu turda beklenen 1234, kurulu olan 1194'tü. Symlink tarifi
+(`chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell` →
+1194'ün `chrome-linux/headless_shell`'i) yine çalıştı; ayrıca `chromium-1234/chrome-linux`
+için de aynısını kurmak gerekti. `prisma validate/format` ise `.env` yoksa
+`DATABASE_URL bulunamadı` diye patlıyor — komutun başına sahte bir URL vermek yetiyor.
+
+**`admin@example.com` ile giren specler seed'siz DB'de kırmızı yanar.** Yerelde
+`calendar-logged-meetings` bu yüzden düştü, değişiklikten değil — `prisma db seed`
+öncesi bir başarısızlığı regresyon sanmadan önce specin hangi hesapla girdiğine bak.
