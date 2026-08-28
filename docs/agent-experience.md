@@ -5244,3 +5244,30 @@ için de aynısını kurmak gerekti. `prisma validate/format` ise `.env` yoksa
 **`admin@example.com` ile giren specler seed'siz DB'de kırmızı yanar.** Yerelde
 `calendar-logged-meetings` bu yüzden düştü, değişiklikten değil — `prisma db seed`
 öncesi bir başarısızlığı regresyon sanmadan önce specin hangi hesapla girdiğine bak.
+
+## 2026-08-28 — "Açık hedef yok" dediği hâlde açık iş olması (#1491)
+
+**Bu repoda bir mentee'ye verilen iş iki ayrı modelde yaşıyor: `Goal` ve `ProjectTask`.**
+`Goal`, ilişkinin (`MentorshipRelation`) hedefi; yapılacaklar listesi (#1113) ise
+`ProjectTask` — ve **ortak havuzdan verilen her madde `ProjectTask`**, `Goal` değil.
+`mentorAttention.ts` "açık iş var mı?" sorusunu yalnızca `Goal`'a sorduğu için,
+listesinde 4 açık maddesi olan mentee ekranda kalıcı olarak "Açık hedef yok" damgası
+alıyordu. Bir sinyal/rapor/e-posta "hiç işi yok" diyorsa, **iki modeli de** saymalı;
+`grep -rn "status: 'OPEN'"` bu tür yerleri hızla buluyor (`activityReport.ts` de aynı
+soyutlamada).
+
+**Başkasının listesini okurken görünürlük filtresini kopyala, yeniden icat etme.**
+`GET /api/todos` başka birinin listesinde yalnızca *bir projeden ya da başkası tarafından*
+eklenmiş maddeleri gösteriyor; kişinin kendine yazdığı satır özel. Mentor'a gösterilen
+damgayı hesaplarken aynı filtreyi uygulamak gerekiyor — yoksa damga sayfada görünenle
+çelişiyor (mentor "hiçbir şey yok" görüyor ama damga kayboluyor).
+
+**Testin hatayı gerçekten ürettiğini kanıtla.** Düzeltmeyi tek `sed` ile geri alıp spec'i
+yeniden koşturdum: `Expected: 0, Received: 1`. Bu 40 saniye, "yeşil ama boşa dönen" bir
+iddiayı elemenin en ucuz yolu.
+
+**Kutudaki apt indeksi bayat: `mariadb-server` kurulumu önce 404 veriyor.**
+Güvenlik playbook'undaki tarif doğru, ama tek başına `apt-get install -y mariadb-server`
+`iproute2` ve `libmysqlclient21` için "404 Not Found" ile düşüyor. Önce
+`apt-get update` — sonra kurulum sorunsuz. (Ardından `.env` + `export DATABASE_URL` ve
+headless-shell symlink'i: ikisi de bu dosyada yukarıda yazılı, hâlâ geçerli.)
