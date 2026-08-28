@@ -321,7 +321,7 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
               />
               <span>
                 {t.auth.rememberMe}
-                <span className="block text-xs text-gray-400">{t.auth.rememberHint}</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">{t.auth.rememberHint}</span>
               </span>
             </label>
             <Button type="submit" className="w-full" size="lg" loading={loading}>

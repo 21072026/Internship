@@ -692,7 +692,7 @@ export function AccountSettings() {
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.account.trustedDevices}</h3>
           <p className="text-sm text-gray-600 mt-1 mb-3 max-w-lg">{t.account.trustedDevicesHint}</p>
           {devices === null ? (
-            <p className="text-sm text-gray-400">{t.common.loading}</p>
+            <p className="text-sm text-gray-500">{t.common.loading}</p>
           ) : devices.length === 0 ? (
             <p className="text-sm text-gray-500" data-testid="no-trusted-devices">{t.account.noTrustedDevices}</p>
           ) : (
