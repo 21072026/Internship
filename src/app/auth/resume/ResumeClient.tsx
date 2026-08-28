@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { signIn } from 'next-auth/react';
 import { useT } from '@/i18n/client';
+import { sameOriginPath } from '@/lib/safeRedirect';
 
 /**
  * Silent re-authentication from a remembered device (#1495).
@@ -23,10 +24,10 @@ export function ResumeClient() {
     if (started.current) return;
     started.current = true;
 
-    // Only same-origin relative paths, so a crafted ?next= cannot turn this
-    // into an open redirect.
-    const raw = new URLSearchParams(window.location.search).get('next') || '/';
-    const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+    // Only somewhere on this site, so a crafted ?next= cannot turn this into an
+    // open redirect (see sameOriginPath — the string check it replaced was not
+    // equivalent).
+    const next = sameOriginPath(new URLSearchParams(window.location.search).get('next'), '/');
 
     (async () => {
       try {

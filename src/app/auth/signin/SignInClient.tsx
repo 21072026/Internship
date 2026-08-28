@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
+import { sameOriginPath } from '@/lib/safeRedirect';
 
 // Whether the "keep me signed in" box was ticked last time, per browser. A UI
 // preference only: the credential itself is the httpOnly cookie the server
@@ -191,13 +192,12 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   };
 
   // Where to land after signing in: the ?callbackUrl the app sent us to, when
-  // there is one, else the role's home. Only same-origin relative paths are
-  // honoured — '//evil.example' is a protocol-relative URL, not a local path,
-  // and must never become an open redirect.
+  // there is one, else the role's home. sameOriginPath is what keeps a crafted
+  // parameter from turning this into an open redirect.
   const destination = (role?: string) => {
     const target = new URLSearchParams(window.location.search).get('callbackUrl');
-    if (target && target.startsWith('/') && !target.startsWith('//')) return target;
-    return roleHome(role);
+    const home = roleHome(role);
+    return target ? sameOriginPath(target, home) : home;
   };
 
   // One-click sign-in with a shared demo account (#966). The credentials are

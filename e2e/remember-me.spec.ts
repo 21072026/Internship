@@ -35,9 +35,11 @@ async function signIn(page: Page, email: string, pw: string, remember: boolean) 
   else await box.uncheck();
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.startsWith('/auth'), { timeout: 20_000 });
-  // The sign-in page lands with a full-page assign(); let it settle before the
-  // caller navigates, or the next goto() races the one already in flight.
+  // The sign-in page lands with a full-page assign() and the "already signed in"
+  // effect can fire a second navigation right behind it. Let the dust settle
+  // before the caller navigates, or its goto() is interrupted by one of them.
   await page.waitForLoadState('load');
+  await page.waitForLoadState('networkidle').catch(() => {});
 }
 
 async function sessionEmail(page: Page): Promise<string | null> {
@@ -231,6 +233,34 @@ test('a remembered browser can still open the sign-in form on purpose', async ({
     await page.goto('/auth/signin');
     await expect(page.getByTestId('remember-me')).toBeVisible();
     expect(new URL(page.url()).pathname).toBe('/auth/signin');
+  } finally {
+    await context.close();
+    await cleanupByEmail(email);
+  }
+});
+
+// CodeQL flagged the ?next= handling: a hand-written "starts with / but not //"
+// check is not the same as same-origin, because the browser normalises a
+// backslash to a slash while parsing. `/\evil.example` used to pass it.
+test('a crafted ?next= cannot redirect the resume flow off-site', async ({ browser }) => {
+  const email = uniqueEmail('remember-redir');
+  const pw = 'RememberPass123!';
+  await seedUser(email, pw, 'MENTEE', 'Remember Redirect');
+
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await signIn(page, email, pw, true);
+    await expect
+      .poll(() => cookieValue(context, REMEMBER_COOKIES), { timeout: 10_000 })
+      .toBeTruthy();
+    await expireSession(context);
+
+    await page.goto(`/auth/resume?next=${encodeURIComponent('/\\evil.example/phish')}`);
+    await page.waitForURL((u) => !u.pathname.startsWith('/auth/resume'), { timeout: 20_000 });
+    // Signed in, and still on this site — the hostile target was dropped.
+    expect(new URL(page.url()).hostname).toBe('localhost');
+    expect(await sessionEmail(page)).toBe(email);
   } finally {
     await context.close();
     await cleanupByEmail(email);
