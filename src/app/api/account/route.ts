@@ -8,6 +8,8 @@ import { passwordSchema } from '@/lib/password';
 import { logActivity } from '@/lib/activity';
 import { hardDeleteUser } from '@/lib/accountErasure';
 import { withTenantScope } from '@/lib/orgContext';
+import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { clearRememberCookies } from '@/lib/rememberCookie';
 
 const schema = z.object({
   email: z.string().email().optional(),
@@ -87,13 +89,19 @@ export async function PUT(request: Request) {
         where: { userId: user.id, used: false },
         data: { used: true },
       });
+      // Same reasoning as the reset-token sweep above, for remembered devices
+      // (#1495): a password change is what someone does to shut an intruder
+      // out, so the long-lived device credentials go with the sessions.
+      await revokeAllTrustedDevices(user.id);
       await logActivity({ action: 'account.password_change', level: 'warning', actorId: user.id, actorEmail: user.email });
     }
-    return NextResponse.json({
+    const res = NextResponse.json({
       message: 'Account updated',
       emailChanged: !!data.email,
       sessionsRevoked: !!data.password,
     });
+    if (data.password) clearRememberCookies(res);
+    return res;
     });
   } catch (error) {
     console.error('Account update error:', error);
@@ -134,7 +142,11 @@ export async function DELETE(request: Request) {
     await hardDeleteUser(id);
 
     await logActivity({ action: 'account.delete', level: 'warning', actorId: id, actorEmail: session.user.email ?? null });
-    return NextResponse.json({ ok: true });
+    // The device rows went with the user (onDelete: Cascade); drop the now-dead
+    // cookie too so the browser stops presenting it.
+    const res = NextResponse.json({ ok: true });
+    clearRememberCookies(res);
+    return res;
     });
   } catch (error) {
     console.error('Account delete error:', error);

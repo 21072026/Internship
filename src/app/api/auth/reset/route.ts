@@ -4,6 +4,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { passwordSchema } from '@/lib/password';
+import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 
 const schema = z.object({
   token: z.string().min(1),
@@ -63,6 +64,11 @@ export async function POST(request: Request) {
         data: { used: true },
       }),
     ]);
+
+    // Every remembered device of the account too (#1495): a reset is a
+    // "lock everyone out" action, and a long-lived device cookie that survived
+    // it would hand the session straight back.
+    await revokeAllTrustedDevices(record.userId);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

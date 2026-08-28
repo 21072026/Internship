@@ -187,6 +187,9 @@ async function run() {
     ['emailVerificationToken', () => prisma.emailVerificationToken.deleteMany({})],
     ['impersonationGrant', () => prisma.impersonationGrant.deleteMany({})],
     ['ssoLoginGrant', () => prisma.ssoLoginGrant.deleteMany({})],
+    ['sessionRefreshGrant', () => prisma.sessionRefreshGrant.deleteMany({})],
+    // Remembered devices are live credentials belonging to real people (#1495).
+    ['trustedDevice', () => prisma.trustedDevice.deleteMany({})],
     ['apiKey', () => prisma.apiKey.deleteMany({})],
     ['webhook', () => prisma.webhook.deleteMany({})],
     ['meetingRoomState', () => prisma.meetingRoomState.deleteMany({})],

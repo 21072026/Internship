@@ -240,6 +240,12 @@ workaround, #636, and it compiled on every PR push).
   it before extending: `lib/newsletter.ts` is client-safe on purpose (the HMAC token and
   URL builders live in `lib/newsletterTokens.ts`), and the cron is registered from
   `/api/cron/start`, never from `initCronJobs`, to keep the import graph one-way.
+- **Staying signed in** (`docs/remember-me.md`, #1495): the session JWT is 12h and stays that
+  way; "keep me signed in" is a separate rotating, hashed, revocable per-device token that
+  silently mints a new session. Two rules to keep in mind when touching auth: anything that
+  revokes sessions (sets `sessionsValidFrom`) **must** also call `revokeAllTrustedDevices()`,
+  or the browser signs itself straight back in; and any new sign-out control must go through
+  `signOutEverywhere()` rather than NextAuth's `signOut()`.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

@@ -5271,3 +5271,43 @@ Güvenlik playbook'undaki tarif doğru, ama tek başına `apt-get install -y mar
 `iproute2` ve `libmysqlclient21` için "404 Not Found" ile düşüyor. Önce
 `apt-get update` — sonra kurulum sorunsuz. (Ardından `.env` + `export DATABASE_URL` ve
 headless-shell symlink'i: ikisi de bu dosyada yukarıda yazılı, hâlâ geçerli.)
+
+## 2026-08-28 — "Beni hatırla": NextAuth'ta oturumu uzatmadan kalıcı giriş (#1495)
+
+**JWT stratejisinde oturum ömrünü kullanıcı başına değiştiremezsin.** NextAuth v4,
+çerezin `expires` değerini her zaman `session.maxAge`'den üretir; token'ın içine
+"remember" bayrağı koymak çerezi uzatmıyor. Doğru şekil, oturumu 12 saatte bırakıp
+**ikinci, sunucu tarafında saklanan bir kimlik bilgisi** eklemek: cihaz başına bir
+satır, sha256'lanmış, her kullanımda **döndürülen** (rotate) ve iptal edilebilir bir
+token. Böylece hem "sürekli login olmasın" isteği karşılanıyor hem de çalınan bir
+şey geri alınabiliyor — uzun ömürlü bir JWT'de ikisi birden mümkün değil.
+
+**Bir NextAuth provider'ı çerez yazamaz.** `authorize()` bir Response değil, bir
+user döndürüyor. Bu yüzden hem kayıt (enrol) hem tazeleme ayrı route handler'lar,
+ve oturum tek kullanımlık bir grant üzerinden alınıyor — SSO/impersonation
+akışlarındaki desenin aynısı. Token'ı elle `encode` etmeye kalkma: role, orgId,
+`authTime` gibi alanların tek karar yeri `jwt` callback'i.
+
+**Rotasyonu koşullu yaz, yoksa iki sekme cihazı kilitler.** Aynı anda uyanan iki
+sekme aynı sırrı gönderiyor; ikisi de döndürürse tarayıcıda kalan çerez ile
+veritabanındaki güncel token ayrışıyor ve **günler sonra masum çerez "çalınmış"
+sayılıp cihaz iptal ediliyor.** Çözüm: `updateMany({ where: { id, tokenHash } })`
+ile yalnızca bir isteğin döndürmesine izin vermek, yarışı kaybedene `token: null`
+("çerezi elleme") döndürmek. 30 saniyelik `prevTokenHash` penceresi de bunun için.
+
+**"Oturumları iptal et" diyen her yol cihazları da iptal etmeli.** `sessionsValidFrom`
+damgalayıp `TrustedDevice` satırlarını bırakan bir uç nokta aslında hiçbir şeyi iptal
+etmiyor: tarayıcı bir sonraki ziyarette kendine yeni oturum bastırıyor. Aynı şekilde
+çıkış düğmesi düz `signOut()` çağırırsa kullanıcı **çıkamıyor**.
+
+**Playwright'ta `clearCookies()` + `addCookies(kalanlar)` kurabiye kavanozunu bozuyor.**
+Geri eklenen çerez host-only olmayabiliyor; sonra gelen `Set-Cookie` ikinci bir kayıt
+oluşturuyor ve aynı isimden iki çerez arasından hangisini okuduğun belirsizleşiyor
+(rotasyon iddiası sahte kırmızı verdi). `clearCookies({ name })` ile ada göre sil.
+Ayrıca spec'lerin kendi PrismaClient'ı `.env`'i okumuyor: `set -a; . ./.env; set +a`
+ile ver — `export $(grep … | xargs)` tırnakları da değişkene katıp
+"URL must start with mysql://" hatası veriyor.
+
+**Bu turda kutu:** `chromium_headless_shell-1234` yine yoktu; symlink yerine
+`playwright.local.config.ts` (repoya girmez) ile
+`use.launchOptions.executablePath = '/opt/pw-browsers/chromium'` vermek daha hızlı yol.

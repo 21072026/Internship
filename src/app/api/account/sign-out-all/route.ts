@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { clearRememberCookies } from '@/lib/rememberCookie';
 
 // POST — "Sign out of all devices". Stamps sessionsValidFrom = now so every
 // existing JWT (including the caller's own) is rejected on its next request.
@@ -28,12 +30,18 @@ export async function POST() {
     where: { id: session.user.id },
     data: { sessionsValidFrom: new Date() },
   });
+  // Every remembered device too (#1495) — otherwise a browser the user just
+  // locked out would silently mint itself a fresh session on its next visit,
+  // which is precisely the opposite of what they pressed.
+  await revokeAllTrustedDevices(session.user.id);
   await logActivity({
     action: 'account.sign_out_all',
     level: 'warning',
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
   });
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  clearRememberCookies(res);
+  return res;
   });
 }

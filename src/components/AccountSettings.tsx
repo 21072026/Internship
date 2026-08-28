@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { signOutEverywhere } from '@/lib/signOutClient';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -9,10 +10,10 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { AvatarManager } from '@/components/AvatarManager';
 import { ConsentSettings } from '@/components/ConsentSettings';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
-import { durationSince } from '@/lib/relativeTime';
+import { durationSince, relativeTime } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 import { pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
 import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
@@ -20,11 +21,13 @@ import { EMAIL_GROUPS, emailGroupPrefKey, resolveEmailGroupPrefs, type EmailGrou
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
 import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } from '@/lib/timezone';
 import { GoogleCalendarCard } from '@/components/GoogleCalendarCard';
+import type { TrustedDeviceView } from '@/lib/trustedDevice';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
 // change email, change password, and delete the account.
 export function AccountSettings() {
   const t = useT();
+  const locale = useLocale();
   const { data: session, update } = useSession();
   const router = useRouter();
   // Read after mount, not during render: localStorage doesn't exist on the
@@ -96,6 +99,9 @@ export function AccountSettings() {
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaBusy, setTwoFaBusy] = useState(false);
   const [signOutBusy, setSignOutBusy] = useState(false);
+  // "Remember me" devices (#1495). null = still loading; [] = none remembered.
+  const [devices, setDevices] = useState<TrustedDeviceView[] | null>(null);
+  const [deviceBusy, setDeviceBusy] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
   const [theme, setTheme] = useState('system');
   const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
@@ -179,6 +185,8 @@ export function AccountSettings() {
       })
       .catch(() => setPrefsLoadFailed(true));
     fetch('/api/account/2fa').then((r) => r.json()).then((d) => setTwoFaEnabled(!!d.enabled)).catch(() => {});
+    void loadDevices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -416,6 +424,33 @@ export function AccountSettings() {
     }
   };
 
+  // Staying signed in is only defensible if it can be seen and undone, so the
+  // list is part of the session section rather than a hidden implementation
+  // detail. A failure here shows an empty list, never a broken card.
+  const loadDevices = async () => {
+    try {
+      const res = await fetch('/api/account/devices');
+      const data = res.ok ? await res.json() : null;
+      setDevices(Array.isArray(data?.devices) ? data.devices : []);
+    } catch {
+      setDevices([]);
+    }
+  };
+
+  const forgetDevice = async (id: string) => {
+    setDeviceBusy(id);
+    try {
+      const res = await fetch(`/api/account/devices/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      await loadDevices();
+      flash(t.account.deviceForgotten);
+    } catch {
+      flash(t.account.deviceForgetFailed, true);
+    } finally {
+      setDeviceBusy(null);
+    }
+  };
+
   const flash = (m: string, isErr = false) => {
     setMsg(isErr ? '' : m);
     setErr(isErr ? m : '');
@@ -460,7 +495,7 @@ export function AccountSettings() {
       // so say why and send the user back to sign-in rather than letting the
       // next request fail as a mystery logout.
       flash(t.account.passwordChangedSignOut);
-      setTimeout(() => { void signOut({ callbackUrl: '/auth/signin' }); }, 2500);
+      setTimeout(() => { void signOutEverywhere('/auth/signin'); }, 2500);
       return;
     } catch (e2) {
       flash(e2 instanceof Error ? e2.message : 'Failed', true);
@@ -475,7 +510,7 @@ export function AccountSettings() {
       const res = await fetch('/api/account/sign-out-all', { method: 'POST' });
       if (!res.ok) throw new Error();
       // The current cookie is now invalid too — clear it and go to sign-in.
-      await signOut({ callbackUrl: '/auth/signin' });
+      await signOutEverywhere('/auth/signin');
     } catch {
       flash('Failed', true);
       setSignOutBusy(false);
@@ -492,7 +527,7 @@ export function AccountSettings() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
-      await signOut({ callbackUrl: '/' });
+      await signOutEverywhere('/');
     } catch (e2) {
       flash(e2 instanceof Error ? e2.message : 'Failed', true);
       setDeleting(false);
@@ -652,6 +687,42 @@ export function AccountSettings() {
       <Card className="mt-6 max-w-4xl" data-testid="sessions-card">
         <CardHeader><CardTitle>{t.account.sessionsSection}</CardTitle></CardHeader>
         <p className="text-sm text-gray-600 mb-4 max-w-lg">{t.account.sessionsHint}</p>
+
+        <div className="mb-6" data-testid="trusted-devices">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.account.trustedDevices}</h3>
+          <p className="text-sm text-gray-600 mt-1 mb-3 max-w-lg">{t.account.trustedDevicesHint}</p>
+          {devices === null ? (
+            <p className="text-sm text-gray-400">{t.common.loading}</p>
+          ) : devices.length === 0 ? (
+            <p className="text-sm text-gray-500" data-testid="no-trusted-devices">{t.account.noTrustedDevices}</p>
+          ) : (
+            <ul className="max-w-lg divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg">
+              {devices.map((d) => (
+                <li key={d.id} data-testid={`trusted-device-${d.id}`} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
+                      {d.label || t.account.unknownDevice}
+                      {d.current && <Badge variant="success" className="ml-2">{t.account.thisDevice}</Badge>}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {t.account.deviceLastUsed.replace('{when}', relativeTime(d.lastUsedAt, locale))}
+                      {d.lastIp ? ` · ${d.lastIp}` : ''}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    loading={deviceBusy === d.id}
+                    onClick={() => forgetDevice(d.id)}
+                  >
+                    {t.account.forgetDevice}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <Button variant="outline" loading={signOutBusy} onClick={signOutAll}>{t.account.signOutAll}</Button>
       </Card>
       )}
