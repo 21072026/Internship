@@ -8,6 +8,7 @@ import { JourneyTracker } from '@/components/JourneyTracker';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { User, Building2, BookOpen, ExternalLink, MessageCircle } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -153,6 +154,7 @@ export default async function PortalJourneyPage() {
                       <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0" />
                       <div className="min-w-0">
                         <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
+                        <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-1" />
                         <p className="text-xs text-gray-400">
                           {formatDate(interaction.date, locale)}
                         </p>

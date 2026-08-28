@@ -76,8 +76,14 @@ export async function GET(request: Request) {
     // Logged "Meeting" interactions are past meetings a mentor recorded without
     // going through the scheduling flow — surface them so the calendar isn't
     // empty when the team logs meetings as interactions instead.
+    //
+    // `meetingId: null` — a log written automatically from a scheduled meeting
+    // (#1489) describes the row already listed above; without this the same
+    // meeting would sit on the calendar twice. A log whose meeting was later
+    // deleted has meetingId back to null (SetNull) and returns here, which is
+    // right: it is then the only remaining record of that meeting.
     prisma.interactionLog.findMany({
-      where: { type: 'Meeting', ...(from || to ? { date: inWindow } : {}), relation: relWhere },
+      where: { type: 'Meeting', meetingId: null, ...(from || to ? { date: inWindow } : {}), relation: relWhere },
       include: { relation: { include: { mentee: { select: { fullName: true } } } } },
       orderBy: { date: 'asc' },
     }),
