@@ -394,6 +394,7 @@ model User {
   interviewRequests                 InterviewRequest[]            @relation("InterviewRequestMentee")
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
+  trustedDevices                    TrustedDevice[]
 
   @@index([role])
   @@index([referredById])
@@ -2325,6 +2326,67 @@ model SsoLoginGrant {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
+}
+
+// Single-use bridge token minted by /api/auth/remember/refresh once a trusted
+// device's remember-me cookie has been verified AND rotated, then consumed by
+// the `remember` NextAuth provider to mint a fresh session. Same shape as
+// SsoLoginGrant on purpose: the session is always minted by a NextAuth
+// provider, never hand-encoded, so every token carries the same claims.
+model SessionRefreshGrant {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  deviceId  String
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+// "Remember me" — one row per device the user chose to trust (#1495).
+//
+// The session JWT stays short-lived (12h); this is the long-lived credential
+// that silently mints a new one, so an idle laptop does not have to be logged
+// into every morning. Shaped along the usual persistent-login rules:
+//
+//   * only the SHA-256 of the secret is stored, so a database dump is not a
+//     pile of usable login cookies;
+//   * the secret ROTATES on every use — `tokenHash` becomes the new one and the
+//     old hash moves to `prevTokenHash`, valid for a few seconds only so two
+//     parallel tabs racing the same refresh do not knock each other out;
+//   * presenting a hash older than that grace window means the cookie was
+//     copied off the machine (the legitimate device would have rotated it), so
+//     the device is revoked on the spot rather than trusted;
+//   * `expiresAt` slides forward on use but `absoluteExpiresAt` never does — a
+//     remembered device eventually has to type its password again.
+model TrustedDevice {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SHA-256 of the current secret. Never the secret itself.
+  tokenHash         String    @unique
+  // The previous secret's hash, accepted until prevValidUntil (see above).
+  prevTokenHash     String?   @unique
+  prevValidUntil    DateTime?
+  // Human-readable "Chrome on macOS", derived from the user-agent at enrolment
+  // so the account page can list devices someone actually recognises.
+  label             String?
+  userAgent         String?   @db.Text
+  lastIp            String?
+  createdAt         DateTime  @default(now())
+  lastUsedAt        DateTime  @default(now())
+  // Idle expiry — slides forward on every refresh.
+  expiresAt         DateTime
+  // Hard cap — never extended.
+  absoluteExpiresAt DateTime
+  // Set when the user signs out, revokes the device, changes their password or
+  // signs out of all devices. Kept (rather than deleted) so a later attempt
+  // with the stolen cookie can be recognised and logged instead of looking like
+  // an unknown token.
+  revokedAt         DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 enum LogLevel {

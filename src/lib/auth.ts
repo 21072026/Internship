@@ -321,6 +321,55 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    // "Remember me" silent re-authentication (#1495). The device's long-lived
+    // cookie is verified AND rotated by POST /api/auth/remember/refresh — a
+    // provider cannot write the rotated cookie back, since it returns a user
+    // rather than a response — which mints the single-use grant consumed here.
+    // Same two-step shape as the SSO and impersonation providers, and for the
+    // same reason: the session is always issued by the jwt callback below, so
+    // there is exactly one place where a token's claims are decided.
+    //
+    // No password and no TOTP prompt: the rotating device credential IS the
+    // proof, and it was issued to a browser that had already passed both. That
+    // is the whole point of "remember this device" — and it stays revocable,
+    // which a long-lived JWT would not be.
+    CredentialsProvider({
+      id: 'remember',
+      name: 'remember',
+      credentials: { grant: { label: 'grant', type: 'text' } },
+      async authorize(credentials) {
+        const token = credentials?.grant;
+        if (!token) throw new Error('grant is required');
+
+        const grant = await prisma.sessionRefreshGrant.findUnique({ where: { token } });
+        if (!grant || grant.used || grant.expiresAt < new Date()) {
+          throw new Error('Invalid or expired grant');
+        }
+        await prisma.sessionRefreshGrant.update({ where: { id: grant.id }, data: { used: true } });
+
+        const user = await prisma.user.findUnique({
+          where: { id: grant.userId },
+          select: AUTH_USER_SELECT,
+        });
+        if (!user) throw new Error('User not found');
+        // Re-checked here even though rotateTrustedDevice() just checked it:
+        // the grant is a bearer token with a 60s life, and an account can be
+        // deactivated inside it.
+        if (!user.isActive) {
+          throw new Error('This account has been deactivated. Please contact an administrator.');
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.fullName,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          companyId: user.companyId,
+          orgId: user.orgId,
+        };
+      },
+    }),
   ]),
   callbacks: {
     async jwt({ token, user, trigger }) {

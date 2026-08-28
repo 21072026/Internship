@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { LogOut, Settings, ChevronUp } from 'lucide-react';
+import { signOutEverywhere } from '@/lib/signOutClient';
 import { SidebarAvatar } from '@/components/SidebarAvatar';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -70,14 +71,19 @@ export function AccountMenu({
             <Settings className="h-4 w-4" />
             {t.account.nav}
           </Link>
-          <Link
-            href="/api/auth/signout"
+          {/* A button rather than a link to /api/auth/signout: signing out has
+              to give up the remembered device too, or the next page load would
+              silently mint a new session and the sign-out would look broken
+              (#1495). */}
+          <button
+            type="button"
             role="menuitem"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+            onClick={() => { void signOutEverywhere(); }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
           >
             <LogOut className="h-4 w-4" />
             {t.nav.signOut}
-          </Link>
+          </button>
           <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
           <div className="flex items-center justify-between gap-2 px-3 py-1.5">
             <LanguageSwitcher current={locale} />

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
+import { purgeExpiredTrustedDevices } from '@/lib/trustedDevice';
 import { logger } from '@/lib/logger';
 import { getEmailHealth, type EmailHealth } from '@/lib/emailHealth';
 import { logActivity } from '@/lib/activity';
@@ -3054,6 +3055,22 @@ export function initCronJobs() {
     }
   });
   scheduledTasks.set('unread-message-digest', unreadDigestTask);
+
+  // Housekeeping for "keep me signed in" (#1495) — nightly at 03:40. Expired
+  // device rows and the spent one-minute refresh grants have no further use;
+  // revoked devices are kept a month longer so a replayed cookie is still
+  // recognisable (see purgeExpiredTrustedDevices).
+  const trustedDeviceTask = cron.schedule('40 3 * * *', async () => {
+    try {
+      const r = await purgeExpiredTrustedDevices();
+      if (r.devices || r.grants) {
+        console.log(`[Cron] Trusted device purge: ${r.devices} devices, ${r.grants} grants`);
+      }
+    } catch (e) {
+      console.error('[Cron] Trusted device purge error:', e);
+    }
+  });
+  scheduledTasks.set('trusted-device-purge', trustedDeviceTask);
 
   console.log('[Cron] Scheduled jobs initialized');
 }

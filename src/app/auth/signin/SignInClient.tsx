@@ -1,7 +1,7 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -14,6 +14,12 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
+import { sameOriginPath } from '@/lib/safeRedirect';
+
+// Whether the "keep me signed in" box was ticked last time, per browser. A UI
+// preference only: the credential itself is the httpOnly cookie the server
+// issues (#1495).
+const REMEMBER_PREF_KEY = 'internship.remember-pref';
 
 const signinSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -41,6 +47,17 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   const [needsVerify, setNeedsVerify] = useState(false);
   const [resending, setResending] = useState(false);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
+  // Off by default — staying signed in for 30 days is a decision about the
+  // machine you are sitting at, and this form is also used on shared ones. The
+  // *choice* is remembered per browser (a plain localStorage flag, with no
+  // authority of its own), so someone who wants it ticks the box once and finds
+  // it ticked on every later sign-in from that browser.
+  //
+  // Uncontrolled, like the email and password fields: a controlled checkbox
+  // loses a click made before React hydrates, and the box sits right next to
+  // two inputs that people tab through immediately.
+  const rememberRef = useRef<HTMLInputElement>(null);
+  const rememberTouched = useRef(false);
 
   // Already signed in → go straight to the role dashboard.
   useEffect(() => {
@@ -48,6 +65,28 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
       router.replace(roleHome(session?.user?.role));
     }
   }, [status, session, router]);
+
+  // Applied after mount, not during render: reading localStorage while
+  // rendering would disagree with the server-rendered HTML. Skipped if the
+  // visitor has already touched the box.
+  useEffect(() => {
+    try {
+      if (!rememberTouched.current && localStorage.getItem(REMEMBER_PREF_KEY) === '1' && rememberRef.current) {
+        rememberRef.current.checked = true;
+      }
+    } catch {
+      // Private mode / storage disabled — the box simply starts unticked.
+    }
+  }, []);
+
+  const chooseRemember = (on: boolean) => {
+    rememberTouched.current = true;
+    try {
+      localStorage.setItem(REMEMBER_PREF_KEY, on ? '1' : '0');
+    } catch {
+      // As above: the choice still applies to this sign-in.
+    }
+  };
 
   // Surface a post-registration notice (pending approval / verify email).
   useEffect(() => {
@@ -116,7 +155,10 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
       return;
     }
 
-    await settleAndRedirect();
+    // Enrol the device only now, on a session that exists: a NextAuth provider
+    // cannot set a cookie, so "remember me" is a separate call authorised by the
+    // session the password (and TOTP) just earned.
+    await settleAndRedirect(rememberRef.current?.checked === true);
   });
 
   // Safari (and other strict-cookie browsers) can lag applying the Set-Cookie
@@ -126,7 +168,7 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   // briefly for the session to settle, then do a FULL-PAGE navigation so the
   // freshly-committed cookie is guaranteed to accompany the next request
   // (client-side router.push could run before the cookie is readable).
-  const settleAndRedirect = async () => {
+  const settleAndRedirect = async (rememberDevice = false) => {
     let role: string | undefined;
     for (let i = 0; i < 6; i++) {
       const res = await fetch('/api/auth/session', { cache: 'no-store' });
@@ -135,7 +177,27 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
       if (role) break;
       await new Promise((r) => setTimeout(r, 200));
     }
-    window.location.assign(roleHome(role));
+    // Enrolled here rather than right after signIn() for the same reason the
+    // loop above exists: the endpoint authorises itself with the session
+    // cookie, which a strict-cookie browser may not have committed yet.
+    if (rememberDevice && role) {
+      try {
+        await fetch('/api/auth/remember', { method: 'POST' });
+      } catch {
+        // A device that could not be remembered is a lost convenience, never a
+        // reason to hold up a successful sign-in.
+      }
+    }
+    window.location.assign(destination(role));
+  };
+
+  // Where to land after signing in: the ?callbackUrl the app sent us to, when
+  // there is one, else the role's home. sameOriginPath is what keeps a crafted
+  // parameter from turning this into an open redirect.
+  const destination = (role?: string) => {
+    const target = new URLSearchParams(window.location.search).get('callbackUrl');
+    const home = roleHome(role);
+    return target ? sameOriginPath(target, home) : home;
   };
 
   // One-click sign-in with a shared demo account (#966). The credentials are
@@ -249,6 +311,19 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
                 {...register('totp')}
               />
             )}
+            <label className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300 select-none">
+              <input
+                type="checkbox"
+                data-testid="remember-me"
+                ref={rememberRef}
+                onChange={(e) => chooseRemember(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>
+                {t.auth.rememberMe}
+                <span className="block text-xs text-gray-500 dark:text-gray-400">{t.auth.rememberHint}</span>
+              </span>
+            </label>
             <Button type="submit" className="w-full" size="lg" loading={loading}>
               {t.auth.signIn}
             </Button>
