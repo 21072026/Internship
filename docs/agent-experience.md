@@ -5311,3 +5311,37 @@ ile ver — `export $(grep … | xargs)` tırnakları da değişkene katıp
 **Bu turda kutu:** `chromium_headless_shell-1234` yine yoktu; symlink yerine
 `playwright.local.config.ts` (repoya girmez) ile
 `use.launchOptions.executablePath = '/opt/pw-browsers/chromium'` vermek daha hızlı yol.
+
+## 2026-08-29 — Pasif ilk temaslar: bir kuralı gizlemekten işaretlemeye taşımak (#1499, #1508)
+
+**Bir listeden satır düşürmek ile insanı "pasif" diye etiketlemek aynı eşiği
+kaldırmıyor.** İlk PR yalnızca hatırlatmaları bastırıyordu; orada "mesaj atıldı,
+yanıt yok" kuralının temasın ne kadar eski olduğunu sormaması zararsızdı. Aynı kural
+ikinci PR'da görünür bir rozete ve otomatik e-postaya bağlanınca aynı sadelik hataya
+dönüştü: dün yazdığın birine ertesi sabah "pasif" demek. Kuralı taşırken sorulacak
+soru "aynı kural mı?" değil, **"bu kuralın yeni tüketicisi hangi eşiği gerektiriyor?"**
+— 14 günlük hoşgörü penceresi buradan çıktı.
+
+**Zamanlanmış ikinci bir hatırlatmayı ilk hatırlatmadan ölç, tetikleyen olaydan
+değil.** "14. ve 45. gün" doğal olarak ilk temasa göre kurgulanıyor; ama özellik
+yayına girdiği gün birikmiş kuyruğun tamamı ikisini de hak ediyor ve iki mail arka
+arkaya iki sabah gidiyor. Kadansın ikinci adımını **bir öncekinin damgasına** bağlamak
+hem yeni vakayı hem birikmiş kuyruğu doğru davrandırıyor. Aynı sebeple tur başına
+gönderim tavanı: ilk çalıştırmada yüzlerce benzer mailin bir dakikada çıkması, gönderen
+alan adının itibarını harcamanın en hızlı yolu.
+
+**Tercihi sayaçtan önce oku.** Nudge sayacını artırıp sonra "e-posta kapalıymış" diye
+çıkmak, hiç gönderilmemiş maillerle kişinin hakkını tüketiyor: sonradan e-postayı açan
+kişi hatırlatma yerine sessizlik satın almış oluyor. Claim-before-send deseni
+idempotency için doğru, ama **filtreler claim'den önce** gelmeli.
+
+**Kutu notu (dünkü nota ek):** `chromium_headless_shell-1234` yine yoktu. Sürüm
+dizinini `chromium-1194`'e symlink'lemek **yetmiyor** — beklenen iç yol
+`chrome-headless-shell-linux64/chrome-headless-shell`, kurulu build ise `chrome-linux/`
+taşıyor. Çalışan yol: iç dizini elle oluşturup ikiliyi
+`chromium-1194/chrome-linux/chrome`'a symlink'lemek (headless shell yerine tam chrome
+sorunsuz çalıştı). Tarayıcı açmayan prisma-only spec'ler bu sorunu hiç göstermiyor;
+`page` kullanan ilk spec'e kadar eksiklik görünmez kalıyor.
+
+**MariaDB oturum içinde durabiliyor:** `db push` bir anda P1001 verdiyse kutunun
+ağı değil, `service mariadb start`'ı tekrar çalıştırmak gerekiyor.
