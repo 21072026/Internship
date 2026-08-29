@@ -246,6 +246,14 @@ workaround, #636, and it compiled on every PR push).
   revokes sessions (sets `sessionsValidFrom`) **must** also call `revokeAllTrustedDevices()`,
   or the browser signs itself straight back in; and any new sign-out control must go through
   `signOutEverywhere()` rather than NextAuth's `signOut()`.
+- **Pasif ilk temaslar** (`docs/dormant-first-contacts.md`, #1499/#1508): biri pipeline'ın
+  ilk aşamasında takılı, kendisine yazılmış ve 14 gündür yanıt vermemişse "pasif" sayılır —
+  mentor kuyruğundan ve hatırlatma e-postasından düşer, `dormantSince` damgalanır ve
+  mentee'ye **en fazla iki** "hâlâ ilgileniyor musun?" maili gider (14. gün + 31 gün sonra).
+  Kuralın tek kaynağı `src/lib/dormantFirstContact.ts`, tek yazarı `sweepDormantFirstContacts`.
+  İki sınır tartışmaya kapalıdır: **üçüncü mail yok** (gönderen alan adının itibarı) ve
+  **otomatik aşama değişikliği / kapatma yok**. Herhangi bir yaşam belirtisi (mentee mesajı,
+  yanıtsız soru, bekleyen toplantı, aşama ilerlemesi) damgayı ve sayaçları sıfırlar.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.

@@ -221,7 +221,12 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'announcements',
     essential: false,
     bulk: true,
-    categories: ['announcement', 're-engagement'],
+    // 'dormant-check-in' (#1508) is the "are you still interested?" nudge to
+    // somebody who never answered the first contact. It belongs beside
+    // 're-engagement' because it is the same kind of mail — us writing to
+    // somebody who has gone quiet, hoping they come back — and that is the
+    // switch a reader who wants none of it reaches for.
+    categories: ['announcement', 're-engagement', 'dormant-check-in'],
     legacy: ['announcements'],
   },
 ];

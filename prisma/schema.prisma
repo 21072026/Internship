@@ -1707,6 +1707,17 @@ model MentorshipRelation {
   // mentee has a recent interaction again, so each staleness episode notifies the
   // mentor only once (#573).
   stalenessReminderSentAt DateTime?
+  // Dormant first contact (#1501). Stamped by the daily sweep when the relation
+  // is still parked in the pipeline's FIRST stage, an outreach already went out
+  // and nothing came back (lib/dormantFirstContact.ts). Cleared the moment any
+  // sign of life appears, so a later silence can flag — and nudge — again.
+  dormantSince            DateTime?
+  // "Still interested?" check-ins sent to the MENTEE for the current dormancy
+  // episode: how many (capped at DORMANT_MAX_NUDGES) and when the last one went
+  // out. Both reset with dormantSince, so a person who comes back and goes quiet
+  // months later is written to again rather than being silently written off.
+  dormantNudgeCount       Int              @default(0)
+  dormantNudgeSentAt      DateTime?
 
   mentor                User                   @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                   @relation("MenteeRelations", fields: [menteeId], references: [id])

@@ -14,10 +14,12 @@ import {
   sendWeeklyMissingDocumentReminders,
   runEmailHealthCheck,
   checkReEngagementReminders,
+  sendDormantCheckIns,
 } from '@/services/emailService';
 import { expireOffers } from '@/lib/offerNotify';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
+import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 
 export async function GET(request: Request) {
   try {
@@ -58,10 +60,22 @@ export async function GET(request: Request) {
     if (job === 'newsletter-queue') {
       return NextResponse.json({ message: 'Newsletter queue ran', newsletterQueue: await queueScheduledNewsletter() });
     }
+    // Dormant first contacts (#1508), runnable on its own: the sweep and the
+    // check-in are one decision, so the job runs both and reports both.
+    if (job === 'dormant') {
+      const dormantSweep = await sweepDormantFirstContacts();
+      return NextResponse.json({ message: 'Dormant first contacts ran', dormantSweep, dormantCheckIns: await sendDormantCheckIns() });
+    }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();
       return NextResponse.json({ message: 'Missing-document reminders ran', missingDocuments });
     }
+
+    // Sequenced ahead of the batch below rather than inside it: the sweep is
+    // what decides who counts as dormant today, and the mails it drives must
+    // read the state it just wrote, not race it.
+    const dormantSweep = await sweepDormantFirstContacts();
+    const dormantCheckIns = await sendDormantCheckIns();
 
     const [interactions, meetings, projectMeetings, meetingLogs, digests, deadlines, retention, needMatches, analyticsReport, missingDocuments, offers, weeklyReports, reEngagement, newsletters] = await Promise.all([
       checkMentorInteractionReminders(),
@@ -82,6 +96,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       message: 'Scheduled jobs ran',
+      dormantSweep,
+      dormantCheckIns,
       interactions,
       meetings,
       projectMeetings,

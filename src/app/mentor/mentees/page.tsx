@@ -17,6 +17,10 @@ interface MentorshipRelation {
   id: string;
   status: string;
   startDate: string;
+  // Stamped by the daily sweep (#1508) when the mentee is still parked at first
+  // contact, was messaged and never answered. Null for everybody else.
+  dormantSince: string | null;
+  dormantNudgeCount: number;
   mentee: {
     id: string;
     fullName: string;
@@ -36,6 +40,10 @@ export default function MenteesPage() {
   const t = useT();
   const [relations, setRelations] = useState<MentorshipRelation[]>([]);
   const [loading, setLoading] = useState(true);
+  // Dormant mentees are hidden by default — that is the point of flagging them.
+  // The toggle is always one click away, and it counts them, so "where did they
+  // go?" is answered on the screen rather than in a support message.
+  const [showDormant, setShowDormant] = useState(false);
 
   const fetchRelations = useCallback(async () => {
     const res = await fetch('/api/mentorship');
@@ -47,6 +55,9 @@ export default function MenteesPage() {
   useEffect(() => {
     fetchRelations();
   }, [fetchRelations]);
+
+  const dormantCount = relations.filter((rel) => rel.dormantSince).length;
+  const visibleRelations = showDormant ? relations : relations.filter((rel) => !rel.dormantSince);
 
   return (
     <div>
@@ -65,9 +76,22 @@ export default function MenteesPage() {
 
       <ApplyLinkBox />
 
+      {dormantCount > 0 && (
+        <div className="mb-4">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowDormant((v) => !v)}
+            data-testid="toggle-dormant-mentees"
+          >
+            {showDormant ? t.mentor.dormantHide : t.mentor.dormantShow.replace('{n}', String(dormantCount))}
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <Card><SkeletonRows rows={6} /></Card>
-      ) : relations.length === 0 ? (
+      ) : visibleRelations.length === 0 ? (
         <Card>
           <EmptyState
             icon={Users}
@@ -79,7 +103,7 @@ export default function MenteesPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {relations.map((rel) => (
+          {visibleRelations.map((rel) => (
             <Card key={rel.id}>
               <div className="flex items-start justify-between gap-2 mb-4">
                 {/* `min-w-0` + `truncate`: a long address ran out of the card,
@@ -92,7 +116,14 @@ export default function MenteesPage() {
                   </h3>
                   <p className="text-sm text-gray-500 truncate">{rel.mentee.email}</p>
                 </div>
-                <div className="flex-shrink-0"><StatusBadge status={rel.status} /></div>
+                <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                  <StatusBadge status={rel.status} />
+                  {rel.dormantSince && (
+                    <Badge variant="default" title={t.mentor.dormantTitle} data-testid={`dormant-badge-${rel.id}`}>
+                      {t.mentor.dormantBadge}
+                    </Badge>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2 mb-4">
@@ -122,6 +153,11 @@ export default function MenteesPage() {
                   360px card, so "Detayları gör" was clipped at the card edge (#1305). */}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Badge variant="default">{rel._count.interactions} {t.mentor.interactions}</Badge>
+                {rel.dormantSince && rel.dormantNudgeCount > 0 && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {t.mentor.dormantNudges.replace('{n}', String(rel.dormantNudgeCount))}
+                  </span>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <StartMeetingButton
                     target={{ relationIds: [rel.id] }}

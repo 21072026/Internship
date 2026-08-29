@@ -26,6 +26,19 @@ import { prisma } from './prisma';
 import { onPathKeys } from './pipeline';
 import { resolvePipelineStages } from './pipelineStages';
 
+/**
+ * How old the outreach must be before silence counts as dormancy.
+ *
+ * Without it the rule fires the day after a mentor writes: harmless while this
+ * only suppressed reminders, but it now drives a visible "Dormant" badge and an
+ * automated check-in, and calling somebody passive the morning after you wrote
+ * to them is simply wrong. Fourteen days is the same threshold the attention
+ * queue and the staleness reminder already use for "no recent contact", and it
+ * is deliberately the same as DORMANT_FIRST_NUDGE_DAYS: a relation becomes
+ * dormant on exactly the day its first check-in is due.
+ */
+export const DORMANT_GRACE_DAYS = 14;
+
 export interface DormantCandidate {
   id: string;
   orgId: string | null;
@@ -61,10 +74,13 @@ export async function findDormantFirstContacts(relations: DormantCandidate[]): P
   if (relations.length === 0) return dormant;
 
   const firstStageKey = createFirstStageResolver();
+  const graceCutoff = new Date(Date.now() - DORMANT_GRACE_DAYS * 24 * 60 * 60 * 1000);
   const candidates: DormantCandidate[] = [];
   for (const r of relations) {
     // No outreach yet, or a deadline the mentor set on purpose: never dormant.
     if (!r.lastInteractionAt || r.stageDeadline) continue;
+    // Still inside the grace period — the silence is not yet an answer.
+    if (r.lastInteractionAt > graceCutoff) continue;
     if (r.pipelineStatus !== (await firstStageKey(r.orgId))) continue;
     candidates.push(r);
   }
@@ -93,4 +109,63 @@ export async function findDormantFirstContacts(relations: DormantCandidate[]): P
     dormant.add(r.id);
   }
   return dormant;
+}
+
+/**
+ * Persist the flag (#1508).
+ *
+ * The queue evaluates the rule live, which is what makes a mentee disappear
+ * from it the moment they go quiet. But a *stored* state is what the mentee
+ * list can badge and filter on, and what the "still interested?" check-in job
+ * has to hang its counters off — a nudge count only means something if the
+ * episode it belongs to has an identity. So this sweep is the single writer of
+ * `dormantSince`, and it runs daily alongside the other reminder jobs.
+ *
+ * Clearing matters as much as setting: the moment a relation stops matching,
+ * the stamp AND the nudge counters go, so somebody who resurfaces and then goes
+ * quiet again months later is treated as a new episode rather than as a person
+ * already written off.
+ */
+export async function sweepDormantFirstContacts() {
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: { status: 'ACTIVE' },
+    select: {
+      id: true,
+      orgId: true,
+      menteeId: true,
+      pipelineStatus: true,
+      stageDeadline: true,
+      dormantSince: true,
+      interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
+    },
+  });
+
+  const dormant = await findDormantFirstContacts(
+    relations.map((r) => ({
+      id: r.id,
+      orgId: r.orgId,
+      menteeId: r.menteeId,
+      pipelineStatus: r.pipelineStatus,
+      stageDeadline: r.stageDeadline,
+      lastInteractionAt: r.interactions[0]?.date ?? null,
+    })),
+  );
+
+  const toFlag = relations.filter((r) => dormant.has(r.id) && !r.dormantSince).map((r) => r.id);
+  const toClear = relations.filter((r) => !dormant.has(r.id) && r.dormantSince).map((r) => r.id);
+
+  if (toFlag.length > 0) {
+    await prisma.mentorshipRelation.updateMany({
+      where: { id: { in: toFlag } },
+      data: { dormantSince: new Date() },
+    });
+  }
+  if (toClear.length > 0) {
+    await prisma.mentorshipRelation.updateMany({
+      where: { id: { in: toClear } },
+      data: { dormantSince: null, dormantNudgeCount: 0, dormantNudgeSentAt: null },
+    });
+  }
+
+  return { checked: relations.length, flagged: toFlag.length, cleared: toClear.length };
 }
