@@ -16,7 +16,7 @@ import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
-import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
+import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
@@ -1911,6 +1911,114 @@ export async function sendWeeklyReportReminders(now = new Date()) {
   return { checked: relations.length, reminded, emailed };
 }
 
+/**
+ * "Are you still interested?" — the check-in for dormant first contacts (#1508).
+ *
+ * A lot of people register, get one message and are never heard from again.
+ * lib/dormantFirstContact.ts drops them from the mentor's queue precisely so
+ * nobody keeps chasing them by hand; this is the other half of that bargain —
+ * the system asks them itself, twice, and then stops. Twice is the whole
+ * budget: a third mail to somebody who has ignored two is not persistence, it
+ * is what gets a sending domain marked as spam, and the cost of that is borne
+ * by every meeting invitation and password reset the product sends.
+ *
+ * The cadence is day 14 and day 45, measured from the mentor's own outreach for
+ * the first and from the previous nudge for the second. Measuring the second
+ * one from the FIRST NUDGE rather than from the outreach is what keeps the
+ * backlog sane: on the day this ships, everybody whose outreach was months ago
+ * is due for nudge one, and an outreach-anchored second nudge would follow it
+ * the very next morning.
+ *
+ * No in-app notification: the entire premise is a person who does not sign in.
+ * The mail is the only channel that can reach them, and a bell item nobody will
+ * ever look at is not a second attempt.
+ */
+export const DORMANT_FIRST_NUDGE_DAYS = 14;
+export const DORMANT_SECOND_NUDGE_GAP_DAYS = 31;
+export const DORMANT_MAX_NUDGES = 2;
+// A ceiling on one tick, not on the feature: the first run after this ships
+// faces the whole accumulated backlog at once, and a few hundred near-identical
+// mails leaving in one minute is exactly the shape of traffic that gets a
+// domain throttled. The remainder simply goes out on the following days.
+export const DORMANT_NUDGE_MAX_PER_RUN = 50;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export async function sendDormantCheckIns(now = new Date()) {
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: {
+      status: 'ACTIVE',
+      dormantSince: { not: null },
+      dormantNudgeCount: { lt: DORMANT_MAX_NUDGES },
+      mentee: { isActive: true },
+    },
+    select: {
+      id: true,
+      orgId: true,
+      dormantNudgeCount: true,
+      dormantNudgeSentAt: true,
+      interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
+      mentee: {
+        select: { id: true, fullName: true, email: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
+      },
+    },
+    // Longest-dormant first, so a capped run always drains the oldest backlog
+    // rather than a random slice of it.
+    orderBy: { dormantSince: 'asc' },
+  });
+
+  let sent = 0;
+  let checked = 0;
+  for (const relation of relations) {
+    if (sent >= DORMANT_NUDGE_MAX_PER_RUN) break;
+    checked += 1;
+    const count = relation.dormantNudgeCount;
+    const since = count === 0
+      ? relation.interactions[0]?.date ?? null
+      : relation.dormantNudgeSentAt;
+    if (!since) continue;
+    const days = Math.floor((now.getTime() - since.getTime()) / DAY_MS);
+    if (days < (count === 0 ? DORMANT_FIRST_NUDGE_DAYS : DORMANT_SECOND_NUDGE_GAP_DAYS)) continue;
+
+    // Preferences are read BEFORE the claim on purpose: claiming first would
+    // spend an opted-out person's two-nudge budget on mail that was never sent,
+    // so opting back in later would buy them silence rather than the check-in.
+    if (!emailAllowed(relation.mentee, 'announcements') || !emailGroupAllowedForCategory(relation.mentee, 'dormant-check-in')) {
+      continue;
+    }
+
+    // Claim before sending, guarded on the count we read: two overlapping ticks
+    // (or a retried container) can then never write the same person twice. A
+    // mid-send failure loses one nudge, which is the far better failure than
+    // sending it again.
+    const claimed = await prisma.mentorshipRelation.updateMany({
+      where: { id: relation.id, dormantNudgeCount: count },
+      data: { dormantNudgeCount: count + 1, dormantNudgeSentAt: now },
+    });
+    if (claimed.count === 0) continue;
+
+    const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
+      ? (relation.mentee.preferredLanguage as Locale)
+      : defaultLocale;
+    const copy = getDictionary(locale).dormantCheckIn;
+    const isFinal = count + 1 >= DORMANT_MAX_NUDGES;
+    const brand = await emailBrand(relation.orgId);
+    await sendEmail({
+      to: relation.mentee.email,
+      fromName: brand.name,
+      category: 'dormant-check-in',
+      userId: relation.mentee.id,
+      locale: relation.mentee.preferredLanguage,
+      subject: copy.subject,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${appUrl()}/portal`, copy.cta)}</div>`,
+    })
+      .then(() => { sent += 1; })
+      .catch((error) => logger.error('Dormant check-in email failed', { relationId: relation.id, error: String(error) }));
+  }
+
+  return { checked, sent };
+}
+
 // How far ahead a meeting reminder fires. The cron ticks every 15 minutes
 // (see initCronJobs), so a meeting is reminded 45-60 minutes before it starts —
 // close enough to "one hour before" to be useful, and never late.
@@ -2947,6 +3055,13 @@ export function initCronJobs() {
   const task = cron.schedule('0 9 * * *', async () => {
     console.log('[Cron] Running mentor interaction reminder check...');
     try {
+      // Before the reminders, not after: the sweep is what decides who counts as
+      // a dormant first contact today, and the interaction reminder reads that
+      // same rule to leave them alone.
+      const dormant = await sweepDormantFirstContacts();
+      console.log(`[Cron] Dormant first contacts: flagged ${dormant.flagged}, cleared ${dormant.cleared}`);
+      const checkIns = await sendDormantCheckIns();
+      console.log(`[Cron] Dormant check-ins sent: ${checkIns.sent}`);
       const result = await checkMentorInteractionReminders();
       console.log(`[Cron] Done. Checked: ${result.checked}, Reminded: ${result.reminded}`);
       const dl = await checkStageDeadlineReminders();
