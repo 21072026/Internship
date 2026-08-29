@@ -79,3 +79,52 @@ test('a first-stage mentee who was messaged and never replied leaves the attenti
     await cleanupByEmail(freshEmail);
   }
 });
+
+// Reaching out is not the same as logging that you reached out. A mentor wrote
+// four times through the in-app messenger and never touched the interaction
+// form, so the relation had no InteractionLog at all — and the rule, which only
+// looked at that table, kept the mentee in the queue with "no recent contact"
+// forever. The outreach date is the later of the last logged interaction and
+// the last message from anybody who is not the mentee.
+test('messenger-only outreach counts, and a reply only counts when it came after it', async () => {
+  const mentorEmail = uniqueEmail('messenger-mentor');
+  const menteeEmail = uniqueEmail('messenger-mentee');
+  try {
+    const mentor = await seedUser(mentorEmail, 'MessengerPass123', 'MENTOR', 'Messenger Mentor');
+    const mentee = await seedUser(menteeEmail, 'MessengerPass123', 'MENTEE', 'Messaged Mentee');
+    const relation = await prisma.mentorshipRelation.create({
+      data: { mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE', pipelineStatus: 'APPLICATION_100' },
+    });
+    const at = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Nobody has written at all: the first message is still the mentor's to send.
+    expect((await getAttentionItems(mentor.id)).items.map((i) => i.relationId)).toContain(relation.id);
+
+    // The mentor writes twice through the messenger — no interaction log anywhere.
+    await prisma.message.create({ data: { relationId: relation.id, senderId: mentor.id, body: 'Hoş geldin', createdAt: at(40) } });
+    await prisma.message.create({ data: { relationId: relation.id, senderId: mentor.id, body: 'Ne zaman müsaitsin?', createdAt: at(25) } });
+    expect(await prisma.interactionLog.count({ where: { relationId: relation.id } })).toBe(0);
+    const dormant = await getAttentionItems(mentor.id);
+    expect(dormant.items.map((i) => i.relationId)).not.toContain(relation.id);
+    expect(dormant.dormantCount).toBe(1);
+
+    // A reply from BEFORE the last outreach is not an answer to it: the mentee
+    // talked in month one, was written to in month two and said nothing since.
+    const oldReply = await prisma.message.create({
+      data: { relationId: relation.id, senderId: mentee.id, body: 'Merhaba!', createdAt: at(35) },
+    });
+    expect((await getAttentionItems(mentor.id)).items.map((i) => i.relationId)).not.toContain(relation.id);
+
+    // A reply after it puts the ball back in the mentor's court.
+    await prisma.message.update({ where: { id: oldReply.id }, data: { createdAt: at(3) } });
+    expect((await getAttentionItems(mentor.id)).items.map((i) => i.relationId)).toContain(relation.id);
+
+    // And an outreach inside the grace period is not silence yet.
+    await prisma.message.deleteMany({ where: { relationId: relation.id } });
+    await prisma.message.create({ data: { relationId: relation.id, senderId: mentor.id, body: 'Merhaba', createdAt: at(2) } });
+    expect((await getAttentionItems(mentor.id)).items.map((i) => i.relationId)).toContain(relation.id);
+  } finally {
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(menteeEmail);
+  }
+});

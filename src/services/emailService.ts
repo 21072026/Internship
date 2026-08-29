@@ -1922,18 +1922,25 @@ export async function sendWeeklyReportReminders(now = new Date()) {
  * is what gets a sending domain marked as spam, and the cost of that is borne
  * by every meeting invitation and password reset the product sends.
  *
- * The cadence is day 14 and day 45, measured from the mentor's own outreach for
- * the first and from the previous nudge for the second. Measuring the second
- * one from the FIRST NUDGE rather than from the outreach is what keeps the
- * backlog sane: on the day this ships, everybody whose outreach was months ago
- * is due for nudge one, and an outreach-anchored second nudge would follow it
- * the very next morning.
+ * The cadence is day 14 and day 45. The first is anchored on `dormantSince`,
+ * which the sweep only stamps once the outreach is already DORMANT_GRACE_DAYS
+ * (14) old — so being flagged IS being due, and the job never has to re-derive
+ * when the mentor last reached out. (It must not: an outreach is often an
+ * in-app message rather than a logged interaction, and reading only the
+ * interaction log is exactly the bug that left a mentee who had been written to
+ * four times sitting in the queue.) The second is measured from the FIRST
+ * NUDGE rather than from the outreach, which is what keeps the backlog sane: on
+ * the day this ships, everybody whose outreach was months ago is due for nudge
+ * one, and an outreach-anchored second nudge would follow it the very next
+ * morning.
  *
  * No in-app notification: the entire premise is a person who does not sign in.
  * The mail is the only channel that can reach them, and a bell item nobody will
  * ever look at is not a second attempt.
  */
-export const DORMANT_FIRST_NUDGE_DAYS = 14;
+// No DORMANT_FIRST_NUDGE_DAYS here: the first nudge's timing is DORMANT_GRACE_DAYS
+// in lib/dormantFirstContact.ts, spent before the flag is even stamped. Two
+// constants for one delay is how they drift apart.
 export const DORMANT_SECOND_NUDGE_GAP_DAYS = 31;
 export const DORMANT_MAX_NUDGES = 2;
 // A ceiling on one tick, not on the feature: the first run after this ships
@@ -1955,9 +1962,9 @@ export async function sendDormantCheckIns(now = new Date()) {
     select: {
       id: true,
       orgId: true,
+      dormantSince: true,
       dormantNudgeCount: true,
       dormantNudgeSentAt: true,
-      interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
       mentee: {
         select: { id: true, fullName: true, email: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
       },
@@ -1973,12 +1980,16 @@ export async function sendDormantCheckIns(now = new Date()) {
     if (sent >= DORMANT_NUDGE_MAX_PER_RUN) break;
     checked += 1;
     const count = relation.dormantNudgeCount;
-    const since = count === 0
-      ? relation.interactions[0]?.date ?? null
-      : relation.dormantNudgeSentAt;
-    if (!since) continue;
-    const days = Math.floor((now.getTime() - since.getTime()) / DAY_MS);
-    if (days < (count === 0 ? DORMANT_FIRST_NUDGE_DAYS : DORMANT_SECOND_NUDGE_GAP_DAYS)) continue;
+    if (count > 0) {
+      // Every nudge after the first is spaced from the one before it.
+      if (!relation.dormantNudgeSentAt) continue;
+      const days = Math.floor((now.getTime() - relation.dormantNudgeSentAt.getTime()) / DAY_MS);
+      if (days < DORMANT_SECOND_NUDGE_GAP_DAYS) continue;
+    } else if (!relation.dormantSince || relation.dormantSince > now) {
+      // Flagged is due (see the note above); a stamp in the future can only
+      // come from a caller passing a `now` in the past, and is not due.
+      continue;
+    }
 
     // Preferences are read BEFORE the claim on purpose: claiming first would
     // spend an opted-out person's two-nudge budget on mail that was never sent,
