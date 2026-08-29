@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Dormant first contacts leave the attention queue** (#1499): a mentee still parked in the pipeline's first stage who was already messaged and never replied — no message back, no unanswered question, no pending meeting request, no stage deadline — is dropped from the mentor's \"needs attention\" queue and from the daily staleness reminder. A relation with no outreach yet is untouched (the first message is still the mentor's to send), and any sign of life puts it straight back. Filter only: nothing is written to the relation and the mentee stays visible everywhere else. The queue footnotes how many were hidden.",
+  "notes": {
+    "en": ["People who signed up, were messaged once and never replied no longer fill up your \"Needs attention\" list — they come back the moment they reply."],
+    "tr": ["Kaydolup mesaja hiç yanıt vermeyen kişiler artık \"Dikkat gerektiriyor\" listeni doldurmuyor; yanıt verdikleri anda listeye geri geliyorlar."],
+    "de": ["Wer sich registriert, angeschrieben wurde und nie geantwortet hat, füllt die Liste \"Braucht Aufmerksamkeit\" nicht mehr — sobald eine Antwort kommt, ist der Eintrag wieder da."]
+  }
+}

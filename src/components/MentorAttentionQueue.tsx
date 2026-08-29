@@ -16,7 +16,7 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
 // attention queue). Hides itself when nothing needs attention.
-export function MentorAttentionQueue({ items, t }: { items: AttentionItem[]; t: Dictionary }) {
+export function MentorAttentionQueue({ items, dormantCount = 0, t }: { items: AttentionItem[]; dormantCount?: number; t: Dictionary }) {
   if (items.length === 0) return null;
   const labels = t.mentor.attention;
   const reasonLabel: Record<AttentionReason, string> = {
@@ -61,6 +61,11 @@ export function MentorAttentionQueue({ items, t }: { items: AttentionItem[]; t: 
           </Link>
         ))}
       </div>
+      {dormantCount > 0 && (
+        <p className="pt-3 text-xs text-gray-500 dark:text-gray-400" data-testid="attention-dormant-note">
+          {labels.dormantHidden.replace('{n}', String(dormantCount))}
+        </p>
+      )}
     </Card>
   );
 }

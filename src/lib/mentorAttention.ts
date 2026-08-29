@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getSetting } from '@/lib/settings';
 import { addUtcWeeks, firstFullUtcWeek, utcWeekStart } from '@/lib/week';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
@@ -13,11 +14,21 @@ export interface AttentionItem {
   daysSinceLastInteraction: number | null;
 }
 
+export interface AttentionQueue {
+  items: AttentionItem[];
+  /**
+   * How many relations were left out because they are dormant first contacts
+   * (see lib/dormantFirstContact.ts) — surfaced as a footnote so a filtered
+   * queue never looks like a broken one.
+   */
+  dormantCount: number;
+}
+
 // A ranked "needs attention" list for a mentor's active mentees (EPIC: mentor
 // attention queue). Reuses the same inactivity threshold as the weekly email
 // digest (Setting.reminderDays, default 14) so the in-app view and the email
 // agree on what "stale" means.
-export async function getAttentionItems(mentorId: string): Promise<AttentionItem[]> {
+export async function getAttentionItems(mentorId: string): Promise<AttentionQueue> {
   const reminderDays = parseInt(await getSetting('reminderDays'), 10) || 14;
   const now = Date.now();
   const staleCutoff = new Date(now - reminderDays * 24 * 60 * 60 * 1000);
@@ -26,6 +37,7 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionItem
     where: { mentorId, status: 'ACTIVE' },
     select: {
       id: true,
+      orgId: true,
       pipelineStatus: true,
       startDate: true,
       stageDeadline: true,
@@ -62,8 +74,27 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionItem
       .map((t) => t.assigneeId as string)
   );
 
+  // Applicants who never came back after the first outreach are not work the
+  // mentor can do anything about — they'd otherwise fill the queue permanently
+  // with "no recent contact" + "no open goal" (#1499).
+  const dormant = await findDormantFirstContacts(
+    relations.map((r) => ({
+      id: r.id,
+      orgId: r.orgId,
+      menteeId: r.mentee.id,
+      pipelineStatus: r.pipelineStatus,
+      stageDeadline: r.stageDeadline,
+      lastInteractionAt: r.interactions[0]?.date ?? null,
+    })),
+  );
+
   const items: AttentionItem[] = [];
+  let dormantCount = 0;
   for (const r of relations) {
+    if (dormant.has(r.id)) {
+      dormantCount += 1;
+      continue;
+    }
     const reasons: AttentionReason[] = [];
     const last = r.interactions[0]?.date ?? null;
     const daysSince = last ? Math.floor((now - last.getTime()) / (24 * 60 * 60 * 1000)) : null;
@@ -101,5 +132,5 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionItem
     return (b.daysSinceLastInteraction ?? Infinity) - (a.daysSinceLastInteraction ?? Infinity);
   });
 
-  return items;
+  return { items, dormantCount };
 }

@@ -43,17 +43,17 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     const relation = await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE', pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', startDate: addUtcWeeks(utcWeekStart(new Date()), -4) } });
     relationId = relation.id;
     const attention = await getAttentionItems(mentor.id);
-    expect(attention.find((item) => item.relationId === relation.id)?.reasons).toContain('missing_weekly_reports');
+    expect(attention.items.find((item) => item.relationId === relation.id)?.reasons).toContain('missing_weekly_reports');
     await prisma.weeklyReport.create({ data: { orgId: org.id, relationId: relation.id, weekStart: utcWeekStart(new Date()), summary: 'Current week does not affect attention', status: 'SUBMITTED' } });
-    expect((await getAttentionItems(mentor.id)).find((item) => item.relationId === relation.id)?.reasons).toContain('missing_weekly_reports');
+    expect((await getAttentionItems(mentor.id)).items.find((item) => item.relationId === relation.id)?.reasons).toContain('missing_weekly_reports');
     const lastWeek = addUtcWeeks(utcWeekStart(new Date()), -1);
     const attentionReport = await prisma.weeklyReport.create({ data: { orgId: org.id, relationId: relation.id, weekStart: lastWeek, summary: 'Draft last week', status: 'DRAFT' } });
-    expect((await getAttentionItems(mentor.id)).find((item) => item.relationId === relation.id)?.reasons).toContain('missing_weekly_reports');
+    expect((await getAttentionItems(mentor.id)).items.find((item) => item.relationId === relation.id)?.reasons).toContain('missing_weekly_reports');
     await prisma.weeklyReport.update({ where: { id: attentionReport.id }, data: { status: 'CHANGES_REQUESTED' } });
-    expect((await getAttentionItems(mentor.id)).find((item) => item.relationId === relation.id)?.reasons).not.toContain('missing_weekly_reports');
+    expect((await getAttentionItems(mentor.id)).items.find((item) => item.relationId === relation.id)?.reasons).not.toContain('missing_weekly_reports');
     await prisma.weeklyReport.deleteMany({ where: { relationId: relation.id } });
     const partialRelation = await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE', pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', startDate: new Date(addUtcWeeks(utcWeekStart(new Date()), -1).getTime() + 12 * 60 * 60 * 1000) } });
-    expect((await getAttentionItems(mentor.id)).find((item) => item.relationId === partialRelation.id)?.reasons).not.toContain('missing_weekly_reports');
+    expect((await getAttentionItems(mentor.id)).items.find((item) => item.relationId === partialRelation.id)?.reasons).not.toContain('missing_weekly_reports');
     await prisma.mentorshipRelation.delete({ where: { id: partialRelation.id } });
 
     const menteeContext = await browser.newContext(); contexts.push(menteeContext);

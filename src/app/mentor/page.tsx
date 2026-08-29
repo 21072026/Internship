@@ -89,7 +89,7 @@ export default async function MentorDashboard() {
 
   const { t, locale } = await getServerDictionary();
   const { relations, recentInteractions } = await getMentorData(session.user.id);
-  const attentionItems = await getAttentionItems(session.user.id);
+  const attention = await getAttentionItems(session.user.id);
 
   const activeRelations = relations.filter((r) => r.status === 'ACTIVE');
 
@@ -108,7 +108,7 @@ export default async function MentorDashboard() {
       {/* Volunteers itself while a newly joined mentee still needs onboarding (#51). */}
       <MenteeOnboardingWizard />
 
-      <MentorAttentionQueue items={attentionItems} t={t} />
+      <MentorAttentionQueue items={attention.items} dormantCount={attention.dormantCount} t={t} />
 
       <ReferralLinkCard />
 
