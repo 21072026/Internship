@@ -16,6 +16,7 @@ import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
+import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
@@ -1691,7 +1692,23 @@ export async function checkMentorInteractionReminders() {
 
   const remindersToSend: typeof activeRelations = [];
 
+  // People who signed up, got their first message and were never heard from
+  // again would otherwise be reminded about daily, forever. The mentor already
+  // did their part there, so they are dropped from this nudge exactly as they
+  // are dropped from the in-app attention queue (see lib/dormantFirstContact.ts).
+  const dormant = await findDormantFirstContacts(
+    activeRelations.map((relation) => ({
+      id: relation.id,
+      orgId: relation.orgId,
+      menteeId: relation.menteeId,
+      pipelineStatus: relation.pipelineStatus,
+      stageDeadline: relation.stageDeadline,
+      lastInteractionAt: relation.interactions[0]?.date ?? null,
+    })),
+  );
+
   for (const relation of activeRelations) {
+    if (dormant.has(relation.id)) continue;
     const lastInteraction = relation.interactions[0];
     const stale = !lastInteraction || lastInteraction.date < fourteenDaysAgo;
     if (stale) {
