@@ -177,6 +177,10 @@ bölünebilir — ürün yol haritası ile mentorluk müfredatı bilinçli olara
    Ancak Faz 1–2 gelir üretmeye başladıktan ve bakım yükü ölçüldükten sonra —
    tek kişilik çekirdek ekiple erkenden girilecek bir iş değil.
 
+> Bu dokümanın gelir hatlarının **parasal karşılığı** ve "projeyi biri satın almak
+> istese ne eder?" sorusu ayrı bir çalışmada ele alındı:
+> [valuation.md](valuation.md).
+
 ## 6. Açık sorular
 
 - Ürünün hukuki/vergisel çerçevesi: **hak sahipliği çözüldü** (Mehmet Erşahin, gerçek
