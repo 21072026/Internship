@@ -34,8 +34,8 @@ import { resolvePipelineStages } from './pipelineStages';
  * automated check-in, and calling somebody passive the morning after you wrote
  * to them is simply wrong. Fourteen days is the same threshold the attention
  * queue and the staleness reminder already use for "no recent contact", and it
- * is deliberately the same as DORMANT_FIRST_NUDGE_DAYS: a relation becomes
- * dormant on exactly the day its first check-in is due.
+ * also what schedules the first check-in: a relation becomes dormant on exactly
+ * the day that mail is due, so being flagged is being due.
  */
 export const DORMANT_GRACE_DAYS = 14;
 
@@ -74,37 +74,66 @@ export async function findDormantFirstContacts(relations: DormantCandidate[]): P
   if (relations.length === 0) return dormant;
 
   const firstStageKey = createFirstStageResolver();
-  const graceCutoff = new Date(Date.now() - DORMANT_GRACE_DAYS * 24 * 60 * 60 * 1000);
   const candidates: DormantCandidate[] = [];
   for (const r of relations) {
-    // No outreach yet, or a deadline the mentor set on purpose: never dormant.
-    if (!r.lastInteractionAt || r.stageDeadline) continue;
-    // Still inside the grace period — the silence is not yet an answer.
-    if (r.lastInteractionAt > graceCutoff) continue;
+    // A deadline the mentor set on purpose is a deliberate "chase this one".
+    if (r.stageDeadline) continue;
     if (r.pipelineStatus !== (await firstStageKey(r.orgId))) continue;
     candidates.push(r);
   }
   if (candidates.length === 0) return dormant;
 
   const ids = candidates.map((r) => r.id);
-  const [menteeMessages, openQuestions, pendingMeetings] = await Promise.all([
-    // Grouped rather than listed: one row per (relation, sender) is all we need,
-    // and a chatty thread would otherwise pull its whole history into memory.
-    prisma.message.groupBy({ by: ['relationId', 'senderId'], where: { relationId: { in: ids } } }),
+  const [messages, openQuestions, pendingMeetings] = await Promise.all([
+    // One row per (relation, sender) carrying that sender's latest message, not
+    // the messages themselves: a chatty thread would otherwise pull its whole
+    // history into memory, and the only questions here are "who wrote?" and
+    // "when last?".
+    prisma.message.groupBy({
+      by: ['relationId', 'senderId'],
+      where: { relationId: { in: ids } },
+      _max: { createdAt: true },
+    }),
     prisma.mentorQuestion.findMany({ where: { relationId: { in: ids }, answer: null }, select: { relationId: true } }),
     prisma.meetingRequest.findMany({ where: { relationId: { in: ids }, status: 'PENDING' }, select: { relationId: true } }),
   ]);
 
-  const repliedByMentee = new Set(
-    menteeMessages
-      .filter((m) => m.relationId !== null)
-      .map((m) => `${m.relationId}:${m.senderId}`)
-  );
+  // Reaching out is not the same as logging that you reached out. A mentor who
+  // writes four times through the in-app messenger and never opens the
+  // interaction form has done exactly the thing this rule is about, so the
+  // outreach date is the later of the last logged interaction and the last
+  // message from anybody who is not the mentee (mentor or admin).
+  const lastOutreachMessage = new Map<string, Date>();
+  const lastMenteeMessage = new Map<string, Date>();
+  const byMentee = new Map(candidates.map((r) => [r.id, r.menteeId]));
+  for (const row of messages) {
+    if (!row.relationId) continue;
+    const at = row._max.createdAt;
+    if (!at) continue;
+    const target = row.senderId === byMentee.get(row.relationId) ? lastMenteeMessage : lastOutreachMessage;
+    const seen = target.get(row.relationId);
+    if (!seen || at > seen) target.set(row.relationId, at);
+  }
+
   const withOpenQuestion = new Set(openQuestions.map((q) => q.relationId));
   const withPendingMeeting = new Set(pendingMeetings.map((m) => m.relationId));
+  const graceCutoff = new Date(Date.now() - DORMANT_GRACE_DAYS * 24 * 60 * 60 * 1000);
 
   for (const r of candidates) {
-    if (repliedByMentee.has(`${r.id}:${r.menteeId}`)) continue;
+    const outreachCandidates = [r.lastInteractionAt, lastOutreachMessage.get(r.id) ?? null].filter(
+      (d): d is Date => d !== null,
+    );
+    if (outreachCandidates.length === 0) continue; // Nobody has written yet.
+    const lastOutreachAt = outreachCandidates.reduce((a, b) => (a > b ? a : b));
+    // Still inside the grace period — the silence is not yet an answer.
+    if (lastOutreachAt > graceCutoff) continue;
+    // A reply AFTER the last outreach, not merely somewhere in the history: the
+    // question is whether the ball is in their court right now. Someone who
+    // chatted in June, was written to in August and said nothing since is
+    // dormant again; someone who answered yesterday is not, and the mentor owes
+    // *them* a reply — which is exactly why they belong on the queue.
+    const repliedAt = lastMenteeMessage.get(r.id);
+    if (repliedAt && repliedAt > lastOutreachAt) continue;
     if (withOpenQuestion.has(r.id) || withPendingMeeting.has(r.id)) continue;
     dormant.add(r.id);
   }

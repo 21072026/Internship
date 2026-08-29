@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **The dormant-first-contact rule now counts messenger outreach** (#1512): it only ever read `InteractionLog`, so a mentee written to four times through the in-app messenger — with no interaction ever logged — had \"no outreach\" by the rule and stayed in the attention queue permanently, which is the exact case the feature was built for. The outreach date is now the later of the last logged interaction and the last message from anybody who is not the mentee. A mentee reply also only counts as a sign of life when it came *after* that outreach: somebody who chatted in June, was written to in August and has said nothing since is dormant again, while somebody who answered yesterday stays on the queue because the mentor owes *them* a reply. The first check-in is anchored on `dormantSince` rather than re-derived from the interaction log, so it cannot fall into the same trap.",
+  "notes": {
+    "en": ["Mentees you contacted through the in-app messenger — rather than by logging an interaction — now correctly drop out of \"Needs attention\" when they never reply."],
+    "tr": ["Etkileşim kaydı girmek yerine uygulama içi mesajla ulaştığın mentee'ler de, hiç yanıt vermediklerinde artık doğru şekilde \"Dikkat gerektiriyor\" listesinden düşüyor."],
+    "de": ["Mentees, die du über den In-App-Messenger statt über einen Interaktionseintrag kontaktiert hast, verschwinden jetzt korrekt aus \"Braucht Aufmerksamkeit\", wenn sie nie antworten."]
+  }
+}

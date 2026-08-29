@@ -19,12 +19,12 @@ Bir ilişki şu koşulların **hepsi** sağlandığında "pasif ilk temas" sayı
 | Koşul | Neden |
 |---|---|
 | Pipeline'ın **ilk aşamasında** (varsayılan `APPLICATION_100`; tenant'ın kendi ilk aşaması, #747) | Süreç hiç başlamamış demektir |
-| **Bir temas kaydı var** (`InteractionLog`) | Mentor üzerine düşeni yapmış |
+| **Bir temas var**: `InteractionLog` **veya** mentee dışında birinin (mentor/admin) attığı bir mesaj — hangisi daha yeniyse | Mentor üzerine düşeni yapmış. Mesaj atmak ile "etkileşim kaydı" formunu doldurmak aynı şey değil; kural yalnızca `InteractionLog`'a bakarsa, dört kez yazılmış bir mentee listede kalır (#1512) |
 | Bu temasın üzerinden en az **`DORMANT_GRACE_DAYS` (14) gün** geçmiş | Dünkü sessizlik bir cevap değildir |
-| Mentee'den **hiç mesaj yok**, **yanıtsız soru yok**, **bekleyen toplantı talebi yok** | Bunların her biri canlı bir konuşma demektir |
+| Mentee'den **son temastan sonra** mesaj yok, **yanıtsız soru yok**, **bekleyen toplantı talebi yok** | Soru "top kimde?" — haziranda konuşup ağustosta yazılan ve o gün bugündür susan kişi yine pasiftir; dün yanıt veren kişi değildir, orada cevap borcu mentordadır |
 | Aşamaya **mentor tarafından konmuş bir termin yok** (`stageDeadline`) | Termin, "bunu takip et" demenin bilinçli hâlidir |
 
-Hiç temas kaydı olmayan bir ilişki **asla** pasif sayılmaz: orada eksik olan şey zaten
+Hiç kimsenin yazmadığı bir ilişki **asla** pasif sayılmaz: orada eksik olan şey zaten
 mentorun göndermediği ilk mesajdır.
 
 ## Ne oluyor
@@ -36,7 +36,10 @@ mentorun göndermediği ilk mesajdır.
 3. **`dormantSince` damgalanır.** Günlük süpürme (`sweepDormantFirstContacts`) bu
    durumun tek yazarıdır; kural eşleşmeyi bıraktığı anda damga **ve sayaçlar** silinir.
 4. **Mentee'ye iki kez "hâlâ ilgileniyor musun?" e-postası gider**
-   (`sendDormantCheckIns`): 14. gün ve ~45. gün. İkincisi *ilk hatırlatmadan* 31 gün sonra
+   (`sendDormantCheckIns`): 14. gün ve ~45. gün. İlki `dormantSince` damgasına bağlıdır —
+   damga zaten 14 günlük sessizlikten sonra vurulduğu için **işaretlenmek = vakti gelmiş
+   olmak**; iş, temasın ne zaman olduğunu yeniden hesaplamaz (hesaplasaydı yine yalnızca
+   `InteractionLog`'a bakma tuzağına düşerdi). İkincisi *ilk hatırlatmadan* 31 gün sonra
    ölçülür — aksi hâlde bu özellik yayına alındığı gün, teması aylar öncesine dayanan
    herkes iki maili peş peşe alırdı. Tur başına en fazla `DORMANT_NUDGE_MAX_PER_RUN` (50)
    e-posta gider; kalanı ertesi gün.
