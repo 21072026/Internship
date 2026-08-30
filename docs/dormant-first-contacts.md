@@ -20,8 +20,8 @@ Bir ilişki şu koşulların **hepsi** sağlandığında "pasif ilk temas" sayı
 |---|---|
 | Pipeline'ın **ilk aşamasında** (varsayılan `APPLICATION_100`; tenant'ın kendi ilk aşaması, #747) | Süreç hiç başlamamış demektir |
 | **Bir temas var**: `InteractionLog` **veya** mentee dışında birinin (mentor/admin) attığı bir mesaj — hangisi daha yeniyse | Mentor üzerine düşeni yapmış. Mesaj atmak ile "etkileşim kaydı" formunu doldurmak aynı şey değil; kural yalnızca `InteractionLog`'a bakarsa, dört kez yazılmış bir mentee listede kalır (#1512) |
-| Bu temasın üzerinden en az **`DORMANT_GRACE_DAYS` (14) gün** geçmiş | Dünkü sessizlik bir cevap değildir |
-| Mentee'den **son temastan sonra** mesaj yok, **yanıtsız soru yok**, **bekleyen toplantı talebi yok** | Soru "top kimde?" — haziranda konuşup ağustosta yazılan ve o gün bugündür susan kişi yine pasiftir; dün yanıt veren kişi değildir, orada cevap borcu mentordadır |
+| **Sessizliğin başlangıcından** (mentee'nin yanıtlamadığı **ilk** temas) en az **`DORMANT_GRACE_DAYS` (14) gün** geçmiş | Dünkü sessizlik bir cevap değildir. Sayaç **son** temastan ölçülürse mentorun ısrarına ait olur: üç haftadır yanıt vermeyen birine atılan bir "Hi?" onu iki hafta daha listeye döndürür ve her kovalama bir iki hafta daha satın alır (#1516) |
+| Mentee'nin **son mesajından sonra en az bir cevapsız temas var**, **yanıtsız soru yok**, **bekleyen toplantı talebi yok** | Soru "top kimde?" — mentee'nin son mesajından beri mentor hiç yazmamışsa cevap borcu **mentordadır**, kişi listede kalır |
 | Aşamaya **mentor tarafından konmuş bir termin yok** (`stageDeadline`) | Termin, "bunu takip et" demenin bilinçli hâlidir |
 
 Hiç kimsenin yazmadığı bir ilişki **asla** pasif sayılmaz: orada eksik olan şey zaten

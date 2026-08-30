@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **The dormant fortnight is measured from the start of the silence** (#1516), not from the most recent outreach. Measuring from the last message made the clock belong to the mentor's persistence rather than to the mentee's silence: somebody ignored for three weeks who got one more \"Hi?\" was back on the attention queue for another fortnight, and every chase bought another one — the exact treadmill the feature exists to end. The window now starts at the first outreach the mentee never answered, so a later nudge is more of the same silence rather than a fresh start. A genuine reply still resets it in full, and a relation where the mentor has not written since the mentee's last message stays on the queue, because there the answer is owed by the mentor.",
+  "notes": {
+    "en": ["Chasing someone who never replies no longer puts them back on your \"Needs attention\" list for another two weeks — the clock now runs from their first unanswered message."],
+    "tr": ["Hiç yanıt vermeyen birini tekrar dürtmek onu iki hafta daha \"Dikkat gerektiriyor\" listene geri döndürmüyor; sayaç artık cevapsız kalan ilk mesajdan işliyor."],
+    "de": ["Wer nie antwortet, landet durch eine weitere Nachricht nicht erneut für zwei Wochen in \"Braucht Aufmerksamkeit\" — die Frist läuft jetzt ab der ersten unbeantworteten Nachricht."]
+  }
+}
