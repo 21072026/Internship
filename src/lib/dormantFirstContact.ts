@@ -27,15 +27,22 @@ import { onPathKeys } from './pipeline';
 import { resolvePipelineStages } from './pipelineStages';
 
 /**
- * How old the outreach must be before silence counts as dormancy.
+ * How long the silence must have lasted before it counts as dormancy.
  *
- * Without it the rule fires the day after a mentor writes: harmless while this
- * only suppressed reminders, but it now drives a visible "Dormant" badge and an
- * automated check-in, and calling somebody passive the morning after you wrote
- * to them is simply wrong. Fourteen days is the same threshold the attention
- * queue and the staleness reminder already use for "no recent contact", and it
- * also what schedules the first check-in: a relation becomes dormant on exactly
- * the day that mail is due, so being flagged is being due.
+ * Without a window at all the rule fires the day after a mentor writes: harmless
+ * while this only suppressed reminders, but it now drives a visible "Dormant"
+ * badge and an automated check-in, and calling somebody passive the morning
+ * after you wrote to them is simply wrong. Fourteen days is the same threshold
+ * the attention queue and the staleness reminder already use for "no recent
+ * contact", and it is also what schedules the first check-in: a relation becomes
+ * dormant on exactly the day that mail is due, so being flagged is being due.
+ *
+ * Measured from the START of the silence — the first outreach the mentee never
+ * answered — and NOT from the most recent one. Measuring from the last message
+ * makes the clock belong to the mentor's persistence instead of to the mentee's
+ * silence: somebody ignored for three weeks who gets one more "Hi?" is back on
+ * the queue for another fortnight, and every chase buys another one. That
+ * treadmill is the thing this feature exists to end (#1516).
  */
 export const DORMANT_GRACE_DAYS = 14;
 
@@ -45,8 +52,6 @@ export interface DormantCandidate {
   menteeId: string;
   pipelineStatus: string;
   stageDeadline: Date | null;
-  /** Date of the most recent logged interaction, or null when there is none. */
-  lastInteractionAt: Date | null;
 }
 
 // The first stage of a tenant's pipeline. Custom stages (#747) may rename or
@@ -84,56 +89,59 @@ export async function findDormantFirstContacts(relations: DormantCandidate[]): P
   if (candidates.length === 0) return dormant;
 
   const ids = candidates.map((r) => r.id);
-  const [messages, openQuestions, pendingMeetings] = await Promise.all([
-    // One row per (relation, sender) carrying that sender's latest message, not
-    // the messages themselves: a chatty thread would otherwise pull its whole
-    // history into memory, and the only questions here are "who wrote?" and
-    // "when last?".
-    prisma.message.groupBy({
-      by: ['relationId', 'senderId'],
+  const [messages, interactions, openQuestions, pendingMeetings] = await Promise.all([
+    // The timestamps only, and only for relations parked at first contact —
+    // threads that by definition never got going. Whole rows are not needed and
+    // a message body is the one expensive column here.
+    prisma.message.findMany({
       where: { relationId: { in: ids } },
-      _max: { createdAt: true },
+      select: { relationId: true, senderId: true, createdAt: true },
+    }),
+    // Reaching out is not the same as logging that you reached out, so a logged
+    // interaction and a message from the mentor are the same kind of event to
+    // this rule (#1512).
+    prisma.interactionLog.findMany({
+      where: { relationId: { in: ids } },
+      select: { relationId: true, date: true },
     }),
     prisma.mentorQuestion.findMany({ where: { relationId: { in: ids }, answer: null }, select: { relationId: true } }),
     prisma.meetingRequest.findMany({ where: { relationId: { in: ids }, status: 'PENDING' }, select: { relationId: true } }),
   ]);
 
-  // Reaching out is not the same as logging that you reached out. A mentor who
-  // writes four times through the in-app messenger and never opens the
-  // interaction form has done exactly the thing this rule is about, so the
-  // outreach date is the later of the last logged interaction and the last
-  // message from anybody who is not the mentee (mentor or admin).
-  const lastOutreachMessage = new Map<string, Date>();
-  const lastMenteeMessage = new Map<string, Date>();
   const byMentee = new Map(candidates.map((r) => [r.id, r.menteeId]));
-  for (const row of messages) {
-    if (!row.relationId) continue;
-    const at = row._max.createdAt;
-    if (!at) continue;
-    const target = row.senderId === byMentee.get(row.relationId) ? lastMenteeMessage : lastOutreachMessage;
-    const seen = target.get(row.relationId);
-    if (!seen || at > seen) target.set(row.relationId, at);
+  const outreachTimes = new Map<string, Date[]>();
+  const lastMenteeActivity = new Map<string, Date>();
+  const noteOutreach = (relationId: string, at: Date) => {
+    const list = outreachTimes.get(relationId);
+    if (list) list.push(at);
+    else outreachTimes.set(relationId, [at]);
+  };
+  for (const m of messages) {
+    if (!m.relationId) continue;
+    if (m.senderId === byMentee.get(m.relationId)) {
+      const seen = lastMenteeActivity.get(m.relationId);
+      if (!seen || m.createdAt > seen) lastMenteeActivity.set(m.relationId, m.createdAt);
+    } else {
+      noteOutreach(m.relationId, m.createdAt);
+    }
   }
+  for (const i of interactions) noteOutreach(i.relationId, i.date);
 
   const withOpenQuestion = new Set(openQuestions.map((q) => q.relationId));
   const withPendingMeeting = new Set(pendingMeetings.map((m) => m.relationId));
   const graceCutoff = new Date(Date.now() - DORMANT_GRACE_DAYS * 24 * 60 * 60 * 1000);
 
   for (const r of candidates) {
-    const outreachCandidates = [r.lastInteractionAt, lastOutreachMessage.get(r.id) ?? null].filter(
-      (d): d is Date => d !== null,
-    );
-    if (outreachCandidates.length === 0) continue; // Nobody has written yet.
-    const lastOutreachAt = outreachCandidates.reduce((a, b) => (a > b ? a : b));
-    // Still inside the grace period — the silence is not yet an answer.
-    if (lastOutreachAt > graceCutoff) continue;
-    // A reply AFTER the last outreach, not merely somewhere in the history: the
-    // question is whether the ball is in their court right now. Someone who
-    // chatted in June, was written to in August and said nothing since is
-    // dormant again; someone who answered yesterday is not, and the mentor owes
-    // *them* a reply — which is exactly why they belong on the queue.
-    const repliedAt = lastMenteeMessage.get(r.id);
-    if (repliedAt && repliedAt > lastOutreachAt) continue;
+    const repliedAt = lastMenteeActivity.get(r.id);
+    // Only the outreach the mentee never answered counts. If the mentor has not
+    // written since the mentee's last message, the ball is in the MENTOR's court
+    // and the relation belongs on the queue, not off it.
+    const unanswered = (outreachTimes.get(r.id) ?? []).filter((at) => !repliedAt || at > repliedAt);
+    if (unanswered.length === 0) continue;
+    // The silence began at the FIRST of them — a later "Hi?" is more of the same
+    // silence, not a fresh start.
+    const silenceSince = unanswered.reduce((a, b) => (a < b ? a : b));
+    if (silenceSince > graceCutoff) continue;
     if (withOpenQuestion.has(r.id) || withPendingMeeting.has(r.id)) continue;
     dormant.add(r.id);
   }
@@ -165,7 +173,6 @@ export async function sweepDormantFirstContacts() {
       pipelineStatus: true,
       stageDeadline: true,
       dormantSince: true,
-      interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
     },
   });
 
@@ -176,7 +183,6 @@ export async function sweepDormantFirstContacts() {
       menteeId: r.menteeId,
       pipelineStatus: r.pipelineStatus,
       stageDeadline: r.stageDeadline,
-      lastInteractionAt: r.interactions[0]?.date ?? null,
     })),
   );
 

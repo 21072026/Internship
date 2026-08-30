@@ -84,7 +84,6 @@ export async function getAttentionItems(mentorId: string): Promise<AttentionQueu
       menteeId: r.mentee.id,
       pipelineStatus: r.pipelineStatus,
       stageDeadline: r.stageDeadline,
-      lastInteractionAt: r.interactions[0]?.date ?? null,
     })),
   );
 

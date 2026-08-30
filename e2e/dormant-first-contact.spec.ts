@@ -128,3 +128,34 @@ test('messenger-only outreach counts, and a reply only counts when it came after
     await cleanupByEmail(menteeEmail);
   }
 });
+
+// The fortnight belongs to the mentee's silence, not to the mentor's
+// persistence. Somebody ignored for three weeks who gets one more "Hi?" used to
+// land back on the queue for another fortnight — and every chase bought another
+// one, which is the treadmill this feature exists to end.
+test('a fresh chase does not restart the clock on an unbroken silence', async () => {
+  const mentorEmail = uniqueEmail('chase-mentor');
+  const menteeEmail = uniqueEmail('chase-mentee');
+  try {
+    const mentor = await seedUser(mentorEmail, 'ChasePass123', 'MENTOR', 'Chasing Mentor');
+    const mentee = await seedUser(menteeEmail, 'ChasePass123', 'MENTEE', 'Unresponsive Mentee');
+    const relation = await prisma.mentorshipRelation.create({
+      data: { mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE', pipelineStatus: 'APPLICATION_100' },
+    });
+    const at = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Written to 24 days ago, then again yesterday. Nothing back, ever.
+    await prisma.interactionLog.create({ data: { relationId: relation.id, date: at(24), notes: 'No answer', type: 'Feedback' } });
+    await prisma.message.create({ data: { relationId: relation.id, senderId: mentor.id, body: 'Welcome aboard!', createdAt: at(22) } });
+    await prisma.message.create({ data: { relationId: relation.id, senderId: mentor.id, body: 'Hi?', createdAt: at(1) } });
+    expect((await getAttentionItems(mentor.id)).items.map((i) => i.relationId)).not.toContain(relation.id);
+
+    // But a reply resets it for real: the outreach after it is only a day old,
+    // and the two before it were answered.
+    await prisma.message.create({ data: { relationId: relation.id, senderId: mentee.id, body: 'Sorry, I am here', createdAt: at(2) } });
+    expect((await getAttentionItems(mentor.id)).items.map((i) => i.relationId)).toContain(relation.id);
+  } finally {
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(menteeEmail);
+  }
+});
