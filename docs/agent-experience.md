@@ -10,6 +10,46 @@ Newest entries on top.
 
 ---
 
+## 2026-08-30 — 569 issue'luk bir backlog'u tek oturumda üretmek: workflow, kota ve GitHub API dersleri (#1514)
+
+**Oturum kotası uzun bir workflow'u ortasından kesebilir — ama `resumeFromRunId` bunu
+ucuz bir kesinti yapıyor.** 42 ajanlık backlog workflow'unun 15'i bitmişken kota doldu
+ve 27 epic ajanının tamamı düştü. Yeniden başlatmak yerine aynı `runId` ile devam etmek
+yönlendirme (14 ajan) ve doküman ajanını **önbellekten anında** döndürdü, yalnızca
+düşenler canlı koştu. İki pratik sonuç: (1) uzun bir fan-out'u **tek** parallel yerine
+sıralı partilere bölmek, kota sınırında kaybı bir partiyle sınırlıyor; (2) yeniden
+başlatmadan **önce** tamamlanmış çıktıları (burada 1378 satırlık rapor) commit'le —
+kutu efemeral, workflow önbelleği ise oturuma bağlı.
+
+**Büyük workflow çıktısını task bildiriminden değil `.output` dosyasından oku, ve
+sonuç `result` anahtarının altında.** 1.36 MB'lık dönüş bildirimde kırpılıyor; dosyanın
+kökü `{summary, agentCount, logs, result, ...}` — `JSON.parse(f).result` (kendisi de
+string olabilir) asıl gövde. Doğrudan `JSON.parse(dosya)` yapıp `d.competitors`
+aramak `undefined` veriyor.
+
+**`issue_write` `create` çağrısında `parent_issue_number` geçmek alt-issue bağını aynı
+istekte kuruyor.** Bu, `backlog` skill'inin uyardığı maliyet tuzağını da çözüyor:
+`sub_issue_write` yanıtında **ebeveynin bütün gövdesini** yankılıyor, 400 task'ı uzun
+story gövdelerine bağlamak devasa bağlam yakıyor. Tek uyarı: `parent_issue_number` ile
+`issue_fields` **birlikte kullanılamıyor**, yani board'un org düzeyindeki `Priority`
+alanı ikinci bir `update` çağrısı istiyor. 569 issue için bunu her kaleme yazmak
+mantıksız; Initiative + epic + story'lerde yazıp task'ları P-etiketiyle bırakmak
+makul bir denge.
+
+**`issue_read` / `get_sub_issues` çok çocuklu bir düğümde patlıyor.** #1514'ün 27
+çocuğu 556 KB döndü — her çocuk kaydı repo meta verisinin tamamını taşıyor. Araç bunu
+dosyaya yazıyor; sayımı `grep`/`re.findall` ile dosyadan almak tek doğru yol.
+
+**Araştırmanın en değerli çıktısı boşluk listesinde yoktu.** Üç "kritik" ajanı
+(tamlık / CTO sıralama-risk / GTM) boşluk listesinin üstüne koşturmak, listede hiç
+olmayan asıl riski çıkardı: bu programın işlerinin çoğu eklemeli değil (`Setting`'e
+`orgId` = String-`@id` tablosunun PK değişimi, `PipelineStage`→`programId`, beceri
+metinlerinin taksonomiye taşınması) ve **her PR ortamı kendi taze DB'sine push ettiği
+için yıkıcı bir diff PR'da sapasağlam görünüp yalnızca prod'u ısırıyor.** Fan-out'tan
+sonra bir eleştirmen katmanı koymak, fan-out'u genişletmekten daha çok değer üretti.
+
+---
+
 ## 2026-08-27 — Triaging a batch of e2e-full "locator" failures: separate the shared-helper race from the real bug (#1487, #1486)
 
 **A container restart mid-session can leave uncommitted work that's already correct — verify it, don't redo it.** This task's brief warned a prior attempt was interrupted; the working tree already had complete-looking fixes for all 6 items *and* a fully-provisioned local MariaDB + seeded DB + Playwright browser symlinks from that attempt. Cross-checking each fix against the actual source (label text, dictionary strings, helper signatures) before trusting it was cheaper than re-deriving everything from the CI logs, and it *was* all correct — the only work left was running it and shipping it.
