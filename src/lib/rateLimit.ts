@@ -69,7 +69,7 @@ function shouldLogBreach(key: string): boolean {
 }
 
 // Convenience guard for route handlers: returns a 429 NextResponse when the
-// IP has exceeded `limit` requests to `bucket` within `windowMs`, else null.
+// subject (or client IP by default) has exceeded `limit` requests to `bucket` within `windowMs`, else null.
 export function enforceRateLimit(
   request: Request,
   bucket: string,
