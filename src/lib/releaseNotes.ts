@@ -39,6 +39,732 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.128.2-beta',
+    date: '2026-08-30',
+    time: '07:11',
+    commit: 'bb2fef7',
+    highlights: {
+      en: [
+        "Chasing someone who never replies no longer puts them back on your \"Needs attention\" list for another two weeks — the clock now runs from their first unanswered message.",
+      ],
+      tr: [
+        "Hiç yanıt vermeyen birini tekrar dürtmek onu iki hafta daha \"Dikkat gerektiriyor\" listene geri döndürmüyor; sayaç artık cevapsız kalan ilk mesajdan işliyor.",
+      ],
+      de: [
+        "Wer nie antwortet, landet durch eine weitere Nachricht nicht erneut für zwei Wochen in \"Braucht Aufmerksamkeit\" — die Frist läuft jetzt ab der ersten unbeantworteten Nachricht.",
+      ],
+    },
+  },
+  {
+    version: '0.128.1-beta',
+    date: '2026-08-29',
+    time: '22:39',
+    commit: '9f4b626',
+    highlights: {
+      en: [
+        "Mentees you contacted through the in-app messenger — rather than by logging an interaction — now correctly drop out of \"Needs attention\" when they never reply.",
+      ],
+      tr: [
+        "Etkileşim kaydı girmek yerine uygulama içi mesajla ulaştığın mentee'ler de, hiç yanıt vermediklerinde artık doğru şekilde \"Dikkat gerektiriyor\" listesinden düşüyor.",
+      ],
+      de: [
+        "Mentees, die du über den In-App-Messenger statt über einen Interaktionseintrag kontaktiert hast, verschwinden jetzt korrekt aus \"Braucht Aufmerksamkeit\", wenn sie nie antworten.",
+      ],
+    },
+  },
+  {
+    version: '0.128.0-beta',
+    date: '2026-08-29',
+    time: '20:49',
+    commit: '6efdc24',
+    highlights: {
+      en: [
+        "Applicants who were messaged and never replied are now marked dormant and asked twice by e-mail whether they are still interested — then left alone. Your mentee list hides them behind a toggle.",
+      ],
+      tr: [
+        "Mesaj gönderilip hiç yanıt vermeyen adaylar artık \"Pasif\" olarak işaretleniyor ve kendilerine iki kez \"hâlâ ilgileniyor musun?\" e-postası gidiyor; sonrasında rahat bırakılıyorlar. Mentee listende tek tıkla gizlenip gösteriliyorlar.",
+      ],
+      de: [
+        "Angeschriebene Bewerber ohne Antwort werden jetzt als inaktiv markiert und zweimal per E-Mail gefragt, ob noch Interesse besteht — danach bleiben sie in Ruhe. In der Mentee-Liste sind sie per Klick ein- und ausblendbar.",
+      ],
+    },
+  },
+  {
+    version: '0.127.0-beta',
+    date: '2026-08-29',
+    time: '15:44',
+    commit: '1ac0a50',
+    highlights: {
+      en: [
+        "People who signed up, were messaged once and never replied no longer fill up your \"Needs attention\" list — they come back the moment they reply.",
+      ],
+      tr: [
+        "Kaydolup mesaja hiç yanıt vermeyen kişiler artık \"Dikkat gerektiriyor\" listeni doldurmuyor; yanıt verdikleri anda listeye geri geliyorlar.",
+      ],
+      de: [
+        "Wer sich registriert, angeschrieben wurde und nie geantwortet hat, füllt die Liste \"Braucht Aufmerksamkeit\" nicht mehr — sobald eine Antwort kommt, ist der Eintrag wieder da.",
+      ],
+    },
+  },
+  {
+    version: '0.126.0-beta',
+    date: '2026-08-28',
+    time: '10:01',
+    commit: '053857d',
+    highlights: {
+      en: [
+        "A \"Keep me signed in\" box on the sign-in page. Tick it and this device signs you back in by itself when your session expires — for up to 30 days, without your password. Every remembered device is listed on your account page and can be dropped with one click, and signing out (or changing your password) forgets them all.",
+      ],
+      tr: [
+        "Giriş sayfasında \"Beni hatırla\" kutusu. İşaretlediğinde oturumun sona erdiğinde bu cihaz seni parolasız, 30 güne kadar kendisi geri alır. Hatırlanan her cihaz hesap sayfanda listelenir ve tek tıkla kaldırılır; çıkış yapmak (veya parolanı değiştirmek) hepsini unutturur.",
+      ],
+      de: [
+        "Ein Kästchen „Angemeldet bleiben“ auf der Anmeldeseite. Aktiviert meldet dieses Gerät dich nach Ablauf der Sitzung bis zu 30 Tage lang ohne Passwort wieder an. Jedes gespeicherte Gerät steht auf deiner Kontoseite und lässt sich mit einem Klick entfernen; beim Abmelden (oder Passwortwechsel) werden alle vergessen.",
+      ],
+    },
+  },
+  {
+    version: '0.125.1-beta',
+    date: '2026-08-28',
+    time: '07:18',
+    commit: '7c8abb7',
+    highlights: {
+      en: [
+        "The mentor dashboard no longer says \"no open goal\" for a mentee who has open to-dos — items from the shared list count as open work.",
+      ],
+      tr: [
+        "Mentor panosu, açık yapılacakları olan bir mentee için artık \"açık hedef yok\" demiyor — ortak listeden gelen maddeler de açık iş sayılıyor.",
+      ],
+      de: [
+        "Das Mentor-Dashboard meldet \"kein offenes Ziel\" nicht mehr für Mentees mit offenen Aufgaben — Einträge aus der gemeinsamen Liste zählen als offene Arbeit.",
+      ],
+    },
+  },
+  {
+    version: '0.125.0-beta',
+    date: '2026-08-28',
+    time: '07:04',
+    commit: '0cbe2c9',
+    highlights: {
+      en: [
+        "Meetings you hold are now added to the interaction log by themselves — no more re-typing what the app already scheduled.",
+      ],
+      tr: [
+        "Yaptığınız toplantılar etkileşim kaydına kendiliğinden ekleniyor — uygulamanın zaten planladığı toplantıyı tekrar yazmanıza gerek yok.",
+      ],
+      de: [
+        "Stattgefundene Meetings landen jetzt automatisch im Interaktionsprotokoll — kein erneutes Eintippen dessen, was die App ohnehin geplant hat.",
+      ],
+    },
+  },
+  {
+    version: '0.124.3-beta',
+    date: '2026-08-27',
+    time: '17:41',
+    commit: 'acc4b75',
+    highlights: {
+      en: [
+        "Portal navigation tabs now stay visible and in the same position on every portal page.",
+      ],
+      tr: [
+        "Portal gezinme sekmeleri artık tüm portal sayfalarında görünür ve aynı konumda kalır.",
+      ],
+      de: [
+        "Die Portal-Navigation bleibt jetzt auf allen Portalseiten sichtbar und an derselben Stelle.",
+      ],
+    },
+  },
+  {
+    version: '0.124.2-beta',
+    date: '2026-08-27',
+    time: '17:40',
+    commit: '866f832',
+    highlights: {
+      en: [
+        "Selecting the current pipeline stage no longer adds a duplicate history entry, and existing no-op entries are hidden.",
+      ],
+      tr: [
+        "Mevcut pipeline aşamasını yeniden seçmek artık yinelenen geçmiş kaydı oluşturmuyor; eski değişiklik içermeyen kayıtlar da gizleniyor.",
+      ],
+      de: [
+        "Das erneute Auswählen der aktuellen Pipeline-Phase erzeugt keinen doppelten Verlaufseintrag mehr; bestehende Einträge ohne Änderung werden ausgeblendet.",
+      ],
+    },
+  },
+  {
+    version: '0.124.1-beta',
+    date: '2026-08-27',
+    time: '16:43',
+    commit: '75030fb',
+    highlights: {
+      en: [
+        "Required skills now de-duplicate correctly for Turkish characters.",
+      ],
+      tr: [
+        "Zorunlu yetkinlikler Türkçe karakterlerde artık doğru şekilde tekilleştiriliyor.",
+      ],
+      de: [
+        "Erforderliche Kenntnisse werden bei türkischen Zeichen jetzt korrekt zusammengeführt.",
+      ],
+    },
+  },
+  {
+    version: '0.124.0-beta',
+    date: '2026-08-27',
+    time: '11:45',
+    commit: '17d8500',
+    highlights: {
+      en: [
+        "A new imprint page says who runs this service and how to reach them — linked from every page's footer, and named as the data controller in the privacy notice.",
+      ],
+      tr: [
+        "Yeni künye sayfası bu hizmeti kimin işlettiğini ve kendisine nasıl ulaşılacağını söylüyor — her sayfanın altından linkli ve gizlilik metninde veri sorumlusu olarak adı geçiyor.",
+      ],
+      de: [
+        "Eine neue Impressumsseite nennt den Betreiber dieses Dienstes und wie man ihn erreicht — aus der Fußzeile jeder Seite verlinkt und in der Datenschutzerklärung als Verantwortlicher benannt.",
+      ],
+    },
+  },
+  {
+    version: '0.123.5-beta',
+    date: '2026-08-27',
+    time: '11:26',
+    commit: 'abd78e1',
+    highlights: {
+      en: [
+        "Helper text, empty states, loading messages, and profile prompts are now easier to read in light and dark mode.",
+      ],
+      tr: [
+        "Yardımcı metinler, boş durumlar, yükleme mesajları ve profil uyarıları artık açık ve koyu modda daha kolay okunuyor.",
+      ],
+      de: [
+        "Hilfstexte, Leerzustände, Ladehinweise und Profilaufforderungen sind im hellen und dunklen Modus jetzt besser lesbar.",
+      ],
+    },
+  },
+  {
+    version: '0.123.4-beta',
+    date: '2026-08-27',
+    time: '11:02',
+    commit: 'cc6af7c',
+    highlights: {
+      en: [
+        "The evaluation type selector is now announced correctly by screen readers.",
+      ],
+      tr: [
+        "Değerlendirme türü seçim alanı artık ekran okuyucular tarafından doğru okunur.",
+      ],
+      de: [
+        "Das Auswahlfeld für den Bewertungstyp wird jetzt von Screenreadern korrekt angekündigt.",
+      ],
+    },
+  },
+  {
+    version: '0.123.3-beta',
+    date: '2026-08-27',
+    time: '06:50',
+    commit: '5997a24',
+    highlights: {
+      en: [
+        "The upcoming stages on your journey card are readable now, in light and dark alike.",
+      ],
+      tr: [
+        "Yolculuk kartındaki gelecek aşamalar artık hem açık hem koyu temada okunabiliyor.",
+      ],
+      de: [
+        "Die kommenden Phasen auf deiner Journey-Karte sind jetzt in hellem wie dunklem Design lesbar.",
+      ],
+    },
+  },
+  {
+    version: '0.123.2-beta',
+    date: '2026-08-27',
+    time: '01:41',
+    commit: '38da361',
+    highlights: {
+      en: [
+        "When your mentorship is completed, your portal now keeps the whole record — your mentor, company, stage history, goals and feedback — marked as completed, instead of resetting to \"no mentor assigned yet\". New questions, meeting requests and weekly reports are closed on a finished mentorship, and you can ask for a new mentor from the same screen.",
+      ],
+      tr: [
+        "Mentorluğun tamamlandığında portalın artık tüm kaydını koruyor — mentörün, şirketin, aşama geçmişin, hedeflerin ve geri bildirimlerin \"tamamlandı\" etiketiyle duruyor; eskisi gibi \"henüz mentör atanmadı\" ekranına düşmüyor. Biten bir mentorlukta yeni soru, toplantı talebi ve haftalık rapor kapalı; aynı ekrandan yeni mentör talep edebilirsin.",
+      ],
+      de: [
+        "Wenn dein Mentoring abgeschlossen ist, bleibt im Portal jetzt der gesamte Verlauf erhalten — Mentor, Unternehmen, Phasenverlauf, Ziele und Feedback, als abgeschlossen gekennzeichnet, statt auf \"noch kein Mentor zugewiesen\" zurückzufallen. Neue Fragen, Terminanfragen und Wochenberichte sind bei einem beendeten Mentoring geschlossen, und du kannst auf demselben Bildschirm einen neuen Mentor anfragen.",
+      ],
+    },
+  },
+  {
+    version: '0.123.1-beta',
+    date: '2026-08-27',
+    time: '00:40',
+    commit: 'd417b8e',
+    highlights: {
+      en: [
+        "The graduation-year filter now has one selectable \"All Years\" option.",
+      ],
+      tr: [
+        "Mezuniyet yılı filtresinde artık seçilebilir tek bir \"Tüm yıllar\" seçeneği var.",
+      ],
+      de: [
+        "Der Abschlussjahr-Filter enthält jetzt genau eine auswählbare Option \"Alle Jahre\".",
+      ],
+    },
+  },
+  {
+    version: '0.123.0-beta',
+    date: '2026-08-26',
+    time: '14:03',
+    commit: 'a1586c7',
+    highlights: {
+      en: [
+        "Every e-mail we send now belongs to one of twelve groups, each with its own switch — turn off the automated meeting reminders or the weekly round-ups and still get everything a person actually wrote you.",
+        "Non-essential e-mail carries an unsubscribe link that works in one click, straight from your inbox: no login, no Save button, effective immediately. Sign-in and security notices always get through.",
+      ],
+      tr: [
+        "Gönderdiğimiz her e-posta artık on iki gruptan birine ait ve her grubun kendi anahtarı var — otomatik toplantı hatırlatmalarını ya da haftalık özetleri kapatıp, bir insanın sana yazdığı her şeyi almaya devam edebilirsin.",
+        "Zorunlu olmayan e-postaların altında tek tıkla çalışan bir kapatma bağlantısı var: giriş yok, kaydet düğmesi yok, anında geçerli. Giriş ve güvenlik bildirimleri her zaman ulaşır.",
+      ],
+      de: [
+        "Jede E-Mail, die wir senden, gehört jetzt zu einer von zwölf Gruppen mit eigenem Schalter — schalte die automatischen Besprechungserinnerungen oder die Wochenübersichten ab und bekomme weiterhin alles, was dir ein Mensch geschrieben hat.",
+        "Nicht zwingende E-Mails enthalten einen Abmeldelink, der mit einem Klick direkt aus dem Postfach funktioniert: ohne Anmeldung, ohne Speichern-Knopf, sofort wirksam. Anmelde- und Sicherheitshinweise kommen immer durch.",
+      ],
+    },
+  },
+  {
+    version: '0.122.0-beta',
+    date: '2026-08-26',
+    time: '23:12',
+    commit: 'd11ba53',
+    highlights: {
+      en: [
+        "The release notes now list every change as its own version, with the date and time it went live and a link to the exact commit — instead of a single bundle per day.",
+      ],
+      tr: [
+        "Sürüm notları artık her değişikliği kendi sürüm numarasıyla, yayına girdiği tarih-saat ve ilgili commit bağlantısıyla listeliyor; eskiden hepsi tek bir günlük paket olarak görünüyordu.",
+      ],
+      de: [
+        "Die Release-Notes führen jede Änderung jetzt als eigene Version auf — mit Datum und Uhrzeit des Livegangs und einem Link auf den zugehörigen Commit, statt als ein Sammelpaket pro Tag.",
+      ],
+    },
+  },
+  {
+    version: '0.121.0-beta',
+    date: '2026-08-26',
+    time: '17:31',
+    commit: 'a8612c0',
+    highlights: {
+      en: [
+        "A message you have read no longer keeps its unread notification — reading (or answering) a conversation now clears its bell row too.",
+        "Messages arrive live while the inbox or a conversation is open, instead of up to a minute later.",
+        "If you allow notifications, new messages can now reach your device even when the app is closed.",
+      ],
+      tr: [
+        "Okuduğun bir mesajın okunmadı bildirimi artık kalmıyor — bir sohbeti okumak (ya da cevaplamak) zildeki satırını da kapatıyor.",
+        "Gelen kutusu veya bir sohbet açıkken mesajlar bir dakikaya kadar gecikmek yerine anında düşüyor.",
+        "Bildirimlere izin verirsen yeni mesajlar artık uygulama kapalıyken de cihazına ulaşıyor.",
+      ],
+      de: [
+        "Eine gelesene Nachricht behält ihre Ungelesen-Benachrichtigung nicht mehr — wer eine Unterhaltung liest oder beantwortet, schließt damit auch ihren Eintrag in der Glocke.",
+        "Nachrichten erscheinen live, solange der Posteingang oder eine Unterhaltung geöffnet ist, statt mit bis zu einer Minute Verzögerung.",
+        "Wer Benachrichtigungen erlaubt, erreicht neue Nachrichten jetzt auch bei geschlossener App auf dem Gerät.",
+      ],
+    },
+  },
+  {
+    version: '0.120.0-beta',
+    date: '2026-08-26',
+    time: '16:42',
+    commit: 'bd4ccec',
+    highlights: {
+      en: [
+        "Admins get an interactive API explorer: browse every endpoint, call it as yourself with no token, and mint an API key straight into the Authorize box.",
+      ],
+      tr: [
+        "Yöneticiler için etkileşimli API gezgini: tüm uç noktaları incele, token olmadan kendi hesabınla çağır ve API anahtarını doğrudan Authorize kutusuna üret.",
+      ],
+      de: [
+        "Für Admins gibt es einen interaktiven API-Explorer: alle Endpunkte durchsuchen, ohne Token als du selbst aufrufen und einen API-Schlüssel direkt in das Authorize-Feld erzeugen.",
+      ],
+    },
+  },
+  {
+    version: '0.119.2-beta',
+    date: '2026-08-26',
+    time: '15:41',
+    commit: 'd6d6bd2',
+    highlights: {
+      en: [
+        "The mentee onboarding introduction now follows your selected language.",
+      ],
+      tr: [
+        "Mentee onboarding giriş metni artık seçtiğiniz dilde gösteriliyor.",
+      ],
+      de: [
+        "Die Einführung des Mentee-Onboardings wird jetzt in der ausgewählten Sprache angezeigt.",
+      ],
+    },
+  },
+  {
+    version: '0.119.1-beta',
+    date: '2026-08-26',
+    time: '14:52',
+    commit: 'fb61482',
+    highlights: {
+      en: [
+        "Turning off the Messages notification category now also stops the in-app bell, not only the emails.",
+      ],
+      tr: [
+        "Mesajlar bildirim kategorisini kapatmak artık yalnızca e-postaları değil, uygulama içi bildirimleri de susturuyor.",
+      ],
+      de: [
+        "Das Abschalten der Kategorie „Nachrichten“ stoppt jetzt auch die In-App-Glocke, nicht nur die E-Mails.",
+      ],
+    },
+  },
+  {
+    version: '0.119.0-beta',
+    date: '2026-08-26',
+    time: '16:54',
+    commit: 'f44a4e6',
+    highlights: {
+      en: [
+        "New career newsletter: short, emoji-led CV and interview issues, written once in English, Turkish and German and sent to each reader in their own language.",
+        "Read every past issue in the archive, and unsubscribe from the newsletter in one press without losing messages or reminders.",
+      ],
+      tr: [
+        "Yeni kariyer bülteni: CV ve mülakat ipuçlarını emojili kısa sayılar hâlinde ulaştırıyor; İngilizce, Türkçe ve Almanca bir kez yazılıyor, her okuyucuya kendi dilinde gidiyor.",
+        "Geçmiş bütün sayılar arşivden okunabiliyor; bülten aboneliği tek dokunuşla bırakılabiliyor, mesajlar ve hatırlatmalar gelmeye devam ediyor.",
+      ],
+      de: [
+        "Neuer Karriere-Newsletter: kurze Ausgaben mit Emoji-Tipps zu CV und Bewerbungsgesprächen — einmal auf Englisch, Türkisch und Deutsch geschrieben, an jede Leserin in ihrer Sprache verschickt.",
+        "Alle früheren Ausgaben stehen im Archiv, und die Abmeldung gelingt mit einem Klick, ohne Nachrichten oder Erinnerungen zu verlieren.",
+      ],
+    },
+  },
+  {
+    version: '0.118.4-beta',
+    date: '2026-08-26',
+    time: '14:27',
+    commit: '00acb82',
+    highlights: {
+      en: [
+        "When a set-password or invitation email cannot be delivered, the screen now says so instead of reporting it as sent.",
+      ],
+      tr: [
+        "Parola belirleme ya da davet e-postası gönderilemediğinde ekran artık \"gönderildi\" demiyor, durumu olduğu gibi söylüyor.",
+      ],
+      de: [
+        "Wenn eine Passwort- oder Einladungs-E-Mail nicht zugestellt werden kann, sagt der Bildschirm das jetzt, statt sie als gesendet zu melden.",
+      ],
+    },
+  },
+  {
+    version: '0.118.2-beta',
+    date: '2026-08-26',
+    time: '14:14',
+    commit: '2173cd7',
+    highlights: {
+      en: [
+        "Talent-pool search now searches the whole pool, shows how many candidates matched, and pages through them.",
+      ],
+      tr: [
+        "Yetenek havuzu araması artık havuzun tamamında arıyor, kaç aday eşleştiğini gösteriyor ve sayfalar arasında geziniyor.",
+      ],
+      de: [
+        "Die Talentpool-Suche durchsucht jetzt den gesamten Pool, zeigt die Trefferzahl und blättert durch die Ergebnisse.",
+      ],
+    },
+  },
+  {
+    version: '0.118.1-beta',
+    date: '2026-08-26',
+    time: '13:41',
+    commit: '59ebadc',
+    highlights: {
+      en: [
+        "Calendar dates and onboarding progress are easier to read in both light and dark themes.",
+      ],
+      tr: [
+        "Takvim tarihleri ve onboarding ilerleme göstergesi artık açık ve koyu temalarda daha kolay okunuyor.",
+      ],
+      de: [
+        "Kalenderdaten und der Onboarding-Fortschritt sind jetzt im hellen und dunklen Design besser lesbar.",
+      ],
+    },
+  },
+  {
+    version: '0.118.0-beta',
+    date: '2026-08-26',
+    time: '12:46',
+    commit: 'a7c65b8',
+    highlights: {
+      en: [
+        "When requesting an interview, you can now add a note and suggest up to 5 time slots for the mentor to pick from.",
+      ],
+      tr: [
+        "Mülakat talep ederken artık bir not ekleyebilir ve mentörün seçebileceği en fazla 5 saat önerebilirsiniz.",
+      ],
+      de: [
+        "Bei einer Interviewanfrage kannst du jetzt eine Notiz hinzufügen und bis zu 5 Terminvorschläge machen, aus denen die Mentorin oder der Mentor wählen kann.",
+      ],
+    },
+  },
+  {
+    version: '0.117.5-beta',
+    date: '2026-08-26',
+    time: '12:44',
+    commit: '6981f37',
+    highlights: {
+      en: [
+        "Offer requisitions can now be selected by title, with only open requisitions from the offer's company available.",
+      ],
+      tr: [
+        "Teklif iş talepleri artık başlığa göre seçilebilir ve yalnızca teklif şirketinin açık iş talepleri gösterilir.",
+      ],
+      de: [
+        "Stellenanforderungen für Angebote können jetzt nach Titel ausgewählt werden; verfügbar sind nur offene Anforderungen des Angebotsunternehmens.",
+      ],
+    },
+  },
+  {
+    version: '0.117.4-beta',
+    date: '2026-08-26',
+    time: '11:43',
+    commit: 'b8c404c',
+    highlights: {
+      en: [
+        "Premium match alerts now also cover roles opened as requisitions, not only positions added through the company form.",
+      ],
+      tr: [
+        "Premium eşleşme uyarıları artık yalnızca şirket formundan eklenen pozisyonları değil, iş talebi olarak açılan rolleri de kapsıyor.",
+      ],
+      de: [
+        "Premium-Treffer-Benachrichtigungen decken jetzt auch als Requisition eröffnete Rollen ab, nicht nur über das Firmenformular angelegte Positionen.",
+      ],
+    },
+  },
+  {
+    version: '0.117.3-beta',
+    date: '2026-08-26',
+    time: '10:43',
+    commit: '8f3313f',
+    highlights: {
+      en: [
+        "Interaction history and mentor analytics now distinguish loading, errors and genuinely empty results, with a retry option when loading fails.",
+      ],
+      tr: [
+        "Etkileşim geçmişi ve mentor analitiği artık yükleme, hata ve gerçek boş sonuçları ayrı gösteriyor; yükleme başarısız olursa yeniden deneme sunuyor.",
+      ],
+      de: [
+        "Interaktionsverlauf und Mentor-Analysen unterscheiden jetzt zwischen Laden, Fehlern und tatsächlich leeren Ergebnissen und bieten bei Ladefehlern einen erneuten Versuch.",
+      ],
+    },
+  },
+  {
+    version: '0.117.2-beta',
+    date: '2026-08-26',
+    time: '10:42',
+    commit: 'dd17c87',
+    highlights: {
+      en: [
+        "Candidate stage-history deletion errors are now shown instead of silently refreshing unchanged data.",
+      ],
+      tr: [
+        "Aday aşama geçmişi silinemediğinde değişmemiş veriler sessizce yenilenmek yerine artık hata gösteriliyor.",
+      ],
+      de: [
+        "Fehler beim Löschen des Kandidaten-Phasenverlaufs werden jetzt angezeigt, statt unveränderte Daten still neu zu laden.",
+      ],
+    },
+  },
+  {
+    version: '0.117.1-beta',
+    date: '2026-08-26',
+    time: '10:39',
+    commit: '31d150c',
+    highlights: {
+      en: [
+        "The calendar no longer says \"nothing scheduled\" while it is still loading, and if events fail to load it says so with a retry button instead of showing an empty month.",
+      ],
+      tr: [
+        "Takvim artık yüklenirken \"planlanmış bir şey yok\" demiyor; etkinlikler yüklenemezse boş bir ay göstermek yerine hatayı bildirip tekrar dene düğmesi sunuyor.",
+      ],
+      de: [
+        "Der Kalender zeigt während des Ladens nicht mehr \"nichts geplant\", und wenn Termine nicht geladen werden können, wird das mit einer Wiederholen-Schaltfläche gemeldet statt ein leerer Monat angezeigt.",
+      ],
+    },
+  },
+  {
+    version: '0.117.0-beta',
+    date: '2026-08-26',
+    time: '08:11',
+    commit: '2df864e',
+    highlights: {
+      en: [
+        "You can now invite people from outside the platform to a meeting — just type their email address. They get the same invitation with Yes/No buttons and can reply without an account, and you see who accepted.",
+      ],
+      tr: [
+        "Artık toplantıya platform dışından kişileri de davet edebilirsin — e-posta adresini yazman yeterli. Aynı daveti Evet/Hayır butonlarıyla alırlar, hesap açmadan yanıtlayabilirler ve kimin kabul ettiğini görürsün.",
+      ],
+      de: [
+        "Du kannst jetzt auch Personen außerhalb der Plattform zu einem Meeting einladen — einfach die E-Mail-Adresse eintippen. Sie erhalten dieselbe Einladung mit Ja/Nein-Buttons, können ohne Konto antworten, und du siehst, wer zugesagt hat.",
+      ],
+    },
+  },
+  {
+    version: '0.116.0-beta',
+    date: '2026-08-26',
+    time: '07:39',
+    commit: '5b4b898',
+    highlights: {
+      en: [
+        "Ask for a meeting by picking one of your mentor's available hours instead of typing a time and hoping.",
+      ],
+      tr: [
+        "Artık saat yazıp ummak yerine mentörünün müsait saatlerinden birini seçerek toplantı isteyebilirsin.",
+      ],
+      de: [
+        "Frage ein Meeting an, indem du eine der freien Zeiten deiner Mentorin oder deines Mentors wählst, statt eine Zeit zu raten.",
+      ],
+    },
+  },
+  {
+    version: '0.115.0-beta',
+    date: '2026-08-25',
+    time: '09:25',
+    commit: 'b174c20',
+    highlights: {
+      en: [
+        "Your availability now says which time zone the hours are in, and refuses a slot that overlaps one you already have.",
+      ],
+      tr: [
+        "Müsaitlik ekranın artık saatlerin hangi zaman dilimine ait olduğunu yazıyor ve mevcut bir slotla çakışan aralığı kabul etmiyor.",
+      ],
+      de: [
+        "Deine Verfügbarkeit nennt jetzt die Zeitzone der Stunden und lehnt einen Slot ab, der sich mit einem bestehenden überschneidet.",
+      ],
+    },
+  },
+  {
+    version: '0.114.2-beta',
+    date: '2026-08-25',
+    time: '01:36',
+    commit: 'd1133e4',
+    highlights: {
+      en: [
+        "The admin board now shows a customized pipeline's stages on desktop, not only on a phone.",
+      ],
+      tr: [
+        "Yönetici panosu, özelleştirilmiş bir akışın aşamalarını artık yalnızca telefonda değil masaüstünde de gösteriyor.",
+      ],
+      de: [
+        "Das Admin-Board zeigt die Phasen einer angepassten Pipeline jetzt auch am Desktop, nicht nur am Telefon.",
+      ],
+    },
+  },
+  {
+    version: '0.114.1-beta',
+    date: '2026-08-25',
+    time: '01:36',
+    commit: 'd1133e4',
+    highlights: {
+      en: [
+        "Dark mode is now covered by the automated accessibility checks, which found and fixed four low-contrast links and labels that were unreadable on dark backgrounds.",
+      ],
+      tr: [
+        "Koyu mod artık otomatik erişilebilirlik denetimine dahil; koyu zeminde okunamayan dört düşük kontrastlı bağlantı ve etiket bu sayede bulunup düzeltildi.",
+      ],
+      de: [
+        "Der Dunkelmodus wird jetzt von den automatischen Barrierefreiheitsprüfungen erfasst — dabei wurden vier kontrastschwache Links und Beschriftungen gefunden und behoben, die auf dunklem Grund unlesbar waren.",
+      ],
+    },
+  },
+  {
+    version: '0.114.0-beta',
+    date: '2026-08-24',
+    time: '23:48',
+    commit: '29e072a',
+    highlights: {
+      en: [
+        "Site owners can now connect Plausible, GA4 or PostHog for public-page analytics — off unless configured, and never loaded without the visitor's cookie consent.",
+      ],
+      tr: [
+        "Site sahipleri artık herkese açık sayfa analitiği için Plausible, GA4 veya PostHog bağlayabiliyor — yapılandırılmadıkça kapalı ve ziyaretçinin çerez onayı olmadan hiç yüklenmiyor.",
+      ],
+      de: [
+        "Betreiber können jetzt Plausible, GA4 oder PostHog für die Analyse öffentlicher Seiten anbinden — standardmäßig aus und ohne Cookie-Einwilligung der Besucher nie geladen.",
+      ],
+    },
+  },
+  {
+    version: '0.113.0-beta',
+    date: '2026-08-24',
+    time: '23:03',
+    commit: '6c0e748',
+    highlights: {
+      en: [
+        "Candidates who are not placed this cycle can now be kept in a re-engagement pool with their consent — with an agreed date to talk again, and a one-click way out of it from any e-mail.",
+      ],
+      tr: [
+        "Bu dönem yerleşemeyen adaylar artık kendi rızalarıyla yeniden etkileşim havuzunda tutulabiliyor — tekrar görüşme tarihiyle birlikte ve her e-postadan tek tıkla çıkma imkânıyla.",
+      ],
+      de: [
+        "Kandidatinnen und Kandidaten, die in diesem Durchgang keinen Platz bekommen, können mit ihrer Einwilligung in einem Re-Engagement-Pool bleiben — mit vereinbartem Termin für ein erneutes Gespräch und einem Ein-Klick-Ausstieg aus jeder E-Mail.",
+      ],
+    },
+  },
+  {
+    version: '0.112.0-beta',
+    date: '2026-08-24',
+    time: '22:42',
+    commit: '6c8b027',
+    highlights: {
+      en: [
+        "Admins can now manage tags: rename, recolour, merge duplicates together, or retire one — with the number of people affected shown before anything is deleted.",
+      ],
+      tr: [
+        "Yöneticiler artık etiketleri yönetebiliyor: yeniden adlandırma, renk değiştirme, benzerleri birleştirme ya da kullanımdan kaldırma — silmeden önce kaç kişiyi etkilediği gösteriliyor.",
+      ],
+      de: [
+        "Admins können Tags jetzt verwalten: umbenennen, einfärben, Dubletten zusammenführen oder ausmustern — vor dem Löschen wird angezeigt, wie viele Personen betroffen sind.",
+      ],
+    },
+  },
+  {
+    version: '0.111.0-beta',
+    date: '2026-08-24',
+    time: '22:17',
+    commit: '3ba4083',
+    highlights: {
+      en: [
+        "You can now connect your own Google Calendar from your account settings — meetings you are part of show up there too, and disconnecting revokes the access again.",
+      ],
+      tr: [
+        "Artık hesap ayarlarından kendi Google Takvimini bağlayabilirsin — katıldığın toplantılar orada da görünür, bağlantıyı kaldırdığında erişim geri alınır.",
+      ],
+      de: [
+        "Du kannst jetzt in den Kontoeinstellungen deinen eigenen Google Kalender verbinden — Termine, an denen du teilnimmst, erscheinen auch dort, und beim Trennen wird der Zugriff wieder entzogen.",
+      ],
+    },
+  },
+  {
+    version: '0.110.2-beta',
+    date: '2026-08-24',
+    time: '22:13',
+    commit: 'c50bdb8',
+    highlights: {
+      en: [
+        "Candidate graduation-year and source filters now have clear names for screen readers.",
+      ],
+      tr: [
+        "Aday mezuniyet yılı ve kaynak filtreleri artık ekran okuyucular için anlaşılır adlara sahip.",
+      ],
+      de: [
+        "Die Filter für Abschlussjahr und Quelle haben jetzt eindeutige Bezeichnungen für Screenreader.",
+      ],
+    },
+  },
+  {
     version: '0.110.1-beta',
     date: '2026-08-24',
     time: '21:47',

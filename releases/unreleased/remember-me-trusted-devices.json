@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **\"Keep me signed in\" (#1495).** New `TrustedDevice` model: a rotating, hashed, revocable persistent-login token per device, 30-day sliding / 90-day absolute expiry, with replay of a superseded token treated as theft (device revoked + `auth.device_token_reuse` logged). The 12h session JWT is unchanged — `POST /api/auth/remember/refresh` verifies and rotates the device cookie and mints a single-use grant that the new `remember` NextAuth provider trades for a session, so tokens keep being issued in exactly one place. Devices are listed and revocable under Account → sessions, and are revoked on sign-out, password change, password reset and \"sign out of all devices\".",
-  "notes": {
-    "en": ["A \"Keep me signed in\" box on the sign-in page. Tick it and this device signs you back in by itself when your session expires — for up to 30 days, without your password. Every remembered device is listed on your account page and can be dropped with one click, and signing out (or changing your password) forgets them all."],
-    "tr": ["Giriş sayfasında \"Beni hatırla\" kutusu. İşaretlediğinde oturumun sona erdiğinde bu cihaz seni parolasız, 30 güne kadar kendisi geri alır. Hatırlanan her cihaz hesap sayfanda listelenir ve tek tıkla kaldırılır; çıkış yapmak (veya parolanı değiştirmek) hepsini unutturur."],
-    "de": ["Ein Kästchen „Angemeldet bleiben“ auf der Anmeldeseite. Aktiviert meldet dieses Gerät dich nach Ablauf der Sitzung bis zu 30 Tage lang ohne Passwort wieder an. Jedes gespeicherte Gerät steht auf deiner Kontoseite und lässt sich mit einem Klick entfernen; beim Abmelden (oder Passwortwechsel) werden alle vergessen."]
-  }
-}
