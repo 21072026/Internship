@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**AI endpoint rate limits (#2028)** — throttled all five AI endpoints (`/api/cv/feedback`, `/api/interview-prep`, `/api/interactions/summary`, `/api/admin/mentor-suggest`, `/api/cv/[userId]/extract-ai`) per user (`ai:<taskId>:<userId>`) and per org (`ai:org:<orgId>`) before any database read or provider call, with centralized limit budgets in `src/lib/ai/limits.ts`."
+}

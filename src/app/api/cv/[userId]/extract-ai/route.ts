@@ -6,12 +6,14 @@ import { canAccessCv } from '@/lib/cvAccess';
 import { extractCvText } from '@/lib/cvParse';
 import { aiExtractFromText } from '@/lib/cvExtractAi';
 import { runAiGated } from '@/lib/aiGate';
+import { enforceRateLimit } from '@/lib/rateLimit';
+import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 
 // POST — AI-assisted extraction of profile fields from the stored CV (EPIC B3).
 // Runs through the central AI gate (#537): CV-owner consent → configured
 // provider → monthly quota → call (metered). Only the extracted TEXT is sent
 // to the AI provider, never the file.
-export async function POST(_request: Request, { params }: { params: Promise<{ userId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -20,6 +22,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ us
   if (!(await canAccessCv(session.user, target))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  if (session.user.orgId) {
+    const orgLimited = enforceRateLimit(request, 'ai:org', {
+      ...AI_RATE_LIMITS.org_burst,
+      subject: session.user.orgId,
+    });
+    if (orgLimited) return orgLimited;
+  }
+  const userLimited = enforceRateLimit(request, 'ai:cv_extract', {
+    ...AI_RATE_LIMITS.cv_extract,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
 
   const cv = await prisma.cvFile.findUnique({ where: { userId: target } });
   if (!cv) return NextResponse.json({ error: 'No CV uploaded' }, { status: 404 });
