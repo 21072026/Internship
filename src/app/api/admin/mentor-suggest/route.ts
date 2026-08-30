@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { runAiGated } from '@/lib/aiGate';
 import { aiRankMentors, type MatchCandidate } from '@/lib/aiMentorMatch';
 import { withTenantScope } from '@/lib/orgContext';
+import { enforceRateLimit } from '@/lib/rateLimit';
+import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 
 const schema = z.object({ menteeId: z.string().min(1) });
 
@@ -19,6 +21,19 @@ export async function POST(request: Request) {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  if (session.user.orgId) {
+    const orgLimited = enforceRateLimit(request, 'ai:org', {
+      ...AI_RATE_LIMITS.org_burst,
+      subject: session.user.orgId,
+    });
+    if (orgLimited) return orgLimited;
+  }
+  const userLimited = enforceRateLimit(request, 'ai:mentor_match', {
+    ...AI_RATE_LIMITS.mentor_match,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json().catch(() => null));

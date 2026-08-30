@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { getThreadIfAllowed } from '@/lib/messaging';
 import { runAiGated } from '@/lib/aiGate';
 import { aiSummarizeInteractions } from '@/lib/aiSummary';
+import { enforceRateLimit } from '@/lib/rateLimit';
+import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 
 const schema = z.object({ relationId: z.string().min(1) });
 
@@ -19,6 +21,19 @@ export async function POST(request: Request) {
   if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  if (session.user.orgId) {
+    const orgLimited = enforceRateLimit(request, 'ai:org', {
+      ...AI_RATE_LIMITS.org_burst,
+      subject: session.user.orgId,
+    });
+    if (orgLimited) return orgLimited;
+  }
+  const userLimited = enforceRateLimit(request, 'ai:interaction_summary', {
+    ...AI_RATE_LIMITS.interaction_summary,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
