@@ -24,7 +24,7 @@ interface Meeting {
 
 const HOUR_MS = 60 * 60 * 1000;
 
-export function UpcomingMeetings() {
+export function UpcomingMeetings({ hasMentor }: { hasMentor: boolean }) {
   const t = useT();
   const locale = useLocale();
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
@@ -92,9 +92,13 @@ export function UpcomingMeetings() {
       ) : upcoming.length === 0 && linkOnly.length === 0 ? (
         <div className="py-4" data-testid="upcoming-meetings-empty">
           <p className="text-sm text-gray-500">{t.portal.meetings.empty}</p>
-          <Link href="/portal/requests" className="mt-1 inline-block text-sm text-blue-600 hover:underline">
-            {t.portal.meetings.emptyCta}
-          </Link>
+          {/* #1423: without a mentor, /portal/requests has no request form to
+              land on — offering the CTA there is a dead end. */}
+          {hasMentor && (
+            <Link href="/portal/requests" className="mt-1 inline-block text-sm text-blue-600 hover:underline">
+              {t.portal.meetings.emptyCta}
+            </Link>
+          )}
         </div>
       ) : (
         <ul className="space-y-3">
