@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Feature catalogue:** Added enterprise platform capabilities (#2083).",
+  "notes": {
+    "en": ["The feature catalogue now documents multi-tenant organisations, stored per-tenant branding settings, and enterprise SSO configuration."],
+    "tr": ["Özellik kataloğu artık çok kiracılı organizasyonları, kurum bazında saklanan marka ayarlarını ve kurumsal SSO yapılandırmasını içeriyor."],
+    "de": ["Der Funktionskatalog dokumentiert jetzt mandantenfähige Organisationen, gespeicherte mandantenbezogene Marken-Einstellungen und Enterprise-SSO-Konfiguration."]
+  }
+}
