@@ -34,9 +34,6 @@ const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: t
 
 // GET ?relationId= — messages in a thread (participants/admin only).
 export async function GET(request: Request) {
-    // 60 per minute allows a normal back-and-forth conversation while stopping automated bursts.
-  const limited = enforceRateLimit(request, 'messages', { limit: 60, windowMs: 60 * 1000 });
-  if (limited) return limited;
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -216,6 +213,10 @@ const schema = z
 // party. Accepts either JSON (text-only, the original shape) or multipart
 // form-data (text + an optional file attachment).
 export async function POST(request: Request) {
+  // 60 per minute allows a normal back-and-forth conversation while stopping automated bursts.
+  const limited = enforceRateLimit(request, 'messages', { limit: 60, windowMs: 60 * 1000 });
+  if (limited) return limited;
+
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
