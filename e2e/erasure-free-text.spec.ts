@@ -199,6 +199,18 @@ async function cleanup(s: Seeded) {
   await prisma.message.deleteMany({ where: { senderId: { in: [s.menteeId, s.mentorId] } } });
   await prisma.conversation.deleteMany({ where: { id: s.conversationId } });
   await prisma.personalNote.deleteMany({ where: { userId: { in: [s.menteeId, s.mentorId] } } });
+  // The seeded rows go by ID, not by e-mail: the anonymise path has already
+  // rewritten the mentee's address to erased-<id>@erased.local, so
+  // `cleanupByEmail(menteeEmail)` matches nothing and the anonymised row would
+  // stay behind — with its support ticket sitting in the admin queue and its
+  // pending mentorship request in the approval queue for every later spec in
+  // the run. e2e/candidate-erasure.spec.ts deletes by id after the same call
+  // for the same reason. Relations first: `MentorshipRelation.mentor/mentee`
+  // are FK-restrict, so the user rows cannot go while a relation points at them.
+  await prisma.mentorshipRelation.deleteMany({
+    where: { OR: [{ menteeId: s.menteeId }, { mentorId: s.mentorId }] },
+  });
+  await prisma.user.deleteMany({ where: { id: { in: [s.menteeId, s.mentorId] } } });
   await cleanupByEmail(s.menteeEmail);
   await cleanupByEmail(s.mentorEmail);
 }
