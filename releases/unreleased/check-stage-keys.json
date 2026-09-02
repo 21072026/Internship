@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Stage-key guard** (#1886). `npm run check:stage-keys` fails CI when a canonical pipeline stage key (`HIRED_660`, `APPLICATION_100`, …) is hardcoded in a new place, with `src/lib/pipeline.ts` and `src/lib/offers.ts` allowed and today's offenders recorded in `scripts/stage-keys-baseline.json` as a shrinking ratchet. A `@smoke` e2e fixture seeds a tenant whose stages are `STAGE_A`…`STAGE_F` and asserts the hiring funnel reports on those."
+}

@@ -39,6 +39,12 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # A hardcoded stage key ('HIRED_660', …) type-checks, passes every test on
+      # the default seed, and only misbehaves for a tenant that renamed its
+      # stages — which no test tenant does. That invisibility is why the bug
+      # keeps coming back (#1880); the guard makes a new one a red build.
+      - name: no hardcoded pipeline stage keys (#1886)
+        run: npm run check:stage-keys
       # A malformed release fragment must fail in the PR that adds it, not in
       # next.config.js during the deploy build (#1275).
       - name: release fragments are well-formed (#1275)

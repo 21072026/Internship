@@ -18,6 +18,7 @@
     "check:demo-blocklist": "node scripts/check-demo-blocklist.mjs",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
     "check:release-fragments": "node scripts/check-release-fragments.mjs",
+    "check:stage-keys": "node scripts/check-stage-keys.mjs",
     "test:release": "node --test scripts/test/release-derive.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",

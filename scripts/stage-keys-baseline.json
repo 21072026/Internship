@@ -1,0 +1,59 @@
+{
+  "_comment": "Hardcoded pipeline stage keys still on main, per file, with the issue that owns the cleanup (#1886). This list may only ever SHRINK: scripts/check-stage-keys.mjs fails on any file that is not listed here, and on a listed file whose count went up. When a cleanup PR lowers a count, run `node scripts/check-stage-keys.mjs --update`. The remaining acceptance criterion of #1886 — the guard passing with nothing but the two-file allowlist — is met by the PR that empties this file and deletes it.",
+  "src/app/admin/candidates/[id]/page.tsx": {
+    "hits": 2,
+    "issue": "#1884"
+  },
+  "src/app/admin/cohorts/page.tsx": {
+    "hits": 2,
+    "issue": "#1884"
+  },
+  "src/app/api/admin/analytics/benchmark/route.ts": {
+    "hits": 4,
+    "issue": "#1882"
+  },
+  "src/app/api/admin/analytics/cohorts/route.ts": {
+    "hits": 6,
+    "issue": "#1882"
+  },
+  "src/app/api/admin/analytics/route.ts": {
+    "hits": 4,
+    "issue": "#1882"
+  },
+  "src/app/api/admin/analytics/sources/route.ts": {
+    "hits": 2,
+    "issue": "#1882"
+  },
+  "src/app/api/admin/sources/route.ts": {
+    "hits": 2,
+    "issue": "#1884"
+  },
+  "src/app/api/calendar-events/route.ts": {
+    "hits": 3,
+    "issue": "#1884"
+  },
+  "src/app/api/mentor/analytics/route.ts": {
+    "hits": 4,
+    "issue": "#1882"
+  },
+  "src/components/JourneyTracker.tsx": {
+    "hits": 2,
+    "issue": "#1884"
+  },
+  "src/lib/dormantFirstContact.ts": {
+    "hits": 1,
+    "issue": "#1880"
+  },
+  "src/lib/menteeOnboarding.ts": {
+    "hits": 1,
+    "issue": "#1634"
+  },
+  "src/lib/outcomeComms.ts": {
+    "hits": 2,
+    "issue": "#1880"
+  },
+  "src/services/emailService.ts": {
+    "hits": 5,
+    "issue": "#1884"
+  }
+}
