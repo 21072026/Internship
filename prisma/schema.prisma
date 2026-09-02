@@ -276,6 +276,17 @@ model User {
   emailVerified           Boolean       @default(true)
   // Admin can deactivate a user; inactive users cannot sign in.
   isActive                Boolean       @default(true)
+  // Instance-level capability (#1535): may manage EVERY tenant's Organization
+  // row — create tenants, change plans, and write SSO config (the IdP entry
+  // point and signing certificate, i.e. who may mint a login). A plain ADMIN is
+  // a *tenant* admin and may only ever touch their own org.
+  //
+  // Deliberately a flag, not a `SUPER_ADMIN` value on `Role`: `role` is copied
+  // into the JWT and compared to 'ADMIN' in dozens of guards, so widening the
+  // enum would change all of them at once. It is also never put in the token —
+  // `src/lib/superAdmin.ts` reads it from the database per request so revoking
+  // it takes effect on the next request, like `sessionsValidFrom`.
+  isSuperAdmin            Boolean       @default(false)
   // Set only when the `selfRegistration` setting is 'manual': the account was
   // created by open sign-up and is waiting for an admin to let it in. Lets the
   // sign-in page tell "we haven't reviewed you yet" apart from "an admin

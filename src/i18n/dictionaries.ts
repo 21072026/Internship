@@ -2017,6 +2017,7 @@ const en = {
     none: 'No organizations yet',
     searchPlaceholder: 'Search organizations...',
     phaseNote: 'Multi-tenancy is in an early phase: every existing record is assigned to a default organization and data is not yet isolated per tenant.',
+    tenantScopeNote: 'You are managing your own organization. Creating tenants and editing other organizations requires a super admin.',
   },
   sources: {
     title: 'Referral sources',
@@ -5527,6 +5528,7 @@ const tr: Dict = {
     none: 'Henüz organizasyon yok',
     searchPlaceholder: 'Organizasyon ara...',
     phaseNote: 'Çok kiracılılık erken aşamada: mevcut tüm kayıtlar varsayılan bir organizasyona atanır ve veriler henüz kiracı bazında izole edilmez.',
+    tenantScopeNote: 'Kendi organizasyonunuzu yönetiyorsunuz. Yeni kiracı oluşturmak ve başka organizasyonları düzenlemek süper yönetici yetkisi gerektirir.',
   },
   sources: {
     title: 'Başvuru kaynakları',
@@ -9028,6 +9030,7 @@ const de: Dict = {
     none: 'Noch keine Organisationen',
     searchPlaceholder: 'Organisationen suchen...',
     phaseNote: 'Mandantenfähigkeit befindet sich in einer frühen Phase: Alle bestehenden Datensätze werden einer Standardorganisation zugewiesen und die Daten sind noch nicht pro Mandant isoliert.',
+    tenantScopeNote: 'Sie verwalten Ihre eigene Organisation. Das Anlegen von Mandanten und das Bearbeiten anderer Organisationen erfordert einen Super-Admin.',
   },
   sources: {
     title: 'Empfehlungsquellen',
