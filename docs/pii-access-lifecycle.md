@@ -135,6 +135,86 @@ akışını tekrar tetiklemek. Link elle paylaşılacaksa bunun için ayrı ve d
 bir yol var (#670, e-postasız davet linkleri) — "yanıt gövdesinde döndür" o yol
 değil.
 
+## Silme ne kadarına ulaşıyor (#2052)
+
+Hesap sayfası ve yönetici akışı iki seçenek sunuyor — **anonimleştir** ya da
+**tamamen sil** — ve gizlilik metni silme hakkını taahhüt ediyor. Kaynak kod:
+[`src/lib/accountErasure.ts`](../src/lib/accountErasure.ts). Her iki yol da
+**elle ve yönetici tarafından** başlatılır; `src/lib/retention.ts` kimin
+gözden geçirilmesi gerektiğini gösterir, hiçbir şeyi kendiliğinden silmez.
+
+### Önceki durum
+
+`anonymizeUser()` yalnızca `User` satırını yeniden yazıyor ve yüklenen dosyaları
+siliyordu. Kişinin yazdığı **her serbest metin** yerinde kalıyordu: mesaj
+gövdeleri ve ekleri, destek konuşması ve ekleri, hakkında yazılmış notlar,
+etkileşim kayıtları. Yani "artık kimseyi tanımlamıyor" diyen bir satırın yanında
+telefon numarası, adres ve mentörün özel notları duruyordu. `Message.senderId`'in
+`User`'a **foreign key'i yok**, dolayısıyla tamamen silmede de cascade
+çalışmıyor: `relationId` taşımayan (konuşma katmanındaki) bir mesaj hesaptan
+sonra da yaşıyordu.
+
+### İki kural
+
+Serbest metnin sahibi kim olduğuna göre davranış değişir:
+
+| | Kişinin **yazdığı** içerik | Kişi **hakkında** yazılan içerik |
+|---|---|---|
+| Ne olur | **Mezar taşı**: gövde boşaltılır, ek satırları silinir, **satır kalır** | **Temizlenir**: serbest metin gider, satırın tarihi/türü/aşaması kalır |
+| Neden | Karşı tarafın konuşması anlamsızlaşmasın — mevcut `Message.deletedForEveryoneAt` maskesi zaten "mesaj silindi" yer tutucusunu gösteriyor | Tarih, tür ve aşama kurumun operasyonel geçmişi; metin gittikten sonra PII taşımıyorlar |
+| Kapsam | `Message.body` + `MessageAttachment`, `SupportMessage.body` + `SupportAttachment`, `SupportTicket.subject` (kişinin ilk mesajının ilk 80 karakterinin birebir kopyası), `MentorshipRequest.message`, kişinin kendi `PersonalNote` satırları (yalnızca kendisine ait → doğrudan silinir) | `InteractionLog.notes`/`subject`, `RelationNote.body`, kişinin toplantısında alınmış `PersonalNote.body` |
+
+`User` satırında ayrıca gözden kaçmış üç alan temizleniyor: `country`,
+`referralSource`, `reEngageNote`.
+
+"Hakkında" kapsamı **mentee olduğu ilişkilerle** sınırlı: kişinin *mentör*
+olduğu bir ilişkideki aynı kolonlar üçüncü bir kişinin kaydıdır, onları silmek
+başkasının geçmişini silmek olur (tamamen silmede o ilişkiler cascade ile
+zaten gidiyor). `PersonalNote` **yazarına** bağlı, özneye değil; özneye tek
+bağlantı `meetingId` → toplantının ilişkisi ya da kişiyle olan `DIRECT` (1:1)
+konuşması.
+
+### İki sıra kuralı
+
+- Her iki yolda da temizlik **tek bir `$transaction`** içinde: yarım kalmış bir
+  silme mümkün olmamalı.
+- Tamamen silmede temizlik **ilişkiler silinmeden önce** çalışır.
+  `PersonalNote.meetingId` `SetNull` olduğu için, ilişki (ve onunla toplantı)
+  silindikten sonra not metniyle birlikte hayatta kalır ve özneye giden tek
+  bağı kopmuş olur — hiçbir sorgunun bir daha bulamayacağı bir PII.
+
+### Şema değişikliği yok
+
+Boşaltmak (`''`) null'lamak yerine tercih edilmedi, **şema öyle**:
+`Message.body`, `SupportMessage.body`, `PersonalNote.body`, `RelationNote.body`
+ve `InteractionLog.notes` zorunlu kolonlar. Boş gövde bu yüzeylerde zaten
+ulaşılabilir ve zaten render edilen bir durum (yalnızca ek içeren destek
+mesajı, mezar taşı yapılmış sohbet mesajı).
+
+### Ulaşılamayanlar — sessiz boşluk yok
+
+Kanıt testi: [`e2e/erasure-free-text.spec.ts`](../e2e/erasure-free-text.spec.ts)
+— bir mentee'ye ilişki, mesajlar+ekler, destek konuşması, mentörün notu ve
+etkileşim kaydı serbest metinleriyle yazılır, **iki yol da** koşulur, sonra
+tohumlanan PII dizeleri doğrudan Prisma ile aranır.
+
+Kodda `KNOWN GAPS` bloğunda sayılan ve [#2106](https://github.com/21072026/Internship/issues/2106)
+ile takip edilen kalan yüzeyler:
+
+- **Toplantısız `PersonalNote`** (`meetingId: null`): yazarına bağlı, özneye
+  hiçbir bağı yok. Bu notun bu kişi hakkında mı yoksa bir başkası hakkında mı
+  olduğunu ayırt eden bir sorgu yazılamaz — ürün kararı gerektiriyor.
+- Grup konuşması / proje toplantısında alınan notlar: not toplantı hakkındadır,
+  kişi hakkında değil.
+- `scripts/sanitize-db.mjs` başlığındaki envanterin geri kalanı (değerlendirme
+  yorumları, haftalık raporlar, hedef açıklamaları, teklif/görüşme notları,
+  bildirim metinleri, denetim kaydı `detail` alanları). Bunların çoğu **tamamen
+  silmede** cascade ile gidiyor ama **anonimleştirmede** kalıyor.
+
+Aşağıdaki bölümdeki uyarı burada da geçerli ve iki yönlü: yeni bir serbest metin
+kolonu eklerken hem `scripts/sanitize-db.mjs` envanterine hem de
+`accountErasure.ts`'e eklenmezse sızıntı olur.
+
 ## Önizleme verisi: anonimleştirme (#1186)
 
 Paylaşılan önizleme ortamı gerçek veriyle çalışıyordu. `scripts/sanitize-db.mjs`
