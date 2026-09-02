@@ -986,6 +986,10 @@ export function AccountSettings() {
                   aria-label={(t.account.accentColors as Record<string, string>)[c] ?? c}
                   title={(t.account.accentColors as Record<string, string>)[c] ?? c}
                   onClick={() => changeAccent(c)}
+                  // The swatch's colour IS the choice being made, so it is the
+                  // one place that opts out of forced-colors flattening —
+                  // globals.css targets this attribute (#2045).
+                  data-accent-swatch
                   className={`h-8 w-8 rounded-full ring-offset-2 ring-offset-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 ${selected ? 'ring-2 ring-gray-500' : 'ring-1 ring-gray-200 hover:ring-gray-300'}`}
                   style={{ backgroundColor: ACCENT_SWATCH[c] }}
                 >

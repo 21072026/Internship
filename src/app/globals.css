@@ -373,3 +373,150 @@ textarea:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
 }
+
+/* ==========================================================================
+ * OS-level accessibility preferences (#2045).
+ *
+ * Three media features the browser exposes on behalf of the user. They follow
+ * the same mechanism as the dark-mode layer above: neutralise / retint the flat
+ * utility classes the app is built from, so no component markup has to change.
+ * They sit at the END of the file on purpose — `html.dark` (0,2,0) and
+ * `html[data-accent] …` outscore most bare-utility selectors, so an
+ * equal-specificity rule has to come later to win on source order.
+ * ========================================================================== */
+
+/*
+ * 1. prefers-reduced-motion: reduce
+ *
+ * A user with a vestibular disorder has told their OS to stop moving things.
+ * One blanket rule covers everything the app animates today — the mobile drawer
+ * (`transition-transform duration-200` in ResponsiveShell), `animate-pulse` on
+ * the skeletons, `animate-spin` on the spinners, `animate-ping` on the live
+ * meeting pill, and every `transition-colors` on the UI primitives.
+ *
+ * Durations are near-zero rather than `animation: none`, so state changes still
+ * *happen*, instantly: the drawer opens and closes, hover styles still apply,
+ * and nothing waits on a transition that never fires (no code listens for
+ * transitionend/animationend — checked). `animation-iteration-count: 1` stops
+ * looping animations from cycling forever at 0.01ms. JS-driven smooth scrolling
+ * passes an explicit `behavior`, which CSS cannot override — that is handled in
+ * src/lib/motion.ts.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The skeletons' only affordance is the pulse. With the animation gone they
+     must still read as "a placeholder, not content" — a flat filled block. */
+  .animate-pulse {
+    opacity: 1;
+  }
+}
+
+/*
+ * 2. prefers-contrast: more
+ *
+ * Hairline borders and muted secondary text are the first two things to
+ * disappear for a low-vision user. Both are drawn with a handful of flat gray
+ * utilities, so lifting those covers the whole app. Light and dark are listed
+ * side by side because `html.dark .border-gray-200` (0,2,0) outranks a bare
+ * `.border-gray-200` (0,1,0) — the dark values need their own selector.
+ */
+@media (prefers-contrast: more) {
+  /* Borders: gray-100/200 → gray-500, gray-300 → gray-600. */
+  .border-gray-100,
+  .border-gray-200 {
+    border-color: #6b7280;
+  }
+  .border-gray-300 {
+    border-color: #4b5563;
+  }
+  .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
+  .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #6b7280;
+  }
+  /* Secondary text: gray-400/500 → gray-700 (10.3:1 on white). */
+  .text-gray-400,
+  .text-gray-500 {
+    color: #374151;
+  }
+
+  html.dark .border-gray-100,
+  html.dark .border-gray-200,
+  html.dark .border-gray-300 {
+    border-color: #9ca3af;
+  }
+  html.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
+  html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #9ca3af;
+  }
+  html.dark .text-gray-400,
+  html.dark .text-gray-500,
+  html.dark .text-gray-600 {
+    color: #e5e7eb;
+  }
+
+  /* A thicker keyboard focus ring, for the same reason. */
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline-width: 3px;
+  }
+}
+
+/*
+ * 3. forced-colors: active (Windows High Contrast and friends)
+ *
+ * The OS discards our palette and repaints everything from its own small set of
+ * system colours. Three consequences to handle:
+ *
+ *   (a) the focus ring's hardcoded #2563eb — and the accent override of it — is
+ *       thrown away, so it has to be re-stated as the system `Highlight`
+ *       colour. `!important` rather than a matching selector because
+ *       `html[data-accent] a:focus-visible` scores higher than a bare
+ *       `a:focus-visible`, and any future accent rule would too;
+ *   (b) colour that genuinely *is* the information must opt out with
+ *       `forced-color-adjust: none`. That is only the accent swatches in the
+ *       colour picker, where the colour is the choice being made;
+ *   (c) anything that separated itself from its surroundings by background
+ *       alone now sits on the same flat Canvas. Badges are that case here (the
+ *       board columns and status chips already carry a border), so they grow
+ *       one; everything else pairs colour with text or an icon already.
+ */
+@media (forced-colors: active) {
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+
+  /* (b) an accent swatch IS its colour — keep it. */
+  [data-accent-swatch] {
+    forced-color-adjust: none;
+    border: 1px solid ButtonText;
+  }
+
+  /* (c) a badge flattened to Canvas-on-Canvas stops reading as a pill. */
+  .ui-badge {
+    border: 1px solid currentColor;
+  }
+}
