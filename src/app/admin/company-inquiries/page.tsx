@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { Building2, Mail, Phone } from 'lucide-react';
@@ -85,7 +85,7 @@ export default function CompanyInquiriesPage() {
       {loading ? (
         <SkeletonRows rows={4} />
       ) : rows.length === 0 ? (
-        <EmptyState icon={Building2} title={a.emptyTitle} description={a.emptyBody} />
+        <EmptyState testId="company-inquiries" icon={Building2} title={a.emptyTitle} body={a.emptyBody} />
       ) : (
         <div className="space-y-4" data-testid="company-inquiries-list">
           {rows.map((r) => (

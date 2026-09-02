@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Hand, Plus } from 'lucide-react';
+import { Hand, ListChecks, Plus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useT, useLocale } from '@/i18n/client';
 import { TodoRow, todoText, type Todo } from '@/components/todos/TodoRow';
 
@@ -122,7 +123,19 @@ export function MyTodos({ myId }: { myId: string }) {
         )}
 
         {(showArchive ? archive : todos).length === 0 ? (
-          <p className="text-sm text-gray-400">{showArchive ? t.todos.archiveEmpty : t.todos.none}</p>
+          showArchive ? (
+            <p className="text-sm text-gray-400">{t.todos.archiveEmpty}</p>
+          ) : (
+            /* Role-neutral on purpose: everyone keeps the same list, and the
+               next step is the input right above, not another route. */
+            <EmptyState
+              testId="my-todos"
+              size="sm"
+              icon={ListChecks}
+              title={t.emptyStates.todos.title}
+              body={t.emptyStates.todos.body}
+            />
+          )
         ) : (
           <ul className="divide-y divide-gray-100 dark:divide-gray-800" data-testid={showArchive ? 'todo-archive-list' : 'todo-list'}>
             {(showArchive ? archive : todos).map((todo) => (

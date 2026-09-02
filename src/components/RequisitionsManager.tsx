@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, XCircle } from 'lucide-react';
+import { Plus, Pencil, XCircle, Briefcase } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
@@ -118,7 +119,18 @@ export function RequisitionsManager({ admin }: { admin: boolean }) {
       <Select aria-label={r.status} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} options={[{ value: '', label: r.filters.allStatuses }, ...STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))]} />
     </div>
     {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</div>}
-    {loading ? <p className="py-10 text-center text-gray-500">{t.common.loading}</p> : items.length === 0 ? <Card className="py-12 text-center"><p className="font-medium text-gray-700 dark:text-gray-200">{r.empty.title}</p><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{r.empty.description}</p></Card> :
+    {loading ? <p className="py-10 text-center text-gray-500">{t.common.loading}</p> : items.length === 0 ? <Card><EmptyState
+        testId="requisitions"
+        icon={Briefcase}
+        role={admin ? 'ADMIN' : 'COMPANY'}
+        title={t.emptyStates.requisitions.title}
+        byRole={{
+          // The create form is a dialog on this page and both roles may open it,
+          // so the next step is the control the screen already renders.
+          ADMIN: { body: t.emptyStates.requisitions.adminBody, action: { label: t.emptyStates.requisitions.adminCta, onClick: openCreate } },
+          COMPANY: { body: t.emptyStates.requisitions.companyBody, action: { label: t.emptyStates.requisitions.companyCta, onClick: openCreate } },
+        }}
+      /></Card> :
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">{items.map((item) => <Card key={item.id}>
         <CardHeader><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><CardTitle className="break-words">{item.title}</CardTitle><p className="text-sm text-gray-500 dark:text-gray-400">{item.company.name}</p></div><Badge variant={badgeVariant[item.status] ?? 'default'}>{statusLabel(item.status)}</Badge></div></CardHeader>
         <div className="space-y-3 text-sm"><div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-600 dark:text-gray-300"><span>{r.filled}: <strong>{item.filled}/{item.openings}</strong></span>{item.owner && <span>{r.owner}: {item.owner.fullName}</span>}{item.city && <span>{r.city}: {item.city}</span>}</div>
