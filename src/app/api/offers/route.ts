@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
-import { canSeeCompensation } from '@/lib/offers';
+import { canSeeCompensation, isDeclineReasonCode, isOfferStatus } from '@/lib/offers';
 import { validateOfferRequisition } from '@/lib/requisitions';
 import { resolveOrgId } from '@/lib/orgScope';
 
@@ -36,8 +36,76 @@ const baseSelect = {
   decidedBy: { select: { id: true, fullName: true } },
 } satisfies Prisma.OfferSelect;
 
+// The /admin/offers index (#1873) pages server-side and takes its total from a
+// separate count() on the same where — never from offers.length (#1438).
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+const SORTABLE = ['expiresAt', 'sentAt', 'decidedAt', 'createdAt'] as const;
+
+// Filters for the admin index. ADMIN-only on purpose: MENTEE/COMPANY keep the
+// narrow legacy contract, because their fixed scoping is what makes the DRAFT
+// and compensationNote rules hold — nothing here may widen it for them.
+function adminFilters(sp: URLSearchParams): Prisma.OfferWhereInput {
+  const where: Prisma.OfferWhereInput = {};
+
+  // ?status=SENT&status=DECLINED or ?status=SENT,DECLINED. A value that is
+  // given but entirely unknown narrows to nothing rather than quietly
+  // returning everything.
+  const statuses = sp.getAll('status').flatMap((v) => v.split(',')).map((v) => v.trim()).filter(Boolean);
+  if (statuses.length) where.status = { in: statuses.filter(isOfferStatus) };
+
+  const companyId = sp.get('companyId');
+  if (companyId) where.companyId = companyId;
+  const requisitionId = sp.get('requisitionId');
+  if (requisitionId) where.requisitionId = requisitionId;
+
+  const declineReasonCode = sp.get('declineReasonCode');
+  if (declineReasonCode && isDeclineReasonCode(declineReasonCode)) where.declineReasonCode = declineReasonCode;
+
+  // "Expiring this week": a deadline still ahead of now and inside the window.
+  // Offers without an expiresAt drop out, which is the intent — they cannot
+  // expire, so they are never about to.
+  const days = Math.trunc(Number(sp.get('expiringWithinDays')));
+  if (Number.isFinite(days) && days >= 1) {
+    const window = Math.min(days, 90);
+    where.expiresAt = { gte: new Date(), lte: new Date(Date.now() + window * 86_400_000) };
+  }
+
+  const sentAt: Prisma.DateTimeNullableFilter = {};
+  const from = sp.get('from');
+  const to = sp.get('to');
+  if (from && !Number.isNaN(Date.parse(from))) sentAt.gte = new Date(from);
+  if (to && !Number.isNaN(Date.parse(to))) sentAt.lte = new Date(to);
+  if (sentAt.gte || sentAt.lte) where.sentAt = sentAt;
+
+  const q = sp.get('q')?.trim();
+  if (q) {
+    where.OR = [
+      { position: { contains: q } },
+      { relation: { mentee: { fullName: { contains: q } } } },
+    ];
+  }
+
+  return where;
+}
+
+// Requisitions are linked by plain id (see prisma/schema.prisma), so their
+// titles are resolved separately — tenant-scoped, and null when the row is gone.
+async function withRequisitionTitles<T extends { requisitionId: string | null }>(offers: T[], orgId: string | null) {
+  const requisitionIds = [...new Set(offers.flatMap((offer) => offer.requisitionId ? [offer.requisitionId] : []))];
+  const requisitions = requisitionIds.length
+    ? await prisma.requisition.findMany({
+        where: { id: { in: requisitionIds }, ...(orgId ? { orgId } : {}) },
+        select: { id: true, title: true },
+      })
+    : [];
+  const titles = new Map(requisitions.map((requisition) => [requisition.id, requisition.title]));
+  return offers.map((offer) => ({ ...offer, requisitionTitle: offer.requisitionId ? titles.get(offer.requisitionId) ?? null : null }));
+}
+
 // GET ?relationId=&status=&companyId= — role-scoped offer list.
-//   ADMIN   — everything (optionally filtered).
+//   ADMIN   — everything, plus the /admin/offers index filters and server-side
+//             paging; the response carries total/page/pageSize (#1873).
 //   MENTEE  — only offers on relations where they are the mentee.
 //   COMPANY — only offers on their own companyId; no companyId => 403.
 export async function GET(request: Request) {
@@ -53,46 +121,61 @@ export async function GET(request: Request) {
   }
 
   return await withTenantScope(session, async () => {
-    const url = new URL(request.url);
-    const relationId = url.searchParams.get('relationId') || undefined;
-    const status = url.searchParams.get('status') || undefined;
+    const sp = new URL(request.url).searchParams;
+    const relationId = sp.get('relationId') || undefined;
 
-    const where: Prisma.OfferWhereInput = {};
+    const where: Prisma.OfferWhereInput = role === 'ADMIN' ? adminFilters(sp) : {};
     if (relationId) where.relationId = relationId;
-    if (status) where.status = status;
 
-    if (role === 'MENTEE') {
-      where.relation = { menteeId: session.user.id };
-    } else if (role === 'COMPANY') {
-      where.companyId = session.user.companyId as string;
+    if (role !== 'ADMIN') {
+      const status = sp.get('status') || undefined;
+      if (status) where.status = status;
+
+      if (role === 'MENTEE') {
+        where.relation = { menteeId: session.user.id };
+      } else {
+        where.companyId = session.user.companyId as string;
+      }
+      // A DRAFT hasn't been sent yet — it's an admin staging state, never
+      // visible to MENTEE/COMPANY, even indirectly through a list. Kept as a
+      // separate AND term so an explicit ?status=DRAFT cannot opt back into it.
+      where.AND = [{ status: { not: 'DRAFT' } }];
     }
-    // A DRAFT hasn't been sent yet — it's an admin staging state, never
-    // visible to MENTEE/COMPANY, even indirectly through a list. Kept as a
-    // separate AND term so an explicit ?status=DRAFT cannot opt back into it.
-    if (role !== 'ADMIN') where.AND = [{ status: { not: 'DRAFT' } }];
 
     const select = canSeeCompensation({ role, isOwnMenteeOffer: role === 'MENTEE' })
       ? { ...baseSelect, compensationNote: true }
       : baseSelect;
+    // The index shows who each offer is for, so ADMIN alone gets the mentee's
+    // name joined in. Deliberately not folded into baseSelect: POST reuses it,
+    // and no other role may gain a field because the admin list needed one.
+    const listSelect = role === 'ADMIN'
+      ? { ...select, relation: { select: { ...baseSelect.relation.select, mentee: { select: { id: true, fullName: true } } } } }
+      : select;
 
-    const offers = await prisma.offer.findMany({
-      where,
-      select,
-      orderBy: { createdAt: 'desc' },
-    });
+    const orgId = resolveOrgId(session);
 
-    const requisitionIds = [...new Set(offers.flatMap((offer) => offer.requisitionId ? [offer.requisitionId] : []))];
-    const requisitions = requisitionIds.length
-      ? await prisma.requisition.findMany({
-          where: { id: { in: requisitionIds }, ...(resolveOrgId(session) ? { orgId: resolveOrgId(session)! } : {}) },
-          select: { id: true, title: true },
-        })
-      : [];
-    const titles = new Map(requisitions.map((requisition) => [requisition.id, requisition.title]));
+    if (role !== 'ADMIN') {
+      const offers = await prisma.offer.findMany({ where, select: listSelect, orderBy: { createdAt: 'desc' } });
+      return NextResponse.json({ offers: await withRequisitionTitles(offers, orgId) });
+    }
 
-    return NextResponse.json({
-      offers: offers.map((offer) => ({ ...offer, requisitionTitle: offer.requisitionId ? titles.get(offer.requisitionId) ?? null : null })),
-    });
+    const sortParam = sp.get('sort');
+    const sort = SORTABLE.find((candidate) => candidate === sortParam) ?? 'createdAt';
+    const orderBy = { [sort]: sp.get('dir') === 'asc' ? 'asc' : 'desc' } as Prisma.OfferOrderByWithRelationInput;
+
+    // One relation's offer history is a short list the candidate panel renders
+    // whole (src/components/OfferManagementPanel.tsx), so ?relationId= keeps a
+    // full page instead of being cut at the index default.
+    const page = Math.max(1, Math.trunc(Number(sp.get('page'))) || 1);
+    const requested = Math.trunc(Number(sp.get('pageSize'))) || (relationId ? MAX_PAGE_SIZE : DEFAULT_PAGE_SIZE);
+    const pageSize = Math.min(Math.max(1, requested), MAX_PAGE_SIZE);
+
+    const [offers, total] = await Promise.all([
+      prisma.offer.findMany({ where, select: listSelect, orderBy, skip: (page - 1) * pageSize, take: pageSize }),
+      prisma.offer.count({ where }),
+    ]);
+
+    return NextResponse.json({ offers: await withRequisitionTitles(offers, orgId), total, page, pageSize });
   });
 }
 

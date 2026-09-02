@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText,
   BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, ClipboardCheck, Settings, Webhook, Search, ListChecks,
-  ShieldCheck, Activity, LifeBuoy, Network, Video, ClipboardList, GraduationCap, BriefcaseBusiness, GitMerge, Quote, FileSignature, Tag as TagIcon, UserPlus, MailOpen,
+  ShieldCheck, Activity, LifeBuoy, Network, Video, ClipboardList, GraduationCap, BriefcaseBusiness, GitMerge, Quote, FileSignature, Handshake, Tag as TagIcon, UserPlus, MailOpen,
   Braces,
   type LucideIcon,
 } from 'lucide-react';
@@ -19,6 +19,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/board', icon: Columns3, key: 'board' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
   { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' },
+  { href: '/admin/offers', icon: Handshake, key: 'offers' },
   { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' },
   { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' },
   { href: '/admin/candidates', icon: Users, key: 'candidates' },
@@ -61,6 +62,7 @@ export function AdminNav() {
   const [q, setQ] = useState('');
   const nav = t.nav as Record<string, string>;
   const [pendingApplications, setPendingApplications] = useState(0);
+  const [outstandingOffers, setOutstandingOffers] = useState(0);
 
   // Mentor applications are the one queue an admin is expected to drain, so the
   // nav carries its pending count. Refetched on navigation rather than on a
@@ -71,6 +73,18 @@ export function AdminNav() {
     fetch('/api/mentor-applications?status=PENDING')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setPendingApplications(d?.total ?? 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [pathname]);
+
+  // Sent-but-undecided offers are the second such queue (#1873). pageSize=1
+  // because only the count is wanted — the total comes from the server's
+  // count(), so one row is enough to carry it.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/offers?status=SENT&pageSize=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setOutstandingOffers(d?.total ?? 0); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [pathname]);
@@ -118,6 +132,16 @@ export function AdminNav() {
                 className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-red-500 dark:!text-white"
               >
                 {pendingApplications > 9 ? '9+' : pendingApplications}
+              </span>
+            )}
+            {l.key === 'offers' && outstandingOffers > 0 && (
+              <span
+                data-testid="admin-offers-badge"
+                title={t.offersAdmin.outstandingBadge.replace('{count}', String(outstandingOffers))}
+                aria-label={t.offersAdmin.outstandingBadge.replace('{count}', String(outstandingOffers))}
+                className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-amber-500 dark:!text-white"
+              >
+                {outstandingOffers > 9 ? '9+' : outstandingOffers}
               </span>
             )}
           </Link>
