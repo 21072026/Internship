@@ -37,10 +37,16 @@ const STATUS_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger
 };
 
 // The three questions asked every morning, as URL-shareable filter sets. Each
-// carries its own ordering: while a decision is pending the deadline is what
-// matters, once it is made the decision date is.
+// carries its own ordering: while a decision is pending it is how long the
+// candidate has been waiting, once it is made the decision date is.
+//
+// "Outstanding" deliberately orders by sentAt, not expiresAt: expiresAt is
+// optional and MySQL sorts NULLs first on ASC, so a deadline ordering would
+// lead with the offers that have no deadline at all and bury the ones expiring
+// soonest. Deadlines are what "expiring this week" is for, and that view
+// excludes null ones by construction (it filters on a date range).
 const PRESETS = [
-  { key: 'outstanding', params: { status: 'SENT', sort: 'expiresAt', dir: 'asc' } },
+  { key: 'outstanding', params: { status: 'SENT', sort: 'sentAt', dir: 'asc' } },
   { key: 'expiringThisWeek', params: { status: 'SENT', expiringWithinDays: '7', sort: 'expiresAt', dir: 'asc' } },
   { key: 'declined', params: { status: 'DECLINED', sort: 'decidedAt', dir: 'desc' } },
   { key: 'all', params: {} },

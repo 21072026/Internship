@@ -8,7 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { canSeeCompensation, isDeclineReasonCode, isOfferStatus } from '@/lib/offers';
 import { validateOfferRequisition } from '@/lib/requisitions';
-import { resolveOrgId } from '@/lib/orgScope';
+import { isIsolationEnforced, orgScoped, resolveOrgId } from '@/lib/orgScope';
 
 // Fields every authorized caller may see. compensationNote is added on top of
 // this only for ADMIN / the offer's own MENTEE — see canSeeCompensation().
@@ -124,7 +124,19 @@ export async function GET(request: Request) {
     const sp = new URL(request.url).searchParams;
     const relationId = sp.get('relationId') || undefined;
 
-    const where: Prisma.OfferWhereInput = role === 'ADMIN' ? adminFilters(sp) : {};
+    const orgId = resolveOrgId(session);
+    // Offer is a child model, so it is deliberately absent from orgContext's
+    // TENANT_MODELS — the central middleware expects children to be reached
+    // through a scoped parent, and this handler queries Offer directly. The
+    // admin index (and the nav badge that reads its `total`) would therefore
+    // span every tenant, so scope it here, the same way the requisition lookup
+    // below already does. Gated on the enforcement flag like the middleware
+    // itself: with it off the deployment is single-tenant and must stay
+    // byte-for-byte unchanged, including for a legacy row whose orgId was never
+    // backfilled and which would otherwise vanish from the only screen listing it.
+    const where: Prisma.OfferWhereInput = role === 'ADMIN'
+      ? (isIsolationEnforced() ? orgScoped(adminFilters(sp), orgId) : adminFilters(sp))
+      : {};
     if (relationId) where.relationId = relationId;
 
     if (role !== 'ADMIN') {
@@ -152,8 +164,6 @@ export async function GET(request: Request) {
       ? { ...select, relation: { select: { ...baseSelect.relation.select, mentee: { select: { id: true, fullName: true } } } } }
       : select;
 
-    const orgId = resolveOrgId(session);
-
     if (role !== 'ADMIN') {
       const offers = await prisma.offer.findMany({ where, select: listSelect, orderBy: { createdAt: 'desc' } });
       return NextResponse.json({ offers: await withRequisitionTitles(offers, orgId) });
@@ -161,7 +171,13 @@ export async function GET(request: Request) {
 
     const sortParam = sp.get('sort');
     const sort = SORTABLE.find((candidate) => candidate === sortParam) ?? 'createdAt';
-    const orderBy = { [sort]: sp.get('dir') === 'asc' ? 'asc' : 'desc' } as Prisma.OfferOrderByWithRelationInput;
+    const dir = sp.get('dir') === 'asc' ? 'asc' : 'desc';
+    // Every sortable column is nullable (expiresAt/sentAt/decidedAt) or can tie
+    // (createdAt), and a single-column ORDER BY leaves the order among tied rows
+    // unspecified — two independent LIMIT/OFFSET statements may then repeat a row
+    // on both pages and drop another from all of them. id is unique, so a second
+    // key makes the order total and the paging deterministic.
+    const orderBy = [{ [sort]: dir }, { id: 'asc' }] as Prisma.OfferOrderByWithRelationInput[];
 
     // One relation's offer history is a short list the candidate panel renders
     // whole (src/components/OfferManagementPanel.tsx), so ?relationId= keeps a
