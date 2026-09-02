@@ -117,6 +117,26 @@ test('admin creates an organization and it appears in the list', async ({ page }
     });
     expect(badUrl.status()).toBe(400);
 
+    // OIDC (#1537): the login route always builds a SAML request, so a saved
+    // OIDC config would lock the tenant out. Refused at the write boundary —
+    // both on its own and as part of an otherwise-complete, enabling payload.
+    for (const data of [
+      { id: org!.id, ssoProvider: 'oidc' },
+      {
+        id: org!.id,
+        ssoEnabled: true,
+        ssoProvider: 'oidc',
+        ssoIssuer: 'https://idp.test/metadata',
+        ssoEntryPoint: 'https://idp.test/authorize',
+      },
+    ]) {
+      const res = await page.request.patch('/api/admin/organizations', { data });
+      expect(res.status()).toBe(400);
+      expect((await res.json()).error).toMatch(/OIDC single sign-on is not supported yet/i);
+    }
+    // …and nothing was persisted: the provider is still unset.
+    expect((await prisma.organization.findUnique({ where: { id: org!.id } }))?.ssoProvider).toBeNull();
+
     // A complete SAML config enables and reports active.
     const goodSso = await page.request.patch('/api/admin/organizations', {
       data: {
