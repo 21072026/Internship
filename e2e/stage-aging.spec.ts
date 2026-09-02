@@ -59,3 +59,63 @@ test('stage aging reflects real per-stage durations from transitions', async ({ 
     await cleanupByEmail(menteeEmail);
   }
 });
+
+// #1427: the card used to print the completed-visit count as "N candidates",
+// so /admin/analytics reported two different figures for the same stage (the
+// funnel says who sits there now, aging says who has been through). The payload
+// now carries both numbers, and the card names each of them.
+test('stage aging separates completed visits from distinct candidates', async ({ page }) => {
+  const mentorEmail = uniqueEmail('sav-mentor');
+  const menteeEmail = uniqueEmail('sav-mentee');
+  const mentor = await seedUser(mentorEmail, 'Pass1234!', 'MENTOR', 'SAV Mentor');
+  const mentee = await seedUser(menteeEmail, 'Pass1234!', 'MENTEE', 'SAV Mentee');
+  const now = Date.now();
+  const rel = await prisma.mentorshipRelation.create({
+    data: {
+      mentorId: mentor.id,
+      menteeId: mentee.id,
+      status: 'ACTIVE',
+      pipelineStatus: 'INTERVIEW_PENDING_250',
+      startDate: new Date(now - 40 * DAY),
+    },
+  });
+  // ONE candidate visiting APPLICATION_100 TWICE: 100 → 250 → 100 → 250.
+  await prisma.statusChange.createMany({
+    data: [
+      { relationId: rel.id, fromStatus: 'APPLICATION_100', toStatus: 'INTERVIEW_PENDING_250', changedById: mentor.id, createdAt: new Date(now - 36 * DAY) },
+      { relationId: rel.id, fromStatus: 'INTERVIEW_PENDING_250', toStatus: 'APPLICATION_100', changedById: mentor.id, createdAt: new Date(now - 30 * DAY) },
+      { relationId: rel.id, fromStatus: 'APPLICATION_100', toStatus: 'INTERVIEW_PENDING_250', changedById: mentor.id, createdAt: new Date(now - 24 * DAY) },
+    ],
+  });
+
+  try {
+    await page.goto('/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', ADMIN_EMAIL);
+    await page.fill('input[type="password"]', ADMIN_PASSWORD);
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => !u.pathname.includes('/auth/signin'), { timeout: 20_000 });
+
+    const data = await (await page.request.get('/api/admin/analytics/aging')).json();
+    const rows: { pipelineStatus: string; visits: number; candidates: number }[] = data.stageAging;
+    // Every row: a visit count can never be below the number of people behind it.
+    for (const r of rows) {
+      expect(r.visits).toBeGreaterThanOrEqual(r.candidates);
+    }
+    // Our re-entering mentee adds 2 visits but only 1 candidate, so on this
+    // stage the two numbers MUST differ — whatever else the database holds.
+    const application = rows.find((r) => r.pipelineStatus === 'APPLICATION_100');
+    expect(application).toBeTruthy();
+    expect(application!.visits).toBeGreaterThan(application!.candidates);
+
+    // The card renders both, each with its own label.
+    await page.goto('/admin/analytics');
+    const row = page.getByTestId('stage-aging-row-APPLICATION_100');
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(row).toContainText(/transitions|geçiş|Übergänge/);
+    await expect(row).toContainText(/distinct candidates|ayrı aday|verschiedene Kandidaten/);
+  } finally {
+    await prisma.statusChange.deleteMany({ where: { relationId: rel.id } });
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(menteeEmail);
+  }
+});
