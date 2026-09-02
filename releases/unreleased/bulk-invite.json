@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Bulk invitations**: `/admin/invite/bulk` and `POST /api/admin/invite/bulk` turn one pasted roster (plain addresses or `email,fullName,role,label` CSV) into invitations — a mandatory dry run reports a per-row verdict from the same validator the real run uses, sending goes through a bounded-concurrency queue over the shared single-invite creation path, and ADMIN seats, reserved demo/example domains and over-plan rows are refused.",
+  "notes": {
+    "en": ["Invite a whole programme at once: paste a list of addresses, check the row-by-row preview, and send every invitation with one click."],
+    "tr": ["Tüm programı tek seferde davet et: adres listesini yapıştır, satır satır önizlemeyi kontrol et ve bütün davetleri tek tıkla gönder."],
+    "de": ["Ein ganzes Programm auf einmal einladen: Adressliste einfügen, die Vorschau Zeile für Zeile prüfen und alle Einladungen mit einem Klick senden."]
+  }
+}

@@ -2,14 +2,13 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { logActivity } from '@/lib/activity';
-import { sendInvitationEmail } from '@/services/emailService';
+import { createInvitation } from '@/lib/inviteCreate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { isProjectOwner } from '@/lib/projectAccess';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { z } from 'zod';
-import crypto from 'crypto';
 
 // Email invitations (#51).
 //
@@ -36,7 +35,7 @@ const inviteSchema = z.object({
   // non-empty value still has to be a real address.
   email: z.union([z.string().email('Invalid email'), z.literal('')]).optional().nullable(),
   // The sender's private note about the link — how they recognise it later.
-  label: z.string().trim().max(120).optional().nullable(),
+  label: z.string().trim().max(TEXT_LIMITS.invitationLabel).optional().nullable(),
   role: z.enum(['MENTOR', 'MENTEE', 'ADMIN']),
   mentorId: z.string().min(1).optional().nullable(),
   menteeId: z.string().min(1).optional().nullable(),
@@ -155,59 +154,26 @@ export async function POST(request: Request) {
         }
       }
 
-      const token = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const invitation = await prisma.invitationToken.create({
-        data: {
-          token,
-          email,
-          label,
-          role,
-          expiresAt,
-          invitedById: session.user.id,
-          orgId: resolveOrgId(session),
-          mentorId,
-          menteeId,
-          projectId,
-        },
-      });
-
-      await logActivity({
-        action: 'invite.created',
-        actorId: session.user.id,
-        actorEmail: session.user.email ?? null,
-        targetType: 'invitation',
-        targetId: invitation.id,
-        detail: `${email ?? label ?? 'link'} · ${role}`,
+      // Shared with the bulk endpoint (#2070) so the token, the tenant, the
+      // auto-pairing pointers and the mail template have exactly one
+      // implementation. A failed send is reported, never fatal: the token is
+      // already persisted and the admin can still share registerUrl by hand.
+      const { invitationId, registerUrl, emailSent } = await createInvitation({
+        actor: { id: session.user.id, email: session.user.email },
+        orgId: resolveOrgId(session),
+        email,
+        label,
+        role,
+        mentorId,
+        menteeId,
+        projectId,
         request,
       });
-
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const registerUrl = `${appUrl}/auth/register?token=${token}`;
-
-      // The token is already persisted, so a failed/blocked email must not lose the
-      // invitation — the admin can still share registerUrl manually. Report delivery
-      // status instead of 500-ing.
-      let emailSent = false;
-      if (email) {
-        try {
-          // Was `!!process.env.SMTP_USER` — a guess that happened to be right
-          // about a missing SMTP_USER and wrong about demo mode, where nothing
-          // is delivered either. The transport now reports what it did, so
-          // there is one source of truth and a future skip reason (a
-          // suppression list, say) is covered without touching this line.
-          emailSent = (await sendInvitationEmail({ to: email, token, role, orgId: resolveOrgId(session) })) === 'SENT';
-        } catch (mailErr) {
-          console.error('Invitation email failed (token still valid):', mailErr);
-        }
-      }
 
       return NextResponse.json(
         {
           message: emailSent ? 'Invitation sent' : 'Invitation created (share the link manually)',
-          invitationId: invitation.id,
+          invitationId,
           registerUrl,
           emailSent,
           warnings,
