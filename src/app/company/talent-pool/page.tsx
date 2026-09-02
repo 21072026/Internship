@@ -6,7 +6,7 @@ import { Search, Sparkles, ExternalLink, Users } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useT } from '@/i18n/client';
 
 interface Candidate {
@@ -124,11 +124,11 @@ export default function TalentPoolPage() {
           data-empty-kind={hasFilters ? 'no-results' : 'empty-pool'}
         >
           <EmptyState
+            testId={hasFilters ? 'talent-pool-filtered' : 'talent-pool'}
             icon={hasFilters ? Search : Users}
             title={hasFilters ? tp.noResultsTitle : tp.emptyTitle}
-            description={hasFilters ? tp.noResultsDescription : tp.emptyDescription}
-            actionLabel={hasFilters ? tp.clearFilters : undefined}
-            actionOnClick={hasFilters ? () => { setQ(''); setSkill(''); } : undefined}
+            body={hasFilters ? tp.noResultsDescription : tp.emptyDescription}
+            action={hasFilters ? { label: tp.clearFilters, onClick: () => { setQ(''); setSkill(''); } } : undefined}
           />
         </Card>
       ) : (

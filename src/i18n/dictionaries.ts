@@ -2759,9 +2759,71 @@ const en = {
       assignMentorship: 'Assign a mentorship',
     },
   },
-  emptyState: {
-    candidates: 'No mentees match yet. Invite people or share a public application link.',
-    inviteCta: 'Send an invitation',
+  // Empty screens are the first thing a brand-new tenant sees. Each entry is
+  // one screen: a title, one sentence of orientation plus one of what happens
+  // next, and — where the viewer's role actually allows it — a next step.
+  emptyStates: {
+    board: {
+      title: 'Your board is empty',
+      adminBody: 'Every mentorship in the programme shows up here as a card, in the stage it has reached. Invite the first people and their cards appear as soon as a mentor is assigned.',
+      adminCta: 'Send an invitation',
+      mentorBody: 'Your mentees appear here as cards once an admin assigns them to you. Nothing for you to do yet — the first assignment fills this board.',
+    },
+    boardStage: {
+      title: 'Nothing at this stage',
+      body: 'Cards arrive here when someone reaches this step of the pipeline. Pick another stage above to see where everyone is right now.',
+    },
+    candidates: {
+      title: 'No candidates yet',
+      adminBody: 'Everyone who applies or accepts an invitation lands in this list, together with their mentor, company and stage. Send the first invitation and the list fills itself.',
+      adminCta: 'Send an invitation',
+    },
+    candidatesArchived: {
+      title: 'Nothing archived',
+      body: 'Candidates you archive are kept here instead of being deleted, so a closed file can always be reopened. Nobody has been archived yet.',
+    },
+    companies: {
+      title: 'No companies yet',
+      adminBody: 'Companies are where the internships happen: once one exists you can attach its openings, its contact people and the mentees placed there.',
+      adminCta: 'Add the first company',
+    },
+    requisitions: {
+      title: 'No open positions yet',
+      adminBody: 'A requisition is one position at one company, with its headcount, skills and owner. Create one and candidates can be matched against it.',
+      adminCta: 'Create a position',
+      companyBody: 'A requisition tells the mentors which position you are hiring for, how many people you need and which skills matter. Create one and matching candidates can be proposed to you.',
+      companyCta: 'Create a position',
+    },
+    interviewRequests: {
+      title: 'No interview requests',
+      adminBody: 'When a company asks to meet a candidate from the talent pool, the request waits here until a time is agreed. Keep at least one position open so companies have something to ask about.',
+      adminCta: 'Review open positions',
+      mentorBody: 'When a company asks to meet one of your mentees, the request appears here with the proposed times, and you arrange the meeting from there.',
+    },
+    weeklyReports: {
+      title: 'No weekly reports yet',
+      menteeBody: 'A weekly report is a short note about what you did, how long it took and what is blocking you. Write the first one in the form above so your mentor can comment on it.',
+      mentorBody: 'Weekly reports appear here as your mentee submits them, newest first, and you can approve one or ask for changes. Nothing has been submitted yet.',
+    },
+    documents: {
+      title: 'No documents yet',
+      adminBody: 'Documents uploaded for this person — CV, contracts, certificates — are listed here with their version history. Upload the first one below.',
+      mentorBody: 'Your mentee has not uploaded anything yet. Their CV, contracts and certificates appear here as they arrive, with the version history kept.',
+      menteeBody: 'This is where your CV, contracts and certificates live. Upload the first one below and your mentor can see it right away.',
+    },
+    documentTemplates: {
+      title: 'No custom templates yet',
+      body: 'These are the template files you upload yourself, alongside the curated library. Upload one and it becomes available to everyone in the programme.',
+    },
+    portalGoals: {
+      title: 'No mentor assigned yet',
+      menteeBody: 'Goals, evaluations and weekly reports all belong to a mentorship, so they open up once an admin assigns you a mentor. A complete profile makes that match faster.',
+      menteeCta: 'Complete your profile',
+    },
+    todos: {
+      title: 'Nothing on your list',
+      body: 'This list holds what a mentor handed you, what your projects need and whatever you add yourself. Write the first line in the box above.',
+    },
   },
   search: {
     placeholder: 'Search people, companies…',
@@ -6274,9 +6336,71 @@ const tr: Dict = {
       assignMentorship: 'Mentorluk ata',
     },
   },
-  emptyState: {
-    candidates: 'Henüz eşleşen mentee yok. Kişileri davet et veya public başvuru linki paylaş.',
-    inviteCta: 'Davet gönder',
+  // Boş ekranlar, yepyeni bir kiracının ilk gördüğü şeydir. Her giriş bir
+  // ekran: başlık, bir cümle yön ve bir cümle bundan sonra ne olacağı — ve
+  // rolün gerçekten izin verdiği yerde bir sonraki adım.
+  emptyStates: {
+    board: {
+      title: 'Panon boş',
+      adminBody: 'Programdaki her mentorluk burada, ulaştığı aşamada bir kart olarak görünür. İlk kişileri davet et; bir mentor atandığı anda kartları burada belirir.',
+      adminCta: 'Davet gönder',
+      mentorBody: 'Bir yönetici sana mentee atadığında burada kart olarak görünecekler. Şimdilik yapman gereken bir şey yok — ilk atama bu panoyu doldurur.',
+    },
+    boardStage: {
+      title: 'Bu aşamada kimse yok',
+      body: 'Biri pipeline’ın bu adımına ulaştığında kartı buraya gelir. Herkesin şu an nerede olduğunu görmek için yukarıdan başka bir aşama seç.',
+    },
+    candidates: {
+      title: 'Henüz aday yok',
+      adminBody: 'Başvuran ya da daveti kabul eden herkes; mentoru, şirketi ve aşamasıyla birlikte bu listeye düşer. İlk daveti gönder, liste kendiliğinden dolsun.',
+      adminCta: 'Davet gönder',
+    },
+    candidatesArchived: {
+      title: 'Arşivde bir şey yok',
+      body: 'Arşivlediğin adaylar silinmek yerine burada tutulur; kapanmış bir dosya her zaman yeniden açılabilir. Henüz kimse arşivlenmemiş.',
+    },
+    companies: {
+      title: 'Henüz şirket yok',
+      adminBody: 'Stajlar şirketlerde yapılır: bir şirket eklediğinde ona açık pozisyonlarını, iletişim kişilerini ve oraya yerleşen mentee’leri bağlayabilirsin.',
+      adminCta: 'İlk şirketi ekle',
+    },
+    requisitions: {
+      title: 'Henüz açık pozisyon yok',
+      adminBody: 'Bir talep, tek bir şirketteki tek bir pozisyondur: kaç kişi, hangi yetkinlikler, kim sorumlu. Birini oluştur ki adaylar onunla eşleştirilebilsin.',
+      adminCta: 'Pozisyon oluştur',
+      companyBody: 'Bir talep, mentorlara hangi pozisyon için işe aldığını, kaç kişiye ihtiyacın olduğunu ve hangi yetkinliklerin önemli olduğunu anlatır. Birini oluştur ki sana uygun adaylar önerilebilsin.',
+      companyCta: 'Pozisyon oluştur',
+    },
+    interviewRequests: {
+      title: 'Görüşme talebi yok',
+      adminBody: 'Bir şirket yetenek havuzundaki bir adayla tanışmak istediğinde talebi, saat kararlaştırılana kadar burada bekler. En az bir pozisyonu açık tut ki şirketlerin soracak bir şeyi olsun.',
+      adminCta: 'Açık pozisyonlara bak',
+      mentorBody: 'Bir şirket mentee’lerinden biriyle görüşmek istediğinde talep, önerilen saatlerle birlikte burada belirir; görüşmeyi buradan ayarlarsın.',
+    },
+    weeklyReports: {
+      title: 'Henüz haftalık rapor yok',
+      menteeBody: 'Haftalık rapor; ne yaptığını, ne kadar sürdüğünü ve seni neyin engellediğini anlatan kısa bir nottur. İlkini yukarıdaki formda yaz ki mentorun yorum yapabilsin.',
+      mentorBody: 'Mentee’n rapor gönderdikçe en yeniden başlayarak burada listelenir; onaylayabilir ya da değişiklik isteyebilirsin. Henüz gönderilmiş bir rapor yok.',
+    },
+    documents: {
+      title: 'Henüz belge yok',
+      adminBody: 'Bu kişi için yüklenen belgeler — CV, sözleşmeler, sertifikalar — sürüm geçmişleriyle birlikte burada listelenir. İlkini aşağıdan yükle.',
+      mentorBody: 'Mentee’n henüz bir şey yüklemedi. CV’si, sözleşmeleri ve sertifikaları geldikçe sürüm geçmişiyle birlikte burada görünecek.',
+      menteeBody: 'CV’n, sözleşmelerin ve sertifikaların burada durur. İlkini aşağıdan yükle; mentorun anında görebilsin.',
+    },
+    documentTemplates: {
+      title: 'Henüz özel şablon yok',
+      body: 'Bunlar, hazır kütüphanenin yanına kendi yüklediğin şablon dosyalarıdır. Bir tane yükle; programdaki herkesin kullanımına açılsın.',
+    },
+    portalGoals: {
+      title: 'Henüz mentor atanmadı',
+      menteeBody: 'Hedefler, değerlendirmeler ve haftalık raporlar bir mentorluğa bağlıdır; bir yönetici sana mentor atadığında açılırlar. Eksiksiz bir profil bu eşleşmeyi hızlandırır.',
+      menteeCta: 'Profilini tamamla',
+    },
+    todos: {
+      title: 'Listende bir şey yok',
+      body: 'Bu liste; bir mentorun sana verdiklerini, projelerinin ihtiyaç duyduklarını ve kendi eklediklerini bir arada tutar. İlk satırı yukarıdaki kutuya yaz.',
+    },
   },
   search: {
     placeholder: 'Kişi, şirket ara…',
@@ -9785,9 +9909,71 @@ const de: Dict = {
       assignMentorship: 'Weise ein Mentoring zu',
     },
   },
-  emptyState: {
-    candidates: 'Noch keine passenden Mentees. Lade Leute ein oder teile einen öffentlichen Bewerbungslink.',
-    inviteCta: 'Einladung senden',
+  // Leere Bildschirme sind das Erste, was ein ganz neuer Mandant sieht. Jeder
+  // Eintrag ist ein Bildschirm: Titel, ein Satz Orientierung und ein Satz dazu,
+  // was als Nächstes passiert — und, wo die Rolle es zulässt, ein nächster Schritt.
+  emptyStates: {
+    board: {
+      title: 'Dein Board ist leer',
+      adminBody: 'Jede Mentorschaft im Programm erscheint hier als Karte, in der Phase, die sie erreicht hat. Lade die ersten Leute ein — sobald ein Mentor zugewiesen ist, taucht ihre Karte auf.',
+      adminCta: 'Einladung senden',
+      mentorBody: 'Deine Mentees erscheinen hier als Karten, sobald ein Admin sie dir zuweist. Für dich gibt es noch nichts zu tun — die erste Zuweisung füllt dieses Board.',
+    },
+    boardStage: {
+      title: 'Nichts in dieser Phase',
+      body: 'Karten landen hier, sobald jemand diesen Schritt der Pipeline erreicht. Wähle oben eine andere Phase, um zu sehen, wo alle gerade stehen.',
+    },
+    candidates: {
+      title: 'Noch keine Kandidaten',
+      adminBody: 'Wer sich bewirbt oder eine Einladung annimmt, landet in dieser Liste — mit Mentor, Unternehmen und Phase. Sende die erste Einladung, dann füllt sich die Liste von selbst.',
+      adminCta: 'Einladung senden',
+    },
+    candidatesArchived: {
+      title: 'Nichts archiviert',
+      body: 'Archivierte Kandidaten werden hier aufbewahrt statt gelöscht, damit eine geschlossene Akte jederzeit wieder geöffnet werden kann. Bisher wurde niemand archiviert.',
+    },
+    companies: {
+      title: 'Noch keine Unternehmen',
+      adminBody: 'In Unternehmen finden die Praktika statt: sobald eines existiert, kannst du ihm Stellen, Ansprechpersonen und die dort platzierten Mentees zuordnen.',
+      adminCta: 'Erstes Unternehmen anlegen',
+    },
+    requisitions: {
+      title: 'Noch keine offenen Stellen',
+      adminBody: 'Eine Anforderung ist eine Stelle in einem Unternehmen — mit Anzahl, Skills und verantwortlicher Person. Lege eine an, damit Kandidaten dazu gematcht werden können.',
+      adminCta: 'Stelle anlegen',
+      companyBody: 'Eine Anforderung sagt den Mentoren, für welche Stelle ihr einstellt, wie viele Leute ihr braucht und welche Skills zählen. Lege eine an, damit euch passende Kandidaten vorgeschlagen werden.',
+      companyCta: 'Stelle anlegen',
+    },
+    interviewRequests: {
+      title: 'Keine Interviewanfragen',
+      adminBody: 'Wenn ein Unternehmen jemanden aus dem Talentpool kennenlernen möchte, wartet die Anfrage hier, bis ein Termin steht. Halte mindestens eine Stelle offen, damit Unternehmen überhaupt anfragen können.',
+      adminCta: 'Offene Stellen ansehen',
+      mentorBody: 'Wenn ein Unternehmen einen deiner Mentees treffen möchte, erscheint die Anfrage hier samt Terminvorschlägen, und du vereinbarst das Treffen von dort aus.',
+    },
+    weeklyReports: {
+      title: 'Noch keine Wochenberichte',
+      menteeBody: 'Ein Wochenbericht ist eine kurze Notiz darüber, was du getan hast, wie lange es gedauert hat und was dich blockiert. Schreibe den ersten im Formular oben, damit dein Mentor ihn kommentieren kann.',
+      mentorBody: 'Wochenberichte erscheinen hier, sobald dein Mentee sie einreicht — die neuesten zuerst — und du kannst freigeben oder Änderungen erbitten. Bisher wurde nichts eingereicht.',
+    },
+    documents: {
+      title: 'Noch keine Dokumente',
+      adminBody: 'Für diese Person hochgeladene Dokumente — Lebenslauf, Verträge, Zertifikate — stehen hier mit ihrer Versionshistorie. Lade unten das erste hoch.',
+      mentorBody: 'Dein Mentee hat noch nichts hochgeladen. Lebenslauf, Verträge und Zertifikate erscheinen hier, sobald sie kommen, samt Versionshistorie.',
+      menteeBody: 'Hier liegen dein Lebenslauf, deine Verträge und deine Zertifikate. Lade unten das erste hoch, dann sieht dein Mentor es sofort.',
+    },
+    documentTemplates: {
+      title: 'Noch keine eigenen Vorlagen',
+      body: 'Das sind die Vorlagen, die du selbst hochlädst — neben der kuratierten Bibliothek. Lade eine hoch, und sie steht allen im Programm zur Verfügung.',
+    },
+    portalGoals: {
+      title: 'Noch kein Mentor zugewiesen',
+      menteeBody: 'Ziele, Bewertungen und Wochenberichte gehören zu einer Mentorschaft und öffnen sich, sobald ein Admin dir einen Mentor zuweist. Ein vollständiges Profil beschleunigt dieses Matching.',
+      menteeCta: 'Profil vervollständigen',
+    },
+    todos: {
+      title: 'Nichts auf deiner Liste',
+      body: 'Diese Liste hält zusammen, was dir ein Mentor gegeben hat, was deine Projekte brauchen und was du selbst notierst. Schreibe die erste Zeile in das Feld oben.',
+    },
   },
   search: {
     placeholder: 'Personen, Unternehmen suchen…',
