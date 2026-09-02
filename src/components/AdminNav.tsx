@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText,
   BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, ClipboardCheck, Settings, Webhook, Search, ListChecks,
   ShieldCheck, Activity, LifeBuoy, Network, Video, ClipboardList, GraduationCap, BriefcaseBusiness, GitMerge, Quote, FileSignature, Tag as TagIcon, UserPlus, MailOpen,
-  Braces,
+  Braces, MailCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
@@ -53,6 +53,9 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/organizations', icon: Network, key: 'organizations' },
   { href: '/admin/settings', icon: Settings, key: 'settings' },
   { href: '/admin/invite', icon: Mail, key: 'invite' },
+  // The board that answers "who actually joined?" (#2071), next to the page
+  // that sends the invitations in the first place.
+  { href: '/admin/invitations', icon: MailCheck, key: 'invitations' },
 ];
 
 export function AdminNav() {
