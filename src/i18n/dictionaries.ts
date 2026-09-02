@@ -3280,7 +3280,12 @@ const en = {
     functionalRoles: { DEVELOPER: 'Developer', TESTER: 'Tester', MARKETING: 'Marketing' },
     tasksCompleted: '{n} tasks completed',
   },
-  releaseNotes: { title: 'What’s new', back: 'Back to home' },
+  releaseNotes: {
+    title: 'What’s new',
+    back: 'Back to home',
+    feed: 'RSS feed',
+    feedDescription: 'New features and improvements in Internship CRM.',
+  },
   consentRenew: {
     title: 'Keep your data',
     body: 'Confirm that you still want us to store your data (profile, CV and interaction history). This renews your consent.',
@@ -6946,7 +6951,12 @@ const tr: Dict = {
     functionalRoles: { DEVELOPER: 'Geliştirici', TESTER: 'Test', MARKETING: 'Pazarlama' },
     tasksCompleted: '{n} görev tamamlandı',
   },
-  releaseNotes: { title: 'Yenilikler', back: 'Ana sayfaya dön' },
+  releaseNotes: {
+    title: 'Yenilikler',
+    back: 'Ana sayfaya dön',
+    feed: 'RSS akışı',
+    feedDescription: 'Internship CRM’deki yeni özellikler ve iyileştirmeler.',
+  },
   consentRenew: {
     title: 'Verini sakla',
     body: 'Verini (profil, CV ve etkileşim geçmişi) saklamamıza devam etmek istediğini onayla. Bu, rızanı yeniler.',
@@ -10608,7 +10618,12 @@ const de: Dict = {
     functionalRoles: { DEVELOPER: 'Entwicklung', TESTER: 'Test', MARKETING: 'Marketing' },
     tasksCompleted: '{n} Aufgaben abgeschlossen',
   },
-  releaseNotes: { title: 'Neuigkeiten', back: 'Zurück zur Startseite' },
+  releaseNotes: {
+    title: 'Neuigkeiten',
+    back: 'Zurück zur Startseite',
+    feed: 'RSS-Feed',
+    feedDescription: 'Neue Funktionen und Verbesserungen im Internship CRM.',
+  },
   consentRenew: {
     title: 'Deine Daten behalten',
     body: 'Bestätige, dass wir deine Daten (Profil, Lebenslauf und Interaktionsverlauf) weiter speichern dürfen. Damit erneuerst du deine Einwilligung.',
