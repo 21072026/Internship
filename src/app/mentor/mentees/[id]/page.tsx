@@ -250,286 +250,285 @@ export default function MenteeDetailPage() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Mentee info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.mentor.profile}</CardTitle>
-          </CardHeader>
-          <div className="space-y-3">
-            {relation.mentee.university && (
-              <div>
-                <p className="text-xs text-gray-500">{t.candidateDetail.university}</p>
-                <p className="text-sm text-gray-900">{relation.mentee.university}</p>
+        {/* Who this mentee is and how they got here: reference material the
+            mentor reads while working the panels beside it. It stays first in
+            the DOM so a phone still shows the profile above the working
+            panels, and it is placed in the third column from `lg` up. Every
+            working panel used to carry `lg:col-span-2` in this three-column
+            grid, so nothing was ever placed in the third column and the right
+            third of the page was empty top to bottom (#1370). */}
+        <aside className="space-y-6 lg:col-start-3 lg:row-start-1" data-testid="mentee-detail-sidebar">
+          {/* Mentee info */}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t.mentor.profile}</CardTitle>
+            </CardHeader>
+            <div className="space-y-3">
+              {relation.mentee.university && (
+                <div>
+                  <p className="text-xs text-gray-500">{t.candidateDetail.university}</p>
+                  <p className="text-sm text-gray-900">{relation.mentee.university}</p>
+                </div>
+              )}
+              {relation.mentee.department && (
+                <div>
+                  <p className="text-xs text-gray-500">{t.candidateDetail.department}</p>
+                  <p className="text-sm text-gray-900">{relation.mentee.department}</p>
+                </div>
+              )}
+              {relation.mentee.graduationYear && (
+                <div>
+                  <p className="text-xs text-gray-500">{t.candidateDetail.graduationYear}</p>
+                  <p className="text-sm text-gray-900">{relation.mentee.graduationYear}</p>
+                </div>
+              )}
+              {relation.mentee.phone && (
+                <div>
+                  <p className="text-xs text-gray-500">{t.candidateDetail.phone}</p>
+                  <p className="text-sm text-gray-900">{relation.mentee.phone}</p>
+                </div>
+              )}
+              {relation.mentee.whatsapp && (
+                <div>
+                  <p className="text-xs text-gray-500">{t.candidateDetail.whatsapp}</p>
+                  <p className="text-sm text-gray-900">{relation.mentee.whatsapp}</p>
+                </div>
+              )}
+              {(relation.mentee.whatsapp || relation.mentee.phone) && (
+                <ContactActions
+                  relationId={id}
+                  phone={relation.mentee.whatsapp || relation.mentee.phone || ''}
+                  onLogged={fetchRelation}
+                />
+              )}
+              {relation.mentee.city && (
+                <div>
+                  <p className="text-xs text-gray-500">{t.candidateDetail.city}</p>
+                  <p className="text-sm text-gray-900">{relation.mentee.city}</p>
+                </div>
+              )}
+              {relation.mentee.birthDate && (
+                <div>
+                  <p className="text-xs text-gray-500">{t.candidateDetail.birthDate}</p>
+                  <p className="text-sm text-gray-900">
+                    {formatDate(relation.mentee.birthDate, locale)}
+                  </p>
+                </div>
+              )}
+              {/* Who brought this mentee in — one line, whether that is a
+                  registered person, a source, or the legacy free text (#1296). */}
+              {referrerLabel(relation.mentee) && (
+                <div>
+                  <p className="text-xs text-gray-500">{t.referrer.label}</p>
+                  <p className="text-sm text-gray-900" data-testid="mentee-referrer">{referrerLabel(relation.mentee)}</p>
+                </div>
+              )}
+              {relation.mentee.skills.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">{t.candidateDetail.skills}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {relation.mentee.skills.map((skill) => (
+                      <Badge key={skill} variant="info" className="text-xs">{skill}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {relation.mentee.cvUrl && (
+                <a
+                  href={cvViewHref(relation.mentee.cvUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  {t.candidateDetail.viewCv}
+                </a>
+              )}
+              {relation.company && (
+                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg">
+                  <p className="text-xs text-blue-500 dark:text-blue-400 font-medium mb-1">{t.candidateDetail.company}</p>
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">{relation.company.name}</p>
+                  {relation.company.industry && (
+                    <p className="text-xs text-blue-700 dark:text-blue-300">{relation.company.industry}</p>
+                  )}
+                  {relation.companyInterest && (
+                    <div className="mt-2 pt-2 border-t border-blue-100 dark:border-blue-900">
+                      <Badge variant={relation.companyInterest.status === 'PASS' ? 'danger' : relation.companyInterest.status === 'SHORTLISTED' ? 'success' : 'info'}>
+                        {t.candidateDetail.companyInterest[relation.companyInterest.status.toLowerCase() as 'interested' | 'shortlisted' | 'pass']}
+                      </Badge>
+                      {relation.companyInterest.note && (
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1.5 italic">“{relation.companyInterest.note}”</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Pipeline stage history */}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t.mentor.stageHistory} ({relation.statusChanges.length})</CardTitle>
+            </CardHeader>
+            {relation.statusChanges.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">{t.mentor.noStageChanges}</p>
+            ) : (
+              <ol className="space-y-3">
+                {relation.statusChanges.map((sc) => (
+                  <li key={sc.id} className="text-sm border-l-2 border-blue-100 pl-3">
+                    <p className="text-gray-700">
+                      <span className="text-gray-400">{label(sc.fromStatus)}</span>
+                      {' → '}
+                      <span className="font-medium text-gray-900">{label(sc.toStatus)}</span>
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {sc.changedBy.fullName} · {formatDateTime(sc.createdAt, locale)}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Card>
+        </aside>
+
+        {/* The working panels: two of the three columns, stacked in reading
+            order. `space-y-6` replaces the grid gap they used to inherit. */}
+        <div className="space-y-6 lg:col-start-1 lg:row-start-1 lg:col-span-2" data-testid="mentee-detail-main">
+          {/* Interactions */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>{t.mentor.interactionLog} ({relation.interactions.length})</CardTitle>
+                <Button size="sm" onClick={() => setShowForm(!showForm)}>
+                  <Plus className="h-4 w-4" />
+                  {t.mentor.addLog}
+                </Button>
               </div>
-            )}
-            {relation.mentee.department && (
-              <div>
-                <p className="text-xs text-gray-500">{t.candidateDetail.department}</p>
-                <p className="text-sm text-gray-900">{relation.mentee.department}</p>
-              </div>
-            )}
-            {relation.mentee.graduationYear && (
-              <div>
-                <p className="text-xs text-gray-500">{t.candidateDetail.graduationYear}</p>
-                <p className="text-sm text-gray-900">{relation.mentee.graduationYear}</p>
-              </div>
-            )}
-            {relation.mentee.phone && (
-              <div>
-                <p className="text-xs text-gray-500">{t.candidateDetail.phone}</p>
-                <p className="text-sm text-gray-900">{relation.mentee.phone}</p>
-              </div>
-            )}
-            {relation.mentee.whatsapp && (
-              <div>
-                <p className="text-xs text-gray-500">{t.candidateDetail.whatsapp}</p>
-                <p className="text-sm text-gray-900">{relation.mentee.whatsapp}</p>
-              </div>
-            )}
-            {(relation.mentee.whatsapp || relation.mentee.phone) && (
-              <ContactActions
-                relationId={id}
-                phone={relation.mentee.whatsapp || relation.mentee.phone || ''}
-                onLogged={fetchRelation}
-              />
-            )}
-            {relation.mentee.city && (
-              <div>
-                <p className="text-xs text-gray-500">{t.candidateDetail.city}</p>
-                <p className="text-sm text-gray-900">{relation.mentee.city}</p>
-              </div>
-            )}
-            {relation.mentee.birthDate && (
-              <div>
-                <p className="text-xs text-gray-500">{t.candidateDetail.birthDate}</p>
-                <p className="text-sm text-gray-900">
-                  {formatDate(relation.mentee.birthDate, locale)}
-                </p>
-              </div>
-            )}
-            {/* Who brought this mentee in — one line, whether that is a
-                registered person, a source, or the legacy free text (#1296). */}
-            {referrerLabel(relation.mentee) && (
-              <div>
-                <p className="text-xs text-gray-500">{t.referrer.label}</p>
-                <p className="text-sm text-gray-900" data-testid="mentee-referrer">{referrerLabel(relation.mentee)}</p>
-              </div>
-            )}
-            {relation.mentee.skills.length > 0 && (
-              <div>
-                <p className="text-xs text-gray-500 mb-1">{t.candidateDetail.skills}</p>
-                <div className="flex flex-wrap gap-1">
-                  {relation.mentee.skills.map((skill) => (
-                    <Badge key={skill} variant="info" className="text-xs">{skill}</Badge>
-                  ))}
+            </CardHeader>
+
+            {relation.interactions.length > 0 && <InteractionSummary relationId={relation.id} />}
+
+            {showForm && (
+              <div data-testid="interaction-log-form" className="mb-6 p-4 bg-gray-50 rounded-xl space-y-3">
+                {formError && (
+                  <p className="text-sm text-red-600">{formError}</p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label={t.mentor.date}
+                    type="date"
+                    data-testid="interaction-log-date"
+                    value={formData.date}
+                    onChange={(e) => setFormData((p) => ({ ...p, date: e.target.value }))}
+                  />
+                  <Select
+                    label={t.mentor.type}
+                    options={typeOptions}
+                    value={formData.type}
+                    onChange={(e) => setFormData((p) => ({ ...p, type: e.target.value }))}
+                  />
+                </div>
+                <Input
+                  label={t.mentor.subject}
+                  data-testid="interaction-log-subject"
+                  value={formData.subject}
+                  onChange={(e) => setFormData((p) => ({ ...p, subject: e.target.value }))}
+                  placeholder={t.mentor.subjectPlaceholder}
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.mentor.notes}</label>
+                  <Textarea
+                    rows={3}
+                    data-testid="interaction-log-notes"
+                    value={formData.notes}
+                    onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
+                    placeholder="What was discussed..."
+                    maxLength={TEXT_LIMITS.interactionNotes}
+                    showCounter
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleAddInteraction} loading={submitting}>{t.mentor.save}</Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>{t.mentor.cancel}</Button>
                 </div>
               </div>
             )}
-            {relation.mentee.cvUrl && (
-              <a
-                href={cvViewHref(relation.mentee.cvUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
-              >
-                <ExternalLink className="h-3 w-3" />
-                {t.candidateDetail.viewCv}
-              </a>
-            )}
-            {relation.company && (
-              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg">
-                <p className="text-xs text-blue-500 dark:text-blue-400 font-medium mb-1">{t.candidateDetail.company}</p>
-                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">{relation.company.name}</p>
-                {relation.company.industry && (
-                  <p className="text-xs text-blue-700 dark:text-blue-300">{relation.company.industry}</p>
-                )}
-                {relation.companyInterest && (
-                  <div className="mt-2 pt-2 border-t border-blue-100 dark:border-blue-900">
-                    <Badge variant={relation.companyInterest.status === 'PASS' ? 'danger' : relation.companyInterest.status === 'SHORTLISTED' ? 'success' : 'info'}>
-                      {t.candidateDetail.companyInterest[relation.companyInterest.status.toLowerCase() as 'interested' | 'shortlisted' | 'pass']}
-                    </Badge>
-                    {relation.companyInterest.note && (
-                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1.5 italic">“{relation.companyInterest.note}”</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </Card>
 
-        {/* Pipeline stage history */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.mentor.stageHistory} ({relation.statusChanges.length})</CardTitle>
-          </CardHeader>
-          {relation.statusChanges.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">{t.mentor.noStageChanges}</p>
-          ) : (
-            <ol className="space-y-3">
-              {relation.statusChanges.map((sc) => (
-                <li key={sc.id} className="text-sm border-l-2 border-blue-100 pl-3">
-                  <p className="text-gray-700">
-                    <span className="text-gray-400">{label(sc.fromStatus)}</span>
-                    {' → '}
-                    <span className="font-medium text-gray-900">{label(sc.toStatus)}</span>
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {sc.changedBy.fullName} · {formatDateTime(sc.createdAt, locale)}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Card>
-
-        {/* Interactions */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>{t.mentor.interactionLog} ({relation.interactions.length})</CardTitle>
-              <Button size="sm" onClick={() => setShowForm(!showForm)}>
-                <Plus className="h-4 w-4" />
-                {t.mentor.addLog}
-              </Button>
-            </div>
-          </CardHeader>
-
-          {relation.interactions.length > 0 && <InteractionSummary relationId={relation.id} />}
-
-          {showForm && (
-            <div data-testid="interaction-log-form" className="mb-6 p-4 bg-gray-50 rounded-xl space-y-3">
-              {formError && (
-                <p className="text-sm text-red-600">{formError}</p>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label={t.mentor.date}
-                  type="date"
-                  data-testid="interaction-log-date"
-                  value={formData.date}
-                  onChange={(e) => setFormData((p) => ({ ...p, date: e.target.value }))}
-                />
-                <Select
-                  label={t.mentor.type}
-                  options={typeOptions}
-                  value={formData.type}
-                  onChange={(e) => setFormData((p) => ({ ...p, type: e.target.value }))}
-                />
-              </div>
-              <Input
-                label={t.mentor.subject}
-                data-testid="interaction-log-subject"
-                value={formData.subject}
-                onChange={(e) => setFormData((p) => ({ ...p, subject: e.target.value }))}
-                placeholder={t.mentor.subjectPlaceholder}
-              />
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.mentor.notes}</label>
-                <Textarea
-                  rows={3}
-                  data-testid="interaction-log-notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
-                  placeholder="What was discussed..."
-                  maxLength={TEXT_LIMITS.interactionNotes}
-                  showCounter
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleAddInteraction} loading={submitting}>{t.mentor.save}</Button>
-                <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>{t.mentor.cancel}</Button>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {relation.interactions.length === 0 && (
-              <div>
-                <p className="text-sm text-gray-400 text-center pt-4 pb-3">{t.mentor.noInteractionsYet}</p>
-                <div className="opacity-50 pointer-events-none">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t.mentor.exampleLog}</p>
-                  <div className="flex items-start gap-3 py-3 border-b border-dashed border-gray-200">
-                    <InteractionTypeBadge type="Meeting" className="text-xs flex-shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-700">{t.mentor.exampleLogNote}</p>
-                      <p className="text-xs text-gray-400 mt-1">{formatDate(new Date(), locale)}</p>
+            <div className="space-y-3">
+              {relation.interactions.length === 0 && (
+                <div>
+                  <p className="text-sm text-gray-400 text-center pt-4 pb-3">{t.mentor.noInteractionsYet}</p>
+                  <div className="opacity-50 pointer-events-none">
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t.mentor.exampleLog}</p>
+                    <div className="flex items-start gap-3 py-3 border-b border-dashed border-gray-200">
+                      <InteractionTypeBadge type="Meeting" className="text-xs flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-700">{t.mentor.exampleLogNote}</p>
+                        <p className="text-xs text-gray-400 mt-1">{formatDate(new Date(), locale)}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
+              )}
+              {relation.interactions.map((interaction) => (
+                <div key={interaction.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
+                  <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    {interaction.subject && (
+                      <p className="text-sm font-medium text-gray-900">{interaction.subject}</p>
+                    )}
+                    <p className="text-sm text-gray-700">{interaction.notes}</p>
+                    <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-1" />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {formatDate(interaction.date, locale)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteInteraction(interaction.id)}
+                    className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <EvaluationPanel relationId={id} />
+
+          <GoalsPanel relationId={id} />
+
+          {/* Everything on this mentee's list — what came from a project and what a
+              mentor handed them directly — plus the box to add to it (#1113). */}
+          <PersonTodos userId={relation.mentee.id} fullName={relation.mentee.fullName} />
+
+          <MeetingRequestsPanel relationId={id} mode="manage" />
+
+          <QuestionsPanel relationId={id} mode="answer" />
+
+          <div className="flex flex-col gap-3">
+            {canIssueCertificate(relation, stages) && (
+              <div>
+                <CertificateGenerator
+                  relationId={id}
+                  eligible
+                  mentee={{ fullName: relation.mentee.fullName, skills: relation.mentee.skills }}
+                  mentor={{ fullName: relation.mentor.fullName }}
+                  companyName={relation.company?.name ?? null}
+                  startDate={relation.startDate}
+                  completedAt={relation.completedAt}
+                  onGenerated={fetchRelation}
+                />
               </div>
             )}
-            {relation.interactions.map((interaction) => (
-              <div key={interaction.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-                <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  {interaction.subject && (
-                    <p className="text-sm font-medium text-gray-900">{interaction.subject}</p>
-                  )}
-                  <p className="text-sm text-gray-700">{interaction.notes}</p>
-                  <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-1" />
-                  <p className="text-xs text-gray-400 mt-1">
-                    {formatDate(interaction.date, locale)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleDeleteInteraction(interaction.id)}
-                  className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+            <DocumentsManager targetUserId={relation.mentee.id} />
           </div>
-        </Card>
 
-        <div className="lg:col-span-2">
-          <EvaluationPanel relationId={id} />
-        </div>
-
-        <div className="lg:col-span-2">
-          <GoalsPanel relationId={id} />
-        </div>
-
-        {/* Everything on this mentee's list — what came from a project and what a
-            mentor handed them directly — plus the box to add to it (#1113). */}
-        <div className="lg:col-span-2">
-          <PersonTodos userId={relation.mentee.id} fullName={relation.mentee.fullName} />
-        </div>
-
-        <div className="lg:col-span-2">
-          <MeetingRequestsPanel relationId={id} mode="manage" />
-        </div>
-
-        <div className="lg:col-span-2">
-          <QuestionsPanel relationId={id} mode="answer" />
-        </div>
-
-        <div className="lg:col-span-2 flex flex-col gap-3">
-          {canIssueCertificate(relation, stages) && (
-            <div>
-              <CertificateGenerator
-                relationId={id}
-                eligible
-                mentee={{ fullName: relation.mentee.fullName, skills: relation.mentee.skills }}
-                mentor={{ fullName: relation.mentor.fullName }}
-                companyName={relation.company?.name ?? null}
-                startDate={relation.startDate}
-                completedAt={relation.completedAt}
-                onGenerated={fetchRelation}
-              />
-            </div>
-          )}
-          <DocumentsManager targetUserId={relation.mentee.id} />
-        </div>
-
-        <div className="lg:col-span-2">
           <RelationNotesPanel relationId={id} />
-        </div>
 
-        {/* Activity feed sits last — it's the least frequently acted-on panel,
-            so private notes and the working panels stay above the fold. */}
-        <div className="lg:col-span-2">
+          {/* Activity feed sits last — it's the least frequently acted-on panel,
+              so private notes and the working panels stay above the fold. */}
           <UserActivityPanel userId={relation.mentee.id} flagInactive />
         </div>
       </div>
