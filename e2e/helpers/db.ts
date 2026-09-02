@@ -157,3 +157,114 @@ export async function cleanupCustomPipelineOrg(orgId: string, emails: string[]) 
   for (const email of emails) await cleanupByEmail(email);
   await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
 }
+
+/**
+ * A mentee who is actually IN a mentorship (#2043).
+ *
+ * A bare `seedUser(…, 'MENTEE', …)` renders every relation-bearing screen in its
+ * empty state: the mentor and admin boards have no cards, the inbox has no
+ * threads, the portal has no journey. Scanning that measures the empty state and
+ * calls it coverage — `docs/agent-experience.md` records the gap in numbers (a
+ * related mentee surfaced 9 serious colour-contrast findings on `/portal#dark`
+ * that the thin fixture could not see).
+ *
+ * So this seeds the whole shape a real pair has: mentor + mentee + company, an
+ * ACTIVE relation parked mid-pipeline, one goal, one past interaction and one
+ * upcoming meeting. It is deliberately the ONLY relation-seeding fixture helper
+ * — #1412 (the mentee-portal half of the same widening) consumes this one rather
+ * than adding a second, so the two halves keep scanning the same shape.
+ */
+export type SeededRelation = {
+  mentorEmail: string;
+  menteeEmail: string;
+  mentorId: string;
+  menteeId: string;
+  relationId: string;
+  companyId: string;
+  menteeName: string;
+  /** Both seeded accounts, for the caller's `cleanupByEmail` loop. */
+  emails: string[];
+};
+
+export async function seedMenteeWithRelation(prefix: string, password: string): Promise<SeededRelation> {
+  const mentorEmail = uniqueEmail(`${prefix}-mentor`);
+  const menteeEmail = uniqueEmail(`${prefix}-mentee`);
+  const menteeName = `${prefix} Mentee`;
+  const mentor = await seedUser(mentorEmail, password, 'MENTOR', `${prefix} Mentor`);
+  const mentee = await seedUser(menteeEmail, password, 'MENTEE', menteeName);
+  const company = await prisma.company.create({
+    data: { name: `${prefix} Co ${Date.now()}`, industry: 'Software' },
+  });
+  const day = 24 * 60 * 60 * 1000;
+  const relation = await prisma.mentorshipRelation.create({
+    data: {
+      mentorId: mentor.id,
+      menteeId: mentee.id,
+      companyId: company.id,
+      status: 'ACTIVE',
+      // Mid-pipeline on purpose: a relation parked in the FIRST stage is what
+      // the dormant-first-contact sweep targets, and a terminal one is done —
+      // neither renders the ordinary in-progress card the boards are about.
+      pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450',
+      startDate: new Date(Date.now() - 30 * day),
+    },
+  });
+  await prisma.goal.create({
+    data: {
+      relationId: relation.id,
+      title: `${prefix} goal`,
+      description: 'Seeded goal so goal-bearing screens render a row.',
+      dueDate: new Date(Date.now() + 14 * day),
+    },
+  });
+  await prisma.interactionLog.create({
+    data: {
+      relationId: relation.id,
+      date: new Date(Date.now() - 7 * day),
+      subject: `${prefix} check-in`,
+      notes: 'Seeded interaction so the history is not empty.',
+      type: 'Meeting',
+    },
+  });
+  await prisma.meeting.create({
+    data: {
+      relationId: relation.id,
+      title: `${prefix} upcoming meeting`,
+      scheduledAt: new Date(Date.now() + 2 * day),
+      createdById: mentor.id,
+      rsvpToken: crypto.randomBytes(16).toString('hex'),
+    },
+  });
+  return {
+    mentorEmail,
+    menteeEmail,
+    mentorId: mentor.id,
+    menteeId: mentee.id,
+    relationId: relation.id,
+    companyId: company.id,
+    menteeName,
+    emails: [mentorEmail, menteeEmail],
+  };
+}
+
+/** Teardown for {@link seedMenteeWithRelation}. */
+export async function cleanupMenteeWithRelation(seeded: SeededRelation) {
+  // Visiting /messages lazily creates the pair's conversation, so those rows
+  // exist even though nothing here asked for them. The participant rows cascade
+  // from the user delete below; the conversation itself would be left orphaned.
+  const conversationIds = (
+    await prisma.conversationParticipant.findMany({
+      where: { userId: { in: [seeded.mentorId, seeded.menteeId] } },
+      select: { conversationId: true },
+    })
+  ).map((p) => p.conversationId);
+  if (conversationIds.length > 0) {
+    await prisma.message.deleteMany({ where: { conversationId: { in: conversationIds } } });
+    await prisma.conversationParticipant.deleteMany({ where: { conversationId: { in: conversationIds } } });
+    await prisma.conversation.deleteMany({ where: { id: { in: conversationIds } } });
+  }
+  // Goal, interaction and meeting all cascade from the relation, which
+  // cleanupByEmail deletes along with the users.
+  for (const email of seeded.emails) await cleanupByEmail(email);
+  await prisma.company.delete({ where: { id: seeded.companyId } }).catch(() => {});
+}

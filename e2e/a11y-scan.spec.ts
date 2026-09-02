@@ -2,7 +2,15 @@ import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs';
 import path from 'node:path';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import {
+  prisma,
+  seedUser,
+  cleanupByEmail,
+  uniqueEmail,
+  seedMenteeWithRelation,
+  cleanupMenteeWithRelation,
+  type SeededRelation,
+} from './helpers/db';
 import { signInAsFreshUser } from './helpers/auth';
 
 // Role-based WCAG scan (#862, story #826).
@@ -18,6 +26,13 @@ import { signInAsFreshUser } from './helpers/auth';
 //
 // moderate/minor findings are reported but never gate: they are the backlog,
 // not the alarm.
+//
+// Coverage (#2043): the first nine pages were the ones a bare seeded user can
+// reach, which is a thin slice of the product to publish a conformance statement
+// off. The list now also carries the six screens outside the mentee portal —
+// /messages, /notifications, the mentor and admin boards, /admin/settings and
+// the public /apply entry — scanned against a mentee who is really in a
+// mentorship, so the boards have cards on them rather than an empty state.
 
 const GATED_SEVERITIES = new Set(['critical', 'serious']);
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -104,20 +119,46 @@ async function forceDark(page: Page) {
  * violation that exists only in dark mode gets its own baseline entry instead
  * of being averaged away against the light one.
  */
-async function scanAll(page: Page, keys: string[]) {
+/**
+ * One page to scan.
+ *
+ * A plain string means "the URL is also the baseline key", which is every static
+ * route. The object form separates the two, and that is what the widened list
+ * needs (#2043):
+ *
+ * - `url` — for a route whose address is not stable across runs. `/apply/<id>`
+ *   carries a freshly seeded mentor's cuid, so keying on the URL would write a
+ *   brand-new, never-matching baseline entry on every run; the key stays
+ *   `/apply/:mentorId`.
+ * - `ready` — awaited after the initial load AND again after `forceDark`'s
+ *   reload. A client-fetched screen (the boards, /notifications) is still a
+ *   skeleton at `domcontentloaded`, and a skeleton scans clean: it would freeze
+ *   an empty page into the baseline and call it coverage. This is also where the
+ *   "a board must have a card on it" assertion lives — an empty board proves
+ *   nothing, so it fails loudly instead of passing quietly.
+ */
+type ScanTarget = string | { key: string; url?: string; ready?: (page: Page) => Promise<void> };
+
+async function scanAll(page: Page, targets: ScanTarget[]) {
   // Collect across every key and assert ONCE at the end, rather than failing at
   // the first bad page. `expect` throws, so a per-page assertion aborts the test
   // — and with `mode: 'serial'` it also skips the remaining contexts. That turns
   // a run into "learn one violation per CI cycle", which is how fixing this
   // spec's own findings took three round trips. One list, one run.
   const regressions: string[] = [];
-  for (const key of keys) {
-    await page.goto(key);
+  for (const target of targets) {
+    const key = typeof target === 'string' ? target : target.key;
+    const url = typeof target === 'string' ? target : target.url ?? target.key;
+    const ready = typeof target === 'string' ? undefined : target.ready;
+
+    await page.goto(url);
+    if (ready) await ready(page);
     const light = await scan(page, key);
     freshCounts[key] = light.counts;
     regressions.push(...light.regressions);
 
     await forceDark(page);
+    if (ready) await ready(page);
     const dark = await scan(page, `${key}#dark`);
     freshCounts[`${key}#dark`] = dark.counts;
     regressions.push(...dark.regressions);
@@ -146,7 +187,51 @@ const seed = async (role: 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY', name: strin
   return { email, user: await seedUser(email, PASSWORD, role, name) };
 };
 
+// One mentee who is really in a mentorship, shared by every context that needs
+// a relation on screen (#2043): the mentor board, the admin board, the inbox and
+// the public application link that points at the mentor. Seeded once — the
+// alternative is each context seeding its own pair, which triples the rows on
+// the admin board (it lists every relation in the database) and makes the scans
+// stop comparing like with like.
+const RELATION_PREFIX = 'A11y Rel';
+let related: SeededRelation;
+
 test.describe.configure({ mode: 'serial' });
+
+test.beforeAll(async () => {
+  related = await seedMenteeWithRelation(RELATION_PREFIX, PASSWORD);
+  // /notifications renders an empty-state paragraph with no rows at all, so
+  // without these the scan would look at a page that has none of the markup it
+  // is supposed to be measuring. One unread and one read: the unread row carries
+  // the badge and the bolder text, which is where a contrast pair would hide.
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: related.menteeId,
+        type: 'message.new',
+        text: 'Seeded unread notification for the accessibility scan.',
+        link: '/messages',
+        read: false,
+      },
+      {
+        userId: related.menteeId,
+        type: 'meeting.scheduled',
+        text: 'Seeded read notification for the accessibility scan.',
+        link: '/portal/calendar',
+        read: true,
+      },
+    ],
+  });
+});
+
+/**
+ * A board with nothing on it scans clean. Assert a card first, so a fixture that
+ * silently stopped producing one fails the run instead of quietly reporting a
+ * green empty page. Both boards mark their cards with the same testid.
+ */
+const boardHasCard = async (page: Page) => {
+  await expect(page.getByTestId('board-card').first()).toBeVisible();
+};
 
 test.afterAll(async () => {
   if (UPDATE_BASELINE) {
@@ -174,6 +259,7 @@ test.afterAll(async () => {
     fs.writeFileSync(REPORT_PATH, renderReport(collected, widened));
   }
   for (const email of emails) await cleanupByEmail(email);
+  if (related) await cleanupMenteeWithRelation(related);
   await prisma.$disconnect();
 });
 
@@ -181,8 +267,24 @@ test.afterAll(async () => {
 // claims WCAG 2.2 AA and then fails the scan is the one embarrassment this gate
 // exists to prevent, so it is scanned alongside the two pages every visitor
 // sees — not left to the honour system.
-test('public pages: landing, sign-in and the accessibility statement', async ({ page }) => {
-  await scanAll(page, ['/', '/auth/signin', '/accessibility']);
+test('public pages: landing, sign-in, the statement and the application entry', async ({ page }) => {
+  await scanAll(page, [
+    '/',
+    '/auth/signin',
+    '/accessibility',
+    {
+      // The mentee application entry (#2043) — the one screen a candidate meets
+      // before they have an account at all. Keyed without the mentor id so the
+      // baseline entry survives the next run's fresh fixture.
+      key: '/apply/:mentorId',
+      url: `/apply/${related.mentorId}`,
+      // The form only renders once the mentor link has resolved and is open;
+      // before that the card holds a one-character placeholder.
+      ready: async (p) => {
+        await expect(p.locator('form').first()).toBeVisible();
+      },
+    },
+  ]);
 });
 
 test('mentee portal: dashboard and profile', async ({ page }) => {
@@ -204,6 +306,61 @@ test('admin: dashboard and candidates', async ({ page }) => {
   const { email } = await seed('ADMIN', 'A11y Admin');
   await signInAsFreshUser(page, email, PASSWORD, '/admin');
   await scanAll(page, ['/admin', '/admin/candidates']);
+});
+
+// The contexts below run on the shared relation fixture rather than a bare
+// seeded user. Note that the four tests above are deliberately left on their
+// thin fixtures: re-seeding them would change what /portal, /mentor and /admin
+// render and silently widen baseline keys this task does not own (the mentee
+// portal belongs to #1412).
+
+test('mentee: inbox and notifications', async ({ page }) => {
+  test.slow();
+  await signInAsFreshUser(page, related.menteeEmail, PASSWORD, '/portal');
+  await scanAll(page, [
+    {
+      key: '/messages',
+      // Server-rendered, but the mentorship's conversation is created lazily on
+      // this very request — wait for the thread row so the scan sees an inbox
+      // with something in it.
+      ready: async (p) => {
+        await expect(p.getByText(`${RELATION_PREFIX} Mentor`).first()).toBeVisible();
+      },
+    },
+    {
+      key: '/notifications',
+      ready: async (p) => {
+        await expect(p.getByTestId('notifications-list')).toBeVisible();
+      },
+    },
+  ]);
+});
+
+test('mentor: pipeline board', async ({ page }) => {
+  test.slow();
+  await signInAsFreshUser(page, related.mentorEmail, PASSWORD, '/mentor');
+  await scanAll(page, [{ key: '/mentor/board', ready: boardHasCard }]);
+});
+
+test('admin: board and settings', async ({ page }) => {
+  test.slow();
+  const { email } = await seed('ADMIN', 'A11y Board Admin');
+  await signInAsFreshUser(page, email, PASSWORD, '/admin');
+  await scanAll(page, [
+    { key: '/admin/board', ready: boardHasCard },
+    {
+      key: '/admin/settings',
+      // Two waits, because this screen finishes in two stages: the form itself
+      // (rendered immediately), then the email-health block, which only appears
+      // once the SMTP probe answers. Scanning between the two is what would make
+      // the counts differ from run to run — the ● / ○ status bullet is the one
+      // mark that exists only after that response has landed.
+      ready: async (p) => {
+        await expect(p.locator('form').first()).toBeVisible();
+        await expect(p.getByText(/[●○]/).first()).toBeVisible();
+      },
+    },
+  ]);
 });
 
 test('company: portal', async ({ page }) => {
@@ -253,9 +410,9 @@ function renderReport(findings: Finding[], widened: string[] = []): string {
 <!-- GENERATED by e2e/a11y-scan.spec.ts — do not edit by hand.
      Regenerate: A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts -->
 
-Automated axe-core scan of ten pages across five contexts (public, mentee,
-mentor, admin, company). The scan **measures**; it fixes nothing. Every row
-below is a candidate for its own good-first-issue.
+Automated axe-core scan of sixteen pages across five contexts (public, mentee,
+mentor, admin, company), each in light and dark. The scan **measures**; it fixes
+nothing. Every row below is a candidate for its own good-first-issue.
 
 **Totals** — ${totals}
 ${

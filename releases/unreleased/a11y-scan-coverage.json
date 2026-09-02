@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Accessibility scan widened to the screens outside the mentee portal (#2043)**: `e2e/a11y-scan.spec.ts` now also gates `/messages`, `/notifications`, `/mentor/board`, `/admin/board`, `/admin/settings` and the public `/apply/:mentorId` entry, in light and dark — fifteen pages, thirty baseline keys. The board and inbox scans run against a real mentor ↔ mentee relation (`seedMenteeWithRelation()` in `e2e/helpers/db.ts`, with a company, a goal, an interaction and an upcoming meeting) and assert a card is on screen before axe runs, so an empty board can no longer scan clean. A scan target may now carry its own baseline key and a readiness wait, which keeps a dynamic route (`/apply/:mentorId`) on one stable key and a client-fetched page from being measured mid-skeleton."
+}

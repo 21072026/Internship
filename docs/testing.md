@@ -289,6 +289,43 @@ before writing its report (`E2E_EXPECTED_REPORTS`). Recipients come from
 `ALERT_EMAIL_TO`; set the repository **variable** `E2E_REPORT_MODE=failures` to switch
 back to red-only alerts.
 
+## Accessibility regression gate (axe)
+
+[`e2e/a11y-scan.spec.ts`](../e2e/a11y-scan.spec.ts) runs `@axe-core/playwright` over the
+app against WCAG 2.0/2.1/2.2 A+AA and compares each page's *critical* and *serious*
+counts with the frozen [`e2e/a11y-baseline.json`](../e2e/a11y-baseline.json). It carries
+no `@smoke` tag, so `e2e.yml` runs it as **its own step** on every PR — the smoke set
+stays small while the gate still blocks. The human-readable report is
+[`docs/a11y-audit.md`](a11y-audit.md); both files are regenerated together:
+
+```bash
+A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts
+```
+
+**Coverage** — fifteen pages, each scanned twice (light, then `#dark` with a full reload,
+never by pasting `.dark` onto an already-rendered page):
+
+| Context | Pages |
+|---|---|
+| public | `/`, `/auth/signin`, `/apply/:mentorId` |
+| mentee | `/portal`, `/portal/profile`, `/messages`, `/notifications` |
+| mentor | `/mentor`, `/mentor/mentees`, `/mentor/board` |
+| admin | `/admin`, `/admin/candidates`, `/admin/board`, `/admin/settings` |
+| company | `/company` |
+
+The six non-portal screens were added in #2043, on the shared
+`seedMenteeWithRelation()` fixture in [`e2e/helpers/db.ts`](../e2e/helpers/db.ts) — a real
+mentor ↔ mentee relation with a company, a goal, an interaction and an upcoming meeting.
+That fixture is the point: a board with no cards, or an inbox with no threads, scans clean
+and proves nothing, so a board scan asserts a `board-card` is visible *before* axe runs.
+Add a page by extending the list in the matching context, not by seeding a second fixture.
+
+**Never widen the baseline silently.** A regenerate that raises a count prints
+`⚠️ This regenerate WIDENS the accessibility baseline` and repeats the list in the report
+header; each widened key must be fixed or justified in the PR body (#1333 is the run where
+a quiet widening got in). A dynamic route is keyed separately from its URL — `/apply/:mentorId`
+— so a fresh fixture's id cannot invent a new baseline entry on every run.
+
 ## Accessibility media preferences (#2045)
 
 The browser reports three OS-level accessibility settings, and the app honours all
