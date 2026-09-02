@@ -50,6 +50,10 @@ export async function PublicFooter() {
         // (#1396). A site that collects registrations and enquiry forms without
         // naming its operator anywhere is the state this replaces.
         { href: '/imprint', label: n.imprint },
+        // The one URL to paste into a procurement e-mail (#2027). Labelled
+        // from `trust.title` for the same reason as the three above: a footer
+        // link must not be able to disagree with the heading it leads to.
+        { href: '/trust', label: t.trust.title },
       ],
     },
   ];
