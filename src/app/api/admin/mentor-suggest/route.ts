@@ -32,6 +32,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const userLimited = enforceRateLimit(request, 'ai:mentor_match', {
+    ...AI_RATE_LIMITS.mentor_match,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
+
   if (session.user.orgId) {
     const orgLimited = enforceRateLimit(request, 'ai:org', {
       ...AI_RATE_LIMITS.org_burst,
@@ -39,11 +45,6 @@ export async function POST(request: Request) {
     });
     if (orgLimited) return orgLimited;
   }
-  const userLimited = enforceRateLimit(request, 'ai:mentor_match', {
-    ...AI_RATE_LIMITS.mentor_match,
-    subject: session.user.id,
-  });
-  if (userLimited) return userLimited;
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json().catch(() => null));

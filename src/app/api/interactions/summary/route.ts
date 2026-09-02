@@ -22,6 +22,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const userLimited = enforceRateLimit(request, 'ai:interaction_summary', {
+    ...AI_RATE_LIMITS.interaction_summary,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
+
   if (session.user.orgId) {
     const orgLimited = enforceRateLimit(request, 'ai:org', {
       ...AI_RATE_LIMITS.org_burst,
@@ -29,11 +35,6 @@ export async function POST(request: Request) {
     });
     if (orgLimited) return orgLimited;
   }
-  const userLimited = enforceRateLimit(request, 'ai:interaction_summary', {
-    ...AI_RATE_LIMITS.interaction_summary,
-    subject: session.user.id,
-  });
-  if (userLimited) return userLimited;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

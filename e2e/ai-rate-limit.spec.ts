@@ -9,12 +9,19 @@ test.afterAll(async () => {
 // Rate limiting is keyed by authenticated user ID (and optionally org ID), so
 // a user exhausting their limit receives a 429 while another user on the same
 // network/IP remains unblocked.
-test('AI endpoints throttle per user ID and not shared IP', { tag: '@smoke' }, async ({ page }) => {
+test('AI endpoints isolate user limits without draining the org budget', { tag: '@smoke' }, async ({ page }) => {
   const menteeAEmail = uniqueEmail('airatelimit-a');
   const menteeBEmail = uniqueEmail('airatelimit-b');
   const pw = 'AiRateLimitPass123!';
-  await seedUser(menteeAEmail, pw, 'MENTEE', 'RateLimit Mentee A');
-  await seedUser(menteeBEmail, pw, 'MENTEE', 'RateLimit Mentee B');
+  const org = await prisma.organization.create({
+    data: { name: `AI Rate Limit Org ${Date.now()}`, slug: uniqueEmail('airatelimit-org').split('@')[0] },
+  });
+  const menteeA = await seedUser(menteeAEmail, pw, 'MENTEE', 'RateLimit Mentee A');
+  const menteeB = await seedUser(menteeBEmail, pw, 'MENTEE', 'RateLimit Mentee B');
+  await prisma.user.updateMany({
+    where: { id: { in: [menteeA.id, menteeB.id] } },
+    data: { orgId: org.id },
+  });
 
   try {
     // 1. Sign in as User A
@@ -42,6 +49,17 @@ test('AI endpoints throttle per user ID and not shared IP', { tag: '@smoke' }, a
     expect(jsonA.error).toBe('Too many requests. Please try again later.');
     expect(throttledA.headers()['retry-after']).toBeDefined();
 
+    // A rejected user must not consume the shared 120-request org budget.
+    // Drive User A to 120 total attempts; only their first six should reach the org limiter.
+    const blockedA = await Promise.all(
+      Array.from({ length: 113 }, () =>
+        page.request.post('/api/interview-prep', {
+          data: { position: 'Backend Developer' },
+        })
+      )
+    );
+    expect(blockedA.every((res) => res.status() === 429)).toBe(true);
+
     // 2. Sign in as User B in a second context (sharing the same network/IP).
     const ctxB = await page.context().browser()!.newContext();
     const pageB = await ctxB.newPage();
@@ -63,5 +81,6 @@ test('AI endpoints throttle per user ID and not shared IP', { tag: '@smoke' }, a
   } finally {
     await cleanupByEmail(menteeAEmail);
     await cleanupByEmail(menteeBEmail);
+    await prisma.organization.delete({ where: { id: org.id } });
   }
 });

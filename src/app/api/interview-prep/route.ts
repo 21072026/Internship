@@ -35,6 +35,12 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  const userLimited = enforceRateLimit(request, 'ai:interview_prep', {
+    ...AI_RATE_LIMITS.interview_prep,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
+
   if (session.user.orgId) {
     const orgLimited = enforceRateLimit(request, 'ai:org', {
       ...AI_RATE_LIMITS.org_burst,
@@ -42,11 +48,6 @@ export async function POST(request: Request) {
     });
     if (orgLimited) return orgLimited;
   }
-  const userLimited = enforceRateLimit(request, 'ai:interview_prep', {
-    ...AI_RATE_LIMITS.interview_prep,
-    subject: session.user.id,
-  });
-  if (userLimited) return userLimited;
 
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json().catch(() => ({})));

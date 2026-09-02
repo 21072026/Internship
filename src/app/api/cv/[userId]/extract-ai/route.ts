@@ -23,6 +23,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const userLimited = enforceRateLimit(request, 'ai:cv_extract', {
+    ...AI_RATE_LIMITS.cv_extract,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
+
   if (session.user.orgId) {
     const orgLimited = enforceRateLimit(request, 'ai:org', {
       ...AI_RATE_LIMITS.org_burst,
@@ -30,11 +36,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
     });
     if (orgLimited) return orgLimited;
   }
-  const userLimited = enforceRateLimit(request, 'ai:cv_extract', {
-    ...AI_RATE_LIMITS.cv_extract,
-    subject: session.user.id,
-  });
-  if (userLimited) return userLimited;
 
   const cv = await prisma.cvFile.findUnique({ where: { userId: target } });
   if (!cv) return NextResponse.json({ error: 'No CV uploaded' }, { status: 404 });
