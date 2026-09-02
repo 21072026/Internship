@@ -20,26 +20,76 @@ test('defaults are unchanged: PUBLISH, sequence 0, 30 minutes', () => {
   expect(ics).not.toContain('STATUS:CANCELLED');
 });
 
-test('an invitation is a REQUEST', () => {
+test('an invitation is a REQUEST with an organizer and an attendee', () => {
   const ics = buildMeetingIcs({
     uid: 'm1',
     title: 'Weekly 1:1',
     start: START,
     method: 'REQUEST',
     location: 'https://meet.jit.si/x',
+    organizer: { email: 'noreply@crm.ersah.in', name: 'Internship CRM' },
+    attendee: { email: 'mentee@example.com', name: 'Ada Lovelace' },
   });
   expect(ics).toContain('METHOD:REQUEST');
   expect(ics).toContain('LOCATION:https://meet.jit.si/x');
+  // Without these two an iTIP REQUEST is not a meeting request: Gmail renders no
+  // invitation card and Outlook rejects it (RFC 5546 §3.2.2).
+  expect(ics).toContain('ORGANIZER;CN="Internship CRM":mailto:noreply@crm.ersah.in');
+  expect(ics).toContain(
+    'ATTENDEE;CN="Ada Lovelace";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:mentee@example.com'
+  );
+});
+
+test('a nameless participant simply has no CN', () => {
+  const ics = buildMeetingIcs({
+    uid: 'm1',
+    title: 'Weekly 1:1',
+    start: START,
+    method: 'REQUEST',
+    organizer: { email: 'noreply@crm.ersah.in' },
+    attendee: { email: 'guest@example.com', name: '  ' },
+  });
+  expect(ics).toContain('ORGANIZER:mailto:noreply@crm.ersah.in');
+  expect(ics).toContain('ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:guest@example.com');
+});
+
+test('a PUBLISH copy stays participant-free', () => {
+  const ics = buildMeetingIcs({
+    uid: 'm1',
+    title: 'Weekly 1:1',
+    start: START,
+    organizer: { email: 'noreply@crm.ersah.in' },
+    attendee: { email: 'mentee@example.com' },
+  });
+  // The public token route hands out a read-only copy; nothing negotiates, and
+  // no address may ride along in it.
+  expect(ics).not.toContain('ORGANIZER');
+  expect(ics).not.toContain('ATTENDEE');
+  expect(ics).not.toContain('mentee@example.com');
 });
 
 test('a cancellation carries CANCEL, CANCELLED and the bumped sequence', () => {
-  const ics = buildMeetingIcs({ uid: 'm1', title: 'Weekly 1:1', start: START, method: 'CANCEL', sequence: 2 });
+  const ics = buildMeetingIcs({
+    uid: 'm1',
+    title: 'Weekly 1:1',
+    start: START,
+    method: 'CANCEL',
+    sequence: 2,
+    organizer: { email: 'noreply@crm.ersah.in', name: 'Internship CRM' },
+    attendee: { email: 'mentee@example.com' },
+  });
   expect(ics).toContain('METHOD:CANCEL');
   expect(ics).toContain('STATUS:CANCELLED');
   expect(ics).toContain('SEQUENCE:2');
-  // Same UID as the invitation above — that is what tells the client *which*
-  // event to drop.
+  // Same UID as the invitation above — that, *together with* the ORGANIZER, is
+  // what tells the client which event to drop. Outlook and Google match a
+  // cancellation on both, so a CANCEL without an organizer is silently ignored
+  // and the meeting stays in the calendar.
   expect(ics).toContain('UID:m1@crm.ersah.in');
+  expect(ics).toContain('ORGANIZER;CN="Internship CRM":mailto:noreply@crm.ersah.in');
+  // No RSVP on a cancellation: nothing is being asked.
+  expect(ics).toContain('ATTENDEE;ROLE=REQ-PARTICIPANT:mailto:mentee@example.com');
+  expect(ics).not.toContain('RSVP=TRUE');
 });
 
 test('durationMinutes drives DTEND', () => {

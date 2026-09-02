@@ -34,8 +34,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   // upper edge — the same 275-day default /api/calendar-events expands over.
   const since = new Date(Date.now() - 30 * DAY_MS);
   const until = new Date(Date.now() + 275 * DAY_MS);
+  // A MENTOR is matched on *both* sides, not just `mentorId`: promoting a mentee
+  // to mentor flips User.role in place and keeps every relation they hold as a
+  // mentee, and the feed before #2015 matched either side for everyone. Scoping
+  // to `mentorId` alone would silently drop their own internship meetings and
+  // deadline from a calendar they had already subscribed to.
   const relWhere: Prisma.MentorshipRelationWhereInput =
-    user.role === 'ADMIN' ? {} : user.role === 'MENTOR' ? { mentorId: user.id } : { menteeId: user.id };
+    user.role === 'ADMIN'
+      ? {}
+      : user.role === 'MENTOR'
+        ? { OR: [{ mentorId: user.id }, { menteeId: user.id }] }
+        : { menteeId: user.id };
 
   const [meetings, teamMeetings, series, relations] = await Promise.all([
     // The user's own meetings, on either side of a relation. `seriesId: null`
@@ -82,13 +91,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
             }),
       },
       select: { id: true, title: true, daysOfWeek: true, timeOfDay: true, timeZone: true },
-      take: MAX_EVENTS,
+      // Deliberately uncapped: one rule expands into hundreds of occurrences, so
+      // a cap here would drop whole recurring calls rather than trim the tail —
+      // the MAX_EVENTS budget is applied once, to the merged event list below.
+      orderBy: { createdAt: 'asc' },
     }),
     // Stage deadlines. No mentee relation is selected at all, so a participant
     // name cannot leak into the title by accident.
     prisma.mentorshipRelation.findMany({
       where: { ...relWhere, stageDeadline: { not: null, gte: since } },
       select: { id: true, pipelineStatus: true, stageDeadline: true },
+      // Soonest first, so a cap that bites keeps the deadlines that matter. An
+      // ADMIN's `relWhere` is `{}`, so without an order MySQL would hand back an
+      // arbitrary 500 rows and a deadline three days out could lose to one six
+      // months out.
+      orderBy: { stageDeadline: 'asc' },
       take: MAX_EVENTS,
     }),
   ]);
