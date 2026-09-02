@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks, FolderKanban, Users, MailOpen } from 'lucide-react';
+import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks, FolderKanban, Users, MailOpen, Activity } from 'lucide-react';
 import { useT } from '@/i18n/client';
 
 // Mentee portal sidebar navigation with active-route highlighting (mirrors the
@@ -23,6 +23,9 @@ export function PortalNav() {
     { href: '/messages', label: t.nav.messages, Icon: MessageSquare },
     { href: '/portal/interactions', label: t.nav.interactionLogs, Icon: BookOpen },
     { href: '/portal/notes', label: t.portal.notes.title, Icon: Lock },
+    // Their own copy of the activity report their mentor and admin already
+    // read about them (#1915) — transparency, not a scoreboard.
+    { href: '/portal/insights', label: t.nav.myInsights, Icon: Activity },
     // The career-tips archive (#1469). Linked from the sidebar and not only
     // from the e-mail footer: the issues stay useful long after the mail is
     // gone, and someone who unsubscribed can still read them here.
