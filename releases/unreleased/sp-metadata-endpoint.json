@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **SAML SP metadata per tenant** (#1931). `GET /api/auth/sso/<slug>/metadata` returns SAML 2.0 SP metadata as `application/samlmetadata+xml` — public, pre-auth, served while `ssoEnabled` is still off (that is when IT configures), `404` for an unknown slug. Admin → Organizations → Enterprise SSO shows the Entity ID, ACS URL and metadata URL read-only with copy buttons, computed server-side from `NEXTAUTH_URL`.",
+  "notes": {
+    "en": ["Enterprise SSO: hand your identity team one metadata URL instead of copying identifiers by hand — the tenant's Entity ID, ACS URL and metadata URL are now shown with copy buttons."],
+    "tr": ["Kurumsal SSO: kimlik ekibine artık tek bir metadata adresi verebilirsin — kiracının Entity ID, ACS ve metadata adresleri kopyalama düğmeleriyle görünüyor."],
+    "de": ["Enterprise SSO: Ihr Identity-Team erhält jetzt eine Metadaten-URL statt handkopierter Werte — Entity ID, ACS-URL und Metadaten-URL des Mandanten stehen mit Kopierbuttons bereit."]
+  }
+}
