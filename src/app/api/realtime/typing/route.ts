@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
-import { enforceRateLimit } from '@/lib/rateLimit';
+import { rateLimit } from '@/lib/rateLimit';
 import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
 import {
   getConversationIfAllowed,
@@ -23,9 +23,10 @@ import { withTenantScope } from '@/lib/orgContext';
  * seconds.
  *
  * It is still an authenticated write endpoint, so it carries the two guards
- * every write here carries: a rate limit (the composer throttles itself to one
- * call every ~3s, so the ceiling only bites a client that stopped asking
- * politely), and the *same* participant authorization as `POST /api/messages` —
+ * every write here carries: a rate limit (per *user*, see the note on the
+ * handler — the composer throttles itself to one call every ~3s, so the ceiling
+ * only bites a client that stopped asking politely), and the *same* participant
+ * authorization as `POST /api/messages` —
  * `getThreadIfAllowed` / `getConversationIfAllowed`, plus the live posting check
  * for a conversation. Without that last one this would happily answer "is the
  * caller a participant of thread <id>?" for any id a signed-in user cared to
@@ -49,13 +50,26 @@ const schema = z
 // POST — announce that the caller is composing in a thread they participate in.
 // Publishes one ephemeral `typing` event to the other participants and returns.
 export async function POST(request: Request) {
-  // Generous next to the 3s client throttle (one open thread is ~20/min),
-  // tight enough that a script cannot use this as a free fan-out amplifier.
-  const limited = enforceRateLimit(request, 'realtime-typing', { limit: 60, windowMs: 60 * 1000 });
-  if (limited) return limited;
-
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Rate-limited **per user**, not per IP — deliberately unlike the rest of the
+  // routes here, which use `enforceRateLimit` (an IP bucket). A whole cohort
+  // typically sits behind one NAT egress address, so an IP ceiling anywhere near
+  // the real per-user rate (the 3s client throttle allows ~20/min per open
+  // thread) would be tripped by four people chatting at once — and because the
+  // composer swallows the failure, the indicator would just silently stop
+  // working for everyone at that location while `ratelimit.exceeded` warnings
+  // (#864) piled up from entirely ordinary use. 120/min is ~6 open threads of
+  // honest typing for one account, and still stops a script from using this as
+  // a free fan-out amplifier.
+  const limited = rateLimit(`realtime-typing:${session.user.id}`, { limit: 120, windowMs: 60 * 1000 });
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(limited.retryAfter) } }
+    );
+  }
 
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json().catch(() => null));

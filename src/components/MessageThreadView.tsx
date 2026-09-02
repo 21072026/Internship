@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2, FolderOpen } from 'lucide-react';
+import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2, FolderOpen, MessageSquareQuote, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
@@ -23,6 +23,11 @@ import { LanguageBadge } from '@/components/LanguageBadge';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 import { scrollBehavior } from '@/lib/motion';
+import {
+  resolveMessageTemplateText,
+  templatePreview,
+  type MessageTemplateDto,
+} from '@/lib/messageTemplates';
 
 interface Attachment {
   id: string;
@@ -119,9 +124,15 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load the saved Enter-to-send preference once on mount.
+  // Load the saved Enter-to-send preference once on mount. Wrapped like every
+  // other access in this component: with site data blocked (or inside a
+  // sandboxed iframe) the `localStorage` *getter* itself throws, and a throw in
+  // an effect unmounts the whole thread view through the nearest error boundary
+  // — i.e. no composer at all, over a stored preference.
   useEffect(() => {
-    setEnterToSend(localStorage.getItem('messages-enter-to-send') === '1');
+    try {
+      setEnterToSend(localStorage.getItem('messages-enter-to-send') === '1');
+    } catch { /* ignore */ }
   }, []);
   const toggleEnterToSend = () => {
     setEnterToSend((prev) => {
@@ -136,10 +147,17 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // unsent message ever leaves the browser. Every access is wrapped — in a
   // private window or with site data blocked even the *getter* throws, and a
   // composer that cannot remember a draft must still be a composer.
-  const draftKey = `messages-draft-${target.kind}-${target.id}`;
+  // Keyed by viewer as well as thread: on a shared browser profile the next
+  // person to sign in must not be handed the previous one's unsent text (which
+  // they could then send as themselves). `signOutEverywhere()` clears the
+  // session, not site data, so the key has to carry the identity itself — and
+  // it is null until the session has resolved, so nothing is ever written to or
+  // read from an anonymous key in the first moments of a mount.
+  const draftKey = myId ? `messages-draft-${myId}-${target.kind}-${target.id}` : null;
   const draftKeyRef = useRef<string | null>(null);
 
   const saveDraft = useCallback((value: string) => {
+    if (!draftKey) return;
     try {
       if (value) localStorage.setItem(draftKey, value);
       else localStorage.removeItem(draftKey);
@@ -156,6 +174,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   }, [saveDraft]);
 
   useEffect(() => {
+    if (!draftKey) return;
     const previous = draftKeyRef.current;
     draftKeyRef.current = draftKey;
     let saved = '';
@@ -206,6 +225,61 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     }, 1_000);
     return () => clearInterval(timer);
   }, [someoneTyping]);
+
+  // Canned responses (#1871). The pool is fetched once, the first time somebody
+  // opens the picker — it is a convenience most people never touch, and loading
+  // it with the thread would put a query on every thread open for nothing.
+  // `null` means "not fetched yet"; `[]` means "fetched, and empty".
+  const [canned, setCanned] = useState<MessageTemplateDto[] | null>(null);
+  const [cannedOpen, setCannedOpen] = useState(false);
+  const [cannedQuery, setCannedQuery] = useState('');
+
+  const toggleCanned = useCallback(() => {
+    setCannedOpen((prev) => !prev);
+    setCanned((current) => {
+      if (current !== null) return current;
+      // Marked as fetched immediately so a double-click cannot fire two loads.
+      void (async () => {
+        try {
+          const res = await fetch('/api/message-templates');
+          setCanned(res.ok ? ((await res.json()).templates ?? []) : []);
+        } catch {
+          setCanned([]);
+        }
+      })();
+      return [];
+    });
+  }, []);
+
+  const insertCanned = (tpl: MessageTemplateDto) => {
+    // Resolved in the *writer's* locale: they are about to send this under their
+    // own name, so they have to be able to read it (src/lib/messageTemplates.ts).
+    const text = resolveMessageTemplateText(tpl, locale);
+    // Appended, never replacing. "Half a sentence of my own plus the standard
+    // paragraph" is the normal case, and throwing away typed text to make room
+    // for a template would be the one unforgivable outcome here.
+    changeBody(body ? `${body}\n\n${text}` : text);
+    setCannedOpen(false);
+    setCannedQuery('');
+    bodyRef.current?.focus();
+    // Ranking only, and best-effort: a counter that missed a tick must never
+    // cost anyone their reply, so the failure is swallowed.
+    void fetch(`/api/message-templates/${tpl.id}/use`, { method: 'POST' }).catch(() => {});
+    // Reflect the bump locally so the list keeps its most-used-first order
+    // without a refetch.
+    setCanned((prev) =>
+      prev
+        ? [...prev.map((c) => (c.id === tpl.id ? { ...c, useCount: c.useCount + 1 } : c))].sort(
+            (a, b) => b.useCount - a.useCount
+          )
+        : prev
+    );
+  };
+
+  const cannedQ = cannedQuery.trim().toLowerCase();
+  const cannedList = (canned ?? []).filter(
+    (tpl) => !cannedQ || resolveMessageTemplateText(tpl, locale).toLowerCase().includes(cannedQ)
+  );
 
   // Enter/Shift+Enter behaviour depends on the preference above; ArrowUp on an
   // empty box edits your last message (WhatsApp/Slack/Telegram style).
@@ -764,6 +838,62 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
             ? t.messages.typing.replace('{name}', typingNames[0])
             : t.messages.typingMany}
       </p>
+      {/* Canned responses (#1871): the reply a mentor writes forty times a
+          cohort, one click, in their own language. Collapsed by default — this
+          is a shortcut for the person who needs it, not furniture above
+          everyone's composer. */}
+      {cannedOpen && (
+        <div
+          className="mb-2 rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+          data-testid="canned-panel"
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <input
+              type="search"
+              value={cannedQuery}
+              onChange={(e) => setCannedQuery(e.target.value)}
+              placeholder={t.messages.cannedSearch}
+              className="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              data-testid="canned-search"
+            />
+            <button
+              type="button"
+              onClick={() => setCannedOpen(false)}
+              aria-label={t.messages.cannedClose}
+              className="shrink-0 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {cannedList.length === 0 ? (
+            <p className="px-1 py-2 text-xs text-gray-400" data-testid="canned-none">
+              {t.messages.cannedNone}
+            </p>
+          ) : (
+            <>
+              <p className="mb-1.5 px-1 text-xs text-gray-400">{t.messages.cannedHint}</p>
+              <ul className="max-h-52 overflow-y-auto">
+                {cannedList.map((tpl) => (
+                  <li key={tpl.id}>
+                    <button
+                      type="button"
+                      onClick={() => insertCanned(tpl)}
+                      title={resolveMessageTemplateText(tpl, locale)}
+                      className="w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-blue-50 dark:text-gray-200 dark:hover:bg-gray-800"
+                      data-testid={`canned-template-${tpl.id}`}
+                    >
+                      {templatePreview(resolveMessageTemplateText(tpl, locale))}
+                      {tpl.personal && (
+                        <span className="ml-1.5 text-gray-400">· {t.messages.cannedPersonal}</span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
       <PendingAttachmentList attachments={attachments} onRemove={removeAttachment} removeLabel={t.common.delete} />
       <MessageComposer
         body={body}
@@ -785,6 +915,16 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         sendTestId="message-send"
       />
       <div className="mt-1.5 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={toggleCanned}
+          aria-expanded={cannedOpen}
+          className="inline-flex shrink-0 items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+          data-testid="canned-toggle"
+        >
+          <MessageSquareQuote className="h-3.5 w-3.5" />
+          {t.messages.canned}
+        </button>
         {/* Keyboard-only hint — no room for it on a phone. */}
         <span className="hidden lg:inline text-xs text-gray-400 truncate">{t.messages.pasteHint}</span>
         <button

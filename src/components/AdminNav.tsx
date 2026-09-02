@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Columns3, Building2, Users, UserCheck, UserCog, Mail, ScrollText,
   BarChart3, FolderGit2, Layers, Radio, Megaphone, FileText, CalendarDays, ClipboardCheck, Settings, Webhook, Search, ListChecks,
   ShieldCheck, Activity, LifeBuoy, Network, Video, ClipboardList, GraduationCap, BriefcaseBusiness, GitMerge, Quote, FileSignature, Tag as TagIcon, UserPlus, MailOpen,
-  Braces,
+  Braces, MessageSquareQuote,
   type LucideIcon,
 } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
@@ -29,6 +29,7 @@ const LINKS: { href: string; icon: LucideIcon; key: string; exact?: boolean }[] 
   { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries' },
   { href: '/admin/projects', icon: FolderGit2, key: 'projects' },
   { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates' },
+  { href: '/admin/message-templates', icon: MessageSquareQuote, key: 'messageTemplates' },
   { href: '/todos', icon: ClipboardList, key: 'todos' },
   { href: '/admin/cohorts', icon: Layers, key: 'cohorts' },
   { href: '/admin/tags', icon: TagIcon, key: 'tags' },

@@ -164,3 +164,70 @@ test('an unsent reply survives a reload and is gone once it is sent', async ({ p
     await cleanupByEmail(mentorEmail);
   }
 });
+
+// #1871 — canned responses. Covers the two halves of the acceptance criterion
+// that are not visible from the admin screen: the text arrives in the *writer's*
+// locale, and picking it increments `useCount` (which is what ranks the picker).
+// The template is seeded straight into the table rather than clicked into
+// /admin/message-templates, so a failure here points at the composer.
+test('a canned response inserts in the writer’s locale and counts the use', async ({ page }) => {
+  const mentorEmail = uniqueEmail('canned-mentor');
+  const menteeEmail = uniqueEmail('canned-mentee');
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Canned Mentor');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Canned Mentee');
+  // The writer reads Turkish, so the TR wording is the one that must land.
+  await prisma.user.update({ where: { id: mentor.id }, data: { preferredLanguage: 'tr' } });
+  const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
+  // A distinctive body: the UI is Turkish for this writer, so a greeting would
+  // risk matching the app's own copy under getByText's substring rules.
+  const seeded = `Ilk mesaj ${Date.now()}`;
+  await prisma.message.create({
+    data: { relationId: rel.id, senderId: mentee.id, channel: 'IN_APP', body: seeded },
+  });
+  const trText = `CV'ni PDF olarak gönder ${Date.now()}`;
+  const template = await prisma.messageTemplate.create({
+    data: {
+      ownerId: null,
+      title: 'Send me your CV as a PDF',
+      translations: { en: 'Send me your CV as a PDF', tr: trText },
+    },
+  });
+
+  try {
+    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await page.goto(`/messages/${rel.id}`);
+    await expect(page.getByText(seeded)).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('canned-toggle').click();
+    await expect(page.getByTestId('canned-panel')).toBeVisible();
+    await page.getByTestId(`canned-template-${template.id}`).click();
+
+    // The Turkish wording, not the canonical English title.
+    await expect(page.getByTestId('message-input')).toHaveValue(trText);
+    await expect(page.getByTestId('canned-panel')).toBeHidden();
+    await expect
+      .poll(async () =>
+        (await prisma.messageTemplate.findUnique({ where: { id: template.id }, select: { useCount: true } }))?.useCount
+      )
+      .toBe(1);
+
+    // Retiring a template archives it rather than deleting it, and it drops out
+    // of the picker — the row (and its useCount) stays.
+    const res = await page.request.delete('/api/admin/message-templates', { data: { id: template.id } });
+    // A mentor is not an admin: the pool is admin-managed.
+    expect(res.status()).toBe(401);
+    await prisma.messageTemplate.update({ where: { id: template.id }, data: { archivedAt: new Date() } });
+    await page.reload();
+    await expect(page.getByText(seeded)).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('canned-toggle').click();
+    await expect(page.getByTestId('canned-none')).toBeVisible();
+    expect(await prisma.messageTemplate.count({ where: { id: template.id } })).toBe(1);
+  } finally {
+    await prisma.messageTemplate.deleteMany({ where: { id: template.id } });
+    await prisma.message.deleteMany({ where: { relationId: rel.id } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});

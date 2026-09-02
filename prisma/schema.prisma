@@ -107,6 +107,7 @@ model Organization {
   offers               Offer[]
   requisitions         Requisition[]
   interviewRequests    InterviewRequest[]
+  messageTemplates     MessageTemplate[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -398,6 +399,8 @@ model User {
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+  ownedMessageTemplates             MessageTemplate[]             @relation("MessageTemplateOwner")
+  authoredMessageTemplates          MessageTemplate[]             @relation("MessageTemplateAuthor")
 
   @@index([role])
   @@index([referredById])
@@ -687,6 +690,59 @@ model MessageAttachment {
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
+}
+
+// Reusable 1:1 message text — "canned responses" (#1871). The sentence a mentor
+// writes forty times a cohort ("send me your CV as a PDF and I'll look at it
+// before Friday") becomes one click, in whichever of the three languages the
+// writer is working in.
+//
+// Deliberately the same shape as ProjectTaskTemplate (the trilingual reusable
+// text we already ship): `title` is the canonical wording — the fallback when a
+// reader's language has no entry, and the key the pool dedupes on — while
+// `translations` ({ en?, tr?, de? }) carries the per-locale body. What gets
+// inserted into the composer is a plain string resolved once from the *writer's*
+// own locale, so nothing downstream (Message, the email mirror, the SSE bus) has
+// to know a template was involved at all.
+//
+// Tenant-anchored: it holds an organisation's own wording, so `orgId` is here and
+// the model is in TENANT_MODELS (src/lib/orgContext.ts) — unlike
+// ProjectTaskTemplate, which is reached through Project.
+model MessageTemplate {
+  id      String  @id @default(cuid())
+  orgId   String?
+  // Null = org-wide, which is what /admin/message-templates manages and what
+  // every writer in the tenant is offered. Set = personal, offered to its owner
+  // only. Only the org-wide half has a management screen today; the read path
+  // already honours both so a "save this reply" affordance is additive.
+  ownerId String?
+
+  title        String    @db.Text
+  translations Json?
+  // How many times this text has been inserted — the picker sorts by it, so the
+  // replies actually used float to the top and the pool stays usable as it grows.
+  useCount     Int       @default(0)
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  // Retired from the picker, not deleted (same reasoning as ProjectTaskTemplate,
+  // #1113): `useCount` is the only record of which wording a program actually
+  // leans on, and re-adding the same text revives this row rather than starting
+  // a second one from zero. Nothing here is referenced by a sent Message — the
+  // insert is a copy — so this is about the pool's own history.
+  archivedAt   DateTime?
+
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner     User?         @relation("MessageTemplateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdBy User?         @relation("MessageTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  // No @@unique on the wording: `title` is @db.Text (a canned reply is a
+  // paragraph, not a label), which MySQL cannot index without a prefix length,
+  // and a nullable orgId/ownerId would not be constrained by it anyway — the
+  // same reason /api/admin/goal-templates dedupes by hand.
+  @@index([orgId, ownerId, archivedAt])
+  @@index([ownerId, archivedAt])
+  @@index([createdById])
 }
 
 // In-app notification for a user.
