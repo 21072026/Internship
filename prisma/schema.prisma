@@ -331,6 +331,9 @@ model User {
   theme                   String?
   // UI font-size preference ('sm' | 'md' | 'lg' | 'xl'); applied at sign-in.
   fontSize                String?
+  // UI density preference ('comfortable' | 'compact'); applied at sign-in.
+  // Null = comfortable (the default spacing).
+  density                 String?
   // UI accent color ('blue' | 'green' | 'purple' | 'rose' | 'teal' | 'amber');
   // drives the app's primary color via data-accent. Null = environment default
   // (green in preview, blue in production).
