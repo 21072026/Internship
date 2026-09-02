@@ -12,8 +12,9 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
-import { Users, ArrowLeft } from 'lucide-react';
+import { Users, ArrowLeft, Copy, Check } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { copyToClipboard } from '@/lib/clipboard';
 import { BULK_INVITE_MAX_CHARS, type BulkInviteReason, type BulkInviteRole } from '@/lib/bulkInvite';
 
 interface ReportRow {
@@ -23,6 +24,10 @@ interface ReportRow {
   status: 'invite' | 'skip' | 'error';
   reason?: BulkInviteReason;
   possibleDuplicates?: { id: string; fullName: string; matchedOn: string[] }[];
+  /** Real run only: whether a mail actually left the app for this row. */
+  emailSent?: boolean;
+  /** Real run only, unmailed rows only: the link the admin must now share. */
+  registerUrl?: string;
 }
 
 interface Report {
@@ -33,6 +38,8 @@ interface Report {
   skipped: number;
   errors: number;
   created: number;
+  emailed: number;
+  unsent: number;
   rows: ReportRow[];
 }
 
@@ -44,6 +51,14 @@ export default function BulkInvitePage() {
   const [result, setResult] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copyLink = async (link: string) => {
+    if (await copyToClipboard(link)) {
+      setCopied(link);
+      setTimeout(() => setCopied((c) => (c === link ? null : c)), 2000);
+    }
+  };
 
   const reasonLabel = (reason?: BulkInviteReason) =>
     reason ? (t.bulkInvite.reasons as Record<string, string>)[reason] ?? reason : '';
@@ -95,6 +110,17 @@ export default function BulkInvitePage() {
     invite: 'success',
     skip: 'warning',
     error: 'danger',
+  };
+
+  // A created invitation whose mail never left the app is NOT a sent one: demo
+  // mode and an env without SMTP both report the transport as skipped without
+  // throwing. It gets its own badge (and its link below) so the admin can see
+  // the difference at a glance.
+  const rowTone = (r: ReportRow) =>
+    r.status === 'invite' && r.emailSent === false ? 'warning' : statusTone[r.status];
+  const rowLabel = (r: ReportRow) => {
+    if (r.status !== 'invite' || r.emailSent === undefined) return t.bulkInvite.status[r.status];
+    return r.emailSent ? t.bulkInvite.status.emailed : t.bulkInvite.status.notEmailed;
   };
 
   return (
@@ -205,6 +231,11 @@ export default function BulkInvitePage() {
                 <span className="text-red-700" data-testid="bulk-invite-count-errors">
                   {t.bulkInvite.countErrors}: <strong>{shown.errors}</strong>
                 </span>
+                {result && (
+                  <span className="text-amber-700" data-testid="bulk-invite-count-unsent">
+                    {t.bulkInvite.countUnsent}: <strong>{result.unsent}</strong>
+                  </span>
+                )}
               </div>
 
               {shown.truncated && (
@@ -213,14 +244,27 @@ export default function BulkInvitePage() {
                 </div>
               )}
 
-              {result && (
-                <div
-                  className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm"
-                  data-testid="bulk-invite-result"
-                >
-                  {t.bulkInvite.sent.replace('{n}', String(result.created))}
-                </div>
-              )}
+              {result &&
+                (result.unsent > 0 ? (
+                  // Never "{n} invitations sent." when nothing was mailed (#1431):
+                  // the invitations exist, but the admin has to deliver them.
+                  <div
+                    className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm"
+                    data-testid="bulk-invite-result"
+                  >
+                    {t.bulkInvite.sentPartial
+                      .replace('{created}', String(result.created))
+                      .replace('{n}', String(result.emailed))
+                      .replace('{unsent}', String(result.unsent))}
+                  </div>
+                ) : (
+                  <div
+                    className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm"
+                    data-testid="bulk-invite-result"
+                  >
+                    {t.bulkInvite.sent.replace('{n}', String(result.emailed))}
+                  </div>
+                ))}
 
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -239,13 +283,14 @@ export default function BulkInvitePage() {
                         key={r.row}
                         data-testid={`bulk-invite-row-${r.row}`}
                         data-status={r.status}
+                        data-email-sent={r.emailSent === undefined ? undefined : String(r.emailSent)}
                         className="border-t border-gray-100 dark:border-gray-700"
                       >
                         <td className="py-1 pr-3 text-gray-400">{r.row}</td>
                         <td className="py-1 pr-3 font-mono text-xs break-all">{r.email || '—'}</td>
                         <td className="py-1 pr-3">{r.role}</td>
                         <td className="py-1 pr-3">
-                          <Badge variant={statusTone[r.status]}>{t.bulkInvite.status[r.status]}</Badge>
+                          <Badge variant={rowTone(r)}>{rowLabel(r)}</Badge>
                         </td>
                         <td className="py-1 text-gray-600 dark:text-gray-300">
                           {reasonLabel(r.reason)}
@@ -255,6 +300,31 @@ export default function BulkInvitePage() {
                                 '{names}',
                                 r.possibleDuplicates.map((d) => d.fullName).join(', '),
                               )}
+                            </span>
+                          )}
+                          {r.registerUrl && (
+                            <span className="mt-1 flex items-center gap-2">
+                              <input
+                                readOnly
+                                value={r.registerUrl}
+                                data-testid={`bulk-invite-link-${r.row}`}
+                                className="flex-1 min-w-0 text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 text-gray-600"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => copyLink(r.registerUrl!)}
+                                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 flex-shrink-0"
+                              >
+                                {copied === r.registerUrl ? (
+                                  <>
+                                    <Check className="h-3.5 w-3.5" /> {t.invite.copied}
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-3.5 w-3.5" /> {t.invite.copy}
+                                  </>
+                                )}
+                              </button>
                             </span>
                           )}
                         </td>

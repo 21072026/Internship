@@ -162,6 +162,17 @@ export async function POST(request: Request) {
             entry.reason = 'send_failed';
             return;
           }
+          // "The transport did not throw" is NOT "the mail was delivered"
+          // (#1431): sendEmail() answers SKIPPED without throwing in demo mode
+          // and on any env with no SMTP_USER. Carry the transport's own verdict
+          // into the row so a created-but-unmailed invitation cannot be
+          // reported as one that was sent.
+          entry.emailSent = result.emailSent;
+          // Its link, only when it was not mailed: GET /api/invite withholds
+          // the token of every invitation that has an email address, so this
+          // response is the admin's one chance to keep a link they now have to
+          // deliver by hand.
+          if (!result.emailSent) entry.registerUrl = result.registerUrl;
           created++;
         } catch (err) {
           console.error('Bulk invite row failed:', err);
@@ -170,11 +181,13 @@ export async function POST(request: Request) {
         }
       });
 
+      const outcome = summarizeBulkInvite(report);
+
       await logActivity({
         action: 'invite.bulk_created',
         actorId: session.user.id,
         actorEmail: session.user.email ?? null,
-        detail: `created ${created}/${summary.invitable} · ${defaultRole}`,
+        detail: `created ${created}/${summary.invitable} · emailed ${outcome.emailed} · ${defaultRole}`,
         request,
       });
 
@@ -182,7 +195,7 @@ export async function POST(request: Request) {
         dryRun: false,
         truncated: parsed.truncated,
         created,
-        ...summarizeBulkInvite(report),
+        ...outcome,
         rows: report,
       });
     });

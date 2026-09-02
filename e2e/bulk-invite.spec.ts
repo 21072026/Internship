@@ -52,6 +52,16 @@ test('admin previews and sends a bulk invitation roster', { tag: '@smoke' }, asy
     await page.getByTestId('bulk-invite-send').click();
     await expect(page.getByTestId('bulk-invite-result')).toBeVisible({ timeout: 20_000 });
 
+    // Delivery is reported honestly (#1431): every created row carries the mail
+    // transport's own verdict, never "it did not throw, so it was sent". CI has
+    // no SMTP, so these rows are created-but-not-emailed and must hand back the
+    // registration link — GET /api/invite withholds it for an emailed address.
+    const sentState = await page.getByTestId('bulk-invite-row-1').getAttribute('data-email-sent');
+    expect(['true', 'false']).toContain(sentState);
+    if (sentState === 'false') {
+      await expect(page.getByTestId('bulk-invite-link-1')).toHaveValue(/\/auth\/register\?token=/);
+    }
+
     // The two invitable rows became invitations, with the per-row role honoured.
     const tokens = await prisma.invitationToken.findMany({
       where: { email: { in: [first, second] } },
@@ -107,6 +117,15 @@ test('the dry run predicts the real run exactly, and admins cannot be bulk-invit
     const realBody = await real.json();
     // THE invariant.
     expect(realBody.created).toBe(dryBody.invitable);
+    // Created is not the same as delivered: the two halves must add up, and an
+    // undelivered invitation carries the link the admin now has to share.
+    expect(realBody.emailed + realBody.unsent).toBe(realBody.created);
+    for (const row of realBody.rows as { status: string; emailSent?: boolean; registerUrl?: string }[]) {
+      if (row.status !== 'invite') continue;
+      expect(typeof row.emailSent).toBe('boolean');
+      if (row.emailSent === false) expect(row.registerUrl).toContain('/auth/register?token=');
+      else expect(row.registerUrl).toBeUndefined();
+    }
     expect(await prisma.invitationToken.count({ where: { email: { in: good } } })).toBe(3);
     // The reserved domains were never turned into invitations.
     expect(

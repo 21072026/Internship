@@ -75,6 +75,20 @@ export interface BulkInviteReportRow {
   reason?: BulkInviteReason;
   /** Look-alike existing mentees (#841) — warn-only, the row is still invitable. */
   possibleDuplicates?: BulkInviteDuplicate[];
+  /**
+   * Real run only: true only when a mail actually left the app. A SKIPPED
+   * transport (demo mode, or an env with no SMTP_USER) does not throw, so
+   * "the send did not fail" is NOT "the invitation was delivered" (#1431) —
+   * absent on a dry run, false for a created-but-unmailed invitation.
+   */
+  emailSent?: boolean;
+  /**
+   * Real run only, and only for a created-but-unmailed row: the share link.
+   * GET /api/invite deliberately withholds the token of any invitation that
+   * carries an email address, so this response is the only place the admin
+   * can still recover the link they now have to send by hand.
+   */
+  registerUrl?: string;
 }
 
 export interface BulkInviteContext {
@@ -242,14 +256,25 @@ export interface BulkInviteSummary {
   invitable: number;
   skipped: number;
   errors: number;
+  /** Real run: invitations whose mail was actually delivered. 0 on a dry run. */
+  emailed: number;
+  /**
+   * Real run: invitations that exist but were never mailed (demo mode, no SMTP
+   * transport). They are created, not delivered — the banner has to say so,
+   * and their links are in the report because nothing else will hand them back.
+   */
+  unsent: number;
 }
 
 export function summarizeBulkInvite(rows: readonly BulkInviteReportRow[]): BulkInviteSummary {
+  const invited = rows.filter((r) => r.status === 'invite');
   return {
     total: rows.length,
-    invitable: rows.filter((r) => r.status === 'invite').length,
+    invitable: invited.length,
     skipped: rows.filter((r) => r.status === 'skip').length,
     errors: rows.filter((r) => r.status === 'error').length,
+    emailed: invited.filter((r) => r.emailSent === true).length,
+    unsent: invited.filter((r) => r.emailSent === false).length,
   };
 }
 
