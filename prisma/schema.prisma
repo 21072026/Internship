@@ -2403,6 +2403,42 @@ model TrustedDevice {
   @@index([expiresAt])
 }
 
+// Durable brute-force lockout (#1541).
+//
+// The sign-in failure counter used to live only in the in-process Map behind
+// `rateLimit()`: it evaporated on every redeploy, no admin could see that an
+// account was locked, and nobody could clear a lockout for a user who had
+// locked themselves out. This row is the durable, visible, clearable copy of
+// that state — and `authorize()` consults it BEFORE the bcrypt compare, so a
+// locked-out attempt costs one indexed point lookup instead of a cost-12 hash.
+//
+// Deliberately NOT a relation to User: the row is keyed by the email that was
+// *typed*, which under an attack usually belongs to no account at all.
+model AccountLockout {
+  id          String    @id @default(cuid())
+  // Normalized (trimmed + lowercased) email the attempts were made against.
+  email       String    @unique
+  // The account, when the typed email matches one. Null otherwise.
+  userId      String?
+  // Which bucket tripped: "password" or "totp".
+  reason      String    @default("password")
+  failedCount Int       @default(0)
+  // Start of the current counting window. Failures older than the window open
+  // a fresh count instead of accumulating forever.
+  windowStart DateTime  @default(now())
+  // Locked until this moment. Null or in the past means "counting, not locked".
+  lockedUntil DateTime?
+  lastIp      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  // Tenant anchor (#543). This is tenant data — it is listed in TENANT_MODELS.
+  orgId       String?
+
+  @@index([userId])
+  @@index([lockedUntil])
+  @@index([orgId])
+}
+
 enum LogLevel {
   DEBUG
   INFO

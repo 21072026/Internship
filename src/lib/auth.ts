@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
 import { verifyTotpStep } from '@/lib/totp';
-import { headerSource } from '@/lib/clientIp';
+import { headerSource, clientIp } from '@/lib/clientIp';
+import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/lib/accountLockout';
 import { logger } from '@/lib/logger';
 import { AUTH_UNEXPECTED_ERROR } from '@/lib/authErrors';
 
@@ -122,6 +123,25 @@ export const authOptions: NextAuthOptions = {
         // registration, so sign-in never misses on a casing/whitespace diff.
         const email = credentials.email.trim().toLowerCase();
         const failKey = `login-fail:${email}`;
+        const ip = clientIp(origin);
+
+        // Durable lockout gate (#1541), consulted BEFORE the bcrypt compare:
+        // cost-12 hashing is the expensive half of a brute-force attempt, and
+        // an already-locked address must not be allowed to buy one. Unlike the
+        // in-process Map behind `rateLimit`, this survives a redeploy — and an
+        // admin can see it and clear it.
+        const lockedBefore = await getActiveLockout(email);
+        if (lockedBefore) {
+          await logActivity({
+            action: 'auth.login_locked',
+            level: 'warning',
+            actorEmail: credentials.email,
+            actorId: lockedBefore.userId,
+            detail: `locked until ${lockedBefore.lockedUntil.toISOString()}`,
+            request: origin,
+          });
+          throw new Error('Too many attempts. Please try again later.');
+        }
 
         const user = await prisma.user.findUnique({
           where: { email },
@@ -137,6 +157,15 @@ export const authOptions: NextAuthOptions = {
         // Only FAILED attempts count toward the brute-force limit.
         if (!user || !isPasswordValid) {
           const within = rateLimit(failKey, { limit: 10, windowMs: 15 * 60 * 1000 });
+          // Same policy, written down durably (#1541).
+          const locked = await recordFailedAttempt({
+            email,
+            userId: user?.id ?? null,
+            orgId: user?.orgId ?? null,
+            reason: 'password',
+            limit: 10,
+            ip,
+          });
           await logActivity({
             action: 'auth.login_failed',
             level: 'warning',
@@ -144,7 +173,9 @@ export const authOptions: NextAuthOptions = {
             actorId: user?.id ?? null,
             request: origin,
           });
-          throw new Error(within.ok ? 'Invalid email or password' : 'Too many attempts. Please try again later.');
+          throw new Error(
+            within.ok && !locked ? 'Invalid email or password' : 'Too many attempts. Please try again later.'
+          );
         }
 
         // NOTE: the failure counter is NOT cleared here. It used to be, which
@@ -188,6 +219,14 @@ export const authOptions: NextAuthOptions = {
 
           if (step === null || replayed) {
             const within = rateLimit(totpKey, { limit: 5, windowMs: 15 * 60 * 1000 });
+            const locked = await recordFailedAttempt({
+              email,
+              userId: user.id,
+              orgId: user.orgId,
+              reason: 'totp',
+              limit: 5,
+              ip,
+            });
             await logActivity({
               action: 'auth.totp_failed',
               level: 'warning',
@@ -199,7 +238,7 @@ export const authOptions: NextAuthOptions = {
             // Same message either way — which of the two it was is the
             // attacker's business to guess, not ours to confirm.
             throw new Error(
-              within.ok ? 'Invalid authenticator code' : 'Too many attempts. Please try again later.'
+              within.ok && !locked ? 'Invalid authenticator code' : 'Too many attempts. Please try again later.'
             );
           }
 
@@ -216,8 +255,10 @@ export const authOptions: NextAuthOptions = {
           clearRateLimit(totpKey);
         }
 
-        // Fully authenticated — now the failure counter can be reset.
+        // Fully authenticated — now the failure counter can be reset. Both
+        // copies of it: the in-process one and the durable row (#1541).
         clearRateLimit(failKey);
+        await clearLockoutByEmail(email);
 
         // Logged here rather than in events.signIn so the row carries the
         // origin IP; the event callback has no request (#881).
