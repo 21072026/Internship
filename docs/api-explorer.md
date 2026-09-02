@@ -253,10 +253,15 @@ The document declares exactly two security schemes:
   The explorer mints one through the **existing** `POST /api/admin/api-keys`
   route: no new token type and no new auth path, so every key created from the
   page lands in the admin activity log (`apikey.created`, level `warning`) like
-  any other. The raw key is shown exactly once.
+  any other. The raw key is shown exactly once. Since #1545 every key carries a
+  scope list, so the explorer mints its throwaway key with the read-only default
+  set (`candidates:read`) — a key with no scopes is refused.
 
-  `ApiKey` has no `expiresAt` column, so nothing on the server ever retires a
-  key minted here — which is why the page revokes it for you. Navigating away
+  A key minted here is deliberately created **without** an expiry, so nothing on
+  the server retires it — which is why the page revokes it for you. Since #1545
+  that revoke is *soft*: `DELETE /api/admin/api-keys` stamps `revokedAt` and
+  leaves the row, so the `apikey.revoked` audit entry still has a target (the
+  page's behaviour is unchanged; only the row's fate is). Navigating away
   inside the app revokes it on unmount (an ordinary request on a page that is
   still alive), and closing the tab or hard-reloading fires the same `DELETE`
   with `keepalive` from a `pagehide` handler. That second path is genuinely best

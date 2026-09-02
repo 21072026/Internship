@@ -107,6 +107,7 @@ model Organization {
   offers               Offer[]
   requisitions         Requisition[]
   interviewRequests    InterviewRequest[]
+  apiKeys              ApiKey[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -395,6 +396,7 @@ model User {
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+  createdApiKeys                    ApiKey[]                      @relation("ApiKeyCreatedBy")
 
   @@index([role])
   @@index([referredById])
@@ -1384,12 +1386,45 @@ model Webhook {
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
+// A minted programmatic credential for the public /api/v1 surface.
+//
+// Lifecycle (#1545): a key is no longer just "a name and a hash". It knows WHO
+// minted it (createdById), WHEN it stops being valid (expiresAt), WHAT it may
+// read (scopes) and WHETHER it was withdrawn (revokedAt).
+//
+// Revocation is SOFT on purpose: the row is never deleted. The
+// `apikey.revoked` ActivityLog entry points at this id, and a hard delete would
+// leave that audit trail pointing at nothing — the evidence of what the key did
+// would disappear together with the key.
+//
+// `scopes` is a comma-separated list in the canonical `<resource>:<action>`
+// shape (see src/lib/apiScopes.ts). One value exists today — `candidates:read`,
+// the only /api/v1 route — but the shape is fixed now so later resources slot
+// in without a migration. ENFORCEMENT of expiry/revocation/scope at the door is
+// #1546; this model only stores the facts.
 model ApiKey {
-  id         String    @id @default(cuid())
-  name       String
-  hashedKey  String    @unique
-  lastUsedAt DateTime?
-  createdAt  DateTime  @default(now())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id])
+  id          String        @id @default(cuid())
+  name        String
+  hashedKey   String        @unique
+  // Comma-separated `<resource>:<action>` scopes. Defaulted (not nullable) so
+  // `db push` fills existing rows non-destructively; the backfill normalises
+  // any row that ended up empty.
+  scopes      String        @default("candidates:read")
+  // The admin who minted the key. Nullable: rows that predate #1545 have no
+  // recorded owner, and a deleted admin must not take the key's history away.
+  createdById String?
+  createdBy   User?         @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  // Null means "never expires" — allowed, but flagged in the admin UI.
+  expiresAt   DateTime?
+  // Set by the soft revoke; the row itself stays forever.
+  revokedAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([orgId])
+  @@index([createdById])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support

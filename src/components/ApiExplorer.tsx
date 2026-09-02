@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/Toast';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Check, Copy, KeyRound, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { DEFAULT_API_SCOPES } from '@/lib/apiScopes';
 import type { SwaggerUISystem } from 'swagger-ui-dist/swagger-ui-es-bundle.js';
 import 'swagger-ui-dist/swagger-ui.css';
 
@@ -307,7 +308,9 @@ export function ApiExplorer() {
       const res = await fetch('/api/admin/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: `Swagger UI — ${stamp}` }),
+        // A key must carry at least one scope (#1545). The explorer only ever
+        // needs to read, so it mints the read-only default set.
+        body: JSON.stringify({ name: `Swagger UI — ${stamp}`, scopes: [...DEFAULT_API_SCOPES] }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
