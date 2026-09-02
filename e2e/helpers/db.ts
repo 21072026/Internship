@@ -80,3 +80,80 @@ export async function acceptContributorTerms(
     data: { userId, termsKey, version: terms.version, projectId: opts.projectId ?? null },
   });
 }
+
+/**
+ * A tenant whose pipeline is NOT the default catalogue (#1886).
+ *
+ * Every other spec runs against `resolvePipelineStages()`'s fallback, so a
+ * consumer that hardcodes `'HIRED_660'` passes the whole suite and only
+ * misbehaves for a customer who renamed their stages. This seeds exactly that
+ * customer: six `PipelineStage` rows keyed `STAGE_A`…`STAGE_F`, an admin, and a
+ * relation that has actually travelled from the first stage to the last one, so
+ * the funnel has a journey to report on.
+ */
+export async function seedCustomPipelineOrg(prefix: string, password: string) {
+  const org = await prisma.organization.create({
+    data: { slug: `${prefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`, name: `${prefix} Org` },
+  });
+  const keys = ['STAGE_A', 'STAGE_B', 'STAGE_C', 'STAGE_D', 'STAGE_E', 'STAGE_F'];
+  await prisma.pipelineStage.createMany({
+    data: keys.map((key, i) => ({
+      orgId: org.id,
+      key,
+      label: `Custom ${key.slice(-1)}`,
+      order: i,
+      // Only the last stage ends the journey; nothing here is off-path, so the
+      // whole set is the on-path order the funnel reports.
+      isTerminal: i === keys.length - 1,
+      isOffPath: false,
+    })),
+  });
+
+  const adminEmail = uniqueEmail(`${prefix}-admin`);
+  const mentorEmail = uniqueEmail(`${prefix}-mentor`);
+  const menteeEmail = uniqueEmail(`${prefix}-mentee`);
+  const admin = await seedUser(adminEmail, password, 'ADMIN', `${prefix} Admin`);
+  const mentor = await seedUser(mentorEmail, password, 'MENTOR', `${prefix} Mentor`);
+  const mentee = await seedUser(menteeEmail, password, 'MENTEE', `${prefix} Mentee`);
+  await prisma.user.updateMany({
+    where: { id: { in: [admin.id, mentor.id, mentee.id] } },
+    data: { orgId: org.id },
+  });
+
+  const relation = await prisma.mentorshipRelation.create({
+    data: {
+      orgId: org.id,
+      mentorId: mentor.id,
+      menteeId: mentee.id,
+      pipelineStatus: 'STAGE_F',
+      startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+  await prisma.statusChange.create({
+    data: {
+      relationId: relation.id,
+      fromStatus: 'STAGE_A',
+      toStatus: 'STAGE_F',
+      changedById: admin.id,
+    },
+  });
+
+  return {
+    org,
+    relationId: relation.id,
+    adminEmail,
+    emails: [adminEmail, mentorEmail, menteeEmail],
+    stageKeys: keys,
+  };
+}
+
+/** Teardown for {@link seedCustomPipelineOrg}. */
+export async function cleanupCustomPipelineOrg(orgId: string, emails: string[]) {
+  // Explicit, in dependency order: PipelineStage cascades from Organization,
+  // but a partial failure should still leave nothing behind.
+  await prisma.statusChange.deleteMany({ where: { relation: { orgId } } });
+  await prisma.mentorshipRelation.deleteMany({ where: { orgId } });
+  await prisma.pipelineStage.deleteMany({ where: { orgId } });
+  for (const email of emails) await cleanupByEmail(email);
+  await prisma.organization.delete({ where: { id: orgId } }).catch(() => {});
+}
