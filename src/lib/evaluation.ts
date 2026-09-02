@@ -38,6 +38,40 @@ export const ALL_CRITERIA = [...EVAL_CRITERIA, ...MENTOR_CRITERIA] as const;
 
 export const EVALUATION_TYPES = ['INTERIM', 'FINAL'] as const;
 
+// How long an evaluation stays correctable (#1893). A typo in a score used to
+// force delete-and-rewrite, which threw away the record's place in history; a
+// bounded window makes it a correction rather than a rewrite of the past.
+// Server-side is what decides — the UI imports the same rule only so it does
+// not offer a button the route would refuse.
+export const EVALUATION_EDIT_WINDOW_DAYS = 7;
+
+/** Is this evaluation still inside its correction window? */
+export function isWithinEditWindow(createdAt: Date | string, now: Date = new Date()): boolean {
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return false;
+  return now.getTime() - created <= EVALUATION_EDIT_WINDOW_DAYS * 86_400_000;
+}
+
+/**
+ * Has this record actually been corrected?
+ *
+ * `Evaluation.updatedAt` cannot answer that on its own: Prisma stamps
+ * `@updatedAt` on CREATE too, so every freshly written evaluation carries one
+ * roughly equal to `createdAt`. A correction is a write that happened
+ * meaningfully after the row was created — hence the comparison rather than a
+ * null check, and hence a second column would only be a duplicate of it.
+ */
+export function wasCorrected(
+  createdAt: Date | string,
+  updatedAt: Date | string | null | undefined
+): boolean {
+  if (!updatedAt) return false;
+  const created = new Date(createdAt).getTime();
+  const updated = new Date(updatedAt).getTime();
+  if (Number.isNaN(created) || Number.isNaN(updated)) return false;
+  return updated - created > 1_000;
+}
+
 // Which side of the relationship a rubric scores.
 export const EVALUATION_SCOPES = ['MENTEE', 'MENTOR'] as const;
 export type EvaluationScope = (typeof EVALUATION_SCOPES)[number];

@@ -1779,6 +1779,14 @@ model Evaluation {
   scores      Json           @default("{}") // { criterion: 1..5 }
   comment     String?        @db.Text
   createdAt   DateTime       @default(now())
+  // Last write, so a correction inside the edit window is visible (#1893).
+  // Nullable on purpose: unlike InterviewPanel (created with the column) this
+  // table is already populated, and a required DATETIME(3) with no default
+  // would be a risky `db push --accept-data-loss`. Null therefore means "row
+  // predates #1893". Note that Prisma stamps @updatedAt on CREATE as well, so
+  // a non-null value alone does NOT mean the record was corrected — that is
+  // derived by comparing it with createdAt (src/lib/evaluation.ts).
+  updatedAt   DateTime?      @updatedAt
   // Which rubric this was scored against (#822). Null means the built-in 4+4
   // criteria, which is every row written before org templates existed and every
   // row in an org that never defined one. Stamped at write time so a record

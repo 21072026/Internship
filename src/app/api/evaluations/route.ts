@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
-import { EVALUATION_TYPES } from '@/lib/evaluation';
+import { EVALUATION_TYPES, isWithinEditWindow, wasCorrected } from '@/lib/evaluation';
 import { allowedCriterionKeys, criteriaByTemplate, resolveTemplateId } from '@/lib/evaluationTemplates';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { notifyIfAllowed } from '@/lib/notify';
@@ -66,13 +66,19 @@ export async function GET(request: Request) {
     evaluations.map((e) => e.templateId).filter((id): id is string => !!id)
   );
   // Tag each evaluation with its direction so the UI can pick the right rubric,
-  // and with whether the viewer may remove it (author or admin) so the panel
-  // only offers a delete button where the DELETE route would actually allow it.
+  // and with whether the viewer may remove or correct it (author or admin) so
+  // the panel only offers a button where the route would actually allow it —
+  // PATCH re-checks the 7-day window itself (#1893).
+  const mine = (e: { authorId: string }) => e.authorId === session.user.id || session.user.role === 'ADMIN';
   return NextResponse.json({
     evaluations: evaluations.map((e) => ({
       ...e,
       direction: e.authorId === rel.menteeId ? 'MENTEE_ON_MENTOR' : 'MENTOR_ON_MENTEE',
-      canDelete: e.authorId === session.user.id || session.user.role === 'ADMIN',
+      canDelete: mine(e),
+      canEdit: mine(e) && isWithinEditWindow(e.createdAt),
+      // Derived here rather than in the browser: `updatedAt` is also stamped on
+      // create, so it alone would mark every new record as corrected.
+      corrected: wasCorrected(e.createdAt, e.updatedAt),
     })),
     templates,
   });
