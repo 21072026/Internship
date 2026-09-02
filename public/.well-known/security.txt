@@ -1,0 +1,33 @@
+# Internship CRM — security contact, machine readable (RFC 9116, #2031).
+#
+# Served straight out of public/, so it needs no route handler — verified
+# against `next start`, which returns 200 with `text/plain; charset=UTF-8`
+# despite the leading-dot directory. The middleware never sees this path
+# either: its matcher excludes anything containing a dot (src/middleware.ts).
+#
+# The human-readable versions of the same thing:
+#
+#   SECURITY.md                              — how to report, what to expect
+#   docs/trust/vulnerability-disclosure.md   — scope, safe harbour, timeline
+#   docs/trust/pentest.md                    — what has been tested, and what has not
+#
+# SELF-HOSTERS: this file travels with the AGPL source. If you run your own
+# instance, replace `Contact:` with a channel YOU monitor — a report about your
+# deployment's data should not arrive at this project's issue tracker. Reports
+# about the *code* are welcome here either way.
+#
+# `Canonical:` is deliberately absent. The same bytes are served from
+# production, preview and every per-PR environment (see the deployment table in
+# CLAUDE.md); a canonical URI that disagrees with the host it was fetched from
+# is worse than none at all.
+#
+# RENEWAL: `Expires` below is under a year out, as RFC 9116 § 2.5.5 asks.
+# e2e/security-txt.spec.ts fails when the date is in the past OR more than a
+# year out, which is the reminder — when it goes red, re-read this file, confirm
+# the contact and the policy still hold, then push the date out again.
+
+Contact: https://github.com/21072026/Internship/security/advisories/new
+Expires: 2027-06-30T00:00:00.000Z
+Preferred-Languages: en, tr, de
+Policy: https://github.com/21072026/Internship/blob/main/docs/trust/vulnerability-disclosure.md
+Acknowledgments: https://github.com/21072026/Internship/blob/main/CHANGELOG.md

@@ -5385,3 +5385,41 @@ sorunsuz çalıştı). Tarayıcı açmayan prisma-only spec'ler bu sorunu hiç g
 
 **MariaDB oturum içinde durabiliyor:** `db push` bir anda P1001 verdiyse kutunun
 ağı değil, `service mariadb start`'ı tekrar çalıştırmak gerekiyor.
+
+## 2026-09-02 — `public/.well-known/` gerçekten sunuluyor; ve mount noktası başka bir PR'ın dosyasıysa (#2031)
+
+**`public/.well-known/security.txt`'in sunulduğunu varsaymayın — ölçün; ama sonuç iyi.**
+Kaynağı okuyup ters sonuca varmak kolay: Next statik dosyaları `send` ile veriyor,
+`send`'in `dotfiles` seçeneği belirtilmediğinde `"ignore"` oluyor
+(`node_modules/next/dist/compiled/send/index.js`), ve `containsDotFile()` yol
+parçalarında `.well-known`'ı görüp 404 üretiyor gibi duruyor —
+`router-server.js:384` `serveStatic`'i `{ root, etag }` ile, `dotfiles` **vermeden**
+çağırıyor. Buna rağmen gerçek davranış **200 + `text/plain; charset=UTF-8`**. Ders:
+statik sunum zincirinde kaynak okumasıyla varılan sonuç kanıt değil; `npm run build`
+sonrası `npx next start -p <port>` + `curl -i --noproxy '*'` 15 saniye sürüyor ve
+tartışmayı bitiriyor. (Kutuda `curl`'ün proxy'ye gitmemesi için `--noproxy '*'` şart;
+DB olmadan da statik istek dönüyor.)
+
+**`src/middleware.ts` matcher'ı bu yolu zaten dışlıyor:** `'/((?!api/|_next/|auth/|.*\\.).*)'`
+— içinde nokta olan her şey dosya sayılıyor, yani `/.well-known/security.txt`
+middleware'e hiç uğramıyor. Yeni bir statik dosya eklerken kontrol edilecek ikinci yer
+`.dockerignore` (`*.md` hariç tutuluyor, `public/` girmiyor) ve `Dockerfile`'daki
+`COPY --from=builder /app/public ./public`.
+
+**Paylaşılan `node_modules` symlink'i Prisma client'ı için yarış demek.** Worktree'ye
+`ln -s /home/user/Internship/node_modules` bağlayıp `npx prisma generate` çalıştırmak
+yetmiyor: aynı node_modules'ü kullanan başka bir oturum kendi şemasından yeniden üretince
+`tsc --noEmit` sizin şemanızdaki alanları (bu turda `User.density`) "yok" diye
+raporluyor. Şema kaynaklı gibi görünen ani tip hatalarında ilk hamle `npx prisma generate`
+tekrar — kodda değişiklik aramak değil.
+
+**Mount noktası başka bir açık PR'ın dosyasıysa, o dosyayı yaratmak çözüm değil.**
+Bu görev (#2031) "Assurance bölümünü `src/app/trust/page.tsx`'e bağla" diyordu; o dosya
+`main`'de yok, kardeş görev #2027'nin açık PR'ında (#2122) geliyor. Aynı yolu ikinci bir
+dalda yaratmak add/add çakışması demek ve iki PR'ı da bloke ediyor. Yapılan: içerik
+(`src/lib/trustAssurance.ts`) ve bileşen (`src/components/trust/AssuranceSection.tsx`)
+tek satırla mount edilecek şekilde bağımsız yazıldı, EN/TR/DE parity'si `Record<Locale, …>`
+ile **tip düzeyinde** zorunlu kılındı (`check:i18n`'e ek olarak `tsc` de yakalıyor), ve
+e2e spec'i listeyi import edip her hedefin var olduğunu doğruluyor. Sıralı görevlerde
+"komşunun dosyasına dokunmayan" arayüzü baştan tasarlamak, sonra çakışmayı çözmekten
+ucuz.

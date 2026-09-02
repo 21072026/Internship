@@ -7,6 +7,21 @@ from you than read about it later.
 The security *model* — what protects what — is documented further down, under
 [Security overview](#security-overview).
 
+Three companion documents, for the questions this file does not answer:
+
+- [`docs/trust/vulnerability-disclosure.md`](docs/trust/vulnerability-disclosure.md)
+  — the same reporting channel, plus the parts a security reviewer asks to see
+  in writing: which environments are in scope, the **safe harbour** for
+  good-faith research, and the disclosure timeline.
+- [`docs/trust/pentest.md`](docs/trust/pentest.md) — what has actually been
+  tested, what has never been examined, and which findings are **open right
+  now**. No external penetration test has been commissioned yet.
+- [`docs/trust/soc2-decision.md`](docs/trust/soc2-decision.md) — there is no
+  SOC 2 report and none is in progress; here is the costed decision instead.
+
+The machine-readable pointer to all of it is
+[`/.well-known/security.txt`](public/.well-known/security.txt).
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue.** That discloses the problem to everyone

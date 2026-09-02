@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "- **The assurance layer behind the trust claims** (#2031). New `public/.well-known/security.txt` (RFC 9116: `Contact`, a renewable `Expires` under a year, `Preferred-Languages`, `Policy`, `Acknowledgments`), and four published documents: `docs/trust/vulnerability-disclosure.md` (scope, safe harbour, response targets, and \"there is no bug bounty\" said out loud), `docs/trust/pentest.md` (the cadence commitment, the internal audit method, the areas proven correct, the areas never examined, and the three open findings under #1522 — no external test has been commissioned and the page says so first), `docs/trust/questionnaire-answers.md` (a CAIQ/SIG-lite answer library where every row carries an evidence path in this repo and every \"no\" is written as a no) and `docs/trust/soc2-decision.md` (SOC 2 Type II costed at roughly €40–80k in year one, with the prerequisites we do not meet — host separation, #1515, #1591 — and the trigger condition; explicitly not an implementation plan). `src/lib/trustAssurance.ts` + `src/components/trust/AssuranceSection.tsx` hold the EN/TR/DE \"Assurance\" block the /trust page (#2027) mounts in one line. `e2e/security-txt.spec.ts` asserts the file is served, that its `Expires` is neither past nor more than a year out, and that every document it and the Assurance list point at exists.",
+  "notes": {
+    "en": [
+      "Security researchers now have a published address and policy: /.well-known/security.txt plus a vulnerability disclosure policy with scope, safe harbour and response targets.",
+      "Our security testing is public — including what has never been tested and the findings still open. No external penetration test has been commissioned yet, and the page says so."
+    ],
+    "tr": [
+      "Güvenlik araştırmacıları için artık yayımlanmış bir adres ve politika var: /.well-known/security.txt ve kapsamı, güvenli limanı ve yanıt sürelerini yazan bir zafiyet bildirim politikası.",
+      "Güvenlik testlerimiz herkese açık — hiç test edilmemiş alanlar ve hâlâ açık olan bulgular dahil. Henüz dış bir sızma testi yapılmadı ve sayfa bunu açıkça söylüyor."
+    ],
+    "de": [
+      "Sicherheitsforschende haben jetzt eine veröffentlichte Adresse und Richtlinie: /.well-known/security.txt sowie eine Richtlinie zur Offenlegung von Schwachstellen mit Geltungsbereich, Safe Harbour und Reaktionszeiten.",
+      "Unsere Sicherheitstests sind öffentlich — einschließlich der nie geprüften Bereiche und der noch offenen Feststellungen. Ein externer Penetrationstest wurde bisher nicht beauftragt, und die Seite sagt das."
+    ]
+  }
+}
