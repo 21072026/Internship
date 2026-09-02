@@ -42,7 +42,9 @@ test('mentor global search finds own mentee and navigates to their profile, not 
     const searchResponse = page.waitForResponse((r) => r.url().includes('/api/search') && r.url().includes('Quixara'));
     await page.locator('[data-testid="global-search-input"]').fill('Quixara Voltmoss');
     await searchResponse;
-    await page.getByRole('button', { name: mentee.fullName }).click();
+    // The result rows are combobox options now (#2075), not plain buttons — the
+    // explicit role="option" replaces the implicit button role in the a11y tree.
+    await page.getByRole('option', { name: new RegExp(mentee.fullName) }).click();
     await page.waitForURL((u) => u.pathname === `/mentor/mentees/${relation.id}`, { timeout: 10_000 });
   } finally {
     await cleanupByEmail(menteeEmail);

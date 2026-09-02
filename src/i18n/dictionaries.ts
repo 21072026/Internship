@@ -2759,6 +2759,11 @@ const en = {
   search: {
     placeholder: 'Search people, companies…',
     company: 'Company',
+    results: 'Search results',
+    noResults: 'No matches found',
+    // Count-neutral on purpose: this string goes into an aria-live region for
+    // any number of hits, so it must not read "1 results".
+    resultsCount: 'Results: {count}',
   },
   savedViews: {
     save: 'Save view',
@@ -6264,6 +6269,9 @@ const tr: Dict = {
   search: {
     placeholder: 'Kişi, şirket ara…',
     company: 'Şirket',
+    results: 'Arama sonuçları',
+    noResults: 'Eşleşme bulunamadı',
+    resultsCount: 'Sonuç: {count}',
   },
   savedViews: {
     save: 'Görünümü kaydet',
@@ -9765,6 +9773,9 @@ const de: Dict = {
   search: {
     placeholder: 'Personen, Unternehmen suchen…',
     company: 'Unternehmen',
+    results: 'Suchergebnisse',
+    noResults: 'Keine Treffer gefunden',
+    resultsCount: 'Ergebnisse: {count}',
   },
   savedViews: {
     save: 'Ansicht speichern',
