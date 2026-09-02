@@ -45,6 +45,12 @@ interface Msg {
 
 // Fixed reaction set (mirrors the server's REACTION_EMOJIS).
 const REACTIONS = ['👍', '❤️', '😂', '😮', '🎉'] as const;
+// Typing indicator (#1871). One publish per thread per throttle window — the
+// point is "someone is writing", not a keystroke feed — and the receiving side
+// forgets it EXPIRY after the last event it heard, because there is no
+// "stopped typing" event to wait for and a stuck indicator is worse than none.
+const TYPING_THROTTLE_MS = 3_000;
+const TYPING_EXPIRY_MS = 5_000;
 interface Party {
   id: string;
   fullName: string;
@@ -125,6 +131,82 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     });
   };
 
+  // Draft (#1871). A half-written reply is per thread and per device, so
+  // localStorage is the whole store: no table, no endpoint, and nothing about an
+  // unsent message ever leaves the browser. Every access is wrapped — in a
+  // private window or with site data blocked even the *getter* throws, and a
+  // composer that cannot remember a draft must still be a composer.
+  const draftKey = `messages-draft-${target.kind}-${target.id}`;
+  const draftKeyRef = useRef<string | null>(null);
+
+  const saveDraft = useCallback((value: string) => {
+    try {
+      if (value) localStorage.setItem(draftKey, value);
+      else localStorage.removeItem(draftKey);
+    } catch { /* ignore */ }
+  }, [draftKey]);
+
+  // Every write to the box goes through here, so the draft is saved by the same
+  // action that changed it. An effect keyed on `body` would instead run once
+  // more right after the thread changed — with the previous thread's text still
+  // in state — and stamp it onto the new thread's key.
+  const changeBody = useCallback((value: string) => {
+    setBody(value);
+    saveDraft(value);
+  }, [saveDraft]);
+
+  useEffect(() => {
+    const previous = draftKeyRef.current;
+    draftKeyRef.current = draftKey;
+    let saved = '';
+    try { saved = localStorage.getItem(draftKey) ?? ''; } catch { /* ignore */ }
+    // Switching threads without remounting: show this thread's draft, or an
+    // empty box. The other thread's text is already stored under its own key.
+    if (previous !== null && previous !== draftKey) { setBody(saved); return; }
+    // First run for this mount: never overwrite something already typed — the
+    // box is interactive before effects have run.
+    if (saved) setBody((current) => current || saved);
+  }, [draftKey]);
+
+  // Typing indicator (#1871). Outbound: a throttled POST that stores nothing.
+  // Inbound: a senderId -> expiry map this component prunes itself.
+  const lastTypingSentRef = useRef(0);
+  const [typingUntil, setTypingUntil] = useState<Record<string, number>>({});
+
+  const notifyTyping = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < TYPING_THROTTLE_MS) return;
+    lastTypingSentRef.current = now;
+    void fetch('/api/realtime/typing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [target.kind === 'relation' ? 'relationId' : 'conversationId']: target.id }),
+    }).catch(() => { /* a courtesy signal must never surface as an error */ });
+  }, [target.kind, target.id]);
+
+  // A thread switch inside one mount must not inherit the previous thread's
+  // indicator (it would linger for up to TYPING_EXPIRY_MS), and the outbound
+  // throttle starts fresh so the first keystroke in the new thread is announced.
+  useEffect(() => {
+    setTypingUntil({});
+    lastTypingSentRef.current = 0;
+  }, [target.kind, target.id]);
+
+  const someoneTyping = Object.keys(typingUntil).length > 0;
+  useEffect(() => {
+    if (!someoneTyping) return;
+    const timer = setInterval(() => {
+      setTypingUntil((prev) => {
+        const now = Date.now();
+        const live = Object.entries(prev).filter(([, until]) => until > now);
+        // Hand the same object back when nothing expired, so this does not
+        // re-render the whole thread once a second.
+        return live.length === Object.keys(prev).length ? prev : Object.fromEntries(live);
+      });
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, [someoneTyping]);
+
   // Enter/Shift+Enter behaviour depends on the preference above; ArrowUp on an
   // empty box edits your last message (WhatsApp/Slack/Telegram style).
   const onComposerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -179,9 +261,18 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // None of the three says *which* thread moved, so they reload unconditionally.
   useRealtime((signal) => {
     if (signal.type === 'tick' || signal.type === 'ready' || signal.type === 'unread') { void load(); return; }
-    if (signal.type !== 'message') return;
+    if (signal.type !== 'message' && signal.type !== 'typing') return;
     const mine = target.kind === 'relation' ? signal.relationId === target.id : signal.conversationId === target.id;
-    if (mine) void load();
+    if (!mine) return;
+    if (signal.type === 'typing') {
+      // Nothing to refetch: the thread has not changed, someone is only
+      // writing into it. Remember who, until it expires above.
+      const who = signal.senderId;
+      if (!who || who === myId) return;
+      setTypingUntil((prev) => ({ ...prev, [who]: Date.now() + TYPING_EXPIRY_MS }));
+      return;
+    }
+    void load();
   });
   // `block: 'end'` keeps this inside the bubble scroller instead of nudging the
   // page: on mobile the list is the only scrollable box (see MessagesShell).
@@ -243,6 +334,8 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       }
       if (res.ok) {
         setBody('');
+        // Sent, so there is no draft left to restore on the next visit.
+        saveDraft('');
         attachments.forEach((a) => URL.revokeObjectURL(a.url));
         setAttachments([]);
         if (fileRef.current) fileRef.current.value = '';
@@ -314,6 +407,12 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   };
 
   const nameFor = (id: string) => parties.find((p) => p.id === id)?.fullName ?? '—';
+  // Resolved through the participants already loaded for the thread; an id we
+  // cannot name (someone added to a group chat since the last fetch) is dropped
+  // rather than announced as a dash.
+  const typingNames = Object.keys(typingUntil)
+    .map((id) => (parties.find((p) => p.id === id)?.fullName ?? '').trim().split(/\s+/)[0] ?? '')
+    .filter(Boolean);
   // Header shows the other side (the only other party in a 1:1 thread).
   const other = parties.find((p) => p.id !== myId) ?? null;
   // A group chat has no "other side" — it is named after its project.
@@ -346,7 +445,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // No explicit caret handling — writing a new `value` into a textarea puts the
   // caret at the end by itself, which is where an unfinished opener continues.
   const applySuggestion = (text: string) => {
-    setBody(text);
+    changeBody(text);
     bodyRef.current?.focus();
   };
 
@@ -649,10 +748,26 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
           </div>
         </div>
       )}
+      {/* Always in the DOM so the live region is registered before it has
+          anything to say — a screen reader does not reliably announce an
+          aria-live element that appears at the same moment as its text. When
+          there is nothing to say it is `sr-only`, which keeps it out of the
+          layout rather than reserving a strip above the composer. */}
+      <p
+        className={`text-xs text-gray-500 dark:text-gray-400 ${typingNames.length > 0 ? 'mb-1.5' : 'sr-only'}`}
+        data-testid="typing-indicator"
+        aria-live="polite"
+      >
+        {typingNames.length === 0
+          ? ''
+          : typingNames.length === 1
+            ? t.messages.typing.replace('{name}', typingNames[0])
+            : t.messages.typingMany}
+      </p>
       <PendingAttachmentList attachments={attachments} onRemove={removeAttachment} removeLabel={t.common.delete} />
       <MessageComposer
         body={body}
-        onBodyChange={setBody}
+        onBodyChange={(value) => { changeBody(value); if (value) notifyTyping(); }}
         onSubmit={() => void send()}
         sending={sending}
         hasAttachments={attachments.length > 0}

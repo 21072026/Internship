@@ -147,7 +147,11 @@ export async function GET(request: Request) {
           relationId: event.relationId ?? null,
           senderId: event.senderId ?? null,
         });
-        pushCounts('sync');
+        // `typing` is the one event that moves no counter (#1871), and it
+        // arrives up to once every 3s per open thread per participant — one
+        // coalesced pair of unread COUNTs each would be a database round trip
+        // per keystroke burst for a number that cannot have changed.
+        if (event.type !== 'typing') pushCounts('sync');
       });
       // Lost the race against the per-user cap between the check above and here.
       if (!unsubscribe) {
