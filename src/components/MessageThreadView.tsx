@@ -22,6 +22,7 @@ import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { LanguageBadge } from '@/components/LanguageBadge';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
+import { scrollBehavior } from '@/lib/reducedMotion';
 
 interface Attachment {
   id: string;
@@ -191,7 +192,9 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // back through the thread down to the bottom every few seconds.
   const lastMessageId = messages.length ? messages[messages.length - 1].id : null;
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    // `scrollBehavior()` is 'auto' for someone who asked their OS to reduce
+    // motion — CSS cannot override an explicit ScrollOptions.behavior (#2045).
+    endRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'end' });
   }, [lastMessageId]);
 
   const addFiles = (list: FileList | File[]) => {

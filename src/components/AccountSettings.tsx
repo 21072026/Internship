@@ -986,7 +986,9 @@ export function AccountSettings() {
                   aria-label={(t.account.accentColors as Record<string, string>)[c] ?? c}
                   title={(t.account.accentColors as Record<string, string>)[c] ?? c}
                   onClick={() => changeAccent(c)}
-                  className={`h-8 w-8 rounded-full ring-offset-2 ring-offset-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 ${selected ? 'ring-2 ring-gray-500' : 'ring-1 ring-gray-200 hover:ring-gray-300'}`}
+                  // `accent-swatch` opts this one control out of the forced-colors
+                  // palette (globals.css, #2045): the fill is the content.
+                  className={`accent-swatch h-8 w-8 rounded-full ring-offset-2 ring-offset-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 ${selected ? 'ring-2 ring-gray-500' : 'ring-1 ring-gray-200 hover:ring-gray-300'}`}
                   style={{ backgroundColor: ACCENT_SWATCH[c] }}
                 >
                   {selected && <span className="flex items-center justify-center text-white text-sm leading-none">✓</span>}

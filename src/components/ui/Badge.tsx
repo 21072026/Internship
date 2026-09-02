@@ -26,7 +26,10 @@ export function Badge({ className, variant = 'default', children, ...props }: Ba
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium',
+        // `ui-badge` is a styling hook for the forced-colors layer in globals.css
+        // (#2045): the variant tint is discarded by the forced palette, so the
+        // pill needs an outline to stay a distinct chip.
+        'ui-badge inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium',
         variants[variant],
         className
       )}

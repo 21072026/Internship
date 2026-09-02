@@ -373,3 +373,160 @@ textarea:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
 }
+
+/* ==========================================================================
+ * OS accessibility media preferences (#2045).
+ *
+ * Three user preferences the app used to ignore completely — a repo-wide grep
+ * for them returned nothing. They are grouped here, at the very end of the
+ * file, on purpose: several of them have to out-rank the dark-mode layer or
+ * the accent layer above, and those two score identically (`html.dark` and
+ * `html[data-accent]` are both 0,2,0), so **source order is the only lever**.
+ * Anything added below must therefore repeat the `html.dark` /
+ * `html[data-accent]` prefix rather than rely on a bare utility selector —
+ * see the long note at the `text-blue-600` rule for how that trap plays out.
+ *
+ * None of these rules exist outside their media query, so the default light
+ * theme and the dark theme are byte-for-byte unchanged for a user who has set
+ * no preference. That also keeps the axe baseline (which scans without
+ * emulating any of them) untouched.
+ * ========================================================================== */
+
+/* --- 1. Reduced motion ---------------------------------------------------
+ * The standard blanket remedy. It does NOT remove behaviour: a transition
+ * with a ~0 duration still fires its `transitionend`, and a state-driven
+ * class swap (the mobile drawer's `translate-x-0` / `-translate-x-full`)
+ * still happens — it just happens instantly. Only the animation goes.
+ *
+ * What this cannot reach: a scripted scroll that names its own behaviour, as
+ * `scrollIntoView({ behavior: 'smooth' })` overrides `scroll-behavior`. Those
+ * two call sites ask `prefersReducedMotion()` (src/lib/reducedMotion.ts).
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /*
+   * Skeletons are the one place where the blanket rule is not enough: their
+   * only affordance is the pulse (`animate-pulse` on a bg-gray-100 block), and
+   * freezing that leaves a barely-visible grey bar that reads as an empty
+   * page rather than as "loading". Give them a static, clearly-drawn
+   * placeholder instead — an inset ring, so no layout shifts.
+   * `html.dark .ui-skeleton` repeats the prefix because the component's own
+   * `dark:bg-gray-800` utility is (0,2,0) and would otherwise win.
+   */
+  .ui-skeleton {
+    background-color: #e5e7eb;                     /* gray-200 */
+    box-shadow: inset 0 0 0 1px #d1d5db;           /* gray-300 */
+  }
+  html.dark .ui-skeleton {
+    background-color: #374151;                     /* gray-700 */
+    box-shadow: inset 0 0 0 1px #4b5563;           /* gray-600 */
+  }
+}
+
+/* --- 2. Increased contrast -----------------------------------------------
+ * Same flat-utility remap mechanism as the dark-mode layer above: the app is
+ * built from a handful of neutral utilities, so retinting those few covers
+ * the whole product without touching a single component.
+ *
+ * Hairline borders (gray-100/200) become clearly drawn lines, and the two
+ * secondary text tones (gray-400/500) move up to a tone that clears AAA on
+ * their surface. Every rule is duplicated for `html.dark` — not for tidiness
+ * but because the dark layer's own `html.dark .text-gray-500` is (0,2,0) and
+ * would swallow a bare (0,1,0) rule here regardless of source order.
+ */
+@media (prefers-contrast: more) {
+  /* Borders */
+  .border-gray-100 { border-color: #6b7280; }      /* gray-500 */
+  .border-gray-200 { border-color: #4b5563; }      /* gray-600 */
+  .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: #6b7280; }
+  .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #6b7280; }
+  html.dark .border-gray-100 { border-color: #9ca3af; }   /* gray-400 */
+  html.dark .border-gray-200 { border-color: #d1d5db; }   /* gray-300 */
+  html.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: #9ca3af; }
+  html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #9ca3af; }
+  /* Secondary text */
+  .text-gray-400 { color: #374151; }               /* gray-700 */
+  .text-gray-500 { color: #1f2937; }               /* gray-800 */
+  html.dark .text-gray-400 { color: #e5e7eb; }     /* gray-200 */
+  html.dark .text-gray-500 { color: #f3f4f6; }     /* gray-100 */
+  /* The one hover variant the app compiles (`hover:text-gray-500`, the goal
+     toggle). Base-name remaps cannot reach it — the class is a different name —
+     and without it hovering that icon would land *below* the resting tone the
+     rules above establish. Same reason the dark layer re-tints its hovers. */
+  .hover\:text-gray-500:hover { color: #1f2937; }
+  html.dark .hover\:text-gray-500:hover { color: #f3f4f6; }
+}
+
+/* --- 3. Forced colors (Windows High Contrast) ----------------------------
+ * The OS replaces every author colour with a small system palette, so
+ * anything that carried meaning in a background colour stops carrying it.
+ */
+@media (forced-colors: active) {
+  /*
+   * (a) The keyboard focus ring. Its authored colour (#2563eb, or the user's
+   * accent) is discarded by the forced palette, which can leave the ring
+   * painted in the same colour as the text beside it. `Highlight` is the
+   * system's own selection colour and is guaranteed to contrast with `Canvas`.
+   *
+   * `!important` is deliberate, and this is the one place in the file that
+   * earns it. A bare `a:focus-visible` scores (0,1,1) and is out-ranked by
+   * BOTH `html[data-accent] a:focus-visible` (0,2,1) — data-accent is always
+   * present, see the note at the `text-blue-600` rule — and any element
+   * carrying Tailwind's `focus:outline-none` (0,2,0), which sets a
+   * *transparent* 2px outline and pairs it with a `ring-*` box-shadow that
+   * forced-colors then throws away. Both of those end in no visible focus
+   * indicator at all, which is a hard WCAG 2.4.7 failure rather than a styling
+   * preference, so the ring wins outright here.
+   */
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+
+  /*
+   * (b) Opt out of the forced palette ONLY where the colour IS the content.
+   * The accent swatches in /account are a colour picker: six identically
+   * shaped circles whose entire meaning is their fill. Forced into one system
+   * colour they become six indistinguishable dots. This is the single
+   * documented exception — do not add another without the same argument.
+   * Keeping the element's own colours also preserves its `ring-*` selection
+   * indicator, which is a box-shadow and would otherwise be dropped.
+   */
+  .accent-swatch { forced-color-adjust: none; }
+
+  /*
+   * (c) Nothing may convey state by background colour alone.
+   *   • Badges (`Badge`, `RoleBadge`, `StatusBadge`) are pills whose variant is
+   *     a bg-*-100 tint. The tint goes; the pill itself would disappear into
+   *     the page. An inset outline in the current text colour keeps it a
+   *     distinct chip — outline rather than border so no layout moves. The
+   *     label text already carries the meaning.
+   *   • Board columns highlight the active drop target with `bg-blue-50`,
+   *     which is invisible under forced colours (both states also have a
+   *     border, so the border does not distinguish them either). The columns
+   *     mark themselves with data-drop-active so the target can be outlined.
+   *     The WIP chip is deliberately not listed: it already differs by text
+   *     ("12 / 10" vs "12"), not only by colour.
+   */
+  .ui-badge {
+    outline: 1px solid currentColor;
+    outline-offset: -1px;
+  }
+  [data-drop-active='true'] {
+    outline: 3px solid Highlight;
+    outline-offset: -3px;
+  }
+}

@@ -179,6 +179,9 @@ export default function MentorBoardPage() {
             return (
               <div
                 key={status}
+                // See the admin board: forced-colors drops the bg-blue-50 drop
+                // target highlight, so mark the state for globals.css (#2045).
+                data-drop-active={dragOver === status ? 'true' : undefined}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragOver(status);
