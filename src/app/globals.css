@@ -363,6 +363,24 @@ html.dark option { background-color: #111827; color: #f3f4f6; }
   }
 }
 
+/* Mentor analytics prints as a one-page report (#1913): the four stat cards and
+   the two-column grid are laid out for a screen, and at print scale the default
+   gaps push the goals card onto a second sheet. Tightened here rather than in
+   the page so the print layout stays a stylesheet concern. German is the
+   longest locale, so nothing gets a fixed width — the labels keep wrapping. */
+@media print {
+  #mentor-analytics-print {
+    font-size: 11px;
+  }
+  #mentor-analytics-print .grid {
+    gap: 0.5rem !important;
+  }
+  #mentor-analytics-print .mb-8,
+  #mentor-analytics-print .mb-6 {
+    margin-bottom: 0.75rem !important;
+  }
+}
+
 /* a11y: a clear, consistent keyboard focus ring for interactive elements. */
 a:focus-visible,
 button:focus-visible,
