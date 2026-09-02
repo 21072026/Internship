@@ -93,9 +93,13 @@ test('portal interactions uses loading, error, retry and genuine empty states', 
 
   try {
     await signInAndSettle(page, email, 'AsyncPass123!', '/portal');
+    await page.evaluate(() => { document.cookie = 'locale=tr;path=/'; });
     await page.route('**/api/interactions', async (route) => { pending.push(route); });
     await page.goto('/portal/interactions');
 
+    await expect(page.getByRole('heading', { name: 'Etkileşim Kayıtları' })).toBeVisible();
+    await expect(page.getByText('Mentörünle olan etkileşim geçmişin')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Interaction Logs' })).toHaveCount(0);
     await expect.poll(() => pending.length).toBe(1);
     await expect(page.getByTestId('async-section-loading')).toBeVisible();
     await expect(page.getByText('No interactions logged yet')).toHaveCount(0);
@@ -103,11 +107,13 @@ test('portal interactions uses loading, error, retry and genuine empty states', 
     await expect(page.getByTestId('async-section-error')).toBeVisible();
     await expect(page.getByText('No interactions logged yet')).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Try again' }).click();
+    await page.getByRole('button', { name: 'Tekrar dene' }).click();
     await expect.poll(() => pending.length).toBe(2);
     await expect(page.getByTestId('async-section-loading')).toBeVisible();
     await pending[1].fulfill({ json: { interactions: [] } });
-    await expect(page.getByText('No interactions logged yet')).toBeVisible();
+    await expect(page.getByText('Henüz etkileşim kaydı yok')).toBeVisible();
+    await expect(page.getByText('Görüşmeleriniz gerçekleştikçe mentörün etkileşimleri buraya kaydedecek.')).toBeVisible();
+    await expect(page.getByText('No interactions logged yet')).toHaveCount(0);
   } finally {
     await cleanupByEmail(email);
   }

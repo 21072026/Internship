@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Mentee /portal/interactions page is fully localized** (#1418). Replaced hard-coded English strings with EN/TR/DE dictionary keys.",
+  "notes": {
+    "en": ["The mentee interactions page (`/portal/interactions`) is now fully localized in English, Turkish and German."],
+    "tr": ["Mentee etkileşimler sayfası (`/portal/interactions`) artık İngilizce, Türkçe ve Almanca dillerinde tam olarak yerelleştirildi."],
+    "de": ["Die Mentee-Interaktionsseite (`/portal/interactions`) ist jetzt vollständig in Englisch, Türkisch und Deutsch lokalisiert."]
+  }
+}
