@@ -89,6 +89,12 @@ export async function POST(request: Request) {
       if (invitation.expiresAt < new Date()) {
         return NextResponse.json({ error: 'Invitation token has expired' }, { status: 400 });
       }
+      // Revoked (#2071). Hiding a withdrawn invitation from the admin board
+      // would leave the link live for whoever already has it, so the refusal
+      // lives on the consumption path — right beside `used` and `expiresAt`.
+      if (invitation.revokedAt) {
+        return NextResponse.json({ error: 'Invitation token has been revoked' }, { status: 400 });
+      }
       // A named invitation is bound to its address; an email-less shareable link
       // (#670) has none to match, so the registrant's own address is taken as
       // given — and written back onto the invitation further down, so the row

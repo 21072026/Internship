@@ -2285,6 +2285,13 @@ model InvitationToken {
   openedAt     DateTime?
   registeredAt DateTime?
   verifiedAt   DateTime?
+  // Revoked (#2071): an invitation the admin has withdrawn. A real state rather
+  // than a delete, so the board can still answer "what happened to that person"
+  // — and so the consumption paths (register, /api/invite/opened, resend) can
+  // refuse it. Registration checks this alongside `used`/`expiresAt`: hiding a
+  // revoked row from the list without refusing the token would leave the link
+  // live for whoever already has it.
+  revokedAt    DateTime?
 
   // Only the inviter gets a relation; mentorId/menteeId/projectId stay plain
   // columns (validated when the invitation is created) so the User model does
