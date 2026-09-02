@@ -3,15 +3,40 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Trash2 } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { formatDate, relativeTime } from '@/lib/relativeTime';
 
 interface Hook { id: string; url: string; events: string[]; active: boolean }
 interface Key { id: string; name: string; lastUsedAt: string | null; createdAt: string }
 interface GoogleStatus { configured: boolean; connected: boolean }
+interface ConnectorHealth {
+  connector: string;
+  state: string;
+  lastOkAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+  detail: Record<string, unknown>;
+}
+
+// The state vocabulary of /api/admin/integrations/health (src/lib/integrationHealth.ts).
+const STATE_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
+  ok: 'success', degraded: 'warning', failing: 'danger', not_configured: 'default',
+};
+const STATE_LABEL: Record<string, string> = {
+  ok: 'stateOk', degraded: 'stateDegraded', failing: 'stateFailing', not_configured: 'stateNotConfigured',
+};
+const CONNECTOR_LABEL: Record<string, string> = {
+  email: 'connectorEmail',
+  webhooks: 'connectorWebhooks',
+  google_calendar: 'connectorGoogle',
+  sso: 'connectorSso',
+  inbound_jaas: 'connectorInboundJaas',
+  inbound_email: 'connectorInboundEmail',
+};
 
 export default function IntegrationsPage() {
   const t = useT();
@@ -26,16 +51,19 @@ export default function IntegrationsPage() {
   const [newKey, setNewKey] = useState('');
 
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  const [health, setHealth] = useState<ConnectorHealth[]>([]);
 
   const load = useCallback(async () => {
-    const [w, k, g] = await Promise.all([
+    const [w, k, g, h] = await Promise.all([
       fetch('/api/admin/webhooks'),
       fetch('/api/admin/api-keys'),
       fetch('/api/admin/integrations/google/status'),
+      fetch('/api/admin/integrations/health'),
     ]);
     if (w.ok) { const d = await w.json(); setHooks(d.webhooks ?? []); setEventTypes(d.eventTypes ?? []); }
     if (k.ok) setKeys((await k.json()).keys ?? []);
     if (g.ok) setGoogle(await g.json());
+    if (h.ok) setHealth((await h.json()).connectors ?? []);
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -59,6 +87,8 @@ export default function IntegrationsPage() {
   };
   const delKey = async (id: string) => { await fetch(`/api/admin/api-keys?id=${id}`, { method: 'DELETE' }); await load(); };
 
+  const labels = t.integrations as unknown as Record<string, string>;
+
   const toggleEvent = (ev: string) => setEvents((p) => (p.includes(ev) ? p.filter((x) => x !== ev) : [...p, ev]));
 
   return (
@@ -67,6 +97,29 @@ export default function IntegrationsPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.integrations.title}</h1>
         <p className="text-gray-500 mt-1">{t.integrations.subtitle}</p>
       </div>
+
+      <Card className="mb-6" data-testid="integration-health">
+        <CardHeader><CardTitle>{t.integrations.health}</CardTitle></CardHeader>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{t.integrations.healthDesc}</p>
+        <div className="divide-y divide-gray-50 dark:divide-gray-800">
+          {health.map((c) => (
+            <div key={c.connector} data-testid={`health-row-${c.connector}`} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm text-gray-900 dark:text-gray-100">{labels[CONNECTOR_LABEL[c.connector]] ?? c.connector}</p>
+                <p className="text-xs text-gray-400">
+                  {t.integrations.lastOk}: {c.lastOkAt ? relativeTime(c.lastOkAt, locale) : t.integrations.never}
+                  {c.lastErrorAt ? ` · ${t.integrations.lastError}: ${relativeTime(c.lastErrorAt, locale)}` : ''}
+                </p>
+                {c.lastError && <p className="text-xs text-red-600 dark:text-red-400 break-words">{c.lastError}</p>}
+                {c.detail?.deliveryHealthPending ? <p className="text-xs text-gray-400">{t.integrations.deliveryPending}</p> : null}
+              </div>
+              <Badge variant={STATE_VARIANT[c.state] ?? 'default'} data-testid={`health-state-${c.connector}`}>
+                {labels[STATE_LABEL[c.state]] ?? c.state}
+              </Badge>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
