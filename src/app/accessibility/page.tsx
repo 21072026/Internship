@@ -142,11 +142,17 @@ export default async function AccessibilityPage() {
               <p data-testid="accessibility-feedback">{feedbackBody}</p>
               <p className="mt-2">
                 {a.feedbackAlternative}{' '}
+                {/* Underlined at rest, not only on hover: this link sits inside a
+                    sentence, and blue-600 against the surrounding gray-600 body
+                    text is under the 3:1 that WCAG 1.4.1 asks of a colour-only
+                    cue (axe link-in-text-block). The links in the lists above
+                    carry their own smaller/mono type, which is a non-colour
+                    distinction already. */}
                 <a
                   href={`${GITHUB_URL}/issues`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-600 underline underline-offset-2"
                 >
                   {a.feedbackAlternativeLink}
                 </a>
