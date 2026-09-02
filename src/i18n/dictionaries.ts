@@ -2766,6 +2766,9 @@ const en = {
   search: {
     placeholder: 'Search people, companies…',
     company: 'Company',
+    noResults: 'No results',
+    searching: 'Searching…',
+    resultCount: '{count} results',
   },
   savedViews: {
     save: 'Save view',
@@ -6278,6 +6281,9 @@ const tr: Dict = {
   search: {
     placeholder: 'Kişi, şirket ara…',
     company: 'Şirket',
+    noResults: 'Sonuç yok',
+    searching: 'Aranıyor…',
+    resultCount: '{count} sonuç',
   },
   savedViews: {
     save: 'Görünümü kaydet',
@@ -9786,6 +9792,9 @@ const de: Dict = {
   search: {
     placeholder: 'Personen, Unternehmen suchen…',
     company: 'Unternehmen',
+    noResults: 'Keine Ergebnisse',
+    searching: 'Suche läuft…',
+    resultCount: '{count} Ergebnisse',
   },
   savedViews: {
     save: 'Ansicht speichern',
