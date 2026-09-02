@@ -80,5 +80,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'emailGroups', category: 'trust', icon: MailMinus, color: 'teal', title: C.emailGroups.t, desc: C.emailGroups.d },
     { key: 'trustedDevices', category: 'trust', icon: Fingerprint, color: 'indigo', title: C.trustedDevices.t, desc: C.trustedDevices.d },
     { key: 'dormantCheckIn', category: 'tracking', icon: MailQuestion, color: 'amber', title: C.dormantCheckIn.t, desc: C.dormantCheckIn.d },
+    { key: 'matchQuality', category: 'insights', icon: Target, color: 'blue', title: C.matchQuality.t, desc: C.matchQuality.d },
   ];
 }

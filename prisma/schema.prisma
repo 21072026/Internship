@@ -107,6 +107,7 @@ model Organization {
   offers               Offer[]
   requisitions         Requisition[]
   interviewRequests    InterviewRequest[]
+  matchFeedback        MatchFeedback[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -395,6 +396,9 @@ model User {
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+  suggestedAsMentee                 MatchFeedback[]               @relation("MatchFeedbackMentee")
+  suggestedAsMentor                 MatchFeedback[]               @relation("MatchFeedbackMentor")
+  matchFeedbackActions              MatchFeedback[]               @relation("MatchFeedbackActor")
 
   @@index([role])
   @@index([referredById])
@@ -2661,4 +2665,85 @@ model GoogleCalendarEventLink {
 
   @@unique([meetingId, connectionId])
   @@index([connectionId])
+}
+
+/// What happened to one mentor suggestion (#2040).
+/// SHOWN is written the moment the suggestion is returned; ACCEPTED/DISMISSED
+/// overwrite it when the admin acts. There is deliberately no "IGNORED": a row
+/// that stays SHOWN *is* the ignored case, and a fourth state would need a
+/// sweeper to decide when hesitation became a decision.
+enum MatchFeedbackAction {
+  SHOWN
+  ACCEPTED
+  DISMISSED
+}
+
+/// The mentor-matching feedback loop (#2040): every suggestion we put in front
+/// of an admin, and what they did with it. Without this the ranking can never
+/// improve and the simplest question about it — "how often is our suggestion
+/// taken?" — has no answer.
+///
+/// Complementary to the pairing record (#1789, MatchDecision): that one stores
+/// the match that HAPPENED, this one stores the ones that did not. They share
+/// `batchId` so the two can be joined once both exist.
+///
+/// Writing here is always best-effort: a failed insert must never break a
+/// suggestion response or an assignment (same discipline as the AI metering in
+/// src/lib/aiGate.ts).
+model MatchFeedback {
+  id       String  @id @default(cuid())
+  /// Tenant anchor. Nullable like the other phase-1 tenant models; the model is
+  /// listed in TENANT_MODELS (src/lib/orgContext.ts) so Prisma queries
+  /// auto-scope once MT_ENFORCE_ISOLATION is on. The report aggregates with raw
+  /// SQL, which the middleware never sees, so it filters on orgId explicitly.
+  orgId    String?
+  menteeId String
+  mentorId String
+
+  /// One id per POST /api/admin/mentor-suggest call, returned to the client so
+  /// it can echo it back with the outcome. Every suggestion of one call — and
+  /// the eventual accept/dismiss — carries the same batchId.
+  batchId String
+
+  /// 1-based position in the list as it was shown.
+  ///
+  /// NULL means "this mentor was never in that batch's suggestion list" — i.e.
+  /// the admin assigned somebody we did not suggest. That is how an off-list
+  /// assignment stays distinguishable from accepting a suggestion, and why the
+  /// per-rank report only counts rows that have a rank.
+  ///
+  /// NOTE for raw SQL: `rank` is a reserved word in MySQL 8 — always backtick it.
+  rank           Int?
+  /// The rule-based score the row was ranked by (today: number of shared
+  /// skills). Kept so a later ranking change can be compared against this one.
+  score          Float?
+  /// Which ranking rule set produced the row (src/lib/matchFeedback.ts).
+  ruleSetVersion String?
+  /// Whether the AI re-ranking actually ran for this batch.
+  aiUsed         Boolean @default(false)
+
+  action     MatchFeedbackAction @default(SHOWN)
+  /// Short dismissal reason code — one of MATCH_DISMISS_REASONS
+  /// (src/lib/matchFeedback.ts), validated at the route. Free text goes to
+  /// reasonNote so the codes stay aggregatable.
+  reason     String?
+  reasonNote String?             @db.Text
+  /// Who accepted/dismissed. Null on SHOWN rows — nobody has acted yet.
+  actorId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org    Organization? @relation(fields: [orgId], references: [id])
+  mentee User          @relation("MatchFeedbackMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  mentor User          @relation("MatchFeedbackMentor", fields: [mentorId], references: [id], onDelete: Cascade)
+  actor  User?         @relation("MatchFeedbackActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  /// One row per (batch, mentor) — the key the feedback upsert writes through.
+  @@unique([batchId, mentorId])
+  @@index([orgId, createdAt])
+  @@index([orgId, action, createdAt])
+  @@index([menteeId])
+  @@index([mentorId])
+  @@index([actorId])
 }

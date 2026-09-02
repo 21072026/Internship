@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { useId, useState } from 'react';
+import { Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
+import { MATCH_DISMISS_REASONS, type MatchDismissReason } from '@/lib/matchFeedback';
 
 interface MentorOption {
   id: string;
@@ -42,23 +43,61 @@ export function AssignMentorInline({
 }) {
   const t = useT();
   const a = t.assignMentor;
+  const f = t.matchFeedback;
+  // /admin/candidates renders this component TWICE per candidate (a md:hidden
+  // mobile card and a desktop one), so a menteeId-derived id would be a
+  // duplicate in the document. useId is per-instance.
+  const reasonSelectId = useId();
   const [choice, setChoice] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [suggesting, setSuggesting] = useState(false);
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  // The whole ranked list, not just the winner (#2040). One is on screen at a
+  // time, but dismissing #1 has to reveal #2 — otherwise ranks 2-5 are recorded
+  // as "shown" while nobody could ever pick them, and the per-rank report is a
+  // fiction.
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [cursor, setCursor] = useState(0);
+  const [batchId, setBatchId] = useState<string | null>(null);
   const [aiUsed, setAiUsed] = useState(false);
+  const [exhausted, setExhausted] = useState(false);
+  // The dismiss reason picker, open only after the ✕ is clicked.
+  const [dismissing, setDismissing] = useState(false);
+  const [dismissReason, setDismissReason] = useState<MatchDismissReason>(MATCH_DISMISS_REASONS[0]);
   // Assignment held for confirmation (#942) when the picked mentor's server-
   // reported availability.status is at_capacity/not_accepting — never
   // recomputed on the client, just read off the mentor object the caller
   // already fetched from /api/users?view=mentorAvailability.
   const [pendingAssign, setPendingAssign] = useState<{ mentorId: string; status: 'at_capacity' | 'not_accepting' } | null>(null);
 
+  const suggestion = suggestions[cursor] ?? null;
+
+  // Record what happened to a suggestion (#2040). Always best-effort: this is
+  // bookkeeping, and losing a row must never cost the admin their assignment.
+  const recordFeedback = async (
+    mentorId: string,
+    action: 'ACCEPTED' | 'DISMISSED',
+    reason?: MatchDismissReason
+  ): Promise<void> => {
+    if (!batchId) return; // no suggestions were shown — nothing to report on
+    try {
+      await fetch('/api/admin/mentor-suggest/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId, mentorId, action, reason }),
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+
   // Mentor suggestion (#533): rule-based ranking, AI-deepened with a rationale
   // when the AI gate allows — otherwise the top rule-based match, no rationale.
   const suggest = async () => {
     setSuggesting(true);
     setErr('');
+    setExhausted(false);
+    setDismissing(false);
     try {
       const res = await fetch('/api/admin/mentor-suggest', {
         method: 'POST',
@@ -67,10 +106,12 @@ export function AssignMentorInline({
       });
       if (res.ok) {
         const d = await res.json();
-        const top = (d.suggestions ?? [])[0] ?? null;
-        setSuggestion(top);
+        const list: Suggestion[] = d.suggestions ?? [];
+        setSuggestions(list);
+        setCursor(0);
+        setBatchId(d.batchId ?? null);
         setAiUsed(!!d.aiUsed);
-        if (top) setChoice(top.mentorId);
+        if (list[0]) setChoice(list[0].mentorId);
         else setErr(a.noSuggestion);
       } else {
         setErr(t.common.error);
@@ -79,6 +120,23 @@ export function AssignMentorInline({
       setErr(t.common.error);
     } finally {
       setSuggesting(false);
+    }
+  };
+
+  // ✕ on the suggestion card: record why, then reveal the next-best mentor.
+  const confirmDismiss = async () => {
+    if (!suggestion) return;
+    const next = cursor + 1;
+    await recordFeedback(suggestion.mentorId, 'DISMISSED', dismissReason);
+    setDismissing(false);
+    setDismissReason(MATCH_DISMISS_REASONS[0]);
+    if (next < suggestions.length) {
+      setCursor(next);
+      setChoice(suggestions[next].mentorId);
+    } else {
+      setCursor(next);
+      setExhausted(true);
+      setChoice('');
     }
   };
 
@@ -97,6 +155,10 @@ export function AssignMentorInline({
         body: JSON.stringify({ mentorId, menteeId }),
       });
       if (res.ok) {
+        // Report the acceptance before the parent re-renders this card away.
+        // The server decides whether this mentor was one of ours — an
+        // off-list assignment is recorded too, and stays distinguishable.
+        await recordFeedback(mentorId, 'ACCEPTED');
         onAssigned();
         return;
       }
@@ -172,14 +234,57 @@ export function AssignMentorInline({
         </Button>
       </div>
       {suggestion && (
-        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5" data-testid="mentor-suggestion">
-          <span className="font-medium">{a.suggested}: {suggestion.fullName}</span>
-          {suggestion.reason
-            ? ` — ${suggestion.reason}`
-            : suggestion.sharedSkills.length > 0
-              ? ` — ${a.sharedSkills}: ${suggestion.sharedSkills.join(', ')}`
-              : ''}
-          {!aiUsed && <span className="text-gray-400"> ({a.ruleBased})</span>}
+        <div className="mt-1.5 flex items-start gap-1.5" data-testid="mentor-suggestion">
+          <p className="text-xs text-gray-600 dark:text-gray-300 flex-1 min-w-0">
+            <span className="font-medium">{a.suggested}: {suggestion.fullName}</span>
+            {suggestion.reason
+              ? ` — ${suggestion.reason}`
+              : suggestion.sharedSkills.length > 0
+                ? ` — ${a.sharedSkills}: ${suggestion.sharedSkills.join(', ')}`
+                : ''}
+            {!aiUsed && <span className="text-gray-400"> ({a.ruleBased})</span>}
+          </p>
+          <button
+            type="button"
+            onClick={() => setDismissing((v) => !v)}
+            aria-label={f.dismiss}
+            title={f.dismiss}
+            data-testid="dismiss-suggestion"
+            className="flex-shrink-0 rounded p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      {suggestion && dismissing && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2" data-testid="dismiss-reason-picker">
+          <label className="text-xs text-gray-500" htmlFor={reasonSelectId}>
+            {f.dismissTitle}
+          </label>
+          <select
+            id={reasonSelectId}
+            data-testid="dismiss-reason-select"
+            value={dismissReason}
+            onChange={(e) => setDismissReason(e.target.value as MatchDismissReason)}
+            className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-xs"
+          >
+            {MATCH_DISMISS_REASONS.map((code) => (
+              <option key={code} value={code}>
+                {f.reasons[code]}
+              </option>
+            ))}
+          </select>
+          <Button size="sm" variant="outline" onClick={confirmDismiss} data-testid="dismiss-confirm">
+            {f.dismissConfirm}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setDismissing(false)}>
+            {t.common.cancel}
+          </Button>
+        </div>
+      )}
+      {exhausted && (
+        <p className="text-xs text-gray-400 mt-1.5" data-testid="suggestions-exhausted">
+          {f.noMore}
         </p>
       )}
       {err && <p className="text-xs text-red-600 mt-1.5">{err}</p>}
