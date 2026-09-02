@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { SavedViews } from '@/components/SavedViews';
 import { AssignMentorInline } from '@/components/admin/AssignMentorInline';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import Link from "next/link";
 import { useT } from "@/i18n/client";
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
@@ -533,14 +533,24 @@ export default function CandidatesPage() {
       ) : candidates.length === 0 ? (
         <Card>
           {archived ? (
-            <EmptyState icon={Users} title={t.candidates.noneArchived} />
+            <EmptyState
+              testId="admin-candidates-archived"
+              icon={Users}
+              title={t.emptyStates.candidatesArchived.title}
+              body={t.emptyStates.candidatesArchived.body}
+            />
           ) : (
             <EmptyState
+              testId="admin-candidates"
               icon={Users}
-              title={t.candidates.none}
-              description={t.emptyState.candidates}
-              actionLabel={t.emptyState.inviteCta}
-              actionHref="/admin/invite"
+              role="ADMIN"
+              title={t.emptyStates.candidates.title}
+              byRole={{
+                ADMIN: {
+                  body: t.emptyStates.candidates.adminBody,
+                  action: { label: t.emptyStates.candidates.adminCta, href: '/admin/invite' },
+                },
+              }}
             />
           )}
         </Card>

@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { FileText, Download, Trash2, Upload } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { DOCUMENT_TYPES } from '@/lib/documentAccess';
 import { useLocale, useT } from '@/i18n/client';
 
@@ -38,6 +40,7 @@ export function DocumentsManager({
 }) {
   const t = useT();
   const locale = useLocale();
+  const { data: session } = useSession();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [requirementId, setRequirementId] = useState('');
@@ -109,7 +112,31 @@ export function DocumentsManager({
       {error && <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">{error}</div>}
 
       {docs.length === 0 ? (
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{t.documents.none}</p>
+        templates ? (
+          <EmptyState
+            testId="document-templates"
+            size="sm"
+            icon={FileText}
+            title={t.emptyStates.documentTemplates.title}
+            body={t.emptyStates.documentTemplates.body}
+          />
+        ) : (
+          // The same list is read by an admin, the mentee it belongs to and
+          // their mentor — each needs a different sentence about what happens
+          // next. Uploading is the control right below, so no link.
+          <EmptyState
+            testId="documents"
+            size="sm"
+            icon={FileText}
+            role={session?.user?.role}
+            title={t.emptyStates.documents.title}
+            byRole={{
+              ADMIN: { body: t.emptyStates.documents.adminBody },
+              MENTOR: { body: t.emptyStates.documents.mentorBody },
+              MENTEE: { body: t.emptyStates.documents.menteeBody },
+            }}
+          />
+        )
       ) : (
         <div className="divide-y divide-gray-50 mb-4">
           {docs.map((d) => (

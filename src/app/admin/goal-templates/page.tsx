@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Ca
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, type Locale } from '@/i18n/config';
@@ -154,7 +154,7 @@ export default function AdminGoalTemplatesPage() {
         {loading ? (
           <SkeletonRows rows={5} />
         ) : filtered.length === 0 ? (
-          <EmptyState title={t.goalTemplateAdmin.none} />
+          <EmptyState testId="goal-templates" title={t.goalTemplateAdmin.none} />
         ) : (
           <ul className="divide-y divide-gray-100 dark:divide-gray-800">
             {filtered.map((tpl) => (

@@ -8,7 +8,7 @@ import { MyTodos } from '@/components/todos/MyTodos';
 // their projects need, and what they wrote for themselves.
 export default async function TodosPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect('/auth/signin');
+  if (!session?.user?.id) redirect('/auth/signin?callbackUrl=/todos');
   const { t } = await getServerDictionary();
 
   return (
