@@ -185,7 +185,7 @@ konuşması.
 
 ### Şema değişikliği yok
 
-Boşaltmak (`''`) null'lamak yerine tercih edilmedi, **şema öyle**:
+Null'lamak yerine boşaltmak (`''`) bir tercih değil, **şemanın zorunluluğu**:
 `Message.body`, `SupportMessage.body`, `PersonalNote.body`, `RelationNote.body`
 ve `InteractionLog.notes` zorunlu kolonlar. Boş gövde bu yüzeylerde zaten
 ulaşılabilir ve zaten render edilen bir durum (yalnızca ek içeren destek

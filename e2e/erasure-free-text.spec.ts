@@ -38,6 +38,7 @@ interface Seeded {
     support: string;
     supportSubject: string;
     meetingNote: string;
+    conversationNote: string;
     ownNote: string;
     relationNote: string;
     interactionNotes: string;
@@ -56,6 +57,7 @@ interface Seeded {
   menteeMessageIds: string[];
   interactionLogId: string;
   meetingNoteId: string;
+  conversationNoteId: string;
 }
 
 async function seedPaperTrail(prefix: string): Promise<Seeded> {
@@ -68,6 +70,7 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
     support: `cannot sign in, my address is ${tag} avenue`,
     supportSubject: `login trouble ${tag}`,
     meetingNote: `talked about their divorce ${tag}`,
+    conversationNote: `they cried on the call ${tag}`,
     ownNote: `my own reminder ${tag}`,
     relationNote: `mentor impression ${tag}`,
     interactionNotes: `phoned them on their mobile ${tag}`,
@@ -156,6 +159,27 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
   const meetingNote = await prisma.personalNote.create({
     data: { userId: mentor.id, meetingId: meeting.id, category: 'MEETING', body: pii.meetingNote },
   });
+  // The other half of the note lookup: a meeting hung off the DIRECT (1:1)
+  // conversation rather than off the relation (`relationId: null` — #1051 made
+  // that legal). It is reached only through
+  // `meeting.conversation.participants`, the second branch of the `OR` in
+  // scrubFreeTextOps, and nothing else in this repo covers that branch.
+  const conversationMeeting = await prisma.meeting.create({
+    data: {
+      conversationId: conversation.id,
+      title: `catch-up ${tag}`,
+      rsvpToken: crypto.randomBytes(24).toString('hex'),
+      createdById: mentor.id,
+    },
+  });
+  const conversationNote = await prisma.personalNote.create({
+    data: {
+      userId: mentor.id,
+      meetingId: conversationMeeting.id,
+      category: 'MEETING',
+      body: pii.conversationNote,
+    },
+  });
   // The person's own private note.
   await prisma.personalNote.create({ data: { userId: mentee.id, body: pii.ownNote } });
 
@@ -187,6 +211,7 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
     menteeMessageIds: [relationMessage.id, conversationMessage.id],
     interactionLogId: interactionLog.id,
     meetingNoteId: meetingNote.id,
+    conversationNoteId: conversationNote.id,
   };
 }
 
@@ -231,6 +256,7 @@ async function expectNoFreeTextLeft(s: Seeded) {
   expect(await prisma.supportTicket.count({ where: { subject: { contains: p.supportSubject } } })).toBe(0);
   expect(await prisma.supportAttachment.count({ where: { message: { senderId: s.menteeId } } })).toBe(0);
   expect(await prisma.personalNote.count({ where: { body: { contains: p.meetingNote } } })).toBe(0);
+  expect(await prisma.personalNote.count({ where: { body: { contains: p.conversationNote } } })).toBe(0);
   expect(await prisma.personalNote.count({ where: { body: { contains: p.ownNote } } })).toBe(0);
   expect(await prisma.relationNote.count({ where: { body: { contains: p.relationNote } } })).toBe(0);
   expect(await prisma.interactionLog.count({ where: { notes: { contains: p.interactionNotes } } })).toBe(0);
@@ -328,6 +354,12 @@ test('hard-deleting an account leaves none of its free text behind, including wh
     // afterwards nothing links it to the person any more.
     const note = await prisma.personalNote.findUnique({ where: { id: s.meetingNoteId } });
     expect(note?.body).toBe('');
+    // Same for the note on the conversation meeting: that meeting survives the
+    // user (its `relationId` is null, so no cascade touches it), and the only
+    // link to the erased person — their `ConversationParticipant` row — went
+    // with the user row. So this one, too, is only reachable before the delete.
+    const convNote = await prisma.personalNote.findUnique({ where: { id: s.conversationNoteId } });
+    expect(convNote?.body).toBe('');
   } finally {
     await cleanup(s);
   }
