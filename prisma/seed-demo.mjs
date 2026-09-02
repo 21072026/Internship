@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { assertSafeDemoTarget } from './demoTarget.mjs';
 
 // Rich DEMO seed (#550) — fully synthetic data for local development and demos,
 // so nobody needs real user PII to work on the app. Idempotent: every record it
@@ -20,35 +21,12 @@ const prisma = new PrismaClient();
 const DEMO_DOMAIN = 'demo.example.com';
 const PASSWORD = process.env.SEED_DEMO_PASSWORD || 'DemoPass123!';
 
+// The predicate itself lives in ./demoTarget.mjs so the fidelity checker
+// (scripts/check-demo-fidelity.mjs, #2063) enforces the SAME definition of
+// "local". Two copies could drift, and a guard that two tools disagree about
+// is not a guard.
 function assertSafeTarget() {
-  const url = process.env.DATABASE_URL || '';
-  const local = /@(localhost|127\.0\.0\.1|mysql|db)[:/]/.test(url);
-  // The public demo (#966) runs against a dedicated database whose name ends in
-  // `_demo`, reached over the container network rather than localhost — so the
-  // host check alone would reject it. A `*_demo` name is as strong a signal as
-  // localhost: production is `internship_crm`, preview is
-  // `internship_crm_preview`, and neither can ever match.
-  const demoDb = /\/[^/?]*_demo(\?|$)/.test(url);
-  // Per-PR topic environments (#1185) get their OWN database, created and
-  // dropped with the environment, and it is filled with exactly this synthetic
-  // data. SEED_DEMO_FORCE used to be a blanket bypass — "I know what I'm
-  // doing" is not a safety property, and the one caller that needs it runs
-  // unattended in CI. It is now NARROWED to that case: the flag only unlocks a
-  // database named `internship_pr<N>`, which by construction is neither
-  // `internship_crm` (prod) nor `internship_crm_preview` (shared preview).
-  const topicDb = /\/internship_pr[0-9]+(\?|$)/.test(url);
-  const forced = process.env.SEED_DEMO_FORCE === '1' && topicDb;
-  if (!local && !demoDb && !forced) {
-    console.error(
-      'seed-demo: DATABASE_URL does not look local. Refusing to seed demo data.\n' +
-      'Allowed targets: a localhost DATABASE_URL, a database whose name ends in _demo,\n' +
-      'or a per-PR topic database named internship_pr<N> with SEED_DEMO_FORCE=1.\n' +
-      (process.env.SEED_DEMO_FORCE === '1' && !topicDb
-        ? 'SEED_DEMO_FORCE=1 is set but the target is not an internship_pr<N> database — the flag no longer bypasses this check for anything else.'
-        : '')
-    );
-    process.exit(1);
-  }
+  assertSafeDemoTarget('seed-demo');
 }
 
 const MENTORS = [
