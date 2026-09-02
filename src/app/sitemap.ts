@@ -30,6 +30,9 @@ const lastShipped = (): Date => {
   return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
 };
 
+/** Same page size app/stories/page.tsx asks for — see the call site below. */
+const STORIES_PAGE_LIMIT = 50;
+
 /**
  * Every route that renders for a signed-out visitor, with the two deliberate
  * omissions:
@@ -90,7 +93,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // /stories 404s while nothing is published (a deliberate honesty rule, see
     // app/stories/page.tsx), so it is listed only once there is something on
     // it. Individual stories have no URL of their own; the page is the entry.
-    const stories = await listPublishedStories(1);
+    //
+    // Asked with the SAME limit the page uses, not `1`: listPublishedStories
+    // applies `take` in SQL and *then* drops rows in JS (an interview
+    // scorecard has no relation, an admin-authored evaluation has no
+    // participant author — neither is ever a story). With `take: 1` a single
+    // such row at the top of the list answers "no stories" while the page
+    // renders content, and the sitemap would silently omit a live page.
+    const stories = await listPublishedStories(STORIES_PAGE_LIMIT);
     if (stories.length > 0) {
       entries.push({
         url: `${base}/stories`,
