@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Supply-chain evidence: SBOM, licence inventory and a written vulnerability SLA** (#2059). A CycloneDX 1.6 SBOM of the production tree is generated on the runner in `build-image.yml` (`npm run gen:sbom`, `@cyclonedx/cyclonedx-npm` pinned via `npx` — no new devDependency), stamped with the derived version and the exact commit through the existing `RELEASE_STAMPS` plumbing, uploaded as a build artifact, and served unauthenticated at `/sbom.cdx.json` by the same image it describes. `npm run check:licenses` reads `package-lock.json` — no install, no network, no new dependency — and generates `docs/legal/third-party-licenses.md`, failing CI on a licence that blocks **either** distribution under AGPL-3.0-or-later **or** the commercial grant sold on top of it (a GPL-3.0/AGPL-3.0 dependency passes the first and kills the second) and on any SPDX id nobody has classified; hand-resolved packages need an `ALLOWLIST` entry with a prose reason, which is rendered into the inventory. Drift is keyed on licence facts rather than versions, so a patch bump does not redden a Dependabot PR. `docs/trust/vulnerability-management.md` states the per-severity remediation targets, the no-upstream-fix path, the owner and the scanning cadence — and the `npm audit` gate now implements exactly that ladder (`scripts/check-audit.mjs`) instead of blocking on `critical` alone: `high` blocks when a non-major fix exists, and when only a major fix exists unless the reason is written in `docs/security-exceptions.md`, whose open-findings table the gate now parses. Both gates fail closed on an unreachable advisory feed or a missing document, and both policy engines — every row of the ladder and the two-question licence table — are asserted offline by `npm run test:supply-chain` in CI, because a gate that has quietly stopped blocking still exits 0.",
+  "notes": {
+    "en": [
+      "The software bill of materials for every release is now published at /sbom.cdx.json, alongside a third-party licence inventory and a written vulnerability remediation policy — no account needed to read any of them."
+    ],
+    "tr": [
+      "Her sürümün yazılım bileşen listesi (SBOM) artık /sbom.cdx.json adresinde yayınlanıyor; yanında üçüncü taraf lisans envanteri ve yazılı zafiyet giderme politikası da var — hiçbiri için hesap gerekmiyor."
+    ],
+    "de": [
+      "Die Software-Stückliste (SBOM) jeder Version wird jetzt unter /sbom.cdx.json veröffentlicht — zusammen mit einem Verzeichnis der Drittanbieter-Lizenzen und einer schriftlichen Richtlinie zur Behebung von Sicherheitslücken, alle ohne Konto einsehbar."
+    ]
+  }
+}
