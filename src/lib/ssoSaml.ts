@@ -25,6 +25,45 @@ export function spEntityId(slug: string): string {
 export function acsUrl(slug: string): string {
   return `${appBase()}/api/auth/sso/${slug}/acs`;
 }
+// The document a customer's identity team imports in one click (#1931), instead
+// of hand-copying the two identifiers above out of our docs.
+export function metadataUrl(slug: string): string {
+  return `${appBase()}/api/auth/sso/${slug}/metadata`;
+}
+
+// The slug reaches spMetadataXml straight from the URL, so every interpolated
+// value goes through this — an unescaped `"` would let a crafted slug close an
+// attribute and inject markup into a document IdPs parse.
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// SAML 2.0 SP metadata for one tenant. Pure + string-returning, so it is
+// verifiable without an IdP. The two claims it makes must stay in lockstep with
+// samlForOrg below — the NameID format and wantAssertionsSigned are the same
+// settings node-saml enforces on the assertion, so an IdP that trusts this
+// document sends exactly what we accept.
+//
+// Element order is fixed by the metadata schema (SSODescriptorType's children
+// come before SPSSODescriptor's own): NameIDFormat must precede
+// AssertionConsumerService, or a strict validator rejects the document.
+export function spMetadataXml(slug: string): string {
+  const entityId = escapeXml(spEntityId(slug));
+  const acs = escapeXml(acsUrl(slug));
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="${entityId}">
+  <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" AuthnRequestsSigned="false" WantAssertionsSigned="true">
+    <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="${acs}" index="0" isDefault="true"/>
+  </md:SPSSODescriptor>
+</md:EntityDescriptor>
+`;
+}
 
 export interface OrgSamlConfig {
   ssoEntryPoint: string | null;

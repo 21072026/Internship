@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ORG_PLAN_KEYS, planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
+import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
@@ -58,6 +59,13 @@ export async function GET() {
           // Never expose the raw certificate to the list view; just whether one is set.
           ssoCertificateSet: !!o.ssoCertificate,
           active: isSsoActive(o),
+          // The three values a customer's IT team registers in their IdP
+          // (#1931). Computed here, not in the browser: they hang off
+          // NEXTAUTH_URL, which is a server concern — a value derived from
+          // window.location would be wrong behind a custom domain.
+          spEntityId: spEntityId(o.slug),
+          acsUrl: acsUrl(o.slug),
+          metadataUrl: metadataUrl(o.slug),
         },
         createdAt: o.createdAt,
         counts: {

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Richer PWA manifest** (#2084). `id`, `lang`, `dir`, `categories` and `display_override`; long-press shortcuts to Messages / To-dos / Notifications (96x96 icons, each target now carries a `?callbackUrl` through sign-in); a `share_target` at `/share` that displays a shared link and writes nothing until the person confirms; iOS launch screens for 17 device sizes, generated from `lib/appleSplash.ts` by `npm run gen:pwa-images`. `orientation` is no longer locked to portrait — the pipeline board is a wide horizontal scroller. `screenshots` still wait on the capture pipeline in #1399.",
+  "notes": {
+    "en": [
+      "The installed app now offers home-screen shortcuts to messages, to-dos and notifications, opens on an iOS launch screen instead of a blank page, and can receive a link shared from another app — nothing is saved until you confirm it. Tablets are no longer locked to portrait."
+    ],
+    "tr": [
+      "Kurulu uygulama artık ana ekrandan mesajlar, yapılacaklar ve bildirimler için kısayol sunuyor, iOS'ta boş ekran yerine açılış ekranıyla başlıyor ve başka bir uygulamadan paylaşılan bağlantıyı alabiliyor — siz onaylamadan hiçbir şey kaydedilmiyor. Tabletler artık dikey moda kilitli değil."
+    ],
+    "de": [
+      "Die installierte App bietet jetzt Startbildschirm-Kurzbefehle für Nachrichten, To-dos und Benachrichtigungen, startet unter iOS mit einem Launch-Screen statt einer leeren Seite und nimmt aus anderen Apps geteilte Links entgegen — gespeichert wird erst nach deiner Bestätigung. Tablets sind nicht mehr aufs Hochformat festgelegt."
+    ]
+  }
+}

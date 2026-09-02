@@ -13,6 +13,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import type { TeamMember } from '@/lib/projectTeam';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { scrollBehavior } from '@/lib/motion';
 
 interface Task {
   id: string;
@@ -182,7 +183,7 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     setOwnerType(p.ownerType);
     setOwnerUserId(p.ownerUser?.id ?? '');
     setOwnerCompanyId(p.ownerCompany?.id ?? '');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: scrollBehavior() });
   };
 
   const remove = (p: Project) => setPendingDelete({ id: p.id, name: p.name });

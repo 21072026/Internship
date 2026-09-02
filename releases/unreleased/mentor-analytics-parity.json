@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Mentor analytics: date range, Excel export and print** (#1913). `GET /api/mentor/analytics` accepts `?from=&to=` with the admin route's parse-and-fall-back behaviour and returns `range`, a windowed `statusChanges` and `goals.doneInRange`, plus per-mentee `rows` (stage, days in stage, interactions, completed goals) computed server-side so the spreadsheet and the screen cannot disagree. `/mentor/analytics` gains the range preset, an ungated XLSX export (a mentor's own data is free core) and a print layout. The stage distribution and outcomes stay present-tense state and are deliberately not date-filtered.",
+  "notes": {
+    "en": ["Mentor analytics: pick a date range, export your mentees to Excel and print the page as a report."],
+    "tr": ["Mentor analitiği: tarih aralığı seç, mentee'lerini Excel'e aktar ve sayfayı rapor olarak yazdır."],
+    "de": ["Mentor-Analysen: Zeitraum wählen, Mentees nach Excel exportieren und die Seite als Bericht drucken."]
+  }
+}

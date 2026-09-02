@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **Invitation status board** (#2071). `/admin/invitations` shows every invitation with a derived status (sent / opened / registered / verified / expired / revoked), per-status counts that double as the status filter, plus role, date-range and free-text filters and a CSV export of the filtered set. Bulk re-invite, revoke and delete run through `POST /api/admin/invitations/bulk` and report a per-row outcome; re-invite refuses rows that already registered, never mails a synthetic `@demo.example.com` / `@sample.invalid` address, fans out with bounded concurrency and carries a per-admin hourly cap on top of the IP bucket. `InvitationToken` gains a nullable `revokedAt`, and a revoked token is refused at registration, at the open-tracking ping and at single-row resend — not merely hidden from the list. Both new routes are ADMIN-only and filter by `orgId` explicitly, because `InvitationToken` is not in `TENANT_MODELS`.",
+  "notes": {
+    "en": ["A new invitation board shows who was invited, who opened the link and who actually joined — with filters, per-status counts, CSV export, and bulk re-invite, revoke or delete."],
+    "tr": ["Yeni davet panosu kimin davet edildiğini, kimin bağlantıyı açtığını ve kimin gerçekten katıldığını gösteriyor — filtreler, durum sayaçları, CSV dışa aktarım ve toplu yeniden davet, iptal veya silme ile birlikte."],
+    "de": ["Eine neue Einladungsübersicht zeigt, wer eingeladen wurde, wer den Link geöffnet hat und wer wirklich beigetreten ist — mit Filtern, Statuszählern, CSV-Export sowie Sammelaktionen zum erneuten Einladen, Widerrufen oder Löschen."]
+  }
+}

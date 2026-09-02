@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FileSignature, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { DECLINE_REASON_CODES, OFFER_STATUSES } from '@/lib/offers';
@@ -252,7 +252,7 @@ function OffersIndex() {
       ) : failed ? (
         <p className="text-sm text-red-600 dark:text-red-400">{a.loadError}</p>
       ) : rows.length === 0 ? (
-        <EmptyState icon={FileSignature} title={a.emptyTitle} description={a.emptyBody} />
+        <EmptyState testId="admin-offers" icon={FileSignature} title={a.emptyTitle} body={a.emptyBody} />
       ) : (
         <>
           <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">

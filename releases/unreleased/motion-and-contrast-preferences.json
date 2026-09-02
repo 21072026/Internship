@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **OS accessibility preferences honoured** (#2045): `prefers-reduced-motion: reduce` neutralises every animation, transition and programmatic smooth scroll (`src/lib/motion.ts`) while state changes such as the mobile drawer keep working; `prefers-contrast: more` strengthens gray borders and secondary text in light and dark; `forced-colors: active` restates the keyboard focus ring as the system `Highlight` colour, opts the accent swatches out of colour flattening and gives badges a border. Covered by `e2e/a11y-media-preferences.spec.ts`.",
+  "notes": {
+    "en": ["The app now follows your system settings for reduced motion, higher contrast and Windows High Contrast mode: animations stop, borders and secondary text get stronger, and the keyboard focus ring stays visible."],
+    "tr": ["Uygulama artık işletim sisteminizin hareketi azaltma, yüksek kontrast ve Windows Yüksek Kontrast ayarlarına uyuyor: animasyonlar duruyor, kenarlıklar ve ikincil metinler belirginleşiyor, klavye odak halkası görünür kalıyor."],
+    "de": ["Die App folgt jetzt Ihren Systemeinstellungen für reduzierte Bewegung, höheren Kontrast und den Windows-Modus für hohen Kontrast: Animationen stoppen, Rahmen und sekundärer Text werden kräftiger, und der Tastaturfokus bleibt sichtbar."]
+  }
+}

@@ -50,8 +50,17 @@ allows IdP-initiated). The assertion signature + audience/recipient/expiry are
 the security anchors.
 
 ### SP identifiers to register in the IdP (per tenant)
-For a tenant with slug `<slug>` on base URL `<BASE>` (e.g.
-`https://crm-preview.ersah.in`):
+**Don't copy these by hand — we publish them.** For a tenant with slug `<slug>`
+on base URL `<BASE>` (e.g. `https://crm-preview.ersah.in`):
+
+- **SP metadata (#1931):** `GET <BASE>/api/auth/sso/<slug>/metadata` returns SAML
+  2.0 SP metadata as `application/samlmetadata+xml`, which most IdPs import in
+  one click. Public and pre-auth by nature (it carries nothing secret), served
+  even while `ssoEnabled` is still off — that is exactly when IT needs it — and
+  `404` for an unknown slug. Admin → Organizations → **Enterprise SSO** shows
+  the same three values with copy buttons.
+
+For an IdP that cannot import metadata, register the values by hand:
 - **ACS / Reply URL:** `<BASE>/api/auth/sso/<slug>/acs`
 - **SP Entity ID / Audience:** `<BASE>/sso/<slug>`
 - **NameID format:** emailAddress; email in NameID or an `email` attribute;
