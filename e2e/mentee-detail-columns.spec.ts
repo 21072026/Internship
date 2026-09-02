@@ -92,6 +92,14 @@ test('the mentee detail overview uses both columns at desktop widths', async ({ 
       await expect(sidebar.getByText('Columns University')).toBeVisible();
       await expect(main.getByText(/Interaction Log/i)).toBeVisible();
     }
+
+    // Printing must not lose the profile. `globals.css` drops the app chrome
+    // with `@media print { aside, header, .no-print { display: none } }`, which
+    // catches *any* `aside` — the sidebar pins itself back with `print:!block`.
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.getByTestId('mentee-detail-sidebar')).toBeVisible();
+    await expect(page.getByTestId('mentee-detail-main')).toBeVisible();
+    await page.emulateMedia({ media: null });
   } finally {
     await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
     await cleanupByEmail(menteeEmail);

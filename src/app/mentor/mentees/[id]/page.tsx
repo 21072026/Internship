@@ -256,8 +256,13 @@ export default function MenteeDetailPage() {
             panels, and it is placed in the third column from `lg` up. Every
             working panel used to carry `lg:col-span-2` in this three-column
             grid, so nothing was ever placed in the third column and the right
-            third of the page was empty top to bottom (#1370). */}
-        <aside className="space-y-6 lg:col-start-3 lg:row-start-1" data-testid="mentee-detail-sidebar">
+            third of the page was empty top to bottom (#1370).
+            `print:!block` because the app-chrome print rule in globals.css hides
+            *every* `aside` (`@media print { aside, header, .no-print { display:
+            none !important } }`) — without it this content sidebar would vanish
+            from a printed / saved-as-PDF mentee page, which the two cards used to
+            survive as plain grid children. */}
+        <aside className="space-y-6 print:!block lg:col-start-3 lg:row-start-1" data-testid="mentee-detail-sidebar">
           {/* Mentee info */}
           <Card>
             <CardHeader>
