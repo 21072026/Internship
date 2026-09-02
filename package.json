@@ -25,6 +25,7 @@
     "check:k6": "node scripts/check-k6.mjs",
     "check:openapi": "node scripts/check-openapi.mjs",
     "gen:openapi": "node scripts/openapi-generate.cjs",
+    "gen:pwa-images": "node --experimental-strip-types scripts/generate-pwa-images.ts",
     "db:check-json": "node prisma/backfill-json-columns.mjs",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",

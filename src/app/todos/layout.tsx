@@ -9,7 +9,9 @@ import { roleHome } from '@/lib/roleHome';
 // admin/mentor/portal shells — like /notifications and /messages (#1113).
 export default async function TodosLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
-  if (!session) redirect('/auth/signin');
+  // callbackUrl: the manifest's "To-dos" shortcut (#2084) must survive the
+  // sign-in redirect and land back here.
+  if (!session) redirect('/auth/signin?callbackUrl=/todos');
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
