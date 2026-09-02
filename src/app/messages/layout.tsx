@@ -26,7 +26,9 @@ export const viewport: Viewport = {
 // back/home) and the desktop document flow — see the comment in that file.
 export default async function MessagesLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
-  if (!session) redirect('/auth/signin');
+  // The callbackUrl is what makes the manifest's "Messages" shortcut (#2084)
+  // land here after signing in, instead of on the role's home page.
+  if (!session) redirect('/auth/signin?callbackUrl=/messages');
 
   return <MessagesShell homeHref={roleHome(session.user.role)}>{children}</MessagesShell>;
 }

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Users } from 'lucide-react';
 import type { MentorAvailabilityStatus } from '@/lib/mentorAvailability';
 
@@ -137,6 +137,7 @@ export default function MentorDirectoryPage() {
       ) : mentors.length === 0 ? (
         <Card>
           <EmptyState
+            testId="mentor-directory"
             icon={Users}
             title={hasFilters ? t.mentorDirectory.noMatches : t.mentorDirectory.empty}
           />

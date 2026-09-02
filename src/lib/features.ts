@@ -15,7 +15,7 @@ import {
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
-  MailQuestion, MailOpen, Fingerprint, HeartPulse,
+  MailQuestion, MailOpen, Fingerprint, HeartPulse, MailCheck,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -76,6 +76,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'stories', category: 'trust', icon: Quote, color: 'rose', title: C.stories.t, desc: C.stories.d },
     { key: 'newsletter', category: 'collaboration', icon: MailOpen, color: 'indigo', title: C.newsletter.t, desc: C.newsletter.d },
     { key: 'inviteLinks', category: 'tracking', icon: Link2, color: 'teal', title: C.inviteLinks.t, desc: C.inviteLinks.d },
+    { key: 'invitationBoard', category: 'tracking', icon: MailCheck, color: 'blue', title: C.invitationBoard.t, desc: C.invitationBoard.d },
     { key: 'outcomeComms', category: 'trust', icon: MessageSquareHeart, color: 'rose', title: C.outcomeComms.t, desc: C.outcomeComms.d },
     { key: 'emailGroups', category: 'trust', icon: MailMinus, color: 'teal', title: C.emailGroups.t, desc: C.emailGroups.d },
     { key: 'trustedDevices', category: 'trust', icon: Fingerprint, color: 'indigo', title: C.trustedDevices.t, desc: C.trustedDevices.d },

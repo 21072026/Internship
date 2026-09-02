@@ -145,7 +145,9 @@ export async function POST(request: Request) {
         }
 
         const existingToken = await prisma.invitationToken.findFirst({
-          where: { email, used: false, expiresAt: { gt: new Date() } },
+          // A revoked invitation (#2071) is not an active one — withdrawing it
+          // has to make re-inviting the same address possible again.
+          where: { email, used: false, revokedAt: null, expiresAt: { gt: new Date() } },
         });
         if (existingToken) {
           return NextResponse.json(
