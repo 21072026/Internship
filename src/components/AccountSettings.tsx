@@ -567,7 +567,7 @@ export function AccountSettings() {
         <h1 className="text-2xl font-bold text-gray-900">{t.account.title}</h1>
         <p className="text-gray-500 mt-1">{t.account.subtitle}</p>
         {membershipLabel && (
-          <p className="text-xs text-gray-400 mt-1" data-testid="membership-duration">{membershipLabel}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1" data-testid="membership-duration">{membershipLabel}</p>
         )}
       </div>
 
@@ -635,7 +635,7 @@ export function AccountSettings() {
             <div className="flex items-center justify-between gap-3 pt-1">
               <div>
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.account.acceptingMentees}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{t.account.acceptingMenteesHint}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{t.account.acceptingMenteesHint}</p>
               </div>
               <button
                 type="button"
@@ -743,7 +743,7 @@ export function AccountSettings() {
           />
           {t.account.notesAutoOpen}
         </label>
-        <p className="text-xs text-gray-400 mt-1">{t.account.notesAutoOpenHint}</p>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.account.notesAutoOpenHint}</p>
       </Card>
 
       <GoogleCalendarCard />
@@ -808,12 +808,12 @@ export function AccountSettings() {
           />
           {t.account.emailNotifications}
         </label>
-        <p className="text-xs text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.account.emailNotificationsHint}</p>
         {/* The master switch does not silence everything, and saying so here is
             the honest reading: the account_security group ignores every
             preference, because a password reset the account holder cannot
             receive is a lockout rather than a choice. */}
-        <p className="text-xs text-gray-400 mt-1">{t.emailGroups.account_security.desc}</p>
+        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.emailGroups.account_security.desc}</p>
 
         {/* Per-group e-mail opt-out (#1444). Driven by EMAIL_GROUPS so a new
             group cannot ship without a switch here, exactly like the legacy
@@ -823,7 +823,7 @@ export function AccountSettings() {
             point of the sub-headings. */}
         <section className="mt-4 pt-4 border-t border-gray-100" data-testid="email-groups-section">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.sectionTitle}</h4>
-          <p className="text-xs text-gray-400 mt-1">{t.unsubscribe.sectionHint}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.unsubscribe.sectionHint}</p>
           {/* The group switches stay interactive while the master switch is off —
               they mean something independent of it, and a user turning e-mail
               back on should find the choices they made in the meantime intact. */}
@@ -856,7 +856,7 @@ export function AccountSettings() {
                     Playwright's hasText is a case-insensitive SUBSTRING match:
                     any description swallowed into a label becomes a second
                     match and the spec dies on strict mode. */}
-                <p className="text-xs text-gray-400 ml-6">{t.emailGroups[g.id].desc}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 ml-6">{t.emailGroups[g.id].desc}</p>
               </div>
             ))}
           </div>
@@ -866,7 +866,7 @@ export function AccountSettings() {
               try, and there is nothing here to toggle. */}
           <div className="mt-4">
             <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t.unsubscribe.essentialHeading}</h5>
-            <p className="text-xs text-gray-400 mt-1">{t.unsubscribe.essentialHint}</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.unsubscribe.essentialHint}</p>
             <div className="mt-2 space-y-1.5 pl-6">
               {EMAIL_GROUPS.filter((g) => g.essential).map((g) => (
                 <div
@@ -897,7 +897,7 @@ export function AccountSettings() {
               paragraphs that contradicted each other ("in-app only", then "e-mail
               and in-app alike"), and the reassuring one was the false one: a user
               who unticked a category expecting their inbox untouched lost mail. */}
-          <p className="text-xs text-gray-400">{t.unsubscribe.legacyHint}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400">{t.unsubscribe.legacyHint}</p>
           {prefsLoadFailed && (
             <p className="text-xs text-red-600" role="status" data-testid="prefs-load-failed-legacy">
               {t.account.prefsLoadFailed}
@@ -934,7 +934,7 @@ export function AccountSettings() {
               />
               {t.account.browserNotifications}
             </label>
-            <p className="text-xs text-gray-400 mt-1" data-testid="browser-notif-hint">
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1" data-testid="browser-notif-hint">
               {browserNotifDenied
                 ? t.account.browserNotificationsDenied
                 : pushActive
@@ -982,7 +982,7 @@ export function AccountSettings() {
 
         <div className="mt-4 pt-4 border-t border-gray-100 max-w-md">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.accentLabel}</label>
-          <p className="text-xs text-gray-400 mb-2">{t.account.accentHint}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{t.account.accentHint}</p>
           <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label={t.account.accentLabel}>
             {ACCENT_COLORS.map((c) => {
               const selected = accent === c;
