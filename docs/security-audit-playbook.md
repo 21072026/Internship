@@ -11,6 +11,16 @@ Kök takip issue'su: **#951** · Epic'ler: #814, #816, #818, #821, #823, #825, #
 > yapmayın — [`DATA_ACCESS_POLICY.md`](DATA_ACCESS_POLICY.md) gereği gerçek PII'ya
 > hiç dokunulmaz. Dışarıdan gelen zafiyet bildirimleri için `SECURITY.md` (bkz. #901).
 
+**Bu playbook "nasıl bakarız"ı anlatıyor; "ne kadar sürede kapatırız"ı değil.**
+Şiddet seviyesi başına giderme süreleri, yukarı akışta yama olmadığında
+izlenecek yol, kararı kimin verdiği ve tarama takvimi yazılı politikada:
+[`docs/trust/vulnerability-management.md`](trust/vulnerability-management.md)
+(#2059). Denetimde bulunan bir şey oraya göre sınıflandırılır; kapatılamayan bir
+bulgu [`security-exceptions.md`](security-exceptions.md)'ye **gerekçesiyle**
+yazılır — o dosyadaki tablo artık CI kapısı tarafından da okunuyor, biçimini
+bozmayın. Bağımlılık lisansları ayrı bir kapıda: `npm run check:licenses`
+→ [`docs/legal/third-party-licenses.md`](legal/third-party-licenses.md).
+
 ---
 
 ## 1. Ortam kurulumu (Claude Code web container)

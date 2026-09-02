@@ -66,6 +66,38 @@ jobs:
           STAMPS="$(node scripts/release-derive.cjs --stamps)"
           echo "json=$STAMPS" >> "$GITHUB_OUTPUT"
 
+      # CycloneDX SBOM for the production dependency tree (#2059). Written to
+      # public/sbom.cdx.json *before* the docker build, so `COPY . .` picks it
+      # up and the image serves it at /sbom.cdx.json — unauthenticated, and
+      # always describing the tree that same image installed from the lockfile.
+      # Procurement asks for this and will not create an account to get it.
+      #
+      # --require-stamps: refuse to write an SBOM that cannot name its commit.
+      # An SBOM stamped "unknown" is worse than a missing one, because it reads
+      # as an answer. RELEASE_STAMPS is passed through so the stamped version is
+      # the derived one (base + pending fragments, #1457) rather than
+      # package.json's base — the same number the app's footer reports.
+      #
+      # No `npm ci` here on purpose: the generator runs --package-lock-only, so
+      # the SBOM comes from the lockfile and this step adds seconds, not
+      # minutes. It fails the build if the registry is unreachable.
+      - name: Generate SBOM
+        env:
+          RELEASE_STAMPS: ${{ steps.stamps.outputs.json }}
+          # Through env rather than inlined into the shell, same as the step
+          # below: a `${{ }}` expansion inside `run:` is substituted before bash
+          # sees it, so an input with shell metacharacters would be executed.
+          REF: ${{ inputs.ref }}
+        run: node scripts/generate-sbom.mjs --commit "$REF" --require-stamps
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-${{ inputs.tag }}
+          path: public/sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Resolve image reference
         id: meta
         env:
@@ -104,4 +136,10 @@ jobs:
       - name: Summary
         env:
           IMAGE: ${{ steps.meta.outputs.image }}
-        run: echo "### Pushed \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+          TAG: ${{ inputs.tag }}
+        run: |
+          {
+            echo "### Pushed \`$IMAGE\`"
+            echo ""
+            echo "CycloneDX SBOM attached as \`sbom-$TAG\`, and served by this image at \`/sbom.cdx.json\`."
+          } >> "$GITHUB_STEP_SUMMARY"

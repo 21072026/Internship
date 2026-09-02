@@ -55,6 +55,27 @@ jobs:
       # changelog section (#1457).
       - name: release version arithmetic (#1457)
         run: npm run test:release
+      # This codebase is AGPL-3.0-or-later AND dual-licensed, so a dependency
+      # has to clear two separate bars: may we distribute it under the AGPL, and
+      # may the rights holder still sell a non-AGPL licence on top? A GPL-3.0 or
+      # AGPL-3.0 dependency passes the first and fails the second, and an
+      # unlicensed package fails both — neither of which any existing check
+      # looked at. Reads package-lock.json only (no install, no network), so it
+      # is cheap; an SPDX id nobody has classified fails rather than passing
+      # (#2059). Also fails when docs/legal/third-party-licenses.md no longer
+      # matches the tree's *licence facts* — versions deliberately excluded, so
+      # a patch bump does not turn a Dependabot PR red.
+      - name: third-party licences are compatible (#2059)
+        run: npm run check:licenses
+      # Both supply-chain gates are policy encoded as code, and both fail
+      # silently in the direction that hurts: a licence classifier that answers
+      # "permissive" for an id it has never seen, and an audit gate that reads
+      # an unreachable advisory feed as "no vulnerabilities". Neither shows up
+      # in a build, a lint or a type check — the scripts still exit 0. So the
+      # ladder in docs/trust/vulnerability-management.md and the two-question
+      # licence policy are asserted directly (#2059).
+      - name: supply-chain policy engines (#2059)
+        run: npm run test:supply-chain
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # Prisma's filter grammar is data: an object where a scalar id belongs is

@@ -1,13 +1,23 @@
-# Dependency vulnerability gate (#885).
+# Dependency vulnerability gate (#885, threshold tightened #2059).
 #
 # Ten CVEs accumulated because nothing looked. This makes the number visible on
-# every PR and in the job summary, and blocks only on `critical`.
+# every PR and in the job summary, and blocks on the findings the written policy
+# says must stop the line.
 #
-# Why critical and not high: the remaining `high` findings (nodemailer, xlsx)
-# have no non-major fix today, so a high gate would fail every PR from the
-# moment it merged — and a gate that is always red is a gate everyone learns to
-# scroll past. Tighten it to `high` once #891-class work lands; the change is
-# one word.
+# The threshold is NOT decided here. It lives in
+# docs/trust/vulnerability-management.md — the remediation SLA — and
+# scripts/check-audit.mjs implements it. In short: `critical` always blocks; a
+# `high` blocks unless its only fix is a semver-major documented in
+# docs/security-exceptions.md, or no fix is published at all.
+#
+# This replaces the old `critical`-only gate. That gate's header said why it was
+# loose: a `high` gate would have failed every PR from the moment it merged
+# (nodemailer, xlsx had no non-major fix) — "and a gate that is always red is a
+# gate everyone learns to scroll past". That reasoning still holds, which is why
+# the new threshold is a ladder rather than a severity: it blocks exactly what
+# the PR author can act on, and routes an unfixable finding to a written
+# exception instead of to a red build nobody can clear. Verified against the
+# tree at the time of the change: 0 blockers.
 name: Security audit
 
 on:
@@ -17,7 +27,8 @@ on:
     branches: [main]
   schedule:
     # Weekly, so a newly published advisory against unchanged code still shows
-    # up rather than waiting for someone to open a PR.
+    # up rather than waiting for someone to open a PR. Also how a *fix* for a
+    # carried exception reaches us without anyone going looking.
     - cron: '17 5 * * 1'
 
 concurrency:
@@ -35,29 +46,31 @@ jobs:
           cache: npm
 
       # `npm ci` would also run the postinstall prisma generate; the audit only
-      # needs the lockfile, so skip the install entirely.
+      # needs the lockfile, so skip the install entirely. check-audit.mjs has no
+      # dependencies for the same reason.
       - name: Audit
         run: |
           set -o pipefail
+          # `npm audit` exits non-zero merely for HAVING findings, so its status
+          # is not the verdict — the script's is. A registry failure therefore
+          # leaves an empty or truncated audit.json behind, which the script
+          # rejects loudly rather than reading as "no vulnerabilities".
           npm audit --json > audit.json || true
+          node scripts/check-audit.mjs audit.json | tee -a "$GITHUB_STEP_SUMMARY"
 
-          summary() { node -e '
-            const a = JSON.parse(require("fs").readFileSync("audit.json", "utf8"));
-            const m = a.metadata.vulnerabilities;
-            const rows = Object.entries(a.vulnerabilities || {})
-              .map(([name, v]) => `| ${v.severity} | \`${name}\` | ${v.fixAvailable === false ? "no fix published" : "fix available"} |`)
-              .sort();
-            console.log(`### npm audit — ${m.critical} critical · ${m.high} high · ${m.moderate} moderate · ${m.low} low\n`);
-            if (rows.length) console.log(["| Severity | Package | Fix |", "|---|---|---|", ...rows].join("\n"));
-            else console.log("No known vulnerabilities.");
-            process.exitCode = m.critical > 0 ? 1 : 0;
-          '; }
-
-          summary | tee -a "$GITHUB_STEP_SUMMARY"
-          # tee swallows the exit code of the pipeline's left side without
-          # pipefail; with it, a critical finding fails the job.
-          summary > /dev/null
+      # The report itself, so a blocked PR (or a questionnaire) can be answered
+      # from the exact data the gate judged, not from a re-run days later.
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-audit-report
+          path: audit.json
+          if-no-files-found: warn
+          retention-days: 90
 
       # Documented, reviewed exceptions live in docs/security-exceptions.md
       # rather than in a suppression file, so the reasoning is readable next to
       # the rest of the security docs and expires when someone re-reads it.
+      # check-audit.mjs reads that same document: an exception cannot exist
+      # without a written reason, because the reason IS the exception.

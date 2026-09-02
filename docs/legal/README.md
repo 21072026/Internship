@@ -29,6 +29,25 @@ somut bir **karar** ve gerekçesiyle.
 | Mentee görünürlük rızası | #551 | Yalnızca kamuya-açık alanlar (ad, üniversite, beceri, hedef pozisyon); e-posta/telefon asla; anında geri çekilebilir | [talent-pool-consent-policy.md](talent-pool-consent-policy.md) |
 | Fırsat eşitliği verisi | #819 | Demografik veri **toplanmıyor**; ürün sahibi açık onayı gelmeden şema değişikliği yok. Kör inceleme modu ayrı ve gönderildi | [equal-opportunity-data.md](equal-opportunity-data.md) |
 | Ödeme altyapısı | #552 | Faz 1 manuel fatura; ölçeklenince Stripe Billing + webhook → entitlement | [payment-infrastructure.md](payment-infrastructure.md) |
+| Üçüncü taraf lisans envanteri | #2059 | **Üretilen dosya** — her PR'da `npm run check:licenses` ile doğrulanıyor; AGPL dağıtımını *veya* ticari hakkı imkânsız kılan bir lisans CI'ı kırıyor | [third-party-licenses.md](third-party-licenses.md) |
+
+## Üçüncü taraf lisansları (#2059)
+
+[third-party-licenses.md](third-party-licenses.md) **elle düzenlenmez** —
+`npm run check:licenses -- --write` üretiyor. Neden ayrı bir kapı: bir bağımlılık
+iki ayrı sınavı geçmek zorunda ve bunlar aynı soru değil.
+
+1. AGPL-3.0-or-later altında dağıtabilir miyiz?
+2. Hak sahibi bunun üzerine **AGPL olmayan** bir ticari lisans da verebilir mi?
+
+GPL-3.0 / AGPL-3.0 bir bağımlılık birinciyi rahatça geçer, ikinciyi öldürür:
+başkasının copyleft kodunu kapalı şartlarla alt-lisanslayamayız. Lisansı hiç
+belirtilmemiş bir paket ikisini de öldürür — sessizlik izin değildir. Politika
+tablosu ve elle çözülmüş paketlerin gerekçeleri `scripts/license-policy.mjs`
+içinde; sınıflandırılmamış bir SPDX kimliği **bilinmiyor** sayılıp build'i
+kırıyor, "muhtemelen sorun yoktur" saymıyor.
+
+Güvenlik tarafındaki eşi: [`docs/trust/vulnerability-management.md`](../trust/vulnerability-management.md).
 
 ## Veri erişim kuralı (#523 kalemi — zaten uygulandı)
 Katkı veren mentee'ler gerçek/preview PII'ye erişmez; geliştirme sentetik seed ile

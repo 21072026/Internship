@@ -166,6 +166,20 @@ e2e/.state/
 # file and `npx tsc --noEmit` on a fresh clone never looks for it.
 /src/generated/openapi.json
 
+# CycloneDX SBOM (scripts/generate-sbom.mjs, npm run gen:sbom). Generated on the
+# runner during build-image.yml and picked up by `COPY . .`, so the image serves
+# it at /sbom.cdx.json — always describing the tree that image installed. ~280 KB
+# and regenerated per build, so committing it would put a large derived diff in
+# every dependency PR for no review value; the licence inventory
+# (docs/legal/third-party-licenses.md) is the committed, human-readable half of
+# the same evidence. A local checkout simply has no /sbom.cdx.json, which is
+# correct — an unstamped SBOM is not evidence of anything.
+/public/sbom.cdx.json
+
+# Raw `npm audit --json` report (scripts/check-audit.mjs, the security-audit
+# workflow). Uploaded as a build artifact there; never committed.
+/audit.json
+
 # Isolated worktrees created by Claude Code's background Agent tool for
 # in-progress work — internal tooling state, not a project artifact.
 /.claude/worktrees/

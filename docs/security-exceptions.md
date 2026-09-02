@@ -1,15 +1,29 @@
 # Kabul edilen bağımlılık bulguları / Accepted dependency findings
 
-`npm audit` çıktısında **bilerek açık bırakılan** bulgular ve gerekçeleri. CI
-kapısı (`.github/workflows/security-audit.yml`) yalnız `critical` seviyesinde
-kırılıyor; buradaki her satır, "neden hâlâ kırmızı ve neden sorun değil"
-sorusunun cevabı.
+`npm audit` çıktısında **bilerek açık bırakılan** bulgular ve gerekçeleri.
+Buradaki her satır, "neden hâlâ kırmızı ve neden sorun değil" sorusunun cevabı.
 
 Bir bastırma dosyası yerine düz metin: gerekçe diğer güvenlik dokümanlarının
 yanında okunabilir kalıyor ve biri okuduğunda **hâlâ geçerli mi** diye sorması
 gerektiği belli oluyor.
 
-Son gözden geçirme: **2026-08-24** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823)
+Hangi bulgunun CI'ı kırdığı, hangisinin buraya yazılarak taşınabildiği ve her
+şiddet seviyesi için giderme süresi **yazılı politikada**:
+[`docs/trust/vulnerability-management.md`](trust/vulnerability-management.md).
+Kısaca: `critical` her zaman kırar; **yaması majör olmayan** bir `high` kırar;
+**yalnız majör yaması olan** bir `high` ancak aşağıdaki tabloda gerekçesiyle
+yazılıysa geçer; **hiç yaması olmayan** bir `high` kırmaz ama gerekçesini yine
+buraya borçlu.
+
+> ⚠️ **Aşağıdaki tablo makine tarafından da okunuyor.** `scripts/check-audit.mjs`
+> (yani CI kapısı) `## Açık bulgular` başlığı altındaki tablodan paket adlarını
+> ve gerekçe hücresini çıkarıyor: **gerekçesi boş olan satır istisna sayılmaz.**
+> Başlığı ya da tablo düzenini değiştirirsen aynı commit'te o script'i de
+> güncelle — kapı, doküman bulunamazsa **sessizce geçmez, düşer**. Bu bilinçli:
+> istisnanın kendisi ile gerekçesi aynı şey olsun, gerekçesiz bir istisna hiç
+> yazılamasın diye.
+
+Son gözden geçirme: **2026-09-02** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823) · Politika: [#2059](https://github.com/21072026/Internship/issues/2059)
 
 ## Açık bulgular
 
@@ -93,3 +107,17 @@ Kapatma gerekçesi olarak yukarıdaki üç madde yeterli; "used in tests" değil
 2. **Bu uygulamada sömürülebilir mi** — sadece "advisory var" yetmez, kod yolunu adlandır.
 3. Kalıcı çözümü ve takip issue'sunu yaz.
 4. Üstteki "son gözden geçirme" tarihini güncelle.
+5. Paket adını **`ters kesme` içinde** yaz ve gerekçe hücresini boş bırakma —
+   kapı satırı ancak öyle istisna olarak sayıyor (bkz. yukarıdaki uyarı).
+
+Bir bulgu artık `npm audit` çıktısında görünmüyorsa satırı **sil**: kapı bunu
+"gereksiz kalmış istisna" olarak iş özetinde bildiriyor, ama silmek insana
+kalıyor. Duran satır bir gün canlı bir karar sanılır.
+
+## Lisans tarafı
+
+Aynı disiplinin lisans karşılığı `scripts/license-policy.mjs` içindeki
+`ALLOWLIST`: SPDX olarak çözülemeyen bir lisans dizesi ancak paketin içindeki
+LICENSE dosyası okunup **yazılı gerekçeyle** oraya eklenirse geçiyor, ve o
+gerekçe [`docs/legal/third-party-licenses.md`](legal/third-party-licenses.md)
+envanterine olduğu gibi basılıyor. Kapı: `npm run check:licenses`.
