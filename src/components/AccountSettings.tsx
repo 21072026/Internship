@@ -946,11 +946,17 @@ export function AccountSettings() {
 
         <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.language}</label>
+            {/* `htmlFor`/`id` rather than an `aria-label`: the visible text and
+                the accessible name then cannot drift apart, and the label
+                becomes a click target for the control (#2041). */}
+            <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="account-language">
+              {t.account.language}
+            </label>
             <select
+              id="account-language"
               value={language}
               onChange={(e) => changeLanguage(e.target.value)}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="block max-lg:min-h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             >
               {locales.map((l) => (
                 <option key={l} value={l}>{(t.account.languages as Record<string, string>)[l] ?? l.toUpperCase()}</option>
@@ -958,11 +964,14 @@ export function AccountSettings() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.themeLabel}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="account-theme">
+              {t.account.themeLabel}
+            </label>
             <select
+              id="account-theme"
               value={theme}
               onChange={(e) => changeTheme(e.target.value)}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="block max-lg:min-h-11 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             >
               <option value="system">{t.theme.system}</option>
               <option value="light">{t.theme.light}</option>
