@@ -95,9 +95,13 @@ test('the feed is localized by ?lang and linked from the page', async ({ page })
 
   expect(en.language).toBe('en');
   expect(tr.language).toBe('tr');
-  // Same releases, different prose.
+  // Same releases, different prose. Compared over the WHOLE window rather than
+  // the newest item alone: item 0 is whichever fragment merged last, and a
+  // single note whose Turkish text happens to equal its English one (a product
+  // name, a forgotten translation) would fail that narrower assertion on an
+  // unrelated PR without anything being wrong with the feed.
   expect(tr.guids).toEqual(en.guids);
-  expect(tr.descriptions[0]).not.toBe(en.descriptions[0]);
+  expect(tr.descriptions).not.toEqual(en.descriptions);
   // An unknown language falls back to the default rather than erroring.
   expect(bogus.language).toBe('en');
 
