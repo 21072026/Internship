@@ -1,4 +1,18 @@
 {
   "bump": "patch",
-  "changelog": "- **Accessibility scan widened to the screens outside the mentee portal (#2043)**: `e2e/a11y-scan.spec.ts` now also gates `/messages`, `/notifications`, `/mentor/board`, `/admin/board`, `/admin/settings` and the public `/apply/:mentorId` entry, in light and dark — fifteen pages, thirty baseline keys. The board and inbox scans run against a real mentor ↔ mentee relation (`seedMenteeWithRelation()` in `e2e/helpers/db.ts`, with a company, a goal, an interaction and an upcoming meeting) and assert a card is on screen before axe runs, so an empty board can no longer scan clean. A scan target may now carry its own baseline key and a readiness wait, which keeps a dynamic route (`/apply/:mentorId`) on one stable key and a client-fetched page from being measured mid-skeleton."
+  "changelog": "- **Accessibility scan widened to the screens outside the mentee portal (#2043)**: `e2e/a11y-scan.spec.ts` now also gates `/messages`, `/notifications`, `/mentor/board`, `/admin/board`, `/admin/settings` and the public `/apply/:mentorId` entry, in light and dark — fifteen pages, thirty baseline keys. The board and inbox scans run against a real mentor ↔ mentee relation (`seedMenteeWithRelation()` in `e2e/helpers/db.ts`, with a company, a goal, an interaction and an upcoming meeting) and assert a card is on screen before axe runs, so an empty board can no longer scan clean. A scan target may now carry its own baseline key and a readiness wait, which keeps a dynamic route (`/apply/:mentorId`) on one stable key and a client-fetched page from being measured mid-skeleton.\n- **Three accessibility bugs the widened scan found (#2043)**: the *Self-registration* and *Require 2FA* dropdowns on `/admin/settings` had labels that were never associated with them, so a screen reader announced two unnamed selects (axe `select-name`, **critical**); the admin board's horizontally scrolling stage rows were not focusable, leaving the columns past the fold unreachable without a mouse (`scrollable-region-focusable`); and the inbox's person-card trigger is an `aria-hidden` icon inside a `role=\"button\"`, so it announced nothing (`aria-command-name`) — it now takes its name from the person it opens.\n- The nine remaining *serious* findings on the newly scanned screens are pre-existing and are frozen in `e2e/a11y-baseline.json` rather than fixed here: eight are the one `text-gray-400` muted-text token (2.38–2.53:1 against white) plus its dark-board mirror, and two are the 14×14px inbox trigger. Both are design-token changes that move other baseline keys, so they are #2131.",
+  "notes": {
+    "en": [
+      "Screen readers now announce the self-registration and two-factor dropdowns in admin settings, and the person icon in your inbox.",
+      "The admin pipeline board's stage rows can be scrolled with the keyboard."
+    ],
+    "tr": [
+      "Yönetici ayarlarındaki kendi kendine kayıt ve iki adımlı doğrulama seçim kutuları ile gelen kutusundaki kişi simgesi artık ekran okuyucular tarafından seslendiriliyor.",
+      "Yönetici pipeline panosundaki aşama satırları artık klavyeyle kaydırılabiliyor."
+    ],
+    "de": [
+      "Screenreader lesen jetzt die Auswahlfelder für Selbstregistrierung und Zwei-Faktor in den Admin-Einstellungen sowie das Personensymbol im Posteingang vor.",
+      "Die Stufenzeilen der Admin-Pipeline-Tafel lassen sich per Tastatur scrollen."
+    ]
+  }
 }

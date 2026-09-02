@@ -9,8 +9,24 @@ import crypto from 'crypto';
  */
 export const prisma = new PrismaClient();
 
+/**
+ * A collision-proof e2e address.
+ *
+ * The prefix is slugified rather than interpolated raw, because the addresses
+ * this mints are typed into the sign-in form's `<input type="email" required>`
+ * — and that input is validated twice, by the browser's native constraint check
+ * and by the page's own `z.string().email()`. A prefix carrying anything an
+ * address may not (a space, most obviously — a caller reusing a human-readable
+ * fixture label like `'A11y Rel'` is the natural way to get one) produces a row
+ * that seeds fine and then cannot be signed in as: both validators reject it,
+ * react-hook-form never reaches its submit handler, and the click is swallowed
+ * with nothing on screen. The only symptom is the eventual
+ * `page.waitForURL` timeout in `signInAsFreshUser`, pointing at the wait rather
+ * than at the address (#2043).
+ */
 export function uniqueEmail(prefix: string) {
-  return `${prefix}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@e2e.local`;
+  const slug = prefix.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '') || 'e2e';
+  return `${slug}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@e2e.local`;
 }
 
 export async function seedInvite(email: string, role: 'ADMIN' | 'MENTOR' | 'MENTEE') {

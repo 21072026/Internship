@@ -19,15 +19,32 @@
   "/admin#dark": {},
   "/admin/candidates": {},
   "/admin/candidates#dark": {},
-  "/messages": {},
-  "/messages#dark": {},
-  "/notifications": {},
-  "/notifications#dark": {},
-  "/mentor/board": {},
+  "/messages": {
+    "color-contrast": 1,
+    "target-size": 1
+  },
+  "/messages#dark": {
+    "target-size": 1
+  },
+  "/notifications": {
+    "color-contrast": 1
+  },
+  "/notifications#dark": {
+    "color-contrast": 1
+  },
+  "/mentor/board": {
+    "color-contrast": 1
+  },
   "/mentor/board#dark": {},
-  "/admin/board": {},
-  "/admin/board#dark": {},
-  "/admin/settings": {},
+  "/admin/board": {
+    "color-contrast": 1
+  },
+  "/admin/board#dark": {
+    "color-contrast": 1
+  },
+  "/admin/settings": {
+    "color-contrast": 1
+  },
   "/admin/settings#dark": {},
   "/company": {},
   "/company#dark": {}

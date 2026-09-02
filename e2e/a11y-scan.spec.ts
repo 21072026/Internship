@@ -33,6 +33,25 @@ import { signInAsFreshUser } from './helpers/auth';
 // /messages, /notifications, the mentor and admin boards, /admin/settings and
 // the public /apply entry — scanned against a mentee who is really in a
 // mentorship, so the boards have cards on them rather than an empty state.
+//
+// What that widening found, and where each finding went. Twelve serious/critical
+// violations were already sitting on those screens; none of them were introduced
+// by the widening. Three classes had a single obviously-correct fix and were
+// fixed with it, so their baseline entries stay at zero:
+//   - select-name (CRITICAL) — the two /admin/settings dropdowns had <label>s
+//     that were never associated with them (htmlFor/id).
+//   - scrollable-region-focusable — the admin board's stage rows could not be
+//     panned without a mouse (tabIndex on HorizontalScrollArea's scroller).
+//   - aria-command-name — the inbox's person-card trigger is an aria-hidden icon
+//     in a role="button" and announced nothing (it now takes the person's name).
+// The remaining nine ARE frozen into e2e/a11y-baseline.json, and that is the one
+// thing this file's own warning tells you to justify rather than do quietly:
+// eight of them are the single `text-gray-400` muted-text token at 2.38–2.53:1
+// (plus its dark-mode mirror on the board header) and two are the 14x14px inbox
+// trigger. Both are token/spacing changes that would move baseline keys on
+// pages this task does not own, so they are #2131 — with the measurements — and
+// docs/a11y-audit.md carries the row-by-row list. A frozen entry is a debt with
+// an issue number, never a pass mark.
 
 const GATED_SEVERITIES = new Set(['critical', 'serious']);
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
