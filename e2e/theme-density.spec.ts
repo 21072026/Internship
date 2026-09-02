@@ -127,9 +127,12 @@ test('compact density tightens spacing without shrinking a tap target', async ({
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(html).toHaveClass(/\bdensity-compact\b/);
 
-    // The sidebar controls keep their 44px floor in compact mode.
+    // The sidebar controls keep their 44px floor in compact mode. At this
+    // viewport (800px, below `lg`) the sidebar is an off-canvas drawer, so
+    // the hamburger has to open it before the account menu is reachable.
     await page.goto('/portal');
     await expect(html).toHaveClass(/\bdensity-compact\b/);
+    await page.getByRole('button', { name: 'Open menu' }).click();
     await page.getByTestId('account-menu-button').click();
     for (const id of ['theme-toggle', 'density-control']) {
       const control = page.getByTestId(id).first();
