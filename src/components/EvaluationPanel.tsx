@@ -24,10 +24,9 @@ interface Evaluation {
   comment: string | null;
   direction: 'MENTOR_ON_MENTEE' | 'MENTEE_ON_MENTOR';
   createdAt: string;
-  // Set once the record has been corrected inside its window (#1893). The
-  // flag is derived server-side: `updatedAt` is stamped on create too.
-  updatedAt?: string | null;
-  corrected?: boolean;
+  // When this record was corrected inside its window (#1893); null unless a
+  // PATCH actually rewrote it, so no other write can mislabel it.
+  correctedAt?: string | null;
   canDelete?: boolean;
   // Offered only inside the correction window; the PATCH route decides.
   canEdit?: boolean;
@@ -343,7 +342,7 @@ export function EvaluationPanel({
                     {ev.comment && <p className="text-sm text-gray-600 mt-1.5 whitespace-pre-wrap">{ev.comment}</p>}
                     <p className="text-xs text-gray-400 mt-1">
                       {relativeTime(ev.createdAt, locale)}
-                      {ev.corrected && ev.updatedAt && ` · ${t.evaluation.editedAt.replace('{when}', relativeTime(ev.updatedAt, locale))}`}
+                      {ev.correctedAt && ` · ${t.evaluation.editedAt.replace('{when}', relativeTime(ev.correctedAt, locale))}`}
                     </p>
                   </>
                 )}

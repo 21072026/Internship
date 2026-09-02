@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { assertSameOrg, requireOrg } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { isWithinEditWindow } from '@/lib/evaluation';
@@ -45,10 +46,19 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 // The same body shape the collection route's POST validates; the keys
 // themselves are checked against the tenant's rubric inside the handler, since
 // an org may have defined its own criteria (#822).
-const patchSchema = z.object({
-  scores: z.record(z.string().min(1).max(64), z.number().int().min(1).max(5)).optional(),
-  comment: z.string().max(2000).optional().nullable(),
-});
+const patchSchema = z
+  .object({
+    scores: z.record(z.string().min(1).max(64), z.number().int().min(1).max(5)).optional(),
+    comment: z.string().max(2000).optional().nullable(),
+  })
+  // An empty body is refused rather than treated as "correct nothing". The
+  // update below un-approves and un-publishes any testimonial built on this
+  // record, and that side effect must only ever fire on a real edit — a `{}`
+  // PATCH would otherwise take a live public quote down while changing no
+  // wording at all.
+  .refine((d) => d.scores !== undefined || d.comment !== undefined, {
+    message: 'Nothing to correct: send scores, comment, or both',
+  });
 
 // PATCH — correct a score or a comment inside the edit window (#1893). A typo
 // used to force delete-and-rewrite, which threw the record out of its place in
@@ -82,6 +92,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       },
     });
     if (!evaluation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Evaluation is not in TENANT_MODELS, so withTenantScope does not narrow a
+    // lookup by id for us — assert the tenant explicitly before authorizing, or
+    // an admin of another org could correct this row once isolation is on. A
+    // no-op while MT_ENFORCE_ISOLATION is off.
+    assertSameOrg(evaluation.relation?.orgId ?? null, requireOrg(session));
 
     if (evaluation.authorId !== session.user.id && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -121,6 +137,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       data: {
         ...(parsed.data.scores ? { scores: parsed.data.scores } : {}),
         ...(parsed.data.comment !== undefined ? { comment: parsed.data.comment?.trim() || null } : {}),
+        // The one writer of this column, which is what makes it mean
+        // "corrected" and not merely "last touched" (see the schema comment).
+        correctedAt: new Date(),
         excerptApprovedAt: null,
         publishedAt: null,
         sharedPublicly: false,
@@ -137,7 +156,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     });
 
     return NextResponse.json({
-      evaluation: { id: updated.id, scores: updated.scores, comment: updated.comment, updatedAt: updated.updatedAt },
+      evaluation: { id: updated.id, scores: updated.scores, comment: updated.comment, correctedAt: updated.correctedAt },
     });
   });
 }

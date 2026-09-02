@@ -52,26 +52,6 @@ export function isWithinEditWindow(createdAt: Date | string, now: Date = new Dat
   return now.getTime() - created <= EVALUATION_EDIT_WINDOW_DAYS * 86_400_000;
 }
 
-/**
- * Has this record actually been corrected?
- *
- * `Evaluation.updatedAt` cannot answer that on its own: Prisma stamps
- * `@updatedAt` on CREATE too, so every freshly written evaluation carries one
- * roughly equal to `createdAt`. A correction is a write that happened
- * meaningfully after the row was created — hence the comparison rather than a
- * null check, and hence a second column would only be a duplicate of it.
- */
-export function wasCorrected(
-  createdAt: Date | string,
-  updatedAt: Date | string | null | undefined
-): boolean {
-  if (!updatedAt) return false;
-  const created = new Date(createdAt).getTime();
-  const updated = new Date(updatedAt).getTime();
-  if (Number.isNaN(created) || Number.isNaN(updated)) return false;
-  return updated - created > 1_000;
-}
-
 // Which side of the relationship a rubric scores.
 export const EVALUATION_SCOPES = ['MENTEE', 'MENTOR'] as const;
 export type EvaluationScope = (typeof EVALUATION_SCOPES)[number];

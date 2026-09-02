@@ -3,11 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { assertSameOrg, requireOrg } from '@/lib/orgScope';
 import { criteriaByTemplate, resolveCriteria } from '@/lib/evaluationTemplates';
 import { canSeeOtherScorecards, divergence, isPanelComplete, panelAverage } from '@/lib/interviewPanel';
 import { blindLabel, isBlindFor } from '@/lib/blindReview';
 import { getSetting } from '@/lib/settings';
 import { logActivity } from '@/lib/activity';
+import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
 
 // Panel detail — and the place blind scoring is actually enforced (#824).
@@ -153,6 +155,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       where: { id },
       select: {
         id: true,
+        orgId: true,
         closedAt: true,
         createdById: true,
         subjectId: true,
@@ -161,6 +164,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       },
     });
     if (!panel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // InterviewPanel is not in TENANT_MODELS, so the lookup by id above is not
+    // org-narrowed for us; assert the tenant before authorizing. No-op while
+    // MT_ENFORCE_ISOLATION is off.
+    assertSameOrg(panel.orgId, requireOrg(session));
 
     const isAdmin = session.user.role === 'ADMIN';
     if (!isAdmin && panel.createdById !== session.user.id) {
@@ -210,6 +218,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         data: addable.map((u) => ({ panelId: id, userId: u.id })),
         skipDuplicates: true,
       });
+      // A new member now blocks completion until they submit, so they have to
+      // be told — exactly as the create route tells the original roster, and
+      // with the same blind-safe variant, since a notification naming the
+      // candidate would undo the blinding before they open the panel (#819).
+      // Without this, a late addition is the "ghost member" the validity filter
+      // above exists to prevent.
+      const blindEnabled = (await getSetting('blindReview')) === 'true';
+      const subjectName = blindEnabled
+        ? null
+        : (await prisma.user.findUnique({ where: { id: panel.subjectId }, select: { fullName: true } }))?.fullName ?? '';
+      await Promise.all(
+        addable.map((u) =>
+          blindEnabled
+            ? notifyIfAllowed(u.id, 'goalsEvaluations', 'interview.assignedBlind', undefined, `/interviews/${id}`)
+            : notifyIfAllowed(
+                u.id,
+                'goalsEvaluations',
+                'interview.assigned',
+                { name: subjectName ?? '' },
+                `/interviews/${id}`
+              )
+        )
+      );
       changed.push(`+${addable.length} interviewers`);
     }
     if (remove.length > 0) {

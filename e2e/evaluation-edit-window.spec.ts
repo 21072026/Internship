@@ -44,7 +44,7 @@ test('an author corrects an evaluation inside the window, and the window closes'
     const body = await fixed.json();
     expect(body.evaluation.scores.technical).toBe(5);
     expect(body.evaluation.comment).toBe('meant to type 5');
-    expect(body.evaluation.updatedAt).not.toBeNull();
+    expect(body.evaluation.correctedAt).not.toBeNull();
 
     // The record keeps its place in history rather than being rewritten as a
     // new one, and the list marks it correctable.
@@ -52,8 +52,14 @@ test('an author corrects an evaluation inside the window, and the window closes'
     expect(list.evaluations).toHaveLength(1);
     expect(list.evaluations[0].scores.technical).toBe(5);
     expect(list.evaluations[0].canEdit).toBe(true);
-    // `updatedAt` is stamped on create too, so the list carries a derived flag.
-    expect(list.evaluations[0].corrected).toBe(true);
+    // Exact, not inferred from a timestamp comparison: a correction one
+    // millisecond after the create still shows as one.
+    expect(list.evaluations[0].correctedAt).not.toBeNull();
+
+    // An empty body is not "correct nothing": it would silently un-publish a
+    // testimonial while changing no wording, so it is refused outright.
+    const noop = await page.request.patch(`/api/evaluations/${evaluationId}`, { data: {} });
+    expect(noop.status()).toBe(400);
 
     // A correction is auditable, not silent.
     const logged = await prisma.activityLog.findFirst({
@@ -127,6 +133,19 @@ test('correcting an evaluation un-approves and un-publishes its testimonial exce
     expect(row?.sharedPublicly).toBe(false);
     // The admin's drafted text is kept — re-approving it is the author's call.
     expect(row?.publicExcerpt).toBe('A quotable excerpt');
+    expect(row?.correctedAt).not.toBeNull();
+
+    // Conversely, a write that is NOT a correction must not claim to be one:
+    // publishing an excerpt again leaves the correction stamp exactly where the
+    // PATCH left it, so the panel never says "corrected" about untouched
+    // scores.
+    const stampAfterEdit = row?.correctedAt?.getTime();
+    await prisma.evaluation.update({
+      where: { id: evaluationId },
+      data: { publishedAt: new Date(), sharedPublicly: true },
+    });
+    const republished = await prisma.evaluation.findUnique({ where: { id: evaluationId } });
+    expect(republished?.correctedAt?.getTime()).toBe(stampAfterEdit);
 
     // Neither the author nor an admin: refused by the ROUTE, not by a hidden
     // button.

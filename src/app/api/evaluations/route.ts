@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
-import { EVALUATION_TYPES, isWithinEditWindow, wasCorrected } from '@/lib/evaluation';
+import { EVALUATION_TYPES, isWithinEditWindow } from '@/lib/evaluation';
 import { allowedCriterionKeys, criteriaByTemplate, resolveTemplateId } from '@/lib/evaluationTemplates';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { notifyIfAllowed } from '@/lib/notify';
@@ -76,9 +76,9 @@ export async function GET(request: Request) {
       direction: e.authorId === rel.menteeId ? 'MENTEE_ON_MENTOR' : 'MENTOR_ON_MENTEE',
       canDelete: mine(e),
       canEdit: mine(e) && isWithinEditWindow(e.createdAt),
-      // Derived here rather than in the browser: `updatedAt` is also stamped on
-      // create, so it alone would mark every new record as corrected.
-      corrected: wasCorrected(e.createdAt, e.updatedAt),
+      // `correctedAt` rides along in the spread above: it is null unless PATCH
+      // actually rewrote this record, so the UI needs no derived flag and an
+      // unrelated write (an excerpt being published, say) never mislabels it.
     })),
     templates,
   });

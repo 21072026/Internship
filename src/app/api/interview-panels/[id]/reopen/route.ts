@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { assertSameOrg, requireOrg } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 
 // Reopen a panel that was closed too early (#1893) — the mirror of the close
@@ -23,9 +24,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const panel = await prisma.interviewPanel.findUnique({
       where: { id },
-      select: { id: true, closedAt: true, subjectId: true, createdById: true },
+      select: { id: true, orgId: true, closedAt: true, subjectId: true, createdById: true },
     });
     if (!panel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // InterviewPanel is not in TENANT_MODELS, so the lookup by id above is not
+    // org-narrowed for us; assert the tenant before authorizing. No-op while
+    // MT_ENFORCE_ISOLATION is off.
+    assertSameOrg(panel.orgId, requireOrg(session));
 
     if (session.user.role !== 'ADMIN' && panel.createdById !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
