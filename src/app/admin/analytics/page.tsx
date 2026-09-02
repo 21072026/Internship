@@ -599,25 +599,35 @@ export default function AdminAnalyticsPage() {
             {aging.stageAging.length === 0 ? (
               <p className="text-sm text-gray-400">—</p>
             ) : (
-              <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                {/* The stats string is unbreakable, so on a phone the stage name
-                    gets its own line instead of being squeezed to ~35px
-                    ("100 · Erstkontakt" → "100 …", #1305). */}
-                {aging.stageAging.map((s) => (
-                  <div key={s.pipelineStatus} className="flex flex-col items-start gap-0.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2" data-testid={`stage-aging-row-${s.pipelineStatus}`}>
-                    <span className="max-w-full truncate">{label(s.pipelineStatus)}</span>
-                    {/* The trailing number used to be printed as "candidates",
-                        which flatly contradicted the funnel above: it is the
-                        count of completed stage VISITS (a re-entry counts
-                        twice), so it read as "6 candidates" where the funnel
-                        said 1. Both numbers are now named for what they are,
-                        with the hint spelling out the difference (#1427). */}
-                    <span className="text-gray-500 sm:flex-shrink-0" title={t.analytics.aging.countsHint}>
-                      {t.analytics.aging.avg} {s.avgDays}{t.analytics.aging.days} · {t.analytics.aging.median} {s.medianDays}{t.analytics.aging.days} · {s.visits} {t.analytics.aging.visits} · {s.candidates} {t.analytics.aging.distinctCandidates}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <>
+                {/* Both numbers below are measured from transitions that have
+                    ENDED, so neither equals the funnel's "in this stage now" —
+                    which is the contradiction this card used to present (#1427).
+                    The explanation is rendered, not put in a `title`: a hover
+                    tooltip never appears on a touch device, and this page states
+                    what its other cards measure the same visible way
+                    (funnelKpi.conversionHint). */}
+                <p className="text-xs text-gray-500 mt-0.5 mb-3" data-testid="stage-aging-hint">{t.analytics.aging.countsHint}</p>
+                <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                  {/* The stats string is unbreakable, so on a phone the stage name
+                      gets its own line instead of being squeezed to ~35px
+                      ("100 · Erstkontakt" → "100 …", #1305). */}
+                  {aging.stageAging.map((s) => (
+                    <div key={s.pipelineStatus} className="flex flex-col items-start gap-0.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2" data-testid={`stage-aging-row-${s.pipelineStatus}`}>
+                      <span className="max-w-full truncate">{label(s.pipelineStatus)}</span>
+                      {/* The trailing number used to be printed as "candidates",
+                          which flatly contradicted the funnel above: it is the
+                          count of completed stage VISITS (a re-entry counts
+                          twice), so it read as "6 candidates" where the funnel
+                          said 1. Both numbers are now named for what they are
+                          (#1427). */}
+                      <span className="text-gray-500 sm:flex-shrink-0">
+                        {t.analytics.aging.avg} {s.avgDays}{t.analytics.aging.days} · {t.analytics.aging.median} {s.medianDays}{t.analytics.aging.days} · {s.visits} {t.analytics.aging.visits} · {s.candidates} {t.analytics.aging.distinctCandidates}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </Card>
 

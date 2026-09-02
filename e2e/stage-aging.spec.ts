@@ -113,6 +113,9 @@ test('stage aging separates completed visits from distinct candidates', async ({
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText(/transitions|geçiş|Übergänge/);
     await expect(row).toContainText(/distinct candidates|ayrı aday|verschiedene Kandidaten/);
+    // …and the card states on the page (not in a hover-only title, which a
+    // touch device never shows) why neither number is the funnel's count.
+    await expect(page.getByTestId('stage-aging-hint')).toBeVisible();
   } finally {
     await prisma.statusChange.deleteMany({ where: { relationId: rel.id } });
     await cleanupByEmail(mentorEmail);
