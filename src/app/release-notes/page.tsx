@@ -1,15 +1,32 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { GraduationCap, Sparkles } from 'lucide-react';
+import { GraduationCap, Rss, Sparkles } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { getAllReleaseNotes } from '@/lib/releaseNotes';
+import { publicOrigin, releaseFeedUrl } from '@/lib/releaseFeed';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { GITHUB_URL } from '@/components/landing/links';
+
+// Discoverability half of the feed (#1383): browsers and readers pick a feed up
+// from this link, so subscribing is one click from the page. Static metadata is
+// locale-independent, hence the default-locale feed — the other two languages
+// are the same URL with `?lang=`, and the visible link below follows the reader.
+export const metadata: Metadata = {
+  alternates: {
+    types: {
+      'application/rss+xml': [
+        { url: releaseFeedUrl(publicOrigin()), title: 'Internship CRM — release notes' },
+      ],
+    },
+  },
+};
 
 // Public, user-facing "what's new" page — friendly feature highlights per
 // release, localized. Distinct from CHANGELOG.md (developer-facing, in the repo).
 export default async function ReleaseNotesPage() {
   const { locale, t } = await getServerDictionary();
+  const feedUrl = releaseFeedUrl(publicOrigin(), locale);
 
   return (
     <PublicShell>
@@ -23,7 +40,12 @@ export default async function ReleaseNotesPage() {
 
         <div className="space-y-6">
           {getAllReleaseNotes().map((r) => (
-            <div key={r.version} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+            <div
+              key={r.version}
+              /* The permalink the feed items point at (#1383). */
+              id={`v${r.version}`}
+              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 scroll-mt-20"
+            >
               {/* Stacks on a phone: version + "2026-08-25 09:25 UTC · b174c20"
                   side by side is wider than 360px (e2e/mobile-layout-audit). */}
               <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-3 mb-3">
@@ -55,9 +77,18 @@ export default async function ReleaseNotesPage() {
           ))}
         </div>
 
-        <Link href="/" className="inline-flex items-center gap-1.5 mt-8 text-sm text-blue-600 hover:underline">
-          <GraduationCap className="h-4 w-4" /> {t.releaseNotes.back}
-        </Link>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-8">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline">
+            <GraduationCap className="h-4 w-4" /> {t.releaseNotes.back}
+          </Link>
+          <a
+            href={feedUrl}
+            data-testid="release-notes-feed-link"
+            className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+          >
+            <Rss className="h-4 w-4" /> {t.releaseNotes.feed}
+          </a>
+        </div>
       </div>
     </PublicShell>
   );
