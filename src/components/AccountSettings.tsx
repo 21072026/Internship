@@ -997,7 +997,7 @@ export function AccountSettings() {
               <option value="comfortable">{t.density.comfortable}</option>
               <option value="compact">{t.density.compact}</option>
             </select>
-            <p className="text-xs text-gray-400 mt-1">{t.account.densityHint}</p>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.account.densityHint}</p>
           </div>
         </div>
 
