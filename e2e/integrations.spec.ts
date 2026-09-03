@@ -17,7 +17,8 @@ test('admin generates an API key that authorizes the read-only v1 API', async ({
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
     // Generate a key (raw value returned once).
-    const created = await page.request.post('/api/admin/api-keys', { data: { name: 'CI key' } });
+    // A key must carry at least one scope since #1545.
+    const created = await page.request.post('/api/admin/api-keys', { data: { name: 'CI key', scopes: ['candidates:read'] } });
     expect(created.status()).toBe(201);
     const { id, key } = await created.json();
     keyId = id;
