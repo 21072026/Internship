@@ -5431,6 +5431,62 @@ sorunsuz çalıştı). Tarayıcı açmayan prisma-only spec'ler bu sorunu hiç g
 **MariaDB oturum içinde durabiliyor:** `db push` bir anda P1001 verdiyse kutunun
 ağı değil, `service mariadb start`'ı tekrar çalıştırmak gerekiyor.
 
+## 2026-09-02 — Kuyruktan paralel iş alma: claim, oturum limiti ve worktree'ler
+
+**Aynı backlog'da birden fazla oturum çalışıyor ve claim mekanizması bir issue
+yorumu.** İşe başlamadan önce `issue_read` + `get_comments` çağırmadan iş almak
+doğrudan çift emek: bu turda ilk parti 11 adayın 6'sı (#2041, #2045, #2052,
+#2062, #2071, #2077) o sabah başka oturumlarca `🔒 Claimed` yorumuyla alınmıştı;
+#2041 dört ayrı oturum tarafından 60 saniye içinde claim edilmişti. Kendi
+aldığın işe **branch adını içeren** bir claim yorumu düş — PR açılana kadar tek
+görünür işaret o. Açık PR başlıklarını issue numarasına göre taramak da ucuz bir
+ikinci kontrol (#2028 için fork'tan gelmiş bir PR zaten açıktı).
+
+**Oturum limiti alt ajanları uçuruyor, ama işi uçurmuyor.** İki kez
+"You've hit your session limit" ile bütün alt ajanlar düştü (10:00 ve 15:00 UTC
+reset). Kurtarma yolu: `git worktree list`, sonra her worktree'de
+`git status --short` + `git log --oneline -1`. Bu turda dört worktree
+**commit'lenmiş ama push'lanmamış** iş taşıyordu, biri de yarım kalmış
+(uncommitted) bir implementasyon — hepsi ana döngüde tamamlanıp PR'a çıktı.
+Alt ajan öldüğünde varsayılan davranış "baştan yap" değil, "worktree'ye bak".
+
+**Bash çalışma dizini çağrılar arasında kalıcı.** Bir worktree'ye `cd` ettikten
+sonra sonraki `python3`/`sed` çağrısı da orada çalışıyor: `package.json`
+yamasını ana checkout'a attığımı sanırken worktree'ye attım ve worktree
+silinince yama kayboldu. Worktree'lerle çalışırken her komuta mutlak yol ya da
+kendi `cd`'sini yaz.
+
+**Workflow worktree'lerinde `npm install` çalıştırma.** `ln -sfn
+/home/user/Internship/node_modules node_modules` yeterli ve saniyeler sürüyor;
+üretilen Prisma client de simlink üzerinden paylaşılıyor. Yeni bir model
+eklediysen `DATABASE_URL="mysql://u:p@localhost:3306/x" npx prisma generate`
+(format/validate/generate hepsi `.env` yokken URL istiyor) — ve bu, aynı
+node_modules'ü paylaşan diğer worktree'lerin client'ını da değiştirir.
+
+**Kapsam değişince release fragment'ı da değişmeli.** #1871'in fragment'ı ilk
+commit'te "canned responses bu değişikliğin parçası değil" diyordu; ikinci
+pass'te o madde de shipping oldu ve fragment yalan söylemeye başladı.
+`npm run check:release-fragments` bunu yakalamıyor — metin doğruluğu gözle
+kontrol edilecek tek şey.
+
+**Yeşil görünen PR saatlerce merge olmuyorsa muhtemelen self-hosted runner
+kuyruğudur.** Bu turda dokuz PR'ın tamamında lint/typecheck/build, Playwright
+smoke, CodeQL ve audit yeşilken tek bekleyen iş `Deploy topic environment`
+(`topic-preview.yml`, Plesk kutusundaki tek self-hosted runner) `queued`
+durumundaydı — #2112'de 9 saat boyunca. Kırmızı değil, sıraya girmiş: PR başına
+bir topic ortamı kurulduğu için bir düzine açık PR runner'ı seri hâle getiriyor.
+"CI kırmızı" muamelesi yapıp diff'te hata aramak boşa emek; kontrol edilecek
+şey runner'ın ayakta olup olmadığı (`runner-watchdog.yml`).
+
+**Bir turda 11 iş çıkarmanın işleyen şekli:** triyajı ayrı bir akış olarak koş
+(issue + kod okuyup `verdict/sizeHours/files/plan/scopeCut` döndüren ajanlar),
+sonuçları bir JSON'a yaz, çakışmayanları seç, claim et, implementasyonu
+`implement → adversarial review → fix+push` üçlü pipeline'ıyla ver. Review
+aşaması bu turda gerçek hatalar buldu: iTIP `.ics`'te eksik
+`ORGANIZER`/`ATTENDEE` (iptal maili hiçbir şeyi silemezdi), `/admin/offers`'ta
+tek kolonlu `ORDER BY` yüzünden sayfalar arası tekrarlayan satır, typing
+sinyalinin inbox'ta her 3 saniyede bir conversation upsert tetiklemesi. Tek
+geçişli üretim bunların hiçbirini yakalamıyordu.
 ## 2026-09-03 — Ham Prisma hatasının giriş formunda görünmesi + MySQL watchdog
 
 **Bir "koruma" var diye korunuyor sanma; koruduğu yolu çalıştırıp gör.** #1150'de
