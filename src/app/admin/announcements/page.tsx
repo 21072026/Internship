@@ -313,20 +313,13 @@ export default function AdminAnnouncementsPage() {
               />
               {image ? (
                 <div className="flex items-start gap-3">
-                  <button
-                    type="button"
-                    onClick={() => lightbox.open([{ src: image.url, filename: image.file.name }])}
-                    aria-label={t.imageViewer.view.replace('{name}', image.file.name)}
-                    className="rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={image.url}
-                      alt={image.file.name}
-                      data-testid="announcement-image-preview"
-                      className="h-24 w-24 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
-                    />
-                  </button>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image.url}
+                    alt={image.file.name}
+                    data-testid="announcement-image-preview"
+                    className="h-24 w-24 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
+                  />
                   <div className="min-w-0">
                     <p className="text-xs text-gray-500 truncate">{image.file.name}</p>
                     <div className="flex gap-2 mt-1.5">
