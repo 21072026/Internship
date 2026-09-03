@@ -19,12 +19,14 @@ import { test, expect, type APIRequestContext, type APIResponse } from '@playwri
  */
 test.use({ storageState: { cookies: [], origins: [] } });
 
-// Path prefixes that must never appear in the sitemap. Compared as
-// exact-or-subpath rather than by `startsWith`, because `/mentor` is a prefix
-// of the *public* `/mentors` directory.
+// Path prefixes that must never appear in the sitemap. `/mentors` (the
+// signed-in mentor directory, #938) is listed explicitly rather than relying
+// on the `/mentor` prefix to catch it, so removing `/mentor` later can't
+// silently stop covering it.
 const PRIVATE_PREFIXES = [
   '/admin',
   '/mentor',
+  '/mentors',
   '/portal',
   '/company',
   '/messages',

@@ -61,7 +61,7 @@ test('global search dropdown is readable in both light and dark mode', async ({ 
 
     await search(page, token);
     const listbox = page.getByTestId('global-search-listbox');
-    const option = page.getByTestId(`global-search-option-${mentee.id}`);
+    const option = page.getByTestId(`global-search-option-user-${mentee.id}`);
     await expect(listbox).toBeVisible();
     await expect(option).toBeVisible();
     // The candidate name — the strongest text tone in the row (text-gray-900).
@@ -120,7 +120,7 @@ test('global search is a keyboard-operable combobox', async ({ page }) => {
     await seedUser(emails[2], 'x', 'MENTEE', `${token} Charlie`),
   ];
 
-  const testId = (id: string) => `global-search-option-${id}`;
+  const testId = (id: string) => `global-search-option-user-${id}`;
 
   try {
     await signIn(page, adminEmail, 'AdminPass123');
