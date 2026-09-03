@@ -52,6 +52,7 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'WeeklyReport',
   'Requisition',
   'InterviewRequest',
+  'MessageTemplate',
   // Brute-force lockouts (#1541). Rows are written by the sign-in path, which
   // runs outside any tenant scope (there is no session yet) and stamps orgId
   // itself; listing this here is what keeps one tenant's admin from seeing or

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Demo-seed fidelity gate**: a new `demo-fidelity` CI job seeds a throwaway MySQL and counts the rows behind each differentiating screen against `scripts/demo-fidelity.json`, failing the build with the screen and the owning issue when a screen has no demo data. The \"is this DATABASE_URL safe for demo data?\" predicate moved to `prisma/demoTarget.mjs` and is now shared by the seeder and the checker."
+}
