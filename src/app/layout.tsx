@@ -9,8 +9,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { hasSessionCookie } from '@/lib/sessionCookie';
 import { resolveAccent } from '@/lib/accent';
+import { DENSITY_CLASS, resolveDensity } from '@/lib/density';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
+import { SystemThemeSync } from '@/components/SystemThemeSync';
+import { appleSplashLinks } from '@/lib/appleSplash';
 
 export const metadata: Metadata = {
   title: 'Internship CRM - Mentor-Mentee Management',
@@ -23,6 +26,11 @@ export const metadata: Metadata = {
       { url: '/favicon.ico', sizes: 'any' },
     ],
     apple: '/apple-touch-icon.png',
+    // iOS launch screens for the installed app (#2084). Safari ignores the
+    // manifest here and wants one media-matched <link> per device resolution,
+    // so the list — and the images under public/splash/ — are both generated
+    // from the device table in lib/appleSplash.ts.
+    other: appleSplashLinks(),
   },
 };
 
@@ -36,7 +44,10 @@ export const viewport: Viewport = {
 
 // Runs before paint to set the dark class from the saved preference or the OS,
 // so there's no light flash. Mirrors the server-side cookie read below.
-const NO_FLASH = `(function(){try{var m=document.cookie.match(/(?:^|; )theme=([^;]+)/);var e=m?decodeURIComponent(m[1]):localStorage.getItem('theme');var h=document.documentElement;if(e==='dark')h.classList.add('dark');else if(e==='light')h.classList.remove('dark');else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)h.classList.add('dark');var fm=document.cookie.match(/(?:^|; )fontSize=([^;]+)/);var fe=fm?decodeURIComponent(fm[1]):localStorage.getItem('fontSize');if(fe==='sm'||fe==='lg'||fe==='xl')h.classList.add('font-'+fe);}catch(e){}})();`;
+// `theme=system` is an explicit stored value (#2078), not the absence of one:
+// it is resolved here through matchMedia, which is why SSR can leave the class
+// off and this script still paints the right theme on the first frame.
+const NO_FLASH = `(function(){try{var h=document.documentElement;var p=function(n,a){var m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]+)'));if(m)return decodeURIComponent(m[1]);var v=null;try{v=localStorage.getItem(n);}catch(e){}return v||h.getAttribute(a);};var e=p('theme','data-theme-pref');var d;if(e==='dark')d=true;else if(e==='light')d=false;else d=!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);h.classList.toggle('dark',d);var fe=p('fontSize','data-font-size-pref');if(fe==='sm'||fe==='lg'||fe==='xl')h.classList.add('font-'+fe);h.classList.toggle('density-compact',p('density','data-density-pref')==='compact');}catch(e){}})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale();
@@ -45,28 +56,39 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   let theme = cookieStore.get('theme')?.value;
   let fontSize = cookieStore.get('fontSize')?.value;
   let accent = cookieStore.get('accent')?.value;
+  let density = cookieStore.get('density')?.value;
   // No device cookie yet? Fall back to the signed-in user's saved preferences
   // so they follow them across devices (the no-flash script still handles OS default).
   // Signed-out visitors have none, and this layout wraps every page — so gate on
   // the session cookie rather than paying a session decode per view (#1197).
-  if ((!theme || !fontSize || !accent) && (await hasSessionCookie())) {
+  if ((!theme || !fontSize || !accent || !density) && (await hasSessionCookie())) {
     try {
       const session = await getServerSession(authOptions);
       if (session?.user?.id) {
-        const u = await prisma.user.findUnique({ where: { id: session.user.id }, select: { theme: true, fontSize: true, accentColor: true } });
+        const u = await prisma.user.findUnique({ where: { id: session.user.id }, select: { theme: true, fontSize: true, accentColor: true, density: true } });
         if (!theme && u?.theme) theme = u.theme;
         if (!fontSize && u?.fontSize) fontSize = u.fontSize;
         if (!accent && u?.accentColor) accent = u.accentColor;
+        if (!density && u?.density) density = u.density;
       }
     } catch { /* ignore */ }
   }
   const fontSizeClass = fontSize === 'sm' || fontSize === 'lg' || fontSize === 'xl' ? `font-${fontSize}` : undefined;
+  const densityClass = resolveDensity(density) === 'compact' ? DENSITY_CLASS : undefined;
 
   return (
     <html
       lang={locale}
-      className={[theme === 'dark' ? 'dark' : undefined, fontSizeClass].filter(Boolean).join(' ') || undefined}
+      className={[theme === 'dark' ? 'dark' : undefined, fontSizeClass, densityClass].filter(Boolean).join(' ') || undefined}
       data-accent={resolveAccent(accent)}
+      // The preferences this request resolved (cookie, else the signed-in
+      // user's saved value). The no-flash script falls back to these when the
+      // device itself has stored nothing, so a preference that lives only in
+      // the account still paints correctly on the first frame instead of being
+      // overruled by the OS setting.
+      data-theme-pref={theme || undefined}
+      data-font-size-pref={fontSize || undefined}
+      data-density-pref={density || undefined}
       suppressHydrationWarning
     >
       <head>
@@ -79,6 +101,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           {dict.a11y.skipToContent}
         </a>
+        {/* Keeps a `system` theme preference following the OS while the tab
+            is open (#2078). Renders nothing. */}
+        <SystemThemeSync />
         <Providers locale={locale} dict={dict}>
           {/* Public demo (#966) — above everything, on every route, so a visitor
               never mistakes the demo for their own tenant. */}

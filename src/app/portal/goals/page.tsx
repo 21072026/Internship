@@ -8,6 +8,8 @@ import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
 import { InterviewPrep } from '@/components/InterviewPrep';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Target } from 'lucide-react';
 import { ArchivedNotice } from '@/components/ArchivedNotice';
 import { menteeRelationWhere, pickMenteeRelation } from '@/lib/menteeRelation';
 
@@ -52,7 +54,20 @@ export default async function PortalGoalsPage() {
         </div>
       ) : (
         <Card>
-          <p className="text-sm text-gray-500">{t.portal.noRelationSection}</p>
+          {/* Everything on this page hangs off a mentorship, so with no mentor
+              the only honest next step is the one thing the mentee controls. */}
+          <EmptyState
+            testId="portal-goals"
+            icon={Target}
+            role="MENTEE"
+            title={t.emptyStates.portalGoals.title}
+            byRole={{
+              MENTEE: {
+                body: t.emptyStates.portalGoals.menteeBody,
+                action: { label: t.emptyStates.portalGoals.menteeCta, href: '/portal/profile' },
+              },
+            }}
+          />
         </Card>
       )}
 

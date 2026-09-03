@@ -2,11 +2,23 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3, Users, BookOpen, Target, TrendingUp, Award } from 'lucide-react';
+import { BarChart3, Users, BookOpen, Target, TrendingUp, Award, ArrowRightLeft } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { AsyncSection } from '@/components/ui/AsyncSection';
-import { useResolvedStages } from '@/lib/pipelineStagesClient';
+import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
+import { exportXlsx } from '@/lib/excel';
+import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
+
+interface MentorAnalyticsRow {
+  menteeId: string;
+  menteeName: string;
+  pipelineStatus: string;
+  daysInStage: number;
+  interactions: number;
+  goalsDone: number;
+}
 
 interface MentorAnalytics {
   funnel: Record<string, number>;
@@ -15,8 +27,27 @@ interface MentorAnalytics {
   hired: number;
   conversionToHired: number;
   interactions: number;
-  goals: { open: number; done: number; total: number };
+  goals: { open: number; done: number; total: number; doneInRange: number };
   avgDaysToHired: number | null;
+  statusChanges: number;
+  rows: MentorAnalyticsRow[];
+  range: { from: string; to: string };
+}
+
+type RangePreset = '30' | '90' | '6m' | '12m' | 'all';
+
+// Same helper as the admin analytics page: "all time" sends no bounds so the
+// API falls back to its own default window.
+function rangeQuery(preset: RangePreset): string {
+  if (preset === 'all') return '';
+  const to = new Date();
+  const from = new Date(to);
+  if (preset === '30') from.setDate(from.getDate() - 30);
+  else if (preset === '90') from.setDate(from.getDate() - 90);
+  else if (preset === '6m') from.setMonth(from.getMonth() - 6);
+  else if (preset === '12m') from.setMonth(from.getMonth() - 12);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return `?from=${iso(from)}&to=${iso(to)}`;
 }
 
 function StatCard({ icon: Icon, value, label, color }: { icon: React.ElementType; value: string | number; label: string; color: string }) {
@@ -42,6 +73,8 @@ function StatCard({ icon: Icon, value, label, color }: { icon: React.ElementType
 export default function MentorAnalyticsPage() {
   const t = useT();
   const stages = useResolvedStages();
+  const stageLabel = useStageLabel();
+  const [range, setRange] = useState<RangePreset>('6m');
   const [data, setData] = useState<MentorAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +83,7 @@ export default function MentorAnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/mentor/analytics');
+      const response = await fetch(`/api/mentor/analytics${rangeQuery(range)}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setData(await response.json());
     } catch (loadError) {
@@ -59,7 +92,7 @@ export default function MentorAnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [t.common.error]);
+  }, [range, t.common.error]);
 
   useEffect(() => {
     void load();
@@ -67,13 +100,73 @@ export default function MentorAnalyticsPage() {
 
   const ma = t.mentorAnalytics;
 
+  // A mentor's own numbers are free core: no entitlement check here, ever.
+  const exportExcel = async () => {
+    if (!data) return;
+    await exportXlsx(
+      `mentor-analytics-${data.range.from}-${data.range.to}`,
+      [ma.exportMentee, ma.exportStage, ma.exportDaysInStage, ma.exportInteractions, ma.exportGoalsDone],
+      data.rows.map((r) => [
+        r.menteeName,
+        stageLabel(r.pipelineStatus),
+        r.daysInStage,
+        r.interactions,
+        r.goalsDone,
+      ]),
+      'Mentees'
+    );
+  };
+
   const maxFunnel = data ? Math.max(1, ...stages.map((s) => data.funnel[s.key] || 0)) : 1;
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{ma.title}</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">{ma.subtitle}</p>
+    <div id="mentor-analytics-print">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{ma.title}</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">{ma.subtitle}</p>
+          {data ? (
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1" data-testid="mentor-analytics-window">
+              {data.range.from} – {data.range.to}
+            </p>
+          ) : null}
+        </div>
+        {/* `no-print` is what the existing global @media print block keys off,
+            so the controls disappear from the printed report with no new CSS. */}
+        <div className="flex flex-wrap items-center gap-2 no-print">
+          <Select
+            aria-label={t.analytics.dateRange}
+            className="w-auto"
+            value={range}
+            onChange={(e) => setRange(e.target.value as RangePreset)}
+            data-testid="mentor-analytics-range"
+            options={[
+              { value: '30', label: t.analytics.last30 },
+              { value: '90', label: t.analytics.last90 },
+              { value: '6m', label: t.analytics.last6m },
+              { value: '12m', label: t.analytics.last12m },
+              { value: 'all', label: t.analytics.allTime },
+            ]}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportExcel}
+            disabled={!data}
+            data-testid="mentor-analytics-export"
+          >
+            {t.analytics.exportExcel}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            disabled={!data}
+            data-testid="mentor-analytics-print"
+          >
+            {t.analytics.print}
+          </Button>
+        </div>
       </div>
 
       <AsyncSection
@@ -88,11 +181,15 @@ export default function MentorAnalyticsPage() {
         {data ? (
         <>
           {/* Summary stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-3">
             <StatCard icon={Users} value={data.totalRelations} label={ma.totalMentees} color="bg-blue-500" />
             <StatCard icon={TrendingUp} value={`${data.conversionToHired}%`} label={ma.hiredRate} color="bg-green-500" />
             <StatCard icon={BookOpen} value={data.interactions} label={ma.totalInteractions} color="bg-purple-500" />
+            <StatCard icon={ArrowRightLeft} value={data.statusChanges} label={ma.stageMoves} color="bg-indigo-500" />
           </div>
+          {/* Which numbers move with the range and which are state. Without this
+              line a mentor reads a narrow window as "my pipeline shrank". */}
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-8">{ma.rangeNote}</p>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Pipeline funnel */}
@@ -155,7 +252,11 @@ export default function MentorAnalyticsPage() {
                     <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 break-words">{ma.goalsOpen}</p>
                   </div>
                   <div className="rounded-lg bg-green-50 dark:bg-green-950/30 p-2 sm:p-3">
-                    <p className="text-2xl font-bold text-green-700 dark:text-green-300">{data.goals.done}</p>
+                    {/* Completed is an EVENT, so it follows the selected range;
+                        total and open next to it are current state. rangeNote
+                        under the stat cards says exactly that, which is why the
+                        three tiles are allowed not to add up. */}
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-300" data-testid="mentor-goals-done">{data.goals.doneInRange}</p>
                     <p className="text-xs text-green-600 dark:text-green-400 mt-1 break-words">{ma.goalsDone}</p>
                   </div>
                 </div>

@@ -69,8 +69,10 @@ test('support attachments: image preview in composer, send, renders inline in th
     const res = await done;
     expect(res.status()).toBe(201);
 
-    // The attachment is visible in the thread after the reload.
-    await expect(page.locator('a[href*="/api/support/attachments/"]')).toBeVisible({ timeout: 10_000 });
+    // The attachment is visible in the thread after the reload. An image is a
+    // button, not a link: it opens the in-app viewer (which can be closed)
+    // instead of stranding the reader in a chrome-less new tab.
+    await expect(page.getByTestId('support-image-attachment')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('screenshot.png', { exact: false })).toBeVisible();
   } finally {
     await cleanupSupportData(user.id, email);
@@ -127,8 +129,10 @@ test('support attachments: removing a pending attachment', async ({ page }) => {
     });
     await expect(page.locator('img[alt="screenshot.png"]')).toBeVisible({ timeout: 5_000 });
 
-    // Remove the file using the ×-button.
-    await page.locator('button[aria-label*="screenshot.png"]').click();
+    // Remove the file using the ×-button. (Targeted by testid: the thumbnail
+    // next to it also carries the filename, as the button that opens the
+    // in-app image viewer.)
+    await page.getByTestId('pending-attachment-remove').click();
 
     // Thumbnail gone; send button back to disabled (no text, no files).
     await expect(page.locator('img[alt="screenshot.png"]')).not.toBeVisible();

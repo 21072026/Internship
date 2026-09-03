@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Copy, Check } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { OrgPlan, OrgPlanLimits } from '@/lib/orgPlans';
 
 interface Organization {
@@ -28,6 +30,9 @@ interface Organization {
     ssoEntryPoint: string | null;
     ssoCertificateSet: boolean;
     active: boolean;
+    spEntityId: string;
+    acsUrl: string;
+    metadataUrl: string;
   };
   createdAt: string;
   counts: {
@@ -47,6 +52,51 @@ function Usage({ used, limit }: { used: number; limit: number | null }) {
     <span className={over ? 'text-red-600 font-medium' : ''}>
       {used}{limit != null ? ` / ${limit}` : ' / ∞'}
     </span>
+  );
+}
+
+// One read-only SP identifier plus a copy button (#1931). The values come from
+// the API, never recomputed here — see the comment on the GET handler. `link`
+// makes the value clickable so IT can open the metadata document itself.
+function SpRow({ label, value, testId, link }: { label: string; value: string; testId: string; link?: boolean }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-medium text-gray-500">{label}</p>
+      <div className="flex items-center gap-2 mt-0.5">
+        {link ? (
+          <a
+            href={value}
+            target="_blank"
+            rel="noreferrer"
+            data-testid={testId}
+            // min-w-0 + truncate: these URLs are long, and without it the flex
+            // item refuses to shrink and pushes the copy button out of the box.
+            className="flex-1 min-w-0 truncate font-mono text-xs text-gray-700 underline decoration-dotted"
+          >
+            {value}
+          </a>
+        ) : (
+          <code data-testid={testId} className="flex-1 min-w-0 truncate font-mono text-xs text-gray-700">{value}</code>
+        )}
+        <button
+          type="button"
+          // type="button": this block lives inside the SSO <form>, and a bare
+          // button would submit it.
+          data-testid={`copy-${testId}`}
+          onClick={async () => {
+            if (!(await copyToClipboard(value))) return;
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? t.organizations.spCopied : t.organizations.spCopy}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -260,6 +310,19 @@ export default function AdminOrganizationsPage() {
             </div>
             {ssoOrgId && (
               <>
+                {(() => {
+                  const o = orgs.find((x) => x.id === ssoOrgId);
+                  if (!o) return null;
+                  return (
+                    <div data-testid="sp-details" className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                      <p className="text-sm font-medium text-gray-700">{t.organizations.spDetails}</p>
+                      <p className="text-xs text-gray-500">{t.organizations.spDetailsHint}</p>
+                      <SpRow label={t.organizations.spEntityId} value={o.sso.spEntityId} testId="sp-entity-id" />
+                      <SpRow label={t.organizations.spAcsUrl} value={o.sso.acsUrl} testId="sp-acs-url" />
+                      <SpRow label={t.organizations.spMetadataUrl} value={o.sso.metadataUrl} testId="sp-metadata-url" link />
+                    </div>
+                  );
+                })()}
                 <div className="flex flex-wrap gap-3">
                   <div className="min-w-[140px]">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoProvider}</label>

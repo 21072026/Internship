@@ -8,6 +8,7 @@ import { SidebarAvatar } from '@/components/SidebarAvatar';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { FontSizeControl } from '@/components/FontSizeControl';
+import { DensityControl } from '@/components/DensityControl';
 import { VersionFooter } from '@/components/VersionFooter';
 import { useT } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
@@ -91,6 +92,11 @@ export function AccountMenu({
           </div>
           <div className="flex items-center justify-center px-3 py-1">
             <FontSizeControl />
+          </div>
+          {/* Own row: the panel is only as wide as the sidebar, and both
+              controls carry a label, so side by side they would collide. */}
+          <div className="flex items-center justify-center px-3 py-1">
+            <DensityControl />
           </div>
           <div className="px-3 pt-1">
             <VersionFooter version={version} />

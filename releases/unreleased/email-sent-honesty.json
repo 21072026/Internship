@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fixed** — four endpoints reported `emailSent: true` when nothing had been delivered. `sendEmail` returns normally (recording a SKIPPED row) when SMTP is unconfigured or demo mode is on, and the callers read that silence as success — so creating a company or source login, resetting a password, or activating a mentee claimed the set-password link was on its way while the delivery log said SKIPPED, leaving an account nobody could sign in to. `sendEmail` and its wrappers now return `'SENT' | 'SKIPPED' | 'FAILED'`, all six routes derive `emailSent` from that, and the invite routes' `!!process.env.SMTP_USER` guess is gone — it was right about a missing SMTP_USER and wrong about demo mode.",
-  "notes": {
-    "en": ["When a set-password or invitation email cannot be delivered, the screen now says so instead of reporting it as sent."],
-    "tr": ["Parola belirleme ya da davet e-postası gönderilemediğinde ekran artık \"gönderildi\" demiyor, durumu olduğu gibi söylüyor."],
-    "de": ["Wenn eine Passwort- oder Einladungs-E-Mail nicht zugestellt werden kann, sagt der Bildschirm das jetzt, statt sie als gesendet zu melden."]
-  }
-}

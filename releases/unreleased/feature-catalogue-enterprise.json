@@ -2,8 +2,8 @@
   "bump": "patch",
   "changelog": "- **Feature catalogue:** Added enterprise platform capabilities (#2083).",
   "notes": {
-    "en": ["The feature catalogue now documents multi-tenant organisations, stored per-tenant branding settings, and enterprise SSO configuration."],
-    "tr": ["Özellik kataloğu artık çok kiracılı organizasyonları, kurum bazında saklanan marka ayarlarını ve kurumsal SSO yapılandırmasını içeriyor."],
-    "de": ["Der Funktionskatalog dokumentiert jetzt mandantenfähige Organisationen, gespeicherte mandantenbezogene Marken-Einstellungen und Enterprise-SSO-Konfiguration."]
+    "en": ["The feature catalogue now documents multi-tenant organisations, product-applied per-tenant branding, and enterprise SSO where SAML sign-in is live while OIDC sign-in is not yet wired."],
+    "tr": ["Özellik kataloğu artık çok kiracılı organizasyonları, ürün geneline uygulanan kurum bazlı markalamayı ve SAML girişinin canlı, OIDC girişinin ise henüz bağlı olmadığı kurumsal SSO durumunu içeriyor."],
+    "de": ["Der Funktionskatalog dokumentiert jetzt mandantenfähige Organisationen, produktweit angewandtes Mandanten-Branding und den Enterprise-SSO-Stand, bei dem SAML-Login live ist, OIDC-Login aber noch nicht angebunden ist."]
   }
 }

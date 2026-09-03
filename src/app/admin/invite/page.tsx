@@ -343,6 +343,16 @@ export default function InvitePage() {
           <CardHeader>
             <CardTitle>{t.invite.recentInvitations}</CardTitle>
           </CardHeader>
+          {/* The full history, its filters and the bulk actions live on the
+              board (#2071); this card stays because it is the only place a
+              freshly-minted link is ever shown — the GET deliberately omits
+              tokens, so a link not copied here cannot be recovered. */}
+          <p className="mb-4 text-xs text-gray-500">
+            {t.invite.boardHint}{' '}
+            <Link href="/admin/invitations" className="text-blue-600 hover:underline font-medium" data-testid="invite-open-board">
+              {t.invite.openBoard}
+            </Link>
+          </p>
           {invites.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">
               {t.invite.noneSent}
