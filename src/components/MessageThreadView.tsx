@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2, FolderOpen } from 'lucide-react';
+import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2, FolderOpen, MessageSquareQuote, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useT, useLocale } from '@/i18n/client';
@@ -24,6 +24,11 @@ import { LanguageBadge } from '@/components/LanguageBadge';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import type { MeetingTarget } from '@/components/meeting/MeetingLauncher';
 import { scrollBehavior } from '@/lib/motion';
+import {
+  resolveMessageTemplateText,
+  templatePreview,
+  type MessageTemplateDto,
+} from '@/lib/messageTemplates';
 
 interface Attachment {
   id: string;
@@ -46,6 +51,12 @@ interface Msg {
 
 // Fixed reaction set (mirrors the server's REACTION_EMOJIS).
 const REACTIONS = ['👍', '❤️', '😂', '😮', '🎉'] as const;
+// Typing indicator (#1871). One publish per thread per throttle window — the
+// point is "someone is writing", not a keystroke feed — and the receiving side
+// forgets it EXPIRY after the last event it heard, because there is no
+// "stopped typing" event to wait for and a stuck indicator is worse than none.
+const TYPING_THROTTLE_MS = 3_000;
+const TYPING_EXPIRY_MS = 5_000;
 interface Party {
   id: string;
   fullName: string;
@@ -127,9 +138,15 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load the saved Enter-to-send preference once on mount.
+  // Load the saved Enter-to-send preference once on mount. Wrapped like every
+  // other access in this component: with site data blocked (or inside a
+  // sandboxed iframe) the `localStorage` *getter* itself throws, and a throw in
+  // an effect unmounts the whole thread view through the nearest error boundary
+  // — i.e. no composer at all, over a stored preference.
   useEffect(() => {
-    setEnterToSend(localStorage.getItem('messages-enter-to-send') === '1');
+    try {
+      setEnterToSend(localStorage.getItem('messages-enter-to-send') === '1');
+    } catch { /* ignore */ }
   }, []);
   const toggleEnterToSend = () => {
     setEnterToSend((prev) => {
@@ -138,6 +155,145 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       return next;
     });
   };
+
+  // Draft (#1871). A half-written reply is per thread and per device, so
+  // localStorage is the whole store: no table, no endpoint, and nothing about an
+  // unsent message ever leaves the browser. Every access is wrapped — in a
+  // private window or with site data blocked even the *getter* throws, and a
+  // composer that cannot remember a draft must still be a composer.
+  // Keyed by viewer as well as thread: on a shared browser profile the next
+  // person to sign in must not be handed the previous one's unsent text (which
+  // they could then send as themselves). `signOutEverywhere()` clears the
+  // session, not site data, so the key has to carry the identity itself — and
+  // it is null until the session has resolved, so nothing is ever written to or
+  // read from an anonymous key in the first moments of a mount.
+  const draftKey = myId ? `messages-draft-${myId}-${target.kind}-${target.id}` : null;
+  const draftKeyRef = useRef<string | null>(null);
+
+  const saveDraft = useCallback((value: string) => {
+    if (!draftKey) return;
+    try {
+      if (value) localStorage.setItem(draftKey, value);
+      else localStorage.removeItem(draftKey);
+    } catch { /* ignore */ }
+  }, [draftKey]);
+
+  // Every write to the box goes through here, so the draft is saved by the same
+  // action that changed it. An effect keyed on `body` would instead run once
+  // more right after the thread changed — with the previous thread's text still
+  // in state — and stamp it onto the new thread's key.
+  const changeBody = useCallback((value: string) => {
+    setBody(value);
+    saveDraft(value);
+  }, [saveDraft]);
+
+  useEffect(() => {
+    if (!draftKey) return;
+    const previous = draftKeyRef.current;
+    draftKeyRef.current = draftKey;
+    let saved = '';
+    try { saved = localStorage.getItem(draftKey) ?? ''; } catch { /* ignore */ }
+    // Switching threads without remounting: show this thread's draft, or an
+    // empty box. The other thread's text is already stored under its own key.
+    if (previous !== null && previous !== draftKey) { setBody(saved); return; }
+    // First run for this mount: never overwrite something already typed — the
+    // box is interactive before effects have run.
+    if (saved) setBody((current) => current || saved);
+  }, [draftKey]);
+
+  // Typing indicator (#1871). Outbound: a throttled POST that stores nothing.
+  // Inbound: a senderId -> expiry map this component prunes itself.
+  const lastTypingSentRef = useRef(0);
+  const [typingUntil, setTypingUntil] = useState<Record<string, number>>({});
+
+  const notifyTyping = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTypingSentRef.current < TYPING_THROTTLE_MS) return;
+    lastTypingSentRef.current = now;
+    void fetch('/api/realtime/typing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [target.kind === 'relation' ? 'relationId' : 'conversationId']: target.id }),
+    }).catch(() => { /* a courtesy signal must never surface as an error */ });
+  }, [target.kind, target.id]);
+
+  // A thread switch inside one mount must not inherit the previous thread's
+  // indicator (it would linger for up to TYPING_EXPIRY_MS), and the outbound
+  // throttle starts fresh so the first keystroke in the new thread is announced.
+  useEffect(() => {
+    setTypingUntil({});
+    lastTypingSentRef.current = 0;
+  }, [target.kind, target.id]);
+
+  const someoneTyping = Object.keys(typingUntil).length > 0;
+  useEffect(() => {
+    if (!someoneTyping) return;
+    const timer = setInterval(() => {
+      setTypingUntil((prev) => {
+        const now = Date.now();
+        const live = Object.entries(prev).filter(([, until]) => until > now);
+        // Hand the same object back when nothing expired, so this does not
+        // re-render the whole thread once a second.
+        return live.length === Object.keys(prev).length ? prev : Object.fromEntries(live);
+      });
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, [someoneTyping]);
+
+  // Canned responses (#1871). The pool is fetched once, the first time somebody
+  // opens the picker — it is a convenience most people never touch, and loading
+  // it with the thread would put a query on every thread open for nothing.
+  // `null` means "not fetched yet"; `[]` means "fetched, and empty".
+  const [canned, setCanned] = useState<MessageTemplateDto[] | null>(null);
+  const [cannedOpen, setCannedOpen] = useState(false);
+  const [cannedQuery, setCannedQuery] = useState('');
+
+  const toggleCanned = useCallback(() => {
+    setCannedOpen((prev) => !prev);
+    setCanned((current) => {
+      if (current !== null) return current;
+      // Marked as fetched immediately so a double-click cannot fire two loads.
+      void (async () => {
+        try {
+          const res = await fetch('/api/message-templates');
+          setCanned(res.ok ? ((await res.json()).templates ?? []) : []);
+        } catch {
+          setCanned([]);
+        }
+      })();
+      return [];
+    });
+  }, []);
+
+  const insertCanned = (tpl: MessageTemplateDto) => {
+    // Resolved in the *writer's* locale: they are about to send this under their
+    // own name, so they have to be able to read it (src/lib/messageTemplates.ts).
+    const text = resolveMessageTemplateText(tpl, locale);
+    // Appended, never replacing. "Half a sentence of my own plus the standard
+    // paragraph" is the normal case, and throwing away typed text to make room
+    // for a template would be the one unforgivable outcome here.
+    changeBody(body ? `${body}\n\n${text}` : text);
+    setCannedOpen(false);
+    setCannedQuery('');
+    bodyRef.current?.focus();
+    // Ranking only, and best-effort: a counter that missed a tick must never
+    // cost anyone their reply, so the failure is swallowed.
+    void fetch(`/api/message-templates/${tpl.id}/use`, { method: 'POST' }).catch(() => {});
+    // Reflect the bump locally so the list keeps its most-used-first order
+    // without a refetch.
+    setCanned((prev) =>
+      prev
+        ? [...prev.map((c) => (c.id === tpl.id ? { ...c, useCount: c.useCount + 1 } : c))].sort(
+            (a, b) => b.useCount - a.useCount
+          )
+        : prev
+    );
+  };
+
+  const cannedQ = cannedQuery.trim().toLowerCase();
+  const cannedList = (canned ?? []).filter(
+    (tpl) => !cannedQ || resolveMessageTemplateText(tpl, locale).toLowerCase().includes(cannedQ)
+  );
 
   // Enter/Shift+Enter behaviour depends on the preference above; ArrowUp on an
   // empty box edits your last message (WhatsApp/Slack/Telegram style).
@@ -193,9 +349,18 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // None of the three says *which* thread moved, so they reload unconditionally.
   useRealtime((signal) => {
     if (signal.type === 'tick' || signal.type === 'ready' || signal.type === 'unread') { void load(); return; }
-    if (signal.type !== 'message') return;
+    if (signal.type !== 'message' && signal.type !== 'typing') return;
     const mine = target.kind === 'relation' ? signal.relationId === target.id : signal.conversationId === target.id;
-    if (mine) void load();
+    if (!mine) return;
+    if (signal.type === 'typing') {
+      // Nothing to refetch: the thread has not changed, someone is only
+      // writing into it. Remember who, until it expires above.
+      const who = signal.senderId;
+      if (!who || who === myId) return;
+      setTypingUntil((prev) => ({ ...prev, [who]: Date.now() + TYPING_EXPIRY_MS }));
+      return;
+    }
+    void load();
   });
   // `block: 'end'` keeps this inside the bubble scroller instead of nudging the
   // page: on mobile the list is the only scrollable box (see MessagesShell).
@@ -257,6 +422,8 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
       }
       if (res.ok) {
         setBody('');
+        // Sent, so there is no draft left to restore on the next visit.
+        saveDraft('');
         attachments.forEach((a) => URL.revokeObjectURL(a.url));
         setAttachments([]);
         if (fileRef.current) fileRef.current.value = '';
@@ -328,6 +495,12 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   };
 
   const nameFor = (id: string) => parties.find((p) => p.id === id)?.fullName ?? '—';
+  // Resolved through the participants already loaded for the thread; an id we
+  // cannot name (someone added to a group chat since the last fetch) is dropped
+  // rather than announced as a dash.
+  const typingNames = Object.keys(typingUntil)
+    .map((id) => (parties.find((p) => p.id === id)?.fullName ?? '').trim().split(/\s+/)[0] ?? '')
+    .filter(Boolean);
   // Header shows the other side (the only other party in a 1:1 thread).
   const other = parties.find((p) => p.id !== myId) ?? null;
   // A group chat has no "other side" — it is named after its project.
@@ -360,7 +533,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // No explicit caret handling — writing a new `value` into a textarea puts the
   // caret at the end by itself, which is where an unfinished opener continues.
   const applySuggestion = (text: string) => {
-    setBody(text);
+    changeBody(text);
     bodyRef.current?.focus();
   };
 
@@ -671,10 +844,82 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
           </div>
         </div>
       )}
+      {/* Always in the DOM so the live region is registered before it has
+          anything to say — a screen reader does not reliably announce an
+          aria-live element that appears at the same moment as its text. When
+          there is nothing to say it is `sr-only`, which keeps it out of the
+          layout rather than reserving a strip above the composer. */}
+      <p
+        className={`text-xs text-gray-500 dark:text-gray-400 ${typingNames.length > 0 ? 'mb-1.5' : 'sr-only'}`}
+        data-testid="typing-indicator"
+        aria-live="polite"
+      >
+        {typingNames.length === 0
+          ? ''
+          : typingNames.length === 1
+            ? t.messages.typing.replace('{name}', typingNames[0])
+            : t.messages.typingMany}
+      </p>
+      {/* Canned responses (#1871): the reply a mentor writes forty times a
+          cohort, one click, in their own language. Collapsed by default — this
+          is a shortcut for the person who needs it, not furniture above
+          everyone's composer. */}
+      {cannedOpen && (
+        <div
+          className="mb-2 rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900"
+          data-testid="canned-panel"
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <input
+              type="search"
+              value={cannedQuery}
+              onChange={(e) => setCannedQuery(e.target.value)}
+              placeholder={t.messages.cannedSearch}
+              className="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              data-testid="canned-search"
+            />
+            <button
+              type="button"
+              onClick={() => setCannedOpen(false)}
+              aria-label={t.messages.cannedClose}
+              className="shrink-0 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {cannedList.length === 0 ? (
+            <p className="px-1 py-2 text-xs text-gray-400" data-testid="canned-none">
+              {t.messages.cannedNone}
+            </p>
+          ) : (
+            <>
+              <p className="mb-1.5 px-1 text-xs text-gray-400">{t.messages.cannedHint}</p>
+              <ul className="max-h-52 overflow-y-auto">
+                {cannedList.map((tpl) => (
+                  <li key={tpl.id}>
+                    <button
+                      type="button"
+                      onClick={() => insertCanned(tpl)}
+                      title={resolveMessageTemplateText(tpl, locale)}
+                      className="w-full rounded-md px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-blue-50 dark:text-gray-200 dark:hover:bg-gray-800"
+                      data-testid={`canned-template-${tpl.id}`}
+                    >
+                      {templatePreview(resolveMessageTemplateText(tpl, locale))}
+                      {tpl.personal && (
+                        <span className="ml-1.5 text-gray-400">· {t.messages.cannedPersonal}</span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
       <PendingAttachmentList attachments={attachments} onRemove={removeAttachment} removeLabel={t.common.delete} />
       <MessageComposer
         body={body}
-        onBodyChange={setBody}
+        onBodyChange={(value) => { changeBody(value); if (value) notifyTyping(); }}
         onSubmit={() => void send()}
         sending={sending}
         hasAttachments={attachments.length > 0}
@@ -692,6 +937,16 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         sendTestId="message-send"
       />
       <div className="mt-1.5 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={toggleCanned}
+          aria-expanded={cannedOpen}
+          className="inline-flex shrink-0 items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+          data-testid="canned-toggle"
+        >
+          <MessageSquareQuote className="h-3.5 w-3.5" />
+          {t.messages.canned}
+        </button>
         {/* Keyboard-only hint — no room for it on a phone. */}
         <span className="hidden lg:inline text-xs text-gray-400 truncate">{t.messages.pasteHint}</span>
         <button

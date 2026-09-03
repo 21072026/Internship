@@ -26,7 +26,13 @@ export type RealtimeEventType =
   // drop the badge instead of waiting for the next heartbeat).
   | 'read'
   // Any in-app notification row was created for this user.
-  | 'notification';
+  | 'notification'
+  // Someone in a thread this user is in is composing a reply. Purely
+  // ephemeral: nothing is stored, nothing is counted, and a listener that was
+  // not connected at the moment it was published has missed nothing that
+  // matters — which is why the stream deliberately does *not* re-check the
+  // unread counters for this one (#1871).
+  | 'typing';
 
 export interface RealtimeEvent {
   type: RealtimeEventType;
