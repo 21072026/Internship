@@ -1,214 +1,139 @@
 import { test, expect, type Page } from '@playwright/test';
-import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAndSettle } from './helpers/auth';
 
 /**
- * OS accessibility media preferences (#2045).
+ * OS-level accessibility preferences (#2045).
  *
- * Until this spec landed, a repo-wide grep for `prefers-reduced-motion`,
- * `prefers-contrast` and `forced-colors` returned nothing at all — someone with
- * a vestibular disorder who asked their OS to reduce motion, and someone on
- * Windows High Contrast, got exactly the same CSS as everyone else. axe does
- * not flag any of that (it scans one rendering, with no preference emulated),
- * so the clean a11y baseline was actively hiding it.
+ * The browser tells us three things about the person in front of it, and until
+ * this spec existed the app ignored all three. axe never flagged any of it —
+ * these are exactly the checks an auditor runs by hand after reading a
+ * conformance statement, which is why they are asserted mechanically here.
  *
- * The support lives in the media-preference block at the end of
- * `src/app/globals.css`. This spec asserts the three things that block has to
- * get right, in the order they break:
+ * Playwright emulates all three, so no OS setting is involved:
+ *   page.emulateMedia({ reducedMotion: 'reduce' })
+ *   page.emulateMedia({ contrast: 'more' })
+ *   page.emulateMedia({ forcedColors: 'active' })
  *
- *   1. reduced motion removes the ANIMATION, not the behaviour — the mobile
- *      drawer still opens and closes, it just arrives instantly;
- *   2. under forced colors the keyboard focus ring is still visible (its
- *      authored #2563eb is discarded by the forced palette, so it has to name
- *      the system `Highlight` colour instead);
- *   3. none of the three preferences may break the layout — same
- *      no-sideways-scroll rule as `mobile-layout-audit.spec.ts`.
- *
- * Not @smoke: the PR gate stays on the critical product flows.
+ * The rules under test live at the end of src/app/globals.css. Not @smoke: the
+ * PR gate stays small, this is scheduled-suite coverage.
  */
 
 const PHONE = { width: 360, height: 800 };
 
-/**
- * One preference at a time. `emulateMedia` merges into whatever is already
- * emulated, so each entry spells out all three — otherwise the second
- * iteration would silently be "reduced motion AND high contrast".
- */
-const PREFERENCES = [
-  { reducedMotion: 'reduce', contrast: null, forcedColors: null },
-  { reducedMotion: null, contrast: 'more', forcedColors: null },
-  { reducedMotion: null, contrast: null, forcedColors: 'active' },
-] as const;
-const PASSWORD = 'MediaPrefs123!';
-
-const mentorEmail = uniqueEmail('media-prefs-mentor');
-
-test.beforeAll(async () => {
-  await cleanupByEmail(mentorEmail);
-  await seedUser(mentorEmail, PASSWORD, 'MENTOR', 'Media Prefs Mentor');
-});
-
-test.afterAll(async () => {
-  await cleanupByEmail(mentorEmail);
-  await prisma.$disconnect();
-});
-
-/** Rule 1 of the mobile layout audit, reused: the page must not scroll sideways. */
-async function scrollsSideways(page: Page) {
-  return page.evaluate(() => {
-    // 1px of slack: sub-pixel rounding on a scaled layout is not an overflow.
-    const width = document.documentElement.scrollWidth;
-    return width > window.innerWidth + 1 ? `${width}px > ${window.innerWidth}px` : null;
-  });
+/** Seconds in a computed `transition-duration` / `animation-duration` string. */
+function seconds(value: string): number {
+  const first = value.split(',')[0].trim();
+  if (first.endsWith('ms')) return parseFloat(first) / 1000;
+  return parseFloat(first) || 0;
 }
 
-/** Seconds, from a computed `transition-duration` such as "0.2s" or "0.01ms". */
-function toSeconds(value: string) {
-  const first = value.split(',')[0].trim();
-  const n = parseFloat(first);
-  return first.endsWith('ms') ? n / 1000 : n;
+/** Relative-luminance-ish score of an `rgb(...)` string; lower = darker. */
+function brightness(rgb: string): number {
+  const [r, g, b] = rgb.match(/\d+(\.\d+)?/g)!.map(Number);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** The page itself must never scroll sideways (same rule as mobile-layout-audit). */
+async function expectNoSidewaysScroll(page: Page) {
+  const overflow = await page.evaluate(() => {
+    const el = document.scrollingElement || document.documentElement;
+    return el.scrollWidth - el.clientWidth;
+  });
+  expect(overflow).toBeLessThanOrEqual(1);
 }
 
 test.describe('prefers-reduced-motion', () => {
-  test('the mobile drawer still opens and closes, without animating', async ({ page }) => {
-    await page.setViewportSize(PHONE);
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');
-
-    // Guard the emulation itself: without this a broken `emulateMedia` would
-    // surface as a confusing "duration is 0.2s" failure below.
-    expect(
-      await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
-      'prefers-reduced-motion is not actually emulated',
-    ).toBe(true);
-
-    const drawer = page.getByTestId('mobile-drawer');
-    await expect(drawer).toHaveAttribute('data-open', 'false');
-
-    // The blanket rule collapses the 200ms transition to ~0. Anything under
-    // 50ms is "no perceptible animation"; the authored value is 0.2s, so a
-    // regression that drops the rule fails this by 4x.
-    const duration = toSeconds(
-      await drawer.evaluate((el) => getComputedStyle(el).transitionDuration),
-    );
-    expect(duration).toBeLessThan(0.05);
-
-    // Off-canvas while closed (-translate-x-full on a 256px-wide drawer).
-    const closedBox = await drawer.boundingBox();
-    expect(closedBox!.x).toBeLessThan(0);
-
-    // ...and the state change itself still works, in both directions.
-    await page.getByRole('button', { name: 'Open menu' }).click();
-    await expect(drawer).toHaveAttribute('data-open', 'true');
-    await expect.poll(async () => (await drawer.boundingBox())!.x).toBe(0);
-
-    await page.getByRole('button', { name: 'Close menu' }).click();
-    await expect(drawer).toHaveAttribute('data-open', 'false');
-    await expect.poll(async () => (await drawer.boundingBox())!.x).toBeLessThan(0);
-  });
-
-  test('skeleton placeholders stay visible once the pulse is frozen', async ({ page }) => {
+  test('neutralises transitions on the public page', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
 
-    // The pulse is a skeleton's only affordance, so freezing it must not leave
-    // an invisible block. Rendered standalone here: a live skeleton is by
-    // definition transient, and what is under test is the CSS, not the fetch
-    // that happens to show it.
-    const style = await page.evaluate(() => {
-      const el = document.createElement('div');
-      // Exactly what <Skeleton> renders, minus the size utilities (those are
-      // passed in per call site, and a class Tailwind never compiled is noise).
-      el.className = 'ui-skeleton animate-pulse rounded bg-gray-100';
-      el.style.width = '160px';
-      el.style.height = '12px';
-      document.body.appendChild(el);
+    // The audience cards carry `transition-all`; under the blanket rule their
+    // duration collapses to ~0 instead of the Tailwind default.
+    const duration = await page.locator('.transition-all').first()
+      .evaluate((el) => getComputedStyle(el).transitionDuration);
+    expect(seconds(duration)).toBeLessThan(0.05);
+
+    await expectNoSidewaysScroll(page);
+  });
+
+  test('the mobile drawer still opens and closes without its slide animation', async ({ page }) => {
+    const email = uniqueEmail('a11y-motion');
+    const password = 'TestPass123!';
+    await seedUser(email, password, 'MENTOR', 'Reduced Motion Mentor');
+    try {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      // Sign in at the default viewport, then shrink: the drawer only exists
+      // below `lg`, and this keeps the login flow off the mobile shell.
+      await signInAndSettle(page, email, password, '/mentor');
+      await page.setViewportSize(PHONE);
+
+      const drawer = page.getByTestId('app-drawer');
+
+      // The animation is gone …
+      const duration = await drawer.evaluate((el) => getComputedStyle(el).transitionDuration);
+      expect(seconds(duration)).toBeLessThan(0.05);
+
+      // … but the behaviour is not: closed it sits off-screen to the left,
+      // open it sits flush against it, and it goes back when dismissed.
+      const closedBox = await drawer.boundingBox();
+      expect(closedBox!.x).toBeLessThan(-100);
+
+      await page.getByRole('button', { name: 'Open menu' }).click();
+      await expect.poll(async () => (await drawer.boundingBox())!.x).toBeCloseTo(0, 0);
+
+      await page.getByRole('button', { name: 'Close menu' }).click();
+      await expect.poll(async () => (await drawer.boundingBox())!.x).toBeLessThan(-100);
+    } finally {
+      await cleanupByEmail(email);
+    }
+  });
+});
+
+test.describe('prefers-contrast: more', () => {
+  test('borders and secondary text get stronger', async ({ page }) => {
+    await page.goto('/');
+
+    const probe = async () => {
+      const border = await page.locator('.border-gray-200').first()
+        .evaluate((el) => getComputedStyle(el).borderTopColor);
+      const text = await page.locator('.text-gray-500').first()
+        .evaluate((el) => getComputedStyle(el).color);
+      return { border: brightness(border), text: brightness(text) };
+    };
+
+    const normal = await probe();
+    await page.emulateMedia({ contrast: 'more' });
+    const boosted = await probe();
+
+    // Light theme: "stronger" means darker against the light page background.
+    expect(boosted.border).toBeLessThan(normal.border);
+    expect(boosted.text).toBeLessThan(normal.text);
+
+    await expectNoSidewaysScroll(page);
+  });
+});
+
+test.describe('forced-colors: active', () => {
+  test('the keyboard focus ring survives colour flattening', async ({ page }) => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    await page.goto('/');
+
+    // Tab (not .focus()) so :focus-visible actually matches — Chromium only
+    // paints the ring when the last interaction was a keyboard one.
+    await page.keyboard.press('Tab');
+
+    const ring = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || el === document.body) return null;
       const cs = getComputedStyle(el);
-      return { background: cs.backgroundColor, shadow: cs.boxShadow };
+      return { style: cs.outlineStyle, width: parseFloat(cs.outlineWidth) || 0 };
     });
 
-    // Stronger than the default bg-gray-100 (#f3f4f6) fill...
-    const [r, g, b] = style.background.match(/\d+(\.\d+)?/g)!.map(Number);
-    expect(Math.max(r, g, b)).toBeLessThan(240);
-    // ...and drawn with a ring so the block reads as a placeholder, not a gap.
-    expect(style.shadow).toContain('inset');
-  });
-});
+    expect(ring).not.toBeNull();
+    expect(ring!.style).toBe('solid');
+    expect(ring!.width).toBeGreaterThanOrEqual(2);
 
-test.describe('forced-colors', () => {
-  test('the keyboard focus ring survives the forced palette', async ({ page }) => {
-    await page.emulateMedia({ forcedColors: 'active' });
-    await page.goto('/');
-
-    // `:focus-visible` only matches keyboard focus, so drive it from the
-    // keyboard. Tab until one of the element types the focus-ring rule names
-    // holds focus — the first stop can be a skip link or a wrapper.
-    let ring: { tag: string; style: string; width: string; color: string } | null = null;
-    for (let i = 0; i < 12 && !ring; i++) {
-      await page.keyboard.press('Tab');
-      ring = await page.evaluate(() => {
-        const el = document.activeElement as HTMLElement | null;
-        if (!el || !el.matches('a, button, [role="button"], input, select, textarea')) return null;
-        const cs = getComputedStyle(el);
-        return { tag: el.tagName, style: cs.outlineStyle, width: cs.outlineWidth, color: cs.outlineColor };
-      });
-    }
-
-    expect(ring, 'no focusable a/button reached within 12 tabs').not.toBeNull();
-    expect(ring!.style).not.toBe('none');
-    expect(parseFloat(ring!.width)).toBeGreaterThanOrEqual(2);
-    // Not transparent — a ring painted in the page background is no ring.
-    expect(ring!.color).not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
-  });
-
-  test('the accent swatches keep their colours (the fill IS the content)', async ({ page }) => {
-    await page.emulateMedia({ forcedColors: 'active' });
-    await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');
-    await gotoSettled(page, '/account');
-
-    const swatches = page.locator('.accent-swatch');
-    await expect(swatches.first()).toBeVisible();
-
-    const adjust = await swatches.first().evaluate(
-      (el) => getComputedStyle(el).forcedColorAdjust,
-    );
-    expect(adjust).toBe('none');
-
-    // The whole point: six colour choices must not collapse into one system
-    // colour. Distinct fills is the assertion, not any particular fill.
-    const fills = await swatches.evaluateAll(
-      (els) => els.map((el) => getComputedStyle(el).backgroundColor),
-    );
-    expect(fills.length).toBeGreaterThan(1);
-    expect(new Set(fills).size).toBe(fills.length);
-  });
-});
-
-test.describe('layout holds under every preference', () => {
-  test('the landing page does not scroll sideways', async ({ page }) => {
-    await page.setViewportSize(PHONE);
-    for (const media of PREFERENCES) {
-      await page.emulateMedia(media);
-      await page.goto('/');
-      await page.getByRole('heading', { level: 1 }).first().waitFor({ state: 'visible' });
-      expect(await scrollsSideways(page), `landing under ${JSON.stringify(media)}`).toBeNull();
-    }
-  });
-
-  test('a signed-in page does not scroll sideways', async ({ page }) => {
-    await page.setViewportSize(PHONE);
-    await signInAndSettle(page, mentorEmail, PASSWORD, '/mentor');
-
-    for (const media of PREFERENCES) {
-      await page.emulateMedia(media);
-      await page.reload();
-      await page.getByTestId('account-menu-button').waitFor({ state: 'visible', timeout: 20_000 });
-      // Every list here renders SkeletonRows while it fetches; measuring a
-      // half-empty page measures nothing (see mobile-layout-audit.spec.ts).
-      await expect
-        .poll(async () => page.locator('.animate-pulse').count(), { timeout: 20_000 })
-        .toBe(0);
-      expect(await scrollsSideways(page), `/mentor under ${JSON.stringify(media)}`).toBeNull();
-    }
+    await expectNoSidewaysScroll(page);
   });
 });

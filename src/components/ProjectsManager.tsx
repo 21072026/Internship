@@ -13,7 +13,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import type { TeamMember } from '@/lib/projectTeam';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
-import { scrollBehavior } from '@/lib/reducedMotion';
+import { scrollBehavior } from '@/lib/motion';
 
 interface Task {
   id: string;
@@ -183,8 +183,6 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
     setOwnerType(p.ownerType);
     setOwnerUserId(p.ownerUser?.id ?? '');
     setOwnerCompanyId(p.ownerCompany?.id ?? '');
-    // Instant for a reduced-motion user; CSS cannot reach a scripted scroll
-    // that names its own behavior (#2045).
     window.scrollTo({ top: 0, behavior: scrollBehavior() });
   };
 

@@ -9,17 +9,35 @@ name: Compact release fragments
 #
 # Between a merge and this compaction, the app already shows the right version:
 # next.config.js derives it from base+fragments at build time — so a delayed
-# compaction is harmless.
+# compaction is harmless *to the app*. It is not harmless to the record: while
+# compaction is stuck, CHANGELOG.md and src/lib/releaseNotes.ts keep saying
+# whatever they said when it last succeeded, so the repo stops reflecting what
+# shipped.
+#
+# ONE STABLE BRANCH, FORCE-PUSHED (#2142). The branch name used to carry the
+# version (bot/release-compact-<version>), which made every failure permanent:
+# a run pushed the branch, failed at the PR step, and every later run rebuilt
+# the SAME branch name with a new commit — rejected as non-fast-forward. That
+# is exactly what happened between 2026-08-24 and 2026-09-02: ten consecutive
+# runs failed, 57 fragments piled up and 25 versions' worth of changes never
+# reached the changelog. Now there is one branch, force-pushed. That is safe by
+# construction: the branch only ever holds an earlier compaction attempt built
+# from the same main, which this run's commit strictly supersedes (compaction
+# is cumulative — it always folds *everything* pending). And if the PR step
+# fails anyway, the branch is still left correct and current, so the next run
+# recovers on its own instead of wedging.
 #
 # TOKEN NOTE: the repo secret RELEASE_BOT_TOKEN (a maintainer's fine-grained
 # PAT — this repo only, contents + pull-requests: write) is effectively
 # REQUIRED for the scheduled path, twice over: the org setting forbids the
-# default GITHUB_TOKEN from creating PRs at all, and even where allowed, a
+# default GITHUB_TOKEN from creating PRs at all ("GitHub Actions is not
+# permitted to create or approve pull requests"), and even where allowed, a
 # GITHUB_TOKEN-created PR would not trigger the required checks (GitHub's
-# recursion guard), so auto-merge could never fire. Without the secret this
-# workflow fails at the PR step — harmless: compaction can lag indefinitely
-# (builds derive the version from base+fragments), and any maintainer or agent
-# session can run `node scripts/release-compact.mjs` and open the PR normally.
+# recursion guard), so auto-merge could never fire. Without the secret the run
+# still pushes a correct, ready-to-open branch and then fails LOUDLY (annotation
+# + alert email) naming the branch — a maintainer opens the PR in one click, or
+# any agent session runs `node scripts/release-compact.mjs` and opens it
+# normally.
 
 on:
   schedule:
@@ -36,9 +54,17 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  # One branch for every compaction, ever. See the header note.
+  COMPACT_BRANCH: bot/release-compact
+
 jobs:
   compact:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compact.outputs.changed }}
+      version: ${{ steps.compact.outputs.version }}
+      count: ${{ steps.compact.outputs.count }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -57,26 +83,104 @@ jobs:
           if ! ls releases/unreleased/*.json >/dev/null 2>&1; then
             echo "nothing to compact"; echo "changed=0" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          COUNT=$(ls releases/unreleased/*.json | wc -l | tr -d ' ')
           node scripts/release-compact.mjs
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
           echo "changed=1" >> "$GITHUB_OUTPUT"
 
-      - name: Open the compaction PR
+      - name: Open or update the compaction PR
         if: steps.compact.outputs.changed == '1'
         env:
+          # The fallback keeps the PUSH working (GITHUB_TOKEN may push a
+          # branch); only PR creation is forbidden to it. The preflight below
+          # says so up front instead of leaving the GraphQL error to be decoded.
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+          HAS_PAT: ${{ secrets.RELEASE_BOT_TOKEN != '' && '1' || '0' }}
           VERSION: ${{ steps.compact.outputs.version }}
+          COUNT: ${{ steps.compact.outputs.count }}
         run: |
           set -euo pipefail
-          BRANCH="bot/release-compact-${VERSION}"
+          BRANCH="$COMPACT_BRANCH"
+
+          if [ "$HAS_PAT" != "1" ]; then
+            echo "::warning title=RELEASE_BOT_TOKEN is not set::Falling back to GITHUB_TOKEN, which this org forbids from creating pull requests. The compaction branch will be pushed and the run will then fail — open the PR from ${BRANCH} by hand, or add the secret."
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
+          git checkout -B "$BRANCH"
           git add -A
-          git commit -m "chore(release): compact fragments into ${VERSION} (#1275)"
-          git push -u origin "$BRANCH"
-          gh pr create \
-            --title "chore(release): compact fragments into ${VERSION}" \
-            --body "Scheduled compaction (#1275): folds the pending \`releases/unreleased/\` fragments into \`package.json\`, \`CHANGELOG.md\` and \`src/lib/releaseNotes.ts\`, then deletes them. The displayed version does not change — builds already derived \`${VERSION}\` from base+fragments; this only makes the canonical files match it."
-          gh pr merge "$BRANCH" --squash --auto
+          git commit -m "chore(release): compact ${COUNT} fragment(s) up to ${VERSION} (#1275)"
+
+          # Force-push the single compaction branch — safe and deliberate; see
+          # the header note. This is what makes a failed run recoverable.
+          git push --force -u origin "$BRANCH"
+
+          # The PR may already be open from an earlier run; the push above has
+          # just updated it, so creating a second one would fail.
+          PR="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty' || true)"
+          if [ -n "$PR" ]; then
+            echo "PR #${PR} was already open for ${BRANCH} — the force-push updated it."
+          else
+            # Built with printf so every line of this file stays indented: a
+            # dedented continuation line would close the YAML block scalar.
+            # Single-quoted format string keeps the markdown backticks literal.
+            BODY="$(printf 'Scheduled compaction (#1275): folds the pending `releases/unreleased/` fragments into `package.json`, `CHANGELOG.md` and `src/lib/releaseNotes.ts`, then deletes them — one release section per fragment, each with its own version, merge time and commit (#1457).\n\nThe displayed version does not change: builds already derived `%s` from base+fragments. This only makes the canonical files match what shipped.\n' "$VERSION")"
+            if ! gh pr create \
+                --head "$BRANCH" \
+                --title "chore(release): compact fragments into ${VERSION}" \
+                --body "$BODY"; then
+              echo "::error title=Could not open the compaction PR::The branch ${BRANCH} is pushed and correct (${COUNT} fragment(s) -> ${VERSION}), but creating the PR failed. Usual cause: the RELEASE_BOT_TOKEN secret is missing, and this org forbids GITHUB_TOKEN from creating pull requests. Open the PR from ${BRANCH} manually, or add the secret."
+              exit 1
+            fi
+            PR="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty' || true)"
+          fi
+
+          # Best effort: the PR itself is the deliverable, so a repo without
+          # auto-merge enabled must not turn a successful compaction into a
+          # failed run.
+          if [ -n "$PR" ]; then
+            gh pr merge "$PR" --squash --auto --delete-branch \
+              || echo "::warning title=Auto-merge not armed::PR #${PR} is open but auto-merge could not be enabled; merge it manually."
+          fi
+
+  notify:
+    name: Email alert on failure
+    needs: [compact]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Send alert email
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          ALERT_SUBJECT: '📓 Internship CRM — sürüm/changelog derlemesi başarısız'
+          ALERT_BODY: |
+            Bekleyen release fragment'larını CHANGELOG.md, src/lib/releaseNotes.ts
+            ve package.json'a katlayan zamanlanmış iş başarısız oldu.
+
+            Uygulamanın GÖSTERDİĞİ sürüm doğru kalmaya devam eder (build sırasında
+            base+fragment'lardan türetiliyor). Bozulan şey KAYIT: bu iş çalışmadığı
+            sürece changelog ve sürüm notları en son başarılı derlemede kaldıkları
+            yerde durur — kapanan PR'ların değişiklikleri changelog'a hiç girmez.
+
+            Derlenecek olan: ${{ needs.compact.outputs.count || '?' }} fragment -> ${{ needs.compact.outputs.version || 'sürüm hesaplanamadı' }}
+
+            Ne yapmalı: dal (bot/release-compact) itilmiş ve doğrudur — PR'ı elle
+            açmak yeterli. En sık neden RELEASE_BOT_TOKEN secret'ının eksik olması;
+            ayrıntı releases/README.md ve workflow başlığındaki TOKEN NOTE'ta.
+
+            Çalışma: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/send-alert-email.mjs

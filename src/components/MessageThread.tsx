@@ -5,6 +5,8 @@ import { FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { useT } from '@/i18n/client';
+import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
 
 export interface PendingMessageAttachment {
   file: File;
@@ -33,27 +35,41 @@ export function PendingAttachmentList({ attachments, onRemove, removeLabel }: {
   onRemove: (index: number) => void;
   removeLabel: string;
 }) {
+  const t = useT();
+  const lightbox = useImageLightbox();
+  const images = attachments
+    .filter((a) => a.file.type.startsWith('image/'))
+    .map((a) => ({ src: a.url, filename: a.file.name }));
+
   if (!attachments.length) return null;
   return (
     <div data-testid="pending-attachments" className="flex flex-wrap items-start gap-2 mb-2">
       {attachments.map((attachment, index) => (
         <div key={attachment.url} className="relative group">
           {attachment.file.type.startsWith('image/') ? (
-            <a href={attachment.url} target="_blank" rel="noopener noreferrer" title={attachment.file.name}>
+            <button
+              type="button"
+              title={attachment.file.name}
+              aria-label={t.imageViewer.view.replace('{name}', attachment.file.name)}
+              data-testid="pending-image-attachment"
+              onClick={() => lightbox.open(images, images.findIndex((i) => i.src === attachment.url))}
+              className="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={attachment.url} alt={attachment.file.name} className="h-16 w-16 object-cover rounded-lg border border-gray-200" />
-            </a>
+            </button>
           ) : (
             <div className="flex items-center gap-2 text-xs bg-gray-100 dark:bg-gray-800 rounded-lg px-2.5 py-1.5 h-16">
               <FileText className="h-3.5 w-3.5 text-gray-500" />
               <span className="text-gray-700 dark:text-gray-200 max-w-[8rem] truncate">{attachment.file.name}</span>
             </div>
           )}
-          <button type="button" onClick={() => onRemove(index)} aria-label={`${removeLabel}: ${attachment.file.name}`} className="absolute -top-1.5 -right-1.5 bg-white rounded-full border border-gray-200 text-gray-400 hover:text-red-600 shadow-sm">
+          <button type="button" onClick={() => onRemove(index)} aria-label={`${removeLabel}: ${attachment.file.name}`} data-testid="pending-attachment-remove" className="absolute -top-1.5 -right-1.5 bg-white rounded-full border border-gray-200 text-gray-400 hover:text-red-600 shadow-sm">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       ))}
+      <ImageLightbox {...lightbox.lightboxProps} />
     </div>
   );
 }

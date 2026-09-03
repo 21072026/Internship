@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
 
 // AI CV feedback for the mentee (Faz 2, #535). Free for the mentee — quota
@@ -66,8 +67,11 @@ export function CvFeedback() {
       </div>
       {notice && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{notice}</p>}
       {feedback && (
-        <div className="mt-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 p-3 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">
-          {feedback}
+        <div className="mt-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 p-3 text-sm text-gray-800 dark:text-gray-200">
+          {/* Marked, because a mentee acting on advice about their own CV
+              deserves to know a model wrote it (#2034). */}
+          <AiBadge note className="mb-2" />
+          <div className="whitespace-pre-line">{feedback}</div>
         </div>
       )}
     </div>

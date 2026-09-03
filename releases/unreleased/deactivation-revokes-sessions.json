@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Deactivation ends the session**: switching an account off (and erasing one) now stamps `sessionsValidFrom` and revokes the account's trusted devices, so an already-signed-in user is rejected on their next request instead of staying signed in until their 12-hour JWT expires.",
+  "notes": {
+    "en": ["Deactivating or erasing an account now signs that person out immediately, on every device, instead of letting their open session run out on its own."],
+    "tr": ["Bir hesabı pasifleştirmek veya silmek artık o kişiyi tüm cihazlarda anında oturumdan düşürüyor; açık oturumun kendiliğinden sona ermesi beklenmiyor."],
+    "de": ["Ein Konto zu deaktivieren oder zu löschen meldet die Person jetzt sofort auf allen Geräten ab, statt die offene Sitzung von selbst auslaufen zu lassen."]
+  }
+}

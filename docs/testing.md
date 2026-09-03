@@ -345,6 +345,27 @@ before writing its report (`E2E_EXPECTED_REPORTS`). Recipients come from
 `ALERT_EMAIL_TO`; set the repository **variable** `E2E_REPORT_MODE=failures` to switch
 back to red-only alerts.
 
+## Accessibility media preferences (#2045)
+
+The browser reports three OS-level accessibility settings, and the app honours all
+three. The rules live in one block at the **end of `src/app/globals.css`** (last, so
+they win on source order over the `html.dark` / `html[data-accent]` layers above),
+and `e2e/a11y-media-preferences.spec.ts` asserts them — **not `@smoke`**, so they run
+in the scheduled full suite. Cite this section for the VPAT rows.
+
+| Media feature | What the app does | How it is tested |
+|---|---|---|
+| `prefers-reduced-motion: reduce` | Blanket near-zero `animation-duration` / `transition-duration` on `*` — the mobile drawer, `animate-pulse` skeletons, `animate-spin` spinners, `animate-ping` and every `transition-*`. State changes still happen instantly (the drawer still opens and closes); nothing listens for `transitionend`. Programmatic smooth scrolling passes `behavior` as an argument, which CSS cannot override, so those call sites go through `scrollBehavior()` in [`src/lib/motion.ts`](../src/lib/motion.ts). | `page.emulateMedia({ reducedMotion: 'reduce' })` — computed `transition-duration` is effectively zero, and the drawer's bounding box still moves on open/close |
+| `prefers-contrast: more` | Gray borders (`border-gray-100/200/300`, the `divide-*` rules) darken and secondary text (`text-gray-400/500`) lifts to gray-700; dark mode gets its own values because `html.dark .border-gray-200` outranks the bare utility. The focus ring goes to 3px. | `page.emulateMedia({ contrast: 'more' })` — the computed border and text colours are measurably darker than the default |
+| `forced-colors: active` (Windows High Contrast) | The focus ring is restated as `outline: 3px solid Highlight !important` (the accent rule outscores a bare `a:focus-visible`); the accent swatches — the one place the colour *is* the information — opt out with `forced-color-adjust: none` via `[data-accent-swatch]`; badges gain a border so a pill flattened to Canvas-on-Canvas still reads as one. | `page.emulateMedia({ forcedColors: 'active' })` — after a `Tab`, the focused element still has a solid outline ≥ 2px |
+
+Each test also re-runs the no-sideways-scroll rule, since a preference that changes
+border widths or text size can push a layout past the viewport.
+
+**When adding UI**: a new animation needs nothing (the blanket rule covers it), but a
+new element whose *state* is carried by background colour alone needs a border, an
+icon or text as well — that is the one thing `forced-colors` cannot rescue.
+
 ## Ideas for further test types
 
 - **Contract / API tests** for `/api/v1/*` against the published OpenAPI spec.

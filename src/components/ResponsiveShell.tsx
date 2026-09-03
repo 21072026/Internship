@@ -55,12 +55,7 @@ export function ResponsiveShell({
 
       {/* Sidebar: drawer on mobile, sticky column on desktop */}
       <div
-        // Named so a11y-media-preferences.spec.ts can assert the drawer still
-        // opens and closes under prefers-reduced-motion — the blanket rule in
-        // globals.css collapses the 200ms transition, it must not disable the
-        // state change itself (#2045).
-        data-testid="mobile-drawer"
-        data-open={open ? 'true' : 'false'}
+        data-testid="app-drawer"
         className={`fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}

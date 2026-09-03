@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Candidate history deletion**: surface failed stage-history deletes and avoid reloading stale candidate data.",
-  "notes": {
-    "en": ["Candidate stage-history deletion errors are now shown instead of silently refreshing unchanged data."],
-    "tr": ["Aday aşama geçmişi silinemediğinde değişmemiş veriler sessizce yenilenmek yerine artık hata gösteriliyor."],
-    "de": ["Fehler beim Löschen des Kandidaten-Phasenverlaufs werden jetzt angezeigt, statt unveränderte Daten still neu zu laden."]
-  }
-}

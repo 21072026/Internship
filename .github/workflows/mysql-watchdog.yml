@@ -1,0 +1,164 @@
+name: MySQL Watchdog (database health)
+
+# Keeps the Plesk box's MySQL/MariaDB alive, and makes sure the thing that
+# keeps it alive is itself alive.
+#
+# The database is being OOM-killed: the kernel picks mysqld, the unit stops,
+# and every page of the app turns into an error until someone types
+# `service mysql start`. infra/mysql-watchdog.sh is the fix that lives ON the
+# box — a systemd timer that checks once a minute and restarts it, plus a
+# drop-in that lets systemd restart the unit itself within seconds.
+#
+# This workflow is the layer that box cannot provide:
+#   · it runs on a GitHub-HOSTED runner ON PURPOSE. A watchdog that needs the
+#     sick server to be healthy is not a watchdog — if the box is so short of
+#     memory that mysqld died, its self-hosted runner may be dead too;
+#   · it re-installs the timer when it is missing (a server rebuild, a Plesk
+#     update that rewrote the unit), so the on-box watchdog cannot quietly
+#     disappear;
+#   · it is the only path that EMAILS. The on-box script logs; nobody reads
+#     logs they don't know to open.
+#
+# Requires the SSH_* secrets the deploy workflows already use (SSH_PRIVATE_KEY,
+# SSH_HOST, SSH_USER, SSH_PORT); the SSH user must be root or have passwordless
+# sudo for systemctl.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # every 10 minutes
+  workflow_dispatch:
+    inputs:
+      install:
+        description: 'Force a re-install of the on-box timer and unit hardening'
+        type: boolean
+        default: false
+
+concurrency:
+  group: mysql-watchdog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  watchdog:
+    name: Check the database from outside the box
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      report: ${{ steps.check.outputs.report }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          # Written via env var (not inline interpolation) to preserve the exact
+          # OpenSSH format.
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H -p "${SSH_PORT:-22}" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || \
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      # The script is copied over rather than pulled by the box: `git fetch` from
+      # this server's IP has been answering 429 (#1239), and a watchdog that
+      # depends on a rate-limited download is a watchdog that fails on the bad day.
+      - name: Ship the watchdog to the server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            "${SSH_USER}@${SSH_HOST}" 'mkdir -p ~/internship-infra'
+          scp -i ~/.ssh/deploy_key -P "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            infra/mysql-watchdog.sh "${SSH_USER}@${SSH_HOST}:~/internship-infra/mysql-watchdog.sh"
+
+      - name: Check the database, recover it, keep the on-box timer installed
+        id: check
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          FORCE_INSTALL: ${{ github.event.inputs.install }}
+        run: |
+          set -o pipefail
+          if ssh -i ~/.ssh/deploy_key -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+              "${SSH_USER}@${SSH_HOST}" "FORCE_INSTALL='${FORCE_INSTALL:-false}' bash -s" 2>&1 \
+              <<'REMOTE' | tee /tmp/mysql-watchdog.txt
+          set -uo pipefail
+          chmod +x ~/internship-infra/mysql-watchdog.sh
+
+          # Idempotent: --install only rewrites the unit files and re-enables the
+          # timer. Run it when the timer is absent (or when asked), so a server
+          # rebuild or a package update that replaced the unit cannot leave the
+          # box unprotected without anyone noticing.
+          if [ "${FORCE_INSTALL:-false}" = "true" ] || \
+             ! systemctl is-enabled internship-mysql-watchdog.timer >/dev/null 2>&1; then
+            echo "== installing the on-box watchdog =="
+            ~/internship-infra/mysql-watchdog.sh --install || echo "WARNING: install failed"
+          fi
+
+          echo "== status =="
+          ~/internship-infra/mysql-watchdog.sh --status || true
+
+          echo "== check =="
+          # This is what decides the job: exit 1 means the database is down AND
+          # the script could not bring it back, which is the only state worth an
+          # email at 3am.
+          ~/internship-infra/mysql-watchdog.sh --check
+          REMOTE
+          then
+            status=ok
+          else
+            status=fail
+          fi
+          {
+            echo 'report<<REPORT_EOF'
+            cat /tmp/mysql-watchdog.txt
+            echo REPORT_EOF
+          } >> "$GITHUB_OUTPUT"
+          [ "$status" = ok ]
+
+  notify:
+    name: Email alert when the database is down
+    needs: [watchdog]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Send alert email
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
+          ALERT_SUBJECT: '🛑 Internship CRM — the database is DOWN'
+          ALERT_BODY: |
+            MySQL is not answering on the server and the watchdog could not
+            restart it. The app is up but every page that touches data is
+            failing right now.
+
+            First move: `systemctl status mysql` and `journalctl -u mysql -n 50`
+            on the box — the report below usually already contains both.
+            If the kernel log shows an OOM kill, the restart is only first aid:
+            the box needs memory headroom (swap, or a lower
+            innodb_buffer_pool_size). See infra/README.md → "MySQL watchdog".
+
+            ${{ needs.watchdog.outputs.report }}
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/send-alert-email.mjs

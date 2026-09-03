@@ -1,5 +1,23 @@
 import { test, expect } from '@playwright/test';
 
+// Click the three-state theme control (system → light → dark → system, #2078)
+// until it lands on the wanted state. It polls instead of clicking a fixed
+// number of times: the button is in the SSR markup with its initial
+// `data-theme="system"` before React hydrates it, so both the attribute read
+// and an early click can be stale/swallowed. Polling converges either way.
+async function selectTheme(page: import('@playwright/test').Page, want: 'system' | 'light' | 'dark') {
+  const toggle = page.getByTestId('theme-toggle').first();
+  await expect(toggle).toBeVisible();
+  await expect
+    .poll(async () => {
+      const current = await toggle.getAttribute('data-theme');
+      if (current === want) return current;
+      await toggle.click();
+      return toggle.getAttribute('data-theme');
+    }, { timeout: 15_000 })
+    .toBe(want);
+}
+
 // Dark mode (EPIC D1). The toggle on the public landing header flips the
 // `dark` class on <html>, persists a `theme` cookie, and survives reload.
 test('theme toggle switches dark mode and persists across reload', async ({ page }) => {
@@ -8,16 +26,11 @@ test('theme toggle switches dark mode and persists across reload', async ({ page
   const html = page.locator('html');
   // Start from a known light baseline regardless of the runner's OS preference.
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.evaluate(() => {
-    document.documentElement.classList.remove('dark');
-    document.cookie = 'theme=light; path=/; max-age=0';
-    try { localStorage.removeItem('theme'); } catch { /* ignore */ }
-  });
+  await selectTheme(page, 'light');
   await expect(html).not.toHaveClass(/\bdark\b/);
 
   // Toggle → dark.
-  const toggle = page.getByRole('button', { name: /toggle theme/i }).first();
-  await toggle.click();
+  await selectTheme(page, 'dark');
   await expect(html).toHaveClass(/\bdark\b/);
 
   // Cookie was written so SSR + the no-flash script agree on the next load.
@@ -29,7 +42,7 @@ test('theme toggle switches dark mode and persists across reload', async ({ page
   await expect(html).toHaveClass(/\bdark\b/);
 
   // Toggle back → light.
-  await page.getByRole('button', { name: /toggle theme/i }).first().click();
+  await selectTheme(page, 'light');
   await expect(html).not.toHaveClass(/\bdark\b/);
 });
 
@@ -37,7 +50,7 @@ test('theme toggle switches dark mode and persists across reload', async ({ page
 // light bar (regression from the utility remap missing opacity variants).
 test('dark mode retints the translucent landing header (not a light bar)', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /toggle theme/i }).first().click();
+  await selectTheme(page, 'dark');
   await expect(page.locator('html')).toHaveClass(/\bdark\b/);
 
   const headerBg = await page.locator('header').first().evaluate(

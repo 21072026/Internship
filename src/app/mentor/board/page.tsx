@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, LayoutGrid } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
@@ -156,7 +158,19 @@ export default function MentorBoardPage() {
         </p>
       </div>
 
-      {narrow ? (
+      {relations.length === 0 ? (
+        /* Day one for a mentor: no assignment yet, so no board. Deliberately no
+           button — assigning a mentorship is an admin action. */
+        <Card>
+          <EmptyState
+            testId="mentor-board"
+            icon={LayoutGrid}
+            role="MENTOR"
+            title={t.emptyStates.board.title}
+            byRole={{ MENTOR: { body: t.emptyStates.board.mentorBody } }}
+          />
+        </Card>
+      ) : narrow ? (
         <div data-testid="board-mobile">
           <BoardStageFilter
             stages={stages}
@@ -167,7 +181,13 @@ export default function MentorBoardPage() {
           <div className="space-y-2">
             {itemsFor(activeStage).map(renderCard)}
             {itemsFor(activeStage).length === 0 && (
-              <p className="text-center py-8 text-sm text-gray-400">{t.board.emptyStage}</p>
+              <EmptyState
+                testId="mentor-board-stage"
+                size="sm"
+                icon={LayoutGrid}
+                title={t.emptyStates.boardStage.title}
+                body={t.emptyStates.boardStage.body}
+              />
             )}
           </div>
         </div>
