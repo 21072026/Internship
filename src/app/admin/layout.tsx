@@ -6,6 +6,7 @@ import { AccountMenu } from '@/components/AccountMenu';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
+import { CommandPalette } from '@/components/CommandPalette';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { AdminNav } from '@/components/AdminNav';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
@@ -45,6 +46,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
+    <>
+      {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
+      <CommandPalette role="ADMIN" />
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
       headerExtra={<GlobalSearch />}
@@ -79,5 +83,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
       </PipelineStagesProvider>
     </ResponsiveShell>
+    </>
   );
 }

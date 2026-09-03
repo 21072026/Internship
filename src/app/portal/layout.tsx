@@ -7,6 +7,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { PortalNav } from '@/components/PortalNav';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
+import { CommandPalette } from '@/components/CommandPalette';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { prisma } from '@/lib/prisma';
@@ -60,6 +61,9 @@ export default async function PortalLayout({ children }: { children: React.React
   }
 
   return (
+    <>
+      {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
+      <CommandPalette role="MENTEE" />
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
       sidebar={
@@ -99,5 +103,6 @@ export default async function PortalLayout({ children }: { children: React.React
 </EvaluationCriteriaProvider>
       </PipelineStagesProvider>
     </ResponsiveShell>
+    </>
   );
 }

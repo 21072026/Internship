@@ -5427,3 +5427,33 @@ oraya symlink'lemek oldu. Ayrıca `BASE_URL` verilmeden çalıştırılan tek bi
 tarayıcısız birim spec'leri `BASE_URL=http://127.0.0.1:9999` ile saniyeler içinde
 koşuyor. DB'ye dokunan spec'lerde `DATABASE_URL`'i **komut satırında** vermek
 gerekiyor (config `.env`'i yalnız kendi webServer'ı için yüklüyor).
+## 2026-09-03 — Resim önizleme: "yeni sekme" bir çıkış yolu değil (#2147)
+
+**`target="_blank"` masaüstünde çözüm, telefonda tuzak.** Kullanıcı raporu tek cümleydi:
+"resmi büyüttüğüm zaman resimden çıkamadım, uygulamayı kapatıp tekrar girdim". Kodda hata
+yoktu — bağlantı çalışıyordu; kurulu PWA'da açılan sekmenin **adres çubuğu ve geri tuşu
+yok**. Bir davranışın "çalıştığını" masaüstü tarayıcıda doğrulamak, uygulamanın gerçekte
+çalıştığı yerde doğrulamak değil.
+
+**Kapatma yolu tek değil, dört tanedir.** ✕ düğmesi istenen şeydi ama yetmiyor: Escape,
+arka plana dokunma ve **telefonun kendi geri tuşu**. Sonuncusu için overlay açılırken
+`history.pushState`, kapanırken (geri ile kapanmadıysa) `history.back()` — yığını dengede
+tutmazsan kullanıcı resmi kapattıktan sonra bir kez "boşa" geri basıyor. Bunu e2e'de
+`page.goBack()` ile iki yönlü doğrulamak mümkün ve şart.
+
+**Resmin kendisine dokunmak kapatmamalı.** Arka plan tıklaması kapatırken görselin
+`stopPropagation` ile yakınlaştırmaya bağlanması, hedefi ıskalayan dokunuşun büyüttüğün
+şeyi kapatmasını engelliyor.
+
+**Bir `<a>`'yı `<button>`'a çevirmek testleri sessizce kırıyor.** `a[href*="/api/support/
+attachments/"]` ve `button[aria-label*="dosya.png"]` gibi seçiciler ya hiç eşleşmedi ya da
+iki elemana çıktı (yeni "görüntüle" düğmesi de dosya adını taşıyor). Yeni etkileşimli
+elemana `data-testid` vermek, aynı PR'da eski spec'leri düzeltmekten daha ucuz.
+
+**Kutu notları (bu tur):** `service mariadb start` oturum içinde **iki kez** gerekti —
+`db push` çalıştıktan yarım saat sonra P1001 dönüyor. Playwright için symlink yerine
+`playwright.local.config.ts` (gitignore'da) + `use.launchOptions.executablePath =
+'/opt/pw-browsers/chromium'` yine en hızlı yol. Dev sunucusu ağır yük altında düşebiliyor:
+`ECONNREFUSED 127.0.0.1:3000` veya `[next-auth][error][CLIENT_FETCH_ERROR]` gördüğün
+spec'i **kırmızı saymadan önce tek başına tekrar çalıştır** — bu turda 11 "kırmızı"
+spec'in tamamı ikinci koşuda yeşildi.
