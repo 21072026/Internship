@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Super-admin gate on tenant management**: `/api/admin/organizations` (and its pipeline-stages sub-route) now require a new `User.isSuperAdmin` capability, read from the database per request. A plain tenant ADMIN sees and may edit only their own organization — cross-tenant PATCH is refused before the target row is loaded and audited as `authz.scope_denied`.",
+  "notes": {
+    "en": ["Organization settings, including single sign-on, can now only be changed by a super admin — a regular admin manages their own organization and nothing else."],
+    "tr": ["Organizasyon ayarları, tekli oturum açma dahil, artık yalnızca süper yönetici tarafından değiştirilebilir; normal yönetici sadece kendi organizasyonunu yönetir."],
+    "de": ["Organisationseinstellungen einschließlich Single Sign-on können jetzt nur noch von einem Super-Admin geändert werden — ein normaler Admin verwaltet ausschließlich die eigene Organisation."]
+  }
+}

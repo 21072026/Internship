@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Erasure now actually erases the free text** (#2052). `anonymizeUser()` / `hardDeleteUser()` rewrote the `User` row and deleted the uploaded files, and left every free-text field the person had ever typed — and everything typed about them — in place: `Message.body` + `MessageAttachment`, `SupportMessage.body` + `SupportAttachment`, `SupportTicket.subject` (a verbatim copy of the requester's first message), `PersonalNote.body`, `RelationNote.body`, `InteractionLog.notes`/`subject`, `MentorshipRequest.message`, plus `country`, `referralSource` and `reEngageNote` on the very row being anonymised. Two rules, documented in the file header: content the person **wrote** is tombstoned (body emptied, attachment rows deleted, the row kept — reusing the existing `Message.deletedForEveryoneAt` masking so the counterpart's thread still reads as a conversation), content written **about** them is scrubbed with the row's dates, types and stage intact. Both paths keep it in one `$transaction`; the hard-delete path scrubs *before* it deletes the relations, because `PersonalNote.meetingId` is `SetNull` and the note would otherwise survive with its text intact and its only link to the subject gone. No schema change. `Message.senderId` has no FK to `User`, so a conversation-layer message used to outlive the account entirely. Remaining surfaces are named in a `KNOWN GAPS` comment and tracked in #2106; `e2e/erasure-free-text.spec.ts` seeds a full paper trail, runs both paths and queries Prisma directly for the seeded strings.",
+  "notes": {
+    "en": [
+      "Deleting or anonymising an account now also erases the messages, attachments, support conversations and notes attached to it — not just the profile."
+    ],
+    "tr": [
+      "Bir hesabı silmek ya da anonimleştirmek artık yalnızca profili değil, hesaba bağlı mesajları, ekleri, destek konuşmalarını ve notları da temizliyor."
+    ],
+    "de": [
+      "Beim Löschen oder Anonymisieren eines Kontos werden jetzt auch die zugehörigen Nachrichten, Anhänge, Support-Unterhaltungen und Notizen gelöscht — nicht nur das Profil."
+    ]
+  }
+}

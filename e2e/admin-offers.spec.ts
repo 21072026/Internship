@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { signInAsFreshUser } from './helpers/auth';
 
 // The /admin/offers index (#1873): the three saved views, a correct server-side
 // total, and the fact that the screen is admin-only while the two offer
@@ -196,7 +197,10 @@ test('the offer index is admin-only, and the new filters never widen what a comp
 
     // The company observer keeps the pre-existing contract: no DRAFT, no
     // compensationNote, and none of the admin filters buy a way in.
-    await signIn(page, s.companyEmail, s.pw, '/company');
+    // signInAsFreshUser (not the local signIn) because this switches user
+    // mid-test: a stale NextAuth session cookie races the sign-in form and
+    // detaches it under the fill (see e2e/helpers/auth.ts).
+    await signInAsFreshUser(page, s.companyEmail, s.pw, '/company');
     const res = await page.request.get(`/api/offers?status=DRAFT&q=${s.stamp}&pageSize=100`);
     expect(res.status()).toBe(200);
     const body = await res.text();

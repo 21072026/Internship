@@ -81,6 +81,12 @@ export const TEXT_LIMITS = {
   newsletterCtaLabel: 60,
   /** Call-to-action target — same width as Announcement.link */
   newsletterCtaUrl: 500,
+  /** InvitationToken.label — the inviter's private note, VARCHAR(191) */
+  invitationLabel: 120,
+  /** InvitationToken.email — VARCHAR(191) */
+  invitationEmail: 191,
+  /** Bulk-invite full name (carried into the report only) — VARCHAR(191) */
+  invitationFullName: 191,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;

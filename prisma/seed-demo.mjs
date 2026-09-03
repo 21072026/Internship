@@ -223,12 +223,20 @@ async function main() {
   // Admin — the identity /demo hands out for the public demo (#966). Namespaced
   // like every other demo row, so it never collides with the real first admin
   // that prisma/seed.mjs creates from SEED_ADMIN_EMAIL.
-  await upsertUser({
+  const demoAdmin = await upsertUser({
     email: `admin.demo@${DEMO_DOMAIN}`,
     fullName: 'Admin Demo',
     role: 'ADMIN',
-    extra: { emailVerified: true },
+    // Super admin (#1535): tenant management is gated on this flag, and the
+    // demo identity is the only admin on a preview/topic environment — without
+    // it /admin/organizations would be a dead screen there.
+    extra: { emailVerified: true, isSuperAdmin: true },
   });
+  // upsertUser leaves an existing row untouched, so a demo database seeded
+  // before the flag existed needs this one idempotent nudge.
+  if (!demoAdmin.isSuperAdmin) {
+    await prisma.user.update({ where: { id: demoAdmin.id }, data: { isSuperAdmin: true } });
+  }
 
   // Mentors
   const mentors = [];

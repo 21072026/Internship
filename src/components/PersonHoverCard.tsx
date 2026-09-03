@@ -219,6 +219,13 @@ export function PersonHoverCard({
       <span
         ref={triggerRef}
         data-testid={`person-trigger-${personId}`}
+        // An icon-only trigger — the inbox rows pass an aria-hidden <UserRound/>
+        // as the child, because the row itself is already a link and the name
+        // cannot be the trigger — leaves this role="button" with nothing for a
+        // screen reader to announce (axe `aria-command-name`, serious). Name it
+        // from the person it opens; a trigger that renders the name itself
+        // already has one and must not be overridden.
+        aria-label={children && label ? label : undefined}
         aria-describedby={open ? cardId : undefined}
         tabIndex={0}
         role="button"

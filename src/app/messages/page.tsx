@@ -171,9 +171,11 @@ export default async function MessagesInboxPage() {
                         <span className="truncate">{th.otherName}</span>
                         {/* The whole row is a link into the thread, so the name
                             itself cannot be the card's trigger — it gets its own
-                            icon, same as the email composer's checkbox rows. */}
+                            icon, same as the email composer's checkbox rows.
+                            The icon is aria-hidden, so `name` is what gives this
+                            trigger its accessible name (see PersonHoverCard). */}
                         {th.otherId && (
-                          <PersonHoverCard personId={th.otherId} className="no-underline">
+                          <PersonHoverCard personId={th.otherId} name={th.otherName} className="no-underline">
                             <UserRound className="h-3.5 w-3.5 text-gray-400 hover:text-blue-600" aria-hidden />
                           </PersonHoverCard>
                         )}
