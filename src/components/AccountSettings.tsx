@@ -983,7 +983,7 @@ export function AccountSettings() {
               <option value="light">{t.theme.light}</option>
               <option value="dark">{t.theme.dark}</option>
             </select>
-            {theme === 'system' && <p className="text-xs text-gray-400 mt-1">{t.theme.systemHint}</p>}
+            {theme === 'system' && <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.theme.systemHint}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="account-density">{t.account.densityLabel}</label>
