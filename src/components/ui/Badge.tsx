@@ -26,7 +26,10 @@ export function Badge({ className, variant = 'default', children, ...props }: Ba
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium',
+        // `ui-badge` is a styling hook, not a Tailwind class: under
+        // forced-colors the variant background flattens to Canvas and the pill
+        // disappears, so globals.css gives .ui-badge a border there (#2045).
+        'ui-badge inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium',
         variants[variant],
         className
       )}

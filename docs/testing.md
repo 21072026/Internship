@@ -289,6 +289,64 @@ before writing its report (`E2E_EXPECTED_REPORTS`). Recipients come from
 `ALERT_EMAIL_TO`; set the repository **variable** `E2E_REPORT_MODE=failures` to switch
 back to red-only alerts.
 
+## Accessibility regression gate (axe)
+
+[`e2e/a11y-scan.spec.ts`](../e2e/a11y-scan.spec.ts) runs `@axe-core/playwright` over the
+app against WCAG 2.0/2.1/2.2 A+AA and compares each page's *critical* and *serious*
+counts with the frozen [`e2e/a11y-baseline.json`](../e2e/a11y-baseline.json). It carries
+no `@smoke` tag, so `e2e.yml` runs it as **its own step** on every PR — the smoke set
+stays small while the gate still blocks. The human-readable report is
+[`docs/a11y-audit.md`](a11y-audit.md); both files are regenerated together:
+
+```bash
+A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts
+```
+
+**Coverage** — fifteen pages, each scanned twice (light, then `#dark` with a full reload,
+never by pasting `.dark` onto an already-rendered page):
+
+| Context | Pages |
+|---|---|
+| public | `/`, `/auth/signin`, `/apply/:mentorId` |
+| mentee | `/portal`, `/portal/profile`, `/messages`, `/notifications` |
+| mentor | `/mentor`, `/mentor/mentees`, `/mentor/board` |
+| admin | `/admin`, `/admin/candidates`, `/admin/board`, `/admin/settings` |
+| company | `/company` |
+
+The six non-portal screens were added in #2043, on the shared
+`seedMenteeWithRelation()` fixture in [`e2e/helpers/db.ts`](../e2e/helpers/db.ts) — a real
+mentor ↔ mentee relation with a company, a goal, an interaction and an upcoming meeting.
+That fixture is the point: a board with no cards, or an inbox with no threads, scans clean
+and proves nothing, so a board scan asserts a `board-card` is visible *before* axe runs.
+Add a page by extending the list in the matching context, not by seeding a second fixture.
+
+**Never widen the baseline silently.** A regenerate that raises a count prints
+`⚠️ This regenerate WIDENS the accessibility baseline` and repeats the list in the report
+header; each widened key must be fixed or justified in the PR body (#1333 is the run where
+a quiet widening got in). A dynamic route is keyed separately from its URL — `/apply/:mentorId`
+— so a fresh fixture's id cannot invent a new baseline entry on every run.
+
+## Accessibility media preferences (#2045)
+
+The browser reports three OS-level accessibility settings, and the app honours all
+three. The rules live in one block at the **end of `src/app/globals.css`** (last, so
+they win on source order over the `html.dark` / `html[data-accent]` layers above),
+and `e2e/a11y-media-preferences.spec.ts` asserts them — **not `@smoke`**, so they run
+in the scheduled full suite. Cite this section for the VPAT rows.
+
+| Media feature | What the app does | How it is tested |
+|---|---|---|
+| `prefers-reduced-motion: reduce` | Blanket near-zero `animation-duration` / `transition-duration` on `*` — the mobile drawer, `animate-pulse` skeletons, `animate-spin` spinners, `animate-ping` and every `transition-*`. State changes still happen instantly (the drawer still opens and closes); nothing listens for `transitionend`. Programmatic smooth scrolling passes `behavior` as an argument, which CSS cannot override, so those call sites go through `scrollBehavior()` in [`src/lib/motion.ts`](../src/lib/motion.ts). | `page.emulateMedia({ reducedMotion: 'reduce' })` — computed `transition-duration` is effectively zero, and the drawer's bounding box still moves on open/close |
+| `prefers-contrast: more` | Gray borders (`border-gray-100/200/300`, the `divide-*` rules) darken and secondary text (`text-gray-400/500`) lifts to gray-700; dark mode gets its own values because `html.dark .border-gray-200` outranks the bare utility. The focus ring goes to 3px. | `page.emulateMedia({ contrast: 'more' })` — the computed border and text colours are measurably darker than the default |
+| `forced-colors: active` (Windows High Contrast) | The focus ring is restated as `outline: 3px solid Highlight !important` (the accent rule outscores a bare `a:focus-visible`); the accent swatches — the one place the colour *is* the information — opt out with `forced-color-adjust: none` via `[data-accent-swatch]`; badges gain a border so a pill flattened to Canvas-on-Canvas still reads as one. | `page.emulateMedia({ forcedColors: 'active' })` — after a `Tab`, the focused element still has a solid outline ≥ 2px |
+
+Each test also re-runs the no-sideways-scroll rule, since a preference that changes
+border widths or text size can push a layout past the viewport.
+
+**When adding UI**: a new animation needs nothing (the blanket rule covers it), but a
+new element whose *state* is carried by background colour alone needs a border, an
+icon or text as well — that is the one thing `forced-colors` cannot rescue.
+
 ## Ideas for further test types
 
 - **Contract / API tests** for `/api/v1/*` against the published OpenAPI spec.

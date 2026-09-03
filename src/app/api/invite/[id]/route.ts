@@ -26,6 +26,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!invite) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!mayManage(session, invite)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   if (invite.used) return NextResponse.json({ error: 'This invitation was already accepted' }, { status: 409 });
+  // A revoked invitation (#2071) is unusable: extending its expiry or re-mailing
+  // its link would hand out a token registration is going to refuse.
+  if (invite.revokedAt) return NextResponse.json({ error: 'This invitation was revoked' }, { status: 409 });
 
   // Refresh the expiry so a resent invite is always valid for another week.
   const expiresAt = new Date();

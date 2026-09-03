@@ -51,8 +51,8 @@ export default function PortalInteractionsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Interaction Logs</h1>
-        <p className="text-gray-500 mt-1">Your interaction history with your mentor</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.portal.interactions.title}</h1>
+        <p className="text-gray-500 mt-1">{t.portal.interactions.subtitle}</p>
       </div>
 
       <AsyncSection
@@ -61,10 +61,8 @@ export default function PortalInteractionsPage() {
         empty={interactions.length === 0}
         emptyText={<Card className="text-center py-12">
           <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No interactions logged yet</p>
-          <p className="text-sm text-gray-400 mt-1">
-            Your mentor will log interactions here as your sessions happen.
-          </p>
+          <p className="text-gray-500">{t.portal.interactions.none}</p>
+          <p className="text-sm text-gray-400 mt-1">{t.portal.interactions.noneHint}</p>
         </Card>}
         retryText={t.errorBoundary.retry}
         onRetry={fetchInteractions}

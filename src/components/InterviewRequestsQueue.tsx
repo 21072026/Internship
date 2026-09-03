@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CalendarClock } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
@@ -52,7 +54,23 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
       <p className="mb-6 text-gray-500 dark:text-gray-400">{text.subtitle}</p>
       {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {items.length === 0 ? (
-        <Card className="py-10 text-center text-gray-500 dark:text-gray-400">{text.empty}</Card>
+        <Card>
+          <EmptyState
+            testId="interview-requests"
+            icon={CalendarClock}
+            role={mentor ? 'MENTOR' : 'ADMIN'}
+            title={t.emptyStates.interviewRequests.title}
+            byRole={{
+              ADMIN: {
+                body: t.emptyStates.interviewRequests.adminBody,
+                action: { label: t.emptyStates.interviewRequests.adminCta, href: '/admin/requisitions' },
+              },
+              // A mentor cannot open a requisition, so they get the explanation
+              // and nothing that would walk into a 403.
+              MENTOR: { body: t.emptyStates.interviewRequests.mentorBody },
+            }}
+          />
+        </Card>
       ) : (
         <div className="space-y-4">
           {items.map((item) => {

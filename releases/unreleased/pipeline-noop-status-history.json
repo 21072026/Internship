@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Pipeline history integrity**: ignore same-stage writes and hide legacy no-op transitions while preserving custom stage keys.",
-  "notes": {
-    "en": ["Selecting the current pipeline stage no longer adds a duplicate history entry, and existing no-op entries are hidden."],
-    "tr": ["Mevcut pipeline aşamasını yeniden seçmek artık yinelenen geçmiş kaydı oluşturmuyor; eski değişiklik içermeyen kayıtlar da gizleniyor."],
-    "de": ["Das erneute Auswählen der aktuellen Pipeline-Phase erzeugt keinen doppelten Verlaufseintrag mehr; bestehende Einträge ohne Änderung werden ausgeblendet."]
-  }
-}

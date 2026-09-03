@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles, Check, Plus, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
 
 interface Suggestions {
@@ -151,7 +152,10 @@ export function CvSuggestPanel({
 
       {aiSugg && (
         <div className="mt-3 rounded-lg border border-purple-200 dark:border-purple-900/50 p-3 space-y-3">
-          <p className="text-xs font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1"><Wand2 className="h-3.5 w-3.5" /> {c.aiButton}</p>
+          {/* Only this block is model output — the panel above it is the
+              local heuristic, and badging that would make the marker mean
+              nothing (#2034). */}
+          <p className="text-xs font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1.5"><Wand2 className="h-3.5 w-3.5" /> {c.aiButton} <AiBadge /></p>
           {aiFilled.length === 0 && aiSugg.skills.length === 0 && <p className="text-sm text-gray-500">{c.none}</p>}
 
           {aiFilled.map((f) => (

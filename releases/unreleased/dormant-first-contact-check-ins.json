@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Dormant first contacts are marked and asked** (#1508): the daily sweep stamps `MentorshipRelation.dormantSince` on a relation still parked in the pipeline's first stage whose outreach is 14+ days old with nothing back, and the platform then e-mails the mentee twice — day 14, then 31 days later — asking whether they are still interested. Two is the hard cap; after that the relation simply stays marked dormant (stage unchanged, nothing closed, no data touched). Any sign of life clears the stamp and the nudge counters, so a later silence is a new episode. The mentee list hides dormant relations behind a one-click toggle and badges them. New e-mail category `dormant-check-in` in the `announcements` group, so an opt-out works; preferences are read before the counter is spent. Runnable on its own via `GET /api/cron?job=dormant`.",
-  "notes": {
-    "en": ["Applicants who were messaged and never replied are now marked dormant and asked twice by e-mail whether they are still interested — then left alone. Your mentee list hides them behind a toggle."],
-    "tr": ["Mesaj gönderilip hiç yanıt vermeyen adaylar artık \"Pasif\" olarak işaretleniyor ve kendilerine iki kez \"hâlâ ilgileniyor musun?\" e-postası gidiyor; sonrasında rahat bırakılıyorlar. Mentee listende tek tıkla gizlenip gösteriliyorlar."],
-    "de": ["Angeschriebene Bewerber ohne Antwort werden jetzt als inaktiv markiert und zweimal per E-Mail gefragt, ob noch Interesse besteht — danach bleiben sie in Ruhe. In der Mentee-Liste sind sie per Klick ein- und ausblendbar."]
-  }
-}

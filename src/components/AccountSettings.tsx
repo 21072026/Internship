@@ -13,6 +13,8 @@ import { ConsentSettings } from '@/components/ConsentSettings';
 import { useT, useLocale } from '@/i18n/client';
 import { locales, LOCALE_COOKIE } from '@/i18n/config';
 import { ACCENT_COLORS, ACCENT_SWATCH, DEFAULT_ACCENT, resolveAccent } from '@/lib/accent';
+import { applyTheme, readStoredTheme, resolveTheme, type Theme } from '@/lib/theme';
+import { applyDensity, readStoredDensity, resolveDensity, type Density } from '@/lib/density';
 import { durationSince, relativeTime } from '@/lib/relativeTime';
 import { canUseBrowserNotifications, browserNotificationsPrefOn, setBrowserNotificationsPref } from '@/lib/browserNotifications';
 import { pushSupported, registerPushSubscription, unregisterPushSubscription } from '@/lib/pushNotifications';
@@ -103,7 +105,8 @@ export function AccountSettings() {
   const [devices, setDevices] = useState<TrustedDeviceView[] | null>(null);
   const [deviceBusy, setDeviceBusy] = useState<string | null>(null);
   const [language, setLanguage] = useState('en');
-  const [theme, setTheme] = useState('system');
+  const [theme, setTheme] = useState<Theme>('system');
+  const [density, setDensity] = useState<Density>('comfortable');
   const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
   const [role, setRole] = useState('');
   const [skills, setSkills] = useState('');
@@ -172,7 +175,11 @@ export function AccountSettings() {
             body: JSON.stringify({ preferredLanguage: validCookie }),
           }).catch(() => {});
         }
-        setTheme(user.theme ?? 'system');
+        // Read what this device actually has applied rather than the raw account
+        // value, so the selects can never disagree with the sidebar toggles.
+        // (The helpers fall back to the account preference themselves.)
+        setTheme(readStoredTheme());
+        setDensity(readStoredDensity());
         setAccent(resolveAccent(user.accentColor));
         setRole(user.role ?? '');
         setTimezone(user.timezone ?? '');
@@ -256,21 +263,21 @@ export function AccountSettings() {
     }
   };
 
-  const changeTheme = async (next: string) => {
+  // Both preferences go through the same helpers as the sidebar controls
+  // (class on <html> + localStorage + cookie), so the two places always agree.
+  const changeTheme = async (next: Theme) => {
     setTheme(next);
-    const root = document.documentElement;
-    if (next === 'system') {
-      try { localStorage.removeItem('theme'); } catch { /* ignore */ }
-      document.cookie = 'theme=; path=/; max-age=0';
-      const osDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.classList.toggle('dark', !!osDark);
-    } else {
-      try { localStorage.setItem('theme', next); } catch { /* ignore */ }
-      document.cookie = `theme=${next}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
-      root.classList.toggle('dark', next === 'dark');
-    }
+    applyTheme(next);
     try {
       await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: next }) });
+    } catch { /* ignore */ }
+  };
+
+  const changeDensity = async (next: Density) => {
+    setDensity(next);
+    applyDensity(next);
+    try {
+      await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ density: next }) });
     } catch { /* ignore */ }
   };
 
@@ -958,16 +965,33 @@ export function AccountSettings() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.account.themeLabel}</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="account-theme">{t.account.themeLabel}</label>
             <select
+              id="account-theme"
+              data-testid="theme-select"
               value={theme}
-              onChange={(e) => changeTheme(e.target.value)}
+              onChange={(e) => changeTheme(resolveTheme(e.target.value))}
               className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             >
               <option value="system">{t.theme.system}</option>
               <option value="light">{t.theme.light}</option>
               <option value="dark">{t.theme.dark}</option>
             </select>
+            {theme === 'system' && <p className="text-xs text-gray-400 mt-1">{t.theme.systemHint}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5" htmlFor="account-density">{t.account.densityLabel}</label>
+            <select
+              id="account-density"
+              data-testid="density-select"
+              value={density}
+              onChange={(e) => changeDensity(resolveDensity(e.target.value))}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="comfortable">{t.density.comfortable}</option>
+              <option value="compact">{t.density.compact}</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">{t.account.densityHint}</p>
           </div>
         </div>
 
@@ -986,6 +1010,10 @@ export function AccountSettings() {
                   aria-label={(t.account.accentColors as Record<string, string>)[c] ?? c}
                   title={(t.account.accentColors as Record<string, string>)[c] ?? c}
                   onClick={() => changeAccent(c)}
+                  // The swatch's colour IS the choice being made, so it is the
+                  // one place that opts out of forced-colors flattening —
+                  // globals.css targets this attribute (#2045).
+                  data-accent-swatch
                   className={`h-8 w-8 rounded-full ring-offset-2 ring-offset-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 ${selected ? 'ring-2 ring-gray-500' : 'ring-1 ring-gray-200 hover:ring-gray-300'}`}
                   style={{ backgroundColor: ACCENT_SWATCH[c] }}
                 >

@@ -6,6 +6,7 @@ import { AccountMenu } from '@/components/AccountMenu';
 import { getServerDictionary } from '@/i18n/server';
 import { APP_VERSION } from '@/lib/version';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
+import { CommandPalette } from '@/components/CommandPalette';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { GlobalSearch } from '@/components/GlobalSearch';
@@ -48,6 +49,9 @@ export default async function MentorLayout({ children }: { children: React.React
   }
 
   return (
+    <>
+      {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
+      <CommandPalette role="MENTOR" />
     <ResponsiveShell
       brand={<BrandWordmark oneLine />}
       headerExtra={<GlobalSearch />}
@@ -88,5 +92,6 @@ export default async function MentorLayout({ children }: { children: React.React
         <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
       </PipelineStagesProvider>
     </ResponsiveShell>
+    </>
   );
 }

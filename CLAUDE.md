@@ -305,6 +305,14 @@ workaround, #636, and it compiled on every PR push).
   summary filename, so a second `k6 run` step there would overwrite the first one's summary.
   **Writing a new k6 test is expected** when a change puts real load on a new surface —
   follow the checklist at the end of the k6 section in `docs/testing.md`.
+- **Images open in the app, never in a new tab** (#2147): every user-supplied image
+  (message and support attachments, announcement images) is a `<button>` that opens
+  `ImageLightbox` (`src/components/ui/ImageLightbox.tsx`) via `useImageLightbox()` — never an
+  `<a target="_blank">`. Inside the installed PWA a new tab has no chrome, so an enlarged
+  image was a dead end you could only leave by killing the app. The viewer closes on ✕,
+  Escape, a backdrop tap **and the phone's back button** (it pushes a history entry while
+  open and pops it again on close — keep that balance if you touch it). Non-image
+  attachments still hand off to the browser, which is the right viewer for a PDF.
 - **E2E locator pitfalls** (hit repeatedly): `AdminNav` renders its own sidebar
   `input[type="search"]` filter box present on every admin page — an unscoped
   `input[type="search"]` selector in a new test will hit that instead of a page-level search

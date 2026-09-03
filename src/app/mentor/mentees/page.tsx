@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Users, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { ApplyLinkBox } from '@/components/ApplyLinkBox';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -94,11 +94,11 @@ export default function MenteesPage() {
       ) : visibleRelations.length === 0 ? (
         <Card>
           <EmptyState
+            testId="mentor-mentees"
             icon={Users}
             title={t.mentor.noMenteesAssigned}
-            description={t.mentor.noMenteesHint}
-            actionLabel={t.mentor.addMentee}
-            actionHref="/mentor/mentees/new"
+            body={t.mentor.noMenteesHint}
+            action={{ label: t.mentor.addMentee, href: '/mentor/mentees/new' }}
           />
         </Card>
       ) : (
