@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **The app honours `prefers-reduced-motion`, `prefers-contrast: more` and `forced-colors: active`** (#2045). A repo-wide grep for those three media features previously returned nothing, and axe could not see the gap: it scans one rendering with no preference emulated, so the empty a11y baseline said nothing about any of it. `src/app/globals.css` gains a media-preference block at the end of the file — the standard blanket animation/transition collapse (plus a static drawn placeholder for skeletons, whose only affordance is the pulse); a high-contrast re-tint of `border-gray-100/200`, `divide-gray-50/100` and `text-gray-400/500` through the same flat-utility remap the dark-mode layer uses, each rule duplicated for `html.dark` because that layer outranks a bare utility; and a forced-colors layer that swaps the hardcoded `#2563eb` focus ring for the system `Highlight` colour, opts only the `/account` accent swatches out of the forced palette (`forced-color-adjust: none` — there the fill *is* the content), and stops badges and board drop targets from carrying state in a background colour alone. The two scripted scrolls (message thread, project editor) ask `prefersReducedMotion()` in JS, since an explicit `ScrollOptions.behavior` overrides any CSS `scroll-behavior`. Every rule sits inside its media query, so the default and dark themes — and the empty axe baseline — are byte-for-byte unchanged. Covered by `e2e/a11y-media-preferences.spec.ts`, documented in `docs/testing.md`.",
+  "notes": {
+    "en": [
+      "The app now follows your system accessibility settings: with \"reduce motion\" on, panels, menus and auto-scrolls arrive instantly instead of sliding; with increased contrast on, faint borders and grey helper text get stronger; and in Windows High Contrast mode the keyboard focus ring stays visible while the colour picker keeps its real colours."
+    ],
+    "tr": [
+      "Uygulama artık işletim sistemindeki erişilebilirlik tercihlerinizi izliyor: \"hareketi azalt\" açıkken paneller, menüler ve otomatik kaydırmalar kayarak değil anında geliyor, yüksek kontrast açıkken soluk çizgiler ve gri yardımcı metinler belirginleşiyor, Windows Yüksek Kontrast modunda ise klavye odak çerçevesi görünür kalıyor ve renk seçici gerçek renklerini koruyor."
+    ],
+    "de": [
+      "Die App richtet sich jetzt nach den Barrierefreiheits-Einstellungen Ihres Systems: Bei „Bewegung reduzieren“ erscheinen Panels, Menüs und automatische Sprünge sofort statt hereinzugleiten, bei erhöhtem Kontrast werden blasse Linien und graue Hilfetexte kräftiger, und im Windows-Modus für hohen Kontrast bleibt der Tastaturfokus sichtbar, während die Farbauswahl ihre echten Farben behält."
+    ]
+  }
+}

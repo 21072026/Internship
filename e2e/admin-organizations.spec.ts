@@ -17,7 +17,10 @@ test.afterAll(async () => {
 
 test('admin creates an organization and it appears in the list', async ({ page }) => {
   const adminEmail = uniqueEmail('org-admin');
-  await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Org Admin');
+  const admin = await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'Org Admin');
+  // Tenant management is super-admin only (#1535); a plain ADMIN is a tenant
+  // admin and is covered by the third test below.
+  await prisma.user.update({ where: { id: admin.id }, data: { isSuperAdmin: true } });
   const tag = Date.now();
   const orgName = `E2E Org ${tag}`;
   const orgSlug = `e2e-org-${tag}`;
@@ -184,5 +187,105 @@ test('non-admin cannot list or create organizations', async ({ page }) => {
     expect(create.status()).toBe(401);
   } finally {
     await cleanupByEmail(mentorEmail);
+  }
+});
+
+// Cross-tenant gate (#1535). The dangerous field here is the SAML signing
+// certificate: whoever can write it decides who may mint a login for that
+// tenant. Both directions are asserted — a tenant admin keeps their own
+// organisation, and is refused everything belonging to somebody else.
+test('a tenant admin can only reach their own organization', async ({ page }) => {
+  const tag = Date.now();
+  const ownSlug = `e2e-own-${tag}`;
+  const foreignSlug = `e2e-foreign-${tag}`;
+  createdSlugs.push(ownSlug, foreignSlug);
+
+  const own = await prisma.organization.create({ data: { slug: ownSlug, name: `Own Tenant ${tag}` } });
+  const foreign = await prisma.organization.create({
+    data: {
+      slug: foreignSlug,
+      name: `Foreign Tenant ${tag}`,
+      ssoProvider: 'saml',
+      ssoIssuer: 'https://foreign-idp.test/metadata',
+      ssoEntryPoint: 'https://foreign-idp.test/sso',
+      ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBforeign\n-----END CERTIFICATE-----',
+    },
+  });
+
+  const adminEmail = uniqueEmail('tenant-admin');
+  const admin = await seedUser(adminEmail, 'TenantPass123', 'ADMIN', 'Tenant Admin');
+  // A plain tenant ADMIN: role ADMIN, orgId set, isSuperAdmin left at false.
+  await prisma.user.update({ where: { id: admin.id }, data: { orgId: own.id } });
+
+  try {
+    await signInAndSettle(page, adminEmail, 'TenantPass123', '/admin');
+
+    // GET returns exactly one row — their own — and says they are not a super admin.
+    const listed = await (await page.request.get('/api/admin/organizations')).json();
+    expect(listed.superAdmin).toBe(false);
+    expect(listed.organizations).toHaveLength(1);
+    expect(listed.organizations[0].id).toBe(own.id);
+
+    // Creating a tenant is refused.
+    const create = await page.request.post('/api/admin/organizations', {
+      data: { name: 'Sneaky Tenant', slug: `sneaky-${tag}` },
+    });
+    expect(create.status()).toBe(403);
+    expect(await prisma.organization.findUnique({ where: { slug: `sneaky-${tag}` } })).toBeNull();
+
+    // Their own organization is still editable.
+    const ownPatch = await page.request.patch('/api/admin/organizations', {
+      data: { id: own.id, brandName: 'Own Brand' },
+    });
+    expect(ownPatch.ok()).toBeTruthy();
+    expect((await prisma.organization.findUnique({ where: { id: own.id } }))?.brandName).toBe('Own Brand');
+
+    // The foreign tenant's SSO config is refused, and untouched afterwards.
+    const foreignPatch = await page.request.patch('/api/admin/organizations', {
+      data: {
+        id: foreign.id,
+        ssoEnabled: true,
+        ssoProvider: 'saml',
+        ssoIssuer: 'https://attacker.test/metadata',
+        ssoEntryPoint: 'https://attacker.test/sso',
+        ssoCertificate: '-----BEGIN CERTIFICATE-----\nMIIBattacker\n-----END CERTIFICATE-----',
+      },
+    });
+    expect(foreignPatch.status()).toBe(403);
+    const untouched = await prisma.organization.findUnique({ where: { id: foreign.id } });
+    expect(untouched?.ssoEntryPoint).toBe('https://foreign-idp.test/sso');
+    expect(untouched?.ssoCertificate).toContain('MIIBforeign');
+    expect(untouched?.ssoEnabled).toBe(false);
+
+    // An id that does not exist is also a 403, never a 404 — the response must
+    // not tell a foreign admin which organization ids are real.
+    const missing = await page.request.patch('/api/admin/organizations', {
+      data: { id: 'no-such-org-id', brandName: 'Nope' },
+    });
+    expect(missing.status()).toBe(403);
+
+    // The sub-route follows the same rule: own org readable, foreign refused.
+    const ownStages = await page.request.get(`/api/admin/organizations/${own.id}/pipeline-stages`);
+    expect(ownStages.ok()).toBeTruthy();
+    const foreignStages = await page.request.get(`/api/admin/organizations/${foreign.id}/pipeline-stages`);
+    expect(foreignStages.status()).toBe(403);
+    const foreignStageWrite = await page.request.delete(`/api/admin/organizations/${foreign.id}/pipeline-stages`);
+    expect(foreignStageWrite.status()).toBe(403);
+
+    // The refusal is on record for an auditor.
+    await expect.poll(async () => prisma.activityLog.count({
+      where: { actorId: admin.id, action: 'authz.scope_denied' },
+    }), { timeout: 10_000 }).toBeGreaterThan(0);
+
+    // Presentation follows the capability: no create form, and a note saying why.
+    await gotoSettled(page, '/admin/organizations');
+    await expect(page.getByTestId('tenant-scope-note')).toBeVisible();
+    await expect(page.getByTestId('new-org-card')).toHaveCount(0);
+    // Their own organization is still listed (scoped to the table: the name also
+    // appears in the branding/SSO <select> options).
+    await expect(page.locator('table').getByText(`Own Tenant ${tag}`, { exact: true })).toBeVisible();
+    await expect(page.locator('table').getByText(`Foreign Tenant ${tag}`, { exact: true })).toHaveCount(0);
+  } finally {
+    await cleanupByEmail(adminEmail);
   }
 });

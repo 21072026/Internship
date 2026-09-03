@@ -201,6 +201,9 @@ export default function AdminBoardPage() {
         // handle is the header text, which also matches every card's "Move to
         // stage" <option> and trips strict mode (#828).
         data-testid={`board-column-${status}`}
+        // The drop target is highlighted with bg-blue-50, which forced-colors
+        // discards; this attribute lets globals.css outline it instead (#2045).
+        data-drop-active={dragOver === status ? 'true' : undefined}
         onDragOver={(e) => { e.preventDefault(); setDragOver(status); }}
         onDragLeave={() => setDragOver((s) => (s === status ? null : s))}
         onDrop={(e) => {

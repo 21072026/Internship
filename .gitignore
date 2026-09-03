@@ -170,3 +170,4 @@ e2e/.state/
 # in-progress work — internal tooling state, not a project artifact.
 /.claude/worktrees/
 playwright.local.config.ts
+playwright.repro.config.ts

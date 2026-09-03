@@ -1,6 +1,10 @@
 // Lightweight loading placeholders to improve perceived performance.
+// `ui-skeleton` is a styling hook, not a utility: under
+// `prefers-reduced-motion: reduce` the pulse is frozen by the blanket rule in
+// globals.css, and these blocks are the one case where that leaves nothing to
+// see, so they get a static drawn placeholder instead (#2045).
 export function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded bg-gray-100 dark:bg-gray-800 ${className}`} />;
+  return <div className={`ui-skeleton animate-pulse rounded bg-gray-100 dark:bg-gray-800 ${className}`} />;
 }
 
 // A vertical stack of row-shaped skeletons for list/table loading states.
