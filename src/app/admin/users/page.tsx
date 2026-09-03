@@ -58,11 +58,16 @@ export default function AdminUsersPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [resendResult, setResendResult] = useState<{ userId: string; ok: boolean; message?: string } | null>(null);
   const [impersonateError, setImpersonateError] = useState<{ userId: string; message: string } | null>(null);
+  const [actionError, setActionError] = useState<{ userId: string; message: string } | null>(null);
   // Row whose erasure panel is open. Deleting an account is an admin action
   // that belongs here, not inside an impersonated session — /api/account
   // refuses credential changes and deletion while impersonating, and no admin
   // knows the account holder's password anyway.
   const [eraseId, setEraseId] = useState<string | null>(null);
+  // Accounts currently locked out by brute-force protection (#1541). Kept in
+  // its own map rather than folded into the user rows: it comes from its own
+  // endpoint, and the directory query stays untouched.
+  const [lockedIds, setLockedIds] = useState<Set<string>>(new Set());
   const PAGE_SIZE = 20;
 
   const loginAs = async (u: AdminUser) => {
@@ -110,6 +115,21 @@ export default function AdminUsersPage() {
     setUsers(data.users ?? []);
     setTotal(data.total ?? 0);
     setArchivedCount(data.archivedCount ?? 0);
+    // Best effort: a lockout list that fails to load must not blank the user
+    // directory, it only means the "Locked" badges are missing this render.
+    try {
+      const lockRes = await fetch('/api/admin/lockouts');
+      const lockData = await lockRes.json();
+      setLockedIds(
+        new Set(
+          ((lockData.lockouts ?? []) as { userId: string | null }[])
+            .map((l) => l.userId)
+            .filter((v): v is string => !!v),
+        ),
+      );
+    } catch {
+      // ignored on purpose — see above
+    }
     setLoading(false);
   }, [page, statusView, filter, debouncedSearch]);
 
@@ -159,6 +179,43 @@ export default function AdminUsersPage() {
       );
     } catch (e) {
       setResendResult({ userId: u.id, ok: false, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Force the target out of the product now: every existing session dies on its
+  // next request and every remembered device is forgotten. Deliberately harsher
+  // than a password reset (which revokes nothing) and gentler than deactivation
+  // (which the person cannot come back from).
+  const forceSignOut = async (u: AdminUser) => {
+    if (busyId) return;
+    if (!window.confirm(t.usersAdmin.forceSignOutConfirm.replace('{name}', u.fullName))) return;
+    setBusyId(u.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/sign-out-all`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? t.usersAdmin.forceSignOutFailed);
+    } catch (e) {
+      setActionError({ userId: u.id, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Clear a brute-force lockout for someone who locked themselves out.
+  const unlock = async (u: AdminUser) => {
+    if (busyId) return;
+    setBusyId(u.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/lockout`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? t.usersAdmin.unlockFailed);
+      await load();
+    } catch (e) {
+      setActionError({ userId: u.id, message: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusyId(null);
     }
@@ -272,6 +329,9 @@ export default function AdminUsersPage() {
                   {impersonateError?.userId === u.id && (
                     <p className="text-xs text-red-600 mt-1">{impersonateError.message}</p>
                   )}
+                  {actionError?.userId === u.id && (
+                    <p className="text-xs text-red-600 mt-1">{actionError.message}</p>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <RoleBadge role={u.role} />
@@ -282,6 +342,21 @@ export default function AdminUsersPage() {
                         ? t.usersAdmin.active
                         : t.usersAdmin.inactive}
                   </Badge>
+                  {lockedIds.has(u.id) && (
+                    <Badge variant="danger" data-testid={`locked-badge-${u.id}`}>{t.usersAdmin.locked}</Badge>
+                  )}
+                  {lockedIds.has(u.id) && u.role !== 'ADMIN' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      loading={busyId === u.id}
+                      disabled={!!busyId}
+                      data-testid={`unlock-user-${u.id}`}
+                      onClick={() => unlock(u)}
+                    >
+                      {t.usersAdmin.unlock}
+                    </Button>
+                  )}
                   {u.accountState === 'unverified' && (
                     <Button
                       variant="outline"
@@ -308,6 +383,20 @@ export default function AdminUsersPage() {
                     {u.isActive ? t.usersAdmin.deactivate : t.usersAdmin.activate}
                   </Button>
                   <RoleConvertButton userId={u.id} fullName={u.fullName} role={u.role} onDone={load} />
+                  {/* Admin accounts are out of scope (the endpoint refuses a
+                      peer admin), same rule as reset-password and erase. */}
+                  {u.role !== 'ADMIN' && u.id !== session?.user?.id && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busyId === u.id}
+                      disabled={!!busyId}
+                      data-testid={`force-sign-out-${u.id}`}
+                      onClick={() => forceSignOut(u)}
+                    >
+                      {t.usersAdmin.forceSignOut}
+                    </Button>
+                  )}
                   {/* Admin accounts are out of scope (the endpoint refuses them):
                       demote first, or let the owner delete their own account. */}
                   {u.role !== 'ADMIN' && u.id !== session?.user?.id && (

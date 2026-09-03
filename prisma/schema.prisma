@@ -2549,6 +2549,48 @@ model TrustedDevice {
   @@index([expiresAt])
 }
 
+// Durable brute-force lockout (#1541).
+//
+// The sign-in failure counter used to live only in the in-process Map behind
+// `rateLimit()`: it evaporated on every redeploy, no admin could see that an
+// account was locked, and nobody could clear a lockout for a user who had
+// locked themselves out. This row is the durable, visible, clearable copy of
+// that state — and `authorize()` consults it BEFORE the bcrypt compare, so a
+// locked-out attempt costs one indexed point lookup instead of a cost-12 hash.
+//
+// Deliberately NOT a relation to User: the row is keyed by the email that was
+// *typed*, which under an attack usually belongs to no account at all.
+model AccountLockout {
+  id          String    @id @default(cuid())
+  // Normalized (trimmed + lowercased) email the attempts were made against.
+  email       String
+  // The account, when the typed email matches one. Null otherwise.
+  userId      String?
+  // Which stage this counter belongs to: "password" or "totp". One row PER
+  // STAGE per address, mirroring the two separate in-memory buckets in
+  // auth.ts. A single shared row would let five fumbled authenticator codes
+  // lock the password stage, and the sign-in form could then no longer even
+  // reveal the code field (it needs a 2FA_REQUIRED, which only comes from a
+  // password check that was allowed to run).
+  reason      String    @default("password")
+  failedCount Int       @default(0)
+  // Start of the current counting window. Failures older than the window open
+  // a fresh count instead of accumulating forever.
+  windowStart DateTime  @default(now())
+  // Locked until this moment. Null or in the past means "counting, not locked".
+  lockedUntil DateTime?
+  lastIp      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  // Tenant anchor (#543). This is tenant data — it is listed in TENANT_MODELS.
+  orgId       String?
+
+  @@unique([email, reason])
+  @@index([userId])
+  @@index([lockedUntil])
+  @@index([orgId])
+}
+
 enum LogLevel {
   DEBUG
   INFO

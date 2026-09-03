@@ -69,6 +69,9 @@ export async function cleanupByEmail(email: string) {
     await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
   }
   await prisma.invitationToken.deleteMany({ where: { email: { equals: email } } });
+  // Brute-force lockouts are keyed by the typed email and carry no FK, so a
+  // deleted user leaves one behind unless it is dropped here (#1541).
+  await prisma.accountLockout.deleteMany({ where: { email: email.toLowerCase() } });
 }
 
 /**
