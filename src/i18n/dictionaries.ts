@@ -2822,6 +2822,9 @@ const en = {
       mentorSelfApply: { t: 'Self-serve mentor applications', d: 'Anyone can apply to become a mentor without an account; admins review, take into review, approve or reject from a queue, and approval creates or upgrades the mentor\u2019s account automatically.' },
       calendar: { t: 'Calendar in four views', d: 'Meetings, recurring project calls and stage deadlines in one calendar — month, week, day or a plain upcoming list, with the upcoming list as the default on a phone. A recurring project meeting is kept as a rule, so it shows once under its own title, moves when you move it and disappears when you cancel it.' },
       offers: { t: 'Offer management', d: 'Create, preview and send a job offer from a candidate’s Mentorship card in three steps; the candidate accepts or declines (with a reason) from their portal, sees a persistent decision state, and overdue offers expire on their own — every step logged and notified. An admin offer index answers what is still outstanding, what expires this week and what was declined, and why.' },
+      multiTenancy: { t: 'Multi-tenant organisations', d: 'Keep each organisation’s data, plan and configuration separate in one CRM.' },
+      whiteLabel: { t: 'Per-tenant branding settings', d: 'Brand name, logo, colours and support contact are stored for each organisation, and tenant branding is applied across the product, including role layouts and generated certificates.' },
+      enterpriseSso: { t: 'Enterprise SSO configuration', d: 'Store and validate SAML or OIDC settings for an enterprise directory. SAML sign-in via /auth/sso is wired with JIT provisioning when SSO is active for the organisation; OIDC settings are stored but not yet used for sign-in.' },
     },
   },
   aiSummary: {
@@ -6801,6 +6804,9 @@ const tr: Dict = {
     backHome: 'Ana sayfaya dön',
     categories: { tracking: 'Süreç & başvuru', collaboration: 'Mentorluk & iş birliği', companies: 'Şirketler için', insights: 'İçgörü & AI', trust: 'Gizlilik & güvenlik', platform: 'Platform' },
     items: {
+      multiTenancy: { t: 'Çok kiracılı organizasyonlar', d: 'Her organizasyonun verilerini, planını ve ayarlarını aynı CRM içinde ayrı tutun.' },
+      whiteLabel: { t: 'Kurum bazlı marka ayarları', d: 'Her organizasyon için marka adı, logo, renkler ve destek iletişim bilgileri saklanır; kiracı markası rol yerleşimleri ve üretilen sertifikalar dahil ürün geneline uygulanır.' },
+      enterpriseSso: { t: 'Kurumsal SSO yapılandırması', d: 'Kurumsal dizinler için SAML veya OIDC ayarlarını saklayın ve doğrulayın. Kurum için SSO aktifse /auth/sso üzerinden SAML girişi JIT kullanıcı açılışıyla çalışır; OIDC ayarları saklanır ama girişte henüz kullanılmaz.' },
       stories: { t: 'Rıza temelli başarı hikâyeleri', d: 'Gerçek değerlendirme alıntıları, yalnızca iki tarafın rızası ve yazarın birebir metin onayıyla yayınlanır — istenildiği an geri alınabilir, anında yayından düşer.' },
       messaging: { t: 'Yerleşik mesajlaşma', d: 'Mentorluk başına thread’ler, ekler ve cevaplanabilir e-posta yansıtması olan tek gelen kutusu — bildirimi kendi e-posta uygulamanızdan yanıtlayın, cevabınız thread’e düşer. Mesajlar gelen kutusu açıkken anında görünür; izin verirseniz uygulama kapalıyken de cihazınıza bildirim gelir.' },
       activityReport: { t: 'Günlük aktivite raporları', d: 'Mentör ve adminler için rıza temelli mentee aktivite özetleri: girişler, sitede geçen süre, gezilen sayfalar ve tamamlanan görevler.' },
@@ -10807,6 +10813,9 @@ const de: Dict = {
     backHome: 'Zurück zur Startseite',
     categories: { tracking: 'Pipeline & Aufnahme', collaboration: 'Mentoring & Zusammenarbeit', companies: 'Für Unternehmen', insights: 'Einblicke & KI', trust: 'Datenschutz & Sicherheit', platform: 'Plattform' },
     items: {
+      multiTenancy: { t: 'Mandantenfähige Organisationen', d: 'Daten, Tarif und Einstellungen jeder Organisation bleiben innerhalb eines CRM getrennt.' },
+      whiteLabel: { t: 'Mandantenbezogene Marken-Einstellungen', d: 'Markenname, Logo, Farben und Supportkontakt werden je Organisation gespeichert; das Mandanten-Branding wird produktweit angewendet, inklusive Rollen-Layouts und erzeugter Zertifikate.' },
+      enterpriseSso: { t: 'Enterprise-SSO-Konfiguration', d: 'SAML- oder OIDC-Einstellungen für Unternehmensverzeichnisse speichern und prüfen. Wenn SSO für die Organisation aktiv ist, funktioniert der SAML-Login über /auth/sso mit JIT-Provisionierung; OIDC-Einstellungen werden gespeichert, aber für den Login noch nicht verwendet.' },
       stories: { t: 'Einwilligungsbasierte Erfolgsgeschichten', d: 'Echte Bewertungsauszüge, veröffentlicht nur mit Einwilligung beider Seiten und Freigabe des exakten Wortlauts — jederzeit widerrufbar und sofort entfernt.' },
       messaging: { t: 'Integrierte Nachrichten', d: 'Ein zentraler Posteingang mit Threads pro Mentoring, Anhängen und beantwortbarer E-Mail-Spiegelung — antworte aus deinem Mailprogramm, und die Antwort landet im Thread. Nachrichten erscheinen live, solange der Posteingang offen ist, und können dein Gerät auch bei geschlossener App benachrichtigen.' },
       activityReport: { t: 'Tägliche Aktivitätsberichte', d: 'Einwilligungsbasierte Mentee-Aktivitätsübersichten für Mentoren und Admins: Logins, Verweildauer, besuchte Seiten und erledigte To-dos.' },
