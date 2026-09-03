@@ -163,6 +163,9 @@ export async function inviteGuests({
         rsvpToken: row.rsvpToken,
         organizerTimeZone,
         organizerName,
+        // Same UID as the account-holders' invite for this meeting, so a guest
+        // who also has a calendar entry from elsewhere sees one event, not two.
+        icsUid: meetingId,
       });
     } catch (e) {
       logger.error('Meeting guest invite email failed', { meetingId, error: String(e) });
