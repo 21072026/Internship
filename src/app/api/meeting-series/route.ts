@@ -139,6 +139,10 @@ async function announceNextOccurrence(
         // The mentee being invited, not `sessionUserId` (the mentor/admin who
         // created the series and is not mailed here at all).
         userId: rel.mentee.id,
+        // A series occurrence has no Meeting row, so the UID is the same
+        // synthetic id /api/calendar-events and the subscription feed emit for
+        // it — the mailed occurrence and the subscribed one are one event.
+        icsUid: `series-${series.id}-${next.toISOString()}`,
       });
       invited++;
     } catch (e) {

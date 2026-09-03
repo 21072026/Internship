@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Added** — a company requesting an interview for a shortlisted candidate can now attach an optional note (up to 1000 characters) and up to 5 proposed time slots, added or removed inline before submitting. Both stay optional — submitting with neither still creates a plain request, unchanged from before.",
-  "notes": {
-    "en": ["When requesting an interview, you can now add a note and suggest up to 5 time slots for the mentor to pick from."],
-    "tr": ["Mülakat talep ederken artık bir not ekleyebilir ve mentörün seçebileceği en fazla 5 saat önerebilirsiniz."],
-    "de": ["Bei einer Interviewanfrage kannst du jetzt eine Notiz hinzufügen und bis zu 5 Terminvorschläge machen, aus denen die Mentorin oder der Mentor wählen kann."]
-  }
-}

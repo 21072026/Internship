@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Candidates:** Removed the duplicate disabled graduation-year filter option (#1441).",
-  "notes": {
-    "en": ["The graduation-year filter now has one selectable \"All Years\" option."],
-    "tr": ["Mezuniyet yılı filtresinde artık seçilebilir tek bir \"Tüm yıllar\" seçeneği var."],
-    "de": ["Der Abschlussjahr-Filter enthält jetzt genau eine auswählbare Option \"Alle Jahre\"."]
-  }
-}

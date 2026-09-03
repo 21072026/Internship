@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **AI transparency layer** (#2034). New public `/ai` page (EN/TR/DE) listing all five registered AI tasks with what is sent, what is deliberately withheld, the sub-processor, retention, the per-purpose opt-out, the org-wide off switch and the human-in-the-loop statement — plus an explicit \"what we do not have yet\" section. New shared `AiBadge` ✨ marker (visible chip + screen-reader label + tooltip + \"check it\" note) on all five surfaces that render model output. The privacy notice now names all four AI processing purposes instead of CV parsing alone, and `docs/ai.md` documents the gate, the task table and the two closed boundaries.",
+  "notes": {
+    "en": ["A new AI page explains which features use AI, what is sent, what is never sent and how to switch it off — and everything a model wrote now carries a ✨ marker."],
+    "tr": ["Yeni yapay zekâ sayfası hangi özelliklerin yapay zekâ kullandığını, neyin gönderildiğini, neyin asla gönderilmediğini ve nasıl kapatılacağını anlatıyor; bir modelin yazdığı her metin artık ✨ işareti taşıyor."],
+    "de": ["Eine neue KI-Seite erklärt, welche Funktionen KI nutzen, was gesendet wird, was nie gesendet wird und wie man sie abschaltet — und alles, was ein Modell geschrieben hat, trägt jetzt eine ✨-Markierung."]
+  }
+}

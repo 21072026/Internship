@@ -1,6 +1,6 @@
 {
   "name": "internship-crm",
-  "version": "0.110.1-beta",
+  "version": "0.135.0-beta",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "author": "Mehmet Erşahin",
@@ -20,6 +20,7 @@
     "check:release-fragments": "node scripts/check-release-fragments.mjs",
     "check:stage-keys": "node scripts/check-stage-keys.mjs",
     "test:release": "node --test scripts/test/release-derive.test.mjs",
+    "test:stage-aging": "node --test --experimental-strip-types scripts/test/stage-aging.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
     "check:k6": "node scripts/check-k6.mjs",

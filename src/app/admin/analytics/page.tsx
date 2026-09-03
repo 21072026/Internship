@@ -11,6 +11,7 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { CohortComparison } from '@/components/admin/CohortComparison';
 import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
+import { MatchQuality } from '@/components/admin/MatchQuality';
 import { useT } from '@/i18n/client';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -66,7 +67,7 @@ interface DropReason {
   count: number;
 }
 interface Aging {
-  stageAging: { pipelineStatus: string; count: number; avgDays: number; medianDays: number }[];
+  stageAging: { pipelineStatus: string; visits: number; candidates: number; avgDays: number; medianDays: number }[];
   oldestStuck: AgingItem[];
   overdue: AgingItem[];
   overdueCount: number;
@@ -599,19 +600,35 @@ export default function AdminAnalyticsPage() {
             {aging.stageAging.length === 0 ? (
               <p className="text-sm text-gray-400">—</p>
             ) : (
-              <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                {/* The stats string is unbreakable, so on a phone the stage name
-                    gets its own line instead of being squeezed to ~35px
-                    ("100 · Erstkontakt" → "100 …", #1305). */}
-                {aging.stageAging.map((s) => (
-                  <div key={s.pipelineStatus} className="flex flex-col items-start gap-0.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-                    <span className="max-w-full truncate">{label(s.pipelineStatus)}</span>
-                    <span className="text-gray-500 sm:flex-shrink-0">
-                      {t.analytics.aging.avg} {s.avgDays}{t.analytics.aging.days} · {t.analytics.aging.median} {s.medianDays}{t.analytics.aging.days} · {s.count} {t.analytics.aging.candidates}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <>
+                {/* Both numbers below are measured from transitions that have
+                    ENDED, so neither equals the funnel's "in this stage now" —
+                    which is the contradiction this card used to present (#1427).
+                    The explanation is rendered, not put in a `title`: a hover
+                    tooltip never appears on a touch device, and this page states
+                    what its other cards measure the same visible way
+                    (funnelKpi.conversionHint). */}
+                <p className="text-xs text-gray-500 mt-0.5 mb-3" data-testid="stage-aging-hint">{t.analytics.aging.countsHint}</p>
+                <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                  {/* The stats string is unbreakable, so on a phone the stage name
+                      gets its own line instead of being squeezed to ~35px
+                      ("100 · Erstkontakt" → "100 …", #1305). */}
+                  {aging.stageAging.map((s) => (
+                    <div key={s.pipelineStatus} className="flex flex-col items-start gap-0.5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2" data-testid={`stage-aging-row-${s.pipelineStatus}`}>
+                      <span className="max-w-full truncate">{label(s.pipelineStatus)}</span>
+                      {/* The trailing number used to be printed as "candidates",
+                          which flatly contradicted the funnel above: it is the
+                          count of completed stage VISITS (a re-entry counts
+                          twice), so it read as "6 candidates" where the funnel
+                          said 1. Both numbers are now named for what they are
+                          (#1427). */}
+                      <span className="text-gray-500 sm:flex-shrink-0">
+                        {t.analytics.aging.avg} {s.avgDays}{t.analytics.aging.days} · {t.analytics.aging.median} {s.medianDays}{t.analytics.aging.days} · {s.visits} {t.analytics.aging.visits} · {s.candidates} {t.analytics.aging.distinctCandidates}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </Card>
 
@@ -682,6 +699,11 @@ export default function AdminAnalyticsPage() {
       )}
 
       <CohortComparison />
+
+      {/* Match quality (#2040): how often the mentor suggestion is taken, and
+          at which rank position. Not premium-gated — it is the answer to the
+          first question every buyer asks about the matching. */}
+      <MatchQuality />
 
       <ProgramBenchmark />
       <SourceConversion />

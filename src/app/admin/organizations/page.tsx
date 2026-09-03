@@ -104,6 +104,9 @@ export default function AdminOrganizationsPage() {
   const t = useT();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [plans, setPlans] = useState<OrgPlan[]>([]);
+  // Whether this admin may manage every tenant (#1535). Presentation only — the
+  // API refuses a cross-tenant write regardless of what is rendered here.
+  const [superAdmin, setSuperAdmin] = useState(false);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [saving, setSaving] = useState(false);
@@ -117,6 +120,7 @@ export default function AdminOrganizationsPage() {
       const data = await res.json();
       setOrgs(data.organizations ?? []);
       setPlans(data.plans ?? []);
+      setSuperAdmin(!!data.superAdmin);
     }
     setLoading(false);
   }, []);
@@ -243,7 +247,14 @@ export default function AdminOrganizationsPage() {
         {t.organizations.phaseNote}
       </div>
 
-      <Card className="mb-6 max-w-2xl">
+      {!superAdmin && (
+        <div data-testid="tenant-scope-note" className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          {t.organizations.tenantScopeNote}
+        </div>
+      )}
+
+      {superAdmin && (
+      <Card className="mb-6 max-w-2xl" data-testid="new-org-card">
         <CardHeader><CardTitle>{t.organizations.newOrg}</CardTitle></CardHeader>
         <form onSubmit={create} className="flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[180px]">
@@ -257,6 +268,7 @@ export default function AdminOrganizationsPage() {
         <p className="text-xs text-gray-500 mt-2">{t.organizations.slugHint}</p>
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
       </Card>
+      )}
 
       {orgs.length > 0 && (
         <Card className="mb-6 max-w-2xl">
@@ -329,7 +341,10 @@ export default function AdminOrganizationsPage() {
                     <select value={ssoProvider} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
                       <option value="">—</option>
                       <option value="saml">SAML</option>
-                      <option value="oidc">OIDC</option>
+                      {/* OIDC is a roadmap item: the login route always builds a
+                          SAML request, so saving it would lock the tenant out.
+                          Shown disabled rather than hidden — it is coming. */}
+                      <option value="oidc" disabled>{`OIDC — ${t.organizations.ssoOidcSoon}`}</option>
                     </select>
                   </div>
                   <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>

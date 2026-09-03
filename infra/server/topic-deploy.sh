@@ -232,6 +232,7 @@ fi
 _in_image "$IMAGE" npx prisma db push --accept-data-loss
 _in_image "$IMAGE" node prisma/seed-templates.mjs || true
 _in_image "$IMAGE" node prisma/seed-contributor-terms.mjs || true
+_in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
 
 if [ "${EXISTING_TABLES:-0}" -eq 0 ]; then
   # First deploy of this PR: fill it with the synthetic demo set. Nothing here

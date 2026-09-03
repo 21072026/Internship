@@ -40,7 +40,13 @@ export function HorizontalScrollArea({
 
   return (
     <div className="relative">
-      <div ref={scrollRef} data-testid={testId} onScroll={update} className={`overflow-x-auto ${className}`}>
+      {/* tabIndex makes the scroller itself reachable by keyboard. Without it a
+          mouse-less user cannot pan the board at all — the columns past the
+          fold are simply unreachable — which is what axe reports as
+          `scrollable-region-focusable` (serious). Deliberately no `role` to go
+          with it: an unnamed `role="region"` would only trade this violation
+          for a `region`-name one. */}
+      <div ref={scrollRef} tabIndex={0} data-testid={testId} onScroll={update} className={`overflow-x-auto ${className}`}>
         {children}
       </div>
       {canScrollLeft && (
