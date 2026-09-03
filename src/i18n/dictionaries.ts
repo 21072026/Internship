@@ -1382,6 +1382,65 @@ const en = {
       message: 'Your feedback means a lot — it helps us keep improving the program.',
     },
   },
+  // Wording for the built-in instrument library (src/lib/surveyTemplates.ts).
+  // The NPS question and the four role-specific program questions live in
+  // `programSurvey` above and are reused from there, not repeated here.
+  surveyTemplates: {
+    scale: {
+      low: '1 · Not at all',
+      high: '5 · Very much',
+    },
+    programPre: {
+      title: 'Starting point',
+      description: 'Asked once at the beginning: what each side wants out of this, and how confident they are today.',
+      q: {
+        goals: 'What do you most want to get out of this program?',
+        goalsMentor: 'What do you most want your mentee to get out of this program?',
+        confidence: 'How confident are you today that this will happen?',
+        concerns: 'Is there anything you think could get in the way?',
+      },
+    },
+    programMid: {
+      title: 'Halfway check',
+      description: 'Asked in the middle, while there is still time to fix something.',
+      q: {
+        progress: 'How much has moved forward since you started?',
+        blockers: 'What would help you most in the second half?',
+      },
+    },
+    programPost: {
+      title: 'Closing survey',
+      description: 'Asked at the end: did it deliver, and would they recommend it.',
+      q: {
+        npsWhy: 'What is the main reason for your score?',
+      },
+    },
+    pulse: {
+      title: 'Pulse (2 questions)',
+      description: 'Short enough to send on a repeating cadence without wearing anyone out.',
+      q: {
+        mood: 'How is the mentorship going right now?',
+        needHelp: 'Do you need anything from us this week?',
+      },
+      options: {
+        allGood: 'No, all good',
+        smallThing: 'Yes, a small thing',
+        contactMe: 'Yes, please get in touch with me',
+      },
+    },
+    npsOnly: {
+      title: 'Recommendation score only',
+      description: 'One number and one reason — the shortest survey that still tells you something.',
+    },
+    postMeeting: {
+      title: 'After a meeting',
+      description: 'Sent right after a meeting, while it is still fresh.',
+      q: {
+        helpfulness: 'How helpful was this meeting for you?',
+        note: 'Anything you want to add about this meeting?',
+      },
+    },
+  },
   cv: {
     title: 'CV / Resume',
     upload: 'Upload CV',
@@ -5325,6 +5384,62 @@ const tr: Dict = {
       message: 'Geri bildirimin bizim için değerli — programı geliştirmemize yardımcı oluyor.',
     },
   },
+  surveyTemplates: {
+    scale: {
+      low: '1 · Hiç',
+      high: '5 · Çok',
+    },
+    programPre: {
+      title: 'Başlangıç durumu',
+      description: 'Programın başında bir kez sorulur: iki taraf bundan ne bekliyor ve bugün ne kadar umutlu.',
+      q: {
+        goals: 'Bu programdan en çok ne kazanmak istiyorsun?',
+        goalsMentor: 'Mentee’nin bu programdan en çok ne kazanmasını istiyorsun?',
+        confidence: 'Bunun gerçekleşeceğine bugün ne kadar inanıyorsun?',
+        concerns: 'Önüne engel olabileceğini düşündüğün bir şey var mı?',
+      },
+    },
+    programMid: {
+      title: 'Yarı yol kontrolü',
+      description: 'Programın ortasında, bir şeyi düzeltmek için hâlâ zaman varken sorulur.',
+      q: {
+        progress: 'Başladığından bu yana ne kadar yol aldın?',
+        blockers: 'İkinci yarıda sana en çok ne yardımcı olur?',
+      },
+    },
+    programPost: {
+      title: 'Kapanış anketi',
+      description: 'Programın sonunda sorulur: beklentiyi karşıladı mı ve tavsiye eder mi.',
+      q: {
+        npsWhy: 'Bu puanı vermenin ana nedeni nedir?',
+      },
+    },
+    pulse: {
+      title: 'Nabız (2 soru)',
+      description: 'Kimseyi yormadan düzenli aralıklarla gönderilebilecek kadar kısa.',
+      q: {
+        mood: 'Mentörlük şu anda nasıl gidiyor?',
+        needHelp: 'Bu hafta bizden bir şeye ihtiyacın var mı?',
+      },
+      options: {
+        allGood: 'Hayır, her şey yolunda',
+        smallThing: 'Evet, küçük bir şey',
+        contactMe: 'Evet, benimle iletişime geçin',
+      },
+    },
+    npsOnly: {
+      title: 'Sadece tavsiye puanı',
+      description: 'Bir puan ve bir neden — yine de bir şey öğreten en kısa anket.',
+    },
+    postMeeting: {
+      title: 'Görüşme sonrası',
+      description: 'Görüşmenin hemen ardından, henüz akıldayken gönderilir.',
+      q: {
+        helpfulness: 'Bu görüşme sana ne kadar faydalı oldu?',
+        note: 'Bu görüşmeyle ilgili eklemek istediğin bir şey var mı?',
+      },
+    },
+  },
   cv: {
     title: 'CV / Özgeçmiş',
     upload: 'CV yükle',
@@ -9250,6 +9365,62 @@ const de: Dict = {
     thankYou: {
       title: 'Danke!',
       message: 'Dein Feedback ist uns wichtig — es hilft uns, das Programm weiter zu verbessern.',
+    },
+  },
+  surveyTemplates: {
+    scale: {
+      low: '1 · Gar nicht',
+      high: '5 · Sehr',
+    },
+    programPre: {
+      title: 'Ausgangslage',
+      description: 'Einmal am Anfang gefragt: was beide Seiten davon erwarten und wie zuversichtlich sie heute sind.',
+      q: {
+        goals: 'Was möchtest du aus diesem Programm vor allem mitnehmen?',
+        goalsMentor: 'Was soll dein Mentee aus diesem Programm vor allem mitnehmen?',
+        confidence: 'Wie zuversichtlich bist du heute, dass das gelingt?',
+        concerns: 'Gibt es etwas, das dir dabei im Weg stehen könnte?',
+      },
+    },
+    programMid: {
+      title: 'Zwischenstand',
+      description: 'Zur Mitte gefragt, solange noch Zeit bleibt, etwas zu ändern.',
+      q: {
+        progress: 'Wie viel hat sich seit dem Start bewegt?',
+        blockers: 'Was würde dir in der zweiten Hälfte am meisten helfen?',
+      },
+    },
+    programPost: {
+      title: 'Abschlussumfrage',
+      description: 'Am Ende gefragt: hat es gehalten, was es versprochen hat, und würdest du es weiterempfehlen.',
+      q: {
+        npsWhy: 'Was ist der Hauptgrund für deine Bewertung?',
+      },
+    },
+    pulse: {
+      title: 'Puls (2 Fragen)',
+      description: 'Kurz genug, um sie regelmäßig zu senden, ohne jemanden zu ermüden.',
+      q: {
+        mood: 'Wie läuft das Mentoring im Moment?',
+        needHelp: 'Brauchst du diese Woche etwas von uns?',
+      },
+      options: {
+        allGood: 'Nein, alles gut',
+        smallThing: 'Ja, eine Kleinigkeit',
+        contactMe: 'Ja, bitte meldet euch bei mir',
+      },
+    },
+    npsOnly: {
+      title: 'Nur Empfehlungswert',
+      description: 'Eine Zahl und ein Grund — die kürzeste Umfrage, die noch etwas verrät.',
+    },
+    postMeeting: {
+      title: 'Nach einem Gespräch',
+      description: 'Direkt nach dem Gespräch gesendet, solange es noch frisch ist.',
+      q: {
+        helpfulness: 'Wie hilfreich war dieses Gespräch für dich?',
+        note: 'Möchtest du etwas zu diesem Gespräch ergänzen?',
+      },
     },
   },
   cv: {
