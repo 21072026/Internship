@@ -1,5 +1,9 @@
+'use client';
+
 import React from 'react';
 import { useCharacterCounter } from '@/hooks/useCharacterCounter';
+import { useAnnounce } from '@/components/ui/LiveRegion';
+import { useT } from '@/i18n/client';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   maxLength?: number;
@@ -31,6 +35,24 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     const text = isControlled ? String(value) : uncontrolledText;
     const counter = useCharacterCounter(text, maxLength);
     const shouldShowCounter = showCounter && maxLength < 65535;
+
+    // WCAG 4.1.3: the counter is a visual-only cue — it changes colour at 80%
+    // and at the limit, and a screen-reader user is told nothing. Announce the
+    // two THRESHOLD CROSSINGS only: `state` changes at most twice per field, so
+    // this never speaks per keystroke (which would make the field unusable).
+    const t = useT();
+    const announce = useAnnounce();
+    const previousState = React.useRef(counter.state);
+    React.useEffect(() => {
+      const previous = previousState.current;
+      previousState.current = counter.state;
+      if (!shouldShowCounter || previous === counter.state) return;
+      if (counter.state === 'error') {
+        announce(t.a11y.characterLimitReached, 'assertive');
+      } else if (counter.state === 'warning') {
+        announce(t.a11y.charactersRemaining.replace('{count}', String(Math.max(0, counter.remaining))));
+      }
+    }, [counter.state, counter.remaining, shouldShowCounter, announce, t]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       if (!isControlled) setUncontrolledText(e.target.value);

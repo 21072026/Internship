@@ -12,7 +12,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Build test** | Production build compiles | `npm run build` | CI (`ci.yml`) |
 | **i18n parity** | EN/TR/DE translation keys stay in sync | `npm run check:i18n` | CI (`ci.yml`) |
 | **Smoke / functional (E2E)** | App boots, auth works, core pages render without errors | `e2e/*.spec.ts` (Playwright) | CI (`e2e.yml`) on every PR |
-| **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics; OS media preferences (reduced motion, increased contrast, forced colors) | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/a11y-media-preferences.spec.ts` | with E2E |
+| **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics, status messages (4.1.3), reflow at 320px; OS media preferences (reduced motion, increased contrast, forced colors) | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/live-region.spec.ts`, `e2e/mobile-layout-audit.spec.ts`, `e2e/a11y-media-preferences.spec.ts` | with E2E |
 | **Security** | Headers, IDOR/RBAC, rate limiting, 2FA, login hardening | `e2e/security-headers.spec.ts`, `e2e/authz-idor.spec.ts`, `e2e/idor-hardening.spec.ts`, `e2e/rate-limit.spec.ts`, `e2e/login-security.spec.ts`, `e2e/two-factor-*.spec.ts` | with E2E |
 | **XSS / injection** | User input is escaped, never executed as HTML/JS | `e2e/xss-injection.spec.ts` | with E2E |
 | **Responsive / mobile** | Layout at small viewports | `e2e/mobile.spec.ts`, `e2e/users-responsive.spec.ts` | with E2E |
@@ -479,6 +479,46 @@ border widths or text size can push a layout past the viewport.
 **When adding UI**: a new animation needs nothing (the blanket rule covers it), but a
 new element whose *state* is carried by background colour alone needs a border, an
 icon or text as well — that is the one thing `forced-colors` cannot rescue.
+
+## The three WCAG categories axe cannot reach (#2047)
+
+An empty axe report is a clean *automated* scan, not an AA claim. Three criteria are
+structurally out of a scanner's reach, and each has its own procedure here. Cite this
+section, and [`docs/a11y-audit.md`](a11y-audit.md), for the VPAT rows.
+
+| Criterion | Why axe cannot see it | Where it is covered |
+|---|---|---|
+| **4.1.3 Status Messages** | axe can find an `aria-live` container; it cannot tell whether text ever *arrives* in one, and a live region mounted together with its message is silent in every screen reader. | One app-wide region: [`src/components/ui/LiveRegion.tsx`](../src/components/ui/LiveRegion.tsx), mounted empty in `src/app/providers.tsx`. Asserted by `e2e/live-region.spec.ts`. |
+| **1.4.10 Reflow** | Needs a measurement at a specific viewport, which a DOM scan does not perform. | `e2e/mobile-layout-audit.spec.ts` — 320×568 and 320×256 (the 400%-zoom equivalent), in German and Turkish. |
+| **Manual AT testing** | Nothing automated substitutes for it. | The task list, the findings and — honestly — what has **not** been run yet, in the manual section of [`docs/a11y-audit.md`](a11y-audit.md). |
+
+**Announcing a status message.** Call `useAnnounce()` and speak through the one region;
+do not add an `aria-live` container of your own. Three rules that keep it usable:
+
+- announce only what has no visible home of its own, or whose visible home is too terse
+  to be understood out of context — a `Toast` and `AsyncSection`'s error branch are
+  already `role="status"` / `role="alert"`, and announcing them again speaks them twice;
+- never per keystroke. A filter goes through
+  [`useFilterAnnouncement`](../src/hooks/useFilterAnnouncement.ts), which debounces and
+  de-duplicates; a threshold (the `Textarea` character counter) announces on the
+  crossing, not on the value;
+- every announced string needs EN/TR/DE keys, under the `a11y:` block of
+  `src/i18n/dictionaries.ts`. `npm run check:i18n` enforces the parity.
+
+**Measuring reflow.** 320 CSS pixels is the criterion's floor, and 400% zoom on a
+1280×1024 desktop lays out in a quarter of each dimension — so a 320×256 viewport *is*
+the 400% case. Run both, in German and Turkish: those dictionaries carry the longest
+labels, and a control that fits in English overflows once translated (the calendar's
+view switcher did exactly that). At 320px the useful assertion is the one 1.4.10 makes
+— *does the page force scrolling in two directions* — rather than the stricter
+four-rule sweep the same file runs at 360px, because the board and the calendar contain
+deliberate scrollers.
+
+**Running the manual walkthrough.** The task list is written out in
+[`docs/a11y-audit.md`](a11y-audit.md) so it is repeated rather than reinvented. Record
+the AT and browser versions, the date and the tester; file every finding as its own
+issue and link it from the findings table. If you did not actually run it, say so in
+the document — a fabricated manual-testing record is worse than an empty one.
 
 ## Ideas for further test types
 

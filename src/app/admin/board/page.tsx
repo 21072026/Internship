@@ -11,6 +11,7 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
+import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
@@ -123,9 +124,31 @@ export default function AdminBoardPage() {
     }
   };
 
+  // WCAG 4.1.3: the search box re-filters every column in place and moves no
+  // focus, so the result count is a visual-only change. Announce it once the
+  // typing settles (the hook debounces and de-duplicates).
+  const q = search.trim().toLowerCase();
+  const matchCount = useMemo(
+    () =>
+      q
+        ? relations.filter(
+            (r) => r.mentee.fullName.toLowerCase().includes(q) || r.mentor.fullName.toLowerCase().includes(q)
+          ).length
+        : 0,
+    [relations, q]
+  );
+  useFilterAnnouncement(
+    q
+      ? matchCount === 0
+        ? t.a11y.noResultsShown
+        : matchCount === 1
+          ? t.a11y.resultsShownOne
+          : t.a11y.resultsShown.replace('{count}', String(matchCount))
+      : null
+  );
+
   if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
 
-  const q = search.trim().toLowerCase();
   const now = Date.now();
   const itemsFor = (status: string) =>
     relations.filter(
@@ -323,7 +346,11 @@ export default function AdminBoardPage() {
                 <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{groupTotal}</span>
               </button>
               {!isCollapsed && (
-                <HorizontalScrollArea testId={`board-scroll-${group.key}`} className="flex gap-4 px-3 pb-4">
+                <HorizontalScrollArea
+                  testId={`board-scroll-${group.key}`}
+                  label={t.a11y.scrollableColumns}
+                  className="flex gap-4 px-3 pb-4"
+                >
                   {statuses.map(renderColumn)}
                 </HorizontalScrollArea>
               )}

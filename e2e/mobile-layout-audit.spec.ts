@@ -32,8 +32,36 @@ const PHONE = { width: 360, height: 800 };
 // Tailwind's `md:` breakpoint, so it is the first width at which `md:` rules
 // apply — the worst case for a layout that assumes `md:` implies "roomy".
 const TABLET = { width: 768, height: 1024 };
+// The WCAG 1.4.10 (Reflow) floor: 320 CSS pixels wide. Everything must be
+// reachable without scrolling in two directions at this width.
+const REFLOW = { width: 320, height: 568 };
+// 400% zoom, emulated the way the success criterion defines it: content at 400%
+// on a 1280x1024 desktop lays out in a quarter of that in each direction, so a
+// 320x256 viewport is the equivalent. The width matches REFLOW on purpose —
+// what this case adds is the *vertical* squeeze, where sticky headers and fixed
+// bottom bars start eating the page.
+const ZOOM_400 = { width: 320, height: 256 };
 // Narrower than this and a truncated label stops carrying information.
 const MIN_TEXT_WIDTH = 110;
+
+/**
+ * Rule 1 of the audit on its own, for the reflow cases.
+ *
+ * The full `auditLayout()` sweep is the right tool for a list or a form, but the
+ * board and the calendar deliberately contain scrollers (13 kanban columns, a
+ * month grid), and at 320px the interesting question is the one 1.4.10 actually
+ * asks: does the PAGE make you scroll in two directions? Returns the offending
+ * measurement, or null.
+ */
+async function sidewaysScroll(page: Page) {
+  return page.evaluate(() => {
+    const content = document.documentElement.scrollWidth;
+    // 1px of slack, same as auditLayout: sub-pixel rounding is not an overflow.
+    return content > window.innerWidth + 1
+      ? `${content}px of content in a ${window.innerWidth}px viewport`
+      : null;
+  });
+}
 
 async function setLocale(page: Page, locale: 'tr' | 'de') {
   // Same trick as i18n-coverage.spec: the cookie wins over the user preference,
@@ -351,4 +379,77 @@ test('phone width: /release-notes fits, one release per card', async ({ page }) 
   await gotoSettled(page, '/release-notes');
   await settlePublic(page);
   expect(await auditLayout(page), `/release-notes at ${PHONE.width}px (de)`).toEqual([]);
+});
+
+test('reflow: the board and the calendar survive 320px and 400% zoom', async ({ page }) => {
+  // WCAG 1.4.10 (#2047). The rest of this file measures 360px and up; 320 is the
+  // width the success criterion actually names, and the board (13 stage columns)
+  // and the calendar (a seven-column month grid + a four-tab view switcher) are
+  // the two surfaces most likely to demand a sideways scroll of the whole page.
+  //
+  // Both locales, because the calendar's view switcher is exactly where the
+  // longest translations land: "Aylık/Haftalık/Günlük/Yaklaşan" (tr) and
+  // "Monat/Woche/Tag/Demnächst" (de) do not fit on one 320px line, and the strip
+  // is expected to WRAP rather than scroll.
+  const adminEmail = uniqueEmail('reflow-admin');
+  const mentorEmail = uniqueEmail('reflow-mentor');
+  const menteeEmail = uniqueEmail('reflow-mentee');
+  const pw = 'MobileAudit123!';
+  await seedUser(adminEmail, pw, 'ADMIN', 'Reflow Audit Admin');
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'Reflow Audit Mentor');
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'Reflow Audit Mentee');
+  // A board with nothing on it renders an empty state, not columns — seed one
+  // relation so the measurement is of the real thing.
+  const relation = await prisma.mentorshipRelation.create({
+    data: { mentorId: mentor.id, menteeId: mentee.id },
+  });
+
+  const sweep = async (paths: string[], locale: 'tr' | 'de') => {
+    for (const viewport of [REFLOW, ZOOM_400]) {
+      await page.setViewportSize(viewport);
+      for (const path of paths) {
+        await gotoSettled(page, path);
+        await settle(page);
+        expect(
+          await sidewaysScroll(page),
+          `${path} at ${viewport.width}x${viewport.height} (${locale})`
+        ).toBeNull();
+      }
+    }
+  };
+
+  try {
+    await page.setViewportSize(REFLOW);
+    await setLocale(page, 'de');
+    await signInAndSettle(page, adminEmail, pw, '/admin');
+    await sweep(['/admin/board', '/admin/calendar'], 'de');
+
+    // The view switcher specifically: it used to answer the overflow with
+    // `overflow-x-auto`, which is a sideways scroll inside a control that has no
+    // reason to need one. It now wraps, so it must fit its own box.
+    const tablist = page.locator('[role="tablist"]').first();
+    await expect(tablist).toBeVisible();
+    expect(
+      await tablist.evaluate((el) => el.scrollWidth - el.clientWidth),
+      'the calendar view switcher scrolls sideways at 320px (de)'
+    ).toBeLessThanOrEqual(1);
+
+    // Turkish carries the longest calendar labels of the three dictionaries.
+    await page.evaluate(() => { document.cookie = 'locale=tr;path=/'; });
+    await sweep(['/admin/board', '/admin/calendar'], 'tr');
+
+    await page.context().clearCookies();
+    await page.setViewportSize(REFLOW);
+    await setLocale(page, 'de');
+    await signInAndSettle(page, mentorEmail, pw, '/mentor');
+    await sweep(['/mentor/board', '/mentor/calendar'], 'de');
+  } finally {
+    await prisma.mentorshipRelation.delete({ where: { id: relation.id } }).catch(() => {});
+    await prisma.activityLog.deleteMany({
+      where: { actorEmail: { in: [adminEmail, mentorEmail, menteeEmail] } },
+    });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+    await cleanupByEmail(adminEmail);
+  }
 });
