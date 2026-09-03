@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { routeInboundEmail } from '@/lib/inboundEmail';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 const schema = z.object({
   to: z.string().min(1),
@@ -31,6 +32,9 @@ function secretOk(request: Request): boolean {
 // directly.) Routes it to a thread only when the HMAC reply token verifies AND
 // the sender is a participant of that thread.
 export async function POST(request: Request) {
+    // The mail provider can deliver a burst from one IP, so allow 120 messages per minute.
+  const limited = enforceRateLimit(request, 'inbound-email', { limit: 120, windowMs: 60 * 1000 });
+  if (limited) return limited;
   if (!secretOk(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
