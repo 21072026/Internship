@@ -10,6 +10,7 @@ import {
   readSupportMessageRequest,
 } from '@/lib/supportMessageRequest';
 import { withTenantScope } from '@/lib/orgContext';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // User side of the support channel (#593): every role has a pinned "Support"
 // conversation. The first message opens a SupportTicket; further messages join
@@ -64,6 +65,9 @@ export async function GET() {
 
 // POST — send a message to support.
 export async function POST(request: Request) {
+    // Support submissions may store attachments, so 5 per 15 minutes limits storage abuse.
+  const limited = enforceRateLimit(request, 'support', { limit: 5, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
   const session = await getServerSession(authOptions);
 
   if (!session) {

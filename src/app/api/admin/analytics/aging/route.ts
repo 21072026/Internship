@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
+import { computeStageAging } from '@/lib/stageAging';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -12,7 +13,12 @@ const DAY = 24 * 60 * 60 * 1000;
 // - stageAging: average/median time actually SPENT in each stage, computed from
 //   completed transitions in the StatusChange audit trail (entering a stage →
 //   leaving it). This gives meaningful per-stage differences instead of every
-//   stage showing the same current-dwell number.
+//   stage showing the same current-dwell number. Each row carries `visits`
+//   (completed stage visits measured — a re-entry counts twice, a candidate who
+//   never left counts zero) and `candidates` (the distinct mentees behind those
+//   visits). Neither is the funnel's "currently in this stage" count (#1427).
+//   `droppedNonPositive` reports how many measurements were discarded for a
+//   duration ≤ 0 rather than dropping them silently (see #894).
 // - oldestStuck / overdue: current dwell in the present stage for ACTIVE
 //   relations (how long they've been sitting where they are now).
 // - dropReasons (#810): stage × reason breakdown for every move that landed on
@@ -81,42 +87,20 @@ export async function GET(request: Request) {
     )
     .sort((a, b) => b.count - a.count);
 
-  // Completed durations per stage, from consecutive transitions.
-  const byStage = new Map<string, number[]>();
-  const pushDuration = (stage: string, ms: number) => {
-    if (ms <= 0) return;
-    if (!byStage.has(stage)) byStage.set(stage, []);
-    byStage.get(stage)!.push(ms / DAY);
-  };
-
-  for (const r of relations) {
-    const changes = r.statusChanges;
-    if (changes.length > 0) {
-      // Initial stage: from relation start until the first recorded transition.
-      // A stage counts only if it was LEFT within the selected window.
-      const firstLeftAt = changes[0].createdAt.getTime();
-      if (inWindow(firstLeftAt)) pushDuration(changes[0].fromStatus, firstLeftAt - r.startDate.getTime());
-      // Each subsequent stage: entered at changes[i], left at changes[i+1].
-      for (let i = 0; i < changes.length - 1; i++) {
-        const leftAt = changes[i + 1].createdAt.getTime();
-        if (inWindow(leftAt)) pushDuration(changes[i].toStatus, leftAt - changes[i].createdAt.getTime());
-      }
-    }
-  }
-
-  const median = (nums: number[]) => {
-    const s = [...nums].sort((a, b) => a - b);
-    const mid = Math.floor(s.length / 2);
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-  };
-  const stageAging = Array.from(byStage.entries())
-    .map(([pipelineStatus, days]) => ({
-      pipelineStatus,
-      count: days.length,
-      avgDays: Math.round(days.reduce((s, d) => s + d, 0) / days.length),
-      medianDays: Math.round(median(days)),
-    }))
-    .sort((a, b) => b.avgDays - a.avgDays);
+  // Completed durations per stage, from consecutive transitions. A stage counts
+  // only if it was LEFT within the selected window. `visits` is the number of
+  // completed stage visits measured and `candidates` the distinct mentees behind
+  // them — never "how many sit in this stage", which is what the funnel on the
+  // same page reports (#1427). The arithmetic lives in src/lib/stageAging.ts so
+  // it can be unit-tested without a database.
+  const { rows: stageAging, droppedNonPositive } = computeStageAging(
+    relations.map((r) => ({
+      menteeId: r.mentee.id,
+      startDate: r.startDate,
+      statusChanges: r.statusChanges,
+    })),
+    inWindow
+  );
 
   // Current dwell in the present stage, for active relations only.
   //
@@ -149,7 +133,7 @@ export async function GET(request: Request) {
   const overdue = items.filter((it) => it.overdue).sort((a, b) => b.daysInStage - a.daysInStage);
 
   return NextResponse.json({
-    stageAging, oldestStuck, overdue, overdueCount: overdue.length,
+    stageAging, droppedNonPositive, oldestStuck, overdue, overdueCount: overdue.length,
     pooledCount: relations.filter((r) => r.status === 'ACTIVE' && pooledIds.has(r.mentee.id)).length,
     dropReasons,
   });

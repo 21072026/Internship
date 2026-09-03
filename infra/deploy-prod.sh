@@ -527,6 +527,11 @@ run_tool node prisma/seed-goal-templates.mjs || true
 run_tool node prisma/seed-contributor-terms.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-organization.mjs || true
+run_tool node scripts/backfill-requisitions.mjs || true
+# API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
+# default org and the 'candidates:read' scope they already had in practice.
+# Must run AFTER backfill-organization.mjs, which creates the default org.
+run_tool node prisma/backfill-api-key-lifecycle.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
 # email out history. Self-skips once applied (Setting 'cronBaselineAt').
 run_tool node prisma/backfill-cron-baseline.mjs || true

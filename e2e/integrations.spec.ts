@@ -17,7 +17,8 @@ test('admin generates an API key that authorizes the read-only v1 API', async ({
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
     // Generate a key (raw value returned once).
-    const created = await page.request.post('/api/admin/api-keys', { data: { name: 'CI key' } });
+    // A key must carry at least one scope since #1545.
+    const created = await page.request.post('/api/admin/api-keys', { data: { name: 'CI key', scopes: ['candidates:read'] } });
     expect(created.status()).toBe(201);
     const { id, key } = await created.json();
     keyId = id;
@@ -34,10 +35,33 @@ test('admin generates an API key that authorizes the read-only v1 API', async ({
     // A webhook can be created and returns its signing secret once.
     const wh = await page.request.post('/api/admin/webhooks', { data: { url: 'https://example.com/hook', events: ['application.created'] } });
     expect(wh.status()).toBe(201);
-    expect((await wh.json()).secret).toBeTruthy();
+    const { webhook, secret } = await wh.json();
+    expect(secret).toBeTruthy();
+
+    // Editing the URL and the event set keeps the signing secret — the receiver
+    // has already deployed verification code against it (#2000).
+    const edited = await page.request.patch(`/api/admin/webhooks?id=${webhook.id}`, {
+      data: { url: 'https://example.org/hook2', events: ['pipeline.stage_change'] },
+    });
+    expect(edited.ok()).toBeTruthy();
+    const afterEdit = await prisma.webhook.findUnique({ where: { id: webhook.id } });
+    expect(afterEdit!.url).toBe('https://example.org/hook2');
+    expect(afterEdit!.secret).toBe(secret);
+
+    // Pausing writes active = false, which is the only filter dispatchWebhook
+    // applies — a paused hook is therefore delivered nothing.
+    const paused = await page.request.patch(`/api/admin/webhooks?id=${webhook.id}`, { data: { active: false } });
+    expect(paused.ok()).toBeTruthy();
+    expect((await prisma.webhook.findUnique({ where: { id: webhook.id } }))!.active).toBe(false);
+    const listed = await page.request.get('/api/admin/webhooks');
+    expect((await listed.json()).webhooks.find((w: { id: string }) => w.id === webhook.id).active).toBe(false);
+
+    // An edited URL hits the same SSRF guard as a created one.
+    const blocked = await page.request.patch(`/api/admin/webhooks?id=${webhook.id}`, { data: { url: 'https://127.0.0.1/hook' } });
+    expect(blocked.status()).toBe(400);
   } finally {
     await prisma.apiKey.deleteMany({ where: { name: 'CI key' } });
-    await prisma.webhook.deleteMany({ where: { url: 'https://example.com/hook' } });
+    await prisma.webhook.deleteMany({ where: { url: { in: ['https://example.com/hook', 'https://example.org/hook2'] } } });
     await cleanupByEmail(adminEmail);
   }
 });

@@ -13,6 +13,7 @@ import { DENSITY_CLASS, resolveDensity } from '@/lib/density';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { DemoModeBanner } from '@/components/DemoModeBanner';
 import { SystemThemeSync } from '@/components/SystemThemeSync';
+import { appleSplashLinks } from '@/lib/appleSplash';
 
 export const metadata: Metadata = {
   title: 'Internship CRM - Mentor-Mentee Management',
@@ -25,6 +26,11 @@ export const metadata: Metadata = {
       { url: '/favicon.ico', sizes: 'any' },
     ],
     apple: '/apple-touch-icon.png',
+    // iOS launch screens for the installed app (#2084). Safari ignores the
+    // manifest here and wants one media-matched <link> per device resolution,
+    // so the list — and the images under public/splash/ — are both generated
+    // from the device table in lib/appleSplash.ts.
+    other: appleSplashLinks(),
   },
 };
 

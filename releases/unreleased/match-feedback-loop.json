@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Added** — `MatchFeedback`: the mentor suggester is no longer stateless. Every suggestion `POST /api/admin/mentor-suggest` returns is now recorded as a `SHOWN` row carrying its rank, the rule-based score, the rule-set version and whether the AI re-rank ran, all sharing one `batchId` that goes back to the client (write is best-effort — a bookkeeping failure never costs the admin their suggestions). A new ADMIN-only `POST /api/admin/mentor-suggest/feedback` upgrades that row in place to `ACCEPTED` or `DISMISSED` with a short reason code, so the position a mentor was shown at survives; assigning a mentor who was never suggested writes a separate row with a NULL rank, which is what keeps an off-list assignment distinguishable from taking one of ours. The suggestion card gained an ✕ with a reason picker (wrong field / no capacity / language / already matched / other, EN/TR/DE) that reveals the next-best mentor, and the admin analytics page gained a \"Match quality\" report — lists shown, acceptance rate, acceptance by rank position, top dismissal reasons and a six-month trend, all aggregated in SQL. Additive schema change; `MatchFeedback` is in `TENANT_MODELS`, and the raw-SQL report filters on `orgId` explicitly because the tenant middleware never sees raw queries.",
+  "notes": {
+    "en": [
+      "Mentor suggestions are now recorded: you can dismiss one with a reason and see the next-best match, and the analytics page reports how often your suggestions are taken — overall, by position in the list, and over the last six months."
+    ],
+    "tr": [
+      "Mentör önerileri artık kayda geçiyor: bir öneriyi gerekçesiyle kapatıp sıradaki en iyi eşleşmeyi görebiliyorsunuz; analiz sayfası da önerilerin ne sıklıkla kabul edildiğini genel olarak, listedeki sıraya göre ve son altı ay boyunca raporluyor."
+    ],
+    "de": [
+      "Mentorvorschläge werden jetzt erfasst: Sie können einen Vorschlag mit Begründung verwerfen und sehen dann den nächstbesten Treffer; die Analyseseite zeigt, wie oft Ihre Vorschläge übernommen werden — insgesamt, nach Position in der Liste und über die letzten sechs Monate."
+    ]
+  }
+}

@@ -228,9 +228,19 @@ export default function InvitePage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.invite.title}</h1>
-        <p className="text-gray-500 mt-1">{t.invite.subtitle}</p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.invite.title}</h1>
+          <p className="text-gray-500 mt-1">{t.invite.subtitle}</p>
+        </div>
+        {/* Bulk invitations (#2070) — a whole roster in one paste. */}
+        <Link
+          href="/admin/invite/bulk"
+          data-testid="bulk-invite-link"
+          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+        >
+          {t.bulkInvite.entryLink}
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -343,6 +353,16 @@ export default function InvitePage() {
           <CardHeader>
             <CardTitle>{t.invite.recentInvitations}</CardTitle>
           </CardHeader>
+          {/* The full history, its filters and the bulk actions live on the
+              board (#2071); this card stays because it is the only place a
+              freshly-minted link is ever shown — the GET deliberately omits
+              tokens, so a link not copied here cannot be recovered. */}
+          <p className="mb-4 text-xs text-gray-500">
+            {t.invite.boardHint}{' '}
+            <Link href="/admin/invitations" className="text-blue-600 hover:underline font-medium" data-testid="invite-open-board">
+              {t.invite.openBoard}
+            </Link>
+          </p>
           {invites.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">
               {t.invite.noneSent}

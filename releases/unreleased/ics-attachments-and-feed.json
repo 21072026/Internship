@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "- **Calendar files on meeting mails, and a complete subscription feed**: meeting invitations (including guest invitations) now carry a `METHOD:REQUEST` `meeting.ics` attachment, built from the existing `buildMeetingIcs`, which gained optional `method` (`PUBLISH`/`REQUEST`/`CANCEL`), `sequence`, `organizer` and `attendee` parameters plus `STATUS:CANCELLED`. The `ORGANIZER`/`ATTENDEE` pair is what iTIP requires of a `REQUEST` and a `CANCEL` (RFC 5546 §3.2.2/§3.2.5) — without it Gmail renders no invitation card and a later cancellation mail cannot be matched to the stored event, so it would never remove it. `PUBLISH` (the public token route) stays participant-free and byte-identical. A link-only meeting still sends no attachment. The personal ICS feed now mirrors `/api/calendar-events`: relation meetings, project/conversation meetings, expanded recurring series occurrences and stage deadlines, role-scoped, still title-and-time only and still rate-limited and capped. The subscription card is mounted on the mentor and admin calendar pages too.",
+  "notes": {
+    "en": [
+      "Meeting invitations now arrive with a calendar file attached — one click to put the meeting in Google Calendar, Outlook or Apple Calendar.",
+      "The calendar subscription now carries everything the app shows: recurring project calls, project meetings and stage deadlines, not just one-to-one meetings — and mentors and admins can get their own subscription link from their calendar page."
+    ],
+    "tr": [
+      "Toplantı davetleri artık takvim dosyası ekiyle geliyor — tek tıkla Google Takvim, Outlook veya Apple Takvim'e ekleniyor.",
+      "Takvim aboneliği artık uygulamadaki her şeyi taşıyor: yalnızca birebir toplantılar değil, düzenli proje görüşmeleri, proje toplantıları ve aşama son tarihleri de. Mentör ve adminler de kendi abonelik bağlantılarını takvim sayfasından alabiliyor."
+    ],
+    "de": [
+      "Meeting-Einladungen kommen jetzt mit einer Kalenderdatei — ein Klick, und das Meeting steht in Google Kalender, Outlook oder Apple Kalender.",
+      "Das Kalender-Abo enthält jetzt alles, was die App zeigt: nicht nur Einzelmeetings, sondern auch wiederkehrende Projekt-Calls, Projektmeetings und Phasenfristen. Auch Mentor:innen und Admins bekommen ihren Abo-Link auf ihrer Kalenderseite."
+    ]
+  }
+}

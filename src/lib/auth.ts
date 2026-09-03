@@ -6,8 +6,7 @@ import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
 import { verifyTotpStep } from '@/lib/totp';
 import { headerSource } from '@/lib/clientIp';
-import { logger } from '@/lib/logger';
-import { AUTH_UNEXPECTED_ERROR } from '@/lib/authErrors';
+import { guardProviders } from '@/lib/authGuard';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -36,59 +35,6 @@ const AUTH_USER_SELECT = {
   twoFactorSecret: true,
   lastTotpStep: true,
 } as const;
-
-// The errors authorize() raises on purpose. Their text is contractual: the
-// sign-in page keys off it to show the 2FA field, offer a resend link, or
-// explain a pending review. Anything NOT in here is an internal fault and must
-// never reach the browser verbatim — see toClientAuthError below.
-const INTENTIONAL_AUTH_ERRORS = new Set([
-  'Email and password are required',
-  'Invalid email or password',
-  'Invalid authenticator code',
-  'Too many attempts. Please try again later.',
-  'This account has been deactivated. Please contact an administrator.',
-  'grant is required',
-  'Invalid or expired grant',
-  'Invalid or expired SSO grant',
-  'Target user not found',
-  'User not found',
-  '2FA_REQUIRED',
-  'EMAIL_NOT_VERIFIED',
-  'ACCOUNT_PENDING_APPROVAL',
-]);
-
-function toClientAuthError(error: unknown, provider: string): Error {
-  const message = error instanceof Error ? error.message : String(error);
-  if (INTENTIONAL_AUTH_ERRORS.has(message)) return error instanceof Error ? error : new Error(message);
-  logger.error('Unexpected error during sign-in', {
-    detail: `provider=${provider} ${error instanceof Error ? error.stack || message : message}`,
-  });
-  return new Error(AUTH_UNEXPECTED_ERROR);
-}
-
-// NextAuth surfaces a thrown authorize() error's `.message` to the browser as
-// ?error=<message>. Wrap every provider once, here, rather than adding a
-// try/catch to each authorize(): an unexpected fault becomes a stable code and
-// the real cause is logged server-side. Applies to providers added later too.
-type AuthorizeFn = (...args: never[]) => Promise<unknown>;
-
-function guardProviders(providers: NextAuthOptions['providers']): NextAuthOptions['providers'] {
-  return providers.map((provider) => {
-    const original = (provider as { authorize?: AuthorizeFn }).authorize;
-    if (typeof original !== 'function') return provider;
-    const id = (provider as { id?: string }).id ?? 'credentials';
-    return {
-      ...provider,
-      authorize: async (...args: never[]) => {
-        try {
-          return await original(...args);
-        } catch (error) {
-          throw toClientAuthError(error, id);
-        }
-      },
-    };
-  }) as NextAuthOptions['providers'];
-}
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -450,7 +396,14 @@ export const authOptions: NextAuthOptions = {
           where: { id: token.id as string },
           select: { sessionsValidFrom: true },
         });
-        if (acct?.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
+        // A deleted account cannot be stamped — there is no row left to hold a
+        // cutoff — so the lookup coming back empty is itself the revocation.
+        // Without this, hard erasure (POST /api/admin/users/[id]/erase, and the
+        // self-service delete) left the erased person holding a working session
+        // until their JWT expired on its own.
+        if (!acct) {
+          token.invalidated = true;
+        } else if (acct.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
           token.invalidated = true;
         }
       }

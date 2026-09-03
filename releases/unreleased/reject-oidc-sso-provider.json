@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **SSO**: reject `oidc` as a tenant SSO provider at the write boundary (`validateSsoConfig`), and treat an already-stored OIDC config as inactive (`isSsoActive`) — the login route only builds SAML requests, so saving OIDC previously reported success and locked the tenant out. The admin provider selector now shows OIDC disabled (\"coming soon\").",
+  "notes": {
+    "en": ["Enterprise SSO now refuses OIDC instead of silently saving a configuration that would lock a tenant out — SAML is the supported provider, OIDC is marked coming soon."],
+    "tr": ["Kurumsal SSO artık OIDC'yi sessizce kaydedip kiracıyı girişten kilitlemek yerine reddediyor — desteklenen sağlayıcı SAML, OIDC \"yakında\" olarak işaretlendi."],
+    "de": ["Enterprise-SSO lehnt OIDC jetzt ab, statt eine Konfiguration zu speichern, die einen Mandanten aussperrt — unterstützt wird SAML, OIDC ist als \"demnächst\" markiert."]
+  }
+}

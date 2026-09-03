@@ -55,6 +55,12 @@ jobs:
       # changelog section (#1457).
       - name: release version arithmetic (#1457)
         run: npm run test:release
+      # The analytics aging card printed "N candidates" for a number that
+      # counts completed stage transitions, so one page reported two different
+      # figures for the same stage (#1427). Nothing typechecks that meaning —
+      # these assertions do.
+      - name: time-in-stage counts visits and candidates separately (#1427)
+        run: npm run test:stage-aging
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # Prisma's filter grammar is data: an object where a scalar id belongs is
@@ -125,6 +131,13 @@ jobs:
       # only thing keeping it off prod is the name check at the top (#966).
       - name: demo reset guard (#966)
         run: bash infra/test/reset-demo-guard.test.sh
+      # The MySQL watchdog only ever runs on the box at the moment the database
+      # is already down, so its two decisions — "is this server alive?" and
+      # "should I restart it?" — get their coverage here instead. A probe that
+      # mistakes a healthy "Access denied" for a dead server would restart prod's
+      # database every minute.
+      - name: mysql watchdog probe logic
+        run: bash infra/test/mysql-watchdog.test.sh
       - run: npm run build
 
   # The demo seed is the only data most people ever see: the public demo, every
