@@ -20,6 +20,7 @@ import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dorma
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
+import { buildMeetingIcs } from '@/lib/ics';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
@@ -816,6 +817,8 @@ export async function sendMeetingInviteEmail({
   organizerTimeZone,
   organizerName,
   userId,
+  icsUid,
+  sequence,
 }: {
   to: string;
   fullName?: string | null;
@@ -836,6 +839,14 @@ export async function sendMeetingInviteEmail({
   // The invitee's User.id when they are one, so the invite carries a working
   // per-group unsubscribe. Omitted by callers that only hold an address.
   userId?: string | null;
+  // Identity of the event in the recipient's calendar (#2015). Supplying it is
+  // what turns on the .ics attachment; the same value must be reused for every
+  // later mail about the same meeting, or a reschedule lands as a second event
+  // instead of moving the first one. Omitted by announcement-shaped callers
+  // that have no single event behind them.
+  icsUid?: string | null;
+  // Bumped by whoever mails a change to the same icsUid — see buildMeetingIcs.
+  sequence?: number;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
@@ -844,11 +855,27 @@ export async function sendMeetingInviteEmail({
   // the RSVP ask entirely.
   const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
   const askRsvp = Boolean(when && rsvpToken);
+  // A link-only meeting (no scheduledAt) has no slot to occupy, so it gets no
+  // attachment at all — an .ics without a DTSTART is not a thing.
+  const ics =
+    scheduledAt && icsUid
+      ? meetingIcsAttachment({
+          uid: icsUid,
+          title,
+          start: scheduledAt,
+          meetLink,
+          sequence,
+          attendeeEmail: to,
+          attendeeName: fullName,
+          organizerName,
+        })
+      : null;
 
   await sendEmail({
     to,
     userId,
     category: 'meeting-invite',
+    ...(ics ? { attachments: [ics] } : {}),
     subject: `Meeting invitation: ${title}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -889,6 +916,8 @@ export async function sendMeetingGuestInviteEmail({
   rsvpToken,
   organizerTimeZone,
   organizerName,
+  icsUid,
+  sequence,
 }: {
   to: string;
   name?: string | null;
@@ -900,6 +929,10 @@ export async function sendMeetingGuestInviteEmail({
   // no profile, so this — or the deployment default — is the only clock there is.
   organizerTimeZone?: string | null;
   organizerName?: string | null;
+  // See sendMeetingInviteEmail. It matters most here: a guest has no account,
+  // so the attachment is their only route into a calendar (#2015).
+  icsUid?: string | null;
+  sequence?: number;
 }) {
   const url = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${url}/rsvp/${rsvpToken}?r=yes`;
@@ -909,10 +942,24 @@ export async function sendMeetingGuestInviteEmail({
     ? `${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' })} (${zoneLabel(scheduledAt, zone)})`
     : null;
   const invitedBy = organizerName ? esc(organizerName) : null;
+  const ics =
+    scheduledAt && icsUid
+      ? meetingIcsAttachment({
+          uid: icsUid,
+          title,
+          start: scheduledAt,
+          meetLink,
+          sequence,
+          attendeeEmail: to,
+          attendeeName: name,
+          organizerName,
+        })
+      : null;
 
   await sendEmail({
     to,
     subject: `Meeting invitation: ${title}`,
+    ...(ics ? { attachments: [ics] } : {}),
     // no-user-row: a guest is an address somebody typed into the scheduler,
     // deliberately not an account here — there is no row to gate on and no
     // token to mint, and the mail says so in its own closing line instead.
@@ -940,6 +987,62 @@ export async function sendMeetingGuestInviteEmail({
       </div>
     `,
   });
+}
+
+// The bare address out of a From header, which may be "Name <addr>". The
+// ORGANIZER line takes a mailto: value, so the display name has to come off.
+function bareAddress(header: string): string {
+  const angled = header.match(/<([^>]+)>/);
+  return (angled ? angled[1] : header).trim();
+}
+
+// The calendar file that rides along with a meeting mail (#2015). METHOD:REQUEST
+// is what makes a client treat it as an invitation rather than a read-only copy;
+// the same header has to be repeated on the MIME part, because Outlook reads the
+// content type and not the body. `.ics` generation itself stays in @/lib/ics —
+// this only wraps it in the shape sendEmail's `attachments` takes.
+//
+// The length is buildMeetingIcs's 30-minute default: a Meeting has no stored
+// duration yet (#1984). When it gains one, thread it through here.
+//
+// A REQUEST is an iTIP message, so it needs an ORGANIZER and an ATTENDEE or the
+// clients ignore it (RFC 5546 §3.2.2): Gmail renders no invitation card without
+// them, Outlook rejects a REQUEST with no organizer as an invalid meeting
+// request, and a later CANCEL for the same UID can only be matched against the
+// organizer that was stored. The deployment's own From address is the organizer
+// — replies go nowhere useful, but RSVP is handled by the buttons in the mail
+// body, not by iTIP. Both sides are optional: with no SMTP identity configured
+// there is nothing to send anyway, and the file degrades to what it was before.
+function meetingIcsAttachment(opts: {
+  uid: string;
+  title: string;
+  start: Date;
+  meetLink?: string | null;
+  sequence?: number;
+  // The recipient of the mail this rides on — the person whose calendar the
+  // event lands in.
+  attendeeEmail: string;
+  attendeeName?: string | null;
+  // Shown as the organizer's display name when the deployment has one.
+  organizerName?: string | null;
+}) {
+  const organizerEmail = bareAddress(fromHeader(null, 'primary'));
+  const ics = buildMeetingIcs({
+    uid: opts.uid,
+    title: opts.title,
+    start: opts.start,
+    description: opts.meetLink ? `Join: ${opts.meetLink}` : null,
+    location: opts.meetLink ?? null,
+    method: 'REQUEST',
+    sequence: opts.sequence,
+    organizer: organizerEmail ? { email: organizerEmail, name: opts.organizerName } : null,
+    attendee: { email: opts.attendeeEmail, name: opts.attendeeName },
+  });
+  return {
+    filename: 'meeting.ics',
+    content: Buffer.from(ics, 'utf-8'),
+    contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+  };
 }
 
 // Minimal HTML escape for user-supplied strings interpolated into templates

@@ -15,7 +15,7 @@ import {
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
-  MailQuestion, MailOpen, Fingerprint, MailCheck, Accessibility,
+  MailQuestion, MailOpen, Fingerprint, Palette, Eye, MailCheck, Accessibility, ScrollText,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -54,6 +54,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     // Catalogue-only (newer features; strings in featureCatalog.items).
     { key: 'messaging', category: 'collaboration', icon: MessageCircle, color: 'blue', title: C.messaging.t, desc: C.messaging.d },
     { key: 'activityReport', category: 'insights', icon: Activity, color: 'green', title: C.activityReport.t, desc: C.activityReport.d },
+    { key: 'menteeInsights', category: 'insights', icon: Eye, color: 'teal', title: C.menteeInsights.t, desc: C.menteeInsights.d },
     { key: 'talentPool', category: 'companies', icon: Search, color: 'purple', title: C.talentPool.t, desc: C.talentPool.d },
     { key: 'aiPackage', category: 'insights', icon: Bot, color: 'indigo', title: C.aiPackage.t, desc: C.aiPackage.d },
     { key: 'security', category: 'trust', icon: KeyRound, color: 'amber', title: C.security.t, desc: C.security.d },
@@ -81,6 +82,11 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'emailGroups', category: 'trust', icon: MailMinus, color: 'teal', title: C.emailGroups.t, desc: C.emailGroups.d },
     { key: 'trustedDevices', category: 'trust', icon: Fingerprint, color: 'indigo', title: C.trustedDevices.t, desc: C.trustedDevices.d },
     { key: 'dormantCheckIn', category: 'tracking', icon: MailQuestion, color: 'amber', title: C.dormantCheckIn.t, desc: C.dormantCheckIn.d },
+    { key: 'trustCenter', category: 'trust', icon: ScrollText, color: 'sky', title: C.trustCenter.t, desc: C.trustCenter.d },
+    { key: 'matchQuality', category: 'insights', icon: Target, color: 'blue', title: C.matchQuality.t, desc: C.matchQuality.d },
     { key: 'accessibility', category: 'trust', icon: Accessibility, color: 'sky', title: C.accessibility.t, desc: C.accessibility.d },
+    { key: 'multiTenancy', category: 'platform', icon: Building2, color: 'purple', title: C.multiTenancy.t, desc: C.multiTenancy.d },
+    { key: 'whiteLabel', category: 'platform', icon: Palette, color: 'rose', title: C.whiteLabel.t, desc: C.whiteLabel.d },
+    { key: 'enterpriseSso', category: 'trust', icon: KeyRound, color: 'indigo', title: C.enterpriseSso.t, desc: C.enterpriseSso.d },
   ];
 }

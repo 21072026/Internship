@@ -1,0 +1,116 @@
+{
+  "note": [
+    "Demo-seed fidelity manifest (#2063). One entry per screen that only looks",
+    "alive when the demo seed puts rows behind it. `model` is a Prisma model name",
+    "(delegate resolution is case-insensitive, and a name that is not in the",
+    "schema is a hard error — a typo here must never be a silent pass).",
+    "",
+    "minRows  = the ENFORCED floor. A count below it fails the build. It is set to",
+    "           what prisma/seed-demo.mjs actually produces today, so the gate is a",
+    "           ratchet: coverage can go up, never quietly back down.",
+    "target   = how many rows the screen needs to stop reading as empty.",
+    "issue    = who owns closing the gap when minRows < target.",
+    "",
+    "When minRows < target the row is reported as PENDING with its issue on every",
+    "run, so the debt is visible instead of dropped. DEMO_FIDELITY_STRICT=1 makes",
+    "the checker enforce `target` too — use it while working on a coverage issue,",
+    "then raise minRows to the new count in the same PR.",
+    "",
+    "How to add a screen: docs/testing.md, 'Demo-seed fidelity gate'."
+  ],
+  "entries": [
+    {
+      "model": "MentorshipRelation",
+      "minRows": 8,
+      "target": 8,
+      "screen": "/admin/mentorship, /admin/board, /mentor/mentees — the pipeline itself",
+      "issue": "#550"
+    },
+    {
+      "model": "InteractionLog",
+      "minRows": 12,
+      "target": 12,
+      "screen": "/mentor/interactions, /portal/interactions — interaction history and the attention queue",
+      "issue": "#550"
+    },
+    {
+      "model": "ProjectTask",
+      "minRows": 3,
+      "target": 3,
+      "screen": "/mentor/projects, /portal/projects — project task board",
+      "issue": "#550"
+    },
+    {
+      "model": "Requisition",
+      "minRows": 0,
+      "target": 3,
+      "screen": "/admin/requisitions — company requisition list and its pipeline counts",
+      "issue": "#2062"
+    },
+    {
+      "model": "InterviewRequest",
+      "minRows": 0,
+      "target": 3,
+      "screen": "/admin/interview-requests, /mentor/interview-requests — interview request inbox",
+      "issue": "#2062"
+    },
+    {
+      "model": "Offer",
+      "minRows": 0,
+      "target": 2,
+      "screen": "/admin/mentorship relation detail — offer stage and offer history",
+      "issue": "#2062"
+    },
+    {
+      "model": "InterviewPanel",
+      "minRows": 0,
+      "target": 2,
+      "screen": "interview panel scheduling and panel-member scoring",
+      "issue": "#2062"
+    },
+    {
+      "model": "CompanyInterest",
+      "minRows": 0,
+      "target": 3,
+      "screen": "company talent-pool interest list — the COMPANY role's main screen",
+      "issue": "#2062"
+    },
+    {
+      "model": "WeeklyReport",
+      "minRows": 0,
+      "target": 4,
+      "screen": "/weekly-reports, /weekly-reports/print — mentee weekly reporting",
+      "issue": "#1419"
+    },
+    {
+      "model": "MentorQuestion",
+      "minRows": 0,
+      "target": 3,
+      "screen": "mentee → mentor question inbox (unanswered questions drive the mentor queue)",
+      "issue": "#1419"
+    },
+    {
+      "model": "DocumentRequirement",
+      "minRows": 0,
+      "target": 3,
+      "screen": "/admin/documents — required-document checklist and the missing-documents report",
+      "issue": "#1419"
+    },
+    {
+      "model": "Document",
+      "minRows": 0,
+      "target": 3,
+      "screen": "/admin/documents, /portal/profile — uploaded documents against the requirements",
+      "issue": "#1419"
+    },
+    {
+      "model": "User",
+      "where": { "role": "SOURCE" },
+      "label": "User(role=SOURCE)",
+      "minRows": 0,
+      "target": 2,
+      "screen": "/admin/sources — the SOURCE role has no demo account at all, so the screen is blank",
+      "issue": "#2062"
+    }
+  ]
+}

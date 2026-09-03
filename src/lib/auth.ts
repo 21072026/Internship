@@ -5,9 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
 import { verifyTotpStep } from '@/lib/totp';
-import { headerSource } from '@/lib/clientIp';
-import { logger } from '@/lib/logger';
-import { AUTH_UNEXPECTED_ERROR } from '@/lib/authErrors';
+import { headerSource, clientIp } from '@/lib/clientIp';
+import { guardProviders } from '@/lib/authGuard';
+import { getActiveLockout, recordFailedAttempt, clearLockoutByEmail } from '@/lib/accountLockout';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -36,59 +36,6 @@ const AUTH_USER_SELECT = {
   twoFactorSecret: true,
   lastTotpStep: true,
 } as const;
-
-// The errors authorize() raises on purpose. Their text is contractual: the
-// sign-in page keys off it to show the 2FA field, offer a resend link, or
-// explain a pending review. Anything NOT in here is an internal fault and must
-// never reach the browser verbatim — see toClientAuthError below.
-const INTENTIONAL_AUTH_ERRORS = new Set([
-  'Email and password are required',
-  'Invalid email or password',
-  'Invalid authenticator code',
-  'Too many attempts. Please try again later.',
-  'This account has been deactivated. Please contact an administrator.',
-  'grant is required',
-  'Invalid or expired grant',
-  'Invalid or expired SSO grant',
-  'Target user not found',
-  'User not found',
-  '2FA_REQUIRED',
-  'EMAIL_NOT_VERIFIED',
-  'ACCOUNT_PENDING_APPROVAL',
-]);
-
-function toClientAuthError(error: unknown, provider: string): Error {
-  const message = error instanceof Error ? error.message : String(error);
-  if (INTENTIONAL_AUTH_ERRORS.has(message)) return error instanceof Error ? error : new Error(message);
-  logger.error('Unexpected error during sign-in', {
-    detail: `provider=${provider} ${error instanceof Error ? error.stack || message : message}`,
-  });
-  return new Error(AUTH_UNEXPECTED_ERROR);
-}
-
-// NextAuth surfaces a thrown authorize() error's `.message` to the browser as
-// ?error=<message>. Wrap every provider once, here, rather than adding a
-// try/catch to each authorize(): an unexpected fault becomes a stable code and
-// the real cause is logged server-side. Applies to providers added later too.
-type AuthorizeFn = (...args: never[]) => Promise<unknown>;
-
-function guardProviders(providers: NextAuthOptions['providers']): NextAuthOptions['providers'] {
-  return providers.map((provider) => {
-    const original = (provider as { authorize?: AuthorizeFn }).authorize;
-    if (typeof original !== 'function') return provider;
-    const id = (provider as { id?: string }).id ?? 'credentials';
-    return {
-      ...provider,
-      authorize: async (...args: never[]) => {
-        try {
-          return await original(...args);
-        } catch (error) {
-          throw toClientAuthError(error, id);
-        }
-      },
-    };
-  }) as NextAuthOptions['providers'];
-}
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -122,6 +69,25 @@ export const authOptions: NextAuthOptions = {
         // registration, so sign-in never misses on a casing/whitespace diff.
         const email = credentials.email.trim().toLowerCase();
         const failKey = `login-fail:${email}`;
+        const ip = clientIp(origin);
+
+        // Durable lockout gate (#1541), consulted BEFORE the bcrypt compare:
+        // cost-12 hashing is the expensive half of a brute-force attempt, and
+        // an already-locked address must not be allowed to buy one. Unlike the
+        // in-process Map behind `rateLimit`, this survives a redeploy — and an
+        // admin can see it and clear it.
+        const lockedBefore = await getActiveLockout(email, 'password');
+        if (lockedBefore) {
+          await logActivity({
+            action: 'auth.login_locked',
+            level: 'warning',
+            actorEmail: credentials.email,
+            actorId: lockedBefore.userId,
+            detail: `locked until ${lockedBefore.lockedUntil.toISOString()}`,
+            request: origin,
+          });
+          throw new Error('Too many attempts. Please try again later.');
+        }
 
         const user = await prisma.user.findUnique({
           where: { email },
@@ -137,6 +103,15 @@ export const authOptions: NextAuthOptions = {
         // Only FAILED attempts count toward the brute-force limit.
         if (!user || !isPasswordValid) {
           const within = rateLimit(failKey, { limit: 10, windowMs: 15 * 60 * 1000 });
+          // Same policy, written down durably (#1541).
+          const locked = await recordFailedAttempt({
+            email,
+            userId: user?.id ?? null,
+            orgId: user?.orgId ?? null,
+            reason: 'password',
+            limit: 10,
+            ip,
+          });
           await logActivity({
             action: 'auth.login_failed',
             level: 'warning',
@@ -144,7 +119,9 @@ export const authOptions: NextAuthOptions = {
             actorId: user?.id ?? null,
             request: origin,
           });
-          throw new Error(within.ok ? 'Invalid email or password' : 'Too many attempts. Please try again later.');
+          throw new Error(
+            within.ok && !locked ? 'Invalid email or password' : 'Too many attempts. Please try again later.'
+          );
         }
 
         // NOTE: the failure counter is NOT cleared here. It used to be, which
@@ -179,6 +156,24 @@ export const authOptions: NextAuthOptions = {
           const code = (credentials.totp || '').trim();
           if (!code) throw new Error('2FA_REQUIRED');
 
+          // The TOTP stage has its own durable gate, deliberately placed AFTER
+          // the 2FA_REQUIRED throw above: a locked code bucket must still let
+          // the sign-in form learn that a code is wanted, or the field never
+          // renders and the user cannot see why they are stuck. Only an
+          // actually-submitted code is refused here.
+          const totpLocked = await getActiveLockout(email, 'totp');
+          if (totpLocked) {
+            await logActivity({
+              action: 'auth.login_locked',
+              level: 'warning',
+              actorEmail: user.email,
+              actorId: user.id,
+              detail: `totp locked until ${totpLocked.lockedUntil.toISOString()}`,
+              request: origin,
+            });
+            throw new Error('Too many attempts. Please try again later.');
+          }
+
           // Its own bucket, separate from the password one: a legitimate user
           // fumbling their code shouldn't consume the password allowance, and
           // an attacker past the password shouldn't get a fresh one.
@@ -188,6 +183,14 @@ export const authOptions: NextAuthOptions = {
 
           if (step === null || replayed) {
             const within = rateLimit(totpKey, { limit: 5, windowMs: 15 * 60 * 1000 });
+            const locked = await recordFailedAttempt({
+              email,
+              userId: user.id,
+              orgId: user.orgId,
+              reason: 'totp',
+              limit: 5,
+              ip,
+            });
             await logActivity({
               action: 'auth.totp_failed',
               level: 'warning',
@@ -199,7 +202,7 @@ export const authOptions: NextAuthOptions = {
             // Same message either way — which of the two it was is the
             // attacker's business to guess, not ours to confirm.
             throw new Error(
-              within.ok ? 'Invalid authenticator code' : 'Too many attempts. Please try again later.'
+              within.ok && !locked ? 'Invalid authenticator code' : 'Too many attempts. Please try again later.'
             );
           }
 
@@ -216,8 +219,10 @@ export const authOptions: NextAuthOptions = {
           clearRateLimit(totpKey);
         }
 
-        // Fully authenticated — now the failure counter can be reset.
+        // Fully authenticated — now the failure counter can be reset. Both
+        // copies of it: the in-process one and the durable row (#1541).
         clearRateLimit(failKey);
+        await clearLockoutByEmail(email);
 
         // Logged here rather than in events.signIn so the row carries the
         // origin IP; the event callback has no request (#881).
@@ -450,7 +455,14 @@ export const authOptions: NextAuthOptions = {
           where: { id: token.id as string },
           select: { sessionsValidFrom: true },
         });
-        if (acct?.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
+        // A deleted account cannot be stamped — there is no row left to hold a
+        // cutoff — so the lookup coming back empty is itself the revocation.
+        // Without this, hard erasure (POST /api/admin/users/[id]/erase, and the
+        // self-service delete) left the erased person holding a working session
+        // until their JWT expired on its own.
+        if (!acct) {
+          token.invalidated = true;
+        } else if (acct.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
           token.invalidated = true;
         }
       }

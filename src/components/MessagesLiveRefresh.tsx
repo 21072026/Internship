@@ -29,7 +29,14 @@ export function MessagesLiveRefresh() {
   const seenReady = useRef(false);
 
   useRealtime((signal) => {
-    if (signal.type === 'notification') return;
+    // `notification` is not about a thread at all, and `typing` (#1871) is a
+    // purely ephemeral courtesy signal the inbox does not render: it changes no
+    // preview, no row order and no unread count. Refreshing on it would run the
+    // whole inbox render — mentorship adoption (a conversation upsert), the
+    // read-stamp updateMany and one unread count per thread — every ~3s for as
+    // long as somebody is typing anywhere. Anything ephemeral added to the bus
+    // later belongs in this list too; this is the bus's only catch-all consumer.
+    if (signal.type === 'notification' || signal.type === 'typing') return;
     if (signal.type === 'ready' && !seenReady.current) {
       seenReady.current = true;
       return;

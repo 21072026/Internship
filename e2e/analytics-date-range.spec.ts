@@ -70,8 +70,8 @@ test('analytics honours the ?from/?to date-range window', async ({ page }) => {
     const agingOut = await (
       await page.request.get('/api/admin/analytics/aging?from=2020-01-01&to=2020-03-31')
     ).json();
-    const countFor = (payload: { stageAging: { pipelineStatus: string; count: number }[] }) =>
-      payload.stageAging.find((s) => s.pipelineStatus === 'APPLICATION_100')?.count ?? 0;
+    const countFor = (payload: { stageAging: { pipelineStatus: string; visits: number }[] }) =>
+      payload.stageAging.find((s) => s.pipelineStatus === 'APPLICATION_100')?.visits ?? 0;
     expect(countFor(agingIn)).toBeGreaterThan(countFor(agingOut));
 
     // The UI selector re-queries the API with a date window when changed.

@@ -10,6 +10,51 @@ Newest entries on top.
 
 ---
 
+## 2026-09-03 — Sessizce kamaya giren bir cron: sürüm derlemesi 10 gün boyunca her gece patladı (#2142, #2143)
+
+**Türetilmiş bir değer doğruyken, kanonik dosya yanlış olabilir — ve kimse fark
+etmez.** Uygulamanın gösterdiği sürüm build sırasında `base + fragment`'lardan
+türetildiği için 10 gün boyunca kusursuzdu; bozulan tek şey `CHANGELOG.md` ve
+`releaseNotes.ts` idi. Kullanıcıya dönük hiçbir belirti yoktu, dolayısıyla hatayı
+ancak bakımcı "PR'lar kapandı ama changelog boş" diye sorduğunda gördük. Ders: bir
+değeri iki yoldan üretiyorsan (biri build-time türetme, biri commit'li dosya),
+**ikisinin ayrıştığını gösteren bir kontrol** gerekiyor — `check:release-fragments`
+bekleyen sayıyı basıyor ama "57 tanedir, bu çok" demiyor.
+
+**Deterministik dal adı + başarısız bir adım = kalıcı kama.** Dal adı sürümü
+taşıyordu (`bot/release-compact-<version>`), yani her denemede *aynı* ad, her
+denemede *farklı* commit sha'sı. İlk çalıştırma dalı itip PR adımında öldükten sonra
+sonraki her çalıştırma `non-fast-forward` ile PR adımına **hiç ulaşamadan** düştü —
+üstelik ilk hatanın (`RELEASE_BOT_TOKEN` yok) izini de gizleyerek. Bir bot dalı ya
+**tek ve force-push'lanabilir** olmalı ya da her çalıştırmada benzersiz; ikisinin
+arası en kötüsü. Kural olarak: geri alınabilir bir işi tekrar çalıştırılabilir yaz,
+"iki kere çalışırsa ne olur?" sorusunu adım adım sor.
+
+**Kendi kendini toparlayan tasarım > doğru çalışan tasarım.** Asıl düzeltme token
+eklemek değil — onu bakımcı ekleyebilir. Asıl düzeltme, PR adımı başarısız olsa bile
+dalın **doğru ve güncel** kalması: sonraki gece kendi kendine toparlıyor, insan
+müdahalesi gerekmiyor.
+
+**Zamanlanmış her workflow'a bir hata bildirimi koy.** Depoda `e2e-full`, `k6-load`,
+`stress` ve `backup-verify` `scripts/send-alert-email.mjs`'ye bağlıyken
+`release-compact` bağlı değildi — ve tam olarak o, sessizce 10 gün kırmızı kaldı.
+Bildirimi olmayan cron, olmayan cron'dur.
+
+**`actions_list` MCP çıktısı bağlamı patlatıyor.** Her run objesi tüm `head_commit`
+mesajını taşıyor, bu repoda commit mesajları uzun → 4-5 run bile ~100k karakter.
+Tool sonucu otomatik dosyaya düşüyor; `python3 -c "json.load(...)"` ile sadece
+`run_number/status/conclusion/id` çekmek doğru yol. `minimal_output: true` bu araçta
+işe yaramadı.
+
+**Kutu notu:** oturum `--depth` ile klonlanmış geliyor (69 commit). `release-compact.mjs`
+`requireStamps: true` ile çalıştığı için **fetch --unshallow şart** — aksi halde
+bilinçli olarak "fails closed" davranıyor. Ayrıca `npm ci --ignore-scripts`
+`prisma generate`'i atlıyor, bu yüzden `tsc --noEmit` 100+ sahte hata veriyor;
+`npx prisma generate` sonrası 0'a düşüyor. Uzak dal silme (`git push origin --delete`)
+sandbox tarafından reddedildi — artıkları bakımcıya bırakmak gerekti.
+
+---
+
 ## 2026-08-30 — 569 issue'luk bir backlog'u tek oturumda üretmek: workflow, kota ve GitHub API dersleri (#1514)
 
 **Oturum kotası uzun bir workflow'u ortasından kesebilir — ama `resumeFromRunId` bunu
@@ -5385,3 +5430,182 @@ sorunsuz çalıştı). Tarayıcı açmayan prisma-only spec'ler bu sorunu hiç g
 
 **MariaDB oturum içinde durabiliyor:** `db push` bir anda P1001 verdiyse kutunun
 ağı değil, `service mariadb start`'ı tekrar çalıştırmak gerekiyor.
+
+## 2026-09-02 — Paralel oturumlar aynı kuyruktan iş alırken (#1370, #1380, #1383, #1427, #2052)
+
+**Aynı anda çalışan başka Claude oturumları backlog'un aynı yerinden iş alıyor — claim
+yorumunu yazmak yetmez, önce okumak gerekiyor.** Bu turda seçtiğim ilk dört issue'dan
+üçünü (#2041, #2045, #2075) başka oturumlar benden **20 saniye önce** almıştı; claim
+yorumumu yazdıktan sonra fark ettim ve üçünü de bıraktım. Ders ikili: (1) claim etmeden
+önce `issue_read` ile **yorumları oku** — assignee tek başına işaret değil, çünkü tüm
+oturumlar aynı hesapla (`mersahin`) çalışıyor, dolayısıyla atama kimin aldığını
+söylemiyor; (2) claim yorumuna **UTC zaman damgası** yaz, çünkü çakışma çözümü fiilen
+"ilk claim kazanır" olarak yerleşti ve karşılaştırılacak tek şey damga. Ayrıca herkes
+listenin en üstündeki en yeni P0'lara gidiyor: `orderBy: UPDATED_AT, direction: ASC` ile
+backlog'un **eski** bölgesinden seçmek çakışmayı sıfıra indirdi (5 issue, 0 çakışma).
+Yorum sayısı 0 olan bir issue pratikte "alınmamış" demek — `list_issues` çağrısında
+`comments` alanını istemek ucuz bir ön filtre.
+
+**Paylaşılan `node_modules` worktree'ler arası prisma client'ı zehirliyor.** Paralel
+agent'lar disk ve süre için `node_modules`'ü ana checkout'a symlink'liyor; ama
+`npx prisma generate` **paylaşılan** `node_modules/.prisma/client`'a yazıyor. Başka bir
+branch'in şemasıyla generate eden bir agent, sizin branch'inizde olmayan bir kolonu
+(bu turda `User.density`) bekleyen bir client bırakıyor ve testler anlaşılmaz bir
+şekilde patlıyor. Çözüm: client'ı yeniden generate etmek yerine **yerel DB'yi
+`node_modules/.prisma/client/schema.prisma`'ya göre** senkronlamak. Şema değiştiren bir
+iş paralel çalışacaksa `node_modules`'ü symlink etmek yerine kopyalamak gerekiyor.
+
+**Workflow resume, kutu yeniden başlarken tek kurtarıcı.** Bu oturum iki ayrı
+`session limit` duvarına (10:00 ve 15:00 UTC sıfırlamaları) ve **üç konteyner yeniden
+başlatmasına** denk geldi. Push edilmiş hiçbir şey kaybolmadı; kaybolan yalnızca o an
+çalışan agent'lar oldu ve `Workflow({scriptPath, resumeFromRunId})` tamamlanmış
+agent'ları önbellekten döndürdüğü için her tur yalnızca eksik kalanı çalıştırdı (5 iş,
+4 tur). İki pratik not: (1) agent'a **"push etmek teslimattır"** demek bu yüzden önemli
+— yarım iş worktree'de değil, uzakta duruyor; (2) yeniden başlatmadan sonra worktree'ler
+`locked` kalıyor, `git worktree unlock` + `remove --force` + `prune` ve artık dalları
+silmek gerekiyor, yoksa `checkout -b` aynı isimde patlıyor.
+
+**Bağımsız denetçi turu, beş PR'ın dördünde yazarın kaçırdığı gerçek bir kusur buldu**
+— hepsi "yeşil CI" ile birlikte yaşıyordu: yeni `<aside>` sidebar `globals.css`'teki
+`@media print { aside { display: none } }` kuralına yakalanıp mentee detayının yazdırma
+çıktısını boşaltıyordu (#2137); iki sayıyı uzlaştıran açıklama yalnızca `title`
+attribute'unda durduğu için dokunmatikte ve ekran okuyucuda hiç görünmüyordu (#2136);
+sitemap `/stories`'i `listPublishedStories(1)` ile yokluyordu, oysa o helper `take`'i
+SQL'de uygulayıp satırları JS'te attığı için canlı bir public sayfa sessizce listeden
+düşebiliyordu (#2111); docs'a eklenen cümle kodun tam tersini söylüyordu ve spec
+`PersonalNote`'a ulaşan iki yoldan yalnızca birini kapsıyordu (#2116). Denetimin en
+değerli hamlesi ucuz olanı: **spec'i `origin/main`'e geri sarıp kırmızı olduğunu
+doğrulamak** — yoksa "regresyon testi" iddiası test edilmemiş kalıyor.
+
+**`@smoke` etiketi olmayan yeni bir spec, PR kapısında hiç çalışmıyor.** PR job'u
+`--grep @smoke` ile koştuğu için yeşil "Playwright smoke" tiki yeni spec'in kanıtı
+değil; onun kanıtı yalnızca yerel çalıştırma ya da 4 saatlik tam suite. Kritik olmayan
+bir spec için doğru davranış (etiketi eklememek) doğru, ama PR gövdesinde "CI doğrular"
+yazmak yanlış — hangisinin çalıştığını açıkça yazmak gerekiyor.
+## 2026-09-02 — Kuyruktan paralel iş alma: claim, oturum limiti ve worktree'ler
+
+**Aynı backlog'da birden fazla oturum çalışıyor ve claim mekanizması bir issue
+yorumu.** İşe başlamadan önce `issue_read` + `get_comments` çağırmadan iş almak
+doğrudan çift emek: bu turda ilk parti 11 adayın 6'sı (#2041, #2045, #2052,
+#2062, #2071, #2077) o sabah başka oturumlarca `🔒 Claimed` yorumuyla alınmıştı;
+#2041 dört ayrı oturum tarafından 60 saniye içinde claim edilmişti. Kendi
+aldığın işe **branch adını içeren** bir claim yorumu düş — PR açılana kadar tek
+görünür işaret o. Açık PR başlıklarını issue numarasına göre taramak da ucuz bir
+ikinci kontrol (#2028 için fork'tan gelmiş bir PR zaten açıktı).
+
+**Oturum limiti alt ajanları uçuruyor, ama işi uçurmuyor.** İki kez
+"You've hit your session limit" ile bütün alt ajanlar düştü (10:00 ve 15:00 UTC
+reset). Kurtarma yolu: `git worktree list`, sonra her worktree'de
+`git status --short` + `git log --oneline -1`. Bu turda dört worktree
+**commit'lenmiş ama push'lanmamış** iş taşıyordu, biri de yarım kalmış
+(uncommitted) bir implementasyon — hepsi ana döngüde tamamlanıp PR'a çıktı.
+Alt ajan öldüğünde varsayılan davranış "baştan yap" değil, "worktree'ye bak".
+
+**Bash çalışma dizini çağrılar arasında kalıcı.** Bir worktree'ye `cd` ettikten
+sonra sonraki `python3`/`sed` çağrısı da orada çalışıyor: `package.json`
+yamasını ana checkout'a attığımı sanırken worktree'ye attım ve worktree
+silinince yama kayboldu. Worktree'lerle çalışırken her komuta mutlak yol ya da
+kendi `cd`'sini yaz.
+
+**Workflow worktree'lerinde `npm install` çalıştırma.** `ln -sfn
+/home/user/Internship/node_modules node_modules` yeterli ve saniyeler sürüyor;
+üretilen Prisma client de simlink üzerinden paylaşılıyor. Yeni bir model
+eklediysen `DATABASE_URL="mysql://u:p@localhost:3306/x" npx prisma generate`
+(format/validate/generate hepsi `.env` yokken URL istiyor) — ve bu, aynı
+node_modules'ü paylaşan diğer worktree'lerin client'ını da değiştirir.
+
+**Kapsam değişince release fragment'ı da değişmeli.** #1871'in fragment'ı ilk
+commit'te "canned responses bu değişikliğin parçası değil" diyordu; ikinci
+pass'te o madde de shipping oldu ve fragment yalan söylemeye başladı.
+`npm run check:release-fragments` bunu yakalamıyor — metin doğruluğu gözle
+kontrol edilecek tek şey.
+
+**Yeşil görünen PR saatlerce merge olmuyorsa muhtemelen self-hosted runner
+kuyruğudur.** Bu turda dokuz PR'ın tamamında lint/typecheck/build, Playwright
+smoke, CodeQL ve audit yeşilken tek bekleyen iş `Deploy topic environment`
+(`topic-preview.yml`, Plesk kutusundaki tek self-hosted runner) `queued`
+durumundaydı — #2112'de 9 saat boyunca. Kırmızı değil, sıraya girmiş: PR başına
+bir topic ortamı kurulduğu için bir düzine açık PR runner'ı seri hâle getiriyor.
+"CI kırmızı" muamelesi yapıp diff'te hata aramak boşa emek; kontrol edilecek
+şey runner'ın ayakta olup olmadığı (`runner-watchdog.yml`).
+
+**Bir turda 11 iş çıkarmanın işleyen şekli:** triyajı ayrı bir akış olarak koş
+(issue + kod okuyup `verdict/sizeHours/files/plan/scopeCut` döndüren ajanlar),
+sonuçları bir JSON'a yaz, çakışmayanları seç, claim et, implementasyonu
+`implement → adversarial review → fix+push` üçlü pipeline'ıyla ver. Review
+aşaması bu turda gerçek hatalar buldu: iTIP `.ics`'te eksik
+`ORGANIZER`/`ATTENDEE` (iptal maili hiçbir şeyi silemezdi), `/admin/offers`'ta
+tek kolonlu `ORDER BY` yüzünden sayfalar arası tekrarlayan satır, typing
+sinyalinin inbox'ta her 3 saniyede bir conversation upsert tetiklemesi. Tek
+geçişli üretim bunların hiçbirini yakalamıyordu.
+## 2026-09-03 — Ham Prisma hatasının giriş formunda görünmesi + MySQL watchdog
+
+**Bir "koruma" var diye korunuyor sanma; koruduğu yolu çalıştırıp gör.** #1150'de
+eklenen `guardProviders` hiç devreye girmemişti. Sebep NextAuth'un kendi iç akışı:
+`CredentialsProvider({...})` gerçek `authorize`'ı üst seviyeye değil `options`
+çantasına koyuyor (üstteki `authorize: () => null` bir taş bebek), ve
+`core/lib/providers.js` içindeki `parseProviders` o çantayı sağlayıcının **üstüne**
+merge ediyor. Yani sarmalanan fonksiyon hiç çağrılmıyor, sarmalanmamış olan geri
+geliyor. Sonuç: MySQL OOM ile ölünce kullanıcı giriş formunda
+``Can't reach database server at `localhost:3306` `` görüyordu. Ders: bir
+kütüphanenin veri yapısını "spread ile kopyalayıp değiştirdim" demek yetmiyor —
+o yapıyı kütüphanenin nasıl **yeniden** işlediğine bakmak gerekiyor
+(`node_modules` içindeki 20 satır her seferinde tahminden ucuz).
+
+**Sunucu tarafı maskeleme tek başına yeterli değil.** İstemcide de beyaz liste
+var artık: bilinen mesaj değilse hiç basılmıyor. Guard'ın atlandığı (veya
+NextAuth'un kendi ürettiği) her mesaj böylece jenerik kalıyor — savunmanın iki
+tarafı da tek kaynaktan (`INTENTIONAL_AUTH_ERRORS`) besleniyor.
+
+**Watchdog yazarken asıl tehlike "ölüyü diriltmek" değil, "diriye ölü demek".**
+Probe olarak `mysqladmin ... --no-defaults ... ping` yazmıştım; MariaDB istemcisi
+`--no-defaults`'u **ilk argüman değilse** reddedip `unknown option` ile 2 dönüyor.
+Stub'lı testler yeşildi, gerçek kutuda ise sağlıklı sunucu sürekli DOWN görünüyordu —
+yani prod veritabanını dakikada bir yeniden başlatacaktı. İki sonuç: (1) stub'ı
+gerçek istemci kadar huysuz yaz (testteki `mysqladmin` artık aynı sırayı dayatıyor),
+(2) probe'un üç hâli olmalı: up / down / **sorulamadı**; "sorulamadı"yı down saymak
+en pahalı hata.
+
+**`command -v systemctl` "systemd var" demek değil.** Bu konteynerde `systemctl`
+kurulu ama PID 1 değil; her çağrı "System has not been booted with systemd" diyor.
+Doğru soru `[ -d /run/systemd/system ]`. Fallback SysV `service` yoluna düşünce
+script bu kutuda gerçekten çalıştı — ve testlerde yolun ikisi de kapsandı
+(`SYSTEMD_RUN_DIR` / `INITD_DIR` env'leri sırf bunun için var).
+
+**Kutu notu:** `chromium_headless_shell-1234` yine eksikti; bu kez çalışan yol,
+beklenen iç dizini oluşturup `chromium_headless_shell-1194/chrome-linux/` içeriğini
+oraya symlink'lemek oldu. Ayrıca `BASE_URL` verilmeden çalıştırılan tek bir
+`*.unit.spec.ts` bile Playwright'ı kendi dev sunucusunu ayağa kaldırmaya zorluyor;
+tarayıcısız birim spec'leri `BASE_URL=http://127.0.0.1:9999` ile saniyeler içinde
+koşuyor. DB'ye dokunan spec'lerde `DATABASE_URL`'i **komut satırında** vermek
+gerekiyor (config `.env`'i yalnız kendi webServer'ı için yüklüyor).
+## 2026-09-03 — Resim önizleme: "yeni sekme" bir çıkış yolu değil (#2147)
+
+**`target="_blank"` masaüstünde çözüm, telefonda tuzak.** Kullanıcı raporu tek cümleydi:
+"resmi büyüttüğüm zaman resimden çıkamadım, uygulamayı kapatıp tekrar girdim". Kodda hata
+yoktu — bağlantı çalışıyordu; kurulu PWA'da açılan sekmenin **adres çubuğu ve geri tuşu
+yok**. Bir davranışın "çalıştığını" masaüstü tarayıcıda doğrulamak, uygulamanın gerçekte
+çalıştığı yerde doğrulamak değil.
+
+**Kapatma yolu tek değil, dört tanedir.** ✕ düğmesi istenen şeydi ama yetmiyor: Escape,
+arka plana dokunma ve **telefonun kendi geri tuşu**. Sonuncusu için overlay açılırken
+`history.pushState`, kapanırken (geri ile kapanmadıysa) `history.back()` — yığını dengede
+tutmazsan kullanıcı resmi kapattıktan sonra bir kez "boşa" geri basıyor. Bunu e2e'de
+`page.goBack()` ile iki yönlü doğrulamak mümkün ve şart.
+
+**Resmin kendisine dokunmak kapatmamalı.** Arka plan tıklaması kapatırken görselin
+`stopPropagation` ile yakınlaştırmaya bağlanması, hedefi ıskalayan dokunuşun büyüttüğün
+şeyi kapatmasını engelliyor.
+
+**Bir `<a>`'yı `<button>`'a çevirmek testleri sessizce kırıyor.** `a[href*="/api/support/
+attachments/"]` ve `button[aria-label*="dosya.png"]` gibi seçiciler ya hiç eşleşmedi ya da
+iki elemana çıktı (yeni "görüntüle" düğmesi de dosya adını taşıyor). Yeni etkileşimli
+elemana `data-testid` vermek, aynı PR'da eski spec'leri düzeltmekten daha ucuz.
+
+**Kutu notları (bu tur):** `service mariadb start` oturum içinde **iki kez** gerekti —
+`db push` çalıştıktan yarım saat sonra P1001 dönüyor. Playwright için symlink yerine
+`playwright.local.config.ts` (gitignore'da) + `use.launchOptions.executablePath =
+'/opt/pw-browsers/chromium'` yine en hızlı yol. Dev sunucusu ağır yük altında düşebiliyor:
+`ECONNREFUSED 127.0.0.1:3000` veya `[next-auth][error][CLIENT_FETCH_ERROR]` gördüğün
+spec'i **kırmızı saymadan önce tek başına tekrar çalıştır** — bu turda 11 "kırmızı"
+spec'in tamamı ikinci koşuda yeşildi.

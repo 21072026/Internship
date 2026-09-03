@@ -107,6 +107,9 @@ model Organization {
   offers               Offer[]
   requisitions         Requisition[]
   interviewRequests    InterviewRequest[]
+  messageTemplates     MessageTemplate[]
+  apiKeys              ApiKey[]
+  matchFeedback        MatchFeedback[]
 }
 
 // Per-tenant customizable pipeline stages (#747, part of white-label #546).
@@ -276,6 +279,17 @@ model User {
   emailVerified           Boolean       @default(true)
   // Admin can deactivate a user; inactive users cannot sign in.
   isActive                Boolean       @default(true)
+  // Instance-level capability (#1535): may manage EVERY tenant's Organization
+  // row — create tenants, change plans, and write SSO config (the IdP entry
+  // point and signing certificate, i.e. who may mint a login). A plain ADMIN is
+  // a *tenant* admin and may only ever touch their own org.
+  //
+  // Deliberately a flag, not a `SUPER_ADMIN` value on `Role`: `role` is copied
+  // into the JWT and compared to 'ADMIN' in dozens of guards, so widening the
+  // enum would change all of them at once. It is also never put in the token —
+  // `src/lib/superAdmin.ts` reads it from the database per request so revoking
+  // it takes effect on the next request, like `sessionsValidFrom`.
+  isSuperAdmin            Boolean       @default(false)
   // Set only when the `selfRegistration` setting is 'manual': the account was
   // created by open sign-up and is waiting for an admin to let it in. Lets the
   // sign-in page tell "we haven't reviewed you yet" apart from "an admin
@@ -398,9 +412,37 @@ model User {
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+  ownedMessageTemplates             MessageTemplate[]             @relation("MessageTemplateOwner")
+  authoredMessageTemplates          MessageTemplate[]             @relation("MessageTemplateAuthor")
+  createdApiKeys                    ApiKey[]                      @relation("ApiKeyCreatedBy")
+  suggestedAsMentee                 MatchFeedback[]               @relation("MatchFeedbackMentee")
+  suggestedAsMentor                 MatchFeedback[]               @relation("MatchFeedbackMentor")
+  matchFeedbackActions              MatchFeedback[]               @relation("MatchFeedbackActor")
+  guidanceStates                    UserGuidanceState[]
 
   @@index([role])
   @@index([referredById])
+}
+
+// Per-user state for in-product guidance surfaces (#2068): "I have seen this"
+// and "I dismissed this", keyed by a surface string (e.g. `checklist:ADMIN`).
+// One generic table rather than a flag per surface — a new tip or tour adds a
+// key, never a column. It stores only the ACKNOWLEDGEMENT: whether a checklist
+// step is done stays derived from the real rows, because a stored "I did it"
+// flag can disagree with reality and a derived one cannot.
+model UserGuidanceState {
+  id          String    @id @default(cuid())
+  userId      String
+  key         String
+  seenAt      DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
 }
 
 // Consent-gated activity trail: one row per page visit, with the dwell time on
@@ -687,6 +729,59 @@ model MessageAttachment {
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
+}
+
+// Reusable 1:1 message text — "canned responses" (#1871). The sentence a mentor
+// writes forty times a cohort ("send me your CV as a PDF and I'll look at it
+// before Friday") becomes one click, in whichever of the three languages the
+// writer is working in.
+//
+// Deliberately the same shape as ProjectTaskTemplate (the trilingual reusable
+// text we already ship): `title` is the canonical wording — the fallback when a
+// reader's language has no entry, and the key the pool dedupes on — while
+// `translations` ({ en?, tr?, de? }) carries the per-locale body. What gets
+// inserted into the composer is a plain string resolved once from the *writer's*
+// own locale, so nothing downstream (Message, the email mirror, the SSE bus) has
+// to know a template was involved at all.
+//
+// Tenant-anchored: it holds an organisation's own wording, so `orgId` is here and
+// the model is in TENANT_MODELS (src/lib/orgContext.ts) — unlike
+// ProjectTaskTemplate, which is reached through Project.
+model MessageTemplate {
+  id      String  @id @default(cuid())
+  orgId   String?
+  // Null = org-wide, which is what /admin/message-templates manages and what
+  // every writer in the tenant is offered. Set = personal, offered to its owner
+  // only. Only the org-wide half has a management screen today; the read path
+  // already honours both so a "save this reply" affordance is additive.
+  ownerId String?
+
+  title        String    @db.Text
+  translations Json?
+  // How many times this text has been inserted — the picker sorts by it, so the
+  // replies actually used float to the top and the pool stays usable as it grows.
+  useCount     Int       @default(0)
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  // Retired from the picker, not deleted (same reasoning as ProjectTaskTemplate,
+  // #1113): `useCount` is the only record of which wording a program actually
+  // leans on, and re-adding the same text revives this row rather than starting
+  // a second one from zero. Nothing here is referenced by a sent Message — the
+  // insert is a copy — so this is about the pool's own history.
+  archivedAt   DateTime?
+
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner     User?         @relation("MessageTemplateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdBy User?         @relation("MessageTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  // No @@unique on the wording: `title` is @db.Text (a canned reply is a
+  // paragraph, not a label), which MySQL cannot index without a prefix length,
+  // and a nullable orgId/ownerId would not be constrained by it anyway — the
+  // same reason /api/admin/goal-templates dedupes by hand.
+  @@index([orgId, ownerId, archivedAt])
+  @@index([ownerId, archivedAt])
+  @@index([createdById])
 }
 
 // In-app notification for a user.
@@ -1387,12 +1482,45 @@ model Webhook {
 }
 
 // Read-only programmatic access key. Only the SHA-256 hash is stored.
+// A minted programmatic credential for the public /api/v1 surface.
+//
+// Lifecycle (#1545): a key is no longer just "a name and a hash". It knows WHO
+// minted it (createdById), WHEN it stops being valid (expiresAt), WHAT it may
+// read (scopes) and WHETHER it was withdrawn (revokedAt).
+//
+// Revocation is SOFT on purpose: the row is never deleted. The
+// `apikey.revoked` ActivityLog entry points at this id, and a hard delete would
+// leave that audit trail pointing at nothing — the evidence of what the key did
+// would disappear together with the key.
+//
+// `scopes` is a comma-separated list in the canonical `<resource>:<action>`
+// shape (see src/lib/apiScopes.ts). One value exists today — `candidates:read`,
+// the only /api/v1 route — but the shape is fixed now so later resources slot
+// in without a migration. ENFORCEMENT of expiry/revocation/scope at the door is
+// #1546; this model only stores the facts.
 model ApiKey {
-  id         String    @id @default(cuid())
-  name       String
-  hashedKey  String    @unique
-  lastUsedAt DateTime?
-  createdAt  DateTime  @default(now())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id])
+  id          String        @id @default(cuid())
+  name        String
+  hashedKey   String        @unique
+  // Comma-separated `<resource>:<action>` scopes. Defaulted (not nullable) so
+  // `db push` fills existing rows non-destructively; the backfill normalises
+  // any row that ended up empty.
+  scopes      String        @default("candidates:read")
+  // The admin who minted the key. Nullable: rows that predate #1545 have no
+  // recorded owner, and a deleted admin must not take the key's history away.
+  createdById String?
+  createdBy   User?         @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  // Null means "never expires" — allowed, but flagged in the admin UI.
+  expiresAt   DateTime?
+  // Set by the soft revoke; the row itself stays forever.
+  revokedAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([orgId])
+  @@index([createdById])
 }
 
 // Key-value system settings, admin-editable (e.g. reminder cadence, support
@@ -1782,6 +1910,17 @@ model Evaluation {
   scores      Json           @default("{}") // { criterion: 1..5 }
   comment     String?        @db.Text
   createdAt   DateTime       @default(now())
+  // When this record was last CORRECTED inside its edit window (#1893). Null
+  // means "never corrected", which is also every row written before #1893.
+  //
+  // Deliberately NOT a Prisma `@updatedAt`: an Evaluation row is written by
+  // several flows that change nothing about the author's judgement — drafting a
+  // testimonial excerpt, approving or declining it, publishing, unpublishing,
+  // and the bulk revoke when a mentee withdraws consent. A generic last-write
+  // column would mark all of those as "corrected", which is precisely the
+  // mislabelling this flag exists to prevent. Only PATCH
+  // /api/evaluations/[id] ever writes it.
+  correctedAt DateTime?
   // Which rubric this was scored against (#822). Null means the built-in 4+4
   // criteria, which is every row written before org templates existed and every
   // row in an org that never defined one. Stamped at write time so a record
@@ -2410,6 +2549,48 @@ model TrustedDevice {
   @@index([expiresAt])
 }
 
+// Durable brute-force lockout (#1541).
+//
+// The sign-in failure counter used to live only in the in-process Map behind
+// `rateLimit()`: it evaporated on every redeploy, no admin could see that an
+// account was locked, and nobody could clear a lockout for a user who had
+// locked themselves out. This row is the durable, visible, clearable copy of
+// that state — and `authorize()` consults it BEFORE the bcrypt compare, so a
+// locked-out attempt costs one indexed point lookup instead of a cost-12 hash.
+//
+// Deliberately NOT a relation to User: the row is keyed by the email that was
+// *typed*, which under an attack usually belongs to no account at all.
+model AccountLockout {
+  id          String    @id @default(cuid())
+  // Normalized (trimmed + lowercased) email the attempts were made against.
+  email       String
+  // The account, when the typed email matches one. Null otherwise.
+  userId      String?
+  // Which stage this counter belongs to: "password" or "totp". One row PER
+  // STAGE per address, mirroring the two separate in-memory buckets in
+  // auth.ts. A single shared row would let five fumbled authenticator codes
+  // lock the password stage, and the sign-in form could then no longer even
+  // reveal the code field (it needs a 2FA_REQUIRED, which only comes from a
+  // password check that was allowed to run).
+  reason      String    @default("password")
+  failedCount Int       @default(0)
+  // Start of the current counting window. Failures older than the window open
+  // a fresh count instead of accumulating forever.
+  windowStart DateTime  @default(now())
+  // Locked until this moment. Null or in the past means "counting, not locked".
+  lockedUntil DateTime?
+  lastIp      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  // Tenant anchor (#543). This is tenant data — it is listed in TENANT_MODELS.
+  orgId       String?
+
+  @@unique([email, reason])
+  @@index([userId])
+  @@index([lockedUntil])
+  @@index([orgId])
+}
+
 enum LogLevel {
   DEBUG
   INFO
@@ -2671,4 +2852,85 @@ model GoogleCalendarEventLink {
 
   @@unique([meetingId, connectionId])
   @@index([connectionId])
+}
+
+/// What happened to one mentor suggestion (#2040).
+/// SHOWN is written the moment the suggestion is returned; ACCEPTED/DISMISSED
+/// overwrite it when the admin acts. There is deliberately no "IGNORED": a row
+/// that stays SHOWN *is* the ignored case, and a fourth state would need a
+/// sweeper to decide when hesitation became a decision.
+enum MatchFeedbackAction {
+  SHOWN
+  ACCEPTED
+  DISMISSED
+}
+
+/// The mentor-matching feedback loop (#2040): every suggestion we put in front
+/// of an admin, and what they did with it. Without this the ranking can never
+/// improve and the simplest question about it — "how often is our suggestion
+/// taken?" — has no answer.
+///
+/// Complementary to the pairing record (#1789, MatchDecision): that one stores
+/// the match that HAPPENED, this one stores the ones that did not. They share
+/// `batchId` so the two can be joined once both exist.
+///
+/// Writing here is always best-effort: a failed insert must never break a
+/// suggestion response or an assignment (same discipline as the AI metering in
+/// src/lib/aiGate.ts).
+model MatchFeedback {
+  id       String  @id @default(cuid())
+  /// Tenant anchor. Nullable like the other phase-1 tenant models; the model is
+  /// listed in TENANT_MODELS (src/lib/orgContext.ts) so Prisma queries
+  /// auto-scope once MT_ENFORCE_ISOLATION is on. The report aggregates with raw
+  /// SQL, which the middleware never sees, so it filters on orgId explicitly.
+  orgId    String?
+  menteeId String
+  mentorId String
+
+  /// One id per POST /api/admin/mentor-suggest call, returned to the client so
+  /// it can echo it back with the outcome. Every suggestion of one call — and
+  /// the eventual accept/dismiss — carries the same batchId.
+  batchId String
+
+  /// 1-based position in the list as it was shown.
+  ///
+  /// NULL means "this mentor was never in that batch's suggestion list" — i.e.
+  /// the admin assigned somebody we did not suggest. That is how an off-list
+  /// assignment stays distinguishable from accepting a suggestion, and why the
+  /// per-rank report only counts rows that have a rank.
+  ///
+  /// NOTE for raw SQL: `rank` is a reserved word in MySQL 8 — always backtick it.
+  rank           Int?
+  /// The rule-based score the row was ranked by (today: number of shared
+  /// skills). Kept so a later ranking change can be compared against this one.
+  score          Float?
+  /// Which ranking rule set produced the row (src/lib/matchFeedback.ts).
+  ruleSetVersion String?
+  /// Whether the AI re-ranking actually ran for this batch.
+  aiUsed         Boolean @default(false)
+
+  action     MatchFeedbackAction @default(SHOWN)
+  /// Short dismissal reason code — one of MATCH_DISMISS_REASONS
+  /// (src/lib/matchFeedback.ts), validated at the route. Free text goes to
+  /// reasonNote so the codes stay aggregatable.
+  reason     String?
+  reasonNote String?             @db.Text
+  /// Who accepted/dismissed. Null on SHOWN rows — nobody has acted yet.
+  actorId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org    Organization? @relation(fields: [orgId], references: [id])
+  mentee User          @relation("MatchFeedbackMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+  mentor User          @relation("MatchFeedbackMentor", fields: [mentorId], references: [id], onDelete: Cascade)
+  actor  User?         @relation("MatchFeedbackActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  /// One row per (batch, mentor) — the key the feedback upsert writes through.
+  @@unique([batchId, mentorId])
+  @@index([orgId, createdAt])
+  @@index([orgId, action, createdAt])
+  @@index([menteeId])
+  @@index([mentorId])
+  @@index([actorId])
 }

@@ -12,7 +12,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Build test** | Production build compiles | `npm run build` | CI (`ci.yml`) |
 | **i18n parity** | EN/TR/DE translation keys stay in sync | `npm run check:i18n` | CI (`ci.yml`) |
 | **Smoke / functional (E2E)** | App boots, auth works, core pages render without errors | `e2e/*.spec.ts` (Playwright) | CI (`e2e.yml`) on every PR |
-| **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics, status messages (4.1.3), reflow at 320px | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/live-region.spec.ts`, `e2e/mobile-layout-audit.spec.ts` | with E2E |
+| **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics, status messages (4.1.3), reflow at 320px; OS media preferences (reduced motion, increased contrast, forced colors) | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/live-region.spec.ts`, `e2e/mobile-layout-audit.spec.ts`, `e2e/a11y-media-preferences.spec.ts` | with E2E |
 | **Security** | Headers, IDOR/RBAC, rate limiting, 2FA, login hardening | `e2e/security-headers.spec.ts`, `e2e/authz-idor.spec.ts`, `e2e/idor-hardening.spec.ts`, `e2e/rate-limit.spec.ts`, `e2e/login-security.spec.ts`, `e2e/two-factor-*.spec.ts` | with E2E |
 | **XSS / injection** | User input is escaped, never executed as HTML/JS | `e2e/xss-injection.spec.ts` | with E2E |
 | **Responsive / mobile** | Layout at small viewports | `e2e/mobile.spec.ts`, `e2e/users-responsive.spec.ts` | with E2E |
@@ -20,6 +20,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Health probe** | `/api/health` liveness + optional DB readiness | `e2e/health.spec.ts` | with E2E |
 | **Stress / load** | Latency percentiles, throughput, error rate under sustained concurrency | `scripts/stress-test.mjs` | **weekly cron**, Mon 02:30 UTC (`stress.yml`) + on demand |
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
+| **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 
 The first ten are **functional / correctness** tests: given an input, is the output
 right? The last two are **non-functional**: the app may be correct yet too slow or
@@ -277,6 +278,62 @@ As the table grows, that query — not the app — is the likeliest cause of an 
 breach. Setting `HEALTH_TOKEN` on the server removes the whole detail path from the anonymous
 probe and is the cheaper fix.
 
+## OS accessibility media preferences
+
+Three user preferences the browser exposes as media features are **supported and
+tested** (#2045). Before that work a repo-wide grep for them returned zero hits in
+`src/` and `e2e/`, and axe never noticed — it scans one rendering, with no preference
+emulated, so a clean baseline said nothing at all about any of this.
+
+| Media feature | What the app does | Where |
+|---------------|-------------------|-------|
+| `prefers-reduced-motion: reduce` | Blanket `animation-duration`/`transition-duration` collapse on `*, *::before, *::after`, plus `scroll-behavior: auto`. Behaviour is untouched: the mobile drawer still opens and closes, it just arrives instantly. Skeleton placeholders (whose only affordance is the pulse) switch to a static fill + inset ring. The two *scripted* scrolls (message thread → newest bubble, project editor → its form) ask in JS, because an explicit `ScrollOptions.behavior` beats any CSS `scroll-behavior`. | `src/app/globals.css` (media-preference block at the end of the file), `src/components/ui/Skeleton.tsx`, `src/lib/reducedMotion.ts` |
+| `prefers-contrast: more` | Hairline borders (`border-gray-100/200`, `divide-gray-50/100`) and secondary text (`text-gray-400/500`) are re-tinted through the same flat-utility remap the dark-mode layer uses — every rule duplicated for `html.dark`, because the dark layer scores (0,2,0) and would otherwise swallow a bare utility selector. | `src/app/globals.css` |
+| `forced-colors: active` (Windows High Contrast) | The focus ring names the system `Highlight` colour instead of a hardcoded `#2563eb`; `forced-color-adjust: none` is applied **only** to the `/account` accent swatches, where the fill *is* the content; badges get an inset outline and board drop targets a `Highlight` outline, so no state is carried by background colour alone. | `src/app/globals.css`, `src/components/ui/Badge.tsx`, `src/components/AccountSettings.tsx`, `src/app/{admin,mentor}/board/page.tsx` |
+
+Everything lives inside its media query, so a user who has set no preference gets the
+default light and dark themes byte-for-byte unchanged — which is also why the axe
+baseline (`e2e/a11y-baseline.json`, empty across 18 keys) is unaffected.
+
+### How to test them
+
+`e2e/a11y-media-preferences.spec.ts` is the regression net. Playwright emulates all
+three:
+
+```ts
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await page.emulateMedia({ contrast: 'more' });
+await page.emulateMedia({ forcedColors: 'active' });
+```
+
+`emulateMedia` **merges** into what is already emulated, so a loop over several
+preferences must spell out all three keys (`null` resets one) or the second iteration
+is silently "reduced motion AND high contrast".
+
+The spec asserts: the drawer's computed `transition-duration` is effectively zero yet
+`data-open` still flips both ways; a frozen skeleton is still drawn; a keyboard focus
+ring is still visible under forced colors; the accent swatches keep six distinct fills;
+and neither the landing page nor a signed-in page scrolls sideways under any of the
+three. It is **not** `@smoke` — it runs in the scheduled full suite.
+
+Run just this file:
+
+```bash
+npx playwright test e2e/a11y-media-preferences.spec.ts
+```
+
+By hand, in Chrome DevTools: **Rendering** panel → *Emulate CSS media feature
+prefers-reduced-motion / prefers-contrast / forced-colors*.
+
+Two things the spec deliberately does **not** cover, so nobody goes looking for them:
+the JS side (`prefersReducedMotion()` / `scrollBehavior()` in `src/lib/reducedMotion.ts`)
+would need a seeded conversation and a thread long enough to scroll to assert anything
+real, and the *visual* result of `prefers-contrast: more` is a colour judgement, not a
+threshold — the spec only proves the layout survives it.
+
+VPAT rows (#2037) can cite this section for WCAG 2.3.3 (Animation from Interactions),
+1.4.11 (Non-text Contrast) and 2.4.7 (Focus Visible) under forced colors.
+
 ## Scheduled full E2E summary email
 
 The scheduled full suite (`e2e-full.yml`, 4×/day, 4-way sharded) sends a **Turkish
@@ -288,6 +345,119 @@ script aggregates the per-shard Playwright JSON reports and flags a shard that c
 before writing its report (`E2E_EXPECTED_REPORTS`). Recipients come from
 `ALERT_EMAIL_TO`; set the repository **variable** `E2E_REPORT_MODE=failures` to switch
 back to red-only alerts.
+
+## Demo-seed fidelity gate (#2063)
+
+The demo seed (`prisma/seed-demo.mjs`) is the only data most people ever see: the
+public demo, every per-PR topic environment at `crm-pr<N>.ersah.in`, and every new
+contributor's local box. The failure mode this gate exists for is not a crash — a
+feature ships, nobody adds a matching block to the seeder, and its screen renders
+*perfectly* and *empty* in all three places. Nothing goes red; the first person to
+notice is whoever is mid-demo.
+
+`scripts/demo-fidelity.json` declares, per screen, how many rows the seed must
+produce. `npm run check:demo-fidelity` counts them with Prisma, prints a
+`model / expected / actual` table, and exits 1 naming both the **screen** and the
+**owning issue** for every shortfall. CI runs it in the `demo-fidelity` job in
+`ci.yml`, which spins up a throwaway MySQL and does
+`prisma db push` → `prisma db seed` → `npm run seed:demo` → the check.
+
+It refuses any `DATABASE_URL` the demo seeder itself would refuse, using the *same*
+predicate — `prisma/demoTarget.mjs`, imported by both. Counting is read-only, but a
+manifest tuned to synthetic data says nothing about a real database, and pointing it
+at prod would be a PII read. Never fork that predicate: two copies that can disagree
+are not a guard. `scripts/test/demo-target.test.mjs` covers it.
+
+### The manifest is a ratchet
+
+Each entry carries two numbers:
+
+- **`minRows`** — the *enforced* floor, set to what the seeder produces **today**.
+  A count below it fails the build. So coverage can go up and never quietly back down.
+- **`target`** — how many rows the screen needs to stop reading as empty.
+
+A row where `minRows < target` is reported as **pending**, with its owning issue, on
+every single run. That is deliberate: the screens that still have zero seed coverage
+(requisitions, interview requests, offers, panels, company interest, weekly reports,
+mentor questions, documents, `SOURCE` users — owned by **#2062** and **#1419**) stay
+listed and visible instead of being dropped from the manifest to make the table look
+tidy. Run with `DEMO_FIDELITY_STRICT=1` to enforce `target` as well; that is how the
+owning issue verifies its own seeding before raising `minRows`.
+
+### How to add a screen to the demo-fidelity manifest
+
+Do this in the **same PR** that ships the feature, the same way a user-visible feature
+gets a `src/lib/features.ts` entry and a release fragment.
+
+1. **Seed the rows** in `prisma/seed-demo.mjs`. Keep it idempotent and namespaced
+   (`@demo.example.com` emails, "Demo" in names) like everything else there.
+2. **Add an entry** to the `entries` array in `scripts/demo-fidelity.json`:
+   ```json
+   {
+     "model": "WeeklyReport",
+     "minRows": 4,
+     "target": 4,
+     "screen": "/weekly-reports — mentee weekly reporting",
+     "issue": "#1419"
+   }
+   ```
+   - `model` must match a model name in `prisma/schema.prisma`. The checker resolves it
+     against the Prisma client and **hard-fails on a name it cannot find** — a typo here
+     would count nothing and pass silently, which is the exact bug this gate prevents.
+   - `screen` is what a reviewer reads in the failure message. Give the route(s), not
+     the model name again.
+   - `issue` is who to talk to when it goes red.
+   - Optional `where` (a Prisma filter) plus `label` narrows the count — that is how the
+     `SOURCE`-role user row works: `"where": { "role": "SOURCE" }`.
+3. **Set `minRows` honestly.** It is the count the seeder actually produces, not an
+   aspiration. If you cannot seed the screen yet, still add the row with `minRows: 0`,
+   a real `target`, and the issue that will close the gap — it will list as pending on
+   every run. Do **not** omit the row; an absent screen is exactly the silence this
+   gate replaces.
+4. **Verify locally** against a scratch database (see the top of this file / the
+   security playbook for standing one up):
+   ```bash
+   npx prisma db push && npx prisma db seed && npm run seed:demo
+   npm run check:demo-fidelity
+   ```
+   Then delete your new seed block and re-run against a fresh database — if the checker
+   does not go red, the entry is not wired to anything.
+## Accessibility regression gate (axe)
+
+[`e2e/a11y-scan.spec.ts`](../e2e/a11y-scan.spec.ts) runs `@axe-core/playwright` over the
+app against WCAG 2.0/2.1/2.2 A+AA and compares each page's *critical* and *serious*
+counts with the frozen [`e2e/a11y-baseline.json`](../e2e/a11y-baseline.json). It carries
+no `@smoke` tag, so `e2e.yml` runs it as **its own step** on every PR — the smoke set
+stays small while the gate still blocks. The human-readable report is
+[`docs/a11y-audit.md`](a11y-audit.md); both files are regenerated together:
+
+```bash
+A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts
+```
+
+**Coverage** — fifteen pages, each scanned twice (light, then `#dark` with a full reload,
+never by pasting `.dark` onto an already-rendered page):
+
+| Context | Pages |
+|---|---|
+| public | `/`, `/auth/signin`, `/apply/:mentorId` |
+| mentee | `/portal`, `/portal/profile`, `/messages`, `/notifications` |
+| mentor | `/mentor`, `/mentor/mentees`, `/mentor/board` |
+| admin | `/admin`, `/admin/candidates`, `/admin/board`, `/admin/settings` |
+| company | `/company` |
+
+The six non-portal screens were added in #2043, on the shared
+`seedMenteeWithRelation()` fixture in [`e2e/helpers/db.ts`](../e2e/helpers/db.ts) — a real
+mentor ↔ mentee relation with a company, a goal, an interaction and an upcoming meeting.
+That fixture is the point: a board with no cards, or an inbox with no threads, scans clean
+and proves nothing, so a board scan asserts a `board-card` is visible *before* axe runs.
+Add a page by extending the list in the matching context, not by seeding a second fixture.
+
+**Never widen the baseline silently.** A regenerate that raises a count prints
+`⚠️ This regenerate WIDENS the accessibility baseline` and repeats the list in the report
+header; each widened key must be fixed or justified in the PR body (#1333 is the run where
+a quiet widening got in). A dynamic route is keyed separately from its URL — `/apply/:mentorId`
+— so a fresh fixture's id cannot invent a new baseline entry on every run.
 
 ## Accessibility media preferences (#2045)
 
