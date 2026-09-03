@@ -2,44 +2,30 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, User, BookOpen, MessageSquare, Lock, ListChecks, FolderKanban, Users, MailOpen } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { PORTAL_NAV_LINKS } from '@/lib/navLinks';
 
 // Mentee portal sidebar navigation with active-route highlighting (mirrors the
 // admin/mentor navs). Client component so it can read the current pathname.
+// The route list lives in lib/navLinks — shared with the command palette's
+// "Go to" group (#2079), so the two can never drift apart.
 export function PortalNav() {
   const t = useT();
   const pathname = usePathname();
+  const nav = t.nav as Record<string, string>;
 
-  const links = [
-    { href: '/portal', label: t.nav.dashboard, Icon: LayoutDashboard },
-    { href: '/portal/profile', label: t.nav.myProfile, Icon: User },
-    // Their own projects, not the public showcase at /projects (#1114).
-    { href: '/portal/projects', label: t.nav.projects, Icon: FolderKanban },
-    // Opted-in mentors only (#938) — consent-gated, see /api/mentors.
-    { href: '/mentors', label: t.nav.mentorDirectory, Icon: Users },
-    { href: '/todos', label: t.nav.todos, Icon: ListChecks },
-    // The shared inbox, not a portal-only copy of it (#1156).
-    { href: '/messages', label: t.nav.messages, Icon: MessageSquare },
-    { href: '/portal/interactions', label: t.nav.interactionLogs, Icon: BookOpen },
-    { href: '/portal/notes', label: t.portal.notes.title, Icon: Lock },
-    // The career-tips archive (#1469). Linked from the sidebar and not only
-    // from the e-mail footer: the issues stay useful long after the mail is
-    // gone, and someone who unsubscribed can still read them here.
-    { href: '/newsletters', label: t.nav.newsletters, Icon: MailOpen },
-  ];
-
-  const isActive = (href: string) =>
-    href === '/portal' ? pathname === '/portal' : pathname.startsWith(href);
+  const isActive = (link: (typeof PORTAL_NAV_LINKS)[number]) =>
+    link.exact ? pathname === link.href : pathname.startsWith(link.href);
 
   return (
     <>
-      {links.map(({ href, label, Icon }) => {
-        const active = isActive(href);
+      {PORTAL_NAV_LINKS.map((link) => {
+        const Icon = link.icon;
+        const active = isActive(link);
         return (
           <Link
-            key={href}
-            href={href}
+            key={link.href}
+            href={link.href}
             aria-current={active ? 'page' : undefined}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${
               active
@@ -48,7 +34,7 @@ export function PortalNav() {
             }`}
           >
             <Icon className={`h-5 w-5 ${active ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
-            {label}
+            {nav[link.key] ?? link.key}
           </Link>
         );
       })}
