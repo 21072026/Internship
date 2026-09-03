@@ -54,6 +54,10 @@ export async function PublicFooter() {
         // (#1396). A site that collects registrations and enquiry forms without
         // naming its operator anywhere is the state this replaces.
         { href: '/imprint', label: n.imprint },
+        // The conformance statement (#2035). EN 301 549 procurement expects to
+        // find it from any page, so it sits with the other legal links rather
+        // than only in the feature catalogue.
+        { href: '/accessibility', label: t.accessibility.title },
       ],
     },
   ];
