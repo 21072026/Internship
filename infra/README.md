@@ -479,3 +479,73 @@ Two consequences worth knowing:
 | `FORCE_NO_BACKUP=1` | deploy without taking a backup |
 | `ALLOW_DESTRUCTIVE=1` | apply a data-destroying schema change — **refused unless a backup was taken in the same run** |
 | `BACKUP_DIR`, `KEEP_DAYS`, `MIN_BYTES` | where/how long/how small |
+
+---
+
+## 6. MySQL watchdog (the database keeps getting OOM-killed)
+
+**Symptom.** The site is up but every page that touches data fails, and the
+sign-in form used to print the driver's own words:
+
+```
+Invalid `prisma.user.findUnique()` invocation:
+Can't reach database server at `localhost:3306`
+```
+
+`service mysql start` fixes it. That is the whole problem: the repair takes two
+seconds and the *detection* takes hours, because nothing on the box was watching
+and nothing off the box was told.
+
+**Cause.** The kernel's OOM killer picks `mysqld` — it is normally the largest
+process on the server — and SIGKILLs it. The packaged systemd unit then either
+does not restart after a SIGKILL, or gives up after a few rapid restarts
+(`StartLimitBurst`), and the database stays down.
+
+### Three layers, on purpose
+
+| Layer | What it covers | Where it lives |
+|---|---|---|
+| systemd drop-in (`Restart=always`, no start-rate limit, `OOMScoreAdjust=-500`) | brings mysqld back within ~10s of a kill, and asks the kernel to prefer another victim next time | `/etc/systemd/system/<unit>.service.d/10-internship-oom.conf` |
+| on-box timer, every minute | the cases systemd will not handle: a unit left `inactive`, a start that failed on a transient, a `stop` nobody meant to leave behind | `internship-mysql-watchdog.timer` → `infra/mysql-watchdog.sh --check` |
+| GitHub-hosted workflow, every 10 min | notices when the box itself is unresponsive, re-installs the timer if it vanished, and is the only layer that **emails** | `.github/workflows/mysql-watchdog.yml` |
+
+The third layer runs off-box deliberately: an alert that needs the sick server
+to be healthy is not an alert.
+
+### Install (idempotent, safe to re-run)
+
+```bash
+sudo ./infra/mysql-watchdog.sh --install     # drop-in + timer, both enabled
+./infra/mysql-watchdog.sh --status           # unit, timer, OOM kills, memory
+```
+
+The workflow installs it too, so a server rebuild that wipes `/etc/systemd`
+re-arms itself within ten minutes without anybody remembering this file.
+
+### What "alive" means here
+
+The probe asks whether the **server answers the protocol**, not whether we can
+log in: a `mysqladmin ping` answered with `Access denied` is a healthy server
+refusing an anonymous client. Reading that as "down" would restart a perfectly
+good database every minute, so it is a case the tests cover explicitly
+(`infra/test/mysql-watchdog.test.sh`, run in CI). No credentials are read or
+stored anywhere in the script.
+
+### The restart is first aid, not the cure
+
+Every recovery logs the kernel's OOM lines and a memory snapshot, and three
+restarts inside an hour are reported as *flapping* rather than health. When that
+happens the box needs headroom, not a faster watchdog:
+
+- add swap (a 2–4 GB swapfile is usually enough to turn a kill into a slowdown);
+- lower `innodb_buffer_pool_size` — on a Plesk box it is often left at a value
+  that assumes MySQL is the only thing running;
+- check what else grew: `./infra/mysql-watchdog.sh --status` prints the top
+  memory consumers by RSS.
+
+### What the user sees while it is down
+
+Nothing about MySQL. The sign-in form says "temporarily unavailable, try again
+in a few moments" — `src/lib/authGuard.ts` maps an unreachable database to a
+stable code and logs the real cause server-side. A raw driver message on a login
+form tells the visitor nothing and an attacker something.

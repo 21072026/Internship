@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
@@ -24,6 +25,7 @@ const PAGE_SIZE = 10;
 
 export default function AnnouncementsPage() {
   const t = useT();
+  const lightbox = useImageLightbox();
   const locale = useLocale();
   const [items, setItems] = useState<AnnouncementItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -84,13 +86,20 @@ export default function AnnouncementsPage() {
                   </p>
                 )}
                 {a.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={a.imageUrl}
-                    alt=""
-                    data-testid="announcement-image"
-                    className="mt-2 max-h-96 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => lightbox.open([{ src: a.imageUrl! }])}
+                    aria-label={t.imageViewer.viewImage}
+                    className="mt-2 block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={a.imageUrl}
+                      alt=""
+                      data-testid="announcement-image"
+                      className="max-h-96 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
+                    />
+                  </button>
                 )}
                 {a.link && (
                   <a href={a.link} target={a.link.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline block mt-1">
@@ -115,6 +124,7 @@ export default function AnnouncementsPage() {
           </Button>
         </div>
       )}
+      <ImageLightbox {...lightbox.lightboxProps} />
     </div>
   );
 }

@@ -527,6 +527,7 @@ run_tool node prisma/seed-goal-templates.mjs || true
 run_tool node prisma/seed-contributor-terms.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-organization.mjs || true
+run_tool node scripts/backfill-requisitions.mjs || true
 # API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
 # default org and the 'candidates:read' scope they already had in practice.
 # Must run AFTER backfill-organization.mjs, which creates the default org.

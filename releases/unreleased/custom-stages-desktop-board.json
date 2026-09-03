@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fixed** — the desktop admin board iterated the built-in stage list, so an organization with a customized pipeline saw its stages on a phone but no columns at all on a desktop. It now groups the organization's own resolved stages; stage keys outside the built-in phases get their own group. Added a 768px tablet layout tier, phone-width audits of the profile pages, a dark-mode phone audit, and board tests that seed 3-stage and 13-stage custom pipelines.",
-  "notes": {
-    "en": ["The admin board now shows a customized pipeline's stages on desktop, not only on a phone."],
-    "tr": ["Yönetici panosu, özelleştirilmiş bir akışın aşamalarını artık yalnızca telefonda değil masaüstünde de gösteriyor."],
-    "de": ["Das Admin-Board zeigt die Phasen einer angepassten Pipeline jetzt auch am Desktop, nicht nur am Telefon."]
-  }
-}

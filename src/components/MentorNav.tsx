@@ -2,47 +2,28 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BarChart3, BookOpen, CalendarClock, CalendarDays, CalendarRange, ClipboardCheck, ClipboardList, Columns3, FolderGit2, Inbox, LayoutDashboard, Mail, MailOpen, MessageSquareText, User, UserPlus, Users } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { MENTOR_NAV_LINKS } from '@/lib/navLinks';
 
 export function MentorNav() {
   const t = useT();
   const pathname = usePathname();
-  const links = [
-    { href: '/mentor', label: t.nav.dashboard, Icon: LayoutDashboard },
-    { href: '/mentor/board', label: t.nav.board, Icon: Columns3 },
-    { href: '/mentor/mentees', label: t.nav.myMentees, Icon: Users },
-    { href: '/mentor/applications', label: t.nav.applications, Icon: Inbox },
-    { href: '/mentor/invite', label: t.nav.inviteMentee, Icon: UserPlus },
-    { href: '/mentor/profile', label: t.nav.myProfile, Icon: User },
-    { href: '/mentor/projects', label: t.nav.projects, Icon: FolderGit2 },
-    { href: '/todos', label: t.nav.todos, Icon: ClipboardList },
-    { href: '/mentor/interactions', label: t.nav.interactionLogs, Icon: BookOpen },
-    { href: '/mentor/email', label: t.nav.email, Icon: Mail },
-    { href: '/mentor/meetings', label: t.nav.meetings, Icon: CalendarClock },
-    { href: '/mentor/interview-requests', label: t.nav.interviewRequests, Icon: CalendarDays },
-    { href: '/interviews', label: t.nav.interviewPanels, Icon: ClipboardCheck },
-    { href: '/mentor/availability', label: t.nav.availability, Icon: CalendarRange },
-    { href: '/mentor/calendar', label: t.nav.calendar, Icon: CalendarDays },
-    { href: '/mentor/mentee-activity', label: t.nav.menteeActivity, Icon: Activity },
-    { href: '/mentor/analytics', label: t.nav.analytics, Icon: BarChart3 },
-    { href: '/mentor/feedback', label: t.nav.feedback, Icon: MessageSquareText },
-    // Mentors read the same archive; a shared issue shows them its coaching
-    // block, exactly as the e-mail does (#1469).
-    { href: '/newsletters', label: t.nav.newsletters, Icon: MailOpen },
-  ];
+  const nav = t.nav as Record<string, string>;
 
-  const isActive = (href: string) =>
-    href === '/mentor' ? pathname === '/mentor' : pathname.startsWith(href);
+  // The route list lives in lib/navLinks — shared with the command palette's
+  // "Go to" group (#2079), so the two can never drift apart.
+  const isActive = (link: (typeof MENTOR_NAV_LINKS)[number]) =>
+    link.exact ? pathname === link.href : pathname.startsWith(link.href);
 
   return (
     <>
-      {links.map(({ href, label, Icon }) => {
-        const active = isActive(href);
+      {MENTOR_NAV_LINKS.map((link) => {
+        const Icon = link.icon;
+        const active = isActive(link);
         return (
           <Link
-            key={href}
-            href={href}
+            key={link.href}
+            href={link.href}
             aria-current={active ? 'page' : undefined}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${
               active
@@ -51,7 +32,7 @@ export function MentorNav() {
             }`}
           >
             <Icon className={`h-5 w-5 ${active ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
-            {label}
+            {nav[link.key] ?? link.key}
           </Link>
         );
       })}

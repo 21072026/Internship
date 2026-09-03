@@ -38,6 +38,46 @@ html.font-sm { font-size: 87.5%; }
 html.font-lg { font-size: 112.5%; }
 html.font-xl { font-size: 125%; }
 
+/*
+ * Compact density (#2078) — opt-in, off by default (html.density-compact).
+ * Same remap technique as the dark theme below: rather than annotate every
+ * component, tighten the handful of *container* utilities that carry the app's
+ * vertical rhythm — table cells, stacked-list rows and card padding.
+ *
+ * Deliberately only containers: every selector below names a table cell, a
+ * list row or a bordered card, never a button/link/input. Interactive elements
+ * keep their own padding and their min-h-11/min-w-11 floors, so compact mode
+ * cannot drop a tap target below 44x44px.
+ */
+html.density-compact table th,
+html.density-compact table td { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+
+/*
+ * Stacked list rows: `li`s that carry their own vertical padding, and the rows
+ * of a `divide-y` stack (which are `div`s about as often as `li`s, so the child
+ * selector names the padding utility rather than the tag).
+ */
+html.density-compact li.py-4,
+html.density-compact li.py-3,
+html.density-compact .divide-y > .py-4,
+html.density-compact .divide-y > .py-3 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+
+/* Card padding (the Card primitive's p-4 / p-6 / p-8 on a bordered surface). */
+html.density-compact div.rounded-xl.border.p-8,
+html.density-compact div.rounded-lg.border.p-8 { padding: 1.25rem; }
+html.density-compact div.rounded-xl.border.p-6,
+html.density-compact div.rounded-lg.border.p-6 { padding: 1rem; }
+html.density-compact div.rounded-xl.border.p-4,
+html.density-compact div.rounded-lg.border.p-4 { padding: 0.625rem; }
+
+/*
+ * Gaps between stacked sections (margins never affect a tap target). The
+ * `> :not([hidden]) ~ :not([hidden])` shape is Tailwind's own — a plain
+ * `> * + *` here would score (0,2,1) against the utility's (0,3,0) and lose.
+ */
+html.density-compact .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
+html.density-compact .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
+
 /* Dark mode base surfaces (class strategy); primitives add their own dark: */
 html.dark body { background-color: #030712; color: #f3f4f6; }
 

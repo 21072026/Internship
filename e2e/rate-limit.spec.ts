@@ -41,3 +41,21 @@ test('a rotating X-Forwarded-For does not buy a fresh rate-limit bucket', { tag:
   // them is a 429; run alone in the smoke subset the first few still pass.)
   expect(statuses).toContain(429);
 });
+test('support submissions are rate limited and return Retry-After', async ({ request }) => {
+  const statuses: number[] = [];
+  let retryAfter: string | undefined;
+
+  for (let i = 0; i < 6; i++) {
+    const response = await request.post('/api/support', {
+      data: { body: 'rate-limit test' },
+    });
+    statuses.push(response.status());
+
+    if (response.status() === 429) {
+      retryAfter = response.headers()['retry-after'];
+    }
+  }
+
+  expect(statuses).toContain(429);
+  expect(retryAfter).toBeTruthy();
+});

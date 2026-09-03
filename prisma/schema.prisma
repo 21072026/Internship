@@ -332,6 +332,9 @@ model User {
   theme                   String?
   // UI font-size preference ('sm' | 'md' | 'lg' | 'xl'); applied at sign-in.
   fontSize                String?
+  // UI density preference ('comfortable' | 'compact'); applied at sign-in.
+  // Null = comfortable (the default spacing).
+  density                 String?
   // UI accent color ('blue' | 'green' | 'purple' | 'rose' | 'teal' | 'amber');
   // drives the app's primary color via data-accent. Null = environment default
   // (green in preview, blue in production).
@@ -397,9 +400,31 @@ model User {
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
   createdApiKeys                    ApiKey[]                      @relation("ApiKeyCreatedBy")
+  guidanceStates                    UserGuidanceState[]
 
   @@index([role])
   @@index([referredById])
+}
+
+// Per-user state for in-product guidance surfaces (#2068): "I have seen this"
+// and "I dismissed this", keyed by a surface string (e.g. `checklist:ADMIN`).
+// One generic table rather than a flag per surface — a new tip or tour adds a
+// key, never a column. It stores only the ACKNOWLEDGEMENT: whether a checklist
+// step is done stays derived from the real rows, because a stored "I did it"
+// flag can disagree with reality and a derived one cannot.
+model UserGuidanceState {
+  id          String    @id @default(cuid())
+  userId      String
+  key         String
+  seenAt      DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
 }
 
 // Consent-gated activity trail: one row per page visit, with the dwell time on
@@ -1814,6 +1839,17 @@ model Evaluation {
   scores      Json           @default("{}") // { criterion: 1..5 }
   comment     String?        @db.Text
   createdAt   DateTime       @default(now())
+  // When this record was last CORRECTED inside its edit window (#1893). Null
+  // means "never corrected", which is also every row written before #1893.
+  //
+  // Deliberately NOT a Prisma `@updatedAt`: an Evaluation row is written by
+  // several flows that change nothing about the author's judgement — drafting a
+  // testimonial excerpt, approving or declining it, publishing, unpublishing,
+  // and the bulk revoke when a mentee withdraws consent. A generic last-write
+  // column would mark all of those as "corrected", which is precisely the
+  // mislabelling this flag exists to prevent. Only PATCH
+  // /api/evaluations/[id] ever writes it.
+  correctedAt DateTime?
   // Which rubric this was scored against (#822). Null means the built-in 4+4
   // criteria, which is every row written before org templates existed and every
   // row in an org that never defined one. Stamped at write time so a record
@@ -2317,6 +2353,13 @@ model InvitationToken {
   openedAt     DateTime?
   registeredAt DateTime?
   verifiedAt   DateTime?
+  // Revoked (#2071): an invitation the admin has withdrawn. A real state rather
+  // than a delete, so the board can still answer "what happened to that person"
+  // — and so the consumption paths (register, /api/invite/opened, resend) can
+  // refuse it. Registration checks this alongside `used`/`expiresAt`: hiding a
+  // revoked row from the list without refusing the token would leave the link
+  // live for whoever already has it.
+  revokedAt    DateTime?
 
   // Only the inviter gets a relation; mentorId/menteeId/projectId stay plain
   // columns (validated when the invitation is created) so the User model does

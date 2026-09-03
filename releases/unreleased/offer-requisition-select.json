@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Offer requisitions are selected safely** (#1407). The offer wizard now lists company-scoped open requisitions, validates the selection on create and draft edit, and shows requisition titles in offer management.",
-  "notes": {
-    "en": ["Offer requisitions can now be selected by title, with only open requisitions from the offer's company available."],
-    "tr": ["Teklif iş talepleri artık başlığa göre seçilebilir ve yalnızca teklif şirketinin açık iş talepleri gösterilir."],
-    "de": ["Stellenanforderungen für Angebote können jetzt nach Titel ausgewählt werden; verfügbar sind nur offene Anforderungen des Angebotsunternehmens."]
-  }
-}

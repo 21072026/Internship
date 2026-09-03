@@ -126,7 +126,7 @@ test('mentor analytics retries a failed load and renders the returned stats', as
 
   try {
     await signInAndSettle(page, email, 'AsyncPass123!', '/mentor');
-    await page.route('**/api/mentor/analytics', async (route) => { pending.push(route); });
+    await page.route('**/api/mentor/analytics**', async (route) => { pending.push(route); });
     await page.goto('/mentor/analytics');
 
     await expect.poll(() => pending.length).toBe(1);
@@ -140,7 +140,10 @@ test('mentor analytics retries a failed load and renders the returned stats', as
     await pending[1].fulfill({
       json: {
         funnel: {}, totalRelations: 3, activeRelations: 2, hired: 1,
-        conversionToHired: 33, interactions: 7, goals: { open: 1, done: 2, total: 3 }, avgDaysToHired: 12,
+        conversionToHired: 33, interactions: 7,
+        goals: { open: 1, done: 2, total: 3, doneInRange: 2 },
+        avgDaysToHired: 12, statusChanges: 4, rows: [],
+        range: { from: '2026-01-01', to: '2026-01-31' },
       },
     });
     await expect(page.getByText('Total mentees')).toBeVisible();
