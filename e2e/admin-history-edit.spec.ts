@@ -50,7 +50,7 @@ test('admin can add and delete stage-history entries', async ({ page }) => {
     }, { times: 1 });
 
     await page.getByRole('button', { name: 'Delete entry' }).click();
-    await expect(page.getByRole('status')).toContainText('Something went wrong');
+    await expect(page.getByRole('status').filter({ hasText: 'Something went wrong' })).toBeVisible();
     expect(detailReloads).toBe(0);
     expect(await prisma.statusChange.findMany({ where: { relationId: rel.id } })).toHaveLength(1);
 

@@ -10,6 +10,51 @@ Newest entries on top.
 
 ---
 
+## 2026-09-03 — Sessizce kamaya giren bir cron: sürüm derlemesi 10 gün boyunca her gece patladı (#2142, #2143)
+
+**Türetilmiş bir değer doğruyken, kanonik dosya yanlış olabilir — ve kimse fark
+etmez.** Uygulamanın gösterdiği sürüm build sırasında `base + fragment`'lardan
+türetildiği için 10 gün boyunca kusursuzdu; bozulan tek şey `CHANGELOG.md` ve
+`releaseNotes.ts` idi. Kullanıcıya dönük hiçbir belirti yoktu, dolayısıyla hatayı
+ancak bakımcı "PR'lar kapandı ama changelog boş" diye sorduğunda gördük. Ders: bir
+değeri iki yoldan üretiyorsan (biri build-time türetme, biri commit'li dosya),
+**ikisinin ayrıştığını gösteren bir kontrol** gerekiyor — `check:release-fragments`
+bekleyen sayıyı basıyor ama "57 tanedir, bu çok" demiyor.
+
+**Deterministik dal adı + başarısız bir adım = kalıcı kama.** Dal adı sürümü
+taşıyordu (`bot/release-compact-<version>`), yani her denemede *aynı* ad, her
+denemede *farklı* commit sha'sı. İlk çalıştırma dalı itip PR adımında öldükten sonra
+sonraki her çalıştırma `non-fast-forward` ile PR adımına **hiç ulaşamadan** düştü —
+üstelik ilk hatanın (`RELEASE_BOT_TOKEN` yok) izini de gizleyerek. Bir bot dalı ya
+**tek ve force-push'lanabilir** olmalı ya da her çalıştırmada benzersiz; ikisinin
+arası en kötüsü. Kural olarak: geri alınabilir bir işi tekrar çalıştırılabilir yaz,
+"iki kere çalışırsa ne olur?" sorusunu adım adım sor.
+
+**Kendi kendini toparlayan tasarım > doğru çalışan tasarım.** Asıl düzeltme token
+eklemek değil — onu bakımcı ekleyebilir. Asıl düzeltme, PR adımı başarısız olsa bile
+dalın **doğru ve güncel** kalması: sonraki gece kendi kendine toparlıyor, insan
+müdahalesi gerekmiyor.
+
+**Zamanlanmış her workflow'a bir hata bildirimi koy.** Depoda `e2e-full`, `k6-load`,
+`stress` ve `backup-verify` `scripts/send-alert-email.mjs`'ye bağlıyken
+`release-compact` bağlı değildi — ve tam olarak o, sessizce 10 gün kırmızı kaldı.
+Bildirimi olmayan cron, olmayan cron'dur.
+
+**`actions_list` MCP çıktısı bağlamı patlatıyor.** Her run objesi tüm `head_commit`
+mesajını taşıyor, bu repoda commit mesajları uzun → 4-5 run bile ~100k karakter.
+Tool sonucu otomatik dosyaya düşüyor; `python3 -c "json.load(...)"` ile sadece
+`run_number/status/conclusion/id` çekmek doğru yol. `minimal_output: true` bu araçta
+işe yaramadı.
+
+**Kutu notu:** oturum `--depth` ile klonlanmış geliyor (69 commit). `release-compact.mjs`
+`requireStamps: true` ile çalıştığı için **fetch --unshallow şart** — aksi halde
+bilinçli olarak "fails closed" davranıyor. Ayrıca `npm ci --ignore-scripts`
+`prisma generate`'i atlıyor, bu yüzden `tsc --noEmit` 100+ sahte hata veriyor;
+`npx prisma generate` sonrası 0'a düşüyor. Uzak dal silme (`git push origin --delete`)
+sandbox tarafından reddedildi — artıkları bakımcıya bırakmak gerekti.
+
+---
+
 ## 2026-08-30 — 569 issue'luk bir backlog'u tek oturumda üretmek: workflow, kota ve GitHub API dersleri (#1514)
 
 **Oturum kotası uzun bir workflow'u ortasından kesebilir — ama `resumeFromRunId` bunu
@@ -5385,3 +5430,75 @@ sorunsuz çalıştı). Tarayıcı açmayan prisma-only spec'ler bu sorunu hiç g
 
 **MariaDB oturum içinde durabiliyor:** `db push` bir anda P1001 verdiyse kutunun
 ağı değil, `service mariadb start`'ı tekrar çalıştırmak gerekiyor.
+
+## 2026-09-03 — Ham Prisma hatasının giriş formunda görünmesi + MySQL watchdog
+
+**Bir "koruma" var diye korunuyor sanma; koruduğu yolu çalıştırıp gör.** #1150'de
+eklenen `guardProviders` hiç devreye girmemişti. Sebep NextAuth'un kendi iç akışı:
+`CredentialsProvider({...})` gerçek `authorize`'ı üst seviyeye değil `options`
+çantasına koyuyor (üstteki `authorize: () => null` bir taş bebek), ve
+`core/lib/providers.js` içindeki `parseProviders` o çantayı sağlayıcının **üstüne**
+merge ediyor. Yani sarmalanan fonksiyon hiç çağrılmıyor, sarmalanmamış olan geri
+geliyor. Sonuç: MySQL OOM ile ölünce kullanıcı giriş formunda
+``Can't reach database server at `localhost:3306` `` görüyordu. Ders: bir
+kütüphanenin veri yapısını "spread ile kopyalayıp değiştirdim" demek yetmiyor —
+o yapıyı kütüphanenin nasıl **yeniden** işlediğine bakmak gerekiyor
+(`node_modules` içindeki 20 satır her seferinde tahminden ucuz).
+
+**Sunucu tarafı maskeleme tek başına yeterli değil.** İstemcide de beyaz liste
+var artık: bilinen mesaj değilse hiç basılmıyor. Guard'ın atlandığı (veya
+NextAuth'un kendi ürettiği) her mesaj böylece jenerik kalıyor — savunmanın iki
+tarafı da tek kaynaktan (`INTENTIONAL_AUTH_ERRORS`) besleniyor.
+
+**Watchdog yazarken asıl tehlike "ölüyü diriltmek" değil, "diriye ölü demek".**
+Probe olarak `mysqladmin ... --no-defaults ... ping` yazmıştım; MariaDB istemcisi
+`--no-defaults`'u **ilk argüman değilse** reddedip `unknown option` ile 2 dönüyor.
+Stub'lı testler yeşildi, gerçek kutuda ise sağlıklı sunucu sürekli DOWN görünüyordu —
+yani prod veritabanını dakikada bir yeniden başlatacaktı. İki sonuç: (1) stub'ı
+gerçek istemci kadar huysuz yaz (testteki `mysqladmin` artık aynı sırayı dayatıyor),
+(2) probe'un üç hâli olmalı: up / down / **sorulamadı**; "sorulamadı"yı down saymak
+en pahalı hata.
+
+**`command -v systemctl` "systemd var" demek değil.** Bu konteynerde `systemctl`
+kurulu ama PID 1 değil; her çağrı "System has not been booted with systemd" diyor.
+Doğru soru `[ -d /run/systemd/system ]`. Fallback SysV `service` yoluna düşünce
+script bu kutuda gerçekten çalıştı — ve testlerde yolun ikisi de kapsandı
+(`SYSTEMD_RUN_DIR` / `INITD_DIR` env'leri sırf bunun için var).
+
+**Kutu notu:** `chromium_headless_shell-1234` yine eksikti; bu kez çalışan yol,
+beklenen iç dizini oluşturup `chromium_headless_shell-1194/chrome-linux/` içeriğini
+oraya symlink'lemek oldu. Ayrıca `BASE_URL` verilmeden çalıştırılan tek bir
+`*.unit.spec.ts` bile Playwright'ı kendi dev sunucusunu ayağa kaldırmaya zorluyor;
+tarayıcısız birim spec'leri `BASE_URL=http://127.0.0.1:9999` ile saniyeler içinde
+koşuyor. DB'ye dokunan spec'lerde `DATABASE_URL`'i **komut satırında** vermek
+gerekiyor (config `.env`'i yalnız kendi webServer'ı için yüklüyor).
+## 2026-09-03 — Resim önizleme: "yeni sekme" bir çıkış yolu değil (#2147)
+
+**`target="_blank"` masaüstünde çözüm, telefonda tuzak.** Kullanıcı raporu tek cümleydi:
+"resmi büyüttüğüm zaman resimden çıkamadım, uygulamayı kapatıp tekrar girdim". Kodda hata
+yoktu — bağlantı çalışıyordu; kurulu PWA'da açılan sekmenin **adres çubuğu ve geri tuşu
+yok**. Bir davranışın "çalıştığını" masaüstü tarayıcıda doğrulamak, uygulamanın gerçekte
+çalıştığı yerde doğrulamak değil.
+
+**Kapatma yolu tek değil, dört tanedir.** ✕ düğmesi istenen şeydi ama yetmiyor: Escape,
+arka plana dokunma ve **telefonun kendi geri tuşu**. Sonuncusu için overlay açılırken
+`history.pushState`, kapanırken (geri ile kapanmadıysa) `history.back()` — yığını dengede
+tutmazsan kullanıcı resmi kapattıktan sonra bir kez "boşa" geri basıyor. Bunu e2e'de
+`page.goBack()` ile iki yönlü doğrulamak mümkün ve şart.
+
+**Resmin kendisine dokunmak kapatmamalı.** Arka plan tıklaması kapatırken görselin
+`stopPropagation` ile yakınlaştırmaya bağlanması, hedefi ıskalayan dokunuşun büyüttüğün
+şeyi kapatmasını engelliyor.
+
+**Bir `<a>`'yı `<button>`'a çevirmek testleri sessizce kırıyor.** `a[href*="/api/support/
+attachments/"]` ve `button[aria-label*="dosya.png"]` gibi seçiciler ya hiç eşleşmedi ya da
+iki elemana çıktı (yeni "görüntüle" düğmesi de dosya adını taşıyor). Yeni etkileşimli
+elemana `data-testid` vermek, aynı PR'da eski spec'leri düzeltmekten daha ucuz.
+
+**Kutu notları (bu tur):** `service mariadb start` oturum içinde **iki kez** gerekti —
+`db push` çalıştıktan yarım saat sonra P1001 dönüyor. Playwright için symlink yerine
+`playwright.local.config.ts` (gitignore'da) + `use.launchOptions.executablePath =
+'/opt/pw-browsers/chromium'` yine en hızlı yol. Dev sunucusu ağır yük altında düşebiliyor:
+`ECONNREFUSED 127.0.0.1:3000` veya `[next-auth][error][CLIENT_FETCH_ERROR]` gördüğün
+spec'i **kırmızı saymadan önce tek başına tekrar çalıştır** — bu turda 11 "kırmızı"
+spec'in tamamı ikinci koşuda yeşildi.

@@ -32,6 +32,10 @@ export default async function PrivacyPage() {
     { title: p.purposesTitle, body: p.purposesBody },
     { title: p.legalBasisTitle, body: p.legalBasisBody },
     { title: p.recipientsTitle, body: p.recipientsBody },
+    // Named per purpose, not as one line about CV parsing: four features can
+    // send text to a model, and a notice that mentions only the first is a
+    // notice that under-discloses the other three (#2034).
+    { title: p.aiTitle, body: p.aiBody },
     { title: p.retentionTitle, body: p.retention },
     { title: p.rightsTitle, body: p.rights },
     { title: p.contactTitle, body: contactBody },
@@ -60,9 +64,12 @@ export default async function PrivacyPage() {
             <p className="text-sm text-gray-600 dark:text-gray-300">{p.withdraw}</p>
             <p className="text-sm text-gray-600 dark:text-gray-300">{p.complaint}</p>
 
-            <p className="text-sm">
+            <p className="text-sm flex flex-wrap gap-x-4 gap-y-1">
               <Link href="/imprint" className="text-blue-600 hover:underline" data-testid="privacy-imprint-link">
                 {p.imprintLink} →
+              </Link>
+              <Link href="/ai" className="text-blue-600 hover:underline" data-testid="privacy-ai-link">
+                {p.aiLink} →
               </Link>
             </p>
           </div>

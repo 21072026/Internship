@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Attention queue counts to-dos as open work** (#1491). `getAttentionItems` derived `no_open_goal` from `Goal` rows only, so a mentee whose work was handed out as to-dos (everything from the shared pool is a `ProjectTask`, not a `Goal`) was permanently flagged \"no open goal\". Open to-dos visible to the mentor now suppress the flag, and the label names both.",
-  "notes": {
-    "en": ["The mentor dashboard no longer says \"no open goal\" for a mentee who has open to-dos — items from the shared list count as open work."],
-    "tr": ["Mentor panosu, açık yapılacakları olan bir mentee için artık \"açık hedef yok\" demiyor — ortak listeden gelen maddeler de açık iş sayılıyor."],
-    "de": ["Das Mentor-Dashboard meldet \"kein offenes Ziel\" nicht mehr für Mentees mit offenen Aufgaben — Einträge aus der gemeinsamen Liste zählen als offene Arbeit."]
-  }
-}

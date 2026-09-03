@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/Card';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
@@ -300,7 +300,7 @@ export default function DuplicatesPage() {
         <Card><SkeletonRows rows={6} /></Card>
       ) : pairs.length === 0 ? (
         <Card>
-          <EmptyState icon={GitMerge} title={t.duplicates.empty} />
+          <EmptyState testId="duplicates" icon={GitMerge} title={t.duplicates.empty} />
         </Card>
       ) : (
         <div className="space-y-4">

@@ -77,7 +77,7 @@ test('mentor board on a phone: stage list, no sideways scrolling, stage change w
     // The filter stays put, so the card visibly leaves the stage you were looking at.
     await expect(card).toHaveCount(0);
     await expect(page.getByTestId('board-stage-filter')).toHaveValue('APPLICATION_100');
-    await expect(page.getByText('No mentees in this stage')).toBeVisible();
+    await expect(page.getByText('Nothing at this stage')).toBeVisible();
 
     // …and the move can be taken back from the toast.
     await page.getByRole('button', { name: 'Undo' }).click();
