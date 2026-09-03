@@ -11,6 +11,8 @@
   "/portal#dark": {},
   "/portal/profile": {},
   "/portal/profile#dark": {},
+  "/account": {},
+  "/account#dark": {},
   "/mentor": {},
   "/mentor#dark": {},
   "/mentor/mentees": {},

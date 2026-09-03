@@ -306,11 +306,17 @@ test('public pages: landing, sign-in, the statement and the application entry', 
   ]);
 });
 
-test('mentee portal: dashboard and profile', async ({ page }) => {
+// `/account` rides in the mentee context because it is the ONE settings page
+// every authenticated role shares (src/app/account/layout.tsx guards on a
+// session, not a role) — scanning it once here covers it for all of them, and
+// the mentee view is the smallest: the mentor-only expertise card and the
+// admin-only impersonation notice are both absent, so nothing role-specific
+// can quietly widen the baseline from under a different context (#2041).
+test('mentee portal: dashboard, profile and account settings', async ({ page }) => {
   test.slow();
   const { email } = await seed('MENTEE', 'A11y Mentee');
   await signInAsFreshUser(page, email, PASSWORD, '/portal');
-  await scanAll(page, ['/portal', '/portal/profile']);
+  await scanAll(page, ['/portal', '/portal/profile', '/account']);
 });
 
 test('mentor: dashboard and mentee list', async ({ page }) => {
