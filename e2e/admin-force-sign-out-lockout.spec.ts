@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAsFreshUser } from './helpers/auth';
+import { signInAsFreshUser, submitSignInForm } from './helpers/auth';
+import { totp } from '../src/lib/totp';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -128,5 +129,60 @@ test('admin sees a Locked badge and can unlock a locked-out account', async ({ p
     await prisma.accountLockout.deleteMany({ where: { email: menteeEmail.toLowerCase() } });
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(adminEmail);
+  }
+});
+
+// #1541 regression — the durable counter is per STAGE, not per address.
+//
+// A single shared row would let five fumbled authenticator codes lock the
+// PASSWORD stage. That is not merely stricter: once the password check is
+// refused it can no longer raise `2FA_REQUIRED`, so the sign-in form never
+// reveals the code field again and a legitimate 2FA user is shut out of their
+// own account for the rest of the window (it also broke
+// e2e/two-factor.spec.ts's sixth iteration). This proves the two counters are
+// independent in both directions.
+test('a locked TOTP counter does not lock the password stage', async ({ page }) => {
+  const email = uniqueEmail('tfastage');
+  const pw = 'StagePass123!';
+  const user = await seedUser(email, pw, 'MENTEE', 'TOTP Stage');
+
+  try {
+    // Turn 2FA on for the account…
+    await signInAsFreshUser(page, email, pw, '/portal');
+    const setup = await (
+      await page.request.post('/api/account/2fa', { data: { action: 'setup' } })
+    ).json();
+    await page.request.post('/api/account/2fa', {
+      data: { action: 'enable', code: totp(setup.secret) },
+    });
+
+    // …then lock ONLY the totp counter, as five wrong codes would.
+    await prisma.accountLockout.create({
+      data: {
+        email: email.toLowerCase(),
+        userId: user.id,
+        reason: 'totp',
+        failedCount: 5,
+        lockedUntil: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+
+    // The password stage still runs, so the form learns a code is wanted.
+    await submitSignInForm(page, email, pw);
+    const field = page.getByLabel('Authenticator code');
+    await expect(field).toBeVisible({ timeout: 10_000 });
+
+    // …and an actually-submitted code is refused by the durable totp gate.
+    await field.fill('123456');
+    await page.click('button[type="submit"]');
+    await expect(page.getByText(/Too many attempts/i)).toBeVisible({ timeout: 10_000 });
+
+    // The password counter was never touched by any of this.
+    expect(
+      await prisma.accountLockout.count({ where: { email: email.toLowerCase(), reason: 'password' } })
+    ).toBe(0);
+  } finally {
+    await prisma.accountLockout.deleteMany({ where: { email: email.toLowerCase() } });
+    await cleanupByEmail(email);
   }
 });

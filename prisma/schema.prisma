@@ -2417,10 +2417,15 @@ model TrustedDevice {
 model AccountLockout {
   id          String    @id @default(cuid())
   // Normalized (trimmed + lowercased) email the attempts were made against.
-  email       String    @unique
+  email       String
   // The account, when the typed email matches one. Null otherwise.
   userId      String?
-  // Which bucket tripped: "password" or "totp".
+  // Which stage this counter belongs to: "password" or "totp". One row PER
+  // STAGE per address, mirroring the two separate in-memory buckets in
+  // auth.ts. A single shared row would let five fumbled authenticator codes
+  // lock the password stage, and the sign-in form could then no longer even
+  // reveal the code field (it needs a 2FA_REQUIRED, which only comes from a
+  // password check that was allowed to run).
   reason      String    @default("password")
   failedCount Int       @default(0)
   // Start of the current counting window. Failures older than the window open
@@ -2434,6 +2439,7 @@ model AccountLockout {
   // Tenant anchor (#543). This is tenant data — it is listed in TENANT_MODELS.
   orgId       String?
 
+  @@unique([email, reason])
   @@index([userId])
   @@index([lockedUntil])
   @@index([orgId])

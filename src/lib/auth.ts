@@ -130,7 +130,7 @@ export const authOptions: NextAuthOptions = {
         // an already-locked address must not be allowed to buy one. Unlike the
         // in-process Map behind `rateLimit`, this survives a redeploy — and an
         // admin can see it and clear it.
-        const lockedBefore = await getActiveLockout(email);
+        const lockedBefore = await getActiveLockout(email, 'password');
         if (lockedBefore) {
           await logActivity({
             action: 'auth.login_locked',
@@ -209,6 +209,24 @@ export const authOptions: NextAuthOptions = {
         if (user.twoFactorEnabled && user.twoFactorSecret) {
           const code = (credentials.totp || '').trim();
           if (!code) throw new Error('2FA_REQUIRED');
+
+          // The TOTP stage has its own durable gate, deliberately placed AFTER
+          // the 2FA_REQUIRED throw above: a locked code bucket must still let
+          // the sign-in form learn that a code is wanted, or the field never
+          // renders and the user cannot see why they are stuck. Only an
+          // actually-submitted code is refused here.
+          const totpLocked = await getActiveLockout(email, 'totp');
+          if (totpLocked) {
+            await logActivity({
+              action: 'auth.login_locked',
+              level: 'warning',
+              actorEmail: user.email,
+              actorId: user.id,
+              detail: `totp locked until ${totpLocked.lockedUntil.toISOString()}`,
+              request: origin,
+            });
+            throw new Error('Too many attempts. Please try again later.');
+          }
 
           // Its own bucket, separate from the password one: a legitimate user
           // fumbling their code shouldn't consume the password allowance, and

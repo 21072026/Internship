@@ -55,15 +55,28 @@ function toActive(row: {
 }
 
 /**
- * The live lockout for an email, or null when the address is not locked.
+ * The live lockout for one stage of one address, or null when that stage is not
+ * locked.
+ *
+ * The stage is required, and that is the whole point: the password gate must
+ * ask about the password counter only. Asking a single shared counter meant
+ * five fumbled authenticator codes locked the password stage too — and once the
+ * password check is refused it can no longer raise `2FA_REQUIRED`, so the
+ * sign-in form never reveals the code field again and a legitimate user with
+ * 2FA on is shut out of their own account for the rest of the window.
  *
  * Never throws: a database hiccup must not turn into "nobody can sign in". That
  * is the same trade the in-memory limiter always made — the lockout is a brake
  * on guessing, not the authentication decision itself.
  */
-export async function getActiveLockout(email: string): Promise<ActiveLockout | null> {
+export async function getActiveLockout(
+  email: string,
+  reason: LockoutReason,
+): Promise<ActiveLockout | null> {
   try {
-    const row = await prisma.accountLockout.findUnique({ where: { email: normalize(email) } });
+    const row = await prisma.accountLockout.findUnique({
+      where: { email_reason: { email: normalize(email), reason } },
+    });
     return row ? toActive(row) : null;
   } catch (e) {
     logger.error('Lockout lookup failed', { error: String(e) });
@@ -78,12 +91,12 @@ export async function getActiveLockout(email: string): Promise<ActiveLockout | n
  * Returns the lockout when the address is locked after this attempt, else null.
  * Never throws.
  *
- * One row per address, shared by both stages: the durable counter answers
- * "how many failed sign-in attempts has this address made", and the caller
- * supplies the limit its stage is judged against (10 for the password, 5 for
- * the TOTP code). The two in-memory buckets in auth.ts stay separate and
- * unchanged, so nothing here loosens the existing behaviour — it only adds a
- * second brake that a redeploy cannot release.
+ * One row per address PER STAGE, exactly mirroring the two separate in-memory
+ * buckets in auth.ts: the password counter is judged against 10 failures, the
+ * TOTP counter against 5, and neither can consume the other's allowance. That
+ * separation is not tidiness — sharing one row let a fumbled authenticator code
+ * lock the password stage, which is the one thing that must keep working for
+ * the form to be able to ask for a code at all.
  */
 export async function recordFailedAttempt(opts: {
   email: string;
@@ -98,7 +111,8 @@ export async function recordFailedAttempt(opts: {
   const windowMs = opts.windowMs ?? LOCKOUT_WINDOW_MS;
   const now = new Date();
   try {
-    const existing = await prisma.accountLockout.findUnique({ where: { email } });
+    const key = { email, reason: opts.reason };
+    const existing = await prisma.accountLockout.findUnique({ where: { email_reason: key } });
     const stillLocked = !!existing?.lockedUntil && existing.lockedUntil.getTime() > now.getTime();
     // A counting window that has run out starts a fresh count — otherwise one
     // fumbled password a week would eventually lock an account nobody attacked.
@@ -120,7 +134,7 @@ export async function recordFailedAttempt(opts: {
       lastIp: opts.ip ?? null,
     };
     const row = await prisma.accountLockout.upsert({
-      where: { email },
+      where: { email_reason: key },
       create: { email, ...data },
       update: data,
     });
@@ -131,7 +145,10 @@ export async function recordFailedAttempt(opts: {
   }
 }
 
-/** Drop the counter after a fully successful sign-in. Never throws. */
+/**
+ * Drop the counters after a fully successful sign-in — both stages, since the
+ * whole credential check is through. Never throws.
+ */
 export async function clearLockoutByEmail(email: string): Promise<void> {
   try {
     await prisma.accountLockout.deleteMany({ where: { email: normalize(email) } });
