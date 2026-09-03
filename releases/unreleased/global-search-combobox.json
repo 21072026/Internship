@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Global search is an accessible combobox** (#2075). The results dropdown in the admin/mentor header now carries `role=\"combobox\"` with `aria-expanded`/`aria-controls`/`aria-activedescendant` on the input and a `role=\"listbox\"` of `role=\"option\"` rows, and is fully keyboard-operable: ArrowUp/ArrowDown (wrapping), Home/End, Enter to open the highlighted hit, Escape to close and return focus, Tab to dismiss without navigating — with the active row scrolled into view. A polite live region announces the result count, a query with no matches now shows a localised \"no results\" row instead of rendering nothing, and the panel's dark-mode surfaces and text tones are pinned to the flat `html.dark` overrides (documented in-file so no dead `dark:` variant creeps back in) and asserted by a computed-style e2e check in both themes.",
-  "notes": {
-    "en": ["Global search can now be driven entirely from the keyboard, is announced properly by screen readers, says when there are no results, and is readable in dark mode."],
-    "tr": ["Genel arama artık tamamen klavyeyle kullanılabiliyor, ekran okuyucular tarafından doğru okunuyor, sonuç bulunamadığında bunu söylüyor ve koyu modda okunaklı."],
-    "de": ["Die globale Suche lässt sich jetzt vollständig per Tastatur bedienen, wird von Screenreadern korrekt angesagt, meldet fehlende Treffer und ist im Dunkelmodus lesbar."]
-  }
-}

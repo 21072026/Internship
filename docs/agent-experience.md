@@ -10,6 +10,51 @@ Newest entries on top.
 
 ---
 
+## 2026-09-03 — Sessizce kamaya giren bir cron: sürüm derlemesi 10 gün boyunca her gece patladı (#2142, #2143)
+
+**Türetilmiş bir değer doğruyken, kanonik dosya yanlış olabilir — ve kimse fark
+etmez.** Uygulamanın gösterdiği sürüm build sırasında `base + fragment`'lardan
+türetildiği için 10 gün boyunca kusursuzdu; bozulan tek şey `CHANGELOG.md` ve
+`releaseNotes.ts` idi. Kullanıcıya dönük hiçbir belirti yoktu, dolayısıyla hatayı
+ancak bakımcı "PR'lar kapandı ama changelog boş" diye sorduğunda gördük. Ders: bir
+değeri iki yoldan üretiyorsan (biri build-time türetme, biri commit'li dosya),
+**ikisinin ayrıştığını gösteren bir kontrol** gerekiyor — `check:release-fragments`
+bekleyen sayıyı basıyor ama "57 tanedir, bu çok" demiyor.
+
+**Deterministik dal adı + başarısız bir adım = kalıcı kama.** Dal adı sürümü
+taşıyordu (`bot/release-compact-<version>`), yani her denemede *aynı* ad, her
+denemede *farklı* commit sha'sı. İlk çalıştırma dalı itip PR adımında öldükten sonra
+sonraki her çalıştırma `non-fast-forward` ile PR adımına **hiç ulaşamadan** düştü —
+üstelik ilk hatanın (`RELEASE_BOT_TOKEN` yok) izini de gizleyerek. Bir bot dalı ya
+**tek ve force-push'lanabilir** olmalı ya da her çalıştırmada benzersiz; ikisinin
+arası en kötüsü. Kural olarak: geri alınabilir bir işi tekrar çalıştırılabilir yaz,
+"iki kere çalışırsa ne olur?" sorusunu adım adım sor.
+
+**Kendi kendini toparlayan tasarım > doğru çalışan tasarım.** Asıl düzeltme token
+eklemek değil — onu bakımcı ekleyebilir. Asıl düzeltme, PR adımı başarısız olsa bile
+dalın **doğru ve güncel** kalması: sonraki gece kendi kendine toparlıyor, insan
+müdahalesi gerekmiyor.
+
+**Zamanlanmış her workflow'a bir hata bildirimi koy.** Depoda `e2e-full`, `k6-load`,
+`stress` ve `backup-verify` `scripts/send-alert-email.mjs`'ye bağlıyken
+`release-compact` bağlı değildi — ve tam olarak o, sessizce 10 gün kırmızı kaldı.
+Bildirimi olmayan cron, olmayan cron'dur.
+
+**`actions_list` MCP çıktısı bağlamı patlatıyor.** Her run objesi tüm `head_commit`
+mesajını taşıyor, bu repoda commit mesajları uzun → 4-5 run bile ~100k karakter.
+Tool sonucu otomatik dosyaya düşüyor; `python3 -c "json.load(...)"` ile sadece
+`run_number/status/conclusion/id` çekmek doğru yol. `minimal_output: true` bu araçta
+işe yaramadı.
+
+**Kutu notu:** oturum `--depth` ile klonlanmış geliyor (69 commit). `release-compact.mjs`
+`requireStamps: true` ile çalıştığı için **fetch --unshallow şart** — aksi halde
+bilinçli olarak "fails closed" davranıyor. Ayrıca `npm ci --ignore-scripts`
+`prisma generate`'i atlıyor, bu yüzden `tsc --noEmit` 100+ sahte hata veriyor;
+`npx prisma generate` sonrası 0'a düşüyor. Uzak dal silme (`git push origin --delete`)
+sandbox tarafından reddedildi — artıkları bakımcıya bırakmak gerekti.
+
+---
+
 ## 2026-08-30 — 569 issue'luk bir backlog'u tek oturumda üretmek: workflow, kota ve GitHub API dersleri (#1514)
 
 **Oturum kotası uzun bir workflow'u ortasından kesebilir — ama `resumeFromRunId` bunu

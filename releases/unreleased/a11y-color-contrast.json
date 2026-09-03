@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Accessible color contrast**: raise low-contrast helper, loading, empty-state, mode-switch, and profile-completion text to WCAG AA-compliant palette tones.",
-  "notes": {
-    "en": ["Helper text, empty states, loading messages, and profile prompts are now easier to read in light and dark mode."],
-    "tr": ["Yardımcı metinler, boş durumlar, yükleme mesajları ve profil uyarıları artık açık ve koyu modda daha kolay okunuyor."],
-    "de": ["Hilfstexte, Leerzustände, Ladehinweise und Profilaufforderungen sind im hellen und dunklen Modus jetzt besser lesbar."]
-  }
-}
