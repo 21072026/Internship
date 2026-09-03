@@ -10,6 +10,16 @@ Newest entries on top.
 
 ---
 
+## 2026-09-03 — Repeated conflict follow-up on the same PR (#2008)
+
+**A scary-looking page conflict can still be import-only.** The second conflict on
+`src/app/admin/integrations/page.tsx` came from two PRs both touching the imports at the top
+while the body merged cleanly. Before re-resolving a whole page by hand, search just for the
+markers; if only the import block is conflicted, keep the union of imports and leave the merged
+body alone.
+
+---
+
 ## 2026-09-03 — Conflict-only follow-up on a stale feature PR (#2008)
 
 **Feature-catalogue conflicts are usually union merges, not winner-takes-all.** `src/lib/features.ts`
@@ -5447,6 +5457,57 @@ sorunsuz çalıştı). Tarayıcı açmayan prisma-only spec'ler bu sorunu hiç g
 **MariaDB oturum içinde durabiliyor:** `db push` bir anda P1001 verdiyse kutunun
 ağı değil, `service mariadb start`'ı tekrar çalıştırmak gerekiyor.
 
+## 2026-09-02 — Paralel oturumlar aynı kuyruktan iş alırken (#1370, #1380, #1383, #1427, #2052)
+
+**Aynı anda çalışan başka Claude oturumları backlog'un aynı yerinden iş alıyor — claim
+yorumunu yazmak yetmez, önce okumak gerekiyor.** Bu turda seçtiğim ilk dört issue'dan
+üçünü (#2041, #2045, #2075) başka oturumlar benden **20 saniye önce** almıştı; claim
+yorumumu yazdıktan sonra fark ettim ve üçünü de bıraktım. Ders ikili: (1) claim etmeden
+önce `issue_read` ile **yorumları oku** — assignee tek başına işaret değil, çünkü tüm
+oturumlar aynı hesapla (`mersahin`) çalışıyor, dolayısıyla atama kimin aldığını
+söylemiyor; (2) claim yorumuna **UTC zaman damgası** yaz, çünkü çakışma çözümü fiilen
+"ilk claim kazanır" olarak yerleşti ve karşılaştırılacak tek şey damga. Ayrıca herkes
+listenin en üstündeki en yeni P0'lara gidiyor: `orderBy: UPDATED_AT, direction: ASC` ile
+backlog'un **eski** bölgesinden seçmek çakışmayı sıfıra indirdi (5 issue, 0 çakışma).
+Yorum sayısı 0 olan bir issue pratikte "alınmamış" demek — `list_issues` çağrısında
+`comments` alanını istemek ucuz bir ön filtre.
+
+**Paylaşılan `node_modules` worktree'ler arası prisma client'ı zehirliyor.** Paralel
+agent'lar disk ve süre için `node_modules`'ü ana checkout'a symlink'liyor; ama
+`npx prisma generate` **paylaşılan** `node_modules/.prisma/client`'a yazıyor. Başka bir
+branch'in şemasıyla generate eden bir agent, sizin branch'inizde olmayan bir kolonu
+(bu turda `User.density`) bekleyen bir client bırakıyor ve testler anlaşılmaz bir
+şekilde patlıyor. Çözüm: client'ı yeniden generate etmek yerine **yerel DB'yi
+`node_modules/.prisma/client/schema.prisma`'ya göre** senkronlamak. Şema değiştiren bir
+iş paralel çalışacaksa `node_modules`'ü symlink etmek yerine kopyalamak gerekiyor.
+
+**Workflow resume, kutu yeniden başlarken tek kurtarıcı.** Bu oturum iki ayrı
+`session limit` duvarına (10:00 ve 15:00 UTC sıfırlamaları) ve **üç konteyner yeniden
+başlatmasına** denk geldi. Push edilmiş hiçbir şey kaybolmadı; kaybolan yalnızca o an
+çalışan agent'lar oldu ve `Workflow({scriptPath, resumeFromRunId})` tamamlanmış
+agent'ları önbellekten döndürdüğü için her tur yalnızca eksik kalanı çalıştırdı (5 iş,
+4 tur). İki pratik not: (1) agent'a **"push etmek teslimattır"** demek bu yüzden önemli
+— yarım iş worktree'de değil, uzakta duruyor; (2) yeniden başlatmadan sonra worktree'ler
+`locked` kalıyor, `git worktree unlock` + `remove --force` + `prune` ve artık dalları
+silmek gerekiyor, yoksa `checkout -b` aynı isimde patlıyor.
+
+**Bağımsız denetçi turu, beş PR'ın dördünde yazarın kaçırdığı gerçek bir kusur buldu**
+— hepsi "yeşil CI" ile birlikte yaşıyordu: yeni `<aside>` sidebar `globals.css`'teki
+`@media print { aside { display: none } }` kuralına yakalanıp mentee detayının yazdırma
+çıktısını boşaltıyordu (#2137); iki sayıyı uzlaştıran açıklama yalnızca `title`
+attribute'unda durduğu için dokunmatikte ve ekran okuyucuda hiç görünmüyordu (#2136);
+sitemap `/stories`'i `listPublishedStories(1)` ile yokluyordu, oysa o helper `take`'i
+SQL'de uygulayıp satırları JS'te attığı için canlı bir public sayfa sessizce listeden
+düşebiliyordu (#2111); docs'a eklenen cümle kodun tam tersini söylüyordu ve spec
+`PersonalNote`'a ulaşan iki yoldan yalnızca birini kapsıyordu (#2116). Denetimin en
+değerli hamlesi ucuz olanı: **spec'i `origin/main`'e geri sarıp kırmızı olduğunu
+doğrulamak** — yoksa "regresyon testi" iddiası test edilmemiş kalıyor.
+
+**`@smoke` etiketi olmayan yeni bir spec, PR kapısında hiç çalışmıyor.** PR job'u
+`--grep @smoke` ile koştuğu için yeşil "Playwright smoke" tiki yeni spec'in kanıtı
+değil; onun kanıtı yalnızca yerel çalıştırma ya da 4 saatlik tam suite. Kritik olmayan
+bir spec için doğru davranış (etiketi eklememek) doğru, ama PR gövdesinde "CI doğrular"
+yazmak yanlış — hangisinin çalıştığını açıkça yazmak gerekiyor.
 ## 2026-09-02 — Kuyruktan paralel iş alma: claim, oturum limiti ve worktree'ler
 
 **Aynı backlog'da birden fazla oturum çalışıyor ve claim mekanizması bir issue

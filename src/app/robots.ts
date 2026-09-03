@@ -18,19 +18,24 @@ export const dynamic = 'force-dynamic';
  * search result.
  *
  * Written as an exact-or-subpath pair (`/x$`, `/x/`) rather than the bare
- * prefix `/x`, because `Disallow` matches by prefix: a plain `/mentor` would
- * also swallow `/mentors`, the *public* mentor directory. `$` is the Google /
- * Bing end-anchor extension; the `/x/` line is what a crawler that ignores the
- * anchor still honours, so the worst case is one dashboard URL being fetched
- * and redirected to sign-in.
+ * prefix `/x`, because `Disallow` matches by prefix — a plain `/mentor` would
+ * also swallow `/mentors`. That happens to be fine here: the mentor directory
+ * at `/mentors` is itself signed-in-only (its layout redirects an anonymous
+ * visitor to `/auth/signin`, #938), so it belongs disallowed too and is listed
+ * explicitly below rather than left to rely on the prefix collision. `$` is
+ * the Google / Bing end-anchor extension; the `/x/` line is what a crawler
+ * that ignores the anchor still honours, so the worst case is one dashboard
+ * URL being fetched and redirected to sign-in.
  */
 const PROTECTED_PATHS = [
   '/admin',
   '/mentor',
+  '/mentors',
   '/portal',
   '/company',
   '/messages',
   '/account',
+  '/announcements',
   '/notifications',
   '/todos',
   '/onboarding',

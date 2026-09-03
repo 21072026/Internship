@@ -12,6 +12,12 @@ export function generateApiKey(): { raw: string; hash: string } {
 
 // Authenticate a request via "Authorization: Bearer <key>". Returns the
 // ApiKey id when valid (and stamps lastUsedAt), else null.
+//
+// DELIBERATELY unchanged by #1545: the key's expiry, revocation and scope list
+// are now RECORDED (see prisma ApiKey / lib/apiScopes.ts) but not yet CHECKED
+// here. Refusing an expired/revoked/out-of-scope key — and an org-less
+// /api/v1 read — is #1546. Storing a lifecycle field is not enforcing it, and
+// splitting the two keeps the behaviour change reviewable on its own.
 export async function authenticateApiKey(request: Request): Promise<{ id: string } | null> {
   const auth = request.headers.get('authorization') || '';
   const m = auth.match(/^Bearer\s+(.+)$/i);
