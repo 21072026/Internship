@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { FileText, Download, MoreVertical, Check, CheckCheck, SmilePlus, Users2, FolderOpen, MessageSquareQuote, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -9,6 +9,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import {
   MessageComposer,
@@ -120,6 +121,19 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // Shift+Enter inserts a newline; when off (default), Enter is a newline and
   // Shift+Enter sends. Persisted in localStorage so it sticks for this user.
   const [enterToSend, setEnterToSend] = useState(false);
+  const lightbox = useImageLightbox();
+
+  // One gallery per conversation: the viewer's arrows then walk every image in
+  // the thread instead of dead-ending on the one that happened to be tapped.
+  const galleryImages = useMemo(
+    () =>
+      messages
+        .filter((m) => !m.deleted)
+        .flatMap((m) => m.attachments)
+        .filter((a) => a.contentType.startsWith('image/'))
+        .map((a) => ({ src: `/api/messages/attachments/${a.id}`, filename: a.filename })),
+    [messages]
+  );
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -651,9 +665,17 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
                         {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                         {m.attachments.map((a) =>
                           a.contentType.startsWith('image/') ? (
-                            <a key={a.id} href={`/api/messages/attachments/${a.id}`} target="_blank" rel="noopener noreferrer" className="block mt-1.5">
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => lightbox.open(galleryImages, galleryImages.findIndex((g) => g.src === `/api/messages/attachments/${a.id}`))}
+                              aria-label={t.imageViewer.view.replace('{name}', a.filename)}
+                              data-testid="message-image-attachment"
+                              className="mt-1.5 block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={`/api/messages/attachments/${a.id}`} alt={a.filename} className="max-h-48 rounded-lg" />
-                            </a>
+                            </button>
                           ) : (
                             <a
                               key={a.id}
@@ -954,6 +976,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
         onConfirm={confirmDeleteEveryone}
         onCancel={() => setDeleteEveryoneId(null)}
       />
+      <ImageLightbox {...lightbox.lightboxProps} />
     </div>
   );
 }

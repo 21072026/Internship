@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "**Mentee detail (mentor)** — the overview grid no longer leaves its third column empty: the profile and stage-history cards form a reference sidebar (`lg:col-start-3`) and the working panels span the other two columns, replacing the `lg:col-span-2` that every panel carried (#1370).",
+  "notes": {
+    "en": [
+      "Mentee detail page: the profile and stage history now sit in a side column, so the working panels use the full width instead of leaving the right third of a wide screen empty."
+    ],
+    "tr": [
+      "Mentee detay sayfası: profil ve aşama geçmişi artık yan sütunda duruyor; çalışma panelleri geniş ekranda sağ üçte biri boş bırakmak yerine tüm genişliği kullanıyor."
+    ],
+    "de": [
+      "Mentee-Detailseite: Profil und Phasenverlauf stehen jetzt in einer Seitenspalte, sodass die Arbeitsbereiche die volle Breite nutzen statt das rechte Drittel breiter Bildschirme leer zu lassen."
+    ]
+  }
+}

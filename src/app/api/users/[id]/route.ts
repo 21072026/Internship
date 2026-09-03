@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
+import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { isPendingActivation, isErasedAccount, isUnusableEmail } from '@/lib/menteeAccount';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
 import { notify } from '@/lib/notify';
@@ -159,6 +160,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         } else {
           const target = await prisma.user.findUnique({ where: { id }, select: { emailVerified: true } });
           data.pendingApproval = target ? !target.emailVerified : false;
+          // Switching an account off must also end the sessions it already
+          // has. `isActive` is only ever read at sign-in, so on its own this
+          // column stops the *next* login and nothing else: the target's
+          // 12-hour JWT kept working until it expired by itself, leaving a
+          // deactivated user signed in for the rest of the day. Same recipe as
+          // the role change below and /api/account/sign-out-all — the cutoff
+          // makes lib/auth.ts reject every token minted before now, and the
+          // remembered devices are revoked right after the update.
+          //
+          // Deactivation only: activating an account must not sign out
+          // sessions that, by definition, do not exist.
+          data.sessionsValidFrom = new Date();
         }
       }
 
@@ -305,6 +318,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         data,
         select: { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true, role: true },
       });
+
+      // A cutoff on its own revokes nothing while a remembered browser can
+      // still mint a fresh session on its next visit (docs/remember-me.md), so
+      // the two always travel together. Deactivation only: the role change
+      // above stamps a cutoff merely to re-issue the token's claims, and must
+      // not cost that person their remembered laptop (the rotation path in
+      // src/lib/trustedDevice.ts spells out that distinction).
+      if (data.isActive === false) {
+        await revokeAllTrustedDevices(id);
+      }
 
       // Activation state is the security-relevant part of this endpoint — it is
       // what lets someone in or keeps them out — so it gets its own audit row

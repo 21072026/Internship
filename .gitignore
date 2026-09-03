@@ -169,3 +169,5 @@ e2e/.state/
 # Isolated worktrees created by Claude Code's background Agent tool for
 # in-progress work — internal tooling state, not a project artifact.
 /.claude/worktrees/
+playwright.local.config.ts
+playwright.repro.config.ts

@@ -35,6 +35,11 @@ interface PanelData {
     closedAt: string | null;
     complete: boolean;
     canClose: boolean;
+    // #1893 — the owner or an admin can put a panel closed too early back to
+    // collecting. The route re-checks both, and the blind gate is recomputed on
+    // every read, so reopening cannot reveal anything.
+    canReopen: boolean;
+    canEdit: boolean;
   };
   criteria: ResolvedCriterion[];
   roster: { userId: string; name: string | null; submittedAt: string | null; isMe: boolean }[];
@@ -100,6 +105,16 @@ export function InterviewPanelView({ panelId }: { panelId: string }) {
     }
   };
 
+  const reopenPanel = async () => {
+    setBusy(true);
+    try {
+      await fetch(`/api/interview-panels/${panelId}/reopen`, { method: 'POST' });
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!data) return null;
   const { panel, criteria, roster, own, revealed } = data;
   const isMember = roster.some((r) => r.isMe);
@@ -159,6 +174,14 @@ export function InterviewPanelView({ panelId }: { panelId: string }) {
               {t.interviewPanel.close}
             </Button>
             <p className="mt-2 text-xs text-gray-500">{t.interviewPanel.closeHint}</p>
+          </div>
+        )}
+        {panel.canReopen && (
+          <div className="mt-4 border-t border-gray-100 dark:border-gray-800 pt-3">
+            <Button size="sm" variant="secondary" loading={busy} onClick={reopenPanel} data-testid="panel-reopen">
+              {t.interviewPanel.reopen}
+            </Button>
+            <p className="mt-2 text-xs text-gray-500">{t.interviewPanel.reopenHint}</p>
           </div>
         )}
       </Card>

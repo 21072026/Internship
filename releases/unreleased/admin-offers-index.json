@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- **`/admin/offers` — the offer index** (#1873). `GET /api/offers` gains ADMIN-only filters (`status` multi, `companyId`, `requisitionId`, `declineReasonCode`, `expiringWithinDays`, `q`, `from`/`to` on `sentAt`, `sort`/`dir`) plus server-side `page`/`pageSize` and a `total` from a separate `count()` on the same `where`. The new page has three URL-shareable saved views (outstanding / expiring this week / declined), rows linking to the candidate's existing offer panel, and a nav badge counting sent-but-undecided offers. The DRAFT-invisibility and `compensationNote` select rules are untouched: MENTEE/COMPANY keep the previous response shape and select.",
+  "notes": {
+    "en": ["Admins get an Offers screen that answers what is still outstanding, what expires this week and what was declined — with saved views, filters and a nav badge for offers awaiting a decision."],
+    "tr": ["Yöneticiler için Teklifler ekranı: hangi teklifler hâlâ bekliyor, hangileri bu hafta doluyor, hangileri neden reddedildi — hazır görünümler, filtreler ve karar bekleyen teklifler için menüde bir sayaç."],
+    "de": ["Admins erhalten eine Angebote-Übersicht, die zeigt, was noch offen ist, was diese Woche abläuft und was abgelehnt wurde — mit gespeicherten Ansichten, Filtern und einem Navigations-Zähler für Angebote, die auf eine Entscheidung warten."]
+  }
+}

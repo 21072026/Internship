@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
@@ -6,6 +7,8 @@ import { prisma } from '@/lib/prisma';
 import { runAiGated } from '@/lib/aiGate';
 import { aiRankMentors, type MatchCandidate } from '@/lib/aiMentorMatch';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveOrgId } from '@/lib/orgScope';
+import { MATCH_RULESET_VERSION } from '@/lib/matchFeedback';
 
 const schema = z.object({ menteeId: z.string().min(1) });
 
@@ -14,6 +17,13 @@ const schema = z.object({ menteeId: z.string().min(1) });
 // provider), the top candidates are re-ranked by AI with a one-sentence
 // rationale each. With no provider or quota the rule-based result is returned
 // unchanged (aiUsed: false) — the feature degrades, never breaks.
+//
+// Since #2040 every returned suggestion is also RECORDED (MatchFeedback, one
+// SHOWN row per suggestion, all sharing one `batchId` that goes back to the
+// client). Without that record the ranking can never be measured, let alone
+// improved. The write is strictly best-effort: same discipline as the AI
+// metering in src/lib/aiGate.ts — a bookkeeping failure must never cost the
+// admin their suggestions.
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') {
@@ -29,6 +39,36 @@ export async function POST(request: Request) {
     select: { id: true, role: true, skills: true, targetPosition: true, interests: true },
   });
   if (!mentee || mentee.role !== 'MENTEE') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // One id for this whole call. The client echoes it back with the outcome, so
+  // an accept/dismiss lands on exactly the suggestions that were on screen.
+  const batchId = randomUUID();
+  const orgId = resolveOrgId(session);
+
+  // Record the list exactly as it is about to be returned — after the AI
+  // re-rank, not before, because rank 1 must mean "the one we put on top".
+  const recordShown = async (
+    list: { mentorId: string; score: number }[],
+    aiUsed: boolean
+  ): Promise<void> => {
+    if (list.length === 0) return;
+    await prisma.matchFeedback
+      .createMany({
+        data: list.map((s, i) => ({
+          orgId,
+          menteeId: mentee.id,
+          mentorId: s.mentorId,
+          batchId,
+          rank: i + 1,
+          score: s.score,
+          ruleSetVersion: MATCH_RULESET_VERSION,
+          aiUsed,
+          action: 'SHOWN' as const,
+        })),
+        skipDuplicates: true,
+      })
+      .catch(() => {}); // bookkeeping must never break a good suggestion
+  };
 
   const mentors = await prisma.user.findMany({
     where: { role: { in: ['MENTOR', 'ADMIN'] }, isActive: true },
@@ -63,10 +103,13 @@ export async function POST(request: Request) {
     activeMentees: x.mentor._count.mentorRelations,
     capacity: x.mentor.mentorCapacity,
     sharedSkills: x.overlap,
+    // The number the rule set actually ranked by, stored with the row so a
+    // future ranking can be compared against this one.
+    score: x.overlap.length,
     reason: null as string | null,
   }));
 
-  if (base.length === 0) return NextResponse.json({ suggestions: [], aiUsed: false });
+  if (base.length === 0) return NextResponse.json({ batchId, suggestions: [], aiUsed: false });
 
   // AI deepening — anonymous labels only; personal identifiers never leave.
   const labels = 'ABCDE';
@@ -94,7 +137,8 @@ export async function POST(request: Request) {
 
   if (!gated.ok) {
     // Graceful fallback: rule-based order, no rationale text.
-    return NextResponse.json({ suggestions: base, aiUsed: false });
+    await recordShown(base, false);
+    return NextResponse.json({ batchId, suggestions: base, aiUsed: false });
   }
 
   // Map the AI ranking (labels) back to mentors; anything unranked keeps its
@@ -109,6 +153,8 @@ export async function POST(request: Request) {
   const rankedIds = new Set(ranked.map((r) => r.mentorId));
   const rest = base.filter((b) => !rankedIds.has(b.mentorId));
 
-  return NextResponse.json({ suggestions: [...ranked, ...rest], aiUsed: true });
+  const suggestions = [...ranked, ...rest];
+  await recordShown(suggestions, true);
+  return NextResponse.json({ batchId, suggestions, aiUsed: true });
   });
 }

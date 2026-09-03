@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Fixed:** the analytics \"time in stage\" card no longer labels completed stage transitions as \"candidates\", which made `/admin/analytics` report two different numbers for the same stage. `/api/admin/analytics/aging` now returns `visits` (completed stage visits measured) and `candidates` (the distinct mentees behind them) instead of an ambiguous `count`, plus `droppedNonPositive` so measurements discarded for a non-positive duration are no longer silent. The arithmetic moved to `src/lib/stageAging.ts` and is covered by `npm run test:stage-aging` in CI (#1427).",
+  "notes": {
+    "en": ["Analytics: the \"time in stage\" card no longer contradicts the pipeline funnel — it now shows how many stage transitions were measured and how many distinct candidates they came from, with a hint explaining the difference."],
+    "tr": ["Analitik: \"Aşamada geçen süre\" kartı artık huni ile çelişmiyor — kaç aşama geçişinin ölçüldüğünü ve bunların kaç ayrı adaydan geldiğini, farkı açıklayan bir ipucuyla birlikte gösteriyor."],
+    "de": ["Analytics: Die Karte \"Zeit in Phase\" widerspricht dem Funnel nicht mehr — sie zeigt jetzt, wie viele Phasenübergänge gemessen wurden und von wie vielen verschiedenen Kandidaten sie stammen, mit einem erklärenden Hinweis."]
+  }
+}
