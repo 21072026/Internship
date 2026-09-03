@@ -430,7 +430,13 @@ export default function AdminSettingsPage() {
             )}
 
             {emailLog && emailLog.entries.length > 0 && (
-              <div className="overflow-x-auto">
+              /* tabIndex makes the scroller reachable by keyboard: the log's
+                 rows do not wrap, so without it a mouse-less user cannot pan to
+                 the columns past the fold. Same trade-off as the board's
+                 HorizontalScrollArea — no `role="region"` to go with it, since
+                 an unnamed region would only swap this violation for a
+                 `region`-name one. */
+              <div className="overflow-x-auto" tabIndex={0}>
                 <table className="w-full text-xs" data-testid="email-log-table">
                   <tbody>
                     {emailLog.entries.map((e) => (
