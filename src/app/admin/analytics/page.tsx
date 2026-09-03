@@ -11,6 +11,7 @@ import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { CohortComparison } from '@/components/admin/CohortComparison';
 import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
+import { MatchQuality } from '@/components/admin/MatchQuality';
 import { useT } from '@/i18n/client';
 import { UNSPECIFIED_REASON } from '@/lib/dropoffReasons';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
@@ -682,6 +683,11 @@ export default function AdminAnalyticsPage() {
       )}
 
       <CohortComparison />
+
+      {/* Match quality (#2040): how often the mentor suggestion is taken, and
+          at which rank position. Not premium-gated — it is the answer to the
+          first question every buyer asks about the matching. */}
+      <MatchQuality />
 
       <ProgramBenchmark />
       <SourceConversion />

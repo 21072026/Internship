@@ -15,10 +15,20 @@ async function main() {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log(`User already exists: ${email} — skipping admin seed.`);
+    // Idempotent backfill (#1535): the first admin is the instance operator and
+    // must keep the super-admin capability that gates tenant management, even
+    // on a database seeded before the flag existed.
+    if (existing.role === 'ADMIN' && !existing.isSuperAdmin) {
+      await prisma.user.update({ where: { id: existing.id }, data: { isSuperAdmin: true } });
+      console.log(`Granted super admin to: ${email}`);
+    }
   } else {
     const hashedPassword = await bcrypt.hash(password, 12);
     await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role: 'ADMIN', skills: [] },
+      // isSuperAdmin (#1535): the very first admin manages the instance itself —
+      // creating tenants and configuring their SSO. Every later ADMIN is a
+      // tenant admin and gets the flag only when an operator grants it.
+      data: { email, password: hashedPassword, fullName, role: 'ADMIN', skills: [], isSuperAdmin: true },
     });
     console.log(`Created ADMIN user: ${email}`);
   }
