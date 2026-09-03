@@ -10,6 +10,42 @@ Newest entries on top.
 
 ---
 
+## 2026-09-03 — Third conflict pass on the same feature branch (#2008)
+
+**`src/lib/features.ts` keeps colliding at the icon list before the feature rows do.** A later PR
+added `ScrollText` for a new catalogue item while this branch already needed `HeartPulse` for
+`integrationHealth`; the actual fix was just the union of imports, because the feature rows
+themselves already merged cleanly below. On repeat conflicts here, check the top `lucide-react`
+import first before re-reading the whole catalogue.
+
+---
+
+## 2026-09-03 — Repeated conflict follow-up on the same PR (#2008)
+
+**A scary-looking page conflict can still be import-only.** The second conflict on
+`src/app/admin/integrations/page.tsx` came from two PRs both touching the imports at the top
+while the body merged cleanly. Before re-resolving a whole page by hand, search just for the
+markers; if only the import block is conflicted, keep the union of imports and leave the merged
+body alone.
+
+---
+
+## 2026-09-03 — Conflict-only follow-up on a stale feature PR (#2008)
+
+**Feature-catalogue conflicts are usually union merges, not winner-takes-all.** `src/lib/features.ts`
+and the three `featureCatalog.items` locale blocks in `src/i18n/dictionaries.ts` collided because
+two feature PRs both appended catalogue entries near the same tail section. The correct resolution
+was to keep the newer descriptive copy from `main` **and** retain the earlier feature rows/keys,
+otherwise one shipped feature silently disappears from `/features`.
+
+**`npm install` in this repo can dirty `package-lock.json` even when you changed no dependencies.**
+On this image it removed two `dev: true` flags from optional `fsevents` entries; that showed up as
+an unstaged diff right after validation. After using install only to get `node_modules`, check
+`git status --short` before committing and restore incidental lockfile noise with
+`git checkout -- package-lock.json`.
+
+---
+
 ## 2026-09-03 — Sessizce kamaya giren bir cron: sürüm derlemesi 10 gün boyunca her gece patladı (#2142, #2143)
 
 **Türetilmiş bir değer doğruyken, kanonik dosya yanlış olabilir — ve kimse fark

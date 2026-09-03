@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **Integration health board** (#2008). `/admin/integrations` now shows per-connector state for e-mail delivery, outgoing webhooks, Google Calendar, enterprise SSO and the two inbound receivers, each derived from that connector's existing ledger rather than a new \"last state\" column. `GET /api/admin/integrations/health` exposes the machine-countable per-connector `state` #1607's operations console rolls up. `sanitizeEmailError` is generalised into the single shared `lib/sanitizeError`, which strips PEM bodies, bearer/secret values, long opaque tokens and addresses from every connector's error text.",
+  "notes": {
+    "en": [
+      "Admins get a connector health board on Integrations: e-mail, webhooks, Google Calendar, SSO and the inbound receivers each report healthy, degraded, failing or not configured — with an SSO certificate warning a month before it expires."
+    ],
+    "tr": [
+      "Yöneticiler Entegrasyonlar sayfasında bir bağlayıcı sağlığı panosu görüyor: e-posta, webhook’lar, Google Takvim, SSO ve gelen alıcıların her biri sağlıklı, kısmen bozuk, arızalı ya da yapılandırılmadı olarak bildiriliyor — SSO sertifikası için süresi dolmadan bir ay önce uyarı veriliyor."
+    ],
+    "de": [
+      "Admins erhalten auf der Integrationsseite ein Konnektor-Zustandsboard: E-Mail, Webhooks, Google Kalender, SSO und die eingehenden Empfänger melden jeweils gesund, beeinträchtigt, fehlerhaft oder nicht konfiguriert — inklusive Warnung einen Monat vor Ablauf des SSO-Zertifikats."
+    ]
+  }
+}

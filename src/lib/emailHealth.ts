@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { sanitizeError } from '@/lib/sanitizeError';
 
 // E-mail delivery health (#1190), DERIVED from the EmailLog ledger (#1194)
 // instead of a separate last-state marker — the log is written on every
@@ -22,10 +23,9 @@ export interface EmailHealth {
   attempts24h: number;
 }
 
-export function sanitizeEmailError(error: string | null | undefined): string | null {
-  if (!error) return null;
-  return error.replace(/[\w.+-]+@[\w.-]+/g, '<redacted>').slice(0, 300);
-}
+// Kept as an alias: the address rule this used to own now lives in the shared
+// sanitizer, which every connector's error text goes through (#2008).
+export const sanitizeEmailError = sanitizeError;
 
 export async function getEmailHealth(): Promise<EmailHealth> {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -40,7 +40,7 @@ export async function getEmailHealth(): Promise<EmailHealth> {
   return {
     lastOkAt: lastOk?.createdAt.toISOString() ?? null,
     lastErrorAt: lastFail?.createdAt.toISOString() ?? null,
-    lastError: sanitizeEmailError(lastFail?.error),
+    lastError: sanitizeError(lastFail?.error),
     failuresSinceOk,
     attempts24h,
   };

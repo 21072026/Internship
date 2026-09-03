@@ -15,7 +15,7 @@ import {
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
-  MailQuestion, MailOpen, Fingerprint, Palette, Eye, MailCheck, Accessibility, ScrollText,
+  MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -88,5 +88,6 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'multiTenancy', category: 'platform', icon: Building2, color: 'purple', title: C.multiTenancy.t, desc: C.multiTenancy.d },
     { key: 'whiteLabel', category: 'platform', icon: Palette, color: 'rose', title: C.whiteLabel.t, desc: C.whiteLabel.d },
     { key: 'enterpriseSso', category: 'trust', icon: KeyRound, color: 'indigo', title: C.enterpriseSso.t, desc: C.enterpriseSso.d },
+    { key: 'integrationHealth', category: 'platform', icon: HeartPulse, color: 'sky', title: C.integrationHealth.t, desc: C.integrationHealth.d },
   ];
 }
