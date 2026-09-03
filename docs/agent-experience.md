@@ -5386,6 +5386,47 @@ sorunsuz çalıştı). Tarayıcı açmayan prisma-only spec'ler bu sorunu hiç g
 **MariaDB oturum içinde durabiliyor:** `db push` bir anda P1001 verdiyse kutunun
 ağı değil, `service mariadb start`'ı tekrar çalıştırmak gerekiyor.
 
+## 2026-09-03 — Ham Prisma hatasının giriş formunda görünmesi + MySQL watchdog
+
+**Bir "koruma" var diye korunuyor sanma; koruduğu yolu çalıştırıp gör.** #1150'de
+eklenen `guardProviders` hiç devreye girmemişti. Sebep NextAuth'un kendi iç akışı:
+`CredentialsProvider({...})` gerçek `authorize`'ı üst seviyeye değil `options`
+çantasına koyuyor (üstteki `authorize: () => null` bir taş bebek), ve
+`core/lib/providers.js` içindeki `parseProviders` o çantayı sağlayıcının **üstüne**
+merge ediyor. Yani sarmalanan fonksiyon hiç çağrılmıyor, sarmalanmamış olan geri
+geliyor. Sonuç: MySQL OOM ile ölünce kullanıcı giriş formunda
+``Can't reach database server at `localhost:3306` `` görüyordu. Ders: bir
+kütüphanenin veri yapısını "spread ile kopyalayıp değiştirdim" demek yetmiyor —
+o yapıyı kütüphanenin nasıl **yeniden** işlediğine bakmak gerekiyor
+(`node_modules` içindeki 20 satır her seferinde tahminden ucuz).
+
+**Sunucu tarafı maskeleme tek başına yeterli değil.** İstemcide de beyaz liste
+var artık: bilinen mesaj değilse hiç basılmıyor. Guard'ın atlandığı (veya
+NextAuth'un kendi ürettiği) her mesaj böylece jenerik kalıyor — savunmanın iki
+tarafı da tek kaynaktan (`INTENTIONAL_AUTH_ERRORS`) besleniyor.
+
+**Watchdog yazarken asıl tehlike "ölüyü diriltmek" değil, "diriye ölü demek".**
+Probe olarak `mysqladmin ... --no-defaults ... ping` yazmıştım; MariaDB istemcisi
+`--no-defaults`'u **ilk argüman değilse** reddedip `unknown option` ile 2 dönüyor.
+Stub'lı testler yeşildi, gerçek kutuda ise sağlıklı sunucu sürekli DOWN görünüyordu —
+yani prod veritabanını dakikada bir yeniden başlatacaktı. İki sonuç: (1) stub'ı
+gerçek istemci kadar huysuz yaz (testteki `mysqladmin` artık aynı sırayı dayatıyor),
+(2) probe'un üç hâli olmalı: up / down / **sorulamadı**; "sorulamadı"yı down saymak
+en pahalı hata.
+
+**`command -v systemctl` "systemd var" demek değil.** Bu konteynerde `systemctl`
+kurulu ama PID 1 değil; her çağrı "System has not been booted with systemd" diyor.
+Doğru soru `[ -d /run/systemd/system ]`. Fallback SysV `service` yoluna düşünce
+script bu kutuda gerçekten çalıştı — ve testlerde yolun ikisi de kapsandı
+(`SYSTEMD_RUN_DIR` / `INITD_DIR` env'leri sırf bunun için var).
+
+**Kutu notu:** `chromium_headless_shell-1234` yine eksikti; bu kez çalışan yol,
+beklenen iç dizini oluşturup `chromium_headless_shell-1194/chrome-linux/` içeriğini
+oraya symlink'lemek oldu. Ayrıca `BASE_URL` verilmeden çalıştırılan tek bir
+`*.unit.spec.ts` bile Playwright'ı kendi dev sunucusunu ayağa kaldırmaya zorluyor;
+tarayıcısız birim spec'leri `BASE_URL=http://127.0.0.1:9999` ile saniyeler içinde
+koşuyor. DB'ye dokunan spec'lerde `DATABASE_URL`'i **komut satırında** vermek
+gerekiyor (config `.env`'i yalnız kendi webServer'ı için yüklüyor).
 ## 2026-09-03 — Resim önizleme: "yeni sekme" bir çıkış yolu değil (#2147)
 
 **`target="_blank"` masaüstünde çözüm, telefonda tuzak.** Kullanıcı raporu tek cümleydi:
