@@ -46,6 +46,10 @@ export async function PublicFooter() {
       links: [
         { href: '/privacy', label: t.privacy.title },
         { href: '/terms', label: t.terms.title },
+        // Which features send text to a model, what is sent, and what we have
+        // not signed yet (#2034). It sits in Legal because that is where the
+        // person who needs it looks first.
+        { href: '/ai', label: t.ai.title },
         // Who runs this deployment, and the one address a visitor can write to
         // (#1396). A site that collects registrations and enquiry forms without
         // naming its operator anywhere is the state this replaces.
@@ -54,6 +58,10 @@ export async function PublicFooter() {
         // from `trust.title` for the same reason as the three above: a footer
         // link must not be able to disagree with the heading it leads to.
         { href: '/trust', label: t.trust.title },
+        // The conformance statement (#2035). EN 301 549 procurement expects to
+        // find it from any page, so it sits with the other legal links rather
+        // than only in the feature catalogue.
+        { href: '/accessibility', label: t.accessibility.title },
       ],
     },
   ];

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Interactive API explorer for admins** (#1447). New page `/admin/api-explorer` mounts real Swagger UI, bundled from `swagger-ui-dist` in `node_modules` (no CDN — `script-src` is `'self'`) with `validatorUrl: null` so the spec never leaves the origin. It is driven by the ADMIN-only `GET /api/admin/openapi`, which describes the whole surface including the internal admin/cron/webhook endpoints. Two auth modes: \"Try it out\" rides the caller's existing NextAuth session cookie (`withCredentials` plus a `requestInterceptor` pinning `credentials: 'same-origin'`), and a Bearer key for `/api/v1/*` can be minted in-page through the existing `POST /api/admin/api-keys` and pushed into the Authorize dialog with `preauthorizeApiKey` — no copy-paste, no new auth path. Linked from `/admin/integrations` and `/admin/api-docs`; the ~1.2 MB bundle is `await import()`ed inside an effect so no other route pays for it.",
-  "notes": {
-    "en": ["Admins get an interactive API explorer: browse every endpoint, call it as yourself with no token, and mint an API key straight into the Authorize box."],
-    "tr": ["Yöneticiler için etkileşimli API gezgini: tüm uç noktaları incele, token olmadan kendi hesabınla çağır ve API anahtarını doğrudan Authorize kutusuna üret."],
-    "de": ["Für Admins gibt es einen interaktiven API-Explorer: alle Endpunkte durchsuchen, ohne Token als du selbst aufrufen und einen API-Schlüssel direkt in das Authorize-Feld erzeugen."]
-  }
-}

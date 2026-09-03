@@ -111,6 +111,26 @@ ellenmedi; en kritikleri:
 | `POST /api/source/mentees` | yalnız `SOURCE`, kendi `sourceId`'si ile |
 | `GET/POST /api/sources` | `ADMIN` veya `MENTOR` — birleşik "getiren kişi / kaynak" seçiminin listesi ve yerinde kaynak yaratma (#1296). Yönetim uçları (istatistik, silme) `ADMIN`-only `/api/admin/sources` altında kalıyor. |
 
+## Yapay zekâ uçları / AI endpoints
+
+Beş uç bir dil modeline metin gönderir. Hepsi rol kapılı **ve** ayrıca
+[`runAiGated`](../src/lib/aiGate.ts) üzerinden geçer: rıza → aylık kota →
+sağlayıcı. Rol kontrolünü geçmek tek başına yetmez.
+
+| Uç | Rol | Ek kapı |
+|---|---|---|
+| `POST /api/cv/[userId]/extract-ai` | `canAccessCv()` kime izin veriyorsa | CV sahibinin `AI_CV_PARSING` rızası |
+| `POST /api/cv/feedback` | oturum açmış herkes — **yalnızca kendi CV'si** (uç, gövdedeki id'yi değil oturumu okur) | çağıranın `AI_CV_PARSING` rızası |
+| `POST /api/interactions/summary` | `MENTOR` veya `ADMIN`, `getThreadIfAllowed()` ile kendi ilişkisinde | **mentee'nin** `AI_INTERACTION_SUMMARY` rızası |
+| `POST /api/interview-prep` | yalnız `MENTEE`, kendisi için | rıza yok — kimlik taşıyan hiçbir alan gönderilmez |
+| `POST /api/admin/mentor-suggest` | yalnız `ADMIN` | rıza yok — mentorlar A–E harfleriyle anonim gider |
+
+`GET /api/cv/feedback` ve `GET /api/interview-prep` yalnızca "bu özellik açık
+mı" bilgisini döndürür; kişisel veri taşımaz.
+
+Her ucun ne gönderip neyi bilerek göndermediği, saklama ve bozulma davranışı:
+[`ai.md`](ai.md).
+
 ## Regresyon testi / Regression test
 
 İki spec bu matrisi kilitliyor:

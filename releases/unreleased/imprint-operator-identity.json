@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Imprint page and a named controller** (#1396). New `/imprint` (EN/TR/DE), linked from the public footer, published from `OPERATOR_*` env vars (`src/lib/imprint.ts`) so a self-hosted instance never inherits ours. The privacy notice now names the controller and a real contact address instead of the placeholder saying the operator would supply them before production use; `PRIVACY_POLICY_VERSION` → 2026-08-25.",
-  "notes": {
-    "en": ["A new imprint page says who runs this service and how to reach them — linked from every page's footer, and named as the data controller in the privacy notice."],
-    "tr": ["Yeni künye sayfası bu hizmeti kimin işlettiğini ve kendisine nasıl ulaşılacağını söylüyor — her sayfanın altından linkli ve gizlilik metninde veri sorumlusu olarak adı geçiyor."],
-    "de": ["Eine neue Impressumsseite nennt den Betreiber dieses Dienstes und wie man ihn erreicht — aus der Fußzeile jeder Seite verlinkt und in der Datenschutzerklärung als Verantwortlicher benannt."]
-  }
-}

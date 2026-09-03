@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
@@ -179,6 +180,10 @@ export function AssignMentorInline({
             : suggestion.sharedSkills.length > 0
               ? ` — ${a.sharedSkills}: ${suggestion.sharedSkills.join(', ')}`
               : ''}
+          {/* The rationale sentence is the only model-written text on this
+              screen — badge it, and only it (#2034). The rule-based order
+              carries its own "(rule based)" note instead. */}
+          {aiUsed && suggestion.reason && <AiBadge className="ml-1.5" />}
           {!aiUsed && <span className="text-gray-400"> ({a.ruleBased})</span>}
         </p>
       )}

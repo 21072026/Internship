@@ -9,7 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { GraduationCap, FlaskConical } from 'lucide-react';
-import { AUTH_UNEXPECTED_ERROR } from '@/lib/authErrors';
+import { AUTH_SERVICE_UNAVAILABLE, INTENTIONAL_AUTH_ERRORS } from '@/lib/authErrors';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -145,11 +145,17 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
         // Offer to resend the verification link rather than a dead-end error.
         setNeedsVerify(true);
         setError(t.auth.emailNotVerified);
-      } else if (result.error === AUTH_UNEXPECTED_ERROR) {
-        // An internal fault. The real cause is in the server log, not here (#1150).
-        setError(t.auth.signInFailed);
+      } else if (result.error === AUTH_SERVICE_UNAVAILABLE) {
+        // Infrastructure, not credentials — the database is down or overloaded.
+        // Say "try again shortly" without naming what is broken.
+        setError(t.auth.serviceUnavailable);
+      } else if (INTENTIONAL_AUTH_ERRORS.has(result.error)) {
+        setError(result.error);
       } else {
-        setError(result.error || t.auth.signInFailed);
+        // AUTH_UNEXPECTED_ERROR, a NextAuth-generated code, or anything thrown
+        // outside the server-side guard: never render it. Raw internals on the
+        // login form are useless to the user and useful to an attacker (#1150).
+        setError(t.auth.signInFailed);
       }
       setLoading(false);
       return;

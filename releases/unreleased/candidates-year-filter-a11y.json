@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Candidate filter accessibility**: add localized accessible names to the graduation-year and source filters on the admin candidate list.",
-  "notes": {
-    "en": ["Candidate graduation-year and source filters now have clear names for screen readers."],
-    "tr": ["Aday mezuniyet yılı ve kaynak filtreleri artık ekran okuyucular için anlaşılır adlara sahip."],
-    "de": ["Die Filter für Abschlussjahr und Quelle haben jetzt eindeutige Bezeichnungen für Screenreader."]
-  }
-}

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { menteeRelationWhere } from '@/lib/menteeRelation';
 
 // Detailed mentee activity report. Aggregates, for a time window, the signals
 // that answer "what has this mentee (and their mentor) been doing": login
@@ -136,6 +137,24 @@ export async function getSystemMenteeActivity(since: Date): Promise<MenteeActivi
     },
   });
   return buildForRelations(relations, since);
+}
+
+// One mentee's own summary — the very report their mentor and admin already
+// read about them (#1915). The subject is a user id resolved from the session,
+// never a request parameter: a self-view that takes an id is an IDOR waiting to
+// happen. Scoped with `menteeRelationWhere` so the portal's archive rule holds
+// here too — a finished mentorship is still their record (#1408).
+export async function getOwnMenteeActivity(userId: string, since: Date): Promise<MenteeActivity | null> {
+  const me = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, fullName: true, lastLoginAt: true, lastSeenAt: true },
+  });
+  if (!me) return null;
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: menteeRelationWhere(userId),
+    select: { id: true },
+  });
+  return getMenteeActivity(me, relations.map((r) => r.id), since);
 }
 
 // Group relations by mentee (a mentee may have more than one), then summarize.
