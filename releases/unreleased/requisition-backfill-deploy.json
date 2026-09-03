@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Requisition compatibility backfill runs during deploys** (#1359). Production, shared preview and topic deploys now migrate legacy `CompanyNeed` rows through the existing idempotent backfill without making row-level failures block deployment."
+}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { GraduationCap, Sparkles } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
 
 // AI interview-prep card on the mentee portal (Faz 2, #536). Free for the
@@ -78,8 +79,11 @@ export function InterviewPrep({ defaultPosition }: { defaultPosition?: string | 
       </div>
       {notice && <p className="text-xs text-amber-600 dark:text-amber-400">{notice}</p>}
       {prep && (
-        <div className="mt-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 p-4 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">
-          {prep}
+        <div className="mt-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 p-4 text-sm text-gray-800 dark:text-gray-200">
+          {/* Generated questions read like a checklist; the marker says who
+              wrote them (#2034). */}
+          <AiBadge note className="mb-2" />
+          <div className="whitespace-pre-line">{prep}</div>
         </div>
       )}
     </Card>
