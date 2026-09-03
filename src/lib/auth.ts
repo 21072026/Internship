@@ -396,7 +396,14 @@ export const authOptions: NextAuthOptions = {
           where: { id: token.id as string },
           select: { sessionsValidFrom: true },
         });
-        if (acct?.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
+        // A deleted account cannot be stamped — there is no row left to hold a
+        // cutoff — so the lookup coming back empty is itself the revocation.
+        // Without this, hard erasure (POST /api/admin/users/[id]/erase, and the
+        // self-service delete) left the erased person holding a working session
+        // until their JWT expired on its own.
+        if (!acct) {
+          token.invalidated = true;
+        } else if (acct.sessionsValidFrom && token.authTime < acct.sessionsValidFrom.getTime()) {
           token.invalidated = true;
         }
       }
