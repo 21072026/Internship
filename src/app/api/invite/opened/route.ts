@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const invite = await prisma.invitationToken.findUnique({ where: { token: parsed.data.token } });
   // Silently succeed for unknown/consumed tokens — this is a best-effort signal,
   // not an auth check, and we don't want to leak which tokens exist.
-  if (invite && !invite.used && !invite.openedAt && invite.expiresAt > new Date()) {
+  if (invite && !invite.used && !invite.revokedAt && !invite.openedAt && invite.expiresAt > new Date()) {
     await prisma.invitationToken.update({ where: { id: invite.id }, data: { openedAt: new Date() } });
   }
   return NextResponse.json({ ok: true });

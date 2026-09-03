@@ -8,7 +8,9 @@ import { roleHome } from '@/lib/roleHome';
 // Notification history is available to any authenticated role.
 export default async function NotificationsLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
-  if (!session) redirect('/auth/signin');
+  // callbackUrl: the manifest's "Notifications" shortcut (#2084) must survive
+  // the sign-in redirect and land back here.
+  if (!session) redirect('/auth/signin?callbackUrl=/notifications');
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">

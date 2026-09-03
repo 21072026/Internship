@@ -82,6 +82,49 @@ asserts both properties (`npm run test:release`).
 - `npm run check:release-fragments` (in CI) fails a PR whose fragment is
   malformed or missing a locale. `npm run test:release` guards the arithmetic.
 
+## When compaction is stuck (#2142)
+
+A delayed compaction is harmless **to the app** — the build derives the version
+and the release-notes entries from base+fragments, so the sidebar footer,
+`/api/health` and `/release-notes` stay correct however long the fragments sit
+there. It is *not* harmless to the **record**: while compaction is stuck,
+`CHANGELOG.md` and `src/lib/releaseNotes.ts` keep saying whatever they said
+when it last succeeded, so merged PRs appear nowhere in the repo's history of
+what shipped.
+
+That is exactly what happened between 2026-08-24 and 2026-09-02: all ten runs
+failed, 57 fragments accumulated, and 25 versions never reached the changelog.
+Two causes, chained — and both are now designed against:
+
+- **`RELEASE_BOT_TOKEN` was unset**, and this org forbids the default
+  `GITHUB_TOKEN` from opening pull requests, so `gh pr create` was refused.
+  The workflow now warns about the missing secret up front and, if creation
+  still fails, emits an `::error` naming the branch that is ready to open.
+- **The branch name carried the version** (`bot/release-compact-<version>`),
+  so every retry rebuilt the *same* name with a *different* commit sha and was
+  rejected as non-fast-forward — one failed run wedged the pipeline for good.
+  There is now **one stable branch, `bot/release-compact`, force-pushed**. That
+  is safe by construction: the branch only ever holds an earlier compaction
+  attempt built from the same `main`, which the new commit strictly supersedes,
+  because compaction always folds *everything* pending. A failed run therefore
+  leaves the branch correct and current, and the next run recovers by itself.
+- **Nothing announced the failure.** The workflow now has a `notify` job that
+  emails through `scripts/send-alert-email.mjs`, like `e2e-full`, `k6-load`,
+  `stress` and `backup-verify`.
+
+To compact by hand at any time — no secret needed, and the right move if the
+scheduled run is red:
+
+```bash
+git fetch origin main && git checkout -b chore/release-compact origin/main
+node scripts/release-compact.mjs --dry-run   # inspect
+node scripts/release-compact.mjs             # write + delete the fragments
+```
+
+It needs **full git history** (each fragment's date and commit come from the
+commit that added it); in a shallow clone it fails closed rather than invent a
+date, so `git fetch --unshallow` first.
+
 ## Edge cases, so they are not reported as bugs
 
 - **Two fragments in one commit** share a date and a sha and get consecutive

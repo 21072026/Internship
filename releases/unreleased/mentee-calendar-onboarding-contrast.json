@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Mentee calendar and onboarding contrast now meets AA targets** (#1417). Month day numbers, inactive calendar view tabs, onboarding step labels and future-step badges use accessible light/dark colours.",
-  "notes": {
-    "en": ["Calendar dates and onboarding progress are easier to read in both light and dark themes."],
-    "tr": ["Takvim tarihleri ve onboarding ilerleme göstergesi artık açık ve koyu temalarda daha kolay okunuyor."],
-    "de": ["Kalenderdaten und der Onboarding-Fortschritt sind jetzt im hellen und dunklen Design besser lesbar."]
-  }
-}

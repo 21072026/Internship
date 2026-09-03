@@ -39,6 +39,12 @@ jobs:
       - run: npx tsc --noEmit
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
+      # A hardcoded stage key ('HIRED_660', …) type-checks, passes every test on
+      # the default seed, and only misbehaves for a tenant that renamed its
+      # stages — which no test tenant does. That invisibility is why the bug
+      # keeps coming back (#1880); the guard makes a new one a red build.
+      - name: no hardcoded pipeline stage keys (#1886)
+        run: npm run check:stage-keys
       # A malformed release fragment must fail in the PR that adds it, not in
       # next.config.js during the deploy build (#1275).
       - name: release fragments are well-formed (#1275)
@@ -109,4 +115,11 @@ jobs:
       # only thing keeping it off prod is the name check at the top (#966).
       - name: demo reset guard (#966)
         run: bash infra/test/reset-demo-guard.test.sh
+      # The MySQL watchdog only ever runs on the box at the moment the database
+      # is already down, so its two decisions — "is this server alive?" and
+      # "should I restart it?" — get their coverage here instead. A probe that
+      # mistakes a healthy "Access denied" for a dead server would restart prod's
+      # database every minute.
+      - name: mysql watchdog probe logic
+        run: bash infra/test/mysql-watchdog.test.sh
       - run: npm run build

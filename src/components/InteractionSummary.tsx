@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
 
 // AI auto-summary of the interaction log (Faz 2, #534), mentor-facing. Runs
@@ -59,8 +60,11 @@ export function InteractionSummary({ relationId }: { relationId: string }) {
       </div>
       {notice && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{notice}</p>}
       {summary && (
-        <div className="mt-3 rounded-lg border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/10 p-3 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">
-          {summary}
+        <div className="mt-3 rounded-lg border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/10 p-3 text-sm text-gray-800 dark:text-gray-200">
+          {/* A summary of someone else's mentee is exactly the text a reader
+              would otherwise take for the mentor's own words (#2034). */}
+          <AiBadge note className="mb-2" />
+          <div className="whitespace-pre-line">{summary}</div>
         </div>
       )}
     </div>

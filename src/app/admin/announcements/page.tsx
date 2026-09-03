@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ImageLightbox, useImageLightbox } from '@/components/ui/ImageLightbox';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
@@ -39,6 +40,7 @@ interface AnnouncementRecord {
 
 export default function AdminAnnouncementsPage() {
   const t = useT();
+  const lightbox = useImageLightbox();
   const locale = useLocale();
   // One announcement, up to three languages (#1163). The composer keeps a body
   // per language and a tab for the one being typed; each reader is served their
@@ -409,15 +411,22 @@ export default function AdminAnnouncementsPage() {
                     <p className="text-sm text-gray-900 whitespace-pre-wrap">{a.text}</p>
                   )}
                   {editId !== a.id && a.imageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={a.imageUrl}
-                      // Decorative here: the announcement text right above it is
-                      // the content. A label like "Image (optional)" would just be
-                      // noise for a screen reader.
-                      alt=""
-                      className="mt-2 max-h-40 rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => lightbox.open([{ src: a.imageUrl! }])}
+                      aria-label={t.imageViewer.viewImage}
+                      className="mt-2 block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={a.imageUrl}
+                        // Decorative here: the announcement text right above it is
+                        // the content. A label like "Image (optional)" would just be
+                        // noise for a screen reader.
+                        alt=""
+                        className="max-h-40 rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
+                      />
+                    </button>
                   )}
                   {a.link && (
                     <a href={a.link} target={a.link.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline block mt-1">
@@ -472,6 +481,7 @@ export default function AdminAnnouncementsPage() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteId(null)}
       />
+      <ImageLightbox {...lightbox.lightboxProps} />
     </div>
   );
 }

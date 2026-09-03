@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 
 
@@ -258,13 +259,21 @@ export default function CompaniesPage() {
       {loading ? (
         <div className="text-center py-12 text-gray-400">{t.common.loading}</div>
       ) : filteredCompanies.length === 0 ? (
-        <Card className="text-center py-12">
-          <Building2 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">{t.companiesPage.none}</p>
-          <Button onClick={() => setShowForm(true)} variant="outline" className="mt-4">
-            <Plus className="h-4 w-4" />
-            {t.companiesPage.addFirstCompany}
-          </Button>
+        <Card>
+          <EmptyState
+            testId="admin-companies"
+            icon={Building2}
+            role="ADMIN"
+            title={t.emptyStates.companies.title}
+            byRole={{
+              ADMIN: {
+                body: t.emptyStates.companies.adminBody,
+                // The create form is a dialog on this very page, so the next
+                // step is the control the screen already renders.
+                action: { label: t.emptyStates.companies.adminCta, onClick: () => setShowForm(true) },
+              },
+            }}
+          />
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

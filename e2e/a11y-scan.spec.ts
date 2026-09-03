@@ -177,8 +177,12 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('public pages: landing and sign-in', async ({ page }) => {
-  await scanAll(page, ['/', '/auth/signin']);
+// /accessibility carries the public conformance statement (#2035). A page that
+// claims WCAG 2.2 AA and then fails the scan is the one embarrassment this gate
+// exists to prevent, so it is scanned alongside the two pages every visitor
+// sees — not left to the honour system.
+test('public pages: landing, sign-in and the accessibility statement', async ({ page }) => {
+  await scanAll(page, ['/', '/auth/signin', '/accessibility']);
 });
 
 // `/account` rides in the mentee context because it is the ONE settings page

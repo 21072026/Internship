@@ -3,6 +3,8 @@
   "/#dark": {},
   "/auth/signin": {},
   "/auth/signin#dark": {},
+  "/accessibility": {},
+  "/accessibility#dark": {},
   "/portal": {},
   "/portal#dark": {},
   "/portal/profile": {},
