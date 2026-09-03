@@ -12,7 +12,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Build test** | Production build compiles | `npm run build` | CI (`ci.yml`) |
 | **i18n parity** | EN/TR/DE translation keys stay in sync | `npm run check:i18n` | CI (`ci.yml`) |
 | **Smoke / functional (E2E)** | App boots, auth works, core pages render without errors | `e2e/*.spec.ts` (Playwright) | CI (`e2e.yml`) on every PR |
-| **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts` | with E2E |
+| **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics; OS media preferences (reduced motion, increased contrast, forced colors) | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/a11y-media-preferences.spec.ts` | with E2E |
 | **Security** | Headers, IDOR/RBAC, rate limiting, 2FA, login hardening | `e2e/security-headers.spec.ts`, `e2e/authz-idor.spec.ts`, `e2e/idor-hardening.spec.ts`, `e2e/rate-limit.spec.ts`, `e2e/login-security.spec.ts`, `e2e/two-factor-*.spec.ts` | with E2E |
 | **XSS / injection** | User input is escaped, never executed as HTML/JS | `e2e/xss-injection.spec.ts` | with E2E |
 | **Responsive / mobile** | Layout at small viewports | `e2e/mobile.spec.ts`, `e2e/users-responsive.spec.ts` | with E2E |
@@ -276,6 +276,62 @@ must either filesort the FAILED set or walk `createdAt` backwards past every non
 As the table grows, that query — not the app — is the likeliest cause of an `ep:health`
 breach. Setting `HEALTH_TOKEN` on the server removes the whole detail path from the anonymous
 probe and is the cheaper fix.
+
+## OS accessibility media preferences
+
+Three user preferences the browser exposes as media features are **supported and
+tested** (#2045). Before that work a repo-wide grep for them returned zero hits in
+`src/` and `e2e/`, and axe never noticed — it scans one rendering, with no preference
+emulated, so a clean baseline said nothing at all about any of this.
+
+| Media feature | What the app does | Where |
+|---------------|-------------------|-------|
+| `prefers-reduced-motion: reduce` | Blanket `animation-duration`/`transition-duration` collapse on `*, *::before, *::after`, plus `scroll-behavior: auto`. Behaviour is untouched: the mobile drawer still opens and closes, it just arrives instantly. Skeleton placeholders (whose only affordance is the pulse) switch to a static fill + inset ring. The two *scripted* scrolls (message thread → newest bubble, project editor → its form) ask in JS, because an explicit `ScrollOptions.behavior` beats any CSS `scroll-behavior`. | `src/app/globals.css` (media-preference block at the end of the file), `src/components/ui/Skeleton.tsx`, `src/lib/reducedMotion.ts` |
+| `prefers-contrast: more` | Hairline borders (`border-gray-100/200`, `divide-gray-50/100`) and secondary text (`text-gray-400/500`) are re-tinted through the same flat-utility remap the dark-mode layer uses — every rule duplicated for `html.dark`, because the dark layer scores (0,2,0) and would otherwise swallow a bare utility selector. | `src/app/globals.css` |
+| `forced-colors: active` (Windows High Contrast) | The focus ring names the system `Highlight` colour instead of a hardcoded `#2563eb`; `forced-color-adjust: none` is applied **only** to the `/account` accent swatches, where the fill *is* the content; badges get an inset outline and board drop targets a `Highlight` outline, so no state is carried by background colour alone. | `src/app/globals.css`, `src/components/ui/Badge.tsx`, `src/components/AccountSettings.tsx`, `src/app/{admin,mentor}/board/page.tsx` |
+
+Everything lives inside its media query, so a user who has set no preference gets the
+default light and dark themes byte-for-byte unchanged — which is also why the axe
+baseline (`e2e/a11y-baseline.json`, empty across 18 keys) is unaffected.
+
+### How to test them
+
+`e2e/a11y-media-preferences.spec.ts` is the regression net. Playwright emulates all
+three:
+
+```ts
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await page.emulateMedia({ contrast: 'more' });
+await page.emulateMedia({ forcedColors: 'active' });
+```
+
+`emulateMedia` **merges** into what is already emulated, so a loop over several
+preferences must spell out all three keys (`null` resets one) or the second iteration
+is silently "reduced motion AND high contrast".
+
+The spec asserts: the drawer's computed `transition-duration` is effectively zero yet
+`data-open` still flips both ways; a frozen skeleton is still drawn; a keyboard focus
+ring is still visible under forced colors; the accent swatches keep six distinct fills;
+and neither the landing page nor a signed-in page scrolls sideways under any of the
+three. It is **not** `@smoke` — it runs in the scheduled full suite.
+
+Run just this file:
+
+```bash
+npx playwright test e2e/a11y-media-preferences.spec.ts
+```
+
+By hand, in Chrome DevTools: **Rendering** panel → *Emulate CSS media feature
+prefers-reduced-motion / prefers-contrast / forced-colors*.
+
+Two things the spec deliberately does **not** cover, so nobody goes looking for them:
+the JS side (`prefersReducedMotion()` / `scrollBehavior()` in `src/lib/reducedMotion.ts`)
+would need a seeded conversation and a thread long enough to scroll to assert anything
+real, and the *visual* result of `prefers-contrast: more` is a colour judgement, not a
+threshold — the spec only proves the layout survives it.
+
+VPAT rows (#2037) can cite this section for WCAG 2.3.3 (Animation from Interactions),
+1.4.11 (Non-text Contrast) and 2.4.7 (Focus Visible) under forced colors.
 
 ## Scheduled full E2E summary email
 
