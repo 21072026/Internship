@@ -108,6 +108,9 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   { href: '/messages', icon: MessageSquare, key: 'messages' },
   { href: '/portal/interactions', icon: BookOpen, key: 'interactionLogs' },
   { href: '/portal/notes', icon: Lock, key: 'myNotes' },
+  // Their own copy of the activity report their mentor and admin already
+  // read about them (#1915) — transparency, not a scoreboard.
+  { href: '/portal/insights', icon: Activity, key: 'myInsights' },
   // The career-tips archive (#1469). Linked from the sidebar and not only
   // from the e-mail footer: the issues stay useful long after the mail is
   // gone, and someone who unsubscribed can still read them here.
