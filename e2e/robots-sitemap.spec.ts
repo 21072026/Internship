@@ -22,7 +22,10 @@ test.use({ storageState: { cookies: [], origins: [] } });
 // Path prefixes that must never appear in the sitemap. `/mentors` (the
 // signed-in mentor directory, #938) is listed explicitly rather than relying
 // on the `/mentor` prefix to catch it, so removing `/mentor` later can't
-// silently stop covering it.
+// silently stop covering it. `/announcements` (available to any signed-in
+// role, not a public page) has no public sibling to collide with, but is
+// listed for the same reason every other authenticated area here is: this
+// list is what the sitemap is actually checked against.
 const PRIVATE_PREFIXES = [
   '/admin',
   '/mentor',
@@ -31,6 +34,7 @@ const PRIVATE_PREFIXES = [
   '/company',
   '/messages',
   '/account',
+  '/announcements',
   '/notifications',
   '/todos',
   '/onboarding',

@@ -47,6 +47,10 @@ const STORIES_PAGE_LIMIT = 50;
  *    matching flow (#938); its layout redirects an anonymous visitor to
  *    `/auth/signin`, so it belongs with the other authenticated areas below,
  *    not here (e2e/robots-sitemap.spec.ts caught it answering 307).
+ *  - `/announcements` — same defect, same fix: its layout redirects an
+ *    anonymous visitor to `/auth/signin` (available to any signed-in role,
+ *    not a public page), and the same e2e spec caught it once `/mentors` no
+ *    longer masked it (the spec's resolve loop stops at its first failure).
  *
  * Authenticated areas are absent by construction, and robots.ts disallows them.
  */
@@ -56,7 +60,6 @@ const PUBLIC_ROUTES: readonly { path: string; priority: number; changeFrequency:
   { path: '/for-companies', priority: 0.8, changeFrequency: 'monthly' },
   { path: '/apply-as-mentor', priority: 0.8, changeFrequency: 'monthly' },
   { path: '/projects', priority: 0.7, changeFrequency: 'weekly' },
-  { path: '/announcements', priority: 0.5, changeFrequency: 'daily' },
   { path: '/release-notes', priority: 0.5, changeFrequency: 'daily' },
   { path: '/code-of-conduct', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/contributor-terms', priority: 0.3, changeFrequency: 'monthly' },

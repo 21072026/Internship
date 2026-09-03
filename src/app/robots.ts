@@ -35,6 +35,7 @@ const PROTECTED_PATHS = [
   '/company',
   '/messages',
   '/account',
+  '/announcements',
   '/notifications',
   '/todos',
   '/onboarding',

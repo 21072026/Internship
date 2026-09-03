@@ -61,6 +61,10 @@ test('global search dropdown is readable in both light and dark mode', async ({ 
 
     await search(page, token);
     const listbox = page.getByTestId('global-search-listbox');
+    // The visual surface (bg-white / dark override) is the panel, not the
+    // listbox it wraps — background-color doesn't inherit from parent to
+    // child, so the colour assertions below target the panel.
+    const panel = page.getByTestId('global-search-panel');
     const option = page.getByTestId(`global-search-option-user-${mentee.id}`);
     await expect(listbox).toBeVisible();
     await expect(option).toBeVisible();
@@ -68,7 +72,7 @@ test('global search dropdown is readable in both light and dark mode', async ({ 
     const name = option.locator('span').first();
 
     // --- Light mode: white panel, near-black name.
-    const [lr, lg, lb] = rgb(await listbox.evaluate((el) => getComputedStyle(el).backgroundColor));
+    const [lr, lg, lb] = rgb(await panel.evaluate((el) => getComputedStyle(el).backgroundColor));
     expect(lr).toBeGreaterThan(240);
     expect(lg).toBeGreaterThan(240);
     expect(lb).toBeGreaterThan(240);
@@ -80,7 +84,7 @@ test('global search dropdown is readable in both light and dark mode', async ({ 
     // re-render or blur the input, so the panel stays open.
     await setTheme(page, 'dark');
     await expect(listbox).toBeVisible();
-    const [dr, dg, db] = rgb(await listbox.evaluate((el) => getComputedStyle(el).backgroundColor));
+    const [dr, dg, db] = rgb(await panel.evaluate((el) => getComputedStyle(el).backgroundColor));
     expect(dr).toBeLessThan(60);
     expect(dg).toBeLessThan(60);
     expect(db).toBeLessThan(70);
