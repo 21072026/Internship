@@ -82,7 +82,18 @@ esac
 exit 0
 EOF
 
-chmod +x "$BIN/mysqladmin" "$BIN/systemctl"
+# The script escalates privileges with `sudo -n <cmd>` whenever it is not root.
+# The REAL sudo resets PATH (secure_path), so the stubs above would be bypassed
+# and the command would hit the host's actual init system — on a CI runner that
+# means these tests would start and stop the machine's real MySQL. Shadowing
+# sudo keeps every privileged call inside this PATH.
+cat > "$BIN/sudo" <<'EOF'
+#!/usr/bin/env bash
+[ "${1:-}" = "-n" ] && shift
+exec "$@"
+EOF
+
+chmod +x "$BIN/mysqladmin" "$BIN/systemctl" "$BIN/sudo"
 
 run_watchdog() { # $1 = ping mode, rest = extra args; sets $out and $rc
   local mode="$1"; shift
