@@ -398,9 +398,31 @@ model User {
   decidedInterviewRequests          InterviewRequest[]            @relation("InterviewRequestDecider")
   newsletterSends                   NewsletterSend[]
   trustedDevices                    TrustedDevice[]
+  guidanceStates                    UserGuidanceState[]
 
   @@index([role])
   @@index([referredById])
+}
+
+// Per-user state for in-product guidance surfaces (#2068): "I have seen this"
+// and "I dismissed this", keyed by a surface string (e.g. `checklist:ADMIN`).
+// One generic table rather than a flag per surface — a new tip or tour adds a
+// key, never a column. It stores only the ACKNOWLEDGEMENT: whether a checklist
+// step is done stays derived from the real rows, because a stored "I did it"
+// flag can disagree with reality and a derived one cannot.
+model UserGuidanceState {
+  id          String    @id @default(cuid())
+  userId      String
+  key         String
+  seenAt      DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
 }
 
 // Consent-gated activity trail: one row per page visit, with the dwell time on
