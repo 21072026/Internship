@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 
 // Shared erasure logic (EPIC: GDPR data retention). Two modes:
 // - hardDeleteUser: same cascade cleanup as the existing self-service account
@@ -77,7 +78,17 @@ export async function anonymizeUser(userId: string): Promise<void> {
         skillLevels: {},
         publicProfile: false,
         isActive: false,
+        // An erased account must not keep a live session. `isActive` is only
+        // read at sign-in, so without this cutoff the person whose data was
+        // just scrubbed stayed signed in on their existing 12-hour JWT — and
+        // browsing an anonymized profile of themselves. lib/auth.ts rejects
+        // every token minted before this instant on its next request.
+        sessionsValidFrom: new Date(),
       },
     }),
   ]);
+  // And the remembered devices, or one of them silently mints a new session
+  // moments later (docs/remember-me.md). A hard delete needs no equivalent:
+  // TrustedDevice cascades with the user row.
+  await revokeAllTrustedDevices(userId);
 }

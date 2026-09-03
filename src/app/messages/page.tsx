@@ -17,7 +17,7 @@ import { conversationForRelation, createOrGetProjectConversation } from '@/lib/c
 // of the latest message, and an unread count — reachable from the header icon.
 export default async function MessagesInboxPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect('/auth/signin');
+  if (!session) redirect('/auth/signin?callbackUrl=/messages');
   const { locale, t } = await getServerDictionary();
   const me = session.user.id;
 

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { z } from 'zod';
 import { createOrGetProjectConversation, findOrCreateDirectConversation, isActiveProjectMember } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 const schema = z.union([
   z.object({ userId: z.string().min(1), projectId: z.never().optional() }),
@@ -15,6 +16,9 @@ const schema = z.union([
 // conversation. 403 when the two aren't allowed to message each other, which
 // today means they share no project and have no mentorship (see canMessage).
 export async function POST(request: Request) {
+    // 20 per 15 minutes permits normal conversation setup while limiting automated creation attempts.
+  const limited = enforceRateLimit(request, 'conversation-create', { limit: 20, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

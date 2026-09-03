@@ -163,7 +163,7 @@ export default async function PortalDashboard() {
 
       {/* Upcoming meetings (#914): when is my meeting, what's the link —
           answered on the first screen, with in-app RSVP and .ics download. */}
-      <UpcomingMeetings />
+      <UpcomingMeetings canRequestMeeting={!!relation && !isArchived} />
 
       {/* Compact mentor card: who my mentor is + the two actions a mentee
           reaches for daily. Company details and the interaction history moved

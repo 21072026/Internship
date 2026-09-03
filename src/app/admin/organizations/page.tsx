@@ -329,7 +329,10 @@ export default function AdminOrganizationsPage() {
                     <select value={ssoProvider} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
                       <option value="">—</option>
                       <option value="saml">SAML</option>
-                      <option value="oidc">OIDC</option>
+                      {/* OIDC is a roadmap item: the login route always builds a
+                          SAML request, so saving it would lock the tenant out.
+                          Shown disabled rather than hidden — it is coming. */}
+                      <option value="oidc" disabled>{`OIDC — ${t.organizations.ssoOidcSoon}`}</option>
                     </select>
                   </div>
                   <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
