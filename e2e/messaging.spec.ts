@@ -120,3 +120,114 @@ test('mentor opens the thread from the mentee page and uses a suggested opener',
     await cleanupByEmail(mentorEmail);
   }
 });
+
+// #1871 — a half-written reply used to die with the tab. The draft lives in
+// localStorage keyed per thread, so this is the only honest way to test it:
+// type, reload the page, look at the box again. Deliberately not @smoke — the
+// PR gate stays small.
+test('an unsent reply survives a reload and is gone once it is sent', async ({ page }) => {
+  const mentorEmail = uniqueEmail('draft-mentor');
+  const menteeEmail = uniqueEmail('draft-mentee');
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Draft Mentor');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Draft Mentee');
+  const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
+  // Seeded history keeps the empty-thread openers out of the composer.
+  await prisma.message.create({ data: { relationId: rel.id, senderId: mentor.id, channel: 'EMAIL', body: 'Any questions?' } });
+  const draft = 'Half a thought I will finish later';
+
+  try {
+    await signIn(page, menteeEmail, 'MenteePass123', '/portal');
+    await page.goto(`/messages/${rel.id}`);
+    await expect(page.getByText('Any questions?')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('message-input').fill(draft);
+    await page.reload();
+    // Restored on mount from localStorage — with no message row written.
+    await expect(page.getByTestId('message-input')).toHaveValue(draft, { timeout: 10_000 });
+    expect(await prisma.message.count({ where: { relationId: rel.id, senderId: mentee.id } })).toBe(0);
+
+    const sent = page.waitForResponse((r) => r.url().includes('/api/messages') && r.request().method() === 'POST');
+    await page.getByTestId('message-send').click();
+    await sent;
+    await expect(page.getByTestId('message-input')).toHaveValue('');
+
+    // Sending clears the stored draft too, so a reload comes back to an empty
+    // box rather than re-offering text that is already in the thread.
+    await page.reload();
+    await expect(page.getByText(draft).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('message-input')).toHaveValue('');
+  } finally {
+    await prisma.message.deleteMany({ where: { relationId: rel.id } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});
+
+// #1871 — canned responses. Covers the two halves of the acceptance criterion
+// that are not visible from the admin screen: the text arrives in the *writer's*
+// locale, and picking it increments `useCount` (which is what ranks the picker).
+// The template is seeded straight into the table rather than clicked into
+// /admin/message-templates, so a failure here points at the composer.
+test('a canned response inserts in the writer’s locale and counts the use', async ({ page }) => {
+  const mentorEmail = uniqueEmail('canned-mentor');
+  const menteeEmail = uniqueEmail('canned-mentee');
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'Canned Mentor');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Canned Mentee');
+  // The writer reads Turkish, so the TR wording is the one that must land.
+  await prisma.user.update({ where: { id: mentor.id }, data: { preferredLanguage: 'tr' } });
+  const rel = await prisma.mentorshipRelation.create({ data: { mentorId: mentor.id, menteeId: mentee.id } });
+  // A distinctive body: the UI is Turkish for this writer, so a greeting would
+  // risk matching the app's own copy under getByText's substring rules.
+  const seeded = `Ilk mesaj ${Date.now()}`;
+  await prisma.message.create({
+    data: { relationId: rel.id, senderId: mentee.id, channel: 'IN_APP', body: seeded },
+  });
+  const trText = `CV'ni PDF olarak gönder ${Date.now()}`;
+  const template = await prisma.messageTemplate.create({
+    data: {
+      ownerId: null,
+      title: 'Send me your CV as a PDF',
+      translations: { en: 'Send me your CV as a PDF', tr: trText },
+    },
+  });
+
+  try {
+    await signIn(page, mentorEmail, 'MentorPass123', '/mentor');
+    await page.goto(`/messages/${rel.id}`);
+    await expect(page.getByText(seeded)).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('canned-toggle').click();
+    await expect(page.getByTestId('canned-panel')).toBeVisible();
+    await page.getByTestId(`canned-template-${template.id}`).click();
+
+    // The Turkish wording, not the canonical English title.
+    await expect(page.getByTestId('message-input')).toHaveValue(trText);
+    await expect(page.getByTestId('canned-panel')).toBeHidden();
+    await expect
+      .poll(async () =>
+        (await prisma.messageTemplate.findUnique({ where: { id: template.id }, select: { useCount: true } }))?.useCount
+      )
+      .toBe(1);
+
+    // Retiring a template archives it rather than deleting it, and it drops out
+    // of the picker — the row (and its useCount) stays.
+    const res = await page.request.delete('/api/admin/message-templates', { data: { id: template.id } });
+    // A mentor is not an admin: the pool is admin-managed.
+    expect(res.status()).toBe(401);
+    await prisma.messageTemplate.update({ where: { id: template.id }, data: { archivedAt: new Date() } });
+    await page.reload();
+    await expect(page.getByText(seeded)).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('canned-toggle').click();
+    await expect(page.getByTestId('canned-none')).toBeVisible();
+    expect(await prisma.messageTemplate.count({ where: { id: template.id } })).toBe(1);
+  } finally {
+    await prisma.messageTemplate.deleteMany({ where: { id: template.id } });
+    await prisma.message.deleteMany({ where: { relationId: rel.id } });
+    await prisma.notification.deleteMany({ where: { userId: { in: [mentor.id, mentee.id] } } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
+  }
+});

@@ -99,12 +99,17 @@ export function ConsentSettings() {
               </label>
               {type === 'TESTIMONIAL' && state[type] && (
                 <div className="pb-3 pl-1 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-                  <span>{c.nameStyleLabel}</span>
+                  {/* A bare <span> next to a <select> is not an accessible
+                      name — screen readers announced this as an unnamed combo
+                      box. Same `htmlFor`/`id` pairing as the /account language
+                      and theme pickers (#2041). */}
+                  <label htmlFor="testimonial-name-style">{c.nameStyleLabel}</label>
                   <select
+                    id="testimonial-name-style"
                     value={nameStyle}
                     onChange={(e) => saveNameStyle(e.target.value as 'initials' | 'fullname')}
                     data-testid="testimonial-name-style"
-                    className="rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-xs"
+                    className="max-lg:min-h-11 rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-2 py-1 text-xs"
                   >
                     <option value="initials">{c.nameStyleInitials}</option>
                     <option value="fullname">{c.nameStyleFullname}</option>

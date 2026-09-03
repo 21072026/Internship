@@ -15,7 +15,7 @@ import {
   BarChart3, ShieldCheck, Sparkles, MessageCircle, Activity,
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
-  MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility,
+  MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 
@@ -82,6 +82,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'emailGroups', category: 'trust', icon: MailMinus, color: 'teal', title: C.emailGroups.t, desc: C.emailGroups.d },
     { key: 'trustedDevices', category: 'trust', icon: Fingerprint, color: 'indigo', title: C.trustedDevices.t, desc: C.trustedDevices.d },
     { key: 'dormantCheckIn', category: 'tracking', icon: MailQuestion, color: 'amber', title: C.dormantCheckIn.t, desc: C.dormantCheckIn.d },
+    { key: 'trustCenter', category: 'trust', icon: ScrollText, color: 'sky', title: C.trustCenter.t, desc: C.trustCenter.d },
     { key: 'matchQuality', category: 'insights', icon: Target, color: 'blue', title: C.matchQuality.t, desc: C.matchQuality.d },
     { key: 'accessibility', category: 'trust', icon: Accessibility, color: 'sky', title: C.accessibility.t, desc: C.accessibility.d },
     { key: 'multiTenancy', category: 'platform', icon: Building2, color: 'purple', title: C.multiTenancy.t, desc: C.multiTenancy.d },

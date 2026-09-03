@@ -107,6 +107,11 @@ jobs:
       # production container has no src/ to scan).
       - name: generated API description is complete and honest
         run: npm run check:openapi
+      # Manifest hygiene, without a database: every entry well-formed and every
+      # `model` a real Prisma model. A typo there would count nothing and pass
+      # silently, so it is worth catching in the fast job too.
+      - name: demo fidelity manifest is well-formed (#2063)
+        run: npm run check:demo-fidelity -- --manifest-only
       # The deploy scripts never run in CI, so their one piece of decision logic
       # — "is this dump real?" — had no coverage at all until it broke prod
       # (#1200). Cheap to run here; the alternative is finding out on the server.
@@ -117,6 +122,11 @@ jobs:
       # — it silently stops prod from deploying at all (#1230).
       - name: schema guard pattern (#1230)
         run: bash infra/test/schema-guard.test.sh
+      # The predicate that keeps demo rows off prod is now shared between the
+      # seeder and the fidelity checker (prisma/demoTarget.mjs); a regression
+      # that made it permissive would be invisible until it mattered.
+      - name: demo seed target guard (#2063)
+        run: node scripts/test/demo-target.test.mjs
       # reset-demo.mjs truncates every table in the database it is given; the
       # only thing keeping it off prod is the name check at the top (#966).
       - name: demo reset guard (#966)
@@ -129,3 +139,56 @@ jobs:
       - name: mysql watchdog probe logic
         run: bash infra/test/mysql-watchdog.test.sh
       - run: npm run build
+
+  # The demo seed is the only data most people ever see: the public demo, every
+  # per-PR topic environment, and every new contributor's local box. When a
+  # feature ships without a corresponding seed block, its screen renders
+  # perfectly — and empty — everywhere, and nothing goes red. This job seeds a
+  # throwaway MySQL from scratch and counts the rows behind each differentiating
+  # screen against scripts/demo-fidelity.json (#2063).
+  #
+  # Its own job rather than a step in `checks`: it needs a database service that
+  # the lint/typecheck job has no use for, and running in parallel keeps it off
+  # the critical path (no `npm run build` here — it never renders a page).
+  demo-fidelity:
+    name: Demo seed fidelity
+    runs-on: ubuntu-latest
+
+    # Same service block as the Playwright gate (.github/workflows/e2e.yml) —
+    # deliberately identical so the two agree about what a fresh CI database is.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: internship_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      DATABASE_URL: 'mysql://root:root@127.0.0.1:3306/internship_test'
+      NEXTAUTH_SECRET: 'ci-test-secret-not-for-production'
+      NEXTAUTH_URL: 'http://localhost:3000'
+      SEED_ADMIN_EMAIL: 'admin@example.com'
+      SEED_ADMIN_PASSWORD: 'ChangeMe123!'
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply DB schema
+        run: npx prisma db push
+      - name: Seed first admin
+        run: npx prisma db seed
+      - name: Seed demo data
+        run: npm run seed:demo
+      - name: Every differentiating screen has demo data behind it (#2063)
+        run: npm run check:demo-fidelity

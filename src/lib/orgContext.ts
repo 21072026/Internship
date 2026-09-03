@@ -52,6 +52,7 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'WeeklyReport',
   'Requisition',
   'InterviewRequest',
+  'MessageTemplate',
   // Programmatic credentials are tenant property too (#1466): a key minted in
   // one org must never be listed by — or authenticate into — another.
   'ApiKey',

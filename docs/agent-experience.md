@@ -10,6 +10,16 @@ Newest entries on top.
 
 ---
 
+## 2026-09-03 — Third conflict pass on the same feature branch (#2008)
+
+**`src/lib/features.ts` keeps colliding at the icon list before the feature rows do.** A later PR
+added `ScrollText` for a new catalogue item while this branch already needed `HeartPulse` for
+`integrationHealth`; the actual fix was just the union of imports, because the feature rows
+themselves already merged cleanly below. On repeat conflicts here, check the top `lucide-react`
+import first before re-reading the whole catalogue.
+
+---
+
 ## 2026-09-03 — Repeated conflict follow-up on the same PR (#2008)
 
 **A scary-looking page conflict can still be import-only.** The second conflict on

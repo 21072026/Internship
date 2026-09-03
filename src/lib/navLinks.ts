@@ -2,7 +2,7 @@ import {
   Activity, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
-  Handshake, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareText, Network, Quote, Radio,
+  Handshake, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
   type LucideIcon,
@@ -43,6 +43,9 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries' },
   { href: '/admin/projects', icon: FolderGit2, key: 'projects' },
   { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates' },
+  // The canned-response pool the composer offers (#1871), next to the other
+  // reusable-text screen rather than buried under settings.
+  { href: '/admin/message-templates', icon: MessageSquareQuote, key: 'messageTemplates' },
   { href: '/todos', icon: ClipboardList, key: 'todos' },
   { href: '/admin/cohorts', icon: Layers, key: 'cohorts' },
   { href: '/admin/tags', icon: TagIcon, key: 'tags' },

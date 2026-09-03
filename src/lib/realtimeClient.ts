@@ -28,6 +28,10 @@ export type RealtimeSignal =
   | { type: 'message'; conversationId: string | null; relationId: string | null; senderId: string | null }
   // The viewer read a thread somewhere else (another tab, the e-mail action).
   | { type: 'read'; conversationId: string | null; relationId: string | null }
+  // Someone else is composing in one of the viewer's threads (#1871). Ephemeral
+  // in both directions: nothing was stored server-side, and the consumer is the
+  // one that expires it (there is no "stopped typing" event to wait for).
+  | { type: 'typing'; conversationId: string | null; relationId: string | null; senderId: string | null }
   // Any in-app notification row was created for the viewer.
   | { type: 'notification' }
   // "Refetch whatever you are showing." Emitted on every poll while in fallback
@@ -158,6 +162,18 @@ function openStream() {
     const d = parse(event);
     emit({
       type: 'message',
+      conversationId: (d.conversationId as string) ?? null,
+      relationId: (d.relationId as string) ?? null,
+      senderId: (d.senderId as string) ?? null,
+    });
+  }) as EventListener);
+  // Deliberately stream-only: there is no polling equivalent (a typing fact is
+  // gone before the next 20s tick), so in fallback mode the indicator is simply
+  // absent rather than late.
+  es.addEventListener('typing', ((event: MessageEvent) => {
+    const d = parse(event);
+    emit({
+      type: 'typing',
       conversationId: (d.conversationId as string) ?? null,
       relationId: (d.relationId as string) ?? null,
       senderId: (d.senderId as string) ?? null,

@@ -20,6 +20,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Health probe** | `/api/health` liveness + optional DB readiness | `e2e/health.spec.ts` | with E2E |
 | **Stress / load** | Latency percentiles, throughput, error rate under sustained concurrency | `scripts/stress-test.mjs` | **weekly cron**, Mon 02:30 UTC (`stress.yml`) + on demand |
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
+| **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 
 The first ten are **functional / correctness** tests: given an input, is the output
 right? The last two are **non-functional**: the app may be correct yet too slow or
@@ -345,6 +346,82 @@ before writing its report (`E2E_EXPECTED_REPORTS`). Recipients come from
 `ALERT_EMAIL_TO`; set the repository **variable** `E2E_REPORT_MODE=failures` to switch
 back to red-only alerts.
 
+## Demo-seed fidelity gate (#2063)
+
+The demo seed (`prisma/seed-demo.mjs`) is the only data most people ever see: the
+public demo, every per-PR topic environment at `crm-pr<N>.ersah.in`, and every new
+contributor's local box. The failure mode this gate exists for is not a crash — a
+feature ships, nobody adds a matching block to the seeder, and its screen renders
+*perfectly* and *empty* in all three places. Nothing goes red; the first person to
+notice is whoever is mid-demo.
+
+`scripts/demo-fidelity.json` declares, per screen, how many rows the seed must
+produce. `npm run check:demo-fidelity` counts them with Prisma, prints a
+`model / expected / actual` table, and exits 1 naming both the **screen** and the
+**owning issue** for every shortfall. CI runs it in the `demo-fidelity` job in
+`ci.yml`, which spins up a throwaway MySQL and does
+`prisma db push` → `prisma db seed` → `npm run seed:demo` → the check.
+
+It refuses any `DATABASE_URL` the demo seeder itself would refuse, using the *same*
+predicate — `prisma/demoTarget.mjs`, imported by both. Counting is read-only, but a
+manifest tuned to synthetic data says nothing about a real database, and pointing it
+at prod would be a PII read. Never fork that predicate: two copies that can disagree
+are not a guard. `scripts/test/demo-target.test.mjs` covers it.
+
+### The manifest is a ratchet
+
+Each entry carries two numbers:
+
+- **`minRows`** — the *enforced* floor, set to what the seeder produces **today**.
+  A count below it fails the build. So coverage can go up and never quietly back down.
+- **`target`** — how many rows the screen needs to stop reading as empty.
+
+A row where `minRows < target` is reported as **pending**, with its owning issue, on
+every single run. That is deliberate: the screens that still have zero seed coverage
+(requisitions, interview requests, offers, panels, company interest, weekly reports,
+mentor questions, documents, `SOURCE` users — owned by **#2062** and **#1419**) stay
+listed and visible instead of being dropped from the manifest to make the table look
+tidy. Run with `DEMO_FIDELITY_STRICT=1` to enforce `target` as well; that is how the
+owning issue verifies its own seeding before raising `minRows`.
+
+### How to add a screen to the demo-fidelity manifest
+
+Do this in the **same PR** that ships the feature, the same way a user-visible feature
+gets a `src/lib/features.ts` entry and a release fragment.
+
+1. **Seed the rows** in `prisma/seed-demo.mjs`. Keep it idempotent and namespaced
+   (`@demo.example.com` emails, "Demo" in names) like everything else there.
+2. **Add an entry** to the `entries` array in `scripts/demo-fidelity.json`:
+   ```json
+   {
+     "model": "WeeklyReport",
+     "minRows": 4,
+     "target": 4,
+     "screen": "/weekly-reports — mentee weekly reporting",
+     "issue": "#1419"
+   }
+   ```
+   - `model` must match a model name in `prisma/schema.prisma`. The checker resolves it
+     against the Prisma client and **hard-fails on a name it cannot find** — a typo here
+     would count nothing and pass silently, which is the exact bug this gate prevents.
+   - `screen` is what a reviewer reads in the failure message. Give the route(s), not
+     the model name again.
+   - `issue` is who to talk to when it goes red.
+   - Optional `where` (a Prisma filter) plus `label` narrows the count — that is how the
+     `SOURCE`-role user row works: `"where": { "role": "SOURCE" }`.
+3. **Set `minRows` honestly.** It is the count the seeder actually produces, not an
+   aspiration. If you cannot seed the screen yet, still add the row with `minRows: 0`,
+   a real `target`, and the issue that will close the gap — it will list as pending on
+   every run. Do **not** omit the row; an absent screen is exactly the silence this
+   gate replaces.
+4. **Verify locally** against a scratch database (see the top of this file / the
+   security playbook for standing one up):
+   ```bash
+   npx prisma db push && npx prisma db seed && npm run seed:demo
+   npm run check:demo-fidelity
+   ```
+   Then delete your new seed block and re-run against a fresh database — if the checker
+   does not go red, the entry is not wired to anything.
 ## Accessibility regression gate (axe)
 
 [`e2e/a11y-scan.spec.ts`](../e2e/a11y-scan.spec.ts) runs `@axe-core/playwright` over the
