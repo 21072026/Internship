@@ -527,6 +527,7 @@ run_tool node prisma/seed-goal-templates.mjs || true
 run_tool node prisma/seed-contributor-terms.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
 run_tool node prisma/backfill-organization.mjs || true
+run_tool node scripts/backfill-requisitions.mjs || true
 # One-shot: baseline the scheduled-job backlog so the first cron tick doesn't
 # email out history. Self-skips once applied (Setting 'cronBaselineAt').
 run_tool node prisma/backfill-cron-baseline.mjs || true

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **A meeting that took place logs itself as an interaction** (#1489). Relation meetings write their own `InteractionLog` (`type: Meeting`, `autoLogged`, unique `meetingId`) — on the \"meeting is over\" click, and via a quarter-hourly sweep for the ones nobody ended (2h grace, DECLINED invitations skipped). The auto entry is marked in the UI, editable and deletable like any other, and is filtered out of the calendar's logged-meeting feed so a meeting is never listed twice.",
-  "notes": {
-    "en": ["Meetings you hold are now added to the interaction log by themselves — no more re-typing what the app already scheduled."],
-    "tr": ["Yaptığınız toplantılar etkileşim kaydına kendiliğinden ekleniyor — uygulamanın zaten planladığı toplantıyı tekrar yazmanıza gerek yok."],
-    "de": ["Stattgefundene Meetings landen jetzt automatisch im Interaktionsprotokoll — kein erneutes Eintippen dessen, was die App ohnehin geplant hat."]
-  }
-}
