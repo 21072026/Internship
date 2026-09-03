@@ -61,14 +61,18 @@ test('global search dropdown is readable in both light and dark mode', async ({ 
 
     await search(page, token);
     const listbox = page.getByTestId('global-search-listbox');
-    const option = page.getByTestId(`global-search-option-${mentee.id}`);
+    // The visual surface (bg-white / dark override) is the panel, not the
+    // listbox it wraps — background-color doesn't inherit from parent to
+    // child, so the colour assertions below target the panel.
+    const panel = page.getByTestId('global-search-panel');
+    const option = page.getByTestId(`global-search-option-user-${mentee.id}`);
     await expect(listbox).toBeVisible();
     await expect(option).toBeVisible();
     // The candidate name — the strongest text tone in the row (text-gray-900).
     const name = option.locator('span').first();
 
     // --- Light mode: white panel, near-black name.
-    const [lr, lg, lb] = rgb(await listbox.evaluate((el) => getComputedStyle(el).backgroundColor));
+    const [lr, lg, lb] = rgb(await panel.evaluate((el) => getComputedStyle(el).backgroundColor));
     expect(lr).toBeGreaterThan(240);
     expect(lg).toBeGreaterThan(240);
     expect(lb).toBeGreaterThan(240);
@@ -80,7 +84,7 @@ test('global search dropdown is readable in both light and dark mode', async ({ 
     // re-render or blur the input, so the panel stays open.
     await setTheme(page, 'dark');
     await expect(listbox).toBeVisible();
-    const [dr, dg, db] = rgb(await listbox.evaluate((el) => getComputedStyle(el).backgroundColor));
+    const [dr, dg, db] = rgb(await panel.evaluate((el) => getComputedStyle(el).backgroundColor));
     expect(dr).toBeLessThan(60);
     expect(dg).toBeLessThan(60);
     expect(db).toBeLessThan(70);
@@ -120,7 +124,7 @@ test('global search is a keyboard-operable combobox', async ({ page }) => {
     await seedUser(emails[2], 'x', 'MENTEE', `${token} Charlie`),
   ];
 
-  const testId = (id: string) => `global-search-option-${id}`;
+  const testId = (id: string) => `global-search-option-user-${id}`;
 
   try {
     await signIn(page, adminEmail, 'AdminPass123');
@@ -214,21 +218,21 @@ test('global search announces its result count and shows a no-results row', asyn
 
   try {
     await signIn(page, adminEmail, 'AdminPass123');
-    const live = page.getByTestId('global-search-live');
+    const live = page.getByTestId('global-search-status');
     await expect(live).toHaveAttribute('aria-live', 'polite');
 
     await search(page, token);
     await expect(page.getByTestId('global-search-listbox')).toBeVisible();
     // One hit → the count is announced (EN is the default locale).
-    await expect(live).toHaveText('Results: 1');
+    await expect(live).toHaveText('1 results');
 
     // A query that matches nothing renders an explicit row instead of an empty
     // popup — previously the panel simply did not render and the box looked broken.
     await search(page, `${token}zzqx`);
-    const empty = page.getByTestId('global-search-no-results');
+    const empty = page.getByTestId('global-search-empty');
     await expect(empty).toBeVisible();
-    await expect(empty).toHaveText('No matches found');
-    await expect(live).toHaveText('No matches found');
+    await expect(empty).toHaveText('No results');
+    await expect(live).toHaveText('No results');
   } finally {
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(adminEmail);
