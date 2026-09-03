@@ -46,6 +46,10 @@ export async function PublicFooter() {
       links: [
         { href: '/privacy', label: t.privacy.title },
         { href: '/terms', label: t.terms.title },
+        // Which features send text to a model, what is sent, and what we have
+        // not signed yet (#2034). It sits in Legal because that is where the
+        // person who needs it looks first.
+        { href: '/ai', label: t.ai.title },
         // Who runs this deployment, and the one address a visitor can write to
         // (#1396). A site that collects registrations and enquiry forms without
         // naming its operator anywhere is the state this replaces.
