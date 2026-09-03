@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "- **WCAG 4.1.3 status messages and 1.4.10 reflow** (#2047). One app-wide live region (`ui/LiveRegion.tsx`, mounted empty in `providers.tsx`) with a `useAnnounce()` hook, wired to the account-settings save/error banner, the character-counter thresholds and the admin board search (debounced and de-duplicated via `useFilterAnnouncement`). The calendar's view switcher now wraps instead of scrolling sideways at 320px, and the board's column strip is a focusable named region while it can scroll. `e2e/mobile-layout-audit.spec.ts` gains a 320px / 400%-zoom reflow case in TR+DE, `e2e/live-region.spec.ts` asserts the region is mounted empty and then receives text, and the manual assistive-technology walkthrough — including what has not been run — is recorded in `docs/a11y-audit.md`, which the axe regenerator now preserves.",
+  "notes": {
+    "en": [
+      "Screen readers now announce saved settings, search result counts and character limits.",
+      "The board and the calendar fit a 320px screen and 400% zoom without scrolling sideways."
+    ],
+    "tr": [
+      "Ekran okuyucular artık kaydedilen ayarları, arama sonuç sayısını ve karakter sınırını sesli bildiriyor.",
+      "Pano ve takvim, 320 piksellik ekranda ve %400 yakınlaştırmada yana kaydırma gerektirmiyor."
+    ],
+    "de": [
+      "Screenreader melden jetzt gespeicherte Einstellungen, die Zahl der Suchtreffer und das Zeichenlimit.",
+      "Board und Kalender passen auf einen 320-Pixel-Bildschirm und in 400 % Zoom, ohne seitwärts zu scrollen."
+    ]
+  }
+}

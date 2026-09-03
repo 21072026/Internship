@@ -3,6 +3,7 @@
 import { SessionProvider } from 'next-auth/react';
 import { LocaleProvider } from '@/i18n/client';
 import { ToastProvider } from '@/components/ui/Toast';
+import { LiveRegionProvider } from '@/components/ui/LiveRegion';
 import { CookieConsent } from '@/components/CookieConsent';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { ActivityTracker } from '@/components/ActivityTracker';
@@ -24,20 +25,25 @@ export function Providers({
   return (
     <SessionProvider>
       <LocaleProvider locale={locale} dict={dict}>
-        <ToastProvider>
-          {/* App-wide, above every page shell: an impersonation session has to be
-              visible (and reversible) on screens that render their own chrome —
-              /messages, /account, /notifications — not just inside ResponsiveShell. */}
-          <ImpersonationBanner />
-          {/* Above the page shells on purpose: a call in progress has to survive
-              navigating from the mentee list to their profile (#1054). */}
-          <FloatingNotesProvider>
-            <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
-          </FloatingNotesProvider>
-          <CookieConsent />
-          <ActivityTracker />
-          <TimezoneSync />
-        </ToastProvider>
+        {/* WCAG 4.1.3: one live region for the whole app, mounted empty above
+            every page shell so it is already in the accessibility tree when the
+            first status message arrives (see ui/LiveRegion.tsx). */}
+        <LiveRegionProvider>
+          <ToastProvider>
+            {/* App-wide, above every page shell: an impersonation session has to be
+                visible (and reversible) on screens that render their own chrome —
+                /messages, /account, /notifications — not just inside ResponsiveShell. */}
+            <ImpersonationBanner />
+            {/* Above the page shells on purpose: a call in progress has to survive
+                navigating from the mentee list to their profile (#1054). */}
+            <FloatingNotesProvider>
+              <MeetingLauncherProvider>{children}</MeetingLauncherProvider>
+            </FloatingNotesProvider>
+            <CookieConsent />
+            <ActivityTracker />
+            <TimezoneSync />
+          </ToastProvider>
+        </LiveRegionProvider>
       </LocaleProvider>
     </SessionProvider>
   );

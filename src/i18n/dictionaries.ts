@@ -64,7 +64,17 @@ const en = {
     source: 'Source Portal',
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Language' },
-  a11y: { skipToContent: 'Skip to content' },
+  a11y: {
+    skipToContent: 'Skip to content',
+    // WCAG 4.1.3 status messages — spoken by the app-wide live region
+    // (components/ui/LiveRegion.tsx), never rendered on screen.
+    charactersRemaining: '{count} characters remaining',
+    characterLimitReached: 'Character limit reached',
+    resultsShown: '{count} results shown',
+    resultsShownOne: '1 result shown',
+    noResultsShown: 'No results',
+    scrollableColumns: 'Pipeline stage columns',
+  },
   // Public accessibility conformance statement (#2035), rendered by
   // src/app/accessibility/page.tsx. Server-only: the page is a server
   // component and this copy is long — see SERVER_ONLY_NAMESPACES.
@@ -3950,7 +3960,15 @@ const tr: Dict = {
     source: 'Kaynak Portalı',
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Dil' },
-  a11y: { skipToContent: 'İçeriğe geç' },
+  a11y: {
+    skipToContent: 'İçeriğe geç',
+    charactersRemaining: '{count} karakter kaldı',
+    characterLimitReached: 'Karakter sınırına ulaşıldı',
+    resultsShown: '{count} sonuç gösteriliyor',
+    resultsShownOne: '1 sonuç gösteriliyor',
+    noResultsShown: 'Sonuç yok',
+    scrollableColumns: 'Pipeline aşama sütunları',
+  },
   accessibility: {
     title: 'Erişilebilirlik',
     intro: 'InternshipCRM’i bir mentee’nin, bir mentörün ya da bir şirket yetkilisinin klavyeyle, ekran okuyucuyla, büyüteçle ya da kol mesafesindeki bir telefonla kullanabileceği şekilde geliştiriyoruz. Bu beyan hangi standardı ölçüt aldığımızı, bunu nasıl denetlediğimizi, henüz neyin çalışmadığını ve bir engelle karşılaştığınızda kime yazacağınızı anlatır.',
@@ -7794,7 +7812,15 @@ const de: Dict = {
     source: 'Quellen-Portal',
   },
   lang: { en: 'English', tr: 'Türkçe', label: 'Sprache' },
-  a11y: { skipToContent: 'Zum Inhalt springen' },
+  a11y: {
+    skipToContent: 'Zum Inhalt springen',
+    charactersRemaining: 'Noch {count} Zeichen',
+    characterLimitReached: 'Zeichenlimit erreicht',
+    resultsShown: '{count} Ergebnisse angezeigt',
+    resultsShownOne: '1 Ergebnis angezeigt',
+    noResultsShown: 'Keine Ergebnisse',
+    scrollableColumns: 'Phasenspalten der Pipeline',
+  },
   accessibility: {
     title: 'Barrierefreiheit',
     intro: 'Wir entwickeln InternshipCRM so, dass ein Mentee, ein Mentor oder eine Ansprechperson im Unternehmen es mit Tastatur, Screenreader, Bildschirmlupe oder einem Handy auf Armlänge bedienen kann. Diese Erklärung sagt, an welchem Standard wir uns messen, wie wir das prüfen, was noch nicht funktioniert und an wen du dich wendest, wenn du auf eine Barriere stößt.',

@@ -23,6 +23,7 @@ import { EMAIL_GROUPS, emailGroupPrefKey, resolveEmailGroupPrefs, type EmailGrou
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
 import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } from '@/lib/timezone';
 import { GoogleCalendarCard } from '@/components/GoogleCalendarCard';
+import { useAnnounce } from '@/components/ui/LiveRegion';
 import type { TrustedDeviceView } from '@/lib/trustedDevice';
 
 // Universal account settings used by every role (admin/mentor/mentee/company):
@@ -57,6 +58,7 @@ export function AccountSettings() {
   const [deletePassword, setDeletePassword] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const announce = useAnnounce();
   const [savingEmail, setSavingEmail] = useState(false);
   const [savingPw, setSavingPw] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -461,6 +463,11 @@ export function AccountSettings() {
   const flash = (m: string, isErr = false) => {
     setMsg(isErr ? '' : m);
     setErr(isErr ? m : '');
+    // WCAG 4.1.3: the green/red banner is mounted TOGETHER with its text
+    // (`{msg && <div…>}`), and a container that appears at the same moment as
+    // its content is not announced. Focus never moves on save either, so
+    // without this the outcome is visible only to people looking at it.
+    announce(m, isErr ? 'assertive' : 'polite');
     setTimeout(() => { setMsg(''); setErr(''); }, 4000);
   };
 

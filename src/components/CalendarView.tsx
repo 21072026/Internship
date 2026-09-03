@@ -487,8 +487,15 @@ export function CalendarView({ initialView }: { initialView?: CalendarViewMode }
         </div>
       </div>
 
-      {/* View switcher — a segmented control that survives a 320px screen. */}
-      <div className="mb-3 flex gap-1 overflow-x-auto rounded-lg bg-gray-100 p-1 dark:bg-gray-800" role="tablist">
+      {/* View switcher — a segmented control that survives a 320px screen.
+          WCAG 1.4.10: the four labels do not fit on one line at 320px once
+          translated ("Monat/Woche/Tag/Demnächst", "Aylık/Haftalık/Günlük/
+          Yaklaşan"), and the strip used to answer that with `overflow-x-auto` —
+          i.e. sideways scrolling inside a control that has no reason to need it.
+          `flex-wrap` lets it fall onto a second row instead; `flex-1` still
+          spreads the tabs across the full width on every row, so the control
+          looks unchanged from `sm:` upwards. */}
+      <div className="mb-3 flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800" role="tablist">
         {VIEWS.map((v) => (
           <button
             key={v}

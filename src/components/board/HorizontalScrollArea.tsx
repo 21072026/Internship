@@ -6,10 +6,16 @@ export function HorizontalScrollArea({
   children,
   className = '',
   testId,
+  label,
 }: {
   children: ReactNode;
   className?: string;
   testId?: string;
+  /**
+   * Accessible name for the scroller. Supplying it turns the scrolling box into
+   * a named `region` a keyboard can reach — see the `tabIndex` note below.
+   */
+  label?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -38,9 +44,24 @@ export function HorizontalScrollArea({
     };
   }, [update]);
 
+  // A box that scrolls but cannot take focus is unreachable with a keyboard
+  // whenever it holds nothing focusable — on the board that is an empty stage
+  // column, whose content a keyboard-only user simply cannot bring into view
+  // (axe calls this `scrollable-region-focusable`). Focusable *only while it can
+  // actually scroll*, so a board whose columns already fit does not grow a dead
+  // tab stop; and named, because an unnamed `region` is worse than none.
+  const scrollable = canScrollLeft || canScrollRight;
+
   return (
     <div className="relative">
-      <div ref={scrollRef} data-testid={testId} onScroll={update} className={`overflow-x-auto ${className}`}>
+      <div
+        ref={scrollRef}
+        data-testid={testId}
+        onScroll={update}
+        {...(scrollable ? { tabIndex: 0 } : {})}
+        {...(scrollable && label ? { role: 'region', 'aria-label': label } : {})}
+        className={`overflow-x-auto ${className}`}
+      >
         {children}
       </div>
       {canScrollLeft && (

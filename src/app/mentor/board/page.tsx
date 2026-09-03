@@ -192,7 +192,7 @@ export default function MentorBoardPage() {
           </div>
         </div>
       ) : (
-        <HorizontalScrollArea testId="board-columns" className="flex gap-4 pb-4">
+        <HorizontalScrollArea testId="board-columns" label={t.a11y.scrollableColumns} className="flex gap-4 pb-4">
           {stages.map((s) => {
             const status = s.key;
             const items = itemsFor(status);
