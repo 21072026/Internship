@@ -23,7 +23,7 @@ import { GITHUB_URL } from '@/components/landing/links';
  * "no critical or serious violations" sentence below and this date with it.
  * Adding a page to the scan or closing one of the limitations does too.
  */
-export const ACCESSIBILITY_STATEMENT_REVIEWED = '2026-09-02';
+export const ACCESSIBILITY_STATEMENT_REVIEWED = '2026-09-03';
 
 /** Working days we aim to answer an accessibility report within. */
 export const ACCESSIBILITY_RESPONSE_DAYS = 5;
@@ -39,19 +39,25 @@ export function issueUrl(issue: number): string {
 
 /**
  * The URLs the automated gate actually visits, each in light and dark
- * (e2e/a11y-baseline.json holds `<page>` and `<page>#dark` for all nine).
+ * (e2e/a11y-baseline.json holds `<page>` and `<page>#dark` for all sixteen).
  * Printed on the page verbatim: "scope" that names no URLs is not a scope.
  */
 export const ACCESSIBILITY_SCANNED_PAGES = [
   '/',
   '/auth/signin',
   '/accessibility',
+  '/apply/:mentorId',
   '/portal',
   '/portal/profile',
+  '/messages',
+  '/notifications',
   '/mentor',
   '/mentor/mentees',
+  '/mentor/board',
   '/admin',
   '/admin/candidates',
+  '/admin/board',
+  '/admin/settings',
   '/company',
 ] as const;
 
@@ -89,8 +95,6 @@ export const ACCESSIBILITY_LIMITATIONS: { key: string; issue: number | null }[] 
   // The language and theme selects in account settings have no programmatic
   // name (src/components/AccountSettings.tsx) — axe `select-name`, critical.
   { key: 'accountSelects', issue: 2041 },
-  // Six surfaces outside the mentee portal have never been scanned.
-  { key: 'unscannedSurfaces', issue: 2043 },
   // The scan's mentee has no MentorshipRelation, so every relation-dependent
   // component on the portal renders empty and is measured as clean.
   { key: 'thinFixture', issue: 1412 },

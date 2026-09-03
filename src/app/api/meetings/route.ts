@@ -188,6 +188,9 @@ export async function POST(request: Request) {
           // sendEmail's central enforcement (group meeting_invites), which is
           // the entire point of the change.
           userId: rel.mentee.id,
+          // The Meeting row's own id, so the attachment, the public token route
+          // and any later reschedule mail all address the same calendar event.
+          icsUid: meeting.id,
         });
       } catch (e) {
         console.error('Meeting invite email failed:', e);

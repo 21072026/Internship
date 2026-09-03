@@ -5,11 +5,13 @@
 // account. This is the piece behind #545's "JIT-provisioned user lands in the
 // correct tenant + role" acceptance criterion.
 //
-// SECURITY: this must be called ONLY after a signed SAML assertion / OIDC token
-// has been verified by the (future, gated) SSO callback — it trusts its inputs.
-// It is never a public entry point. The live callback that verifies the IdP
-// round-trip is still deferred (see docs/sso-saml.md); this helper is the
-// tenant-mapping half, isolated so it is unit-testable without a real IdP.
+// SECURITY: this must be called ONLY after a signed SAML assertion has been
+// verified by the SSO callback — it trusts its inputs. It is never a public
+// entry point. The live callback is `POST /api/auth/sso/[slug]/acs`, which
+// verifies the assertion via `src/lib/ssoSaml.ts` before calling in (see
+// docs/sso-saml.md). This helper is the tenant-mapping half, isolated so it is
+// unit-testable without a real IdP. (OIDC is a roadmap item — it is refused at
+// the SSO config write boundary, so no OIDC token reaches here.)
 //
 // Server-only (imports prisma). No client concerns.
 

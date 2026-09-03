@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fixed** — the upcoming stages in the mentee journey tracker were below the WCAG AA contrast threshold in both themes (measured 2.54:1 and 2.31:1 in light, 2.35:1 and 2.13:1 in dark). The dark half was worse than it looked in the source: the badge's `dark:bg-gray-800` never applied, because a flat `html.dark` rule in globals.css outranks the variant. Now 4.83:1–8.33:1 across both themes.",
-  "notes": {
-    "en": ["The upcoming stages on your journey card are readable now, in light and dark alike."],
-    "tr": ["Yolculuk kartındaki gelecek aşamalar artık hem açık hem koyu temada okunabiliyor."],
-    "de": ["Die kommenden Phasen auf deiner Journey-Karte sind jetzt in hellem wie dunklem Design lesbar."]
-  }
-}

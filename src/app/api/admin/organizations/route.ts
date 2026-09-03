@@ -8,18 +8,34 @@ import { ORG_PLAN_KEYS, planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPla
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
+import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
+import { resolveOrgId } from '@/lib/orgScope';
 
 // Multi-tenancy (#544/#547): super-admin management of Organizations (tenants).
 // Phase 1 is additive/foundational — orgId is nullable and not yet enforced in
 // queries, so this screen lets an admin create tenants, set their plan, and see
 // usage vs. the plan's (advisory) limits. Query isolation lands in a later slice.
 
-// GET — all organizations with plan, limits and per-tenant usage (admin).
+// GET — organizations with plan, limits and per-tenant usage.
+// A super admin sees every tenant; a plain tenant ADMIN sees exactly their own
+// organisation, and nothing at all when they belong to none (#1535).
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const superAdmin = await isSuperAdmin(session);
+  let where: { id: string } | undefined;
+  if (!superAdmin) {
+    const ownOrgId = resolveOrgId(session);
+    if (!ownOrgId) {
+      await logCrossTenantDenial(session, 'GET /api/admin/organizations', null);
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    where = { id: ownOrgId };
+  }
+
   const orgs = await prisma.organization.findMany({
+    where,
     orderBy: { name: 'asc' },
     include: {
       _count: {
@@ -37,6 +53,9 @@ export async function GET() {
 
   return NextResponse.json({
     plans: ORG_PLAN_KEYS,
+    // Lets the admin screen hide what this account cannot use. Presentation
+    // only — the checks above and below are the actual control.
+    superAdmin,
     organizations: orgs.map((o) => {
       const plan = o.plan as OrgPlan;
       return {
@@ -97,10 +116,15 @@ const createSchema = z.object({
   plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
 });
 
-// POST — create an organization (admin).
+// POST — create an organization. Creating tenants is an instance-level act, so
+// it is super-admin only (#1535).
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await isSuperAdmin(session))) {
+    await logCrossTenantDenial(session, 'POST /api/admin/organizations', null);
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
@@ -149,7 +173,11 @@ function orNull(v: string | undefined): string | null | undefined {
   return t.length ? t : null; // blank → clear
 }
 
-// PATCH — change an organization's plan, branding and/or SSO config (admin).
+// PATCH — change an organization's plan, branding and/or SSO config.
+// The target org comes from the request body, so this is where a tenant ADMIN
+// could otherwise overwrite ANOTHER customer's SAML entry point and signing
+// certificate (#1535). A super admin may target any org; a tenant ADMIN only
+// their own.
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -160,6 +188,16 @@ export async function PATCH(request: Request) {
     id, plan, brandName, brandLogoUrl, brandColor, supportEmail,
     ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate,
   } = parsed.data;
+
+  // Ownership is settled BEFORE the target row is touched: a 404-after-403
+  // ordering would let a foreign admin probe which org ids exist.
+  if (!(await isSuperAdmin(session))) {
+    const ownOrgId = resolveOrgId(session);
+    if (!ownOrgId || ownOrgId !== id) {
+      await logCrossTenantDenial(session, 'PATCH /api/admin/organizations', id);
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  }
 
   // Validate an explicitly-set (non-blank) brand color as a hex value.
   if (brandColor && brandColor.trim() && !isHexColor(brandColor)) {

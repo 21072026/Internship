@@ -2,7 +2,7 @@ import {
   Activity, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
   FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
-  Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareText, Network, Quote, Radio,
+  Handshake, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
   type LucideIcon,
@@ -32,6 +32,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/board', icon: Columns3, key: 'board' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
   { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' },
+  { href: '/admin/offers', icon: Handshake, key: 'offers' },
   { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' },
   { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' },
   { href: '/admin/candidates', icon: Users, key: 'candidates' },
@@ -107,6 +108,9 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
   { href: '/messages', icon: MessageSquare, key: 'messages' },
   { href: '/portal/interactions', icon: BookOpen, key: 'interactionLogs' },
   { href: '/portal/notes', icon: Lock, key: 'myNotes' },
+  // Their own copy of the activity report their mentor and admin already
+  // read about them (#1915) — transparency, not a scoreboard.
+  { href: '/portal/insights', icon: Activity, key: 'myInsights' },
   // The career-tips archive (#1469). Linked from the sidebar and not only
   // from the e-mail footer: the issues stay useful long after the mail is
   // gone, and someone who unsubscribed can still read them here.
