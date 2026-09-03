@@ -214,21 +214,21 @@ test('global search announces its result count and shows a no-results row', asyn
 
   try {
     await signIn(page, adminEmail, 'AdminPass123');
-    const live = page.getByTestId('global-search-live');
+    const live = page.getByTestId('global-search-status');
     await expect(live).toHaveAttribute('aria-live', 'polite');
 
     await search(page, token);
     await expect(page.getByTestId('global-search-listbox')).toBeVisible();
     // One hit → the count is announced (EN is the default locale).
-    await expect(live).toHaveText('Results: 1');
+    await expect(live).toHaveText('1 results');
 
     // A query that matches nothing renders an explicit row instead of an empty
     // popup — previously the panel simply did not render and the box looked broken.
     await search(page, `${token}zzqx`);
-    const empty = page.getByTestId('global-search-no-results');
+    const empty = page.getByTestId('global-search-empty');
     await expect(empty).toBeVisible();
-    await expect(empty).toHaveText('No matches found');
-    await expect(live).toHaveText('No matches found');
+    await expect(empty).toHaveText('No results');
+    await expect(live).toHaveText('No results');
   } finally {
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(adminEmail);
