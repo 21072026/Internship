@@ -108,7 +108,15 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ inputs.ref || 'main' }}
           HEALTH_URL: http://127.0.0.1:3201/api/health
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Same inline credential helper as the fetch step above — `git
+          # ls-remote` below hit GitHub's unauthenticated-request rate limit
+          # under heavy concurrent runner load ("could not read Username for
+          # 'https://github.com'"), which failed the gate before it ever got
+          # to the health check.
+          HELPER='!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'
+
           # Resolve the exact commit to deploy. Everything downstream (the image
           # tag, the GIT_SHA baked into it, the container that ends up running) is
           # pinned to this one sha so the build and the deploy cannot disagree.
@@ -118,11 +126,11 @@ jobs:
           # top of it (the regression #794 fixed for prod). Asking the remote also
           # beats trusting a local ref — this workspace is shared and shallow.
           if [ "$EVENT" = workflow_dispatch ]; then
-            SHA="$(git ls-remote origin "refs/heads/$REF" | cut -f1)"
-            [ -n "$SHA" ] || SHA="$(git ls-remote origin "refs/tags/$REF" | cut -f1)"
+            SHA="$(git -c credential.helper="$HELPER" ls-remote origin "refs/heads/$REF" | cut -f1)"
+            [ -n "$SHA" ] || SHA="$(git -c credential.helper="$HELPER" ls-remote origin "refs/tags/$REF" | cut -f1)"
             [ -n "$SHA" ] || SHA="$REF"   # not a branch or tag — assume a raw sha
           else
-            SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
+            SHA="$(git -c credential.helper="$HELPER" ls-remote origin refs/heads/main | cut -f1)"
           fi
           [ -n "$SHA" ] || { echo "could not resolve '$REF'" >&2; exit 1; }
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"

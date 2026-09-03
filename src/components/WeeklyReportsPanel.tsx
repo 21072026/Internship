@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Printer } from 'lucide-react';
+import { NotebookPen, Printer } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -31,7 +32,8 @@ export function WeeklyReportsPanel({
   mode: 'mentee' | 'mentor';
   readOnly?: boolean;
 }) {
-  const t = useT().weeklyReports;
+  const tt = useT();
+  const t = tt.weeklyReports;
   const locale = useLocale();
   const [reports, setReports] = useState<Report[]>([]);
   const [currentWeekStart, setCurrentWeekStart] = useState('');
@@ -107,7 +109,19 @@ export function WeeklyReportsPanel({
       {message && <p role="status" className="mb-4 text-sm text-gray-600 dark:text-gray-300">{message}</p>}
       <section className="space-y-3">
         <h3 className="font-medium text-gray-900 dark:text-gray-100">{t.history}</h3>
-        {historyReports.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400">{t.noReports}</p>}
+        {historyReports.length === 0 && (
+          <EmptyState
+            testId="weekly-reports"
+            size="sm"
+            icon={NotebookPen}
+            role={mode === 'mentee' ? 'MENTEE' : 'MENTOR'}
+            title={tt.emptyStates.weeklyReports.title}
+            byRole={{
+              MENTEE: { body: tt.emptyStates.weeklyReports.menteeBody },
+              MENTOR: { body: tt.emptyStates.weeklyReports.mentorBody },
+            }}
+          />
+        )}
         {historyReports.map((report) => (
           <article key={report.id} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700" data-testid="weekly-report-row">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h4 className="font-medium text-gray-900 dark:text-gray-100">{t.weekOf.replace('{date}', date(report.weekStart))}</h4><Badge variant={badgeVariant[report.status]}>{t.status[report.status]}</Badge></div>

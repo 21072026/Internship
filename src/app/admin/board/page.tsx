@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap, User, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { GraduationCap, User, ChevronDown, ChevronRight, AlertTriangle, LayoutGrid } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { groupResolvedStages, type PipelineGroupKey } from '@/lib/pipeline';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT } from '@/i18n/client';
@@ -254,7 +256,24 @@ export default function AdminBoardPage() {
         </label>
       </div>
 
-      {narrow ? (
+      {relations.length === 0 ? (
+        /* Day one for a whole tenant: no mentorships at all, so no board. The
+           step that fills it is inviting people, which is an admin route. */
+        <Card>
+          <EmptyState
+            testId="admin-board"
+            icon={LayoutGrid}
+            role="ADMIN"
+            title={t.emptyStates.board.title}
+            byRole={{
+              ADMIN: {
+                body: t.emptyStates.board.adminBody,
+                action: { label: t.emptyStates.board.adminCta, href: '/admin/invite' },
+              },
+            }}
+          />
+        </Card>
+      ) : narrow ? (
         /* Phone: one stage at a time as a list — 13 columns don't fit at 390px.
            Search above still applies, so the list is search ∩ stage. */
         <div data-testid="board-mobile">
@@ -267,7 +286,13 @@ export default function AdminBoardPage() {
           <div className="space-y-2">
             {itemsFor(activeStage).map(renderCard)}
             {itemsFor(activeStage).length === 0 && (
-              <p className="text-center py-8 text-sm text-gray-400">{t.board.emptyStage}</p>
+              <EmptyState
+                testId="admin-board-stage"
+                size="sm"
+                icon={LayoutGrid}
+                title={t.emptyStates.boardStage.title}
+                body={t.emptyStates.boardStage.body}
+              />
             )}
           </div>
         </div>

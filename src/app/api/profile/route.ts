@@ -75,6 +75,7 @@ const updateProfileSchema = z.object({
   preferredLanguage: z.enum(['en', 'tr', 'de']).optional(),
   theme: z.enum(['light', 'dark', 'system']).optional(),
   fontSize: z.enum(['sm', 'md', 'lg', 'xl']).optional(),
+  density: z.enum(['comfortable', 'compact']).optional(),
   accentColor: z.enum(['blue', 'green', 'purple', 'rose', 'teal', 'amber']).optional(),
 });
 
@@ -133,6 +134,7 @@ const PROFILE_SELECT = {
   preferredLanguage: true,
   theme: true,
   fontSize: true,
+  density: true,
   accentColor: true,
   createdAt: true,
 } as const;

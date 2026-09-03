@@ -1,9 +1,9 @@
-// Enterprise SSO configuration & gating (#545). Pure config plumbing — no SAML
-// library and no live assertion handling yet (that needs the tenant's IdP
-// metadata and a signed round-trip we can't exercise without a real IdP; see
-// docs/sso-saml.md). This module stores/validates a tenant's SSO config and
-// exposes the guard the (documented, not-yet-wired) auth code path will use, so
-// enabling SSO later is a config + wiring step, not a schema change.
+// Enterprise SSO configuration & gating (#545). The SAML round-trip IS live —
+// `src/lib/ssoSaml.ts` builds the AuthnRequest and verifies the posted
+// assertion; this module stores/validates a tenant's IdP config and exposes the
+// guard (`isSsoActive`) that the login/ACS routes check before redirecting.
+// OIDC is a roadmap item, not a shipped one: nothing builds an OIDC request, so
+// it is refused at the write boundary here. See docs/sso-saml.md.
 //
 // Safe to import from the server; no client-only concerns.
 
@@ -17,10 +17,23 @@ export interface SsoConfig {
   ssoCertificate: string | null;
 }
 
+// Every provider the config *vocabulary* knows about…
 export const SSO_PROVIDERS: SsoProvider[] = ['saml', 'oidc'];
+
+// …and the subset the auth path can actually complete a login with. 'oidc' stays
+// in the type/vocabulary (it is a real roadmap item), but a config naming it can
+// neither be saved (validateSsoConfig) nor go live (isSsoActive) — the login
+// route always builds a SAML request, so an OIDC tenant would be locked out.
+export const SSO_IMPLEMENTED_PROVIDERS: SsoProvider[] = ['saml'];
+
+export const SSO_OIDC_UNSUPPORTED = 'OIDC single sign-on is not supported yet — use SAML';
 
 export function isSsoProvider(v: unknown): v is SsoProvider {
   return v === 'saml' || v === 'oidc';
+}
+
+export function isSsoProviderImplemented(v: unknown): v is SsoProvider {
+  return isSsoProvider(v) && SSO_IMPLEMENTED_PROVIDERS.includes(v);
 }
 
 // A config is "complete" when every field the provider needs is present. This is
@@ -36,19 +49,26 @@ export function isSsoConfigComplete(c: Partial<SsoConfig> | null | undefined): b
   return true;
 }
 
-// The guard the login/auth path checks: SSO is only active for a tenant when it
-// is both switched on AND completely configured. Until per-tenant resolution +
-// a SAML/OIDC library are wired (docs/sso-saml.md), no caller flips this to a
-// live redirect — but the gate is the single source of truth when they do.
+// The guard the login/ACS path checks: SSO is only active for a tenant when it
+// is switched on, completely configured AND names a provider we can actually
+// complete a login with. The provider check is what keeps an already-stored
+// `oidc` row (written before that was refused) from producing a broken redirect
+// — such a tenant falls back to password login instead of a dead end.
 export function isSsoActive(c: Partial<SsoConfig> | null | undefined): boolean {
-  return !!c?.ssoEnabled && isSsoConfigComplete(c);
+  return !!c?.ssoEnabled && isSsoConfigComplete(c) && isSsoProviderImplemented(c.ssoProvider);
 }
 
 // Validate an admin's incoming config before persisting. Returns an error
-// message, or null when valid. Enabling requires a complete config.
+// message, or null when valid. Enabling requires a complete config. This is the
+// single write boundary — every current and future write path inherits it.
 export function validateSsoConfig(c: Partial<SsoConfig>): string | null {
   if (c.ssoProvider != null && c.ssoProvider !== '' && !isSsoProvider(c.ssoProvider)) {
     return 'SSO provider must be "saml" or "oidc"';
+  }
+  // Saving `oidc` used to return a green "saved" and lock every user of the
+  // tenant out: the login route always builds a SAML request.
+  if (isSsoProvider(c.ssoProvider) && !isSsoProviderImplemented(c.ssoProvider)) {
+    return SSO_OIDC_UNSUPPORTED;
   }
   const url = (c.ssoEntryPoint ?? '').trim();
   if (url && !/^https:\/\//i.test(url)) {

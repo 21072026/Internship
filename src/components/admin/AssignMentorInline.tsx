@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AiBadge } from '@/components/AiBadge';
 import { useT } from '@/i18n/client';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
@@ -242,6 +243,7 @@ export function AssignMentorInline({
               : suggestion.sharedSkills.length > 0
                 ? ` — ${a.sharedSkills}: ${suggestion.sharedSkills.join(', ')}`
                 : ''}
+            {aiUsed && suggestion.reason && <AiBadge className="ml-1.5" />}
             {!aiUsed && <span className="text-gray-400"> ({a.ruleBased})</span>}
           </p>
           <button

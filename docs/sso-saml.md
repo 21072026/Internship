@@ -8,15 +8,17 @@ tenant's own IdP instead of email+password.
 
 - **Config storage** on `Organization`: `ssoEnabled`, `ssoProvider`
   (`saml` | `oidc`), `ssoIssuer`, `ssoEntryPoint`, `ssoCertificate` (PEM).
+  **SAML is the only provider that works** — see *OIDC* below.
 - **Admin UI**: Admin → Organizations → *Enterprise SSO* card — pick a tenant,
-  fill in the IdP details, optionally flip *Enable SSO*.
+  fill in the IdP details, optionally flip *Enable SSO*. The provider list
+  offers SAML; OIDC is rendered disabled ("coming soon").
 - **Validation & gating** (`src/lib/sso.ts`):
   - `validateSsoConfig()` — rejects a non-`https` entry point, an unknown
-    provider, and enabling SSO before the config is complete.
+    provider, `oidc` (see below), and enabling SSO before the config is complete.
   - `isSsoConfigComplete()` — provider + issuer + entry point (plus certificate
     for SAML).
-  - `isSsoActive()` — the single guard the auth path will check: enabled **and**
-    complete.
+  - `isSsoActive()` — the single guard the auth path checks: enabled, complete
+    **and** naming an implemented provider (`SSO_IMPLEMENTED_PROVIDERS`).
 - The API never returns the raw certificate; the list only exposes
   `ssoCertificateSet` and `active`.
 - **JIT provisioning** (`src/lib/ssoProvisioning.ts`): `provisionSsoUser()` maps a
@@ -50,12 +52,42 @@ allows IdP-initiated). The assertion signature + audience/recipient/expiry are
 the security anchors.
 
 ### SP identifiers to register in the IdP (per tenant)
-For a tenant with slug `<slug>` on base URL `<BASE>` (e.g.
-`https://crm-preview.ersah.in`):
+**Don't copy these by hand — we publish them.** For a tenant with slug `<slug>`
+on base URL `<BASE>` (e.g. `https://crm-preview.ersah.in`):
+
+- **SP metadata (#1931):** `GET <BASE>/api/auth/sso/<slug>/metadata` returns SAML
+  2.0 SP metadata as `application/samlmetadata+xml`, which most IdPs import in
+  one click. Public and pre-auth by nature (it carries nothing secret), served
+  even while `ssoEnabled` is still off — that is exactly when IT needs it — and
+  `404` for an unknown slug. Admin → Organizations → **Enterprise SSO** shows
+  the same three values with copy buttons.
+
+For an IdP that cannot import metadata, register the values by hand:
 - **ACS / Reply URL:** `<BASE>/api/auth/sso/<slug>/acs`
 - **SP Entity ID / Audience:** `<BASE>/sso/<slug>`
 - **NameID format:** emailAddress; email in NameID or an `email` attribute;
   optional `name` / `firstName`+`lastName` for the display name.
+
+## OIDC — refused at the write boundary (#1537)
+
+`'oidc'` stays in the `SsoProvider` type: it is a real roadmap item (Wave 4) and
+the column already stores it. What it is *not* is implemented — the login route
+(`/api/auth/sso/[slug]/login`) unconditionally builds a SAML `AuthnRequest`. So
+saving a tenant as OIDC used to return a green "saved" and then lock every user
+of that tenant out behind a broken redirect.
+
+Two gates close that, both in `src/lib/sso.ts` so every write path inherits them:
+
+- `validateSsoConfig()` returns *"OIDC single sign-on is not supported yet — use
+  SAML"* (HTTP 400 from `PATCH /api/admin/organizations`) for any config naming
+  `oidc`, whether or not `ssoEnabled` is being flipped.
+- `isSsoActive()` additionally requires an *implemented* provider
+  (`SSO_IMPLEMENTED_PROVIDERS`), so a row written before this shipped is inert:
+  that tenant falls through to password login (`?error=sso_unavailable`) rather
+  than a dead-end redirect.
+
+Implementing OIDC means adding it to `SSO_IMPLEMENTED_PROVIDERS`, branching the
+login/ACS routes on the provider, and re-enabling the option in the admin card.
 
 ## Verifying on preview with mock-saml.com (no real IdP needed)
 
