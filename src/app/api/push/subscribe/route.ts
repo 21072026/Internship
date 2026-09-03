@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { pushConfigured } from '@/lib/webPush';
+import { enforceRateLimit } from '@/lib/rateLimit';
 
 // A push endpoint is a URL issued by the browser's push service. Only https, and
 // bounded by the column width — an endpoint is never user-authored text, so
@@ -23,6 +24,9 @@ const unsubscribeSchema = z.object({ endpoint: z.string().min(1).max(500) });
 // updates its row rather than adding a second one that would deliver the same
 // notification twice.
 export async function POST(request: Request) {
+    // 10 per 15 minutes covers normal browser re-subscriptions without permitting automated churn.
+  const limited = enforceRateLimit(request, 'push-subscribe', { limit: 10, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!pushConfigured()) return NextResponse.json({ error: 'Push not configured' }, { status: 503 });
