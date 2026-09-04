@@ -7,6 +7,8 @@ import { isAiConfigured } from '@/lib/cvExtractAi';
 import { aiInterviewPrep } from '@/lib/aiInterviewPrep';
 import { runAiGated } from '@/lib/aiGate';
 import { withTenantScope } from '@/lib/orgContext';
+import { enforceRateLimit } from '@/lib/rateLimit';
+import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 
 // AI interview-prep assistant (Faz 2, #536) — mentee-facing and FREE for the
 // mentee: cost is metered on the org's AI quota; quota exhaustion surfaces as
@@ -32,6 +34,20 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const userLimited = enforceRateLimit(request, 'ai:interview_prep', {
+    ...AI_RATE_LIMITS.interview_prep,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
+
+  if (session.user.orgId) {
+    const orgLimited = enforceRateLimit(request, 'ai:org', {
+      ...AI_RATE_LIMITS.org_burst,
+      subject: session.user.orgId,
+    });
+    if (orgLimited) return orgLimited;
+  }
 
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json().catch(() => ({})));

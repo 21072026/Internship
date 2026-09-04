@@ -116,27 +116,28 @@ function shouldLogBreach(key: string): boolean {
 }
 
 // Convenience guard for route handlers: returns a 429 NextResponse when the
-// IP has exceeded `limit` requests to `bucket` within `windowMs`, else null.
+// subject (or client IP by default) has exceeded `limit` requests to `bucket` within `windowMs`, else null.
 export function enforceRateLimit(
   request: Request,
   bucket: string,
-  opts: { limit: number; windowMs: number }
+  opts: { limit: number; windowMs: number; subject?: string }
 ): NextResponse | null {
-  const ip = clientIp(request);
-  const res = rateLimit(`${bucket}:${ip}`, opts);
+  const identity = opts.subject ?? clientIp(request);
+  const key = `${bucket}:${identity}`;
+  const res = rateLimit(key, opts);
   if (res.ok) return null;
   // Breaches were recorded nowhere, so being under attack looked exactly like
   // being idle (#864). Fire-and-forget keeps this function synchronous — its
-  // six callers stay untouched — and logActivity never throws by design.
+  // callers stay untouched — and logActivity never throws by design.
   //
   // Coalesced to one row per key per minute: a flood is exactly when this fires,
   // and a DB insert per blocked request would turn the rate limiter into an
   // amplifier for the attack it is supposed to absorb.
-  if (shouldLogBreach(`${bucket}:${ip}`)) {
+  if (shouldLogBreach(key)) {
     void logActivity({
       action: 'ratelimit.exceeded',
       level: 'warning',
-      detail: `${bucket} · ${ip}`,
+      detail: `${bucket} · ${identity}`,
     }).catch(() => {});
   }
   return NextResponse.json(
