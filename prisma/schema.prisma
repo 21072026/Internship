@@ -1,6 +1,13 @@
+// binaryTargets: "native" already resolves correctly when the image is built on
+// the architecture it will run on, which is what build-image.yml does (one
+// native runner per arch). Both concrete targets are listed anyway because a
+// wrong/missing query engine does not fail the build — it fails at runtime, in
+// production, on the first query. linux-arm64-* is the Oracle host (#2166),
+// debian-openssl-3.0.x the amd64 one; ~15 MB to make a cross-build impossible
+// to get wrong.
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
 }
 
 datasource db {
