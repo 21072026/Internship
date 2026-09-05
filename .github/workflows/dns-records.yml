@@ -1,0 +1,71 @@
+name: DNS records (manual)
+
+# Create or correct this project's public DNS records from the Actions tab,
+# using the CF_API_TOKEN repo secret (#2166).
+#
+# WHY A WORKFLOW: the alternative is pasting a Cloudflare token into a shell on
+# the server, which puts a live credential in a scrollback and a history file
+# for no gain — the repo already holds one, encrypted, for exactly this. It also
+# means the record set is applied the same way every time instead of by
+# clicking, and the run log records what changed.
+#
+# The script is idempotent: a correct record is left alone, a wrong one is
+# updated in place, a missing one is created. Safe to re-run.
+#
+# NOTE ON `proxied`: defaults to false, and that is not cosmetic — see the
+# header of infra/setup-dns-cloudflare.sh. Turning it on for a CRM hostname
+# requires bumping TRUSTED_PROXY_COUNT to 2 for that host in the same change.
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Zone, e.g. interncrm.com'
+        required: true
+        type: string
+      records:
+        description: "Space-separated names ('@' = apex)"
+        required: false
+        default: '* www crm'
+        type: string
+      server_ip:
+        description: 'Target IPv4 (leave empty to use SERVER_IP secret/var)'
+        required: false
+        type: string
+      proxied:
+        description: 'Cloudflare proxy (orange cloud) — read the note above'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: dns-records
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply DNS records
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Apply
+        env:
+          CF_Token: ${{ secrets.CF_API_TOKEN }}
+          DOMAIN: ${{ inputs.domain }}
+          RECORDS: ${{ inputs.records }}
+          PROXIED: ${{ inputs.proxied }}
+          SERVER_IP: ${{ inputs.server_ip }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_Token:-}" ]; then
+            echo "::error::CF_API_TOKEN secret is not set (or is empty). Add/rotate it in Settings → Secrets → Actions."
+            exit 1
+          fi
+          # The script auto-detects SERVER_IP from the machine it runs on, which
+          # here would be the GitHub runner — never what we want. Require it.
+          if [ -z "${SERVER_IP:-}" ]; then
+            echo "::error::server_ip is required: this runs on a GitHub runner, so auto-detection would point DNS at the runner."
+            exit 1
+          fi
+          chmod +x infra/setup-dns-cloudflare.sh
+          ./infra/setup-dns-cloudflare.sh
