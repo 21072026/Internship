@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Demo seed fills the development half** (#2062). `prisma/seed-demo.mjs` now creates weekly reports (reviewed, awaiting review, sent back and draft), to-dos (project goals, handed-over and personal, two from the shared `ProjectTaskTemplate` pool), mentor questions (answered and open) and trilingual `DocumentRequirement` rows with real one-page PDF `Document`s fulfilling some of them — so the weekly-report, to-do, question and document screens are no longer empty on the public demo and in per-PR environments. Idempotent (Monday-anchored `weekStart`, existence checks per row) and the non-local `DATABASE_URL` refusal is untouched."
-}

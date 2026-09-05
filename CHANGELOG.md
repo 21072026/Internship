@@ -23,6 +23,260 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.156.2-beta] - 2026-09-05
+
+_Shipped 2026-09-05 07:32 UTC · commit [82609fb](https://github.com/21072026/Internship/commit/82609fb81fd9c70f12395704a0c63ab4f333186d)_
+
+- **Multi-arch container image** (#2166): `build-image.yml` now publishes a `linux/amd64` + `linux/arm64` manifest, each arch built on its own native runner (`ubuntu-24.04-arm`) rather than under QEMU, and stitched with `imagetools create`. The merge job fails closed if either arch is missing. Prisma's `binaryTargets` gains `linux-arm64-openssl-3.0.x`.
+
+## [0.156.1-beta] - 2026-09-05
+
+_Shipped 2026-09-05 07:01 UTC · commit [6d8516d](https://github.com/21072026/Internship/commit/6d8516d1d5f51923d80c8aa18395da45fbc5f92c)_
+
+- **`infra/server/bootstrap.sh`** (#2166): idempotent one-command setup for the new Oracle ARM host — Docker CE + buildx, Caddy owning 80/443, MySQL 8.0 pinned to the CI image and bound to 127.0.0.1, firewall, fail2ban, swap, journald caps. Deliberately no ufw (Oracle's cloud image already owns the filter table and `iptables-restore` flushes it on boot) and no panel. Migration runbook in `docs/server-migration.md`.
+
+## [0.156.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 21:55 UTC · commit [3e61fa3](https://github.com/21072026/Internship/commit/3e61fa37576f02741a6bc86c2d2dc8ed966157ac)_
+
+- **WCAG 4.1.3 status messages and 1.4.10 reflow** (#2047). One app-wide live region (`ui/LiveRegion.tsx`, mounted empty in `providers.tsx`) with a `useAnnounce()` hook, wired to the account-settings save/error banner, the character-counter thresholds and the admin board search (debounced and de-duplicated via `useFilterAnnouncement`). The calendar's view switcher now wraps instead of scrolling sideways at 320px, and the board's column strip is a focusable named region while it can scroll. `e2e/mobile-layout-audit.spec.ts` gains a 320px / 400%-zoom reflow case in TR+DE, `e2e/live-region.spec.ts` asserts the region is mounted empty and then receives text, and the manual assistive-technology walkthrough — including what has not been run — is recorded in `docs/a11y-audit.md`, which the axe regenerator now preserves.
+
+## [0.155.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 21:44 UTC · commit [5acdb75](https://github.com/21072026/Internship/commit/5acdb75bfed307ac57572b61adf5b24c34dff048)_
+
+- **Integration health board** (#2008). `/admin/integrations` now shows per-connector state for e-mail delivery, outgoing webhooks, Google Calendar, enterprise SSO and the two inbound receivers, each derived from that connector's existing ledger rather than a new "last state" column. `GET /api/admin/integrations/health` exposes the machine-countable per-connector `state` #1607's operations console rolls up. `sanitizeEmailError` is generalised into the single shared `lib/sanitizeError`, which strips PEM bodies, bearer/secret values, long opaque tokens and addresses from every connector's error text.
+
+## [0.154.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 21:02 UTC · commit [70c3ce2](https://github.com/21072026/Internship/commit/70c3ce27554b86628a49792041d3579ed5bbb335)_
+
+- **Admin force sign-out & durable lockout**: new `POST /api/admin/users/[id]/sign-out-all` stamps `sessionsValidFrom` and revokes every trusted device (peer-admin refusal, impersonation refusal, `AuditLog` + activity warning + owner notification, tenant-scoped). Brute-force lockouts move out of the in-process `Map` into a new `AccountLockout` table — consulted before the bcrypt compare, surviving redeploys — with a "Locked" badge and `DELETE /api/admin/users/[id]/lockout` unlock in the admin user list. `rateLimit()` gains a pluggable counter store behind its existing signature.
+
+## [0.153.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 20:47 UTC · commit [0586a1b](https://github.com/21072026/Internship/commit/0586a1b5382a8278e6b93a9a5def7264deb29bd5)_
+
+- **Message drafts, a typing indicator and canned responses** (#1871). An unsent reply is kept per thread and per viewer in `localStorage` (`messages-draft-<userId>-<kind>-<id>`) — every access try/catch-wrapped, so a private window or blocked site data still gets a working composer — restored on mount and cleared the moment the message is sent. `'typing'` joins the existing in-process realtime bus as a fourth, never-persisted event type: the composer publishes at most one `POST /api/realtime/typing` every 3s per thread, that route is rate-limited **per user** (a cohort behind one NAT would trip an IP bucket) and runs the *same* participant + can-post authorization as `POST /api/messages` before fanning out to the other participants only, and the receiving client expires the indicator itself after 5s since there is no "stopped typing" event. Two consumers deliberately ignore `typing`: the SSE stream skips its coalesced unread-count re-check, and `MessagesLiveRefresh` skips the inbox re-render — it is the one event that moves no counter, and reacting to it would mean a database round trip (including a conversation upsert and a read-stamp write) every few seconds for a number that cannot have changed. New `MessageTemplate` model (org-wide or personal, trilingual `translations`, `useCount`, archive-not-delete, in `TENANT_MODELS`) with `/admin/message-templates` to manage the pool and a composer picker that inserts the text in the **writer's** own locale and counts the use.
+
+## [0.152.1-beta] - 2026-09-03
+
+_Shipped 2026-09-03 20:46 UTC · commit [23b57f9](https://github.com/21072026/Internship/commit/23b57f9987ee953636ea8b0b8cf619301f59595a)_
+
+- **Accessibility:** the language and theme pickers on `/account` had no accessible name — their `<label>`s were plain text sitting next to the control rather than associated with it, so screen readers announced two bare combo boxes (axe `select-name`, critical). Both now use `htmlFor`/`id` (`account-language`, `account-theme`), which also makes the visible text a click target, and both pick up the `max-lg:min-h-11` touch floor. The testimonial name-style picker in the consent card had the identical shape and got the identical fix. `/account` is now covered by the axe regression gate, light and dark (#2041).
+
+## [0.152.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 20:46 UTC · commit [3e0e16a](https://github.com/21072026/Internship/commit/3e0e16a6689f16e8681a9c878aa02e89ebe04a97)_
+
+- **Trust centre at `/trust`** (#2027) — one public URL to paste into a procurement e-mail. Posture summary, the full **subprocessor register** (13 rows: hosting, both SMTP channels, Anthropic, Google Calendar, 8x8 JaaS and the public Jitsi fallback, Web Push, Plausible/PostHog/GA4, tawk.to, GitHub Actions + ghcr.io — each with purpose, data categories, hosting location, DPA/SCC basis and whether it is optional per deployment), a controls grid, the residency answer, and an explicit "what is not true yet" block that states plainly that `MT_ENFORCE_ISOLATION` is **off in production** (#1572) and that prod, preview and every PR environment share one host. The register lives once, typed, in `src/lib/trust.ts` — only the prose is translated, keyed by the same ids, so a missing locale is a type error rather than a blank cell. Long-form documents in `docs/trust/` (`subprocessors.md`, `security-overview.md`, `hosting-and-residency.md`) plus a `README.md` stating the rule that adding an outbound integration must update the register. Linked from the footer's Legal column using `t.trust.title`, so the link cannot disagree with the heading. No schema change; the operator is read from `operatorIdentity()`, never hardcoded.
+
+## [0.151.1-beta] - 2026-09-03
+
+_Shipped 2026-09-03 20:42 UTC · commit [834a0d5](https://github.com/21072026/Internship/commit/834a0d5297a5824067f759abc2c2a19b552b4256)_
+
+- **Demo-seed fidelity gate**: a new `demo-fidelity` CI job seeds a throwaway MySQL and counts the rows behind each differentiating screen against `scripts/demo-fidelity.json`, failing the build with the screen and the owning issue when a screen has no demo data. The "is this DATABASE_URL safe for demo data?" predicate moved to `prisma/demoTarget.mjs` and is now shared by the seeder and the checker.
+
+## [0.151.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 14:41 UTC · commit [73ff73a](https://github.com/21072026/Internship/commit/73ff73a025a4c3bf5d3bd6a6bc91c0c637abddf8)_
+
+- **API keys get a real lifecycle** (#1545). `ApiKey` gains `createdById` (+ relation to User), `expiresAt`, `revokedAt`, `scopes` (comma-separated, canonical `<resource>:<action>` shape, single closed value `candidates:read` today) and `orgId` — the tenant anchor #1466 describes, with `ApiKey` added to `TENANT_MODELS`. All columns are additive/defaulted so `db push` stays non-destructive. `POST /api/admin/api-keys` now requires at least one valid scope, accepts an optional `expiresAt` capped at 12 months, and stamps the minting admin plus the caller's org. `DELETE` became a **soft revoke**: it sets `revokedAt` and never deletes the row, so the `apikey.revoked` ActivityLog entry no longer points at a vanished target. `GET` returns owner (name/email), scopes, expiry, revocation and a derived `active | expired | revoked` status — never the hash or the raw key, which is still shown exactly once at creation. `/admin/integrations` gained scope checkboxes, an expiry picker bounded to the same 12 months, owner/expiry/status per key and a visible warning on a key with no expiry (EN/TR/DE). One idempotent backfill, `prisma/backfill-api-key-lifecycle.mjs`, gives pre-existing rows the default org and `candidates:read`, wired into the deploy step after `backfill-organization.mjs`. Enforcing expiry/revocation/scope at the `/api/v1` door remains #1546.
+
+## [0.150.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 14:35 UTC · commit [46a1515](https://github.com/21072026/Internship/commit/46a1515b485f980b2eecdd61260affee2e6a602e)_
+
+- **Bulk invitations**: `/admin/invite/bulk` and `POST /api/admin/invite/bulk` turn one pasted roster (plain addresses or `email,fullName,role,label` CSV) into invitations — a mandatory dry run reports a per-row verdict from the same validator the real run uses, sending goes through a bounded-concurrency queue over the shared single-invite creation path, and ADMIN seats, reserved demo/example domains and over-plan rows are refused. The report also carries each row's actual delivery verdict: an environment without a mail transport reports the invitations as created-but-not-emailed and hands back their registration links instead of claiming they were sent.
+
+## [0.149.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 14:30 UTC · commit [ca559a6](https://github.com/21072026/Internship/commit/ca559a62372163e88712d59a348921380b2c3421)_
+
+- **RSS feed for /release-notes** (#1383). New `GET /release-notes/feed.xml` renders `getAllReleaseNotes()` as RSS 2.0 (`src/lib/releaseFeed.ts`, pure + escaped, 50 newest items, absolute links from the configured origin, `urn:internship-crm:release:<version>` GUIDs, RFC 822 dates). Localized by `?lang=tr|de`, cached `s-maxage=3600`; the page advertises it via `rel="alternate"` plus a visible link, and its release cards gained `id="v<version>"` anchors so feed items deep-link.
+
+## [0.148.2-beta] - 2026-09-03
+
+_Shipped 2026-09-03 14:30 UTC · commit [ebbc3f3](https://github.com/21072026/Internship/commit/ebbc3f357ae172be0e87102b787d8aed57d25939)_
+
+**Mentee detail (mentor)** — the overview grid no longer leaves its third column empty: the profile and stage-history cards form a reference sidebar (`lg:col-start-3`) and the working panels span the other two columns, replacing the `lg:col-span-2` that every panel carried (#1370).
+
+## [0.148.1-beta] - 2026-09-03
+
+_Shipped 2026-09-03 14:29 UTC · commit [17be013](https://github.com/21072026/Internship/commit/17be0135c156d2a77e7c3ea9a6c749b5f7ff4683)_
+
+**Fixed:** the analytics "time in stage" card no longer labels completed stage transitions as "candidates", which made `/admin/analytics` report two different numbers for the same stage. `/api/admin/analytics/aging` now returns `visits` (completed stage visits measured) and `candidates` (the distinct mentees behind them) instead of an ambiguous `count`, plus `droppedNonPositive` so measurements discarded for a non-positive duration are no longer silent. The arithmetic moved to `src/lib/stageAging.ts` and is covered by `npm run test:stage-aging` in CI (#1427).
+
+## [0.148.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 14:26 UTC · commit [984c4c7](https://github.com/21072026/Internship/commit/984c4c7dee348729a9738c281c5e4def9ecff821)_
+
+- **Calendar files on meeting mails, and a complete subscription feed**: meeting invitations (including guest invitations) now carry a `METHOD:REQUEST` `meeting.ics` attachment, built from the existing `buildMeetingIcs`, which gained optional `method` (`PUBLISH`/`REQUEST`/`CANCEL`), `sequence`, `organizer` and `attendee` parameters plus `STATUS:CANCELLED`. The `ORGANIZER`/`ATTENDEE` pair is what iTIP requires of a `REQUEST` and a `CANCEL` (RFC 5546 §3.2.2/§3.2.5) — without it Gmail renders no invitation card and a later cancellation mail cannot be matched to the stored event, so it would never remove it. `PUBLISH` (the public token route) stays participant-free and byte-identical. A link-only meeting still sends no attachment. The personal ICS feed now mirrors `/api/calendar-events`: relation meetings, project/conversation meetings, expanded recurring series occurrences and stage deadlines, role-scoped, still title-and-time only and still rate-limited and capped. The subscription card is mounted on the mentor and admin calendar pages too.
+
+## [0.147.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 14:26 UTC · commit [c99ae06](https://github.com/21072026/Internship/commit/c99ae0690c4c2c962afb3e0f87895a2833b264a9)_
+
+**Added** — `MatchFeedback`: the mentor suggester is no longer stateless. Every suggestion `POST /api/admin/mentor-suggest` returns is now recorded as a `SHOWN` row carrying its rank, the rule-based score, the rule-set version and whether the AI re-rank ran, all sharing one `batchId` that goes back to the client (write is best-effort — a bookkeeping failure never costs the admin their suggestions). A new ADMIN-only `POST /api/admin/mentor-suggest/feedback` upgrades that row in place to `ACCEPTED` or `DISMISSED` with a short reason code, so the position a mentor was shown at survives; assigning a mentor who was never suggested writes a separate row with a NULL rank, which is what keeps an off-list assignment distinguishable from taking one of ours. The suggestion card gained an ✕ with a reason picker (wrong field / no capacity / language / already matched / other, EN/TR/DE) that reveals the next-best mentor, and the admin analytics page gained a "Match quality" report — lists shown, acceptance rate, acceptance by rank position, top dismissal reasons and a six-month trend, all aggregated in SQL. Additive schema change; `MatchFeedback` is in `TENANT_MODELS`, and the raw-SQL report filters on `orgId` explicitly because the tenant middleware never sees raw queries.
+
+## [0.146.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 14:25 UTC · commit [cbc134a](https://github.com/21072026/Internship/commit/cbc134ab28d1cf015b4a00f40e6e1eab3d78638a)_
+
+- **The app honours `prefers-reduced-motion`, `prefers-contrast: more` and `forced-colors: active`** (#2045). A repo-wide grep for those three media features previously returned nothing, and axe could not see the gap: it scans one rendering with no preference emulated, so the empty a11y baseline said nothing about any of it. `src/app/globals.css` gains a media-preference block at the end of the file — the standard blanket animation/transition collapse (plus a static drawn placeholder for skeletons, whose only affordance is the pulse); a high-contrast re-tint of `border-gray-100/200`, `divide-gray-50/100` and `text-gray-400/500` through the same flat-utility remap the dark-mode layer uses, each rule duplicated for `html.dark` because that layer outranks a bare utility; and a forced-colors layer that swaps the hardcoded `#2563eb` focus ring for the system `Highlight` colour, opts only the `/account` accent swatches out of the forced palette (`forced-color-adjust: none` — there the fill *is* the content), and stops badges and board drop targets from carrying state in a background colour alone. The two scripted scrolls (message thread, project editor) ask `prefersReducedMotion()` in JS, since an explicit `ScrollOptions.behavior` overrides any CSS `scroll-behavior`. Every rule sits inside its media query, so the default and dark themes — and the empty axe baseline — are byte-for-byte unchanged. Covered by `e2e/a11y-media-preferences.spec.ts`, documented in `docs/testing.md`.
+
+## [0.145.9-beta] - 2026-09-03
+
+_Shipped 2026-09-03 09:37 UTC · commit [f0d8295](https://github.com/21072026/Internship/commit/f0d82958422382c62f3309241593c32f37b69a98)_
+
+- **Feature catalogue:** Added enterprise platform capabilities (#2083).
+
+## [0.145.8-beta] - 2026-09-03
+
+_Shipped 2026-09-03 09:33 UTC · commit [8b46f92](https://github.com/21072026/Internship/commit/8b46f929f735b866cac422506e8738df99d0555f)_
+
+- **Super-admin gate on tenant management**: `/api/admin/organizations` (and its pipeline-stages sub-route) now require a new `User.isSuperAdmin` capability, read from the database per request. A plain tenant ADMIN sees and may edit only their own organization — cross-tenant PATCH is refused before the target row is loaded and audited as `authz.scope_denied`.
+
+## [0.145.7-beta] - 2026-09-03
+
+_Shipped 2026-09-03 09:32 UTC · commit [f61235a](https://github.com/21072026/Internship/commit/f61235a88574d34927d7ed13cabaf889fff81ef6)_
+
+- **Erasure now actually erases the free text** (#2052). `anonymizeUser()` / `hardDeleteUser()` rewrote the `User` row and deleted the uploaded files, and left every free-text field the person had ever typed — and everything typed about them — in place: `Message.body` + `MessageAttachment`, `SupportMessage.body` + `SupportAttachment`, `SupportTicket.subject` (a verbatim copy of the requester's first message), `PersonalNote.body`, `RelationNote.body`, `InteractionLog.notes`/`subject`, `MentorshipRequest.message`, plus `country`, `referralSource` and `reEngageNote` on the very row being anonymised. Two rules, documented in the file header: content the person **wrote** is tombstoned (body emptied, attachment rows deleted, the row kept — reusing the existing `Message.deletedForEveryoneAt` masking so the counterpart's thread still reads as a conversation), content written **about** them is scrubbed with the row's dates, types and stage intact. Both paths keep it in one `$transaction`; the hard-delete path scrubs *before* it deletes the relations, because `PersonalNote.meetingId` is `SetNull` and the note would otherwise survive with its text intact and its only link to the subject gone. No schema change. `Message.senderId` has no FK to `User`, so a conversation-layer message used to outlive the account entirely. Remaining surfaces are named in a `KNOWN GAPS` comment and tracked in #2106; `e2e/erasure-free-text.spec.ts` seeds a full paper trail, runs both paths and queries Prisma directly for the seeded strings.
+
+## [0.145.6-beta] - 2026-09-03
+
+_Shipped 2026-09-03 09:32 UTC · commit [ab18147](https://github.com/21072026/Internship/commit/ab181475c3224a1244f72e20b168af790eb11d3f)_
+
+- **Accessibility scan widened to the screens outside the mentee portal (#2043)**: `e2e/a11y-scan.spec.ts` now also gates `/messages`, `/notifications`, `/mentor/board`, `/admin/board`, `/admin/settings` and the public `/apply/:mentorId` entry, in light and dark — fifteen pages, thirty baseline keys. The board and inbox scans run against a real mentor ↔ mentee relation (`seedMenteeWithRelation()` in `e2e/helpers/db.ts`, with a company, a goal, an interaction and an upcoming meeting) and assert a card is on screen before axe runs, so an empty board can no longer scan clean. A scan target may now carry its own baseline key and a readiness wait, which keeps a dynamic route (`/apply/:mentorId`) on one stable key and a client-fetched page from being measured mid-skeleton.
+- **Three accessibility bugs the widened scan found (#2043)**: the *Self-registration* and *Require 2FA* dropdowns on `/admin/settings` had labels that were never associated with them, so a screen reader announced two unnamed selects (axe `select-name`, **critical**); the admin board's horizontally scrolling stage rows were not focusable, leaving the columns past the fold unreachable without a mouse (`scrollable-region-focusable`); and the inbox's person-card trigger is an `aria-hidden` icon inside a `role="button"`, so it announced nothing (`aria-command-name`) — it now takes its name from the person it opens.
+- The nine remaining *serious* findings on the newly scanned screens are pre-existing and are frozen in `e2e/a11y-baseline.json` rather than fixed here: eight are the one `text-gray-400` muted-text token (2.38–2.53:1 against white) plus its dark-board mirror, and two are the 14×14px inbox trigger. Both are design-token changes that move other baseline keys, so they are #2131.
+
+## [0.145.5-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:17 UTC · commit [e988f77](https://github.com/21072026/Internship/commit/e988f77b7b99545a7bafcb35fe88bd0d8cf8df03)_
+
+- **Global search is a real combobox** (#2075). The dropdown no longer renders as a light slab in dark mode (it leans on the flat `html.dark` overrides, and the weakest `text-gray-400` tones moved to `text-gray-500`, which clears AA in both themes). The input gains `role="combobox"` with `aria-expanded`/`aria-controls`/`aria-autocomplete`/`aria-activedescendant`, the panel is a `role="listbox"` of `role="option"` rows, and ArrowDown/ArrowUp (wrapping), Home/End, Enter, Escape and Tab all work. Adds an `aria-live` result count and a localised no-results row (`search.results`/`noResults`/`resultsCount` in EN/TR/DE). New testids `global-search-listbox` and `global-search-option-<id>`; the result rows answer to `role="option"` rather than `role="button"` now.
+
+## [0.145.4-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:12 UTC · commit [a982010](https://github.com/21072026/Internship/commit/a982010a024999c4f15bf2765e7df25d438c2ccc)_
+
+- **`/robots.txt` and `/sitemap.xml` exist** (#1380). Both were 404, so nothing told a crawler what to fetch and the footer-only public pages were discoverable by luck. Two Next metadata routes (same file convention as `manifest.ts`), both `force-dynamic` because the absolute origin comes from the runtime `NEXTAUTH_URL` (new `lib/siteUrl.ts`). `robots.ts` allows `/`, disallows the signed-in areas as exact-or-subpath pairs (`/mentor$` + `/mentor/`, so the public `/mentors` directory is not collateral damage) and links the sitemap; on any non-production `NEXT_PUBLIC_APP_ENV` and on the demo deployment it closes the whole site instead, so preview/topic/demo copies stay out of the index. `sitemap.ts` lists the 13 anonymous routes plus `isPublic` + `ACTIVE` projects, `/stories` only once a story is published and `/demo` only on the demo instance; `/p/<userId>` and `/apply/<mentorId>` are deliberately excluded, and a database error degrades to the static list rather than a 500. New spec `e2e/robots-sitemap.spec.ts` (`@smoke`) asserts both routes' status and content type, the disallow set, and that no sitemap URL sits under an authenticated prefix.
+
+## [0.145.3-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:10 UTC · commit [26b61ea](https://github.com/21072026/Internship/commit/26b61ea41f530255a71a60c9df9a3476f9db6631)_
+
+- **Demo seed fills the development half** (#2062). `prisma/seed-demo.mjs` now creates weekly reports (reviewed, awaiting review, sent back and draft), to-dos (project goals, handed-over and personal, two from the shared `ProjectTaskTemplate` pool), mentor questions (answered and open) and trilingual `DocumentRequirement` rows with real one-page PDF `Document`s fulfilling some of them — so the weekly-report, to-do, question and document screens are no longer empty on the public demo and in per-PR environments. Idempotent (Monday-anchored `weekStart`, existence checks per row) and the non-local `DATABASE_URL` refusal is untouched.
+
+## [0.145.2-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:09 UTC · commit [a7272b4](https://github.com/21072026/Internship/commit/a7272b4c37fcbc4c74936100fae6cf7d196ac0b1)_
+
+- **Deactivation ends the session**: switching an account off (and erasing one) now stamps `sessionsValidFrom` and revokes the account's trusted devices, so an already-signed-in user is rejected on their next request instead of staying signed in until their 12-hour JWT expires.
+
+## [0.145.1-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:08 UTC · commit [bf96f70](https://github.com/21072026/Internship/commit/bf96f70fd70876f55b10d0e8f70af45ff100c2da)_
+
+- **SSO**: reject `oidc` as a tenant SSO provider at the write boundary (`validateSsoConfig`), and treat an already-stored OIDC config as inactive (`isSsoActive`) — the login route only builds SAML requests, so saving OIDC previously reported success and locked the tenant out. The admin provider selector now shows OIDC disabled ("coming soon").
+
+## [0.145.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:07 UTC · commit [a720d96](https://github.com/21072026/Internship/commit/a720d967b2aa6a1c27d2fbb5be60352cef5d21d2)_
+
+- **A correction window on evaluations, and reopenable interview panels** (#1893). `PATCH /api/evaluations/[id]` lets the author (or an admin) fix a mistyped score or comment for 7 days — `EVALUATION_EDIT_WINDOW_DAYS` in `src/lib/evaluation.ts` is the single rule the route enforces and the UI reads — instead of the delete-and-rewrite that threw the record out of its place in history. Scores go through the same tenant rubric check `POST` uses, an edit clears `excerptApprovedAt`/`publishedAt`/`sharedPublicly` (the approved wording described a record that no longer exists), every edit writes an `evaluation.updated` `ActivityLog` row, and a panel scorecard is explicitly refused so the blind-scoring rule keeps no back door. New nullable `Evaluation.correctedAt`, written **only** by this route and deliberately not a Prisma `@updatedAt` — an Evaluation row is also written when a testimonial excerpt is drafted, approved, published, unpublished or bulk-revoked, and a generic last-write column would have labelled all of those "corrected". On the panel side, `PATCH /api/interview-panels/[id]` retitles, reschedules and adds or drops an interviewer while the panel is open (409 on a closed panel, and on dropping someone who already submitted), and `POST /api/interview-panels/[id]/reopen` puts a panel closed too early back to collecting for its owner or an admin. Reopening adds nothing to the blind gate on purpose: the detail route recomputes it from `closedAt` plus the live roster on every read, so an interviewer who has not submitted stays blind. An empty `PATCH` body is a 400 rather than a no-op, so the un-publish side effect can only fire on a real edit; the two new panel writes and the evaluation `PATCH` also `assertSameOrg()` on the fetched row, since neither `Evaluation` nor `InterviewPanel` is auto-scoped by `TENANT_MODELS`, and an interviewer added by `PATCH` gets the same (blind-safe) assignment notification the create route sends, so a late addition cannot become a ghost member who blocks completion for ever.
+
+## [0.144.1-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:07 UTC · commit [fc5d64f](https://github.com/21072026/Internship/commit/fc5d64fc4ef749dec6890f4a3ea6f51910c19aab)_
+
+- **Fixed** (#1423): the "ask your mentor for a meeting" link on a mentee's empty meetings card no longer appears without an active mentor relation — it used to point at `/portal/requests`, which has no request form for a mentee with no mentor or an archived mentorship. The no-mentor hint now also says a mentor request can be sent instead of only waiting for an admin.
+
+## [0.144.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:05 UTC · commit [b998d9d](https://github.com/21072026/Internship/commit/b998d9dc2a6da82d5747db5b508477352bddd797)_
+
+- **Mentees see the activity report that is already about them** (#1915). New page `/portal/insights` and the thin `GET /api/portal/insights?days=1|7|30` behind it render the same summary `/mentor/mentee-activity` and `/admin/mentee-activity` show, for the caller only. `getMenteeActivity` is reused through a new `getOwnMenteeActivity(userId, since)` wrapper scoped with `menteeRelationWhere`, so a completed mentorship still counts as the reader's record. The route takes **no mentee id** — the subject is `session.user.id`, gated with `canUsePortal` so a mentor or admin who is themselves mentored is not locked out — and carries no entitlement, plan or quota check. When `ACTIVITY_TRACKING` consent is absent the page renders an explicit "tracking is off" state with a link to the privacy settings instead of zeros that read as inactivity; nothing on the page ranks, scores or compares the reader to another participant.
+
+## [0.143.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:04 UTC · commit [53bb054](https://github.com/21072026/Internship/commit/53bb0544e093811cb9f6b8842aa772ceae0962e5)_
+
+- **Built-in survey instrument library** (#1883). New `src/lib/surveyTemplates.ts` ships six ready instruments — `program_pre`, `program_mid`, `program_post`, `pulse`, `nps_only`, `post_meeting` — each complete in EN/TR/DE and each capped at three questions plus one NPS item (the #836 rule: more questions, fewer responses). Labels are dictionary *selectors*, so the already-shipped `programSurvey` NPS and role-specific questions are reused rather than copied; new wording lives in a `surveyTemplates` namespace in all three dictionaries. The file imports nothing from Prisma or `node:*` so a future admin picker can preview an instrument client-side; `listSurveyTemplates()`, `getSurveyTemplate(key)` and `renderSurveyTemplate(template, locale, role)` are the accessors. Content and types only — no schema, no routes, no UI (those are #1879 and its siblings).
+
+## [0.142.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:03 UTC · commit [1a2a0be](https://github.com/21072026/Internship/commit/1a2a0be037217ff9ed26e15e8543e6962028ab04)_
+
+- **`/admin/offers` — the offer index** (#1873). `GET /api/offers` gains ADMIN-only filters (`status` multi, `companyId`, `requisitionId`, `declineReasonCode`, `expiringWithinDays`, `q`, `from`/`to` on `sentAt`, `sort`/`dir`) plus server-side `page`/`pageSize` and a `total` from a separate `count()` on the same `where`. The new page has three URL-shareable saved views (outstanding / expiring this week / declined), rows linking to the candidate's existing offer panel, and a nav badge counting sent-but-undecided offers. The DRAFT-invisibility and `compensationNote` select rules are untouched: MENTEE/COMPANY keep the previous response shape and select.
+
+## [0.141.3-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:03 UTC · commit [12f5716](https://github.com/21072026/Internship/commit/12f5716b0e257ce51d2fd26d49555a9909d8c14c)_
+
+- **Chat apps: operator runbook and env contract written ahead of the code** (#1961). New `docs/chat-apps.md` covers the Slack + Microsoft Teams provider setup step by step, the `configured` vs `CHAT_APPS_ENABLED` gate (the `isGoogleCalendarConfigured()`/`isGoogleCalendarEnabled()` shape), the local-stub design the e2e will need, the two store-submission checklists, and a "what data leaves the app" section for a security reviewer. It also records the commercial gate honestly: the GTM non-goal is quoted verbatim, and the epic is unblocked by an owner scope decision (2026-08-30), *not* by the three-paying-customers condition being met. `.env.example` gains the dormant `SLACK_*` / `TEAMS_*` / `CHAT_OAUTH_REDIRECT_URI` / `CHAT_APPS_ENABLED` block. No code reads these names yet — #1923 is still unimplemented and still sequenced behind the notification router (#1705/#1712) — so the `chatApps` feature-catalogue entry is deliberately deferred to the PR that first delivers a chat notification rather than advertising an unbuilt feature on `/features`.
+
+## [0.141.2-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:03 UTC · commit [66ed97b](https://github.com/21072026/Internship/commit/66ed97bbada0d4d962c8c7535d679e5416a89cfb)_
+
+- **The changelog records what shipped again** (#2142). Release compaction had failed all ten of its runs since 2026-08-24, so 57 fragments piled up and 25 versions' worth of merged changes never reached `CHANGELOG.md` or `src/lib/releaseNotes.ts` — the app's *displayed* version stayed correct throughout, since `next.config.js` derives it from base+fragments at build time, but the committed record stopped tracking reality. Two chained causes: `RELEASE_BOT_TOKEN` is unset, so `gh pr create` was refused (this org forbids `GITHUB_TOKEN` from opening PRs), and the branch name carried the version — identical on every retry, with a fresh commit sha each time — so once a run had pushed it, every later run died on a non-fast-forward reject before even reaching the PR step. Compaction now uses **one stable branch, force-pushed** (safe: it only ever holds an earlier attempt built from the same `main`, which the new commit strictly supersedes, compaction being cumulative), **reuses an already-open PR** instead of failing on a second `gh pr create`, and **fails loudly** — a preflight warning for the missing secret, an `::error` annotation naming the ready-to-open branch, and a `notify` job that emails through `scripts/send-alert-email.mjs` like every other scheduled workflow. A failed run now leaves the branch correct and current, so the next one recovers on its own.
+
+## [0.141.1-beta] - 2026-09-03
+
+_Shipped 2026-09-03 08:00 UTC · commit [ffc14fa](https://github.com/21072026/Internship/commit/ffc14fa28ef723851f102da25a40220187c9a0a6)_
+
+- **The sign-in form no longer prints internal errors, and the database restarts itself.** MySQL is being OOM-killed on the server; while it was down the login page showed the driver's own words (``Invalid `prisma.user.findUnique()` invocation: Can't reach database server at `localhost:3306` ``). The guard added in #1150 never actually ran: `CredentialsProvider` keeps the real `authorize` in its `options` bag and NextAuth's `parseProviders` merges that bag back *over* the provider, reinstating the unwrapped function — so `guardProviders` now wraps both, and a unit spec reproduces that merge (`e2e/auth-error-guard.unit.spec.ts`). An unreachable database (P1001/P2024/`PrismaClientInitializationError`) maps to a new `SERVICE_UNAVAILABLE` code rendered as "temporarily unavailable, try again shortly"; the sign-in page now renders only allow-listed messages, so anything unforeseen is generic by construction. On the server side, `infra/mysql-watchdog.sh` adds three layers: a systemd drop-in (`Restart=always`, no start-rate limit, `OOMScoreAdjust=-500`), a once-a-minute on-box timer that starts the unit and logs the kernel's OOM evidence, and `.github/workflows/mysql-watchdog.yml` — GitHub-hosted, so it still fires when the box is sick — which re-installs the timer and emails when the database is down and could not be recovered.
+
+## [0.141.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 07:59 UTC · commit [06c3637](https://github.com/21072026/Internship/commit/06c3637344386beeb3a1511ba822f3e81428476e)_
+
+- **In-app image viewer** (#2147). Images in messages, support tickets and announcements open in a dismissible lightbox (✕, Escape, backdrop tap, phone back button) with zoom, download and prev/next, instead of a chrome-less new tab the reader could not get out of.
+
+## [0.140.1-beta] - 2026-09-03
+
+_Shipped 2026-09-03 07:58 UTC · commit [1d57e89](https://github.com/21072026/Internship/commit/1d57e89a613aba27f2cdcf3560d659aa4a922582)_
+
+- **Requisition compatibility backfill runs during deploys** (#1359). Production, shared preview and topic deploys now migrate legacy `CompanyNeed` rows through the existing idempotent backfill without making row-level failures block deployment.
+
+## [0.140.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 07:57 UTC · commit [f5a334b](https://github.com/21072026/Internship/commit/f5a334b252ca0d81ee52a0717bcc2211cd80c979)_
+
+- **Onboarding checklist: server-side progress and a guide per step** (#2068). Dismissal moves from localStorage to the new `UserGuidanceState` table (`checklist:<ROLE>`, written by `POST /api/onboarding/dismiss` for the session user only), so it follows the account rather than the browser. The ADMIN list grows from three rows to the nine a launch actually needs (pipeline stages, stage SLAs, document requirements, evaluation framework, mentors, mentees, company, first mentorship, first interaction) — every one still derived from a real count — and each step opens a short EN/TR/DE guide written for a first-time programme owner.
+
+## [0.139.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 07:47 UTC · commit [1522801](https://github.com/21072026/Internship/commit/1522801f241ba0046028eb4c2bd34f8e85fcfc19)_
+
+- **⌘K command palette and a `?` shortcut sheet** (#2079). `CommandPalette` is mounted once per authenticated shell (admin/mentor/portal) and reuses GlobalSearch's combobox machinery plus `useModalFocus` for the trap, Escape and focus return. Its "Go to" entries come from the new `src/lib/navLinks.ts` — now the single source the three sidebars also render from, so a palette entry can never point at a page the role is refused. `src/lib/shortcuts.ts` is the one shortcut registry; the help sheet is generated from it and renders ⌘ on macOS, Ctrl elsewhere.
+
+## [0.138.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 07:25 UTC · commit [f00d27a](https://github.com/21072026/Internship/commit/f00d27a7275932bc275615d40d0b812dc254513d)_
+
+- **Public accessibility conformance statement** (#2035). New page `/accessibility` (EN/TR/DE, server component in the shape of `/privacy`) publishes what EN 301 549 procurement and the European Accessibility Act expect to find: the standard claimed (WCAG 2.2 AA, mapped to EN 301 549 clause 9 and Revised Section 508), a **partially conformant** status, the scope by URL, the evidence for every "we do this" claim — each linking the file or workflow that backs it — the known limitations with their tracking issues (#2041, #2043, #1412, #2033, plus RTL and third-party embeds), a feedback address resolved from `operatorIdentity()` rather than hardcoded with a 5-working-day response target, and the EU enforcement route. Facts, sources and issue numbers live in `src/lib/accessibility.ts`; the canonical long form with the re-review rule is `docs/accessibility-statement.md`. Linked from the public footer's legal column and catalogued as a `trust` feature. `/accessibility` joins `e2e/a11y-baseline.json` and the axe gate (light + dark), and `e2e/accessibility-statement.spec.ts` asserts the anonymous render, the three locales and — the point of the page — a non-empty limitations list.
+
+## [0.137.1-beta] - 2026-09-03
+
+_Shipped 2026-09-03 07:15 UTC · commit [09428f8](https://github.com/21072026/Internship/commit/09428f846663aa48197e7b6bfe95ec867490e93d)_
+
+- **Security:** Added rate limits to unprotected write endpoints (#1547).
+
+## [0.137.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 07:15 UTC · commit [6fdc485](https://github.com/21072026/Internship/commit/6fdc485e713add48719a6b70359389dea9804a92)_
+
+- **AI transparency layer** (#2034). New public `/ai` page (EN/TR/DE) listing all five registered AI tasks with what is sent, what is deliberately withheld, the sub-processor, retention, the per-purpose opt-out, the org-wide off switch and the human-in-the-loop statement — plus an explicit "what we do not have yet" section. New shared `AiBadge` ✨ marker (visible chip + screen-reader label + tooltip + "check it" note) on all five surfaces that render model output. The privacy notice now names all four AI processing purposes instead of CV parsing alone, and `docs/ai.md` documents the gate, the task table and the two closed boundaries.
+
+## [0.136.0-beta] - 2026-09-03
+
+_Shipped 2026-09-03 07:12 UTC · commit [34c221f](https://github.com/21072026/Internship/commit/34c221fa386644f0425dc09e66c9ca30c26d01cc)_
+
+**Added** — webhook subscriptions can now be edited instead of only created and deleted: `PATCH /api/admin/webhooks?id=…` changes the URL (through the same SSRF guard as create) and the event set without touching the signing secret, and writes `active`, which until now had no writer anywhere — so a hook can be paused while its receiver is redeployed and resumed afterwards. Secret rotation is its own explicit endpoint (`POST /api/admin/webhooks/rotate-secret?id=…`, returning the new secret once), and `POST /api/admin/webhooks/test?id=…` delivers a signed `ping` through the normal delivery path and reports the receiver's status code and latency — rate-limited per hook, not per IP, so the button cannot be used to hammer a third party from the production host. `/admin/integrations` grows an inline edit form, a pause/resume toggle, a paused badge and a test button that renders the result next to the hook.
+
 ## [0.135.0-beta] - 2026-09-02
 
 _Shipped 2026-09-02 16:07 UTC · commit [517148d](https://github.com/21072026/Internship/commit/517148df0219a0cae9f735a2ac577b61defb2ef5)_

@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Accessibility:** the language and theme pickers on `/account` had no accessible name — their `<label>`s were plain text sitting next to the control rather than associated with it, so screen readers announced two bare combo boxes (axe `select-name`, critical). Both now use `htmlFor`/`id` (`account-language`, `account-theme`), which also makes the visible text a click target, and both pick up the `max-lg:min-h-11` touch floor. The testimonial name-style picker in the consent card had the identical shape and got the identical fix. `/account` is now covered by the axe regression gate, light and dark (#2041).",
-  "notes": {
-    "en": ["The language and theme pickers in account settings now have proper names for screen readers, and are easier to tap on a phone."],
-    "tr": ["Hesap ayarlarındaki dil ve tema seçicileri artık ekran okuyucular için doğru adlara sahip ve telefonda daha kolay dokunuluyor."],
-    "de": ["Die Sprach- und Themenauswahl in den Kontoeinstellungen hat jetzt korrekte Namen für Screenreader und lässt sich auf dem Handy leichter antippen."]
-  }
-}

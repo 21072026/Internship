@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **`infra/server/bootstrap.sh`** (#2166): idempotent one-command setup for the new Oracle ARM host — Docker CE + buildx, Caddy owning 80/443, MySQL 8.0 pinned to the CI image and bound to 127.0.0.1, firewall, fail2ban, swap, journald caps. Deliberately no ufw (Oracle's cloud image already owns the filter table and `iptables-restore` flushes it on boot) and no panel. Migration runbook in `docs/server-migration.md`."
-}

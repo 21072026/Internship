@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **`/robots.txt` and `/sitemap.xml` exist** (#1380). Both were 404, so nothing told a crawler what to fetch and the footer-only public pages were discoverable by luck. Two Next metadata routes (same file convention as `manifest.ts`), both `force-dynamic` because the absolute origin comes from the runtime `NEXTAUTH_URL` (new `lib/siteUrl.ts`). `robots.ts` allows `/`, disallows the signed-in areas as exact-or-subpath pairs (`/mentor$` + `/mentor/`, so the public `/mentors` directory is not collateral damage) and links the sitemap; on any non-production `NEXT_PUBLIC_APP_ENV` and on the demo deployment it closes the whole site instead, so preview/topic/demo copies stay out of the index. `sitemap.ts` lists the 13 anonymous routes plus `isPublic` + `ACTIVE` projects, `/stories` only once a story is published and `/demo` only on the demo instance; `/p/<userId>` and `/apply/<mentorId>` are deliberately excluded, and a database error degrades to the static list rather than a 500. New spec `e2e/robots-sitemap.spec.ts` (`@smoke`) asserts both routes' status and content type, the disallow set, and that no sitemap URL sits under an authenticated prefix.",
-  "notes": {
-    "en": ["Search engines can now find the public pages: the site serves a robots.txt and a sitemap listing every page a visitor can open, while preview and demo copies stay out of search results."],
-    "tr": ["Arama motorları artık genel sayfaları bulabiliyor: site bir robots.txt ve ziyaretçiye açık tüm sayfaları içeren bir site haritası yayınlıyor; önizleme ve demo kopyaları arama sonuçlarına girmiyor."],
-    "de": ["Suchmaschinen finden jetzt die öffentlichen Seiten: Die Website liefert eine robots.txt und eine Sitemap mit allen für Besucher zugänglichen Seiten, während Vorschau- und Demo-Kopien aus den Suchergebnissen bleiben."]
-  }
-}

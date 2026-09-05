@@ -1,4 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Built-in survey instrument library** (#1883). New `src/lib/surveyTemplates.ts` ships six ready instruments — `program_pre`, `program_mid`, `program_post`, `pulse`, `nps_only`, `post_meeting` — each complete in EN/TR/DE and each capped at three questions plus one NPS item (the #836 rule: more questions, fewer responses). Labels are dictionary *selectors*, so the already-shipped `programSurvey` NPS and role-specific questions are reused rather than copied; new wording lives in a `surveyTemplates` namespace in all three dictionaries. The file imports nothing from Prisma or `node:*` so a future admin picker can preview an instrument client-side; `listSurveyTemplates()`, `getSurveyTemplate(key)` and `renderSurveyTemplate(template, locale, role)` are the accessors. Content and types only — no schema, no routes, no UI (those are #1879 and its siblings)."
-}
