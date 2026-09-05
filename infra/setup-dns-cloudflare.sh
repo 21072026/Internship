@@ -1,48 +1,90 @@
 #!/usr/bin/env bash
 #
-# CI-independent wildcard DNS setup (#636 / #583).
+# Create/update this project's public DNS records via the Cloudflare API
+# (#636 / #583, extended for the server migration #2166).
 #
-# Creates the wildcard `*.ersah.in` A record via the Cloudflare API so every
-# topic subdomain (crm-topicN.ersah.in) resolves to the server. Idempotent:
-# if a `*` A record already exists it does nothing. This is the same logic as
-# the `dns` step of .github/workflows/infra-setup.yml, extracted so it can run
-# from a laptop without GitHub Actions minutes.
+# WHY A SCRIPT: the records have to agree with two things that are easy to get
+# wrong by clicking — the server IP, and whether Cloudflare proxies the name.
+#
+# PROXIED DEFAULTS TO FALSE, AND THAT IS LOAD-BEARING.
+#   `src/lib/rateLimit.ts` counts back from the right of X-Forwarded-For by
+#   TRUSTED_PROXY_COUNT hops, which is 1 in every environment. Cloudflare's
+#   proxy adds a second hop, so an orange-clouded hostname makes the limiter
+#   bucket every visitor as the Cloudflare edge — one person's traffic then
+#   throttles everybody. Turning the proxy on for a CRM hostname is therefore
+#   not a free toggle: it has to happen in the same change as bumping
+#   TRUSTED_PROXY_COUNT to 2 for that host. See infra/README.md.
+#   (The old ersah.in wildcard was created proxied, before that was understood.)
 #
 # USAGE
-#   export CF_Token="<scoped Cloudflare token: Zone:DNS:Edit + Zone:Read, ersah.in>"
-#   SERVER_IP=<server public IP> ./infra/setup-dns-cloudflare.sh
-#   # SERVER_IP optional if you run it ON the server (auto-detected).
+#   export CF_Token="<scoped token: Zone:DNS:Edit + Zone:Read, this zone only>"
+#   DOMAIN=interncrm.com ./infra/setup-dns-cloudflare.sh
+#   # SERVER_IP is auto-detected when run ON the server.
 #
-# The cert (wildcard TLS) is issued by infra/acme-issue-wildcard.sh — run that
-# ON the server. Both together complete the topic-preview foundations.
+#   Env:
+#     DOMAIN      default ersah.in
+#     RECORDS     space-separated names, default "* www crm"  ('@' = apex)
+#     SERVER_IP   default: this host's public IP
+#     PROXIED     default false — read the note above before setting true
 #
+# Idempotent: an existing record with the right content and proxy setting is
+# left alone; a wrong one is UPDATED rather than duplicated (Cloudflare happily
+# holds two A records for one name and then answers with both).
+#
+# The wildcard TLS cert is a separate step — infra/acme-issue-wildcard.sh, run
+# ON the server. DNS alone gets you a name that resolves and cannot do HTTPS.
 set -euo pipefail
 
 DOMAIN="${DOMAIN:-ersah.in}"
+RECORDS="${RECORDS:-* www crm}"
+PROXIED="${PROXIED:-false}"
 : "${CF_Token:?export CF_Token with a scoped Cloudflare API token first}"
 
 SERVER_IP="${SERVER_IP:-}"
 if [ -z "$SERVER_IP" ]; then
-  SERVER_IP="$(curl -fsS https://api.ipify.org 2>/dev/null || true)"
+  SERVER_IP="$(curl -fsS --max-time 10 https://api.ipify.org 2>/dev/null || true)"
 fi
 [ -n "$SERVER_IP" ] || { echo "ERROR: set SERVER_IP=<public ip>" >&2; exit 1; }
-echo "==> Target server IP: $SERVER_IP"
+
+case "$PROXIED" in true|false) ;; *) echo "ERROR: PROXIED must be true or false" >&2; exit 1 ;; esac
+
+echo "==> Zone ${DOMAIN}, target ${SERVER_IP}, proxied=${PROXIED}"
 
 api() { curl -sS -H "Authorization: Bearer $CF_Token" -H "Content-Type: application/json" "$@"; }
 
 ZONE_ID="$(api "https://api.cloudflare.com/client/v4/zones?name=${DOMAIN}" \
   | python3 -c "import sys,json;r=json.load(sys.stdin);print(r['result'][0]['id'] if r.get('result') else '')")"
-[ -n "$ZONE_ID" ] || { echo "ERROR: zone ${DOMAIN} not found with this token (needs Zone:Read)" >&2; exit 1; }
+[ -n "$ZONE_ID" ] || { echo "ERROR: zone ${DOMAIN} not visible to this token (needs Zone:Read on ${DOMAIN})" >&2; exit 1; }
 
-EXISTING="$(api "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?type=A&name=%2A.${DOMAIN}" \
-  | python3 -c "import sys,json;print(len(json.load(sys.stdin).get('result',[])))")"
+for name in $RECORDS; do
+  if [ "$name" = "@" ]; then fqdn="$DOMAIN"; else fqdn="${name}.${DOMAIN}"; fi
 
-if [ "$EXISTING" != "0" ]; then
-  echo "==> Wildcard *.${DOMAIN} A record already exists — nothing to do."
-  exit 0
-fi
+  # url-encode the '*' so the query matches the wildcard record.
+  q="$(printf '%s' "$fqdn" | sed 's/\*/%2A/')"
+  existing="$(api "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?type=A&name=${q}")"
 
-echo "==> Creating *.${DOMAIN} A → ${SERVER_IP} (proxied)"
-api -X POST "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
-  --data "{\"type\":\"A\",\"name\":\"*\",\"content\":\"${SERVER_IP}\",\"proxied\":true,\"ttl\":1}" \
-  | python3 -c "import sys,json;r=json.load(sys.stdin);assert r.get('success'),r;print('OK — wildcard record created.')"
+  read -r rec_id rec_ip rec_proxied <<EOF
+$(printf '%s' "$existing" | python3 -c "
+import sys,json
+r=json.load(sys.stdin).get('result') or []
+print(r[0]['id'], r[0]['content'], str(r[0]['proxied']).lower()) if r else print('- - -')
+")
+EOF
+
+  if [ "$rec_id" = "-" ]; then
+    api -X POST "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+      --data "{\"type\":\"A\",\"name\":\"${name}\",\"content\":\"${SERVER_IP}\",\"proxied\":${PROXIED},\"ttl\":1}" \
+      | python3 -c "import sys,json;r=json.load(sys.stdin);assert r.get('success'),r" \
+      && echo "    created  ${fqdn} → ${SERVER_IP} (proxied=${PROXIED})"
+  elif [ "$rec_ip" = "$SERVER_IP" ] && [ "$rec_proxied" = "$PROXIED" ]; then
+    echo "    ok       ${fqdn} → ${SERVER_IP} (proxied=${PROXIED})"
+  else
+    api -X PATCH "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${rec_id}" \
+      --data "{\"content\":\"${SERVER_IP}\",\"proxied\":${PROXIED},\"ttl\":1}" \
+      | python3 -c "import sys,json;r=json.load(sys.stdin);assert r.get('success'),r" \
+      && echo "    updated  ${fqdn}: ${rec_ip}/proxied=${rec_proxied} → ${SERVER_IP}/proxied=${PROXIED}"
+  fi
+done
+
+echo "==> Done. TLS is a separate step (infra/acme-issue-wildcard.sh for the wildcard;"
+echo "    Caddy obtains per-host certs itself for names that resolve here)."

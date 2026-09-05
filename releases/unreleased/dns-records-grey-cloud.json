@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **`infra/setup-dns-cloudflare.sh` handles the whole record set** (#2166): it takes a list of names instead of only the wildcard, updates a wrong record instead of adding a duplicate, and defaults to `proxied=false`. The old hardcoded `proxied: true` conflicts with `TRUSTED_PROXY_COUNT=1` — Cloudflare's proxy adds a hop, so an orange-clouded CRM hostname makes the rate limiter bucket every visitor as the Cloudflare edge."
+}
