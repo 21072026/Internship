@@ -5655,3 +5655,36 @@ elemana `data-testid` vermek, aynı PR'da eski spec'leri düzeltmekten daha ucuz
 `ECONNREFUSED 127.0.0.1:3000` veya `[next-auth][error][CLIENT_FETCH_ERROR]` gördüğün
 spec'i **kırmızı saymadan önce tek başına tekrar çalıştır** — bu turda 11 "kırmızı"
 spec'in tamamı ikinci koşuda yeşildi.
+
+## 2026-09-05 — Fork'tan gelen PR'ın conflict'ini çözmek (#2087)
+
+**Fork PR'ının conflict'ini PR'ın kendisinde çözemezsin.** #2087'nin head'i
+`itsgintoki/Internship:feat/ai-endpoint-rate-limits`. Web oturumunun GitHub erişimi
+`21072026/internship` ile sınırlı, katkıcının fork'una push yetkisi yok — "allow edits by
+maintainers" açık olsa bile. Çözüm: `origin/main`'den branch aç, `refs/pull/<N>/head`'i
+oraya merge et, conflict'i orada çöz. Katkıcının commit'leri merge'ün ikinci ebeveyninde
+durduğu için **authorship korunur**; `git diff origin/main..HEAD` orijinal PR'ın diff'ine
+birebir eşit çıkmalı — çıkmıyorsa merge sırasında bir şey kaybettin demektir.
+
+**`--depth` ile klonlanmış container'da merge-base tutmayabilir.** `git merge-tree
+--write-tree origin/main pr<N>` conflict'i commit üretmeden gösteriyor; hangi dosyaların
+çakıştığını merge'e girmeden öğrenmek için en ucuz yol.
+
+**En sık conflict "aynı satıra iki import" oluyor.** Bu turda tek çakışan dosya
+`mentor-suggest/route.ts`'in import bloğuydu: main `resolveOrgId`+`MATCH_RULESET_VERSION`
+(#2040), PR `enforceRateLimit`+`AI_RATE_LIMITS` (#2028) eklemiş. İkisi de additive →
+dördünü de tut. Route gövdesi zaten temiz merge oluyor, ama **guard'ların yerini gözle
+doğrula**: rate-limit bloğu `withTenantScope`'un önünde kalmalı, yoksa limit DB
+okumasından sonra çalışır ve hiçbir şeyi korumaz.
+
+**`npx tsc --noEmit` `e2e/`'yi de kapsıyor** (`tsconfig.json` include `**/*.ts`, exclude
+sadece `node_modules`+`scripts`). Yani yeni bir spec'in Prisma modeli/helper imzası
+uydurmadığını DB kurmadan doğrulayabiliyorsun — `--listFiles | grep -c /e2e/` ile teyit et.
+
+**Copilot'un "🔵 Needs a closer look" etiketi bulgu değil.** Aynı raporda "no defects were
+found" + "Comments generated: 0" yazıyor. Etiket **etki alanına** göre veriliyor: diff
+paylaşılan bir güvenlik primitifine (`src/lib/rateLimit.ts`, 38 çağrı yeri) dokunuyorsa ve
+bağımlılık grafiğinde `src/lib/auth.ts` varsa otomatik yükseliyor. Gerekçesi de tam doğru
+değildi: auth dosyası `enforceRateLimit`'i değil doğrudan `rateLimit()`'i çağırıyor ve o
+fonksiyonun gövdesi hiç değişmemişti. Böyle bir etikette yapılacak şey paniklemek değil,
+çağrı yerlerini tek tek sayıp raporun iddiasını doğrulamak.
