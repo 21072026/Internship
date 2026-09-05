@@ -10,6 +10,16 @@ Newest entries on top.
 
 ---
 
+## 2026-09-05 — Stale `.git/index.lock` on the self-hosted runner (#2143, #2170)
+
+**A cancelled self-hosted job can leave a lock file that fails every job after it, forever, until someone SSHes in.** Three days into the #2143 outage, the runner started accepting jobs again but `deploy-prod`/`deploy-preview` both failed in ~1s at `Fetch the repo` with `Unable to create .git/index.lock: File exists` — a `git` process killed mid-fetch (very plausibly the immediately-preceding run, which shows `conclusion: cancelled`) never got the chance to clean up after itself. **This can't be fixed from a watchdog session with no SSH**, but the recurrence *can* be prevented in the workflow itself: `rm -f .git/index.lock` right after `git init`, before the first `git remote`/`fetch` call. Grep `[ -d .git ] || git init -q .` across `.github/workflows/` before assuming this is a one-workflow fix — the same fetch-repo script is hand-copied into six files (`backup-verify`, `demo-reset`, `deploy-preview`, `deploy-prod`, `topic-preview`, `topic-sweep`) that all share one runner's working directory, so all six are exposed the same way.
+
+**A watchdog run that finds only already-filed issues is still worth doing.** All 8 e2e-full failures in the latest run (`mobile-layout-audit` ×2, `mentor-capacity-gate`, `analytics-trends`, `api-explorer`, `support-attachments` ×3, `support-chat`) turned out to already have open issues (#2165, #1497, #2158, #1501/#1484, #2164, #2159) — searching by spec name + one distinctive assertion string (`mcp__github__search_issues`) found every one on the first or second try. Reading one hit's body (#2158) revealed it already explained a *different-looking* failure (`mentor-capacity-gate`'s notification-count-is-0 assertion) as the same root cause (a shared rate-limit bucket getting tripped by a sibling spec) — don't just pattern-match on error text, read the linked issue's actual analysis before concluding "new bug, file it."
+
+**`mcp__github__search_issues` has its own tight, separate rate limit** (distinct from the git-push/API-general one) — expect a `403 ... rate reset in Ns` within 3-4 rapid calls. It clears in under 30s; since a bare `sleep` is blocked by the harness, interleave one harmless filler call (e.g. re-fetch a workflow run you already have) between retries instead of hammering the same search.
+
+**The e2e-full "red run" alert email can itself fail silently.** This run's own `Summary email (red runs)` job failed (`Connection timeout` to the SMTP host) — so the maintainer's usual Turkish alert never went out for this red run either. A scheduled watchdog that only checks *workflow conclusion* and not *whether the failure-notification step itself succeeded* can miss that the human-facing signal was dropped twice over.
+
 ## 2026-09-03 — Third conflict pass on the same feature branch (#2008)
 
 **`src/lib/features.ts` keeps colliding at the icon list before the feature rows do.** A later PR
