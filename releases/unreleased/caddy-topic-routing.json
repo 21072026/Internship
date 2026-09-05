@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Topic environments route through Caddy on the new host** (#2166): `topic-deploy.sh`/`topic-teardown.sh` now detect the reverse proxy in front of them. On the Oracle box the whole route is one generated `<fqdn>.caddy` file plus a validated reload — replacing the Plesk subdomain, wildcard-cert import and vhost regeneration the old box needed. The generated file is validated before reload and removed again if Caddy rejects it. `BASE_DOMAIN` becomes a repo variable so the cutover is a settings change, not a PR."
+}
