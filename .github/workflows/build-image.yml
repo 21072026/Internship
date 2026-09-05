@@ -218,9 +218,20 @@ jobs:
           IMAGE: ${{ needs.prep.outputs.image }}
         run: |
           docker buildx imagetools inspect --raw "$IMAGE" > manifest.json
+          # Parsed, not grepped. The first version of this step looked for the
+          # substring `"architecture":"amd64"` and reported a perfectly good
+          # two-arch manifest as broken: whitespace in the JSON `--raw` prints
+          # is not contractual, and this check fails CLOSED, so getting it wrong
+          # blocks every deploy. buildx also appends provenance entries whose
+          # platform is os/architecture "unknown" — filtered out here rather
+          # than counted as an architecture.
+          ARCHES="$(jq -r '[.manifests[]?.platform | select(.os != "unknown") | .architecture] | sort | join(",")' manifest.json)"
+          echo "manifest platforms: $ARCHES"
           for want in amd64 arm64; do
-            grep -q "\"architecture\":\"$want\"" manifest.json \
-              || { echo "::error::$want missing from $IMAGE manifest"; exit 1; }
+            case ",$ARCHES," in
+              *",$want,"*) ;;
+              *) echo "::error::$want missing from $IMAGE manifest (found: $ARCHES)"; exit 1 ;;
+            esac
           done
           echo "amd64 + arm64 both present"
 
