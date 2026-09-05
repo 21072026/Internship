@@ -64,6 +64,9 @@ jobs:
         run: |
           set -euo pipefail
           [ -d .git ] || git init -q .
+          # A job killed mid-fetch (cancelled run, runner restart) can leave this
+          # behind; every subsequent fetch on this box then fails outright (#2143).
+          rm -f .git/index.lock
           git remote get-url origin >/dev/null 2>&1 \
             || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
           git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
