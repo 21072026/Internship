@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **The deploy runner no longer has to be root** (#2166): `bootstrap.sh` grants the runner user exactly the three things `deploy-prod.sh` needs — read the env file, write the deployed-sha state file, own the backup directory — instead of the old host's approach of running the Actions runner as root. The backup directory must be *owned*, not merely group-writable: `backup-db.sh` chmods it, chmod is owner-only, and a failed backup is a hard stop for the deploy."
+}
