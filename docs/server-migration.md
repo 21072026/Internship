@@ -114,7 +114,7 @@ ona dokunmuyor.
 
 Caddy hostname başına Let's Encrypt sertifikasını kendi alabilir, **ama bu proje
 için yetmez.** Son 100 PR 9 günde merge edilmiş — haftada ~78 PR, ve her PR
-kendi `crm-pr<N>.interncrm.com` ortamını alıyor. Let's Encrypt'in limiti
+kendi `pr<N>.interncrm.com` ortamını alıyor. Let's Encrypt'in limiti
 **alan adı başına haftada 50 sertifika**. Yani hostname-başına sertifika üçüncü
 gün duvara çarpar ve topic ortamları sessizce TLS'siz kalır.
 

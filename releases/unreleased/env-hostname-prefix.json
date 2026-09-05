@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Environment hostnames drop the `crm-` prefix** (#2166): topic environments are now `pr<N>.<domain>` instead of `crm-pr<N>.<domain>`. The prefix existed to distinguish the app under a personal domain shared with other services; on a domain bought for this product it distinguishes nothing. `topic-teardown.sh` removes both the new and the legacy `crm-` names, so environments created under the old scheme are still cleaned up when their PR closes."
+}
