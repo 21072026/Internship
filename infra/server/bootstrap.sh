@@ -50,7 +50,12 @@ MYSQL_IMAGE="${MYSQL_IMAGE:-mysql:8.0}"
 ACME_EMAIL="${ACME_EMAIL:-}"
 # Public hostnames this box serves. The apex serves the app; a bare `www.` host
 # redirects to it; anything else reverse-proxies to the app as well.
-SITES="${SITES:-interncrm.com www.interncrm.com crm.interncrm.com}"
+#
+# No `crm.` host: that prefix existed because the app lived under a personal
+# domain that hosted other things too. On a domain bought for this product the
+# apex IS the app, and a second name for it is just another thing to keep
+# pointing in the right direction.
+SITES="${SITES:-interncrm.com www.interncrm.com}"
 APP_PORT="${APP_PORT:-3200}"
 
 STEPS=(preflight packages swap journald firewall docker fail2ban caddy sites mysql backups tools harden summary)
