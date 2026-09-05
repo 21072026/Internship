@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **`infra/server/mariadb-to-mysql.sh`** (#2166): restores a MariaDB production dump onto the new MySQL 8 host. `prisma db push` alone cannot do this — MariaDB stores `Json` as LONGTEXT, so the push emits `MODIFY … JSON NOT NULL DEFAULT {}`, which MySQL 8 rejects, aborting mid-conversion. The script derives the cast from Prisma's own diff with the invalid defaults stripped, then lets `db push` verify. Everything runs in a scratch database and fails closed on unparseable JSON, on destructive statements, and on a push that is not already in sync. Measured procedure in `docs/server-migration.md`."
+}

@@ -200,15 +200,84 @@ emin ol — x64 paketi bu makinada çalışmaz.
 
 ## Faz 3 — veri taşıma ve kesme anı
 
-Faz 1 ve 2 bitmeden başlama. Sıra:
+> **2026-09-05: bir prova yapıldı.** Eski kutu düştüğü için taze bir dump alınıp
+> yeni sunucuya taşındı ve buradaki sıra uçtan uca çalıştırıldı. Aşağısı artık
+> tahmin değil, ölçülmüş prosedür. Gerçek kesmede aynı adımlar **taze bir
+> dump'la** tekrar koşacak.
+
+### `prisma db push` tek başına ÇALIŞMAZ
+
+Bu fazın en önemli maddesi. Beklenen sıra — restore et, `db push` — MariaDB
+kaynaklı bir dump'ta şöyle patlıyor:
+
+```
+Error: You have an error in your SQL syntax ... near '{}' at line 1
+type_change: Some(RiskyCast)
+```
+
+MariaDB'de native JSON tipi yok, `Json` kolonları **LONGTEXT**. Dolayısıyla
+`db push` 20 `Json` kolonunu `MODIFY … JSON` yapmak istiyor, ve `@default("{}")`
+/ `@default("[]")` taşıyanlar için `MODIFY \`scores\` JSON NOT NULL DEFAULT {}`
+üretiyor. **MySQL 8, JSON kolonunda literal DEFAULT kabul etmiyor**, push
+tamamen iptal oluyor ve veritabanı yarı dönüşmüş kalıyor.
+
+(Bu, #1150'de kayda geçen davranışın **tersi**: orada Prisma `@default`'ı
+*düşürüyordu*, burada *basıyor*.)
+
+### Doğru sıra
+
+`infra/server/mariadb-to-mysql.sh` bunu yapıyor — dönüşümü Prisma'nın kendi
+diff'inden türetip geçersiz DEFAULT'ları ayıklıyor, sonra `db push`'a sadece
+doğrulatıyor:
+
+```bash
+sudo ./infra/server/mariadb-to-mysql.sh --dump /opt/internship-crm/restore/prod-<stamp>.sql.gz
+```
+
+Beş adım, hepsi bir *scratch* veritabanında; canlı hedef ancak son adımda
+değişiyor:
+
+| Adım | Ne yapar | Neden |
+|---|---|---|
+| 1 | dump'ı `<hedef>_migrate`'e restore eder | hata **yutulmaz** — ilk sürüm mysql stderr'ini `/dev/null`'a yollamıştı ve başarısız restore, script'i tek satır çıktı vermeden öldürüyordu |
+| 2 | her `Json` kolonunda `''` ve geçersiz JSON sayar | cast satır satır patlar; **bulursa durur** |
+| 3 | `prisma migrate diff` → geçersiz DEFAULT'ları ayıkla → uygula | `DROP COLUMN`/`DROP TABLE` görürse **durur** (şema motor farkından fazla ayrışmış demektir, bu insan kararı) |
+| 4 | `prisma db push` | "already in sync" demezse **swap yapmaz** |
+| 5 | `RENAME TABLE` ile hedefe geçirir | eskisini `<hedef>_prev_<stamp>` altına park eder, silmez |
+
+### Ölçülen sonuç (2026-09-05 provası)
+
+| | |
+|---|---|
+| Kaynak | MariaDB 10.6.23, `internship_crm` |
+| Dump | 18 MB gzip, 88 tablo, InnoDB + `utf8mb4_unicode_ci` |
+| Restore | 24.5 MB, sıfır hata |
+| Dönüşüm | 20 kolon `LONGTEXT → JSON`, 5 FK düşüp yeniden kuruldu, **0 DROP COLUMN** |
+| `db push` | *"The database is already in sync with the Prisma schema."* |
+| Veri | 33 kullanıcı · 29 ilişki · 35 etkileşim · 1368 bildirim · 5 şirket |
+
+### Bilinmesi gerekenler
+
+- **MariaDB'nin `json_valid()` CHECK kısıtları dump'la birlikte geliyor** (20 adet)
+  ve MySQL 8 **onları uyguluyor** — bozuk JSON zaten restore sırasında
+  `ERROR 3819`'la reddediliyor. Native JSON kolonunda gereksizler ama zararsız:
+  yazma çalışıyor, Prisma onları görmezden geliyor. Bırakıldılar.
+- Prisma sunucuda kurulu değil (uygulama imaj olarak geliyor). Script onu **public
+  `node:20-slim` container'ında** koşuyor, yani ghcr kimlik bilgisi gerekmiyor —
+  ama Prisma'nın schema engine'i OpenSSL istiyor, o yüzden container içinde apt ile
+  kuruluyor (uygulamanın kendi Dockerfile'ı da tam bu sebeple openssl kuruyor).
+
+### Kesme sırası
 
 1. Eski sunucuda bakım moduna al (ya da düşük trafikli bir saat seç).
-2. `mysqldump` → yeni sunucuya kopyala → restore. **Dump'ta gerçek kişisel veri
-   var** (CV'ler, telefonlar, mentor notları — `infra/backup-db.sh` başlığındaki
-   uyarı): 0600, sadece iki kutu arasında, laptopta bırakma.
-3. Yeni sunucuda `prisma db push` + backfill'ler, ardından `/api/health`.
+2. Taze `mysqldump` → yeni sunucuya **kutudan kutuya** kopyala. **Dump'ta gerçek
+   kişisel veri var** (CV'ler, telefonlar, mentor notları — `infra/backup-db.sh`
+   başlığındaki uyarı): 0600, laptoptan geçirme.
+3. `mariadb-to-mysql.sh --dump …`, ardından `/api/health`.
 4. DNS TTL'ini kesmeden **önce** 60 sn'ye indir.
 5. DNS'i çevir, doğrula, eskiyi 1 hafta ayakta bırak (geri dönüş için).
+6. Eski kutunun `~/.ssh/authorized_keys`'inden migrasyon anahtarını sil
+   (`internship-migration-pull`).
 
 **Geri dönüş:** DNS'i eski IP'ye çevirmek. Bu yüzden eski kutu ve veritabanı
 kesme sonrası bir hafta silinmiyor.
