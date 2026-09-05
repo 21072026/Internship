@@ -48,8 +48,12 @@ SWAP_GB="${SWAP_GB:-4}"
 # CI stayed green on MySQL 8. Same engine everywhere, or the tests are lying.
 MYSQL_IMAGE="${MYSQL_IMAGE:-mysql:8.0}"
 ACME_EMAIL="${ACME_EMAIL:-}"
+# Public hostnames this box serves. The apex serves the app; a bare `www.` host
+# redirects to it; anything else reverse-proxies to the app as well.
+SITES="${SITES:-interncrm.com www.interncrm.com crm.interncrm.com}"
+APP_PORT="${APP_PORT:-3200}"
 
-STEPS=(preflight packages swap journald firewall docker fail2ban caddy mysql backups tools harden summary)
+STEPS=(preflight packages swap journald firewall docker fail2ban caddy sites mysql backups tools harden summary)
 ONLY=""
 SKIP=""
 
@@ -315,6 +319,65 @@ EOF
   systemctl reload caddy || systemctl restart caddy
   ok "caddy $(caddy version | head -1 | awk '{print $1}') serving, sites dir /etc/caddy/sites"
   [ -n "$ACME_EMAIL" ] || warn "ACME_EMAIL unset — Let's Encrypt cannot mail expiry warnings"
+}
+
+# -------------------------------------------------------------------- sites --
+step_sites() {
+  # The production vhosts were hand-written during the migration, which means a
+  # rebuild of this box would silently lose them — exactly the "what was running
+  # here?" problem this script exists to prevent.
+  install -d -o root -g caddy -m 0775 /etc/caddy/sites
+
+  local my_ip
+  my_ip="$(curl -fsS --max-time 10 -4 https://api.ipify.org 2>/dev/null || true)"
+  [ -n "$my_ip" ] || warn "could not determine this host's public IP — generating every site unchecked"
+
+  local apex host resolved
+  apex="${SITES%% *}"
+
+  for host in $SITES; do
+    # A site whose DNS does not point here CANNOT pass an ACME challenge, and
+    # Let's Encrypt rate-limits FAILED validations (5 per hostname per hour).
+    # Generating it anyway would burn that budget and, worse, put the domain in
+    # a failure loop right when the cert is actually needed. So skip it, loudly.
+    if [ -n "$my_ip" ]; then
+      # `|| true` is load-bearing: getent exits 2 for a name that does not
+      # resolve, and under `set -e` that assignment would end the whole step —
+      # silently, in the middle of the loop, which is how the first version of
+      # this failed. A name that does not resolve is the case we are testing
+      # for, not an error.
+      resolved="$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR==1{print $1}' || true)"
+      if [ "$resolved" != "$my_ip" ]; then
+        rm -f "/etc/caddy/sites/${host}.caddy"
+        warn "skipping ${host} — resolves to '${resolved:-nothing}', not ${my_ip} (add the DNS record, then re-run)"
+        continue
+      fi
+    fi
+
+    # No `tls` directive: Caddy obtains and renews a real certificate itself.
+    # An explicit `tls` line belongs only on names that cannot be validated that
+    # way — the wildcard the topic environments use (see topic-deploy.sh).
+    if [ "$host" = "www.${apex}" ]; then
+      cat > "/etc/caddy/sites/${host}.caddy" <<EOF
+# Managed by infra/server/bootstrap.sh — do not edit by hand.
+${host} {
+    redir https://${apex}{uri} permanent
+}
+EOF
+    else
+      cat > "/etc/caddy/sites/${host}.caddy" <<EOF
+# Managed by infra/server/bootstrap.sh — do not edit by hand.
+${host} {
+    reverse_proxy 127.0.0.1:${APP_PORT}
+}
+EOF
+    fi
+    ok "site ${host}"
+  done
+
+  caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1 || die "generated Caddyfile does not validate"
+  systemctl reload caddy
+  ok "caddy reloaded ($(ls -1 /etc/caddy/sites/*.caddy 2>/dev/null | wc -l) site files)"
 }
 
 # -------------------------------------------------------------------- mysql --

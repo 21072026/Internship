@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Production vhosts are generated, not hand-written** (#2166): `bootstrap.sh` gains a `sites` step that writes one Caddy site file per public hostname, with automatic Let's Encrypt. It refuses to generate a site whose DNS does not point at this host — an unresolvable name cannot pass an ACME challenge, and Let's Encrypt rate-limits failed validations, so generating it anyway would burn that budget and leave the domain looping."
+}
