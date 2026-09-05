@@ -466,10 +466,50 @@ RandomizedDelaySec=300
 WantedBy=timers.target
 EOF
 
+  # Off-site push, as its OWN unit and timer rather than a step of the backup.
+  # A dump that succeeded locally must still count as a success when the remote
+  # is unreachable — but the off-site failure has to be visible on its own, and
+  # not swallowed by a green backup run. That swallowing is how #2169 stayed
+  # invisible for months.
+  if [ -n "${OFFSITE_TARGET:-}" ]; then
+    curl -fsSL -o "$APP_DIR/bin/backup-offsite.sh" \
+      https://raw.githubusercontent.com/21072026/Internship/main/infra/server/backup-offsite.sh 2>/dev/null \
+      && chmod 0755 "$APP_DIR/bin/backup-offsite.sh"
+    cat > /etc/systemd/system/internship-backup-offsite.service <<EOF
+[Unit]
+Description=Copy Internship CRM dumps to the off-site target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=BACKUP_DIR=/var/backups/internship-crm
+Environment=OFFSITE_TARGET=${OFFSITE_TARGET}
+Environment=OFFSITE_SSH_KEY=/home/${LOGIN_USER}/.ssh/offsite_ed25519
+ExecStart=$APP_DIR/bin/backup-offsite.sh
+EOF
+    cat > /etc/systemd/system/internship-backup-offsite.timer <<'EOF'
+[Unit]
+Description=Daily off-site copy of the Internship CRM dumps
+
+[Timer]
+# 30 minutes after the local dump, so it has something fresh to send.
+OnCalendar=*-*-* 03:10:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
+EOF
+    systemctl daemon-reload
+    systemctl enable --now internship-backup-offsite.timer >/dev/null
+    ok "off-site push timer active -> ${OFFSITE_TARGET}"
+  else
+    warn "OFFSITE_TARGET unset — dumps stay on the same disk as the database, which is not a backup (#2169)"
+  fi
+
   systemctl daemon-reload
   systemctl enable --now internship-backup.timer >/dev/null
   ok "daily backup timer active ($(systemctl show internship-backup.timer -p NextElapseUSecRealtime --value | cut -c1-24))"
-  warn "OFF-SITE copy is still missing — a dump on the same disk as the database is not a backup (#2169)"
 }
 
 # -------------------------------------------------------------------- tools --

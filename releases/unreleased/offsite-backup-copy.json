@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Dumps are copied to a second machine** (#2169): `infra/server/backup-offsite.sh` rsyncs them to `$OFFSITE_TARGET` on its own timer, then verifies arrival with a dry-run pass — the remote key is `rrsync -wo`, write-only, so the far side cannot be listed or read back. Never `--delete`. It runs as a separate systemd unit so a local backup still counts as a success when the remote is down, while the off-site failure stays visible on its own."
+}
