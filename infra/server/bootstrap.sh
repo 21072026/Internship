@@ -58,7 +58,7 @@ ACME_EMAIL="${ACME_EMAIL:-}"
 SITES="${SITES:-interncrm.com www.interncrm.com}"
 APP_PORT="${APP_PORT:-3200}"
 
-STEPS=(preflight packages swap journald firewall docker fail2ban caddy sites mysql backups tools harden summary)
+STEPS=(preflight packages swap journald firewall docker fail2ban caddy sites mysql backups runnerperms tools harden summary)
 ONLY=""
 SKIP=""
 
@@ -578,6 +578,55 @@ EOF
   systemctl daemon-reload
   systemctl enable --now internship-backup.timer >/dev/null
   ok "daily backup timer active ($(systemctl show internship-backup.timer -p NextElapseUSecRealtime --value | cut -c1-24))"
+}
+
+# -------------------------------------------------------- runner permissions --
+step_runnerperms() {
+  # infra/deploy-prod.sh needs three things the deploy user cannot reach by
+  # default: read the env file, write the deployed-sha state file next to it,
+  # and write a pre-deploy dump into the backup directory.
+  #
+  # The OLD host solved this by running the Actions runner as root, which gave
+  # every job on the box unrestricted access to the whole machine. Granting the
+  # three paths to the runner's group instead is strictly less privilege — and
+  # it is still meaningful privilege, so it is worth saying plainly: anything
+  # that runs on this runner can read the production secrets. Fork PRs already
+  # never reach a self-hosted runner (topic-preview.yml refuses them); that
+  # exclusion is what keeps this bounded, so do not relax it.
+  install -d -o root -g "$LOGIN_USER" -m 2750 /etc/internship-crm
+
+  # The backup directory is OWNED by the deploy user, not merely group-writable.
+  # backup-db.sh does `chmod 700` on it, and chmod is an owner-only operation:
+  # a group-writable directory owned by root fails there and, because the deploy
+  # treats a failed backup as a hard stop, takes the whole deploy with it. root
+  # (the systemd backup timer) can still write here either way.
+  install -d -o "$LOGIN_USER" -g "$LOGIN_USER" -m 0700 /var/backups/internship-crm
+  chown -R "$LOGIN_USER":"$LOGIN_USER" /var/backups/internship-crm 2>/dev/null || true
+
+  local f
+  for f in /etc/internship-crm/*.env; do
+    [ -e "$f" ] || continue
+    chown root:"$LOGIN_USER" "$f"
+    chmod 640 "$f"
+    ok "$(basename "$f") readable by $LOGIN_USER (was root-only)"
+  done
+
+  # The state file records which sha is live; deploy-prod.sh writes it with
+  # `|| true`, so a permission problem here does not fail a deploy — it just
+  # silently breaks the drift gate, and a missed deploy then goes unnoticed.
+  #
+  # Created here rather than leaving the directory group-writable: writing an
+  # existing file needs permission on the FILE, creating one needs permission on
+  # the DIRECTORY. Granting the directory would let anything on the runner drop
+  # or replace files next to the production secrets; granting one file does not.
+  for c in internship-crm internship-crm-preview; do
+    f="/etc/internship-crm/.${c}.deployed-sha"
+    [ -e "$f" ] || : > "$f"
+    chown root:"$LOGIN_USER" "$f"
+    chmod 664 "$f"
+  done
+
+  ok "deploy paths writable by $LOGIN_USER (runner stays non-root)"
 }
 
 # -------------------------------------------------------------------- tools --
