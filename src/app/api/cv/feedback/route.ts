@@ -7,6 +7,8 @@ import { extractCvText } from '@/lib/cvParse';
 import { isAiConfigured } from '@/lib/cvExtractAi';
 import { aiCvFeedback } from '@/lib/aiCvFeedback';
 import { runAiGated } from '@/lib/aiGate';
+import { enforceRateLimit } from '@/lib/rateLimit';
+import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 
 // AI CV improvement feedback (Faz 2, #535) — the mentee's own CV only, and
 // FREE for the mentee: the cost is metered against the org's AI quota via the
@@ -26,9 +28,23 @@ export async function GET() {
 }
 
 // POST — generate feedback for the caller's own uploaded CV.
-export async function POST() {
+export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const userLimited = enforceRateLimit(request, 'ai:cv_feedback', {
+    ...AI_RATE_LIMITS.cv_feedback,
+    subject: session.user.id,
+  });
+  if (userLimited) return userLimited;
+
+  if (session.user.orgId) {
+    const orgLimited = enforceRateLimit(request, 'ai:org', {
+      ...AI_RATE_LIMITS.org_burst,
+      subject: session.user.orgId,
+    });
+    if (orgLimited) return orgLimited;
+  }
 
   const cv = await prisma.cvFile.findUnique({ where: { userId: session.user.id } });
   if (!cv) return NextResponse.json({ error: 'No CV uploaded' }, { status: 404 });
