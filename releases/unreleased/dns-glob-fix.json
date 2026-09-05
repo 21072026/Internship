@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Fix: the DNS script expanded `*` against the filesystem** (#2166). `RECORDS` is iterated unquoted so it can hold several names, and the most important name in it is the wildcard — so a run inside a repo checkout created A records named `README.md.<domain>`, `src.<domain>` and 25 more, and never created the wildcard that was asked for. `set -f` disables pathname expansion; the script also gains a delete pass so a mistake like this can be undone by the same tool that made it."
+}

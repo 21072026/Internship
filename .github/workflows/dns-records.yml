@@ -31,6 +31,11 @@ on:
         description: 'Target IPv4 (leave empty to use SERVER_IP secret/var)'
         required: false
         type: string
+      delete_records:
+        description: 'Space-separated names to DELETE first (exact names, no patterns)'
+        required: false
+        default: ''
+        type: string
       proxied:
         description: 'Cloudflare proxy (orange cloud) — read the note above'
         required: false
@@ -53,6 +58,7 @@ jobs:
           CF_Token: ${{ secrets.CF_API_TOKEN }}
           DOMAIN: ${{ inputs.domain }}
           RECORDS: ${{ inputs.records }}
+          DELETE_RECORDS: ${{ inputs.delete_records }}
           PROXIED: ${{ inputs.proxied }}
           SERVER_IP: ${{ inputs.server_ip }}
         run: |

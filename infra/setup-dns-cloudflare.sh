@@ -34,9 +34,18 @@
 # The wildcard TLS cert is a separate step — infra/acme-issue-wildcard.sh, run
 # ON the server. DNS alone gets you a name that resolves and cannot do HTTPS.
 set -euo pipefail
+# DISABLE GLOBBING. RECORDS is iterated unquoted so it can hold several names,
+# and the most important name in it is `*`. Without this, the shell expands that
+# `*` against the working directory: a run in a repo checkout created A records
+# called README.md.<domain>, src.<domain>, Dockerfile.<domain> … 27 of them, and
+# silently never created the wildcard the caller actually asked for.
+set -f
 
 DOMAIN="${DOMAIN:-ersah.in}"
 RECORDS="${RECORDS:-* www crm}"
+# Names to REMOVE. Exact names only — no patterns, so a typo cannot take out
+# more than it names. Runs before the create/update pass.
+DELETE_RECORDS="${DELETE_RECORDS:-}"
 PROXIED="${PROXIED:-false}"
 : "${CF_Token:?export CF_Token with a scoped Cloudflare API token first}"
 
@@ -56,19 +65,37 @@ ZONE_ID="$(api "https://api.cloudflare.com/client/v4/zones?name=${DOMAIN}" \
   | python3 -c "import sys,json;r=json.load(sys.stdin);print(r['result'][0]['id'] if r.get('result') else '')")"
 [ -n "$ZONE_ID" ] || { echo "ERROR: zone ${DOMAIN} not visible to this token (needs Zone:Read on ${DOMAIN})" >&2; exit 1; }
 
-for name in $RECORDS; do
-  if [ "$name" = "@" ]; then fqdn="$DOMAIN"; else fqdn="${name}.${DOMAIN}"; fi
-
-  # url-encode the '*' so the query matches the wildcard record.
-  q="$(printf '%s' "$fqdn" | sed 's/\*/%2A/')"
-  existing="$(api "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?type=A&name=${q}")"
-
-  read -r rec_id rec_ip rec_proxied <<EOF
-$(printf '%s' "$existing" | python3 -c "
+# Look up an A record by name; prints "<id> <content> <proxied>" or "- - -".
+lookup() {
+  local q
+  q="$(printf '%s' "$1" | sed 's/\*/%2A/')"
+  api "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?type=A&name=${q}" \
+    | python3 -c "
 import sys,json
 r=json.load(sys.stdin).get('result') or []
 print(r[0]['id'], r[0]['content'], str(r[0]['proxied']).lower()) if r else print('- - -')
-")
+"
+}
+
+for name in $DELETE_RECORDS; do
+  if [ "$name" = "@" ]; then fqdn="$DOMAIN"; else fqdn="${name}.${DOMAIN}"; fi
+  read -r del_id _ _ <<EOF
+$(lookup "$fqdn")
+EOF
+  if [ "$del_id" = "-" ]; then
+    echo "    absent   ${fqdn}"
+  else
+    api -X DELETE "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${del_id}" \
+      | python3 -c "import sys,json;r=json.load(sys.stdin);assert r.get('success'),r" \
+      && echo "    deleted  ${fqdn}"
+  fi
+done
+
+for name in $RECORDS; do
+  if [ "$name" = "@" ]; then fqdn="$DOMAIN"; else fqdn="${name}.${DOMAIN}"; fi
+
+  read -r rec_id rec_ip rec_proxied <<EOF
+$(lookup "$fqdn")
 EOF
 
   if [ "$rec_id" = "-" ]; then
