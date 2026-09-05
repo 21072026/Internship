@@ -6,11 +6,14 @@
 # `bash -s` with the needed vars exported in front of the command.
 #
 # Design decisions for this project (see infra/README.md):
-#   - Routing: Plesk-native. We drop a self-contained nginx server block for
-#     crm-<topic>.<BASE_DOMAIN> into $NGINX_CONF_DIR and reload nginx. This assumes
-#     the stock `include /etc/nginx/conf.d/*.conf;` is active (default on Plesk) and
-#     these hostnames are NOT Plesk-managed domains (only crm/crm-preview are), so
-#     Plesk never rewrites these files.
+#   - Routing: whichever reverse proxy the host actually runs, auto-detected.
+#     CADDY (the new Oracle host, #2166): one generated file per topic in
+#     $CADDY_SITES_DIR, then reload. Ten lines, no panel, no per-topic cert work.
+#     PLESK (the old IONOS box): a real Plesk subdomain plus an injected
+#     custom-nginx include, because Plesk owns 80/443 there and a raw conf.d
+#     server block loses the address-group match (see the block itself).
+#     The Plesk branch exists only until the old box is retired — delete it then,
+#     along with NGINX_CONF_DIR/NGINX_RELOAD_CMD.
 #   - Database: ONE DATABASE PER TOPIC (#1185). The env file points at the shared
 #     preview DB; this script uses its host and credentials but redirects the
 #     container to `internship_<TOPIC>` (e.g. internship_pr1315) on the same
@@ -50,9 +53,12 @@
 #       set per-topic below.
 #
 # Optional overrides (server paths / commands):
-#   NGINX_CONF_DIR    (default /etc/nginx/conf.d)
-#   NGINX_RELOAD_CMD  (default "nginx -t && systemctl reload nginx")
+#   CADDY_SITES_DIR   (default /etc/caddy/sites)   — one <fqdn>.caddy per topic
+#   CADDY_RELOAD_CMD  (default "caddy validate ... && systemctl reload caddy")
+#   NGINX_CONF_DIR    (default /etc/nginx/conf.d)     — Plesk branch only
+#   NGINX_RELOAD_CMD  (default "nginx -t && systemctl reload nginx") — Plesk only
 #   CERT_DIR          (default /etc/nginx/ssl)  — wildcard cert from acme-issue-wildcard.sh
+#   ROUTER            force "caddy" or "plesk" instead of auto-detecting
 #   SKIP_PULL=1       — image is already present locally; skip ghcr login + pull.
 #   GHCR_USER/GHCR_TOKEN — registry credentials in plain form (see (a) above).
 #
@@ -62,6 +68,8 @@ set -euo pipefail
 NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-nginx -t && systemctl reload nginx}"
 CERT_DIR="${CERT_DIR:-/etc/nginx/ssl}"
+CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/sites}"
+CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy}"
 
 # ── Secrets: explicit base64 (hosted) OR an env file (self-hosted) ───────────
 if [ -n "${B64_DB:-}" ]; then
@@ -288,6 +296,64 @@ sleep 3
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/api/health" 2>/dev/null || echo "ERR")
 echo "==> Container health http://127.0.0.1:${PORT}/api/health -> ${code}"
 
+# ── Routing ──────────────────────────────────────────────────────────────────
+SUBLABEL="crm-${TOPIC}"                 # e.g. crm-pr725
+FQDN="crm-${TOPIC}.${BASE_DOMAIN}"      # e.g. crm-pr725.interncrm.com
+
+# Which reverse proxy sits in front of the containers? The new host runs Caddy and
+# has no panel; the old one runs Plesk, which owns 80/443 there. Auto-detect, so
+# one script serves both boxes while the migration is in flight (#2166).
+ROUTER="${ROUTER:-}"
+if [ -z "$ROUTER" ]; then
+  if command -v caddy >/dev/null 2>&1; then ROUTER=caddy
+  elif command -v plesk >/dev/null 2>&1; then ROUTER=plesk
+  else echo "ERROR: neither caddy nor plesk found on PATH" >&2; exit 1; fi
+fi
+echo "==> Router: ${ROUTER}"
+
+route_caddy() {
+# This is the whole thing — the ~90 lines the Plesk branch needs for the same job.
+mkdir -p "$CADDY_SITES_DIR"
+
+# Prefer the installed wildcard cert. NOT an optimisation: this repo merged its
+# last 100 PRs in 9 days and every PR gets its own hostname, while Let's Encrypt
+# allows 50 certificates per registered domain per week. Per-hostname issuance
+# would exhaust the domain's quota within days and topic environments would then
+# fail TLS with nothing in this script looking wrong.
+tls_line=""
+if [ -f "${CERT_DIR}/${BASE_DOMAIN}.cer" ] && [ -f "${CERT_DIR}/${BASE_DOMAIN}.key" ]; then
+  tls_line="    tls ${CERT_DIR}/${BASE_DOMAIN}.cer ${CERT_DIR}/${BASE_DOMAIN}.key"
+else
+  echo "==> WARN: no wildcard cert at ${CERT_DIR}/${BASE_DOMAIN}.cer — Caddy will issue per-host (50/week/domain limit)"
+fi
+
+# reverse_proxy appends the peer to X-Forwarded-For and upgrades WebSockets by
+# itself, so this stays ONE proxy hop and TRUSTED_PROXY_COUNT=1 remains correct
+# (src/lib/rateLimit.ts). Moving this hostname behind Cloudflare's proxy would
+# make it two — bump the count in that same change.
+{
+  echo "# Managed by infra/server/topic-deploy.sh — topic '${TOPIC}'. Do not edit by hand."
+  echo "${FQDN} {"
+  # `[ -n "$x" ] && echo` would be a non-zero statement under `set -e` when the
+  # cert is absent; an `if` says the same thing without depending on how bash
+  # treats a failing AND-list.
+  if [ -n "$tls_line" ]; then echo "$tls_line"; fi
+  echo "    reverse_proxy 127.0.0.1:${PORT}"
+  echo "}"
+} > "${CADDY_SITES_DIR}/${FQDN}.caddy"
+
+# Validate before reloading: Caddy loads one config for the whole box, so a bad
+# topic file would take production, preview and every other topic down with it.
+if ! eval "$CADDY_RELOAD_CMD"; then
+  rm -f "${CADDY_SITES_DIR}/${FQDN}.caddy"
+  eval "$CADDY_RELOAD_CMD" || true
+  echo "ERROR: caddy rejected the generated site file; removed it and reloaded" >&2
+  exit 1
+fi
+echo "==> Caddy route ${FQDN} -> 127.0.0.1:${PORT}"
+}
+
+route_plesk() {
 # ── Routing: Plesk-native subdomain (mirrors crm-preview) ────────────────────
 # On this Plesk box every site is a Plesk vhost bound to the server IP
 # (`listen <IP>:443 ssl`). A raw all-addresses `listen 443 ssl` block in conf.d
@@ -296,8 +362,6 @@ echo "==> Container health http://127.0.0.1:${PORT}/api/health -> ${code}"
 # (login_up.php / 404). So we route the topic through a real Plesk subdomain and
 # inject the same reverse-proxy crm-preview uses:
 #     location ~ ^/.* { proxy_pass http://0.0.0.0:<container port>; }
-SUBLABEL="crm-${TOPIC}"                 # e.g. crm-pr725
-FQDN="crm-${TOPIC}.${BASE_DOMAIN}"      # e.g. crm-pr725.ersah.in
 VHOST_CONF_DIR="/var/www/vhosts/system/${FQDN}/conf"
 
 # Remove any leftover raw-nginx route from the earlier (pre-Plesk) approach so it
@@ -367,6 +431,14 @@ echo "==> Reconfiguring Plesk vhost for ${FQDN}"
 plesk sbin httpdmng --reconfigure-domain "$FQDN"
 
 # Verify the route resolves to the app locally (Host header hits the new vhost).
+sleep 2
+rcode=$(curl -s -k -o /dev/null -w '%{http_code}' -H "Host: ${FQDN}" "https://127.0.0.1/api/health" 2>/dev/null || echo "ERR")
+echo "==> Route check (Host: ${FQDN}) -> ${rcode}"
+}
+
+if [ "$ROUTER" = caddy ]; then route_caddy; else route_plesk; fi
+
+# Verify the route resolves to the app locally (Host header hits the new route).
 sleep 2
 rcode=$(curl -s -k -o /dev/null -w '%{http_code}' -H "Host: ${FQDN}" "https://127.0.0.1/api/health" 2>/dev/null || echo "ERR")
 echo "==> Route check (Host: ${FQDN}) -> ${rcode}"

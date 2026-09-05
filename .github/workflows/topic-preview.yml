@@ -48,7 +48,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BASE_DOMAIN: ersah.in
+  # Repo variable, so the server migration (#2166) is a settings change rather
+  # than a PR: set vars.BASE_DOMAIN to interncrm.com at cutover. The literal
+  # stays as the fallback until the old host is retired.
+  BASE_DOMAIN: ${{ vars.BASE_DOMAIN || 'ersah.in' }}
   # Where the shared preview secrets live on the server (same as deploy-preview).
   ENV_FILE: /etc/internship-crm/preview.env
 

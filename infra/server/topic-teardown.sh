@@ -17,14 +17,22 @@
 #                     as skipped, never silently assumed gone.
 #   KEEP_TOPIC_DB=1   keep the database (debugging a failed environment)
 # Optional overrides:
-#   NGINX_CONF_DIR    (default /etc/nginx/conf.d)
-#   NGINX_RELOAD_CMD  (default "nginx -t && systemctl reload nginx")
+#   CADDY_SITES_DIR   (default /etc/caddy/sites)  — new host (#2166)
+#   CADDY_RELOAD_CMD  (default "caddy validate ... && systemctl reload caddy")
+#   NGINX_CONF_DIR    (default /etc/nginx/conf.d)  — Plesk branch only
+#   NGINX_RELOAD_CMD  (default "nginx -t && systemctl reload nginx") — Plesk only
+#
+# Teardown removes BOTH kinds of route unconditionally. It has to be able to
+# clean up after a deploy that ran on the other host — during the migration a PR
+# can be deployed on one box and closed after the cutover.
 #
 set -euo pipefail
 
 : "${TOPIC:?}" "${BASE_DOMAIN:?}"
 NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-nginx -t && systemctl reload nginx}"
+CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/sites}"
+CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy}"
 
 CONTAINER="internship-crm-${TOPIC}"
 SUBLABEL="crm-${TOPIC}"
@@ -39,6 +47,16 @@ IMG=$(docker inspect --format '{{.Config.Image}}' "$CONTAINER" 2>/dev/null || tr
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
 [ -n "$IMG" ] && docker rmi "$IMG" 2>/dev/null || true
+
+# Caddy route (new host): one file, remove and reload. Idempotent.
+CADDY_SITE="${CADDY_SITES_DIR}/${FQDN}.caddy"
+if [ -f "$CADDY_SITE" ]; then
+  rm -f "$CADDY_SITE"
+  echo "==> Removed Caddy route ${CADDY_SITE}; reloading"
+  eval "$CADDY_RELOAD_CMD" || true
+elif command -v caddy >/dev/null 2>&1; then
+  echo "==> No Caddy route ${CADDY_SITE} (already gone)"
+fi
 
 # Remove the Plesk subdomain (this drops its nginx vhost + route). Idempotent.
 if command -v plesk >/dev/null && plesk bin subdomain --info "$FQDN" >/dev/null 2>&1; then
