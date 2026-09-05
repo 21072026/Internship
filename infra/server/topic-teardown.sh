@@ -31,12 +31,19 @@ set -euo pipefail
 : "${TOPIC:?}" "${BASE_DOMAIN:?}"
 NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-nginx -t && systemctl reload nginx}"
+ENV_PREFIX="${ENV_PREFIX:-}"
+# Environments created before the prefix was dropped still carry `crm-`. Teardown
+# has to clean BOTH, or every topic deployed under the old naming leaks its route
+# and its Plesk subdomain forever — nothing else ever revisits a closed PR.
+LEGACY_ENV_PREFIX="${LEGACY_ENV_PREFIX:-crm-}"
 CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/sites}"
 CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy}"
 
 CONTAINER="internship-crm-${TOPIC}"
-SUBLABEL="crm-${TOPIC}"
-FQDN="crm-${TOPIC}.${BASE_DOMAIN}"
+SUBLABEL="${ENV_PREFIX}${TOPIC}"
+FQDN="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"
+LEGACY_SUBLABEL="${LEGACY_ENV_PREFIX}${TOPIC}"
+LEGACY_FQDN="${LEGACY_ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"
 CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"
 
 echo "==> Tearing down topic '${TOPIC}'"
@@ -49,21 +56,35 @@ docker rm   "$CONTAINER" 2>/dev/null || true
 [ -n "$IMG" ] && docker rmi "$IMG" 2>/dev/null || true
 
 # Caddy route (new host): one file, remove and reload. Idempotent.
-CADDY_SITE="${CADDY_SITES_DIR}/${FQDN}.caddy"
-if [ -f "$CADDY_SITE" ]; then
-  rm -f "$CADDY_SITE"
-  echo "==> Removed Caddy route ${CADDY_SITE}; reloading"
+_removed_any=0
+for _fq in "$FQDN" "$LEGACY_FQDN"; do
+  [ -n "$_fq" ] || continue
+  _site="${CADDY_SITES_DIR}/${_fq}.caddy"
+  if [ -f "$_site" ]; then
+    rm -f "$_site"
+    echo "==> Removed Caddy route ${_site}"
+    _removed_any=1
+  fi
+done
+if [ "$_removed_any" = "1" ]; then
   eval "$CADDY_RELOAD_CMD" || true
 elif command -v caddy >/dev/null 2>&1; then
-  echo "==> No Caddy route ${CADDY_SITE} (already gone)"
+  echo "==> No Caddy route for ${FQDN} or ${LEGACY_FQDN} (already gone)"
 fi
 
 # Remove the Plesk subdomain (this drops its nginx vhost + route). Idempotent.
-if command -v plesk >/dev/null && plesk bin subdomain --info "$FQDN" >/dev/null 2>&1; then
-  echo "==> Removing Plesk subdomain ${FQDN}"
-  plesk bin subdomain --remove "$SUBLABEL" -domain "$BASE_DOMAIN" || true
-else
-  echo "==> No Plesk subdomain ${FQDN} (already gone)"
+if command -v plesk >/dev/null 2>&1; then
+  _found=0
+  for _pair in "${SUBLABEL}|${FQDN}" "${LEGACY_SUBLABEL}|${LEGACY_FQDN}"; do
+    _lbl="${_pair%%|*}"; _fq="${_pair##*|}"
+    [ -n "$_lbl" ] || continue
+    if plesk bin subdomain --info "$_fq" >/dev/null 2>&1; then
+      echo "==> Removing Plesk subdomain ${_fq}"
+      plesk bin subdomain --remove "$_lbl" -domain "$BASE_DOMAIN" || true
+      _found=1
+    fi
+  done
+  [ "$_found" = "1" ] || echo "==> No Plesk subdomain for ${FQDN} or ${LEGACY_FQDN} (already gone)"
 fi
 
 # Clean up any legacy raw-nginx route from the pre-Plesk approach.

@@ -53,6 +53,7 @@
 #       set per-topic below.
 #
 # Optional overrides (server paths / commands):
+#   ENV_PREFIX        (default "") — hostname prefix, see the note at SUBLABEL
 #   CADDY_SITES_DIR   (default /etc/caddy/sites)   — one <fqdn>.caddy per topic
 #   CADDY_RELOAD_CMD  (default "caddy validate ... && systemctl reload caddy")
 #   NGINX_CONF_DIR    (default /etc/nginx/conf.d)     — Plesk branch only
@@ -68,6 +69,11 @@ set -euo pipefail
 NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-nginx -t && systemctl reload nginx}"
 CERT_DIR="${CERT_DIR:-/etc/nginx/ssl}"
+# Hostname prefix for environment names. Empty by default: on a domain bought
+# for this product, `pr123.<domain>` says everything `crm-pr123.<domain>` did.
+# The `crm-` prefix existed because the app used to live under a personal domain
+# shared with other services, where it had to distinguish itself.
+ENV_PREFIX="${ENV_PREFIX:-}"
 CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/sites}"
 CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy}"
 
@@ -297,8 +303,8 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/api/heal
 echo "==> Container health http://127.0.0.1:${PORT}/api/health -> ${code}"
 
 # ── Routing ──────────────────────────────────────────────────────────────────
-SUBLABEL="crm-${TOPIC}"                 # e.g. crm-pr725
-FQDN="crm-${TOPIC}.${BASE_DOMAIN}"      # e.g. crm-pr725.interncrm.com
+SUBLABEL="${ENV_PREFIX}${TOPIC}"              # e.g. pr725
+FQDN="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"   # e.g. pr725.interncrm.com
 
 # Which reverse proxy sits in front of the containers? The new host runs Caddy and
 # has no panel; the old one runs Plesk, which owns 80/443 there. Auto-detect, so

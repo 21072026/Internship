@@ -33,6 +33,8 @@ env:
   # than a PR: set vars.BASE_DOMAIN to interncrm.com at cutover. The literal
   # stays as the fallback until the old host is retired.
   BASE_DOMAIN: ${{ vars.BASE_DOMAIN || 'ersah.in' }}
+  # See topic-preview.yml. Teardown cleans the legacy `crm-` names regardless.
+  ENV_PREFIX: ${{ vars.ENV_PREFIX }}
 
 jobs:
   # ── 1. What is actually running on the box ──────────────────────────────────
@@ -164,6 +166,7 @@ jobs:
       - env:
           STALE: ${{ needs.resolve.outputs.stale }}
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+          ENV_PREFIX: ${{ env.ENV_PREFIX }}
         run: |
           set -euo pipefail
           chmod +x infra/server/topic-teardown.sh

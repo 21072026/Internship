@@ -145,8 +145,8 @@ workaround, #636, and it compiled on every PR push).
 | Env | Container | Port | URL | Image tag | Trigger |
 |-----|-----------|------|-----|-----------|---------|
 | Production | `internship-crm` | 3200 | https://crm.ersah.in | `prod-<sha>` | push to `main` (+6h drift check, manual) |
-| Preview | `internship-crm-preview` | 3201 | https://crm-preview.ersah.in | `preview-<sha>` | push to `main` (+6h drift check, manual) |
-| Topic (per PR) | `internship-crm-pr<N>` | 33xx | `https://crm-pr<N>.ersah.in` | `topic-pr<N>` | every push to the PR |
+| Preview | `internship-crm-preview` | 3201 | `https://preview.<domain>` | `preview-<sha>` | push to `main` (+6h drift check, manual) |
+| Topic (per PR) | `internship-crm-pr<N>` | 34xx | `https://pr<N>.<domain>` | `topic-pr<N>` | every push to the PR |
 
 - `deploy-prod.yml` / `deploy-preview.yml` — **both follow `main` automatically**. Every merge
   lands on preview and prod. Three jobs: **gate** (self-hosted; resolves the target sha and
@@ -194,7 +194,7 @@ workaround, #636, and it compiled on every PR push).
   Track multi-step work with a visible task list as you go.
   **Always open the PR, without being asked** (restated 2026-08-06): the PR is how the
   maintainer *tests* the change — every PR gets its own environment at
-  `https://crm-pr<N>.ersah.in` (`topic-preview.yml`). Pushing the branch alone gives them
+  `https://pr<N>.<domain>` (`topic-preview.yml`). Pushing the branch alone gives them
   nothing to click. Open it as soon as the work is committed, even mid-review, and post the
   preview URL. If an issue for the work does not exist yet, file one and reference it
   (`Closes #N`) so the branch, the PR and the issue all point at each other.

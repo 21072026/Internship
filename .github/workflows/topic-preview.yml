@@ -4,7 +4,7 @@ name: Topic Preview (hosted build → server swap, auto per-PR)
 #
 # Every open PR automatically gets its own isolated environment:
 #   PR #123 → container internship-crm-pr123 on a dedicated port →
-#             https://crm-pr123.ersah.in  (wildcard *.ersah.in DNS + TLS)
+#             https://pr123.<domain>  (wildcard DNS + TLS)
 # A bot comment on the PR carries the URL (updated on every push). When the PR
 # is merged or closed, the environment (container + image + Plesk route) is torn
 # down so it stops consuming server resources.
@@ -52,6 +52,10 @@ env:
   # than a PR: set vars.BASE_DOMAIN to interncrm.com at cutover. The literal
   # stays as the fallback until the old host is retired.
   BASE_DOMAIN: ${{ vars.BASE_DOMAIN || 'ersah.in' }}
+  # Hostname prefix for environment names, empty by default (pr123.<domain>).
+  # Kept as a variable only so it can be put back to `crm-` without a PR if
+  # something downstream turns out to assume it.
+  ENV_PREFIX: ${{ vars.ENV_PREFIX }}
   # Where the shared preview secrets live on the server (same as deploy-preview).
   ENV_FILE: /etc/internship-crm/preview.env
 
@@ -149,6 +153,7 @@ jobs:
           PORT: ${{ steps.t.outputs.port }}
           IMAGE: ${{ needs.build.outputs.image }}
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+          ENV_PREFIX: ${{ env.ENV_PREFIX }}
           ENV_FILE: ${{ env.ENV_FILE }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -175,7 +180,7 @@ jobs:
         with:
           script: |
             const topic = `pr${context.issue.number}`;
-            const url = `https://crm-${topic}.${{ env.BASE_DOMAIN }}`;
+            const url = `https://${{ env.ENV_PREFIX }}${topic}.${{ env.BASE_DOMAIN }}`;
             const marker = '<!-- topic-preview -->';
             const body = `${marker}\n### 🧪 Topic preview ready\n\n` +
               `Branch **\`${{ github.head_ref }}\`** → **${url}**\n\n` +
@@ -246,6 +251,7 @@ jobs:
         env:
           TOPIC: pr${{ github.event.pull_request.number }}
           BASE_DOMAIN: ${{ env.BASE_DOMAIN }}
+          ENV_PREFIX: ${{ env.ENV_PREFIX }}
         run: |
           chmod +x infra/server/topic-teardown.sh
           ./infra/server/topic-teardown.sh

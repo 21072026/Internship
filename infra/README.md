@@ -1,7 +1,8 @@
 # Infra — Wildcard TLS & topic-based preview environments
 
 Runbook for the automation behind [#583](https://github.com/21072026/Internship/issues/583)
-(per-topic ephemeral preview environments at `crm-<topic>.ersah.in`).
+(per-topic ephemeral preview environments at `<topic>.<domain>`; the hostnames
+carried a `crm-` prefix until #2166 retired it).
 
 The whole design rests on **three one-time foundations**, after which spinning a
 topic environment up or down is *only* a container + database operation — no DNS
