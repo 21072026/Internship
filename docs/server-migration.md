@@ -188,13 +188,31 @@ emin ol — x64 paketi bu makinada çalışmaz.
 
 ## Faz 2 — repo tarafı (ayrı PR'lar)
 
-| # | İş | Neden |
+| # | İş | Durum |
 |---|---|---|
-| 1 | `build-image.yml` → `linux/arm64` manifest | **Gerçek blocker.** Bugünkü imaj `ubuntu-latest` üzerinde amd64 üretiliyor; bu kutuda `docker run` `exec format error` verir — pull sırasında değil, çalıştırma sırasında. buildx ile multi-arch, ya da tamamen arm64 runner. |
-| 2 | Caddy tabanlı routing | `topic-deploy.sh`/`topic-teardown.sh` içindeki Plesk'e özel her şey siliniyor. Topic başına route iki satıra iniyor: `crm-pr5.interncrm.com { reverse_proxy 127.0.0.1:3305 }` + wildcard sertifika için `tls`. |
-| 3 | `BASE_DOMAIN` = `interncrm.com` | Zaten parametrik (`topic-deploy.sh`); workflow'lardaki sabit `ersah.in`'ler taranmalı. |
-| 4 | Deploy workflow'ları yeni hosta | `deploy-prod.yml`, `deploy-preview.yml`, `topic-preview.yml`, `topic-sweep.yml`. |
-| 5 | Yedek hedefi | `infra/backup-db.sh` duruyor, `BACKUP_DIR` ve off-site hedef değişiyor. |
+| 1 | `build-image.yml` → çok mimarili manifest | **Bitti** (#2168). Her mimari kendi native runner'ında (`ubuntu-24.04-arm`), `imagetools create` ile birleştiriliyor, iki mimari de yoksa fail-closed. |
+| 2 | Caddy tabanlı routing | **Bitti** (#2172). Router auto-detect; Plesk dalı eski kutu emekli olana kadar duruyor. |
+| 3 | `BASE_DOMAIN` repo değişkeni | **Bitti** (#2172). Kesmede `vars.BASE_DOMAIN=interncrm.com`. |
+| 4 | Deploy runner'ı repo değişkeni | **Bitti**. `vars.DEPLOY_RUNNER`; aşağıya bak. |
+| 5 | Veri taşıma | **Bitti** (#2171). `infra/server/mariadb-to-mysql.sh`, prova koşuldu. |
+| 6 | Zamanlanmış yedek | **Bitti** (#2173). Off-site kopya hâlâ eksik (#2169). |
+
+### Deploy runner'ı: `vars.DEPLOY_RUNNER`
+
+Kesme sırasında **iki kutuda da** self-hosted runner çalışıyor olacak. Düz bir
+`runs-on: self-hosted` etiketi, işi o an hangi runner müsaitse ona gönderir —
+yani prod deploy'u rastgele eski ya da yeni kutuya düşebilir. Tam olarak
+kesmenin ortasında.
+
+Bu yüzden on bir job da `runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}`.
+
+Sıra:
+
+1. Yeni sunucuya runner'ı **kendine ait bir etiketle** kaydet (örn. `interncrm`).
+   Bu aşamada hiçbir şey değişmez; eski kutu deploy almaya devam eder.
+2. Hazır olduğunda repo değişkeni `DEPLOY_RUNNER` = `interncrm`. Bundan sonraki
+   her deploy yeni kutuya gider.
+3. Bir sorun çıkarsa değişkeni sil — her şey eski kutuya geri döner.
 
 ---
 

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Deploy jobs name the runner they mean** (#2166): all eleven `runs-on: self-hosted` jobs become `${{ vars.DEPLOY_RUNNER || 'self-hosted' }}`. With a self-hosted runner on both the old and the new host during the migration, a bare `self-hosted` label would have sent a production deploy to whichever box happened to be free."
+}

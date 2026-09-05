@@ -71,7 +71,10 @@ jobs:
   # exception and no auth. The cost is a curl.
   gate:
     name: Check for drift
-    runs-on: self-hosted
+    # Both hosts run a self-hosted runner during the #2166 migration, and a bare
+    # `self-hosted` label would send this job to whichever one happens to be
+    # online — at random, mid-cutover. vars.DEPLOY_RUNNER names the intended box.
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     outputs:
       deploy: ${{ steps.gate.outputs.deploy }}
       sha: ${{ steps.gate.outputs.sha }}
@@ -196,7 +199,8 @@ jobs:
   deploy:
     name: Swap production container
     needs: [gate, build]
-    runs-on: self-hosted
+    # See the note on the first runs-on in this file (#2166).
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     permissions:
       contents: read
       packages: read

@@ -80,7 +80,10 @@ jobs:
   deploy:
     name: Deploy topic environment
     needs: build
-    runs-on: self-hosted
+    # Both hosts run a self-hosted runner during the #2166 migration, and a bare
+    # `self-hosted` label would send this job to whichever one happens to be
+    # online — at random, mid-cutover. vars.DEPLOY_RUNNER names the intended box.
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     permissions:
       contents: read
       packages: read
@@ -197,7 +200,8 @@ jobs:
   teardown:
     name: Tear down topic environment
     if: github.event.action == 'closed'
-    runs-on: self-hosted
+    # See the note on the first runs-on in this file (#2166).
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     steps:
       # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
       # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted

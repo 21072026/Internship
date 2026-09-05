@@ -36,7 +36,10 @@ concurrency:
 jobs:
   reset:
     name: Wipe + re-seed the demo database
-    runs-on: self-hosted
+    # Both hosts run a self-hosted runner during the #2166 migration, and a bare
+    # `self-hosted` label would send this job to whichever one happens to be
+    # online — at random, mid-cutover. vars.DEPLOY_RUNNER names the intended box.
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     steps:
       - name: Fetch the repo (no action download)
         env:
