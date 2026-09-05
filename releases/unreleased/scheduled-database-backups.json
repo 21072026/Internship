@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Database backups now run on a timer** (#2169): `bootstrap.sh` installs a systemd timer that runs `infra/backup-db.sh` daily at 02:40 UTC with `Persistent=true`, so a box that was powered off still takes the missed run. Until now nothing called that script on a schedule — dumps only happened as a side effect of a deploy, which is why the newest dump was three days old when the old host died."
+}

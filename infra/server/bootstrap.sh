@@ -49,7 +49,7 @@ SWAP_GB="${SWAP_GB:-4}"
 MYSQL_IMAGE="${MYSQL_IMAGE:-mysql:8.0}"
 ACME_EMAIL="${ACME_EMAIL:-}"
 
-STEPS=(preflight packages swap journald firewall docker fail2ban caddy mysql tools harden summary)
+STEPS=(preflight packages swap journald firewall docker fail2ban caddy mysql backups tools harden summary)
 ONLY=""
 SKIP=""
 
@@ -402,6 +402,74 @@ GRANT ALL PRIVILEGES ON \`internship\_%\`.* TO 'internship'@'%';
 FLUSH PRIVILEGES;
 EOF
   ok "mysql up (127.0.0.1:3306), database 'internship', user 'internship'"
+}
+
+# ------------------------------------------------------------------ backups --
+step_backups() {
+  # The old box had NO backup schedule at all. infra/backup-db.sh existed and its
+  # header promised "a daily run covers everything else", but nothing ever called
+  # it on a timer — dumps only happened as a side effect of a deploy. So when that
+  # box died on 2026-09-03 the newest dump was from the last successful deploy,
+  # 2026-09-02 (#2169). A backup you have to deploy to take is not a schedule.
+  install -d -m 0700 /var/backups/internship-crm
+  install -d -m 0755 "$APP_DIR/bin"
+
+  # backup-db.sh lives in the repo and is not on this host; fetch the one from
+  # main rather than vendoring a copy that would drift.
+  if curl -fsSL -o "$APP_DIR/bin/backup-db.sh" \
+       https://raw.githubusercontent.com/21072026/Internship/main/infra/backup-db.sh; then
+    chmod 0755 "$APP_DIR/bin/backup-db.sh"
+    ok "fetched backup-db.sh from main"
+  elif [ -x "$APP_DIR/bin/backup-db.sh" ]; then
+    skip "keeping the existing backup-db.sh (download failed)"
+  else
+    warn "could not fetch backup-db.sh — backup timer installed but will fail until it is present"
+  fi
+
+  # Its own DATABASE_URL: the app's points at the container hostname, which only
+  # resolves inside Docker's network. mysqldump runs on the host.
+  # shellcheck disable=SC1090
+  if [ -f "$APP_DIR/secrets/mysql.env" ]; then
+    set -a; . "$APP_DIR/secrets/mysql.env"; set +a
+    umask 077
+    printf 'DATABASE_URL=mysql://internship:%s@127.0.0.1:3306/internship\n' "$APP_DB_PASSWORD" \
+      > /etc/internship-crm-backup.env
+    chmod 600 /etc/internship-crm-backup.env
+  fi
+
+  cat > /etc/systemd/system/internship-backup.service <<EOF
+[Unit]
+Description=Internship CRM database backup
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/internship-crm-backup.env
+Environment=BACKUP_DIR=/var/backups/internship-crm
+Environment=KEEP_DAYS=14
+ExecStart=$APP_DIR/bin/backup-db.sh --env prod
+EOF
+
+  # 02:40 UTC, before the 03:00 e2e-full window so a red morning has a fresh dump.
+  # Persistent=true so a box that was powered off still takes the missed run —
+  # the failure mode on the old host was precisely "nothing ran while it was down".
+  cat > /etc/systemd/system/internship-backup.timer <<'EOF'
+[Unit]
+Description=Daily Internship CRM database backup
+
+[Timer]
+OnCalendar=*-*-* 02:40:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable --now internship-backup.timer >/dev/null
+  ok "daily backup timer active ($(systemctl show internship-backup.timer -p NextElapseUSecRealtime --value | cut -c1-24))"
+  warn "OFF-SITE copy is still missing — a dump on the same disk as the database is not a backup (#2169)"
 }
 
 # -------------------------------------------------------------------- tools --
