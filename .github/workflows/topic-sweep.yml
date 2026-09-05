@@ -38,7 +38,10 @@ jobs:
   # ── 1. What is actually running on the box ──────────────────────────────────
   collect:
     name: List topic containers
-    runs-on: self-hosted
+    # Both hosts run a self-hosted runner during the #2166 migration, and a bare
+    # `self-hosted` label would send this job to whichever one happens to be
+    # online — at random, mid-cutover. vars.DEPLOY_RUNNER names the intended box.
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     outputs:
       numbers: ${{ steps.list.outputs.numbers }}
     steps:
@@ -119,7 +122,8 @@ jobs:
     name: Tear down leaked environments
     needs: [collect, resolve]
     if: needs.resolve.outputs.stale != ''
-    runs-on: self-hosted
+    # See the note on the first runs-on in this file (#2166).
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
     steps:
       # #1239 — NO `uses:` in a self-hosted job. Downloading an action archive
       # from codeload.github.com answers 429 from this box's IP (the GitHub-hosted
