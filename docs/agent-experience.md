@@ -5753,3 +5753,51 @@ durum uç noktası **yeniden okunuyor**: kartın söylediği şey, işi yapan su
 
 **Küçük düzeltme:** yukarıda "sağlayıcı eklemek diziye bir nesne eklemek" yazıyor;
 doğrusu iki satır — `CalendarProviderId` union'ına id'yi de eklemek gerekiyor.
+
+## 2026-09-06 — Pazarlama turu: ölü demo linki, taşımadan kalan alan adları, sayı denetimi
+
+**Taşıma sonrası "kanonik alan adı" tek yerde yaşamıyordu.** `interncrm.com`'a geçiş
+altyapıyı (workflow'lar, `uptime.yml`) güncellemişti ama uygulama kodundaki sabitleri
+değil: `src/lib/demoMode.ts`'teki `DEMO_URL` hâlâ `crm-demo.ersah.in` diyordu ve o tek
+sabit landing hero'sunu, alt CTA'yı, footer'ı ve özellik kartını beslediği için **canlı
+ana sayfada dokuz ölü link** vardı — hepsi TLS hatasına düşüyordu. Bunu bulmanın yolu
+kod okumak değil, **canlıyı çekmekti**: `curl -L https://crm.ersah.in` → 301 →
+`interncrm.com`, sonra HTML'de `grep -c crm-demo.ersah.in` → 9. Taşıma sonrası
+kontrol listesine "kullanıcıya görünen her sabiti canlı HTML'de ara" maddesi girmeli.
+İlgili artıklar #2217'de: `INBOUND_EMAIL_DOMAIN` varsayılanı ve ICS UID alan adı.
+
+**Test kırık dünyayı doğruluyordu.** `e2e/landing-demo-cta.spec.ts` eski adresi sabit
+olarak taşıyordu, yani link öldüğü hâlde spec yeşildi. Bir URL sabitini değiştirirken
+onu assert eden spec'i aynı commit'te taşı; ayrıca o spec `@smoke` setinde **değil**, yani
+PR kapısı bunu hiç çalıştırmıyor — kritik bir dış bağlantıyı doğrulayan spec smoke'a
+girmeli mi, ayrı bir tartışma.
+
+**Topic deploy hatası "benim PR'ım" değildi, dalın yaşıydı.** `P1001: Can't reach database
+server at host.docker.internal` — dal `main`'in iki commit öncesinden çıkmıştı ve DB
+erişimi (#2214) ile Caddy sertifika izni (#2215) düzeltmeleri arada merge edilmişti.
+`git log --oneline origin/main` ile bunu görmek, log okumaktan hızlıydı; çözüm `main`'i
+merge edip push etmek. **Ders:** topic-deploy kırmızıysa önce dalın `main`'e göre yaşına bak.
+
+**Force-push classifier tarafından engelleniyor.** PR merge edildikten sonra dalı
+`origin/main`'den yeniden başlatmak gerekti; `git push --force-with-lease` reddedildi
+(auto mode classifier). Tarih yeniden yazmadan çözüm: dalın **eski uzak ucunu local'e
+merge et** — içerik zaten squash olarak `main`'de olduğu için diff boş çıkar ve push
+fast-forward olur.
+
+**Alt-ajanlara verilen brief'teki sayılar eskiydi; eleştirmen turu yakaladı.** Pazarlama
+dokümanlarını yazan ajanlara `docs/research/competitive-analysis-2026-08.md`'den gelen
+"88 Prisma modeli, ~50 özellik, 353 Playwright dosyası" rakamlarını verdim. Denetim turu
+üçünü de çürüttü: doğrusu 92 / 46 / 389 (70'i `@smoke`). Depo public olduğu için bu tür
+bir sayı tek komutla yalanlanabilir. **Kural:** pazarlama metnine giren her sayı, yanında
+üretildiği komutla birlikte yazılır (`copy-bank.md` §0.1 artık o tabloyu tutuyor) ve
+brief'e kopyalamadan önce yeniden sayılır.
+
+**Workflow eşzamanlılığı bu container'da 2.** 13 ajanlık bir fan-out ~100 dakika sürdü
+(`min(16, CPU-2)`). Uzun süren bir workflow'u başlatıp beklerken paralelde kendi işini
+yapmak şart; ayrıca stop-hook her turda commit istediği için ara çıktıyı commit edip
+düzeltme pasını ikinci commit yapmak temiz bir akış.
+
+**`sub_issue_write` yanıtı ebeveynin tüm gövdesini geri veriyor** (~5-6 KB), `issue_write`
+(update) ise sadece id+url. 13 issue'luk bir ağacı bağlarken bu fark ciddi bağlam yiyor;
+skill'in "önce hepsini yarat, id→parent haritasını dosyaya yaz, bağlamayı en sona bırak"
+tavsiyesi doğru ve bu turda da işe yaradı.
