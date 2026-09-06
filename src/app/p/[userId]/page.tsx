@@ -40,6 +40,11 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       languages: true,
       mentorCapacity: true,
       publicShowProjects: true,
+      // Deactivation (#1773): an admin who deactivates a mentor does not clear
+      // publicProfile or the directory consent, so isActive is the third half
+      // of the CTA gate. The profile itself still renders — only the CTA is
+      // withheld, because the request API would reject the id.
+      isActive: true,
       // Directory consent (#1773): the "request this mentor" CTA is only shown
       // for a mentor the request API would actually accept as a preferred
       // mentor — publicProfile alone is not enough, an active
@@ -84,12 +89,15 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
 
   // "Request this mentor" (#1773) — a shortcut into the portal's request panel,
   // so it is offered only to a signed-in MENTEE looking at a directory-visible
-  // mentor. Cosmetic only: POST /api/mentorship-requests re-validates the role
-  // AND the preferred mentor's consent, and this page never bypasses that.
+  // mentor: active + publicProfile + a live MENTOR_DIRECTORY_VISIBILITY consent,
+  // the exact triple /api/mentors and the preferredMentorId check both apply.
+  // Cosmetic only: POST /api/mentorship-requests re-validates the role AND the
+  // preferred mentor, and this page never bypasses that.
   // The session decode is skipped entirely when no session cookie is present —
   // this page is mostly served to signed-out visitors (#1197).
   const viewerIsMentee =
     user.role === 'MENTOR' &&
+    user.isActive &&
     user.consents.length > 0 &&
     (await hasSessionCookie()) &&
     (await getServerSession(authOptions))?.user?.role === 'MENTEE';

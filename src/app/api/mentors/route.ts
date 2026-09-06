@@ -28,6 +28,13 @@ export async function GET(request: Request) {
     const skill = (searchParams.get('skill') || '').trim().slice(0, 60).toLowerCase();
     const language = (searchParams.get('language') || '').trim().slice(0, 60).toLowerCase();
     const acceptingOnly = searchParams.get('accepting') === '1';
+    // Single-mentor lookup (#1773): the portal's request panel has to resolve
+    // one specific id — the ?mentor=<id> deep link — and cannot do that by
+    // searching a page of the list, because the list is capped at 50 rows while
+    // the directory itself pages through up to 500. Narrowing the SAME
+    // visibility where-clause to one id keeps that resolution honest: an empty
+    // result means "not directory-visible", not "not on this page".
+    const mentorId = (searchParams.get('mentorId') || '').trim().slice(0, 64);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '12', 10) || 12));
 
@@ -41,6 +48,7 @@ export async function GET(request: Request) {
         publicProfile: true,
         orgId: resolveOrgId(session),
         consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
+        ...(mentorId ? { id: mentorId } : {}),
       },
       // Mentor counts are small; fetch the consented set and filter/paginate in
       // JS — the skill/language filters match inside JSON arrays, which MySQL

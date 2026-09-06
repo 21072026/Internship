@@ -68,7 +68,11 @@ async function getMenteeData(menteeId: string, locale: Locale) {
   return { user, relation, isArchived, visibilityDecided: !!visibilityConsent, projects, missingDocuments };
 }
 
-export default async function PortalDashboard() {
+export default async function PortalDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ mentor?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   // The layout gates unauthenticated users, but the session can be revoked
   // between the layout check and this render (e.g. "sign out of all devices"),
@@ -76,6 +80,11 @@ export default async function PortalDashboard() {
   if (!session?.user?.id) redirect('/auth/signin');
   const { t, locale } = await getServerDictionary();
   const { user, relation, isArchived, visibilityDecided, projects, missingDocuments } = await getMenteeData(session.user.id, locale);
+  // "Request this mentor" deep link (#1773). The panel below reads the same
+  // param client-side; the dashboard needs it too, because the panel is not
+  // mounted at all while a mentorship is active — and an unacknowledged click
+  // is a dead end.
+  const requestedMentorId = (await searchParams).mentor ?? '';
 
   const profileComplete = user?.university && user?.skills && (user.skills as string[]).length > 0;
 
@@ -146,11 +155,18 @@ export default async function PortalDashboard() {
           the way to ask. */}
       {/* Suspense boundary: the panel reads ?mentor=<id> with useSearchParams
           to preselect the requested mentor (#1773). */}
-      {(!relation || isArchived) && (
+      {(!relation || isArchived) ? (
         <Suspense fallback={null}>
           <MentorshipRequestPanel />
         </Suspense>
-      )}
+      ) : requestedMentorId ? (
+        <div
+          className="mb-6 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700"
+          data-testid="request-mentor-active-mentorship"
+        >
+          {t.mentorDirectory.requestedMentorActiveMentorship}
+        </div>
+      ) : null}
 
       {/* Offer card (#809) — kept above the fold: an offer needing a decision is
           the single most time-sensitive thing a mentee can see here. */}

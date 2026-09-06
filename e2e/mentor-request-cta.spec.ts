@@ -14,7 +14,9 @@ test.afterAll(async () => {
 // /api/mentorship-requests still re-validates the id against active MENTOR +
 // publicProfile + a live MENTOR_DIRECTORY_VISIBILITY consent, so an id that is
 // not in the consent-gated list must land on an empty picker and a visible
-// fallback line rather than on a submit the server would reject.
+// fallback line rather than on a submit the server would reject. That verdict
+// comes from a dedicated `GET /api/mentors?mentorId=<id>` lookup, so it is
+// never an inference from a page of the picker's options.
 
 async function signIn(page: Page, email: string, password: string, landing: string) {
   await page.goto('/auth/signin');
@@ -52,11 +54,13 @@ test.describe('request this mentor', () => {
   const mentorEmail = uniqueEmail('cta-mentor');
   const hiddenEmail = uniqueEmail('cta-hidden');
   const otherMentorEmail = uniqueEmail('cta-viewer');
+  const inactiveEmail = uniqueEmail('cta-inactive');
   const pw = 'CtaPass1234';
 
   let menteeId = '';
   let mentorId = '';
   let hiddenId = '';
+  let inactiveId = '';
 
   test.beforeAll(async () => {
     const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'CTA Mentee');
@@ -75,11 +79,19 @@ test.describe('request this mentor', () => {
     await prisma.user.update({ where: { id: hidden.id }, data: { publicProfile: true } });
 
     await seedUser(otherMentorEmail, pw, 'MENTOR', 'CTA Viewer Mentor');
+
+    // Deactivated, but publicProfile + the directory consent are left as-is —
+    // nothing in the deactivation path clears them. The request API rejects the
+    // id (isActive: true), so the CTA must not be offered.
+    const inactive = await seedUser(inactiveEmail, pw, 'MENTOR', 'CTA Inactive Mentor');
+    inactiveId = inactive.id;
+    await makeDirectoryVisible(inactive.id);
+    await prisma.user.update({ where: { id: inactive.id }, data: { isActive: false } });
   });
 
   test.afterAll(async () => {
     await prisma.mentorshipRequest.deleteMany({ where: { menteeId } });
-    for (const email of [menteeEmail, mentorEmail, hiddenEmail, otherMentorEmail]) {
+    for (const email of [menteeEmail, mentorEmail, hiddenEmail, otherMentorEmail, inactiveEmail]) {
       await cleanupByEmail(email);
     }
   });
@@ -107,6 +119,9 @@ test.describe('request this mentor', () => {
     // 3. Submitting from there files the request against that mentor.
     await panel.getByTestId('request-submit').click();
     await expect(panel.getByTestId('request-pending')).toBeVisible({ timeout: 15_000 });
+    // ?mentor= is still on the URL, but the pending request IS for that mentor,
+    // so the "not added to it" line must stay away.
+    await expect(panel.getByTestId('request-preferred-mentor-pending')).toHaveCount(0);
 
     const stored = await prisma.mentorshipRequest.findFirst({ where: { menteeId } });
     expect(stored?.status).toBe('PENDING');
@@ -139,6 +154,45 @@ test.describe('request this mentor', () => {
       timeout: 20_000,
     });
     await expect(page.getByTestId('request-preferred-mentor')).toHaveValue(mentorId, { timeout: 15_000 });
+  });
+
+  test('a deactivated mentor offers no CTA even with the directory consent still granted', async ({ page }) => {
+    await signIn(page, menteeEmail, pw, '/portal');
+
+    await page.goto(`/p/${inactiveId}`);
+    // The profile still renders — only the CTA is withheld, because
+    // POST /api/mentorship-requests would reject the id.
+    await expect(page.getByText('CTA Inactive Mentor', { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('public-profile-request-mentor')).toHaveCount(0);
+  });
+
+  test('picking another mentor clears the "no longer available" notice', async ({ page }) => {
+    await signIn(page, menteeEmail, pw, '/portal');
+
+    await page.goto(`/portal?mentor=${hiddenId}`);
+    const panel = page.getByTestId('mentorship-request');
+    await expect(panel.getByTestId('request-preferred-mentor-unavailable')).toBeVisible({ timeout: 15_000 });
+
+    await panel.getByTestId('request-preferred-mentor').selectOption(mentorId);
+    await expect(panel.getByTestId('request-preferred-mentor-confirmation')).toContainText('CTA Wanted Mentor');
+    // The two lines must never contradict each other.
+    await expect(panel.getByTestId('request-preferred-mentor-unavailable')).toHaveCount(0);
+  });
+
+  test('a mentee who already has a mentor is told why the request was not started', async ({ page }) => {
+    const relation = await prisma.mentorshipRelation.create({
+      data: { mentorId, menteeId, status: 'ACTIVE' },
+    });
+    try {
+      await signIn(page, menteeEmail, pw, '/portal');
+      await page.goto(`/portal?mentor=${mentorId}`);
+      // The panel is not mounted at all while a mentorship is active, so the
+      // click must be acknowledged rather than silently dropped.
+      await expect(page.getByTestId('request-mentor-active-mentorship')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId('mentorship-request')).toHaveCount(0);
+    } finally {
+      await prisma.mentorshipRelation.delete({ where: { id: relation.id } });
+    }
   });
 
   test('a signed-out visitor sees no CTA on the public profile', async ({ page }) => {
