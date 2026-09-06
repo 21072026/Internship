@@ -56,10 +56,49 @@ function readCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+// The language this device should read, without the server.
+//
+// The `locale` cookie is only written when someone uses the language switcher.
+// A user whose preference lives on their *account* (`User.preferredLanguage`,
+// set in /account) has no cookie on a device they have just signed in on —
+// getLocale() resolves it server-side, which is exactly the thing that is not
+// available here. `navigator.language` is the next best signal: it is what the
+// browser is set to, and for the overwhelming majority of users it agrees with
+// the app language. Better a good guess than a hard-coded 'en' on the one
+// screen a person sees when everything else has failed.
+function detectLocale(): 'en' | 'tr' | 'de' {
+  const cookie = readCookie('locale');
+  if (cookie === 'tr' || cookie === 'de' || cookie === 'en') return cookie;
+  const nav = typeof navigator === 'undefined' ? '' : (navigator.language || '').toLowerCase();
+  if (nav.startsWith('tr')) return 'tr';
+  if (nav.startsWith('de')) return 'de';
+  return 'en';
+}
+
+// Same precedence as readStoredTheme() in src/lib/theme.ts: cookie, then
+// localStorage. (Its third step — the root layout's `data-theme-pref`, which
+// carries the account preference — is unreachable here: this component renders
+// its own <html>, so the attribute the failed layout would have stamped is
+// gone by the time this runs. localStorage covers the same user on any device
+// they have actually used the app on.) 'system' resolves to `undefined` so the
+// prefers-color-scheme rule in STYLES decides, which is what it means.
+function detectTheme(): 'dark' | 'light' | undefined {
+  const cookie = readCookie('theme');
+  if (cookie === 'dark' || cookie === 'light') return cookie;
+  if (cookie === 'system') return undefined;
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem('theme');
+  } catch {
+    /* storage can be blocked; the OS preference is a fine fallback */
+  }
+  return stored === 'dark' || stored === 'light' ? stored : undefined;
+}
+
 // Light values are the defaults; the dark set is applied by the OS preference
-// and overridden by an explicit `theme` cookie, which is the same precedence
-// the root layout's no-flash script uses. Plain CSS variables rather than
-// Tailwind utilities — the stylesheet may not be there.
+// and overridden by an explicit stored theme (see detectTheme), which is the
+// same precedence the root layout's no-flash script uses. Plain CSS variables
+// rather than Tailwind utilities — the stylesheet may not be there.
 const STYLES = `
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
@@ -113,20 +152,18 @@ const STYLES = `
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   // The first paint happens before any of this can run (and may happen on the
   // server), so it uses the English copy and the OS colour preference. The
-  // cookies refine it on mount — resolving them in state rather than during
-  // render is what keeps the server and client markup identical.
+  // device's own signals refine it on mount — resolving them in state rather
+  // than during render is what keeps the server and client markup identical.
   const [locale, setLocale] = useState<'en' | 'tr' | 'de'>('en');
-  const [theme, setTheme] = useState<string | undefined>(undefined);
+  const [theme, setTheme] = useState<'dark' | 'light' | undefined>(undefined);
 
   useEffect(() => {
     reportBoundaryError(error, { scope: 'global', digest: error.digest });
   }, [error]);
 
   useEffect(() => {
-    const cookieLocale = readCookie('locale');
-    if (cookieLocale === 'tr' || cookieLocale === 'de' || cookieLocale === 'en') setLocale(cookieLocale);
-    const cookieTheme = readCookie('theme');
-    if (cookieTheme === 'dark' || cookieTheme === 'light') setTheme(cookieTheme);
+    setLocale(detectLocale());
+    setTheme(detectTheme());
   }, []);
 
   const copy = COPY[locale];

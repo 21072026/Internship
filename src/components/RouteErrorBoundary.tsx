@@ -29,6 +29,7 @@ export function RouteErrorBoundary({
   reset,
   homeHref,
   homeLabel,
+  description,
   scope,
 }: {
   error: Error & { digest?: string };
@@ -36,6 +37,8 @@ export function RouteErrorBoundary({
   /** Where "back" goes — that tree's own landing page, never /admin. */
   homeHref: string;
   homeLabel?: string;
+  /** Body copy, when the default "…back to the dashboard" is not true here. */
+  description?: string;
   /** Route tree name, carried into the error report. */
   scope: string;
 }) {
@@ -50,7 +53,7 @@ export function RouteErrorBoundary({
       <Card className="max-w-md w-full text-center">
         <AlertTriangle className="h-10 w-10 text-red-500 mx-auto mb-4" aria-hidden="true" />
         <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t.errorBoundary.title}</h1>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{t.errorBoundary.description}</p>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{description ?? t.errorBoundary.description}</p>
         {error.digest && (
           <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
             {t.errorBoundary.digest}{' '}
@@ -98,8 +101,15 @@ export function SharedRouteErrorBoundary({
   scope: string;
 }) {
   const t = useT();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const role = session?.user?.role;
+  // Only once next-auth has actually answered. `SessionProvider` starts in
+  // `loading` and fetches /api/auth/session, so keying the copy off
+  // `!session` alone would flash "back to home" at a signed-in user for as
+  // long as that round trip takes. `/` is the right destination throughout —
+  // it is where a signed-out visitor belongs and where a signed-in one gets
+  // bounced to their own dashboard from — so only the wording waits.
+  const signedOut = status === 'unauthenticated';
 
   return (
     <RouteErrorBoundary
@@ -107,7 +117,10 @@ export function SharedRouteErrorBoundary({
       reset={reset}
       scope={scope}
       homeHref={role ? roleHome(role) : '/'}
-      homeLabel={role ? t.errorBoundary.backHome : t.notFound.backHome}
+      homeLabel={signedOut ? t.notFound.backHome : t.errorBoundary.backHome}
+      // "…or go back to the dashboard" is a promise a signed-out visitor on the
+      // public /projects or /mentors pages cannot cash in.
+      description={signedOut ? t.errorBoundary.descriptionPublic : undefined}
     />
   );
 }
