@@ -14,13 +14,13 @@ export default async function OfflinePage() {
         <h1 className="text-xl font-bold text-gray-900">{t.offline.title}</h1>
         <p className="text-gray-500 text-sm mt-2">{t.offline.body}</p>
         <a
-          href="https://crm.ersah.in"
+          href="https://interncrm.com"
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Go to crm.ersah.in"
+          aria-label="Go to interncrm.com"
           className="inline-block mt-4 text-sm font-medium text-blue-600 hover:text-blue-700 underline"
         >
-          crm.ersah.in
+          interncrm.com
         </a>
       </div>
     </div>

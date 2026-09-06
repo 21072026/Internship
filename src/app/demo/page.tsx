@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 // honest list of what the demo will not let you do.
 //
 // 404s off the demo deployment. The credentials are synthetic and public, so
-// this is not a secret worth protecting — but a /demo page on crm.ersah.in that
+// this is not a secret worth protecting — but a /demo page on interncrm.com that
 // advertises accounts which do not exist there would just be a broken page.
 export default async function DemoPage() {
   if (!IS_DEMO_MODE) notFound();
