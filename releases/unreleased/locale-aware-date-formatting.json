@@ -1,0 +1,18 @@
+{
+  "bump": "patch",
+  "changelog": "- **Dates follow the app language, not the browser** (#1422). The five remaining `toLocaleDateString()`/`toLocaleString()`/`toLocaleTimeString()` calls with no locale (interview requests queue, admin settings delivery health + e-mail log, meeting notes) now go through `formatDate`/`formatDateTime`/`formatTime` in `lib/relativeTime.ts`. Proposed interview slots additionally render through the new `formatDateTimeWithZone`, on the viewer's saved `User.timezone` (returned as `viewerTimezone` from `GET /api/interview-requests`, resolved client-side by the new `viewerTimeZone()`), with an explicit \"(GMT+3)\" label. `npm run check:locale-dates` guards the rule in CI.",
+  "notes": {
+    "en": [
+      "Dates and times now follow the language you picked in the app, so a Turkish or German interface no longer shows dates in US format.",
+      "Proposed interview times say which timezone they are in, and use the timezone saved on your profile."
+    ],
+    "tr": [
+      "Tarih ve saatler artık uygulamada seçtiğiniz dile göre gösteriliyor; Türkçe arayüzde tarihler ABD biçiminde görünmüyor.",
+      "Önerilen mülakat saatleri hangi saat diliminde olduklarını yazıyor ve profilinizde kayıtlı saat dilimini kullanıyor."
+    ],
+    "de": [
+      "Datums- und Zeitangaben richten sich jetzt nach der in der App gewählten Sprache — eine deutsche Oberfläche zeigt keine US-Datumsformate mehr.",
+      "Vorgeschlagene Interviewtermine nennen ihre Zeitzone und verwenden die in Ihrem Profil gespeicherte Zeitzone."
+    ]
+  }
+}

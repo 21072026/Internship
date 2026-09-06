@@ -262,3 +262,22 @@ export function browserTimeZone(): string | null {
     return null;
   }
 }
+
+/**
+ * Browser-side counterpart to `resolveTimeZone`: which clock should a *screen*
+ * print this instant on? Saved `User.timezone` first — a zone the person chose
+ * beats one their laptop guessed, and it is also the zone their emails already
+ * use — then the browser's own zone, then the deployment default (#1422).
+ *
+ * The middle step is what makes this different from `resolveTimeZone`, which is
+ * written for the server, where there is no viewer. The `window` guard matters:
+ * `browserTimeZone()` in Node reports the *container's* zone (UTC), which is
+ * nobody's clock — during SSR this therefore degrades to `resolveTimeZone`, so
+ * a value rendered on the server and re-rendered in the browser cannot silently
+ * disagree about which zone it meant.
+ */
+export function viewerTimeZone(saved?: string | null): string {
+  if (isValidTimeZone(saved)) return saved;
+  const browser = typeof window === 'undefined' ? null : browserTimeZone();
+  return isValidTimeZone(browser) ? browser : appTimeZone();
+}

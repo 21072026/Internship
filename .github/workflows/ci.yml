@@ -68,6 +68,12 @@ jobs:
       # lookup into a different query. The tree is clean; this keeps it that way.
       - name: no unvalidated request body in a Prisma filter
         run: npm run check:query-scalars
+      # `toLocaleDateString()` with no argument formats in the BROWSER's
+      # language, so a fully-Turkish screen printed 8/25/2026 and an interview
+      # slot carried no timezone at all (#1422). The tree is clean; this stops
+      # the next call site from re-introducing it.
+      - name: dates are formatted on the app locale, not the browser's (#1422)
+        run: npm run check:locale-dates
       # A renamed route would silently drop out of the demo's write blocklist,
       # re-enabling password changes and uploads on the public demo (#966).
       - name: demo write blocklist still matches the routes (#966)

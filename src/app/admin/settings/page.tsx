@@ -4,12 +4,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
 
 export default function AdminSettingsPage() {
   const t = useT();
+  const locale = useLocale();
   const [reminderDays, setReminderDays] = useState('14');
   const [retentionMonths, setRetentionMonths] = useState('12');
   const [supportEmail, setSupportEmail] = useState('');
@@ -349,7 +351,7 @@ export default function AdminSettingsPage() {
             <div className="text-sm" data-testid="email-delivery-health">
               <span className="text-gray-600 dark:text-gray-300">
                 {emailHealth.lastOkAt
-                  ? t.settings.deliveryLastOk.replace('{t}', new Date(emailHealth.lastOkAt).toLocaleString())
+                  ? t.settings.deliveryLastOk.replace('{t}', formatDateTime(emailHealth.lastOkAt, locale))
                   : t.settings.deliveryNeverOk}
               </span>
               {emailHealth.failuresSinceOk > 0 ? (
@@ -442,7 +444,7 @@ export default function AdminSettingsPage() {
                     {emailLog.entries.map((e) => (
                       <tr key={e.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
                         <td className="py-1.5 pr-2 whitespace-nowrap text-gray-400">
-                          {new Date(e.createdAt).toLocaleString()}
+                          {formatDateTime(e.createdAt, locale)}
                         </td>
                         <td className="py-1.5 pr-2 whitespace-nowrap">
                           <span
