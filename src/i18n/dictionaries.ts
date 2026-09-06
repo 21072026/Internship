@@ -1597,6 +1597,8 @@ const en = {
     loadError: 'Failed to load the mentor directory',
     languagesLabel: 'Languages',
     skillsLabel: 'Expertise',
+    showing: 'Showing {from}–{to} of {total} mentors',
+    partialNotice: 'This list may be incomplete — only the first {cap} listed mentors could be searched. Narrow your filters to be sure you are seeing everyone.',
   },
   duplicates: {
     title: 'Duplicate candidates',
@@ -5880,6 +5882,8 @@ const tr: Dict = {
     loadError: 'Mentor dizini yüklenemedi',
     languagesLabel: 'Diller',
     skillsLabel: 'Uzmanlık',
+    showing: '{total} mentordan {from}–{to} gösteriliyor',
+    partialNotice: 'Bu liste eksik olabilir — yalnızca listelenen ilk {cap} mentor taranabildi. Herkesi gördüğünden emin olmak için filtreleri daralt.',
   },
   duplicates: {
     title: 'Yinelenen adaylar',
@@ -10137,6 +10141,8 @@ const de: Dict = {
     loadError: 'Das Mentorenverzeichnis konnte nicht geladen werden',
     languagesLabel: 'Sprachen',
     skillsLabel: 'Fachgebiete',
+    showing: 'Zeige {from}–{to} von {total} Mentoren',
+    partialNotice: 'Diese Liste ist möglicherweise unvollständig — es konnten nur die ersten {cap} gelisteten Mentoren durchsucht werden. Grenze die Filter ein, um sicherzugehen, dass du alle siehst.',
   },
   duplicates: {
     title: 'Doppelte Kandidaten',
