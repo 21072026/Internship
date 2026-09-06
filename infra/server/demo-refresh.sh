@@ -66,13 +66,23 @@ if [ "$DATA_ONLY" = 0 ]; then
     docker rm   "$CONTAINER" >/dev/null 2>&1 || true
     # The env file is the single source of truth for the demo's configuration —
     # nothing is passed in from CI, so no secret of the demo's ever reaches an
-    # Actions log. DATABASE_URL there points at host.docker.internal, hence
-    # bridge networking with a published port.
+    # Actions log.
+    #
+    # NETWORK follows deploy-prod.sh. It used to be bridge unconditionally,
+    # because on the old host DATABASE_URL pointed at host.docker.internal. On a
+    # host where MySQL itself runs in a container publishing on 127.0.0.1, that
+    # gateway address reaches nothing — the container starts, and the reset then
+    # fails inside it with "Can't reach database server at 127.0.0.1:3306"
+    # (#2166). Host networking matches production and preview.
+    if [ "${NETWORK:-host}" = host ]; then
+      NET_ARGS=(--network=host -e PORT="$PORT")
+    else
+      NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "${PORT}:3000")
+    fi
     docker run -d \
       --name "$CONTAINER" \
       --env-file "$ENV_FILE" \
-      --add-host=host.docker.internal:host-gateway \
-      -p "${PORT}:3000" \
+      "${NET_ARGS[@]}" \
       --restart=unless-stopped \
       "$IMAGE" >/dev/null
     RECREATED=1
