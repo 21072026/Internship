@@ -84,8 +84,15 @@ jobs:
           #
           # Caddy reads the cert files directly, so a reload is all a renewal
           # needs — no restart, no dropped connections.
+          # The reload goes through a helper rather than `systemctl reload`
+          # directly, and that matters on RENEWAL more than now: acme.sh writes
+          # the private key 0600 owner:owner every time it installs one, and
+          # Caddy runs as a different user. An unreadable key does not fail
+          # quietly — Caddy loads one config for the machine, so the whole
+          # reload fails and every site's next deploy fails with it (#2213).
+          # acme.sh stores this command and re-runs it unattended in 60 days.
           DOMAIN="$DOMAIN" CERT_DIR="$CERT_DIR" \
-            RELOAD_CMD='sudo systemctl reload caddy' \
+            RELOAD_CMD='sudo /usr/local/bin/caddy-reload-certs' \
             ./infra/acme-issue-wildcard.sh
 
       - name: Verify the cert covers the wildcard
