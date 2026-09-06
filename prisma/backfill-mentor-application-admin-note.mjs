@@ -20,10 +20,21 @@
 //     Nothing in the row distinguishes the two cases, so any guess would be
 //     wrong half the time — and a wrong guess here either fabricates a
 //     "rejection reason" out of a note, or re-labels a real decision as
-//     private commentary. Leaving the value where it is keeps the surviving
-//     text visible under the label it was last written with, and the fix
-//     stops the destruction from continuing. Recovering the overwritten
-//     reasons is not possible: the old code did a plain UPDATE.
+//     private commentary. Recovering the overwritten reasons is not possible:
+//     the old code did a plain UPDATE.
+//
+//     Be precise about what this costs, because it is easy to overstate:
+//     NOT moving the value is not the same as leaving it labelled correctly.
+//     A row whose reason was destroyed by a note now reads status=REJECTED,
+//     rejectReason=<the note>, adminNote=NULL, and the review UI renders the
+//     rejectReason of a REJECTED row as the recorded decision. So for exactly
+//     those damaged rows, declining to guess here still ends with a private
+//     note displayed where a rejection reason belongs — the fabrication moves
+//     from the data into the label. The script cannot fix that (it cannot tell
+//     the rows apart either), so the UI carries the ambiguity instead: any
+//     REJECTED row decided before the split is shown under a label that does
+//     not claim to know which of the two it is. The rule lives in
+//     src/lib/mentorApplicationRejectReason.ts; keep the two in step.
 //
 // `rejectReason` is not cleared on the rows it copies: the value stays where it
 // is, and the review UI simply stops showing it for a non-REJECTED status

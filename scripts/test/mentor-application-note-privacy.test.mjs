@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -24,20 +24,85 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
-test('no e-mail template reads adminNote', () => {
-  const emailService = read('src/services/emailService.ts');
-  assert.equal(
-    emailService.includes('adminNote'),
-    false,
-    'src/services/emailService.ts must never reference MentorApplication.adminNote',
+/** Every .ts/.tsx file under src/, repo-relative and slash-separated. */
+function sourceFiles(dir = 'src') {
+  const out = [];
+  for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+    const rel = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...sourceFiles(rel));
+    else if (/\.tsx?$/.test(entry.name)) out.push(rel);
+  }
+  return out;
+}
+
+/**
+ * The body of a top-level `export async function <name>(...)`, brace-matched.
+ *
+ * Deliberately not `indexOf('\n}', start)`: these senders open with a
+ * multi-line parameter destructure whose closing line is `}: {` at column 0, so
+ * that naive scan stops after the parameter NAMES — 95 characters, never
+ * reaching the template — and every forbidden-word assertion below it passes
+ * vacuously. That is exactly how this file previously checked nothing.
+ */
+function functionBody(source, name) {
+  const start = source.indexOf(`export async function ${name}`);
+  assert.notEqual(start, -1, `${name} not found — was it renamed?`);
+
+  // Walk the parameter list first so its braces (destructure + type literal)
+  // cannot be mistaken for the body's.
+  let i = source.indexOf('(', start);
+  assert.notEqual(i, -1, `${name} has no parameter list`);
+  let parens = 0;
+  for (; i < source.length; i++) {
+    if (source[i] === '(') parens++;
+    else if (source[i] === ')' && --parens === 0) break;
+  }
+  assert.ok(parens === 0 && i < source.length, `${name}'s parameter list is unbalanced`);
+
+  const open = source.indexOf('{', i);
+  assert.notEqual(open, -1, `${name} has no body`);
+  let depth = 0;
+  for (let j = open; j < source.length; j++) {
+    if (source[j] === '{') depth++;
+    else if (source[j] === '}' && --depth === 0) return source.slice(open, j + 1);
+  }
+  throw new Error(`${name}'s body is unbalanced — could not brace-match it`);
+}
+
+test('no file that composes an e-mail reads adminNote', () => {
+  // emailService.ts is not the only place HTML gets built: ~10 routes and libs
+  // call sendEmail() with their own markup, and a "reply to the applicant with
+  // context" route pasted into any of them would leak the note just as well.
+  // So the scan follows the callers, and picks up new ones automatically.
+  const senders = sourceFiles().filter((f) => read(f).includes('sendEmail('));
+  assert.ok(
+    senders.length >= 8,
+    `expected to find the e-mail-composing files by their sendEmail( call, found ${senders.length} — did the helper get renamed? Fix the discovery, do not lower this bound`,
+  );
+
+  const leaking = senders.filter((f) => read(f).includes('adminNote'));
+  assert.deepEqual(
+    leaking,
+    [],
+    `these files compose e-mail and reference MentorApplication.adminNote: ${leaking.join(', ')}`,
   );
 });
 
 test('the rejection e-mail is built from the decision alone, not from stored free text', () => {
   const emailService = read('src/services/emailService.ts');
-  const start = emailService.indexOf('export async function sendMentorApplicationRejectedEmail');
-  assert.notEqual(start, -1, 'sendMentorApplicationRejectedEmail not found — was it renamed?');
-  const body = emailService.slice(start, emailService.indexOf('\n}', start));
+  const body = functionBody(emailService, 'sendMentorApplicationRejectedEmail');
+
+  // Guard the slice itself: the bug this replaced was a body that scanned
+  // clean because it was 95 characters of parameter names. If the extraction
+  // ever silently shrinks again, fail here rather than pass vacuously.
+  assert.ok(
+    body.length > 400,
+    `extracted only ${body.length} chars of sendMentorApplicationRejectedEmail — the body was not captured`,
+  );
+  assert.ok(
+    body.includes('sendEmail({') && body.includes('html:'),
+    'the extracted slice does not contain the sendEmail call and its html template — it is not the whole body',
+  );
 
   // Its whole input surface: who it goes to, their name, the locale and the
   // tenant it is branded as. No application text of any kind is passed in, so

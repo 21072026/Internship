@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
+import { isRejectReasonAmbiguous } from '@/lib/mentorApplicationRejectReason';
 
 interface ApplicationRow {
   id: string;
@@ -16,6 +17,7 @@ interface ApplicationRow {
   capacity: number | null;
   status: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
   createdAt: string;
+  decidedAt: string | null;
   // Two separate admin-only free-text fields (#1806): the reason a rejection
   // was decided, and a private review note. They used to share one column, so
   // saving a note wiped the reason.
@@ -134,10 +136,16 @@ export default function MentorApplicationsPage() {
                     )}
                     {/* Only a REJECTED row shows a rejection reason — see the
                         note on the detail page: a value on any other status is
-                        a pre-#1806 note the old code mis-filed. */}
+                        a pre-#1806 note the old code mis-filed. A row decided
+                        before the split gets the hedged label instead, because
+                        its text may equally be the note that replaced the
+                        reason. */}
                     {r.status === 'REJECTED' && r.rejectReason ? (
                       <p className="mt-1.5 text-[11px] text-gray-500 line-clamp-2" data-testid={`mentor-application-reason-${r.id}`}>
-                        <span className="font-medium">{a.rejectReasonLabel}:</span> {r.rejectReason}
+                        <span className="font-medium">
+                          {`${isRejectReasonAmbiguous(r.status, r.decidedAt) ? a.rejectReasonRecordedUnverified : a.rejectReasonLabel}:`}
+                        </span>{' '}
+                        {r.rejectReason}
                       </p>
                     ) : null}
                     {r.adminNote ? (

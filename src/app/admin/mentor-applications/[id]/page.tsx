@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
+import { isRejectReasonAmbiguous } from '@/lib/mentorApplicationRejectReason';
 
 type Status = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
 
@@ -27,6 +28,7 @@ interface ApplicationDetail {
   status: Status;
   consentAt: string | null;
   createdAt: string;
+  decidedAt: string | null;
   rejectReason: string | null;
   adminNote: string | null;
 }
@@ -128,6 +130,10 @@ export default function MentorApplicationDetailPage() {
   if (!app) return <p className="text-gray-400 py-12 text-center">{a.notFound}</p>;
 
   const decidable = app.status === 'PENDING' || app.status === 'UNDER_REVIEW';
+  // Decided before notes and reasons had separate columns? Then this text is
+  // either the reason or the note that overwrote it, and nothing can tell them
+  // apart — see src/lib/mentorApplicationRejectReason.ts.
+  const reasonAmbiguous = isRejectReasonAmbiguous(app.status, app.decidedAt);
 
   return (
     <div>
@@ -191,11 +197,23 @@ export default function MentorApplicationDetailPage() {
               still carry a value here from before #1806 — that is a note the
               old code mis-filed, not a decision, and labelling it as one would
               be worse than not showing it. The backfill copies those into
-              adminNote instead. */}
+              adminNote instead.
+
+              A REJECTED row decided before the split is ambiguous in the other
+              direction: the text may be the reason, or the note that destroyed
+              it. Those rows are shown under a label that does not decide which
+              (isRejectReasonAmbiguous) — the CRM must not assert that a private
+              note was why somebody was turned down. */}
           {app.status === 'REJECTED' && app.rejectReason ? (
             <Card>
-              <CardHeader><CardTitle>{a.rejectReasonRecorded}</CardTitle></CardHeader>
-              <p className="text-xs text-gray-500 mb-2">{a.rejectReasonRecordedHint}</p>
+              <CardHeader>
+                <CardTitle>
+                  {reasonAmbiguous ? a.rejectReasonRecordedUnverified : a.rejectReasonRecorded}
+                </CardTitle>
+              </CardHeader>
+              <p className="text-xs text-gray-500 mb-2" data-testid="mentor-application-reject-reason-hint">
+                {reasonAmbiguous ? a.rejectReasonRecordedUnverifiedHint : a.rejectReasonRecordedHint}
+              </p>
               <p
                 className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line"
                 data-testid="mentor-application-recorded-reject-reason"
