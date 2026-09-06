@@ -109,6 +109,11 @@ log "Seeding the first admin"
 run node prisma/seed.mjs
 log "Seeding the synthetic demo dataset"
 run node prisma/seed-demo.mjs
+# Tenant backfill (#1557), after the seeds because they create fresh org-less
+# rows (prisma/seed.mjs creates its companies after its own backfill).
+log "Backfilling orgId on every tenant model"
+run node prisma/backfill-organization.mjs \
+  || log "WARNING: org backfill FAILED (exit non-zero) — see the output above"
 
 log "Health check http://127.0.0.1:${PORT}/api/health"
 for i in $(seq 1 15); do

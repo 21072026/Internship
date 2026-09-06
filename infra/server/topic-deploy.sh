@@ -308,6 +308,12 @@ else
   echo "==> Existing topic database (${EXISTING_TABLES} tables) — keeping its data"
 fi
 
+# Tenant backfill (#1557), after the seeds because they create fresh org-less
+# rows. A topic environment is where the MT_ENFORCE_ISOLATION rollout is meant
+# to be rehearsed, so it has to run here too, not only in deploy-prod.sh.
+_in_image "$IMAGE" node prisma/backfill-organization.mjs \
+  || echo "WARN: org backfill FAILED (exit non-zero) — see the output above"
+
 docker stop "$CONTAINER" 2>/dev/null || true
 docker rm   "$CONTAINER" 2>/dev/null || true
 # OPERATOR_* (#1396) is forwarded like the rest: same host, same operator, so a

@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { assertSafeDemoTarget } from './demoTarget.mjs';
+import { assignDefaultOrg } from './backfill-organization.mjs';
 
 // Rich DEMO seed (#550) — fully synthetic data for local development and demos,
 // so nobody needs real user PII to work on the app. Idempotent: every record it
@@ -341,9 +342,10 @@ async function main() {
     create: { slug: 'default', name: 'Default Organization' },
     select: { id: true },
   });
-  for (const model of ['user', 'source', 'cohort', 'company', 'project', 'mentorshipRelation']) {
-    await prisma[model].updateMany({ where: { orgId: null }, data: { orgId: defaultOrg.id } });
-  }
+  // Every nullable orgId column, derived from the schema — not a hand-kept list
+  // that drifts (#1557). Must stay here, before the rows below whose orgId is a
+  // REQUIRED column and is read from the relations/users backfilled above.
+  await assignDefaultOrg(prisma, defaultOrg.id);
   console.log('backfilled default org onto demo rows');
 
   // ---------------------------------------------------------------------------
