@@ -154,10 +154,16 @@ test('a broken connection shows a warning and a reconnect button', async ({ page
     await expect(card.getByTestId('google-calendar-last-sync')).not.toBeEmpty();
 
     // The honest part: the connection is broken and says so, with the
-    // provider's own message rather than a generic shrug.
+    // provider's own message rather than a generic shrug. Asserted on the
+    // RENDERED text and on the whole sentence, not just 'invalid_grant': the
+    // string passes through lib/sanitizeError on the way out, and a sanitizer
+    // rule that eats the word after "Token" turns the one informative line in
+    // this strip into "<redacted> been expired or revoked" — which the looser
+    // assertion happily passed.
     const strip = card.getByTestId('google-calendar-error');
     await expect(strip).toBeVisible();
-    await expect(strip).toContainText('invalid_grant');
+    await expect(strip).toContainText('invalid_grant: Token has been expired or revoked.');
+    await expect(strip).not.toContainText('<redacted>');
 
     // Reconnect restarts consent for THIS provider only.
     const reconnect = card.getByTestId('google-calendar-reconnect');
@@ -193,6 +199,11 @@ test('a healthy connection shows no warning strip', async ({ page }) => {
     const card = page.getByTestId('connected-calendars-card');
     await expect(card.getByTestId('google-calendar-connected')).toBeVisible({ timeout: 15_000 });
     await expect(card.getByTestId('google-calendar-error')).toHaveCount(0);
+    // …and no "switched off" strip either: the e2e server sets
+    // GOOGLE_CALENDAR_ENABLED=1, so meetings really are flowing. The two strips
+    // are mutually exclusive by construction — a row may not claim both that it
+    // is healthy and that nothing is reaching it.
+    await expect(card.getByTestId('google-calendar-off')).toHaveCount(0);
     await expect(card.getByTestId('google-calendar-disconnect')).toBeVisible();
   } finally {
     await cleanupByEmail(email);

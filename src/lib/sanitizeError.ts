@@ -19,8 +19,21 @@ export function sanitizeError(error: string | null | undefined): string | null {
       // A certificate/key body pasted into an error message. Whole block, not
       // just the base64 — the headers alone are worthless but very noisy.
       .replace(/-----BEGIN [A-Z ]+-----[\s\S]*?-----END [A-Z ]+-----/g, '<redacted>')
-      // `Authorization: Bearer …`, `token=…`, `secret: …` and friends.
-      .replace(/(?:bearer|token|secret|key|password)["'\s:=]+[^\s"',;]+/gi, '<redacted>')
+      // `token=…`, `secret: …`, `password="…"` — an EXPLICIT assignment. The
+      // `:` or `=` says the next thing is a value, so it goes however short it
+      // is.
+      .replace(/(?:bearer|token|secret|key|password)\s*["']?\s*[:=]\s*["']?[^\s"',;]+/gi, '<redacted>')
+      // `Authorization: Bearer eyJ…` — only whitespace between the word and the
+      // value. Here the word may just be an English word in a sentence, so what
+      // follows is redacted only when it LOOKS like a credential: at least 12
+      // characters and carrying non-alphabetic material. Without that guard this
+      // rule ate the next word of every provider message it touched — Google's
+      // own "Token refresh failed" rendered as "<redacted> failed", and
+      // "invalid_grant: Token has been expired or revoked." lost the word that
+      // told the user what happened. A short space-separated secret escapes this
+      // rule, which is the trade: an unquoted six-character bearer token is not
+      // a thing, a sentence starting with "Token" is.
+      .replace(/(?:bearer|token|secret|key|password)["'\s]+(?=\S*[\d_\-.])[^\s"',;]{12,}/gi, '<redacted>')
       // Addresses BEFORE the opaque-blob rule below: a 32+ character local part
       // would otherwise be blanked first, leaving the domain behind because the
       // address rule no longer recognises `<redacted>@example.com`.

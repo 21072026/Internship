@@ -27,15 +27,21 @@ interface ProviderRow {
  * provider (#1991) appears here by being added to the server-side registry;
  * nothing in this file names Google.
  *
- * Three states per row, and they are three on purpose:
+ * Four states per row, and they are four on purpose:
  *   (a) the operator has not set the provider up — say so. A connect button
  *       that can only bounce back with "unavailable" is worse than no button.
- *   (b) set up, but this person has not connected — offer connect.
- *   (c) connected — show WHICH account (so they can tell what they are about to
- *       disconnect), when it last synced, and, when the stored `lastError` says
- *       the last write failed, a warning plus Reconnect. Without that strip a
- *       revoked token reads as "connected" forever while meetings quietly stop
- *       arriving — the whole reason this card exists.
+ *   (b) set up, but switched off for everyone on this installation. Different
+ *       sentence from (a): "not set up" and "turned off" are different facts,
+ *       and only one of them is likely to change back.
+ *   (c) available, but this person has not connected — offer connect.
+ *   (d) connected — show WHICH account (so they can tell what they are about to
+ *       disconnect), when it last synced, and a warning strip whenever meetings
+ *       are NOT reaching that calendar: either because the stored `lastError`
+ *       says the last write failed, or because the provider is switched off
+ *       here, which stops `pushMeeting()` at its first line and would otherwise
+ *       leave the row reading "connected, last synced 3 hours ago" forever. A
+ *       connection nothing is flowing through must never look healthy — that
+ *       silent lie is the whole reason this card exists.
  */
 export function ConnectedCalendarsCard() {
   const t = useT();
@@ -73,6 +79,7 @@ export function ConnectedCalendarsCard() {
         cancelled: g.flashCancelled,
         failed: g.flashFailed,
         unavailable: g.flashUnavailable,
+        disconnectFailed: c.disconnectFailed,
       } as Record<string, string>)[flashKey] ?? null)
     : null;
 
@@ -81,15 +88,33 @@ export function ConnectedCalendarsCard() {
   const disconnect = async (row: ProviderRow) => {
     setBusy(row.provider);
     try {
-      await fetch(row.disconnectPath, { method: 'DELETE' });
-      setRows((prev) =>
-        (prev ?? []).map((r) =>
-          r.provider === row.provider
-            ? { ...r, connected: false, accountEmail: null, lastSyncAt: null, lastError: null }
-            : r
-        )
-      );
+      // The DELETE can be refused — an unverified account is held to reads by
+      // `middleware.ts`, and a 500 or an offline tab look the same from here.
+      // Rewriting the row before checking would show "disconnected and access
+      // revoked" while the tokens are still stored and meetings still flowing:
+      // the same untrue claim, told the other way round.
+      const res = await fetch(row.disconnectPath, { method: 'DELETE' });
+      if (!res.ok) {
+        setFlashKey('disconnectFailed');
+        return;
+      }
+      // Re-read rather than patch: what the card claims should come from the
+      // server that did the work, not from this function's assumption of it.
+      const refreshed = await fetch('/api/integrations/calendar/status')
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      if (refreshed?.providers) setRows(refreshed.providers);
+      else
+        setRows((prev) =>
+          (prev ?? []).map((r) =>
+            r.provider === row.provider
+              ? { ...r, connected: false, accountEmail: null, lastSyncAt: null, lastError: null }
+              : r
+          )
+        );
       setFlashKey('disconnected');
+    } catch {
+      setFlashKey('disconnectFailed');
     } finally {
       setBusy(null);
     }
@@ -117,10 +142,12 @@ export function ConnectedCalendarsCard() {
 
         <ul className="mt-4 divide-y divide-gray-200 dark:divide-gray-800">
           {rows.map((row) => {
-            // "Available" is configured AND switched on. Both failures read the
-            // same way to the person in front of the screen — this deployment
-            // cannot connect them — so they share state (a).
+            // "Available" is configured AND switched on: only then can this
+            // deployment actually move a meeting into that calendar. The two
+            // ways of not being available are told apart, because they are not
+            // the same news.
             const available = row.configured && row.enabled;
+            const switchedOff = row.configured && !row.enabled;
             return (
               <li key={row.provider} data-testid={`calendar-provider-${row.provider}`} className="py-4 first:pt-0 last:pb-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{row.label}</p>
@@ -130,7 +157,7 @@ export function ConnectedCalendarsCard() {
                     data-testid={`${row.provider}-calendar-unavailable`}
                     className="mt-1 text-sm text-gray-500 dark:text-gray-400"
                   >
-                    {c.notConfigured}
+                    {switchedOff ? c.notEnabled : c.notConfigured}
                   </p>
                 )}
 
@@ -162,7 +189,24 @@ export function ConnectedCalendarsCard() {
                         : c.neverSynced}
                     </p>
 
-                    {row.lastError && (
+                    {/* One strip, two reasons for it. Both mean the same
+                        thing to the person reading: meetings are not reaching
+                        this calendar right now. */}
+                    {!available ? (
+                      <div
+                        data-testid={`${row.provider}-calendar-off`}
+                        className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+                      >
+                        <p className="flex items-start gap-1.5 font-medium">
+                          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          {c.offTitle}
+                        </p>
+                        {/* No Reconnect here: the connect route checks the same
+                            switch and can only bounce back with "unavailable".
+                            Disconnect stays — revoking must always be possible. */}
+                        <p className="mt-1">{c.offHint.replace('{provider}', row.label)}</p>
+                      </div>
+                    ) : row.lastError ? (
                       <div
                         data-testid={`${row.provider}-calendar-error`}
                         className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
@@ -185,7 +229,7 @@ export function ConnectedCalendarsCard() {
                           {c.reconnect}
                         </a>
                       </div>
-                    )}
+                    ) : null}
 
                     <button
                       type="button"

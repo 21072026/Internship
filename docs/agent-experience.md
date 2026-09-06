@@ -5716,3 +5716,40 @@ zaten bunun için var (#2008): Google'ın token yenileme hatası hesabı ve baze
 token'ı ekoluyor. Kartta hatanın *kendisini* göstermek gerekiyor (`invalid_grant`,
 "yeniden bağlan" ile "destek çağır" arasındaki fark), ama sunucudan çıkarken
 sanitize edilmiş hâlde.
+
+### Aynı gün, kod incelemesinden sonra (#1993 / PR #2207)
+
+**"Dürüst kart" iddiası, kartın *her* dalında tutmalı.** Satırın `enabled` alanını
+hesaplayıp (`available = configured && enabled`) yalnızca *bağlı değil* dallarında
+kullanmıştım; `connected` dalı `available`'a hiç bakmıyordu. Sonuç: operatör
+`GOOGLE_CALENDAR_ENABLED`'ı kapattığında kart "bağlı, 3 saat önce eşitlendi" demeye devam
+ediyordu — oysa `pushMeeting()` ilk satırında dönüyor, `lastError` de hiç yazılmıyor
+(hata yolu aynı erken dönüşün arkasında), yani strip asla açılmıyordu. Silinen eski kart
+bu durumda hiçbir şey göstermiyordu; "hiçbir şey" yanlış bir şeyden iyidir. Ders: bir
+bayrağı hesaplayınca **onu tüketmeyen dalları tek tek sayın** — bayrağın var olması,
+kullanıldığı anlamına gelmiyor.
+
+**Paylaşılan sanitizer düzyazıyı da yiyebilir.** `sanitizeError`'ın
+`(?:bearer|token|secret|key|password)["'\s:=]+[^\s"',;]+` kuralı İngilizce cümledeki
+"token" kelimesinden *sonraki kelimeyi* siliyordu: Google'ın `Token refresh failed`
+mesajı ekranda `<redacted> failed`, `invalid_grant: Token has been expired or revoked.`
+ise `invalid_grant: <redacted> been expired or revoked.` oluyordu — yani kartın "hatanın
+kendisini göster" vaadinin tam kalbi. Ayrım: açık atama (`:` / `=`) varsa sonrası ne
+olursa olsun değerdir; sadece boşluk varsa ancak **kimlik bilgisine benziyorsa** (12+
+karakter ve içinde harf dışı malzeme) silinir. Bir bağlayıcının hata metnini ekrana
+koyuyorsanız, sanitizer'ı o metnin *gerçek* örnekleriyle bir kez çalıştırın.
+
+**Testi ham veriye değil, ekrandaki metne yazın.** Spec `lastError`'ın `invalid_grant`
+içerdiğini doğruluyordu; yukarıdaki bozulma bu assertion'dan sağ çıkıyordu. Cümlenin
+tamamını (`invalid_grant: Token has been expired or revoked.`) ve strip'te `<redacted>`
+*olmadığını* doğrulamak, aynı hatayı bir daha geçirmez.
+
+**`fetch` sonucunu okumadan state yazmayın.** `disconnect()` DELETE yanıtına bakmadan
+satırı "bağlı değil"e çevirip "erişim geri alındı" flash'ı gösteriyordu. Bu bir varsayım
+değil, ölçülebilir bir vaka: `middleware.ts` doğrulanmamış e-postalı kullanıcının tüm
+yazma metodlarını 403'lüyor, `connect` ise GET olduğu için geçiyor — yani o kullanıcı
+gerçekten bağlanıp sonra "kaldıramıyor". Artık `res.ok` kontrol ediliyor ve başarıda
+durum uç noktası **yeniden okunuyor**: kartın söylediği şey, işi yapan sunucudan geliyor.
+
+**Küçük düzeltme:** yukarıda "sağlayıcı eklemek diziye bir nesne eklemek" yazıyor;
+doğrusu iki satır — `CalendarProviderId` union'ına id'yi de eklemek gerekiyor.
