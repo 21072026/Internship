@@ -1360,7 +1360,14 @@ model MentorApplication {
   decidedAt    DateTime?
   decidedById  String?
   // Set when rejecting; explains the decision to the reviewing admin later.
+  // Written ONLY by the reject action — never by the "save a note" action,
+  // which used to overwrite it and destroy the reason (#1806).
   rejectReason String?                 @db.Text
+  // Free-form review note an admin keeps while working through the queue.
+  // Private to admins and NEVER sent to the applicant — unlike rejectReason,
+  // which at least documents a decision that was communicated, this is
+  // internal commentary and no e-mail template may ever read it.
+  adminNote    String?                 @db.Text
   // When the applicant accepted the privacy/data terms — set server-side on
   // submit, mirrors User.consentAt.
   consentAt    DateTime?

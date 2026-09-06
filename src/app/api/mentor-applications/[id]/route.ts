@@ -38,6 +38,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
 
   return await withTenantScope(auth.session, async () => {
+    // No `select`: every column comes back, which includes both admin-only
+    // free-text fields — `rejectReason` (why the decision went the way it did)
+    // and `adminNote` (private review commentary, #1806). This route is
+    // admin-gated above; neither field is reachable by an applicant.
     const application = await prisma.mentorApplication.findUnique({ where: { id } });
     if (!application) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ application });
@@ -75,13 +79,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!application) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     if (action === 'note') {
-      await prisma.mentorApplication.update({ where: { id }, data: { rejectReason: note ?? '' } });
+      // The note lives in its own column. It used to be written to
+      // `rejectReason`, so saving a note on a rejected application silently
+      // destroyed the reason the admin had recorded for the decision (#1806) —
+      // the two are different things: one documents a decision, the other is
+      // private working commentary. An emptied note is stored as NULL rather
+      // than '' so "no note" and "a note that is blank" are the same state.
+      const trimmed = note?.trim();
+      await prisma.mentorApplication.update({
+        where: { id },
+        data: { adminNote: trimmed ? trimmed : null },
+      });
       await logActivity({
         action: 'mentor_application.note_saved',
         actorId: session.user.id,
         actorEmail: session.user.email ?? null,
         targetType: 'mentor_application',
         targetId: id,
+        // The note text itself is deliberately NOT logged — it is private
+        // admin commentary, and the activity log is read by more people than
+        // the application detail page is.
+        detail: `application ${id}`,
         request,
       });
       return NextResponse.json({ ok: true });

@@ -100,6 +100,65 @@ test('rejecting requires a reason and records it internally', { tag: '@smoke' },
   }
 });
 
+// #1806: the note action used to write to `rejectReason`, so saving a note on
+// a rejected application silently destroyed the reason the admin had recorded.
+// The two fields are separate columns now — this asserts the reason survives a
+// note save byte-for-byte, and that the note landed in its own column.
+test('saving an admin note does not overwrite the rejection reason', { tag: '@smoke' }, async ({ page }) => {
+  const adminEmail = uniqueEmail('mentor-app-note-admin');
+  const pw = 'NoteAdmin123';
+  await seedUser(adminEmail, pw, 'ADMIN', 'Note Admin');
+  const app = await seedApplication({ fullName: 'Note Overwrite Mentor' });
+  const REASON = 'Rejected: no hands-on mentoring experience in the last 3 years.';
+  const NOTE = 'Called on 2026-09-01 — happy to re-apply next year.';
+
+  try {
+    await signInAsFreshUser(page, adminEmail, pw, '/admin');
+    await page.goto(`/admin/mentor-applications/${app.id}`);
+
+    await page.getByTestId('mentor-application-reject-reason').fill(REASON);
+    await page.getByTestId('mentor-application-reject').click();
+    await expect(page.getByText('Application rejected')).toBeVisible();
+    await expect(page.getByTestId('mentor-application-recorded-reject-reason')).toHaveText(REASON);
+
+    // The note box starts empty even on a rejected application: it reads
+    // adminNote, not the reason (the other half of the old bug).
+    const noteBox = page.getByTestId('mentor-application-note');
+    await expect(noteBox).toHaveValue('');
+
+    await noteBox.fill(NOTE);
+    await page.getByRole('button', { name: 'Save note' }).click();
+    await expect(page.getByText('Note saved')).toBeVisible();
+
+    await expect
+      .poll(async () => (await prisma.mentorApplication.findUnique({ where: { id: app.id } }))?.adminNote)
+      .toBe(NOTE);
+
+    const after = await prisma.mentorApplication.findUnique({ where: { id: app.id } });
+    // The point of the test: byte-identical, not merely "still set".
+    expect(after?.rejectReason).toBe(REASON);
+    expect(after?.status).toBe('REJECTED');
+
+    // Reload: the reason is still rendered as the reason, and the note as the
+    // note — they never swap places.
+    await page.reload();
+    await expect(page.getByTestId('mentor-application-recorded-reject-reason')).toHaveText(REASON);
+    await expect(page.getByTestId('mentor-application-note')).toHaveValue(NOTE);
+
+    // Emptying the note clears it to NULL and still leaves the reason alone.
+    await page.getByTestId('mentor-application-note').fill('');
+    await page.getByRole('button', { name: 'Save note' }).click();
+    await expect(page.getByText('Note saved')).toBeVisible();
+    await expect
+      .poll(async () => (await prisma.mentorApplication.findUnique({ where: { id: app.id } }))?.adminNote)
+      .toBeNull();
+    expect((await prisma.mentorApplication.findUnique({ where: { id: app.id } }))?.rejectReason).toBe(REASON);
+  } finally {
+    await prisma.mentorApplication.deleteMany({ where: { id: app.id } });
+    await cleanupByEmail(adminEmail);
+  }
+});
+
 test('approving a new applicant creates an invitation and a second approve attempt is a no-op (idempotent)', { tag: '@smoke' }, async ({ page }) => {
   const adminEmail = uniqueEmail('mentor-app-review-admin');
   const pw = 'ReviewAdmin123';

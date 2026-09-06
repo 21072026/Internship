@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
+import { isRejectReasonAmbiguous } from '@/lib/mentorApplicationRejectReason';
 
 type Status = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
 
@@ -27,7 +28,9 @@ interface ApplicationDetail {
   status: Status;
   consentAt: string | null;
   createdAt: string;
+  decidedAt: string | null;
   rejectReason: string | null;
+  adminNote: string | null;
 }
 
 const STATUS_VARIANT: Record<string, 'warning' | 'info' | 'success' | 'danger'> = {
@@ -65,7 +68,9 @@ export default function MentorApplicationDetailPage() {
     if (res.ok) {
       const d = await res.json();
       setApp(d.application ?? null);
-      setNote(d.application?.rejectReason ?? '');
+      // The note has its own column: reading it back out of `rejectReason`
+      // was the other half of the bug that overwrote the reason (#1806).
+      setNote(d.application?.adminNote ?? '');
     }
     setLoading(false);
   }, [id]);
@@ -125,6 +130,10 @@ export default function MentorApplicationDetailPage() {
   if (!app) return <p className="text-gray-400 py-12 text-center">{a.notFound}</p>;
 
   const decidable = app.status === 'PENDING' || app.status === 'UNDER_REVIEW';
+  // Decided before notes and reasons had separate columns? Then this text is
+  // either the reason or the note that overwrote it, and nothing can tell them
+  // apart — see src/lib/mentorApplicationRejectReason.ts.
+  const reasonAmbiguous = isRejectReasonAmbiguous(app.status, app.decidedAt);
 
   return (
     <div>
@@ -183,6 +192,36 @@ export default function MentorApplicationDetailPage() {
               {app.consentAt ? a.consentedOn.replace('{date}', formatDate(app.consentAt, locale)) : a.noConsent}
             </p>
           </Card>
+
+          {/* Only shown for a REJECTED application. A non-rejected row can
+              still carry a value here from before #1806 — that is a note the
+              old code mis-filed, not a decision, and labelling it as one would
+              be worse than not showing it. The backfill copies those into
+              adminNote instead.
+
+              A REJECTED row decided before the split is ambiguous in the other
+              direction: the text may be the reason, or the note that destroyed
+              it. Those rows are shown under a label that does not decide which
+              (isRejectReasonAmbiguous) — the CRM must not assert that a private
+              note was why somebody was turned down. */}
+          {app.status === 'REJECTED' && app.rejectReason ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {reasonAmbiguous ? a.rejectReasonRecordedUnverified : a.rejectReasonRecorded}
+                </CardTitle>
+              </CardHeader>
+              <p className="text-xs text-gray-500 mb-2" data-testid="mentor-application-reject-reason-hint">
+                {reasonAmbiguous ? a.rejectReasonRecordedUnverifiedHint : a.rejectReasonRecordedHint}
+              </p>
+              <p
+                className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line"
+                data-testid="mentor-application-recorded-reject-reason"
+              >
+                {app.rejectReason}
+              </p>
+            </Card>
+          ) : null}
         </div>
 
         <div className="space-y-6">
@@ -234,7 +273,16 @@ export default function MentorApplicationDetailPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>{a.noteLabel}</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>
+                <span className="inline-flex items-center gap-2">
+                  {a.noteLabel}
+                  <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                    {a.internalBadge}
+                  </span>
+                </span>
+              </CardTitle>
+            </CardHeader>
             <p className="text-xs text-gray-500 mb-2">{a.noteHint}</p>
             <Textarea rows={4} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} data-testid="mentor-application-note" />
             <Button variant="outline" size="sm" className="mt-2" loading={savingNote} onClick={saveNote}>

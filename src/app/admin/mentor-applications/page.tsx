@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
+import { isRejectReasonAmbiguous } from '@/lib/mentorApplicationRejectReason';
 
 interface ApplicationRow {
   id: string;
@@ -16,6 +17,12 @@ interface ApplicationRow {
   capacity: number | null;
   status: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
   createdAt: string;
+  decidedAt: string | null;
+  // Two separate admin-only free-text fields (#1806): the reason a rejection
+  // was decided, and a private review note. They used to share one column, so
+  // saving a note wiped the reason.
+  rejectReason: string | null;
+  adminNote: string | null;
 }
 
 const STATUS_TABS = ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'ALL'] as const;
@@ -127,6 +134,28 @@ export default function MentorApplicationsPage() {
                     ) : (
                       <p className="mt-1.5 text-[11px] text-gray-400">{a.noSkills}</p>
                     )}
+                    {/* Only a REJECTED row shows a rejection reason — see the
+                        note on the detail page: a value on any other status is
+                        a pre-#1806 note the old code mis-filed. A row decided
+                        before the split gets the hedged label instead, because
+                        its text may equally be the note that replaced the
+                        reason. */}
+                    {r.status === 'REJECTED' && r.rejectReason ? (
+                      <p className="mt-1.5 text-[11px] text-gray-500 line-clamp-2" data-testid={`mentor-application-reason-${r.id}`}>
+                        <span className="font-medium">
+                          {`${isRejectReasonAmbiguous(r.status, r.decidedAt) ? a.rejectReasonRecordedUnverified : a.rejectReasonLabel}:`}
+                        </span>{' '}
+                        {r.rejectReason}
+                      </p>
+                    ) : null}
+                    {r.adminNote ? (
+                      <p className="mt-1 text-[11px] text-gray-500 line-clamp-2" data-testid={`mentor-application-note-${r.id}`}>
+                        <span className="inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 mr-1">
+                          {a.internalBadge}
+                        </span>
+                        {r.adminNote}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
