@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Prefer the manual override, then a dedicated secret, then production.
-      BASE_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://crm.ersah.in' }}
+      BASE_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://interncrm.com' }}
       STRESS_CONCURRENCY: '25'
       STRESS_DURATION_MS: '30000'
       STRESS_MAX_ERROR_RATE: '0.02'
