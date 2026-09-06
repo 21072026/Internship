@@ -171,8 +171,8 @@ source available to its users.
 
 ### Trademarks
 
-The AGPL covers the **code only**. The name "Internship CRM", the project's logo and the
-`crm.ersah.in` domain are **not** licensed with it — forks and derivative services must use
+The AGPL covers the **code only**. The name "Internship CRM" / "InternCRM", the project's logo
+and the `interncrm.com` domain are **not** licensed with it — forks and derivative services must use
 their own name and branding, and may not imply endorsement by or affiliation with the rights
 holder.
 

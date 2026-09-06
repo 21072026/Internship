@@ -4,6 +4,7 @@ import { useT, useLocale } from "@/i18n/client";
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/Card';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { INTERACTION_TYPES } from '@/lib/interactionTypes';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { BookOpen } from 'lucide-react';
 import { formatDate } from '@/lib/relativeTime';
@@ -22,7 +23,7 @@ interface Interaction {
   };
 }
 
-const TYPES = ['ALL', 'Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] as const;
+const TYPES = ['ALL', ...INTERACTION_TYPES] as const;
 
 export default function MentorInteractionsPage() {
   const t = useT();

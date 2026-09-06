@@ -7,7 +7,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { CalendarClock } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDate, formatDateTimeWithZone } from '@/lib/relativeTime';
+import { viewerTimeZone } from '@/lib/timezone';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 
 type Item = {
@@ -27,14 +29,24 @@ function proposedSlots(value: unknown): string[] {
 
 export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean }) {
   const t = useT();
+  const locale = useLocale();
   const text = t.interviewRequests;
   const [items, setItems] = useState<Item[]>([]);
+  // Which clock the proposed slots are printed on. The endpoint hands back the
+  // viewer's saved `User.timezone`; `viewerTimeZone` falls back to the browser's
+  // own zone and then to the deployment default, so the "(GMT+3)" label always
+  // names a real zone. Null until the first load resolves, which is harmless:
+  // the list is fetched in an effect, so no date exists in the server-rendered
+  // HTML for a client re-render to disagree with.
+  const [timezone, setTimezone] = useState<string | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
     const res = await fetch('/api/interview-requests');
     const data = await res.json();
-    if (res.ok) setItems(data.requests ?? []);
-    else setError(data.error ?? text.errors.loadFailed);
+    if (res.ok) {
+      setItems(data.requests ?? []);
+      setTimezone(data.viewerTimezone ?? null);
+    } else setError(data.error ?? text.errors.loadFailed);
   }, [text.errors.loadFailed]);
 
   useEffect(() => { void load(); }, [load]);
@@ -85,20 +97,25 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
                 })}`
               : null;
             return (
-              <Card key={item.id}>
+              <Card key={item.id} data-testid={`interview-request-${item.id}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="break-words font-semibold text-gray-900 dark:text-gray-100">{item.requisition.title}</h2>
                     <p className="break-words text-sm text-gray-600 dark:text-gray-300">
                       {item.company.name} · <PersonHoverCard personId={item.mentee.id} name={item.mentee.fullName} role="MENTEE" />
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(item.createdAt, locale)}</p>
                     {item.note && <p className="mt-2 break-words text-sm text-gray-700 dark:text-gray-300">{item.note}</p>}
                     {slots.length > 0 && (
                       <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
                         <p className="font-medium">{text.proposedSlots}</p>
                         <ul className="list-inside list-disc">
-                          {slots.map((slot) => <li key={slot}>{new Date(slot).toLocaleString()}</li>)}
+                          {/* A proposed slot is an appointment someone will be
+                              held to, and this queue is read from Turkey and
+                              from Germany — so it names its zone (#1422). */}
+                          {slots.map((slot) => (
+                            <li key={slot}>{formatDateTimeWithZone(slot, locale, viewerTimeZone(timezone))}</li>
+                          ))}
                         </ul>
                       </div>
                     )}

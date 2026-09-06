@@ -126,7 +126,7 @@ export default function MentorAnalyticsPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{ma.title}</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">{ma.subtitle}</p>
           {data ? (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1" data-testid="mentor-analytics-window">
+            <p className="text-xs text-gray-400 mt-1" data-testid="mentor-analytics-window">
               {data.range.from} – {data.range.to}
             </p>
           ) : null}
@@ -173,7 +173,7 @@ export default function MentorAnalyticsPage() {
         loading={loading}
         error={error}
         empty={!data}
-        emptyText={<p className="py-4 text-center text-sm text-gray-400 dark:text-gray-500">{ma.noData}</p>}
+        emptyText={<p className="py-4 text-center text-sm text-gray-400">{ma.noData}</p>}
         retryText={t.errorBoundary.retry}
         onRetry={load}
         skeleton="stats"
@@ -189,7 +189,7 @@ export default function MentorAnalyticsPage() {
           </div>
           {/* Which numbers move with the range and which are state. Without this
               line a mentor reads a narrow window as "my pipeline shrank". */}
-          <p className="text-xs text-gray-400 dark:text-gray-500 mb-8">{ma.rangeNote}</p>
+          <p className="text-xs text-gray-400 mb-8">{ma.rangeNote}</p>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Pipeline funnel */}
@@ -201,7 +201,7 @@ export default function MentorAnalyticsPage() {
                 </CardTitle>
               </CardHeader>
               {data.totalRelations === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">{ma.noData}</p>
+                <p className="text-sm text-gray-400 py-4 text-center">{ma.noData}</p>
               ) : (
                 <div className="space-y-2">
                   {stages.filter((s) => (data.funnel[s.key] ?? 0) > 0).map((s) => {
@@ -223,7 +223,7 @@ export default function MentorAnalyticsPage() {
                     );
                   })}
                   {stages.every((s) => !data.funnel[s.key]) && (
-                    <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">{ma.noData}</p>
+                    <p className="text-sm text-gray-400 py-4 text-center">{ma.noData}</p>
                   )}
                 </div>
               )}
@@ -286,7 +286,7 @@ export default function MentorAnalyticsPage() {
             </div>
           </div>
 
-          <div className="text-sm text-gray-400 dark:text-gray-500 text-center">
+          <div className="text-sm text-gray-400 text-center">
             <Link href="/mentor/mentees" className="text-blue-600 hover:underline">{ma.viewMentees}</Link>
           </div>
         </>

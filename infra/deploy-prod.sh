@@ -16,7 +16,8 @@
 #   3. back up the database (infra/backup-db.sh), refuse a data-destroying
 #      schema diff (infra/schema-guard.sh), then prisma db push
 #      --accept-data-loss (schema sync, same as CI)
-#   4. seed-templates + seed-goal-templates + backfill-project-members (idempotent)
+#   4. seed-templates + seed-goal-templates + backfill-project-members
+#      + backfill-sso-plan (all idempotent)
 #   5. swap the internship-crm container (host networking, port 3200, restart
 #      unless-stopped) — byte-for-byte the flags deploy.yml uses
 #   6. health-check http://127.0.0.1:3200 and prune old images
@@ -544,6 +545,12 @@ run_tool node prisma/backfill-relation-completed-at.mjs || true
 # the calendar (#1110). Nothing writes them any more, so this converges to a
 # no-op on the next deploy.
 run_tool node prisma/backfill-series-meetings.mjs || true
+# Grandfather tenants whose SAML SSO was live BEFORE it became a paid feature
+# (#1742). plan defaults to FREE, so the new entitlement in isSsoActive() would
+# otherwise take them offline on this very deploy — and their users are
+# provisioned with no usable password, so there is no fallback to sign in with.
+# Converges to a no-op once every such tenant sits on ENTERPRISE.
+run_tool node prisma/backfill-sso-plan.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it

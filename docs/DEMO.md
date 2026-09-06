@@ -86,7 +86,8 @@ mysql -e "GRANT ALL ON internship_crm_demo.* TO 'crm-demo'@'%' IDENTIFIED BY '<p
 #    Deliberately NO SMTP_*: mail is skipped in demo mode anyway, and leaving the
 #    credentials off the box means a mistake cannot send anything.
 
-# 3. Caddy site for demo.interncrm.com -> 127.0.0.1:3203
+# 3. Reverse-proxy vhost for demo.interncrm.com -> 127.0.0.1:3203
+#    (the box moved off Plesk to Caddy in 2026-09 — see docs/server-migration.md)
 
 # 4. first fill
 gh workflow run demo-reset.yml

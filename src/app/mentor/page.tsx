@@ -16,6 +16,7 @@ import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Users, BookOpen, MessageSquare, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
+import { interactionTypeStyle } from '@/lib/interactionTypes';
 
 async function getMentorData(mentorId: string) {
   const relations = await prisma.mentorshipRelation.findMany({
@@ -235,13 +236,7 @@ export default async function MentorDashboard() {
             {recentInteractions.map((interaction) => (
               <div key={interaction.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
                 <div
-                  className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                    interaction.type === 'Meeting'
-                      ? 'bg-blue-500'
-                      : interaction.type === 'Feedback'
-                      ? 'bg-green-500'
-                      : 'bg-orange-500'
-                  }`}
+                  className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${interactionTypeStyle(interaction.type).dot}`}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">

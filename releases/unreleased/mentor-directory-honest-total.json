@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **Mentor directory: honest totals, no silent 500-row cap** (#1820). `/api/mentors` no longer reads the first 500 consented mentors and reports the survivors of a JS filter as the total. Without a JSON-array filter the route now pages with `skip`/`take` and counts with `prisma.user.count()` over the same `where`; with one (skill / language / the derived `accepting` filter) it still filters in memory until the taxonomy join table (#1815) lands, but the count describes the filtered set and reaching the scan cap is reported as `partial: true` plus the cap. The paged order gained an `id` tiebreaker so mentors sharing a name cannot appear on two pages or on none, the cap is detected with a `limit + 1` probe so an answer of exactly the cap is not mislabelled partial, and the in-memory scan reads only the columns the filter needs (the card payload is re-read for the page slice) so a keystroke no longer drags thousands of bios through the heap. `/mentors` renders a \"showing N of M\" line and an explicit incompleteness notice whenever the answer is capped.",
+  "notes": {
+    "en": ["The mentor directory now says how many mentors it is showing out of how many exist — and warns you when a search could not cover the whole list, instead of quietly leaving mentors out."],
+    "tr": ["Mentor dizini artık kaç mentordan kaçını gösterdiğini söylüyor — ve bir arama listenin tamamını kapsayamadığında mentorları sessizce dışarıda bırakmak yerine seni uyarıyor."],
+    "de": ["Das Mentorenverzeichnis zeigt jetzt, wie viele von wie vielen Mentoren angezeigt werden — und warnt dich, wenn eine Suche nicht die ganze Liste erfassen konnte, statt Mentoren stillschweigend wegzulassen."]
+  }
+}

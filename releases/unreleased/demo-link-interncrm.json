@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- **The demo links point at the live demo again** (#2216). `DEMO_URL` still named `crm-demo.ersah.in`, which stopped resolving with a valid certificate when the box moved to `interncrm.com` — so the hero button, the bottom CTA link and the footer link on every public page led to a TLS error. `src/lib/demoMode.ts` now points at `https://demo.interncrm.com` (the host `uptime.yml` already probes), and the offline page, the API-explorer default base, `docs/DEMO.md` and the README environment table follow the same move.",
+  "notes": {
+    "en": ["The \"Try the live demo\" links work again — they pointed at the old demo address after the server move."],
+    "tr": ["\"Canlı demoyu deneyin\" bağlantıları yeniden çalışıyor — sunucu taşındıktan sonra eski demo adresini gösteriyorlardı."],
+    "de": ["Die \"Live-Demo testen\"-Links funktionieren wieder — sie zeigten nach dem Serverumzug noch auf die alte Demo-Adresse."]
+  }
+}
