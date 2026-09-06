@@ -33,6 +33,11 @@ test('queue counters are gated and opt-in, and the dead-letter alert is silent w
 
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
   const seededJobs: string[] = [];
+  // Only the ledger row this run produced is cleaned up. Deleting every row
+  // whose subject starts with the prefix would wipe a long-lived dev database's
+  // whole dead-letter alert history — including the rows counted as
+  // pre-existing two steps below.
+  let alertMailId: string | null = null;
   const mkJob = async (name: string, status: 'PENDING' | 'RUNNING' | 'DEAD_LETTER', over: Record<string, unknown> = {}) => {
     const row = await prisma.job.create({
       data: { name: `${RUN}.${name}`, payload: {}, status, ...over },
@@ -48,7 +53,9 @@ test('queue counters are gated and opt-in, and the dead-letter alert is silent w
     await mkJob('running', 'RUNNING', { lockedAt: new Date(), lockedBy: 'e2e-worker' });
 
     // 1) An anonymous caller sees liveness only — asking for the counters does
-    //    not get them, and (the point) does not cost a query either.
+    //    not get them, and (the point) does not cost a query either. The
+    //    counters fail CLOSED, unlike the detail block: they are withheld from
+    //    an unproven caller whether or not HEALTH_TOKEN is configured.
     const anon = await request.get('/api/health?jobs=1');
     expect(anon.status()).toBe(200);
     expect((await anon.json()).jobs).toBeUndefined();
@@ -89,6 +96,11 @@ test('queue counters are gated and opt-in, and the dead-letter alert is silent w
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
+    // 3b) The other half of the gate: an ADMIN session, no token header at all.
+    const viaSession = await page.request.get('/api/health?jobs=1');
+    expect(viaSession.status()).toBe(200);
+    expect((await viaSession.json()).jobs.pending).toBeGreaterThanOrEqual(2);
+
     // 4) Green is silent. Only meaningful while nothing else has dead-lettered.
     const foreignDeadLetters = await prisma.job.count({
       where: { status: 'DEAD_LETTER', name: { not: { startsWith: RUN } } },
@@ -113,20 +125,35 @@ test('queue counters are gated and opt-in, and the dead-letter alert is silent w
     expect(loud.ok()).toBeTruthy();
     const result = (await loud.json()).dlqAlert;
     expect(result.total).toBeGreaterThanOrEqual(3);
-    expect(result.sent).toBe(true);
+    // SMTP is blanked for e2e, so sendEmail answers SKIPPED without throwing.
+    // `sent` reports delivery, not "the function returned" (#1431): a mail that
+    // never left the box must never be reported as sent.
+    expect(result.sent).toBe(false);
+    expect(result.delivery).toBe('SKIPPED');
+    expect(result.reason).toBe('not_delivered');
 
-    // Exactly one mail, to the operator address, recorded in the ledger. SMTP is
-    // blanked for e2e, so the row is SKIPPED rather than SENT — what matters is
-    // that one row exists and that it is the ops-alert category.
+    // …and the attempt is on the ledger all the same: exactly one row, to the
+    // operator address, in the ops-alert category.
     const mailsAfter = await prisma.emailLog.count({ where: { subject: { startsWith: DLQ_SUBJECT_PREFIX } } });
     expect(mailsAfter).toBe(mailsBefore + 1);
     const mail = await prisma.emailLog.findFirst({
       where: { subject: { startsWith: DLQ_SUBJECT_PREFIX } },
       orderBy: { createdAt: 'desc' },
     });
+    alertMailId = mail?.id ?? null;
     expect(mail?.to).toBe(E2E_ALERT_EMAIL_TO);
     expect(mail?.category).toBe('ops-alert');
+    expect(mail?.status).toBe('SKIPPED');
     expect(mail?.subject).toContain('iş bekliyor');
+
+    // The durable half of the alert: a filling dead-letter queue is visible in
+    // the activity log even though the mail above never left the box.
+    const activity = await prisma.activityLog.findFirst({
+      where: { action: 'jobs.dlq_alert' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(activity?.level).toBe('ERROR');
+    expect(activity?.detail).toContain('"total"');
 
     // …and the counters now show the same three.
     const withDlq = await request.get('/api/health?jobs=1', {
@@ -137,7 +164,7 @@ test('queue counters are gated and opt-in, and the dead-letter alert is silent w
     expect(dlqCounters.failedLast24h).toBeGreaterThanOrEqual(3);
   } finally {
     await prisma.job.deleteMany({ where: { name: { startsWith: RUN } } });
-    await prisma.emailLog.deleteMany({ where: { subject: { startsWith: DLQ_SUBJECT_PREFIX } } });
+    if (alertMailId) await prisma.emailLog.deleteMany({ where: { id: alertMailId } });
     await cleanupByEmail(adminEmail);
   }
 });

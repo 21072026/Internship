@@ -19,7 +19,8 @@ import {
 //      row-by-row dump.
 //
 // The route-shape test at the bottom guards the *other* half of the issue: the
-// counters must cost an anonymous caller nothing.
+// counters must cost an anonymous caller nothing, and must not fall out of the
+// endpoint's fail-open detail branch on a server with no HEALTH_TOKEN.
 
 const empty: DeadLetterSummary = {
   total: 0,
@@ -118,18 +119,24 @@ test('a failure reason is sanitised, single-line and bounded', () => {
 // is read out of the source — the same trick e2e/email-groups-footer.unit.spec.ts
 // uses. /api/health is in the nightly k6 anonymous-GET mix with a latency
 // budget; a stray call up here would be paid by every uptime probe.
-test('the queue counters are read only behind the detail gate and ?jobs=1', () => {
+test('the queue counters are read only for a verified caller who asks for them', () => {
   const src = fs.readFileSync(path.join(process.cwd(), 'src/app/api/health/route.ts'), 'utf8');
 
-  // Exactly one call site, and it is opt-in.
+  // Exactly one call site, and it is opt-in AND behind proof of identity.
   const calls = src.match(/jobQueueHealth\(\)/g) ?? [];
   expect(calls).toHaveLength(1);
   expect(src).toContain("params.get('jobs') === '1'");
-  expect(src).toContain('...(wantsJobs ? { jobs: await jobQueueHealth() } : {})');
+  expect(src).toContain('...(wantsJobs && access.verified ? { jobs: await jobQueueHealth() } : {})');
 
-  // …and it sits after the anonymous early return, so an unauthorised caller
-  // never reaches it.
-  const anonymousReturn = src.indexOf('if (!(await maySeeDetail(request)))');
+  // `detail` is fail-open when HEALTH_TOKEN is unset — that is the bargain the
+  // deploy drift gate needs. `verified` is not, and the counters ride on
+  // `verified`, so an un-tokened server (every environment today) still refuses
+  // them to an anonymous ?jobs=1.
+  expect(src).toContain('return { detail: !expected, verified: false };');
+
+  // …and the read sits after the anonymous early return, so a caller the gate
+  // turned away never reaches it.
+  const anonymousReturn = src.indexOf('if (!access.detail)');
   expect(anonymousReturn).toBeGreaterThan(0);
   expect(src.indexOf('await jobQueueHealth()')).toBeGreaterThan(anonymousReturn);
 

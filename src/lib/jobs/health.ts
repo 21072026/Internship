@@ -17,9 +17,10 @@ import { prisma } from '@/lib/prisma';
 // Cost rule: this is THREE queries and it must stay that way. /api/health is in
 // the nightly k6 anonymous-GET mix with a latency budget, and
 // docs/testing.md warns that the endpoint already pays four EmailLog queries.
-// So the caller only reaches this module behind BOTH the detail gate and an
-// explicit `?jobs=1` — an anonymous probe issues exactly the queries it issued
-// before this landed, which is none.
+// So the caller only reaches this module behind BOTH proof of identity (a
+// matching HEALTH_TOKEN or an ADMIN session — never the route's fail-open
+// detail branch) and an explicit `?jobs=1`: an anonymous probe issues exactly
+// the queries it issued before this landed, which is none.
 
 export interface JobQueueHealth {
   // Work waiting to be claimed, whether or not it is due yet.

@@ -1,7 +1,8 @@
 import cron from 'node-cron';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { sendEmail } from '@/services/emailService';
+import { logActivity } from '@/lib/activity';
+import { sendEmail, type EmailDeliveryResult } from '@/services/emailService';
 import {
   buildDeadLetterAlert,
   normalizeReason,
@@ -87,14 +88,47 @@ export async function getDeadLetterSummary(): Promise<DeadLetterSummary> {
   };
 }
 
+export interface DeadLetterAlertRun {
+  /**
+   * True only when the transport actually accepted the message. A SKIPPED
+   * delivery (no SMTP configured, demo mode, preference gate) is NOT sent —
+   * see the note on the send below.
+   */
+  sent: boolean;
+  total: number;
+  /** What `sendEmail` reported. Absent when no send was attempted at all. */
+  delivery?: EmailDeliveryResult;
+  /** Why nothing was delivered, when `sent` is false and the queue is not empty. */
+  reason?: 'no_alert_address' | 'not_delivered' | 'send_failed';
+}
+
 /**
  * The daily run. Sends at most one e-mail, and none at all when the queue is
  * empty or ALERT_EMAIL_TO is unset.
+ *
+ * Two things make the *result* worth more than a boolean. First, the alert
+ * travels by the very channel it may have to report on, so — exactly as
+ * `alertEmailHealth` does (#1190) — the durable record is written FIRST, to
+ * ActivityLog, and is there even when the mail cannot leave the box. Second,
+ * "did not throw" is not "was delivered": `sendEmail` answers 'SKIPPED' without
+ * throwing on three paths (unsubscribed group, demo mode, SMTP_USER unset), and
+ * #1431 exists because four routes read that silence as success. So the outcome
+ * is captured and reported, and `sent` means SENT.
  */
-export async function runDeadLetterAlert(): Promise<{ sent: boolean; total: number; reason?: string }> {
+export async function runDeadLetterAlert(): Promise<DeadLetterAlertRun> {
   const summary = await getDeadLetterSummary();
   const message = buildDeadLetterAlert(summary);
   if (!message) return { sent: false, total: 0 };
+
+  // The durable signal. ActivityLog.detail is VARCHAR(191) and an oversized
+  // value is silently dropped (P2000, the #1268 lesson), so this is one small
+  // capped object: how many, since when, and the worst offender by name.
+  const detail = JSON.stringify({
+    total: summary.total,
+    oldestAt: summary.oldestAt,
+    topName: summary.byName[0]?.name.slice(0, 64) ?? null,
+  }).slice(0, 191);
+  await logActivity({ level: 'error', action: 'jobs.dlq_alert', targetType: 'job', detail });
 
   const alertTo = process.env.ALERT_EMAIL_TO;
   if (!alertTo) {
@@ -104,8 +138,9 @@ export async function runDeadLetterAlert(): Promise<{ sent: boolean; total: numb
     return { sent: false, total: summary.total, reason: 'no_alert_address' };
   }
 
+  let delivery: EmailDeliveryResult;
   try {
-    await sendEmail({
+    delivery = await sendEmail({
       to: alertTo,
       subject: message.subject,
       html: message.html,
@@ -116,9 +151,17 @@ export async function runDeadLetterAlert(): Promise<{ sent: boolean; total: numb
     });
   } catch (e) {
     logger.error('Dead-letter alert could not be delivered', { error: String(e), total: summary.total });
-    return { sent: false, total: summary.total, reason: 'send_failed' };
+    return { sent: false, total: summary.total, delivery: 'FAILED', reason: 'send_failed' };
   }
-  return { sent: true, total: summary.total };
+
+  if (delivery !== 'SENT') {
+    // The queue is unhealthy AND the alert about it never left. The EmailLog row
+    // records why; this line and the ActivityLog row above are what an operator
+    // can find without reading the ledger.
+    logger.warning('Dead-letter alert was not delivered', { delivery, total: summary.total });
+    return { sent: false, total: summary.total, delivery, reason: 'not_delivered' };
+  }
+  return { sent: true, total: summary.total, delivery };
 }
 
 const tasks = new Map<string, ReturnType<typeof cron.schedule>>();
@@ -147,7 +190,8 @@ export function initDeadLetterAlertCron() {
     try {
       const result = await runDeadLetterAlert();
       // Nothing to say when the queue is clean — the log stays as quiet as the
-      // mailbox does.
+      // mailbox does. When it is not clean, the line names what actually
+      // happened to the mail, not merely that the job ran.
       if (result.total > 0) logger.warning('Dead-letter alert ran', { ...result });
     } catch (e) {
       logger.error('Dead-letter alert cron failed', { error: String(e) });

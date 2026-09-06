@@ -1,4 +1,4 @@
 {
-  "bump": "patch",
-  "changelog": "- **Queue depth and dead-letter size on /api/health** (#1674). `GET /api/health?jobs=1` now reports `pending`, `running`, `deadLetter`, `oldestPendingAgeSec` and `failedLast24h` — inside the HEALTH_TOKEN/ADMIN detail branch only, so an anonymous probe issues no extra query. A daily 06:45 UTC job mails `ALERT_EMAIL_TO` (Turkish) when the dead-letter queue is not empty, listing job types with counts and the grouped, sanitised failure reasons; an empty queue sends nothing and writes no `EmailLog` row. Carries the `Job` model from #1671, which has not landed yet."
+  "bump": "minor",
+  "changelog": "- **Queue depth and dead-letter size on /api/health** (#1674). `GET /api/health?jobs=1` now reports `pending`, `running`, `deadLetter`, `oldestPendingAgeSec` and `failedLast24h` to a caller holding `HEALTH_TOKEN` or signed in as an admin — never on the endpoint's fail-open public branch, so an anonymous probe issues no extra query. A daily 06:45 UTC job mails `ALERT_EMAIL_TO` (Turkish) when the dead-letter queue is not empty, listing job types with counts and the grouped, sanitised failure reasons; it writes a `jobs.dlq_alert` activity row first, so a filling queue is visible even when the alert itself cannot be delivered, and an empty queue sends nothing at all. Carries the `Job` model from #1671, which has not landed yet."
 }

@@ -2957,8 +2957,11 @@ model MatchFeedback {
 // dead-letter alert. `JobRun`, `enqueue()`, the SKIP LOCKED `claim()` and the
 // worker loop are #1671/#1673 and are deliberately NOT in this file yet.
 //
-// Field names and indexes are copied verbatim from #1671's specification so the
-// two land as the same table rather than as two competing ones.
+// Field names are copied verbatim from #1671's specification so the two land as
+// the same table rather than as two competing ones — whichever PR merges second
+// deletes its copy of this block instead of resolving a conflict by hand. The
+// one deliberate addition is the `orgId`-leading index below, which #1671's
+// draft does not have and which every other TENANT_MODELS entry does.
 enum JobStatus {
   PENDING
   RUNNING
@@ -2991,6 +2994,11 @@ model Job {
   lockedBy String?   @db.VarChar(64)
 
   /// Enqueue-side de-duplication key: the same key never produces a second row.
+  /// Global rather than `@@unique([orgId, idempotencyKey])` on purpose: `orgId`
+  /// is nullable and MySQL treats NULLs in a unique index as distinct, so a
+  /// composite key would silently stop de-duplicating anything at all while
+  /// every row still has a null org (i.e. today). Revisit it together with the
+  /// backfill that makes `orgId` non-null.
   idempotencyKey String? @unique
 
   /// Tenant anchor. Nullable like the other phase-1 tenant models; the model is
@@ -3005,4 +3013,11 @@ model Job {
 
   @@index([status, runAt, priority])
   @@index([name, status])
+  /// Tenant-leading, like every other model in TENANT_MODELS (MatchFeedback's
+  /// `[orgId, createdAt]`, Requisition's `[orgId, status]`, AccountLockout's
+  /// `[orgId]`). Without it, an auto-scoped query under MT_ENFORCE_ISOLATION
+  /// would filter orgId row-by-row on top of the status index — including the
+  /// claim query `status=PENDING AND runAt<=now`, which is the hottest one this
+  /// table will ever serve.
+  @@index([orgId, status, runAt])
 }

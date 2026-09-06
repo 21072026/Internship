@@ -13,7 +13,9 @@ import { verifySmtpConnection } from '@/services/emailService';
 // verify database connectivity, ?smtp=1 to verify SMTP connectivity (no
 // message sent — see #483, where SMTP silently failing had no visibility
 // outside of a user reporting a missing email), or ?jobs=1 for the job-queue
-// depth and dead-letter size (#1674). Never touches or mutates domain data.
+// depth and dead-letter size (#1674 — those need a real HEALTH_TOKEN or an
+// ADMIN session, never the fail-open branch). Never touches or mutates domain
+// data.
 //
 // Liveness stays public — a monitor cannot log in. The *detail* (version, git
 // sha, subsystem status, uptime) is a different matter: to an attacker it is a
@@ -21,32 +23,60 @@ import { verifySmtpConnection } from '@/services/emailService';
 // released only to an admin session or a caller holding HEALTH_TOKEN.
 export const dynamic = 'force-dynamic';
 
-/**
- * Whether this caller may see the detailed fields.
- *
- * When `HEALTH_TOKEN` is unset the endpoint keeps its old, fully public shape.
- * That is deliberate rather than lazy: the production deploy gate reads `sha`
- * from this endpoint to decide whether the live container has drifted
- * (`deploy-prod.yml`, `infra/deploy-prod.sh`), and the same is true of the
- * preview gate. Defaulting to closed would blind all of them the moment this
- * merges, before anyone had a chance to configure the token. Set `HEALTH_TOKEN`
- * in the server env and on the probes, and the endpoint closes.
- */
-async function maySeeDetail(request: Request): Promise<boolean> {
-  const expected = process.env.HEALTH_TOKEN;
-  if (!expected) return true;
+interface HealthAccess {
+  /** May see the legacy detail block: version, sha, subsystem status, uptime. */
+  detail: boolean;
+  /**
+   * Proved who they are — a matching `HEALTH_TOKEN` or an ADMIN session. This
+   * is strictly stronger than `detail`, which is fail-open (see below).
+   */
+  verified: boolean;
+}
 
-  const got = request.headers.get('x-health-token') || '';
-  try {
-    if (got.length === expected.length && timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {
-      return true;
+/**
+ * What this caller may see.
+ *
+ * `detail` is FAIL-OPEN: when `HEALTH_TOKEN` is unset the endpoint keeps its
+ * old, fully public shape. That is deliberate rather than lazy — the production
+ * deploy gate reads `sha` from this endpoint to decide whether the live
+ * container has drifted (`deploy-prod.yml`, `infra/deploy-prod.sh`), and the
+ * same is true of the preview gate. Defaulting to closed would blind all of
+ * them the moment this merges, before anyone had a chance to configure the
+ * token. Set `HEALTH_TOKEN` in the server env and on the probes, and the
+ * endpoint closes.
+ *
+ * `verified` is FAIL-CLOSED, and it is what the job-queue counters require
+ * (#1674). Nothing automated parses `jobs`, so those counters owe the deploy
+ * gate nothing and must not inherit its bargain: on a server with no
+ * `HEALTH_TOKEN` — which is every environment today — the fail-open branch
+ * would otherwise hand queue depth, dead-letter size and three extra DB
+ * queries to any anonymous caller who appended `?jobs=1`.
+ *
+ * Reading the session costs a JWT decode, so it is attempted only when it can
+ * change the answer: the token gate is closed, or the caller asked for
+ * something that needs proof. An anonymous liveness probe on an un-tokened
+ * server does exactly what it did before.
+ */
+async function resolveAccess(request: Request, needsProof: boolean): Promise<HealthAccess> {
+  const expected = process.env.HEALTH_TOKEN;
+
+  if (expected) {
+    const got = request.headers.get('x-health-token') || '';
+    try {
+      if (got.length === expected.length && timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {
+        return { detail: true, verified: true };
+      }
+    } catch {
+      // fall through to the session check
     }
-  } catch {
-    // fall through to the session check
   }
 
-  const session = await getServerSession(authOptions);
-  return session?.user.role === 'ADMIN';
+  if (expected || needsProof) {
+    const session = await getServerSession(authOptions);
+    if (session?.user.role === 'ADMIN') return { detail: true, verified: true };
+  }
+
+  return { detail: !expected, verified: false };
 }
 
 export async function GET(request: Request) {
@@ -54,11 +84,13 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const wantsDb = params.get('db') === '1';
   const wantsSmtp = params.get('smtp') === '1';
-  // Queue counters are opt-in like the two probes above, and read only inside
-  // the gated branch below: an anonymous /api/health issues no query for them,
-  // which is what keeps the endpoint inside its k6 latency budget
-  // (docs/testing.md — it already pays four EmailLog queries in the detail view).
+  // Queue counters are opt-in like the two probes above, and read only for a
+  // caller who proved who they are (`access.verified`) — never on the fail-open
+  // detail path. An anonymous /api/health issues no query for them, which is
+  // what keeps the endpoint inside its k6 latency budget (docs/testing.md — it
+  // already pays four EmailLog queries in the detail view).
   const wantsJobs = params.get('jobs') === '1';
+  const access = await resolveAccess(request, wantsJobs);
 
   let db: 'ok' | 'error' | 'skipped' = 'skipped';
   if (wantsDb) {
@@ -84,7 +116,7 @@ export async function GET(request: Request) {
   // An anonymous caller learns whether the app is up, and nothing else. The
   // status code still distinguishes healthy from degraded, which is all an
   // uptime monitor acts on.
-  if (!(await maySeeDetail(request))) {
+  if (!access.detail) {
     return NextResponse.json(
       { status, timestamp: new Date().toISOString() },
       { status: healthy ? 200 : 503 }
@@ -103,10 +135,12 @@ export async function GET(request: Request) {
       // addresses are scrubbed in the lib, so nothing here carries PII.
       email: await getEmailHealth(),
       // Job-queue depth and dead-letter size (#1674) — counters only, no job
-      // payload, name of a user or org. Appended rather than inserted: the
+      // payload, name of a user or org. Requires `access.verified`, i.e. a real
+      // HEALTH_TOKEN or an ADMIN session, so an un-tokened server does not leak
+      // them on the fail-open detail path. Appended rather than inserted: the
       // deploy gate parses `sha` out of this response and every existing field
       // keeps its place.
-      ...(wantsJobs ? { jobs: await jobQueueHealth() } : {}),
+      ...(wantsJobs && access.verified ? { jobs: await jobQueueHealth() } : {}),
       uptimeMs: Math.round(process.uptime() * 1000),
       responseMs: Date.now() - started,
       timestamp: new Date().toISOString(),
