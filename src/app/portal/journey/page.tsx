@@ -153,7 +153,23 @@ export default async function PortalJourneyPage() {
                     >
                       <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
+                        {/* The list is narrow and truncates (#1421): when the
+                            mentor wrote a subject it leads, and the note drops
+                            to a smaller second line — never two full-size lines
+                            competing for the same 375px row. */}
+                        {interaction.subject ? (
+                          <>
+                            <p
+                              data-testid="journey-interaction-subject"
+                              className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                            >
+                              {interaction.subject}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">{interaction.notes}</p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
+                        )}
                         <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-1" />
                         <p className="text-xs text-gray-400">
                           {formatDate(interaction.date, locale)}

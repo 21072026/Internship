@@ -13,6 +13,9 @@ import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 interface Interaction {
   id: string;
   date: string;
+  // The mentor types a short topic line on the log; it was carried by the API
+  // all along but never declared here, so the portal dropped it silently (#1421).
+  subject?: string | null;
   notes: string;
   type: string;
   autoLogged?: boolean;
@@ -73,8 +76,16 @@ export default function PortalInteractionsPage() {
             <Card key={interaction.id}>
               <div className="flex items-start gap-4">
                 <InteractionTypeBadge type={interaction.type} className="flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-700">{interaction.notes}</p>
+                <div className="flex-1 min-w-0">
+                  {interaction.subject && (
+                    <p
+                      data-testid="interaction-subject"
+                      className="text-sm font-medium text-gray-900 dark:text-gray-100 break-words"
+                    >
+                      {interaction.subject}
+                    </p>
+                  )}
+                  <p className="text-sm text-gray-700 break-words">{interaction.notes}</p>
                   <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-2" />
                   <p className="text-xs text-gray-400 mt-2">
                     {formatDate(interaction.date, locale, {

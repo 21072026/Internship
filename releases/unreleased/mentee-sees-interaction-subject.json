@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Mentees see the interaction subject** (#1421). The subject a mentor types on an interaction log reached the portal in the API payload but was never rendered: `/portal/interactions` did not declare `subject` on its row type, and `/portal/journey` showed the note only. Both now lead with the subject in the same bold treatment the mentor screens use, with the journey list truncating the subject and dropping the note to a smaller second line so a 375px row still fits. Logs without a subject render exactly as before.",
+  "notes": {
+    "en": [
+      "Interaction logs now show the subject your mentor wrote, both in your interaction list and in the recent activity on your journey page."
+    ],
+    "tr": [
+      "Etkileşim kayıtlarında mentörünüzün yazdığı başlık artık görünüyor — hem etkileşim listenizde hem de yolculuk sayfanızdaki son etkileşimlerde."
+    ],
+    "de": [
+      "Interaktionsprotokolle zeigen jetzt den Betreff, den Ihre Mentorin oder Ihr Mentor geschrieben hat — in Ihrer Interaktionsliste und in den letzten Aktivitäten auf Ihrer Journey-Seite."
+    ]
+  }
+}
