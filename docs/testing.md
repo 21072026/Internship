@@ -278,6 +278,13 @@ As the table grows, that query — not the app — is the likeliest cause of an 
 breach. Setting `HEALTH_TOKEN` on the server removes the whole detail path from the anonymous
 probe and is the cheaper fix.
 
+The job-queue counters added in #1674 deliberately did **not** join that bill: they are read
+only for a caller who is past the detail gate *and* asks for them with `?jobs=1`, so the
+anonymous mix (`ep:health`, `ep:health_db`) issues exactly the queries it issued before.
+Anything added to `/api/health` from here on should follow the same shape — opt-in, inside
+the gated branch — and `e2e/job-queue-dlq-alert.unit.spec.ts` asserts it for the counters by
+reading the route's source.
+
 ## OS accessibility media preferences
 
 Three user preferences the browser exposes as media features are **supported and

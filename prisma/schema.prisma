@@ -2948,3 +2948,61 @@ model MatchFeedback {
   @@index([mentorId])
   @@index([actorId])
 }
+
+// ── Background job queue ─────────────────────────────────────────────────────
+//
+// The durable substrate for the queue engine (#1669). Only the `Job` half is
+// here: this PR (#1674) is the *observability* task and needs somewhere to
+// count from — queue depth and dead-letter size on /api/health, plus the daily
+// dead-letter alert. `JobRun`, `enqueue()`, the SKIP LOCKED `claim()` and the
+// worker loop are #1671/#1673 and are deliberately NOT in this file yet.
+//
+// Field names and indexes are copied verbatim from #1671's specification so the
+// two land as the same table rather than as two competing ones.
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  // Retries exhausted: nothing will pick this row up again. This is the state
+  // the daily alert (src/lib/jobs/dlqAlert.ts) exists to make visible.
+  DEAD_LETTER
+  CANCELLED
+}
+
+model Job {
+  id       String    @id @default(cuid())
+  name     String    @db.VarChar(64)
+  payload  Json
+  status   JobStatus @default(PENDING)
+  /// Higher runs first; the claim query orders by priority DESC, runAt ASC.
+  priority Int       @default(0)
+  /// Earliest moment the job may run — "due" means runAt <= now.
+  runAt    DateTime  @default(now())
+
+  attempts    Int     @default(0)
+  maxAttempts Int     @default(5)
+  /// Message of the most recent failure. May echo whatever the handler threw,
+  /// so every surface that renders it runs it through sanitizeError() first.
+  lastError   String? @db.Text
+
+  /// Lease held by a worker while status is RUNNING.
+  lockedAt DateTime?
+  lockedBy String?   @db.VarChar(64)
+
+  /// Enqueue-side de-duplication key: the same key never produces a second row.
+  idempotencyKey String? @unique
+
+  /// Tenant anchor. Nullable like the other phase-1 tenant models; the model is
+  /// listed in TENANT_MODELS (src/lib/orgContext.ts) so Prisma queries
+  /// auto-scope once MT_ENFORCE_ISOLATION is on. Operational readers (health,
+  /// the dead-letter alert) run outside any request scope and therefore see the
+  /// whole queue, which is what an operator alert has to do.
+  orgId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, runAt, priority])
+  @@index([name, status])
+}

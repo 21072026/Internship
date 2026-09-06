@@ -4,15 +4,16 @@ import { timingSafeEqual } from 'crypto';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getEmailHealth } from '@/lib/emailHealth';
+import { jobQueueHealth } from '@/lib/jobs/health';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { verifySmtpConnection } from '@/services/emailService';
 
 // Public, unauthenticated liveness/readiness probe used by uptime monitors and
 // the nightly stress test. Always cheap by default; pass ?db=1 to additionally
-// verify database connectivity, or ?smtp=1 to verify SMTP connectivity (no
+// verify database connectivity, ?smtp=1 to verify SMTP connectivity (no
 // message sent — see #483, where SMTP silently failing had no visibility
-// outside of a user reporting a missing email). Never touches or mutates
-// domain data.
+// outside of a user reporting a missing email), or ?jobs=1 for the job-queue
+// depth and dead-letter size (#1674). Never touches or mutates domain data.
 //
 // Liveness stays public — a monitor cannot log in. The *detail* (version, git
 // sha, subsystem status, uptime) is a different matter: to an attacker it is a
@@ -53,6 +54,11 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const wantsDb = params.get('db') === '1';
   const wantsSmtp = params.get('smtp') === '1';
+  // Queue counters are opt-in like the two probes above, and read only inside
+  // the gated branch below: an anonymous /api/health issues no query for them,
+  // which is what keeps the endpoint inside its k6 latency budget
+  // (docs/testing.md — it already pays four EmailLog queries in the detail view).
+  const wantsJobs = params.get('jobs') === '1';
 
   let db: 'ok' | 'error' | 'skipped' = 'skipped';
   if (wantsDb) {
@@ -96,6 +102,11 @@ export async function GET(request: Request) {
       // Delivery health (#1190), derived from the EmailLog ledger — recipient
       // addresses are scrubbed in the lib, so nothing here carries PII.
       email: await getEmailHealth(),
+      // Job-queue depth and dead-letter size (#1674) — counters only, no job
+      // payload, name of a user or org. Appended rather than inserted: the
+      // deploy gate parses `sha` out of this response and every existing field
+      // keeps its place.
+      ...(wantsJobs ? { jobs: await jobQueueHealth() } : {}),
       uptimeMs: Math.round(process.uptime() * 1000),
       responseMs: Date.now() - started,
       timestamp: new Date().toISOString(),
