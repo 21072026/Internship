@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // The suite runs WITHOUT DEMO_MODE, which is the configuration production and
 // preview use — so what these tests assert is that the whole feature is inert
 // there. That is the property worth guarding: a demo banner or a /demo page
-// appearing on crm.ersah.in would be a live incident, and the write blocklist
+// appearing on interncrm.com would be a live incident, and the write blocklist
 // firing on a real tenant would break their account settings.
 //
 // The demo-mode-ON behaviour is covered where it can be tested deterministically

@@ -18,12 +18,12 @@
 #
 # USAGE
 #   export CF_Token="<scoped token: Zone:DNS:Edit + Zone:Read, this zone only>"
-#   DOMAIN=interncrm.com ./infra/setup-dns-cloudflare.sh
+#   ./infra/setup-dns-cloudflare.sh            # DOMAIN/RECORDS/SERVER_IP overridable
 #   # SERVER_IP is auto-detected when run ON the server.
 #
 #   Env:
-#     DOMAIN      default ersah.in
-#     RECORDS     space-separated names, default "* www crm"  ('@' = apex)
+#     DOMAIN      default interncrm.com
+#     RECORDS     space-separated names, default "* www"  ('@' = apex)
 #     SERVER_IP   default: this host's public IP
 #     PROXIED     default false — read the note above before setting true
 #
@@ -41,8 +41,8 @@ set -euo pipefail
 # silently never created the wildcard the caller actually asked for.
 set -f
 
-DOMAIN="${DOMAIN:-ersah.in}"
-RECORDS="${RECORDS:-* www crm}"
+DOMAIN="${DOMAIN:-interncrm.com}"
+RECORDS="${RECORDS:-* www}"
 # Names to REMOVE. Exact names only — no patterns, so a typo cannot take out
 # more than it names. Runs before the create/update pass.
 DELETE_RECORDS="${DELETE_RECORDS:-}"

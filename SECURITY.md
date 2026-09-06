@@ -32,7 +32,7 @@ Useful things to include, roughly in order:
 ## Supported versions
 
 This project deploys continuously: every merge to `main` lands on production
-(`crm.ersah.in`) and preview (`crm-preview.ersah.in`). There are no maintained
+(`interncrm.com`) and preview (`preview.interncrm.com`). There are no maintained
 release branches, so **only the current `main` is supported**. Fixes ship as a
 new version rather than as backports.
 
@@ -51,7 +51,7 @@ thread go quiet.
 ## Scope
 
 **In scope** — the application code in this repository, and the deployments at
-`crm.ersah.in` and `crm-preview.ersah.in`.
+`interncrm.com` and `preview.interncrm.com`.
 
 **Out of scope**
 

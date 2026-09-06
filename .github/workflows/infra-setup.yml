@@ -4,18 +4,18 @@ name: Infra Setup (one-time, manual)
 # the Actions tab. Each step can be skipped independently, so a partial setup
 # can be completed or safely re-run — every step is idempotent.
 #
-#   1. dns   — wildcard A record `*.ersah.in` → server IP (Cloudflare API)
+#   1. dns   — wildcard A record `*.<BASE_DOMAIN>` → server IP (Cloudflare API)
 #   2. cert  — wildcard TLS cert via acme.sh + DNS-01, on the server over SSH
 #   3. perms — verify $NGINX_CONF_DIR is writable + nginx reload works
 #
 # Required secrets: SSH_PRIVATE_KEY / SSH_HOST / SSH_USER / SSH_PORT (already
 # used by deploy.yml) and CF_API_TOKEN — a SCOPED Cloudflare token
-# (Zone→DNS→Edit + Zone→Zone→Read, zone ersah.in only). See infra/README.md.
+# (Zone→DNS→Edit + Zone→Zone→Read, the target zone only). See infra/README.md.
 on:
   workflow_dispatch:
     inputs:
       run_dns:
-        description: 'Step 1: create wildcard *.ersah.in A record (Cloudflare)'
+        description: 'Step 1: create the wildcard A record for BASE_DOMAIN (Cloudflare)'
         type: boolean
         default: true
       run_cert:
@@ -36,7 +36,7 @@ jobs:
     name: Wildcard DNS · TLS · nginx perms
     runs-on: ubuntu-latest
     env:
-      BASE_DOMAIN: ersah.in
+      BASE_DOMAIN: ${{ vars.BASE_DOMAIN || 'interncrm.com' }}
       NGINX_CONF_DIR: /etc/nginx/conf.d
     steps:
       - uses: actions/checkout@v7

@@ -3,7 +3,7 @@ name: Deploy preview (hosted build → server swap, auto on main)
 # PREVIEW deploy — the sibling of deploy-prod.yml. The IMAGE IS BUILT ON A
 # GITHUB-HOSTED RUNNER (build-image.yml) and pushed to ghcr; the Plesk server
 # only pulls it and swaps the container, so preview
-# (https://crm-preview.ersah.in, container internship-crm-preview on :3201) is
+# (https://preview.interncrm.com, container internship-crm-preview on :3201) is
 # kept in step with main without the box ever compiling anything.
 #
 # WHY THIS IS AUTOMATIC (#800): preview used to be dispatch-only. Once per-PR

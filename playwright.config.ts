@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
  * - Local default: starts the dev server and tests http://localhost:3000.
  *   Run headed to watch: `npm run test:e2e -- --headed`.
  * - CI: builds + `next start`, runs headless against localhost.
- * - Against a deployed env: set BASE_URL (e.g. BASE_URL=https://crm-preview.ersah.in),
+ * - Against a deployed env: set BASE_URL (e.g. BASE_URL=https://preview.interncrm.com),
  *   which skips the local webServer and tests the remote URL.
  */
 const externalBase = process.env.BASE_URL;

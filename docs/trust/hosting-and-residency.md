@@ -1,23 +1,23 @@
 # Hosting and data residency
 
-**Last updated: 2026-09-02**
+**Last updated: 2026-09-06**
 
 The written answer to "where does our data live, and can we keep it in the EU?"
 
 ## Where the data is today
 
 **On one server.** The application runs as a Docker container on a single
-Plesk-managed host, next to its MySQL database and its backups. There is no
-managed database service, no object store and no CDN holding application data —
-the whole of it is on that machine.
+Linux host behind a Caddy reverse proxy, next to its MySQL database and its
+backups. There is no control panel, no managed database service, no object store
+and no CDN holding application data — the whole of it is on that machine.
 
 That machine runs three kinds of environment at once:
 
 | Environment | Container | Port | URL | Database |
 |---|---|---|---|---|
-| Production | `internship-crm` | 3200 | `https://crm.ersah.in` | `internship_crm` |
-| Shared preview | `internship-crm-preview` | 3201 | `https://crm-preview.ersah.in` | its own single preview database |
-| Per-pull-request | `internship-crm-pr<N>` | 33xx | `https://crm-pr<N>.ersah.in` | `internship_pr<N>`, created on first deploy and **dropped when the PR closes** |
+| Production | `internship-crm` | 3200 | `https://interncrm.com` | `internship_crm` |
+| Shared preview | `internship-crm-preview` | 3201 | `https://preview.interncrm.com` | its own single preview database |
+| Per-pull-request | `internship-crm-pr<N>` | 34xx | `https://pr<N>.interncrm.com` | `internship_pr<N>`, created on first deploy and **dropped when the PR closes** |
 
 **Say this plainly, because it matters for a risk assessment: production, the
 shared preview and every pull-request environment share one host.** They are
