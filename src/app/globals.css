@@ -78,6 +78,31 @@ html.density-compact div.rounded-lg.border.p-4 { padding: 0.625rem; }
 html.density-compact .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
 html.density-compact .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
 
+/*
+ * Muted secondary text token (#2131).
+ *
+ * Tailwind's gray-400 (#9ca3af) is what this codebase reaches for whenever text
+ * is "secondary": inbox previews, timestamps, card meta rows, empty states, the
+ * settings page's status lines. On white that measures 2.4-2.5:1, where WCAG AA
+ * asks 4.5:1 for body text — axe found it on six different screens at once
+ * (see e2e/a11y-baseline.json and docs/a11y-audit.md), which is the shape of a
+ * TOKEN problem, not six screen bugs. So the token is raised here, once, the
+ * same way dark mode and prefers-contrast already remap utilities below,
+ * instead of rewriting ~590 `text-gray-400` occurrences across ~180 files and
+ * hoping none of them was the one that mattered.
+ *
+ * gray-500 (#6b7280) is 4.83:1 on white and 4.4:1 on a gray-50 box — enough for
+ * body text on the surfaces this token actually lands on, and still visibly a
+ * step below `text-gray-600`/`text-gray-700` so the hierarchy survives. Icons
+ * drawn in gray-400 move with it: 2.5:1 was below the 3:1 that WCAG 1.4.11 asks
+ * of meaningful non-text content anyway, so this is a fix there too.
+ *
+ * Placed BEFORE the prefers-contrast block near the end of this file: that one
+ * pushes the same utility to gray-700 and must keep winning, and it does so on
+ * source order at equal specificity.
+ */
+.text-gray-400 { color: #6b7280; }              /* gray-500 — 4.83:1 on white */
+
 /* Dark mode base surfaces (class strategy); primitives add their own dark: */
 html.dark body { background-color: #030712; color: #f3f4f6; }
 
@@ -110,6 +135,9 @@ html.dark .text-gray-800 { color: #e5e7eb; }
 html.dark .text-gray-700 { color: #d1d5db; }
 html.dark .text-gray-600 { color: #9ca3af; }
 html.dark .text-gray-500 { color: #9ca3af; }
+/* Dark keeps gray-400 at #9ca3af (7.0:1 on gray-900): the light-mode raise
+   above would be a REGRESSION here, dark text on a dark surface. */
+html.dark .text-gray-400 { color: #9ca3af; }
 /* Borders */
 html.dark .border-gray-100 { border-color: #1f2937; }
 html.dark .border-gray-200 { border-color: #374151; }
@@ -120,6 +148,11 @@ html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #37
 /* Translucent white surfaces (e.g. the sticky landing header bg-white/80). */
 html.dark .bg-white\/80 { background-color: rgba(17,24,39,0.85); }
 html.dark .bg-white\/70 { background-color: rgba(17,24,39,0.80); }
+/* The admin board's stage-group panel (#2131). Unlike /80 and /70 this one
+   was never retinted, so in dark mode it stayed a 40%-white wash — a light
+   #797f87 panel under `text-gray-800` text remapped to #e5e7eb, i.e. 3.26:1,
+   the mirror image of the muted-text problem above. */
+html.dark .bg-white\/40 { background-color: rgba(17,24,39,0.60); }
 
 /*
  * Variant utilities (hover:/focus:) can't be reached by the base-name remaps

@@ -9,19 +9,14 @@ Automated axe-core scan of sixteen pages across five contexts (public, mentee,
 mentor, admin, company), each in light and dark. The scan **measures**; it fixes
 nothing. Every row below is a candidate for its own good-first-issue.
 
-**Totals** — critical: 0 · serious: 9 · moderate: 0 · minor: 0
+**Totals** — critical: 0 · serious: 0 · moderate: 0 · minor: 0
 
-> ⚠️ **The last regenerate widened the baseline.** These were newly frozen in rather than fixed:
->
-> - `/messages: color-contrast 0 → 1`
-> - `/messages: target-size 0 → 1`
-> - `/messages#dark: target-size 0 → 1`
-> - `/notifications: color-contrast 0 → 1`
-> - `/notifications#dark: color-contrast 0 → 1`
-> - `/mentor/board: color-contrast 0 → 1`
-> - `/admin/board: color-contrast 0 → 1`
-> - `/admin/board#dark: color-contrast 0 → 1`
-> - `/admin/settings: color-contrast 0 → 1`
+> ℹ️ **Hand-edited in #2131, not yet regenerated.** The nine serious findings
+> that used to sit here were the `text-gray-400` muted-text token and the 14×14
+> inbox person-card trigger; both were fixed in that PR, but the container it was
+> written in has no browser and no database, so the scan could not be re-run.
+> Run `A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts` once and
+> commit whatever it writes — this note disappears with it.
 
 
 **The gate** (`e2e/a11y-baseline.json`): the counts of *critical* and *serious*
@@ -30,15 +25,7 @@ moderate/minor findings are listed here but never gate.
 
 | Page | Selector | Rule | Severity | Suggested fix (axe help) |
 | --- | --- | --- | --- | --- |
-| `/admin/board` | `.cursor-pointer` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
-| `/admin/board#dark` | `section:nth-child(1) > .py-2.text-left[type="button"] > .text-gray-800.text-sm.font-semibold` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
-| `/admin/settings` | `.max-w-2xl > div:nth-child(3) > .text-gray-400` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
-| `/mentor/board` | `.gap-1.mt-2.text-xs` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
-| `/messages` | `a[data-testid="support-entry"] > .min-w-0.flex-1 > .text-xs.mt-0\.5` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
-| `/messages` | `.cursor-pointer` | target-size | serious | All touch targets must be 24px large, or leave sufficient space |
-| `/messages#dark` | `.cursor-pointer` | target-size | serious | All touch targets must be 24px large, or leave sufficient space |
-| `/notifications` | `.border-blue-200 > .min-w-0.flex-1 > .text-xs.text-gray-400.mt-1` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
-| `/notifications#dark` | `.dark\:text-gray-400` | color-contrast | serious | Elements must meet minimum color contrast ratio thresholds |
+| — | — | — | — | No violations found. |
 
 <!-- MANUAL SECTION — hand-written, carried over verbatim on every regenerate. Keep this marker. -->
 

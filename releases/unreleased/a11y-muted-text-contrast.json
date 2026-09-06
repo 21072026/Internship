@@ -1,0 +1,18 @@
+{
+  "bump": "patch",
+  "changelog": "- **Muted secondary text and the inbox person-card trigger now meet WCAG AA** (#2131). `text-gray-400` (#9ca3af) was the app's muted-text token and measured 2.38-2.53:1 on white where AA asks 4.5:1 — axe found it on `/messages`, `/notifications`, both boards and `/admin/settings` at once, so it is raised once in `globals.css` to gray-500 (4.83:1) rather than patched per screen; dark mode keeps #9ca3af. Also: the admin board's `bg-white/40` stage-group panel is finally retinted for dark (its `text-gray-800` header sat at 3.26:1 on a 40%-white wash), a read notification row is muted by colour instead of `opacity-60` (which faded text and card together, 2.3:1 light / 3.4:1 dark), and the 14x14px icon-only person-card trigger in the inbox gets a 24x24 hit area for WCAG 2.2 target-size. All nine frozen entries are cleared from `e2e/a11y-baseline.json`.",
+  "notes": {
+    "en": [
+      "Grey secondary text — inbox previews, timestamps, card details and status lines — is darker and now readable at the contrast level WCAG AA requires.",
+      "The small person icon in each inbox row is easier to hit on a touchscreen."
+    ],
+    "tr": [
+      "Gri ikincil yazılar — gelen kutusu önizlemeleri, zaman damgaları, kart ayrıntıları ve durum satırları — koyulaştırıldı; artık WCAG AA'nın istediği kontrast seviyesinde okunuyor.",
+      "Gelen kutusundaki küçük kişi simgesine dokunmatik ekranda dokunmak kolaylaştı."
+    ],
+    "de": [
+      "Grauer Sekundärtext — Posteingangs-Vorschauen, Zeitstempel, Kartendetails und Statuszeilen — ist dunkler und erreicht jetzt den von WCAG AA geforderten Kontrast.",
+      "Das kleine Personensymbol in jeder Posteingangszeile lässt sich auf dem Touchscreen leichter treffen."
+    ]
+  }
+}

@@ -44,14 +44,15 @@ import { signInAsFreshUser } from './helpers/auth';
 //     panned without a mouse (tabIndex on HorizontalScrollArea's scroller).
 //   - aria-command-name — the inbox's person-card trigger is an aria-hidden icon
 //     in a role="button" and announced nothing (it now takes the person's name).
-// The remaining nine ARE frozen into e2e/a11y-baseline.json, and that is the one
-// thing this file's own warning tells you to justify rather than do quietly:
-// eight of them are the single `text-gray-400` muted-text token at 2.38–2.53:1
-// (plus its dark-mode mirror on the board header) and two are the 14x14px inbox
-// trigger. Both are token/spacing changes that would move baseline keys on
-// pages this task does not own, so they are #2131 — with the measurements — and
-// docs/a11y-audit.md carries the row-by-row list. A frozen entry is a debt with
-// an issue number, never a pass mark.
+// The remaining nine were frozen into e2e/a11y-baseline.json as #2131, because
+// they were two root causes rather than nine bugs and both moved pages this task
+// did not own: seven were the single `text-gray-400` muted-text token at
+// 2.38–2.53:1, one its dark-mode mirror (the board's `bg-white/40` group panel,
+// never retinted, under text remapped to #e5e7eb), and two the 14x14px inbox
+// person-card trigger. #2131 fixed all three — the token is raised once in
+// globals.css, the panel is retinted beside the other `bg-white/*` remaps, and
+// the trigger got a 24x24 hit area — so every baseline entry here is back to {}.
+// A frozen entry is a debt with an issue number, never a pass mark.
 
 const GATED_SEVERITIES = new Set(['critical', 'serious']);
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];

@@ -182,9 +182,14 @@ export default function NotificationsPage() {
                         }
                       }
                 }
+                /* A read row is told apart by its border and its muted text,
+                   NOT by opacity: `opacity-60` dimmed the row's text INTO its
+                   background (3.4:1 in dark, 2.3:1 in light) and no colour token
+                   can win that argument, because it fades the text and the card
+                   under it by the same amount (#2131). */
                 className={`${ROW_INTERACTIVE_CLASSES} ${
                   n.read
-                    ? 'opacity-60 border-gray-100 dark:border-gray-800'
+                    ? 'border-gray-100 dark:border-gray-800'
                     : 'border-blue-200 dark:border-blue-900 bg-blue-50/40 dark:bg-blue-900/10'
                 }`}
               >
