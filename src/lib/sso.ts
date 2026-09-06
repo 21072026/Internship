@@ -53,7 +53,13 @@ export function isSsoConfigComplete(c: Partial<SsoConfig> | null | undefined): b
 
 // The tenant's stored config plus the plan it is on — an Organization row
 // satisfies this as-is, which is how every caller passes it.
-export type SsoActivation = Partial<SsoConfig> & { plan?: OrgPlan | string | null };
+//
+// `plan` is REQUIRED, not optional, and that is load-bearing: isSsoActive is
+// fail-closed on a missing plan, so an optional field would let the natural
+// optimisation of a login/ACS route — narrowing the query to `select` just the
+// SAML columns — compile green and silently take every SSO tenant in the
+// product offline. Required makes that a type error at the call site instead.
+export type SsoActivation = Partial<SsoConfig> & { plan: OrgPlan | string | null };
 
 // The guard the login/ACS path checks: SSO is only active for a tenant when it
 // is switched on, completely configured, names a provider we can actually

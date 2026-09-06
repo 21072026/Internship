@@ -59,9 +59,16 @@ export function isOverLimit(plan: OrgPlan, metric: keyof OrgPlanLimits, usage: n
 // this map is the single place that decides who may configure white-label
 // branding or SAML SSO. When #1733 lands, this map is what gets deleted;
 // nothing else needs to know how the answer was derived.
+//
+// Packaging follows docs/premium-model-calismasi.md, which puts BOTH of these
+// in Enterprise in both places it enumerates tiers ("Enterprise: SSO/SAML,
+// beyaz etiket …" and the summary table). Pro buys scale, analytics and the AI
+// package — not white-label. If the packaging ever changes, it changes there
+// first and here second, so there is one answer to "which plan includes
+// white-label".
 const PLAN_FEATURES: Record<OrgPlan, readonly PremiumFeature[]> = {
   FREE: [],
-  PRO: ['WHITE_LABEL'],
+  PRO: [],
   ENTERPRISE: ['WHITE_LABEL', 'SSO_SAML'],
 };
 
@@ -70,4 +77,12 @@ const PLAN_FEATURES: Record<OrgPlan, readonly PremiumFeature[]> = {
 export function orgPlanHasFeature(plan: OrgPlan | string | null | undefined, feature: PremiumFeature): boolean {
   if (!isOrgPlan(plan)) return false;
   return PLAN_FEATURES[plan].includes(feature);
+}
+
+// The cheapest plan that includes a feature, in ORG_PLANS order (FREE → PRO →
+// ENTERPRISE). This is what a refusal names so the caller can render "upgrade
+// to X" without hardcoding the packaging a second time (#1736). Null only if
+// no plan sells the feature at all.
+export function planIncludingFeature(feature: PremiumFeature): OrgPlan | null {
+  return ORG_PLANS.find((p) => PLAN_FEATURES[p.key].includes(feature))?.key ?? null;
 }

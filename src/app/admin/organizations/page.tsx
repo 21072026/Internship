@@ -251,8 +251,50 @@ export default function AdminOrganizationsPage() {
 
   // Is the selected tenant's plan entitled to each premium editor? Nothing is
   // locked until an org is picked (there is no plan to judge before that).
-  const brandLocked = !!brandOrgId && !orgPlanHasFeature(orgs.find((o) => o.id === brandOrgId)?.plan, 'WHITE_LABEL');
-  const ssoLocked = !!ssoOrgId && !orgPlanHasFeature(orgs.find((o) => o.id === ssoOrgId)?.plan, 'SSO_SAML');
+  const brandOrg = orgs.find((o) => o.id === brandOrgId);
+  const ssoOrg = orgs.find((o) => o.id === ssoOrgId);
+  const brandLocked = !!brandOrgId && !orgPlanHasFeature(brandOrg?.plan, 'WHITE_LABEL');
+  const ssoLocked = !!ssoOrgId && !orgPlanHasFeature(ssoOrg?.plan, 'SSO_SAML');
+
+  // Undoing is never gated (the API exempts a payload that can only null
+  // columns), so a locked editor still offers the way out: branding a tenant
+  // no longer pays for keeps rendering in every branded e-mail and on the
+  // certificate PDF until someone removes it, and a dead SSO switch left on is
+  // the thing an admin most wants to turn off.
+  const brandStored = !!(brandOrg && (brandOrg.branding.brandName || brandOrg.branding.brandLogoUrl
+    || brandOrg.branding.brandColor || brandOrg.branding.supportEmail));
+
+  const clearBranding = async () => {
+    if (!brandOrgId) return;
+    setSaving(true); setBrandMsg(null);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: brandOrgId, brandName: '', brandLogoUrl: '', brandColor: '', supportEmail: '' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setBrandMsg(res.ok ? t.organizations.brandingSaved : (data.error || t.common.error));
+      if (res.ok) { setBrandName(''); setBrandLogoUrl(''); setBrandColor(''); setBrandSupport(''); await load(); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const disableSso = async () => {
+    if (!ssoOrgId) return;
+    setSaving(true); setSsoMsg(null);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ssoOrgId, ssoEnabled: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setSsoMsg(res.ok ? t.organizations.ssoSaved : (data.error || t.common.error));
+      if (res.ok) { setSsoEnabled(false); await load(); }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const q = search.trim().toLowerCase();
   const filtered = orgs.filter((o) => !q || o.name.toLowerCase().includes(q) || o.slug.toLowerCase().includes(q));
@@ -310,6 +352,11 @@ export default function AdminOrganizationsPage() {
               </select>
             </div>
             {brandLocked && <LockedNote testId="branding-locked" text={t.organizations.brandingLocked} />}
+            {brandLocked && brandStored && (
+              <Button type="button" variant="outline" loading={saving} onClick={clearBranding} data-testid="brand-clear">
+                {t.organizations.brandingClear}
+              </Button>
+            )}
             {brandOrgId && (
               <div className="flex flex-wrap gap-3">
                 <div className="flex-1 min-w-[160px]"><Input label={t.organizations.brandName} value={brandName} disabled={brandLocked} onChange={(e) => setBrandName(e.target.value)} placeholder="Internship CRM" /></div>
@@ -343,6 +390,11 @@ export default function AdminOrganizationsPage() {
               </select>
             </div>
             {ssoLocked && <LockedNote testId="sso-locked" text={t.organizations.ssoLocked} />}
+            {ssoLocked && ssoOrg?.sso.ssoEnabled && (
+              <Button type="button" variant="outline" loading={saving} onClick={disableSso} data-testid="sso-disable">
+                {t.organizations.ssoDisable}
+              </Button>
+            )}
             {ssoOrgId && (
               <>
                 {(() => {
@@ -445,9 +497,13 @@ export default function AdminOrganizationsPage() {
                         aria-label={t.organizations.plan}
                         data-testid={`org-plan-${o.id}`}
                         value={o.plan}
-                        disabled={saving}
+                        // Changing the tier is a billing act and the premium
+                        // gate reads it, so the API refuses it for anyone but a
+                        // super admin (#1742). Disabled here to match; the
+                        // server check is the control.
+                        disabled={saving || !superAdmin}
                         onChange={(e) => changePlan(o.id, e.target.value)}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs disabled:opacity-60"
                       >
                         {plans.map((p) => <option key={p} value={p}>{p}</option>)}
                       </select>

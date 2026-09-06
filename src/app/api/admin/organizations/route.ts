@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
-import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, type OrgPlan } from '@/lib/orgPlans';
+import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, planIncludingFeature, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
@@ -178,15 +178,33 @@ function orNull(v: string | undefined): string | null | undefined {
 // entitlement comes from the tenant's plan (orgPlanHasFeature); an unentitled
 // tenant is refused with the shared feature_locked shape below. The locked card
 // on the admin screen is cosmetic; this is the gate.
+//
+// `requiredPlan` is part of the contract (#1736): a refusal that only says "no"
+// forces every caller to re-derive the packaging to render an upgrade CTA.
 function featureLocked(feature: 'WHITE_LABEL' | 'SSO_SAML') {
   return NextResponse.json(
     {
       code: 'feature_locked',
       feature,
+      requiredPlan: planIncludingFeature(feature),
       error: `This feature (${feature}) is not included in the organization's current plan`,
     },
     { status: 403 }
   );
+}
+
+// Is every premium field in this payload being CLEARED? A request that can only
+// null columns is exempt from the entitlement check (#1742): the gate exists to
+// stop an unentitled tenant *acquiring* a paid feature, and refusing the delete
+// too would mean branding bought once renders forever — in every branded e-mail
+// and on the certificate PDF — with no way for anyone, super admin included, to
+// remove it without first re-upgrading the plan. Undoing is always allowed;
+// only a non-empty value needs the entitlement.
+function isPureClear(values: (string | boolean | undefined)[]): boolean {
+  const provided = values.filter((v) => v !== undefined);
+  if (!provided.length) return false;
+  // `ssoEnabled: false` is a clear (switch off); `true` is not.
+  return provided.every((v) => (typeof v === 'boolean' ? v === false : v!.trim() === ''));
 }
 
 // PATCH — change an organization's plan, branding and/or SSO config.
@@ -207,7 +225,8 @@ export async function PATCH(request: Request) {
 
   // Ownership is settled BEFORE the target row is touched: a 404-after-403
   // ordering would let a foreign admin probe which org ids exist.
-  if (!(await isSuperAdmin(session))) {
+  const superAdmin = await isSuperAdmin(session);
+  if (!superAdmin) {
     const ownOrgId = resolveOrgId(session);
     if (!ownOrgId || ownOrgId !== id) {
       await logCrossTenantDenial(session, 'PATCH /api/admin/organizations', id);
@@ -220,20 +239,36 @@ export async function PATCH(request: Request) {
   const existing = await prisma.organization.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
 
-  // Entitlement is read from the plan this request leaves the org on: sending a
-  // plan change together with the fields it unlocks is exactly equivalent to
-  // sending two requests, and refusing it would only be confusing.
+  // The plan is what the premium gate below reads, so who may WRITE it decides
+  // whether that gate means anything (#1742). A tenant ADMIN owns their org and
+  // would otherwise self-upgrade — one request carrying `plan: 'ENTERPRISE'`
+  // alongside a SAML config would pass every check in this handler. Changing a
+  // tenant's tier is a billing act, not a tenant-administration one: super
+  // admins only, same as creating the tenant in POST above. A no-op (the plan
+  // it is already on) is not a change and stays allowed, so a client that
+  // echoes the current plan back is not broken by this.
+  if (plan !== undefined && plan !== existing.plan && !superAdmin) {
+    await logCrossTenantDenial(session, 'PATCH /api/admin/organizations (plan)', id);
+    return NextResponse.json({ error: 'Only a super admin may change an organization\'s plan' }, { status: 403 });
+  }
+
+  // Entitlement is read from the plan this request leaves the org on. Now that
+  // only a super admin can move that plan, granting the tier and configuring
+  // the feature it unlocks in one request is the operator doing two legitimate
+  // things at once, not an escalation.
   const effectivePlan = plan ?? existing.plan;
 
   const touchesBranding = brandName !== undefined || brandLogoUrl !== undefined ||
     brandColor !== undefined || supportEmail !== undefined;
-  if (touchesBranding && !orgPlanHasFeature(effectivePlan, 'WHITE_LABEL')) {
+  const clearsBranding = isPureClear([brandName, brandLogoUrl, brandColor, supportEmail]);
+  if (touchesBranding && !clearsBranding && !orgPlanHasFeature(effectivePlan, 'WHITE_LABEL')) {
     return featureLocked('WHITE_LABEL');
   }
 
   const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
     ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined;
-  if (touchesSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
+  const clearsSso = isPureClear([ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate]);
+  if (touchesSso && !clearsSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
     return featureLocked('SSO_SAML');
   }
 

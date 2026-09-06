@@ -57,6 +57,23 @@ test('admin creates an organization and it appears in the list', async ({ page }
       { timeout: 10_000 },
     ).toBe('PRO');
 
+    // Both premium blocks are ENTERPRISE-only (#1742): on PRO the write boundary
+    // refuses each of them before any field is validated or stored, and names
+    // the plan that sells it so a caller can render the upgrade CTA.
+    const brandOnPro = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, brandName: 'Acme Talent' },
+    });
+    expect(brandOnPro.status()).toBe(403);
+    expect(await brandOnPro.json()).toMatchObject({
+      code: 'feature_locked', feature: 'WHITE_LABEL', requiredPlan: 'ENTERPRISE',
+    });
+    const ssoOnPro = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, ssoEnabled: true, ssoProvider: 'saml' },
+    });
+    expect(ssoOnPro.status()).toBe(403);
+    expect((await ssoOnPro.json()).code).toBe('feature_locked');
+    await prisma.organization.update({ where: { id: org!.id }, data: { plan: 'ENTERPRISE' } });
+
     // White-label branding (#546): set fields via the API and confirm persistence.
     const brand = await page.request.patch('/api/admin/organizations', {
       data: { id: org!.id, brandName: 'Acme Talent', brandColor: '#2563eb', supportEmail: 'help@acme.test' },
@@ -107,15 +124,6 @@ test('admin creates an organization and it appears in the list', async ({ page }
     expect(clear.ok()).toBeTruthy();
     const cleared = await prisma.organization.findUnique({ where: { id: org!.id } });
     expect(cleared?.brandName).toBeNull();
-
-    // SAML SSO is ENTERPRISE-only (#1742): on PRO the write boundary refuses the
-    // whole SSO block before any of it is validated or stored.
-    const ssoOnPro = await page.request.patch('/api/admin/organizations', {
-      data: { id: org!.id, ssoEnabled: true, ssoProvider: 'saml' },
-    });
-    expect(ssoOnPro.status()).toBe(403);
-    expect((await ssoOnPro.json()).code).toBe('feature_locked');
-    await prisma.organization.update({ where: { id: org!.id }, data: { plan: 'ENTERPRISE' } });
 
     // Enterprise SSO (#545): cannot enable without a complete config.
     const badEnable = await page.request.patch('/api/admin/organizations', {
