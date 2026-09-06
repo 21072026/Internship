@@ -133,8 +133,10 @@ test('the queue counters are read only behind the detail gate and ?jobs=1', () =
   expect(anonymousReturn).toBeGreaterThan(0);
   expect(src.indexOf('await jobQueueHealth()')).toBeGreaterThan(anonymousReturn);
 
-  // The fields the deploy gate and the uptime probes parse are still there.
-  for (const field of ['status', 'version', 'sha', 'db', 'smtp', 'uptimeMs', 'responseMs']) {
-    expect(src).toContain(`${field}`);
-  }
+  // The fields the deploy gate and the uptime probes parse are still produced
+  // the way they were — `sha` above all, which infra/deploy-prod.sh reads to
+  // decide whether the live container has drifted.
+  expect(src).toContain('sha: GIT_SHA');
+  expect(src).toContain('version: APP_VERSION');
+  expect(src).toContain('responseMs: Date.now() - started');
 });
