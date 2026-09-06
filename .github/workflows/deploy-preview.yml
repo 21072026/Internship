@@ -264,14 +264,19 @@ jobs:
           #   only fetches it — no npm ci, no next build, no buildkit.
           # --no-pull: the checkout above already pinned the exact commit the
           #   image was built from; don't let the script re-sync to a moving tip.
-          # NETWORK=bridge: the preview DB user is granted from the docker
-          #   gateway (host.docker.internal), not localhost, so preview uses
-          #   bridge networking + a published port instead of host networking.
+          # NETWORK=host, not bridge. Bridge was here for a constraint of the
+          #   OLD host: preview's DB user was granted only from the docker
+          #   gateway, never from localhost, so the container had to arrive via
+          #   host.docker.internal. On the new host MySQL runs in a container
+          #   publishing on 127.0.0.1 ONLY, so that gateway address reaches
+          #   nothing and bridge fails in the first backfill with "Can't reach
+          #   database server at 127.0.0.1:3306". Host networking is also what
+          #   production uses, so the two environments now agree (#2166).
           # FORWARD_ONLY is deliberately unset — preview must stay able to deploy
           #   arbitrary/older refs on demand.
           CONTAINER=internship-crm-preview \
           PORT=3201 \
-          NETWORK=bridge \
+          NETWORK=host \
           ENV_FILE="$ENV_FILE" \
           ./infra/deploy-prod.sh --no-pull --pull-image
 
