@@ -80,6 +80,14 @@ jobs:
       # lookup into a different query. The tree is clean; this keeps it that way.
       - name: no unvalidated request body in a Prisma filter
         run: npm run check:query-scalars
+      # A model that carries `orgId` but is missing from TENANT_MODELS is a
+      # silent pass-through: the tenant middleware never matches it, so the row
+      # only *looks* scoped and is protected by whatever `where` clause a
+      # developer remembered to write. The registry drifted once and eight
+      # models stayed unprotected for months (#1560). Checked in both
+      # directions — a typo'd entry never matches anything either.
+      - name: every orgId model is registered with the tenant middleware (#1560)
+        run: npm run check:tenant-models
       # `toLocaleDateString()` with no argument formats in the BROWSER's
       # language, so a fully-Turkish screen printed 8/25/2026 and an interview
       # slot carried no timezone at all (#1422). The tree is clean; this stops

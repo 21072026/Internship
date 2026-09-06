@@ -20,6 +20,7 @@
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
     "check:release-fragments": "node scripts/check-release-fragments.mjs",
     "check:stage-keys": "node scripts/check-stage-keys.mjs",
+    "check:tenant-models": "node scripts/check-tenant-models.mjs",
     "test:release": "node --test scripts/test/release-derive.test.mjs",
     "test:stage-aging": "node --test --experimental-strip-types scripts/test/stage-aging.test.mjs",
     "test:mentor-directory": "node --test --experimental-strip-types scripts/test/mentor-directory.test.mjs",

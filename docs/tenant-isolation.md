@@ -62,6 +62,31 @@ All of this is exercised against a real DB by `e2e/org-isolation.spec.ts` and
 never called `orgScoped()`** is still isolated purely because it ran inside
 `runWithOrg()` with the flag on, and is a no-op with the flag off.
 
+### Keeping the registry honest (`npm run check:tenant-models`)
+
+The middleware only scopes models that are named in `TENANT_MODELS`. An
+unregistered model is a **silent** pass-through — nothing throws and nothing
+logs, so a row that carries an `orgId` column merely *looks* isolated while it
+is protected by whatever `where` clause the last developer remembered. The set
+drifted from the schema once and eight tenant-keyed models stayed unprotected
+for months.
+
+`scripts/check-tenant-models.mjs` (wired into `.github/workflows/ci.yml` as
+`npm run check:tenant-models`) compares the two lists on every PR and fails in
+both directions:
+
+- a model in `prisma/schema.prisma` that declares `orgId` and is not registered;
+- a name in `TENANT_MODELS` that is not a model, or is a model that no longer
+  has the column — a typo is the same silent no-op as a missing entry.
+
+Two escape hatches, both inside the script and both requiring a written reason:
+`EXEMPT` for a model that is deliberately never auto-scoped (`Setting`, whose
+legacy `orgId = NULL` rows are the global fallback layer; `Organization`, which
+*is* the tenant), and `PENDING_REGISTRATION` for a model that is known to be
+unprotected and is waiting on its own reviewed change (#1559). The pending list
+is a ratchet: it prints a warning on every run, and an entry that has since been
+registered fails the check until it is deleted.
+
 ### Per-route rollout status
 
 Handlers adopt the engine by wrapping their body in `withTenantScope(session, …)`.
