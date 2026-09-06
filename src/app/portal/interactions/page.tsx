@@ -13,6 +13,7 @@ import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 interface Interaction {
   id: string;
   date: string;
+  subject?: string | null;
   notes: string;
   type: string;
   autoLogged?: boolean;
@@ -74,6 +75,9 @@ export default function PortalInteractionsPage() {
               <div className="flex items-start gap-4">
                 <InteractionTypeBadge type={interaction.type} className="flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
+                  {interaction.subject && (
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{interaction.subject}</p>
+                  )}
                   <p className="text-sm text-gray-700">{interaction.notes}</p>
                   <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-2" />
                   <p className="text-xs text-gray-400 mt-2">

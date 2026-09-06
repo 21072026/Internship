@@ -152,8 +152,15 @@ export default async function PortalJourneyPage() {
                       className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0"
                     >
                       <InteractionTypeBadge type={interaction.type} className="text-xs flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
+                      <div className="min-w-0 flex-1">
+                        {interaction.subject ? (
+                          <>
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{interaction.subject}</p>
+                            <p className="text-xs text-gray-700 truncate">{interaction.notes}</p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
+                        )}
                         <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-1" />
                         <p className="text-xs text-gray-400">
                           {formatDate(interaction.date, locale)}
