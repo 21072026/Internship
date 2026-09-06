@@ -21,9 +21,18 @@ const DEFAULT_NAME = process.env.DEFAULT_ORG_NAME || 'Default Organization';
 
 // Models that carry an orgId but must NOT be backfilled. Keep the reason with
 // the entry — an unexplained exclusion reads as an oversight and gets "fixed".
-// Empty today: `Setting` used to be listed here, but it has no orgId column at
-// all (its rows are global by construction), so the entry matched nothing.
-const EXCLUDED = new Map();
+// Entries are matched by model name and may be pre-emptive: an entry for a
+// model that has no orgId column yet simply never matches.
+const EXCLUDED = new Map([
+  // Setting: pre-emptive — it has NO orgId column today, #1551 adds one. When
+  // it does, its legacy rows must stay orgId = NULL: NULL is the *global
+  // fallback layer*, a setting with no org applies to every tenant and a
+  // per-org row overrides it. Assigning the existing rows to the default org
+  // would turn platform-wide defaults into one tenant's private settings and
+  // leave every other tenant with no configuration at all. Do not "fix" this;
+  // if #1551 lands a different shape, delete the entry deliberately.
+  ['Setting', 'global fallback layer — NULL rows apply to every tenant (#1551)'],
+]);
 
 // Identifiers come from the DMMF, not from input, but a backticked identifier
 // interpolated into SQL is worth one assertion regardless.

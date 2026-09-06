@@ -94,7 +94,9 @@ is done and verified in a preview/staging environment first:
    (`infra/server/demo-refresh.sh`); `prisma/seed.mjs` and
    `prisma/seed-demo.mjs` call the same derived pass (`assignDefaultOrg`) so a
    freshly seeded database is complete too. Models whose `orgId` is `NOT NULL`
-   are skipped — they cannot hold NULLs.
+   are skipped — they cannot hold NULLs — and `Setting` is excluded by name
+   ahead of #1551 giving it an `orgId`, because its `NULL` rows are the global
+   fallback layer that applies to every tenant.
    It **exits non-zero if any NULL survives its retry passes**, so a partial
    backfill cannot pass as done; verify it is green *before* flipping the flag
    in any environment. The pass is deliberately raw SQL, so it does not restamp
