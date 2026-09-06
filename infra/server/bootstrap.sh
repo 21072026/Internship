@@ -548,10 +548,23 @@ EOF
   # is unreachable — but the off-site failure has to be visible on its own, and
   # not swallowed by a green backup run. That swallowing is how #2169 stayed
   # invisible for months.
-  if [ -n "${OFFSITE_TARGET:-}" ]; then
+  # Default to the encrypted object store. OFFSITE_TARGET (rsync to another
+  # machine) still works and is selected by setting OFFSITE_MODE=rsync.
+  OFFSITE_MODE="${OFFSITE_MODE:-restic}"
+  if [ "$OFFSITE_MODE" = restic ] || [ -n "${OFFSITE_TARGET:-}" ]; then
     curl -fsSL -o "$APP_DIR/bin/backup-offsite.sh" \
       https://raw.githubusercontent.com/21072026/Internship/main/infra/server/backup-offsite.sh 2>/dev/null \
       && chmod 0755 "$APP_DIR/bin/backup-offsite.sh"
+    if [ "$OFFSITE_MODE" = restic ]; then
+      OFFSITE_ENV_LINES="Environment=OFFSITE_MODE=restic"
+    else
+      OFFSITE_ENV_LINES="Environment=OFFSITE_MODE=rsync
+Environment=OFFSITE_TARGET=${OFFSITE_TARGET}
+Environment=OFFSITE_SSH_KEY=/home/${LOGIN_USER}/.ssh/offsite_ed25519"
+    fi
+    # The restic credentials are NOT listed here. systemd unit files are
+    # world-readable; the repository password and the R2 key live in
+    # $APP_DIR/secrets/offsite.env (0600), which the script sources itself.
     cat > /etc/systemd/system/internship-backup-offsite.service <<EOF
 [Unit]
 Description=Copy Internship CRM dumps to the off-site target
@@ -560,8 +573,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 Environment=BACKUP_DIR=/var/backups/internship-crm
-Environment=OFFSITE_TARGET=${OFFSITE_TARGET}
-Environment=OFFSITE_SSH_KEY=/home/${LOGIN_USER}/.ssh/offsite_ed25519
+${OFFSITE_ENV_LINES}
 ExecStart=$APP_DIR/bin/backup-offsite.sh
 EOF
     cat > /etc/systemd/system/internship-backup-offsite.timer <<'EOF'
@@ -579,9 +591,9 @@ WantedBy=timers.target
 EOF
     systemctl daemon-reload
     systemctl enable --now internship-backup-offsite.timer >/dev/null
-    ok "off-site push timer active -> ${OFFSITE_TARGET}"
+    ok "off-site push timer active (mode: ${OFFSITE_MODE})"
   else
-    warn "OFFSITE_TARGET unset — dumps stay on the same disk as the database, which is not a backup (#2169)"
+    warn "no off-site target — dumps stay on the same disk as the database, which is not a backup (#2169)"
   fi
 
   systemctl daemon-reload
