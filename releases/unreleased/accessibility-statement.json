@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **Public accessibility conformance statement** (#2035). New page `/accessibility` (EN/TR/DE, server component in the shape of `/privacy`) publishes what EN 301 549 procurement and the European Accessibility Act expect to find: the standard claimed (WCAG 2.2 AA, mapped to EN 301 549 clause 9 and Revised Section 508), a **partially conformant** status, the scope by URL, the evidence for every \"we do this\" claim — each linking the file or workflow that backs it — the known limitations with their tracking issues (#2041, #2043, #1412, #2033, plus RTL and third-party embeds), a feedback address resolved from `operatorIdentity()` rather than hardcoded with a 5-working-day response target, and the EU enforcement route. Facts, sources and issue numbers live in `src/lib/accessibility.ts`; the canonical long form with the re-review rule is `docs/accessibility-statement.md`. Linked from the public footer's legal column and catalogued as a `trust` feature. `/accessibility` joins `e2e/a11y-baseline.json` and the axe gate (light + dark), and `e2e/accessibility-statement.spec.ts` asserts the anonymous render, the three locales and — the point of the page — a non-empty limitations list.",
-  "notes": {
-    "en": ["A public accessibility statement at /accessibility says which standard we meet (WCAG 2.2 AA, partially), how we check it, what is still broken, and where to report a barrier."],
-    "tr": ["/accessibility adresindeki herkese açık erişilebilirlik beyanı hangi standardı karşıladığımızı (WCAG 2.2 AA, kısmen), bunu nasıl denetlediğimizi, neyin hâlâ bozuk olduğunu ve bir engeli nereye bildireceğinizi anlatıyor."],
-    "de": ["Eine öffentliche Barrierefreiheits-Erklärung unter /accessibility nennt den erfüllten Standard (WCAG 2.2 AA, teilweise), wie wir das prüfen, was noch nicht funktioniert und wohin man eine Barriere meldet."]
-  }
-}

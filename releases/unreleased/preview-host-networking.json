@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Fix: preview deploys could not reach the database on the new host** (#2166). Preview ran its containers on bridge networking, which existed for an old-host grant quirk — its DB user was granted only from the docker gateway. On the new host MySQL publishes on `127.0.0.1` only, so the gateway address reaches nothing and every preview deploy died in the first backfill. Preview now uses host networking, the same as production."
-}

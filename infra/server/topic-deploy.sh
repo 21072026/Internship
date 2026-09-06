@@ -68,14 +68,32 @@ set -euo pipefail
 : "${TOPIC:?}" "${PORT:?}" "${IMAGE:?}" "${BASE_DOMAIN:?}"
 NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-nginx -t && systemctl reload nginx}"
-CERT_DIR="${CERT_DIR:-/etc/nginx/ssl}"
+# Where the wildcard certificate lives differs per host. The Plesk box kept it
+# under nginx's ssl dir; on the migrated box bootstrap.sh creates
+# /etc/caddy/certs owned by the deploy user, and that is where wildcard-cert.yml
+# installs it. Defaulting to the nginx path on a Caddy host meant the cert was
+# never found and every topic env silently fell back to per-hostname issuance —
+# 50 certificates per domain per week, which this repo's PR rate exhausts in
+# days, after which topic environments fail TLS with nothing looking wrong (#2213).
+if [ -z "${CERT_DIR:-}" ]; then
+  if [ -d /etc/caddy/certs ]; then CERT_DIR=/etc/caddy/certs; else CERT_DIR=/etc/nginx/ssl; fi
+fi
 # Hostname prefix for environment names. Empty by default: on a domain bought
 # for this product, `pr123.<domain>` says everything `crm-pr123.<domain>` did.
 # The `crm-` prefix existed because the app used to live under a personal domain
 # shared with other services, where it had to distinguish itself.
 ENV_PREFIX="${ENV_PREFIX:-}"
 CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/sites}"
-CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy}"
+# Writing a site file and reloading the service both need privilege the runner
+# does not have as itself: bootstrap.sh creates /etc/caddy/sites as root:caddy
+# 0775 and adds the deploy user to `docker` but never to `caddy`, and
+# `systemctl reload` is root-only regardless of that. wildcard-cert.yml already
+# reloads this same service with `sudo systemctl reload caddy`, so sudo is
+# available on this box — use it rather than inventing a second mechanism.
+# Running as root (bootstrap, a manual run) skips sudo entirely.
+_SUDO=""; [ "$(id -u)" -eq 0 ] || _SUDO="sudo "
+_priv() { if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi; }
+CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && ${_SUDO}systemctl reload caddy}"
 
 # ── Secrets: explicit base64 (hosted) OR an env file (self-hosted) ───────────
 if [ -n "${B64_DB:-}" ]; then
@@ -96,7 +114,13 @@ fi
 : "${DATABASE_URL:?DATABASE_URL missing (B64_DB or ENV_FILE)}"
 : "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET missing (B64_SEC or ENV_FILE)}"
 
-HOST="crm-${TOPIC}.${BASE_DOMAIN}"
+# The hostname the reverse proxy actually serves. This MUST follow ENV_PREFIX,
+# because the routing block below builds FQDN the same way — when this line
+# hardcoded `crm-` (its shape before ENV_PREFIX was emptied in #2182) the
+# container was told NEXTAUTH_URL=https://crm-pr<N>.<domain> while Caddy served
+# pr<N>.<domain>, so every sign-in callback on a topic env pointed at a host
+# that does not resolve.
+HOST="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"
 URL="https://${HOST}"
 CONTAINER="internship-crm-${TOPIC}"
 CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"  # legacy raw route (cleaned up below)
@@ -226,12 +250,35 @@ _query=""
 case "$DATABASE_URL" in *\?*) _query="?${DATABASE_URL#*\?}" ;; esac
 TOPIC_DATABASE_URL="${_base}/${TOPIC_DB}${_query}"
 
-# Reach the host's MySQL from inside the container the same way the preview
-# deploy does.
-CONTAINER_DB=$(echo "$TOPIC_DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s|127\.0\.0\.1|host.docker.internal|g')
+# ── Networking mode (#2213) ──────────────────────────────────────────────────
+# How a container reaches the host's MySQL is a property of the HOST, not of
+# this script, and it changed under us in #2166. On the old Plesk box MariaDB
+# was reachable on the docker bridge, so `host.docker.internal` mapped to
+# host-gateway worked. The migrated box publishes MySQL on 127.0.0.1 only,
+# where the gateway address (172.17.0.1) reaches nothing — this script kept
+# the bridge unconditionally and every topic deploy since the cutover died on
+# "P1001: Can't reach database server at host.docker.internal:3306".
+#
+# deploy-prod.sh (:155) and demo-refresh.sh (:72) were both given this switch
+# during the migration; this, the third caller of the same pattern, was missed.
+# Default 'host' matches them. NETWORK=bridge restores the old behaviour for a
+# host whose DB user is granted from the gateway rather than from loopback.
+NETWORK="${NETWORK:-host}"
+if [ "$NETWORK" = host ]; then
+  # Container shares the host's network namespace: the loopback URL is already
+  # correct, and the app is told which port to bind instead of publishing one.
+  CONTAINER_DB=$(echo "$TOPIC_DATABASE_URL" | sed 's|host\.docker\.internal|127.0.0.1|g')
+  NET_ARGS=(--network=host)
+  APP_NET_ARGS=(--network=host -e PORT="$PORT")
+else
+  CONTAINER_DB=$(echo "$TOPIC_DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s|127\.0\.0\.1|host.docker.internal|g')
+  NET_ARGS=(--add-host=host.docker.internal:host-gateway)
+  APP_NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "${PORT}:3000")
+fi
+echo "==> Container networking: ${NETWORK}"
 
 _in_image() {
-  docker run --rm --add-host=host.docker.internal:host-gateway \
+  docker run --rm "${NET_ARGS[@]}" \
     -e DATABASE_URL="$CONTAINER_DB" "$@"
 }
 
@@ -254,7 +301,7 @@ if [ "${EXISTING_TABLES:-0}" -eq 0 ]; then
   # only unlocks an internship_pr<N> target (prisma/seed-demo.mjs); it cannot
   # reach preview or prod even if this script were called with the wrong URL.
   echo "==> Fresh topic database — seeding synthetic demo data"
-  docker run --rm --add-host=host.docker.internal:host-gateway \
+  docker run --rm "${NET_ARGS[@]}" \
     -e DATABASE_URL="$CONTAINER_DB" -e SEED_DEMO_FORCE=1 \
     "$IMAGE" node prisma/seed-demo.mjs || echo "WARN: demo seeding failed — the environment is up but empty"
 else
@@ -269,8 +316,7 @@ docker rm   "$CONTAINER" 2>/dev/null || true
 # half worth being able to see.
 docker run -d \
   --name "$CONTAINER" \
-  -p "${PORT}:3000" \
-  --add-host=host.docker.internal:host-gateway \
+  "${APP_NET_ARGS[@]}" \
   --restart=unless-stopped \
   -e DATABASE_URL="$CONTAINER_DB" \
   -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
@@ -304,7 +350,7 @@ echo "==> Container health http://127.0.0.1:${PORT}/api/health -> ${code}"
 
 # ── Routing ──────────────────────────────────────────────────────────────────
 SUBLABEL="${ENV_PREFIX}${TOPIC}"              # e.g. pr725
-FQDN="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"   # e.g. pr725.interncrm.com
+FQDN="$HOST"                                  # e.g. pr725.interncrm.com — one source, see :99
 
 # Which reverse proxy sits in front of the containers? The new host runs Caddy and
 # has no panel; the old one runs Plesk, which owns 80/443 there. Auto-detect, so
@@ -319,7 +365,7 @@ echo "==> Router: ${ROUTER}"
 
 route_caddy() {
 # This is the whole thing — the ~90 lines the Plesk branch needs for the same job.
-mkdir -p "$CADDY_SITES_DIR"
+_priv mkdir -p "$CADDY_SITES_DIR"
 
 # Prefer the installed wildcard cert. NOT an optimisation: this repo merged its
 # last 100 PRs in 9 days and every PR gets its own hostname, while Let's Encrypt
@@ -346,12 +392,12 @@ fi
   if [ -n "$tls_line" ]; then echo "$tls_line"; fi
   echo "    reverse_proxy 127.0.0.1:${PORT}"
   echo "}"
-} > "${CADDY_SITES_DIR}/${FQDN}.caddy"
+} | _priv tee "${CADDY_SITES_DIR}/${FQDN}.caddy" >/dev/null
 
 # Validate before reloading: Caddy loads one config for the whole box, so a bad
 # topic file would take production, preview and every other topic down with it.
 if ! eval "$CADDY_RELOAD_CMD"; then
-  rm -f "${CADDY_SITES_DIR}/${FQDN}.caddy"
+  _priv rm -f "${CADDY_SITES_DIR}/${FQDN}.caddy"
   eval "$CADDY_RELOAD_CMD" || true
   echo "ERROR: caddy rejected the generated site file; removed it and reloaded" >&2
   exit 1
