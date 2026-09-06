@@ -52,10 +52,30 @@ export async function GET() {
         : role === 'MENTOR'
           ? { relationId: { not: null }, relation: { mentorId: session.user.id } }
           : { relationId: { not: null }, relation: { menteeId: session.user.id } };
+    // An explicit allowlist, never `include` (#1548). A bare `include` serialises
+    // every column of the row, and one of them — `rsvpToken` — is a bearer
+    // credential: /rsvp/<token> is on the middleware's public allowlist and
+    // /api/calendar/<token> serves the event, so whoever holds it can answer the
+    // invitation AS the mentee with no session at all. Listing the fields keeps a
+    // future column out of the payload by default instead of by accident.
     const meetings = await prisma.meeting.findMany({
       where,
-      include: {
-        relation: { include: { mentee: { select: { id: true, fullName: true } } } },
+      select: {
+        id: true,
+        relationId: true,
+        title: true,
+        scheduledAt: true,
+        timeZone: true,
+        meetLink: true,
+        rsvp: true,
+        endedAt: true,
+        createdAt: true,
+        // The token belongs to the mentee the meeting was written for — it is
+        // the same credential their invite e-mail carries, and the portal's
+        // in-app RSVP + "add to calendar" (UpcomingMeetings) run on it. A mentor
+        // or an admin has a session and never needs it, so they never get it.
+        ...(role === 'MENTEE' ? { rsvpToken: true } : {}),
+        relation: { select: { mentee: { select: { id: true, fullName: true } } } },
         // The organizer has to be able to see whether the outsiders they invited
         // said yes — otherwise the invite is send-and-forget (#1446). A MENTEE is
         // not the organizer of their own meeting: the addresses were typed by

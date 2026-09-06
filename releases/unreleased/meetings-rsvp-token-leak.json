@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **`GET /api/meetings` no longer hands out the mentee's RSVP token** (#1548). The handler returned whole `Meeting` rows through a bare `include`, so `rsvpToken` — a bearer credential for the public `/rsvp/<token>` and `/api/calendar/<token>` routes — was serialised to every ADMIN and MENTOR viewer. The query now uses an explicit field `select`, so a future column is not leaked by default, and includes `rsvpToken` only when the caller's role is `MENTEE` — the same role-conditional shape the `guests` block in that query already used. Role scoping in the `where` clauses is unchanged; `e2e/meetings-rsvp-token-scope.spec.ts` asserts the token is absent for a mentor and an admin and present for the mentee."
+}
