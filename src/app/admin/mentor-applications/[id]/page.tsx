@@ -28,6 +28,7 @@ interface ApplicationDetail {
   consentAt: string | null;
   createdAt: string;
   rejectReason: string | null;
+  adminNote: string | null;
 }
 
 const STATUS_VARIANT: Record<string, 'warning' | 'info' | 'success' | 'danger'> = {
@@ -65,7 +66,9 @@ export default function MentorApplicationDetailPage() {
     if (res.ok) {
       const d = await res.json();
       setApp(d.application ?? null);
-      setNote(d.application?.rejectReason ?? '');
+      // The note has its own column: reading it back out of `rejectReason`
+      // was the other half of the bug that overwrote the reason (#1806).
+      setNote(d.application?.adminNote ?? '');
     }
     setLoading(false);
   }, [id]);
@@ -183,6 +186,24 @@ export default function MentorApplicationDetailPage() {
               {app.consentAt ? a.consentedOn.replace('{date}', formatDate(app.consentAt, locale)) : a.noConsent}
             </p>
           </Card>
+
+          {/* Only shown for a REJECTED application. A non-rejected row can
+              still carry a value here from before #1806 — that is a note the
+              old code mis-filed, not a decision, and labelling it as one would
+              be worse than not showing it. The backfill copies those into
+              adminNote instead. */}
+          {app.status === 'REJECTED' && app.rejectReason ? (
+            <Card>
+              <CardHeader><CardTitle>{a.rejectReasonRecorded}</CardTitle></CardHeader>
+              <p className="text-xs text-gray-500 mb-2">{a.rejectReasonRecordedHint}</p>
+              <p
+                className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line"
+                data-testid="mentor-application-recorded-reject-reason"
+              >
+                {app.rejectReason}
+              </p>
+            </Card>
+          ) : null}
         </div>
 
         <div className="space-y-6">
@@ -234,7 +255,16 @@ export default function MentorApplicationDetailPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>{a.noteLabel}</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>
+                <span className="inline-flex items-center gap-2">
+                  {a.noteLabel}
+                  <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                    {a.internalBadge}
+                  </span>
+                </span>
+              </CardTitle>
+            </CardHeader>
             <p className="text-xs text-gray-500 mb-2">{a.noteHint}</p>
             <Textarea rows={4} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} data-testid="mentor-application-note" />
             <Button variant="outline" size="sm" className="mt-2" loading={savingNote} onClick={saveNote}>

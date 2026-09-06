@@ -22,6 +22,7 @@
     "check:stage-keys": "node scripts/check-stage-keys.mjs",
     "test:release": "node --test scripts/test/release-derive.test.mjs",
     "test:stage-aging": "node --test --experimental-strip-types scripts/test/stage-aging.test.mjs",
+    "test:note-privacy": "node --test scripts/test/mentor-application-note-privacy.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
     "check:k6": "node scripts/check-k6.mjs",

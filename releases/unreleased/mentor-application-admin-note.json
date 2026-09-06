@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Saving an admin note no longer destroys a mentor application's rejection reason (#1806)**. The \"save note\" action on `/admin/mentor-applications/[id]` wrote to `MentorApplication.rejectReason` — the same column the reject action uses — so a note saved after a rejection silently overwrote the reason, and the note box read that reason back as if it were the note. `MentorApplication` gains `adminNote String? @db.Text` (nullable, additive, safe under `db push`); the note action writes there and stores an emptied note as `NULL` instead of `''`. Both values are returned by the list and detail routes and rendered side by side, the note marked *Internal* (EN/TR/DE). The activity entry stays and now carries the application id. `prisma/backfill-mentor-application-admin-note.mjs` (idempotent, wired into `deploy-prod.sh`) copies `rejectReason` into `adminNote` for **non-REJECTED rows only** — there the value can only be a misfiled note, since the reject action is the sole writer and flips the status in the same write; REJECTED rows are left untouched because the value there is either the real reason or a note that already replaced it, and nothing distinguishes them. `scripts/test/mentor-application-note-privacy.test.mjs` (CI) asserts no e-mail template can read `adminNote`, and `e2e/mentor-application-review.spec.ts` rejects with a reason, saves a note and asserts the reason survived byte-identical. The sanitiser drops `adminNote` alongside `rejectReason`.",
+  "notes": {
+    "en": [
+      "Saving a review note on a mentor application no longer erases the rejection reason — notes and reasons are now two separate fields, and both are shown in the review screen with the note marked as internal."
+    ],
+    "tr": [
+      "Bir mentor başvurusuna inceleme notu kaydetmek artık ret nedenini silmiyor — not ve ret nedeni ayrı iki alan oldu; ikisi de inceleme ekranında görünüyor ve not \"dahili\" olarak işaretleniyor."
+    ],
+    "de": [
+      "Eine Prüfnotiz zu einer Mentor-Bewerbung löscht den Ablehnungsgrund nicht mehr — Notiz und Grund sind jetzt zwei getrennte Felder, beide werden in der Prüfansicht angezeigt und die Notiz ist als intern gekennzeichnet."
+    ]
+  }
+}

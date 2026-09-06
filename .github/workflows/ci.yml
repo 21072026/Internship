@@ -63,6 +63,12 @@ jobs:
         run: npm run test:stage-aging
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
+      # MentorApplication.adminNote is private admin commentary; an e-mail
+      # template that rendered it would show an applicant what an admin wrote
+      # about them. Nothing in the type system says so, so a file-level guard
+      # does (#1806).
+      - name: no e-mail template can read a private admin note (#1806)
+        run: npm run test:note-privacy
       # Prisma's filter grammar is data: an object where a scalar id belongs is
       # read as an operator, so a raw request body in a `where` turns an equality
       # lookup into a different query. The tree is clean; this keeps it that way.

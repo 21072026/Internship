@@ -135,6 +135,9 @@ export async function GET(request: Request) {
       where.status = statusParam as (typeof STATUSES)[number];
     }
 
+    // Admin-only list: like the detail route, this returns every column, so
+    // both `rejectReason` and the private `adminNote` (#1806) reach the review
+    // UI and can be shown side by side without a second round trip.
     const [items, total] = await Promise.all([
       prisma.mentorApplication.findMany({
         where,

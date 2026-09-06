@@ -544,6 +544,10 @@ run_tool node prisma/backfill-relation-completed-at.mjs || true
 # the calendar (#1110). Nothing writes them any more, so this converges to a
 # no-op on the next deploy.
 run_tool node prisma/backfill-series-meetings.mjs || true
+# Move pre-#1806 review notes out of MentorApplication.rejectReason into the
+# new adminNote column — non-rejected rows only, where the value can only be a
+# note. Only ever fills NULLs — idempotent.
+run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
