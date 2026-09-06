@@ -27,6 +27,7 @@
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
     "check:locale-dates": "node scripts/check-locale-dates.mjs",
+    "check:events": "node scripts/check-events.mjs",
     "check:k6": "node scripts/check-k6.mjs",
     "check:openapi": "node scripts/check-openapi.mjs",
     "gen:openapi": "node scripts/openapi-generate.cjs",

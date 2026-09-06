@@ -21,9 +21,10 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Stress / load** | Latency percentiles, throughput, error rate under sustained concurrency | `scripts/stress-test.mjs` | **weekly cron**, Mon 02:30 UTC (`stress.yml`) + on demand |
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
+| **Architecture guards** | One-way rules the type system cannot state — among them: a domain event leaves the product through `emit()`, never by calling `dispatchWebhook()` from a route (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
 
 The first ten are **functional / correctness** tests: given an input, is the output
-right? The last two are **non-functional**: the app may be correct yet too slow or
+right? The two load rows are **non-functional**: the app may be correct yet too slow or
 fragile under load — those catch that. They are not redundant with each other.
 `stress-test.mjs` is a flat hammer (fixed concurrency, one aggregate p95, weekly);
 the k6 scenario adds a *ramp* (where does latency start to bend?), *per-endpoint*

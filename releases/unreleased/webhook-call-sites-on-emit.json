@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **An event may leave the product through one door only** (#1697). `npm run check:events` (`scripts/check-events.mjs`, wired into `ci.yml`) fails the build when a file under `src/` reaches `dispatchWebhook()` outside the dispatcher module and the future webhook subscriber. The ten producers that call it directly today cannot move yet — `emit()` (#1693) and the event catalogue (#1691) are not in the tree — so they are enumerated in the script's `PENDING_MIGRATION` burndown list with the event each raises; an eleventh direct call is now a red build, and a stale entry fails too, so the list can only shrink. The `activityLog`/`auditLog` half of the guard waits on the catalogue it would compare action names against."
+}
