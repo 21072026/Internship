@@ -81,8 +81,20 @@ uniformity, though scoping is redundant there.
 Do **not** set `MT_ENFORCE_ISOLATION=true` in production until every step below
 is done and verified in a preview/staging environment first:
 
-1. **Assign real orgs.** While there is one `default` org this is a no-op; once
-   multiple tenants exist, ensure every user/row has the correct `orgId`.
+1. **Backfill every `orgId`, then assign real orgs.** This is the step that
+   cannot be skipped: with the flag on, the middleware injects
+   `where: { orgId }` into every query on a tenant model, so a row left at
+   `orgId = NULL` matches nobody and **disappears from the product**.
+   `prisma/backfill-organization.mjs` (run on every deploy) assigns the
+   `default` org to every nullable `orgId` column in the schema — the model
+   list is derived from the Prisma DMMF, so it cannot drift from
+   `prisma/schema.prisma` — and **exits non-zero if any NULL is left over**, so
+   a partial backfill cannot pass as done. Verify it is green *before* flipping
+   the flag in any environment. Two deliberate omissions: models whose `orgId`
+   is `NOT NULL` (they cannot hold NULLs) and `Setting`, whose NULL rows are the
+   global fallback layer that applies to every tenant. While there is one
+   `default` org the assignment is a formality; once multiple tenants exist,
+   ensure every user/row has the *correct* `orgId`, not just a non-NULL one.
 2. **Plumb request→org resolution** everywhere reads/writes happen — either via
    the session `orgId` (done) or host/subdomain for public routes.
 3. **Wrap every API route** body in `withTenantScope(session, …)` so the central

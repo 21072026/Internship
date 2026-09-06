@@ -527,7 +527,13 @@ run_tool node prisma/seed-goal-templates.mjs || true
 # Contributor terms v1.0 (#1025) — versioned rows; never edits an existing one.
 run_tool node prisma/seed-contributor-terms.mjs || true
 run_tool node prisma/backfill-project-members.mjs || true
-run_tool node prisma/backfill-organization.mjs || true
+# Tenant backfill (#1557): the script now exits non-zero when a nullable orgId
+# column still holds NULLs. `|| true` stays for now — a deploy must not abort on
+# it, and #1540 is replacing this whole `|| true` pattern with a backfill
+# registry — but the failure is announced instead of swallowed, because an
+# incomplete backfill is the one thing that must block MT_ENFORCE_ISOLATION.
+run_tool node prisma/backfill-organization.mjs \
+  || log "WARNING: org backfill INCOMPLETE — rows still have orgId = NULL. Do NOT enable MT_ENFORCE_ISOLATION until this is green (#1557)."
 run_tool node scripts/backfill-requisitions.mjs || true
 # API key lifecycle (#1545) + tenant anchor (#1466): give legacy keys the
 # default org and the 'candidates:read' scope they already had in practice.
