@@ -39,6 +39,608 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.156.0-beta',
+    date: '2026-09-03',
+    time: '21:55',
+    commit: '3e61fa3',
+    highlights: {
+      en: [
+        "Screen readers now announce saved settings, search result counts and character limits.",
+        "The board and the calendar fit a 320px screen and 400% zoom without scrolling sideways.",
+      ],
+      tr: [
+        "Ekran okuyucular artık kaydedilen ayarları, arama sonuç sayısını ve karakter sınırını sesli bildiriyor.",
+        "Pano ve takvim, 320 piksellik ekranda ve %400 yakınlaştırmada yana kaydırma gerektirmiyor.",
+      ],
+      de: [
+        "Screenreader melden jetzt gespeicherte Einstellungen, die Zahl der Suchtreffer und das Zeichenlimit.",
+        "Board und Kalender passen auf einen 320-Pixel-Bildschirm und in 400 % Zoom, ohne seitwärts zu scrollen.",
+      ],
+    },
+  },
+  {
+    version: '0.155.0-beta',
+    date: '2026-09-03',
+    time: '21:44',
+    commit: '5acdb75',
+    highlights: {
+      en: [
+        "Admins get a connector health board on Integrations: e-mail, webhooks, Google Calendar, SSO and the inbound receivers each report healthy, degraded, failing or not configured — with an SSO certificate warning a month before it expires.",
+      ],
+      tr: [
+        "Yöneticiler Entegrasyonlar sayfasında bir bağlayıcı sağlığı panosu görüyor: e-posta, webhook’lar, Google Takvim, SSO ve gelen alıcıların her biri sağlıklı, kısmen bozuk, arızalı ya da yapılandırılmadı olarak bildiriliyor — SSO sertifikası için süresi dolmadan bir ay önce uyarı veriliyor.",
+      ],
+      de: [
+        "Admins erhalten auf der Integrationsseite ein Konnektor-Zustandsboard: E-Mail, Webhooks, Google Kalender, SSO und die eingehenden Empfänger melden jeweils gesund, beeinträchtigt, fehlerhaft oder nicht konfiguriert — inklusive Warnung einen Monat vor Ablauf des SSO-Zertifikats.",
+      ],
+    },
+  },
+  {
+    version: '0.154.0-beta',
+    date: '2026-09-03',
+    time: '21:02',
+    commit: '70c3ce2',
+    highlights: {
+      en: [
+        "Admins can now sign a user out of every device and remembered browser instantly, without deactivating their account.",
+        "Accounts locked by too many failed sign-in attempts stay locked across restarts, show a \"Locked\" badge in the user list, and can be unlocked by an admin.",
+      ],
+      tr: [
+        "Yöneticiler artık bir kullanıcıyı hesabını kapatmadan, tüm cihazlardan ve hatırlanan tarayıcılardan anında çıkarabiliyor.",
+        "Çok sayıda başarısız giriş denemesi yüzünden kilitlenen hesaplar yeniden başlatmalardan sonra da kilitli kalıyor, kullanıcı listesinde \"Kilitli\" rozetiyle görünüyor ve bir yönetici tarafından açılabiliyor.",
+      ],
+      de: [
+        "Administratoren können Benutzer jetzt sofort auf allen Geräten und in allen gemerkten Browsern abmelden, ohne das Konto zu deaktivieren.",
+        "Nach zu vielen fehlgeschlagenen Anmeldeversuchen gesperrte Konten bleiben auch nach einem Neustart gesperrt, zeigen in der Benutzerliste ein \"Gesperrt\"-Abzeichen und können von einem Administrator entsperrt werden.",
+      ],
+    },
+  },
+  {
+    version: '0.153.0-beta',
+    date: '2026-09-03',
+    time: '20:47',
+    commit: '0586a1b',
+    highlights: {
+      en: [
+        "A half-written message now waits for you: it survives closing the tab and comes back when you reopen the conversation, and disappears once you send it.",
+        "You can see when the other person is writing a reply — shown live above the message box and never stored anywhere.",
+        "Saved replies: admins keep a pool of standard messages in all three languages, and one click drops the right wording into your message box.",
+      ],
+      tr: [
+        "Yarım kalan mesaj artık sizi bekliyor: sekmeyi kapatsanız da kaybolmuyor, sohbeti tekrar açtığınızda yerinde duruyor ve gönderdiğinizde siliniyor.",
+        "Karşı taraf yanıt yazarken bunu görebiliyorsunuz — mesaj kutusunun üzerinde anlık olarak görünür ve hiçbir yere kaydedilmez.",
+        "Hazır yanıtlar: yöneticiler üç dilde standart mesaj havuzu tutuyor, tek tıkla doğru dildeki metin mesaj kutunuza düşüyor.",
+      ],
+      de: [
+        "Eine halb geschriebene Nachricht bleibt jetzt erhalten: Sie übersteht das Schließen des Tabs, ist beim erneuten Öffnen des Gesprächs wieder da und verschwindet nach dem Senden.",
+        "Du siehst, wenn die andere Person eine Antwort schreibt — live über dem Nachrichtenfeld und ohne irgendwo gespeichert zu werden.",
+        "Gespeicherte Antworten: Admins pflegen einen Pool von Standardnachrichten in allen drei Sprachen, und ein Klick setzt den passenden Text in dein Nachrichtenfeld.",
+      ],
+    },
+  },
+  {
+    version: '0.152.1-beta',
+    date: '2026-09-03',
+    time: '20:46',
+    commit: '23b57f9',
+    highlights: {
+      en: [
+        "The language and theme pickers in account settings now have proper names for screen readers, and are easier to tap on a phone.",
+      ],
+      tr: [
+        "Hesap ayarlarındaki dil ve tema seçicileri artık ekran okuyucular için doğru adlara sahip ve telefonda daha kolay dokunuluyor.",
+      ],
+      de: [
+        "Die Sprach- und Themenauswahl in den Kontoeinstellungen hat jetzt korrekte Namen für Screenreader und lässt sich auf dem Handy leichter antippen.",
+      ],
+    },
+  },
+  {
+    version: '0.152.0-beta',
+    date: '2026-09-03',
+    time: '20:46',
+    commit: '3e0e16a',
+    highlights: {
+      en: [
+        "New public trust centre at /trust: who can receive your data and why, what protects it, where it is hosted — and, in the same list, what is not true yet.",
+      ],
+      tr: [
+        "/trust adresinde yeni güven merkezi: verinizi kim alabilir ve neden, onu ne koruyor, nerede barındırılıyor — ve aynı listede, henüz doğru olmayanlar.",
+      ],
+      de: [
+        "Neues öffentliches Trust Center unter /trust: wer eure Daten erhalten kann und warum, was sie schützt, wo sie liegen — und in derselben Liste, was noch nicht zutrifft.",
+      ],
+    },
+  },
+  {
+    version: '0.151.0-beta',
+    date: '2026-09-03',
+    time: '14:41',
+    commit: '73ff73a',
+    highlights: {
+      en: [
+        "API keys now have a lifecycle: pick what a key may read, give it an expiry date, and see who created each key. Revoking a key keeps it in the list so the audit trail stays intact.",
+      ],
+      tr: [
+        "API anahtarlarının artık bir yaşam döngüsü var: anahtarın neyi okuyabileceğini seçin, bir bitiş tarihi verin ve her anahtarı kimin oluşturduğunu görün. İptal edilen anahtar listede kalır, böylece denetim kaydı bozulmaz.",
+      ],
+      de: [
+        "API-Schlüssel haben jetzt einen Lebenszyklus: Sie legen fest, was ein Schlüssel lesen darf, vergeben ein Ablaufdatum und sehen, wer ihn erstellt hat. Ein widerrufener Schlüssel bleibt in der Liste, damit das Audit-Protokoll vollständig bleibt.",
+      ],
+    },
+  },
+  {
+    version: '0.150.0-beta',
+    date: '2026-09-03',
+    time: '14:35',
+    commit: '46a1515',
+    highlights: {
+      en: [
+        "Invite a whole programme at once: paste a list of addresses, check the row-by-row preview, and send every invitation with one click.",
+      ],
+      tr: [
+        "Tüm programı tek seferde davet et: adres listesini yapıştır, satır satır önizlemeyi kontrol et ve bütün davetleri tek tıkla gönder.",
+      ],
+      de: [
+        "Ein ganzes Programm auf einmal einladen: Adressliste einfügen, die Vorschau Zeile für Zeile prüfen und alle Einladungen mit einem Klick senden.",
+      ],
+    },
+  },
+  {
+    version: '0.149.0-beta',
+    date: '2026-09-03',
+    time: '14:30',
+    commit: 'ca559a6',
+    highlights: {
+      en: [
+        "Follow new releases without an account: the \"What's new\" page now has an RSS feed you can subscribe to or pipe into Slack or Discord.",
+      ],
+      tr: [
+        "Yeni sürümleri hesap açmadan takip edin: \"Yenilikler\" sayfasının artık abone olabileceğiniz ya da Slack/Discord'a bağlayabileceğiniz bir RSS akışı var.",
+      ],
+      de: [
+        "Neue Releases ohne Konto verfolgen: Die Seite \"Neuigkeiten\" hat jetzt einen RSS-Feed, den du abonnieren oder in Slack oder Discord einbinden kannst.",
+      ],
+    },
+  },
+  {
+    version: '0.148.2-beta',
+    date: '2026-09-03',
+    time: '14:30',
+    commit: 'ebbc3f3',
+    highlights: {
+      en: [
+        "Mentee detail page: the profile and stage history now sit in a side column, so the working panels use the full width instead of leaving the right third of a wide screen empty.",
+      ],
+      tr: [
+        "Mentee detay sayfası: profil ve aşama geçmişi artık yan sütunda duruyor; çalışma panelleri geniş ekranda sağ üçte biri boş bırakmak yerine tüm genişliği kullanıyor.",
+      ],
+      de: [
+        "Mentee-Detailseite: Profil und Phasenverlauf stehen jetzt in einer Seitenspalte, sodass die Arbeitsbereiche die volle Breite nutzen statt das rechte Drittel breiter Bildschirme leer zu lassen.",
+      ],
+    },
+  },
+  {
+    version: '0.148.1-beta',
+    date: '2026-09-03',
+    time: '14:29',
+    commit: '17be013',
+    highlights: {
+      en: [
+        "Analytics: the \"time in stage\" card no longer contradicts the pipeline funnel — it now shows how many stage transitions were measured and how many distinct candidates they came from, with a hint explaining the difference.",
+      ],
+      tr: [
+        "Analitik: \"Aşamada geçen süre\" kartı artık huni ile çelişmiyor — kaç aşama geçişinin ölçüldüğünü ve bunların kaç ayrı adaydan geldiğini, farkı açıklayan bir ipucuyla birlikte gösteriyor.",
+      ],
+      de: [
+        "Analytics: Die Karte \"Zeit in Phase\" widerspricht dem Funnel nicht mehr — sie zeigt jetzt, wie viele Phasenübergänge gemessen wurden und von wie vielen verschiedenen Kandidaten sie stammen, mit einem erklärenden Hinweis.",
+      ],
+    },
+  },
+  {
+    version: '0.148.0-beta',
+    date: '2026-09-03',
+    time: '14:26',
+    commit: '984c4c7',
+    highlights: {
+      en: [
+        "Meeting invitations now arrive with a calendar file attached — one click to put the meeting in Google Calendar, Outlook or Apple Calendar.",
+        "The calendar subscription now carries everything the app shows: recurring project calls, project meetings and stage deadlines, not just one-to-one meetings — and mentors and admins can get their own subscription link from their calendar page.",
+      ],
+      tr: [
+        "Toplantı davetleri artık takvim dosyası ekiyle geliyor — tek tıkla Google Takvim, Outlook veya Apple Takvim'e ekleniyor.",
+        "Takvim aboneliği artık uygulamadaki her şeyi taşıyor: yalnızca birebir toplantılar değil, düzenli proje görüşmeleri, proje toplantıları ve aşama son tarihleri de. Mentör ve adminler de kendi abonelik bağlantılarını takvim sayfasından alabiliyor.",
+      ],
+      de: [
+        "Meeting-Einladungen kommen jetzt mit einer Kalenderdatei — ein Klick, und das Meeting steht in Google Kalender, Outlook oder Apple Kalender.",
+        "Das Kalender-Abo enthält jetzt alles, was die App zeigt: nicht nur Einzelmeetings, sondern auch wiederkehrende Projekt-Calls, Projektmeetings und Phasenfristen. Auch Mentor:innen und Admins bekommen ihren Abo-Link auf ihrer Kalenderseite.",
+      ],
+    },
+  },
+  {
+    version: '0.147.0-beta',
+    date: '2026-09-03',
+    time: '14:26',
+    commit: 'c99ae06',
+    highlights: {
+      en: [
+        "Mentor suggestions are now recorded: you can dismiss one with a reason and see the next-best match, and the analytics page reports how often your suggestions are taken — overall, by position in the list, and over the last six months.",
+      ],
+      tr: [
+        "Mentör önerileri artık kayda geçiyor: bir öneriyi gerekçesiyle kapatıp sıradaki en iyi eşleşmeyi görebiliyorsunuz; analiz sayfası da önerilerin ne sıklıkla kabul edildiğini genel olarak, listedeki sıraya göre ve son altı ay boyunca raporluyor.",
+      ],
+      de: [
+        "Mentorvorschläge werden jetzt erfasst: Sie können einen Vorschlag mit Begründung verwerfen und sehen dann den nächstbesten Treffer; die Analyseseite zeigt, wie oft Ihre Vorschläge übernommen werden — insgesamt, nach Position in der Liste und über die letzten sechs Monate.",
+      ],
+    },
+  },
+  {
+    version: '0.146.0-beta',
+    date: '2026-09-03',
+    time: '14:25',
+    commit: 'cbc134a',
+    highlights: {
+      en: [
+        "The app now follows your system accessibility settings: with \"reduce motion\" on, panels, menus and auto-scrolls arrive instantly instead of sliding; with increased contrast on, faint borders and grey helper text get stronger; and in Windows High Contrast mode the keyboard focus ring stays visible while the colour picker keeps its real colours.",
+      ],
+      tr: [
+        "Uygulama artık işletim sistemindeki erişilebilirlik tercihlerinizi izliyor: \"hareketi azalt\" açıkken paneller, menüler ve otomatik kaydırmalar kayarak değil anında geliyor, yüksek kontrast açıkken soluk çizgiler ve gri yardımcı metinler belirginleşiyor, Windows Yüksek Kontrast modunda ise klavye odak çerçevesi görünür kalıyor ve renk seçici gerçek renklerini koruyor.",
+      ],
+      de: [
+        "Die App richtet sich jetzt nach den Barrierefreiheits-Einstellungen Ihres Systems: Bei „Bewegung reduzieren“ erscheinen Panels, Menüs und automatische Sprünge sofort statt hereinzugleiten, bei erhöhtem Kontrast werden blasse Linien und graue Hilfetexte kräftiger, und im Windows-Modus für hohen Kontrast bleibt der Tastaturfokus sichtbar, während die Farbauswahl ihre echten Farben behält.",
+      ],
+    },
+  },
+  {
+    version: '0.145.9-beta',
+    date: '2026-09-03',
+    time: '09:37',
+    commit: 'f0d8295',
+    highlights: {
+      en: [
+        "The feature catalogue now documents multi-tenant organisations, product-applied per-tenant branding, and enterprise SSO where SAML sign-in is live while OIDC sign-in is not yet wired.",
+      ],
+      tr: [
+        "Özellik kataloğu artık çok kiracılı organizasyonları, ürün geneline uygulanan kurum bazlı markalamayı ve SAML girişinin canlı, OIDC girişinin ise henüz bağlı olmadığı kurumsal SSO durumunu içeriyor.",
+      ],
+      de: [
+        "Der Funktionskatalog dokumentiert jetzt mandantenfähige Organisationen, produktweit angewandtes Mandanten-Branding und den Enterprise-SSO-Stand, bei dem SAML-Login live ist, OIDC-Login aber noch nicht angebunden ist.",
+      ],
+    },
+  },
+  {
+    version: '0.145.8-beta',
+    date: '2026-09-03',
+    time: '09:33',
+    commit: '8b46f92',
+    highlights: {
+      en: [
+        "Organization settings, including single sign-on, can now only be changed by a super admin — a regular admin manages their own organization and nothing else.",
+      ],
+      tr: [
+        "Organizasyon ayarları, tekli oturum açma dahil, artık yalnızca süper yönetici tarafından değiştirilebilir; normal yönetici sadece kendi organizasyonunu yönetir.",
+      ],
+      de: [
+        "Organisationseinstellungen einschließlich Single Sign-on können jetzt nur noch von einem Super-Admin geändert werden — ein normaler Admin verwaltet ausschließlich die eigene Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.145.7-beta',
+    date: '2026-09-03',
+    time: '09:32',
+    commit: 'f61235a',
+    highlights: {
+      en: [
+        "Deleting or anonymising an account now also erases the messages, attachments, support conversations and notes attached to it — not just the profile.",
+      ],
+      tr: [
+        "Bir hesabı silmek ya da anonimleştirmek artık yalnızca profili değil, hesaba bağlı mesajları, ekleri, destek konuşmalarını ve notları da temizliyor.",
+      ],
+      de: [
+        "Beim Löschen oder Anonymisieren eines Kontos werden jetzt auch die zugehörigen Nachrichten, Anhänge, Support-Unterhaltungen und Notizen gelöscht — nicht nur das Profil.",
+      ],
+    },
+  },
+  {
+    version: '0.145.6-beta',
+    date: '2026-09-03',
+    time: '09:32',
+    commit: 'ab18147',
+    highlights: {
+      en: [
+        "Screen readers now announce the self-registration and two-factor dropdowns in admin settings, and the person icon in your inbox.",
+        "The admin pipeline board's stage rows can be scrolled with the keyboard.",
+      ],
+      tr: [
+        "Yönetici ayarlarındaki kendi kendine kayıt ve iki adımlı doğrulama seçim kutuları ile gelen kutusundaki kişi simgesi artık ekran okuyucular tarafından seslendiriliyor.",
+        "Yönetici pipeline panosundaki aşama satırları artık klavyeyle kaydırılabiliyor.",
+      ],
+      de: [
+        "Screenreader lesen jetzt die Auswahlfelder für Selbstregistrierung und Zwei-Faktor in den Admin-Einstellungen sowie das Personensymbol im Posteingang vor.",
+        "Die Stufenzeilen der Admin-Pipeline-Tafel lassen sich per Tastatur scrollen.",
+      ],
+    },
+  },
+  {
+    version: '0.145.5-beta',
+    date: '2026-09-03',
+    time: '08:17',
+    commit: 'e988f77',
+    highlights: {
+      en: [
+        "Global search is now readable in dark mode and fully keyboard-operable: arrow keys, Home/End, Enter and Escape, with the number of hits announced to screen readers and a clear message when nothing matches.",
+      ],
+      tr: [
+        "Genel arama artık koyu temada okunabiliyor ve tamamen klavyeyle kullanılabiliyor: yön tuşları, Home/End, Enter ve Escape; sonuç sayısı ekran okuyuculara duyuruluyor ve eşleşme yoksa net bir mesaj gösteriliyor.",
+      ],
+      de: [
+        "Die globale Suche ist jetzt im Dark Mode lesbar und vollständig per Tastatur bedienbar: Pfeiltasten, Home/End, Enter und Escape, mit Ansage der Trefferzahl für Screenreader und einer klaren Meldung, wenn es keine Treffer gibt.",
+      ],
+    },
+  },
+  {
+    version: '0.145.4-beta',
+    date: '2026-09-03',
+    time: '08:12',
+    commit: 'a982010',
+    highlights: {
+      en: [
+        "Search engines can now find the public pages: the site serves a robots.txt and a sitemap listing every page a visitor can open, while preview and demo copies stay out of search results.",
+      ],
+      tr: [
+        "Arama motorları artık genel sayfaları bulabiliyor: site bir robots.txt ve ziyaretçiye açık tüm sayfaları içeren bir site haritası yayınlıyor; önizleme ve demo kopyaları arama sonuçlarına girmiyor.",
+      ],
+      de: [
+        "Suchmaschinen finden jetzt die öffentlichen Seiten: Die Website liefert eine robots.txt und eine Sitemap mit allen für Besucher zugänglichen Seiten, während Vorschau- und Demo-Kopien aus den Suchergebnissen bleiben.",
+      ],
+    },
+  },
+  {
+    version: '0.145.2-beta',
+    date: '2026-09-03',
+    time: '08:09',
+    commit: 'a7272b4',
+    highlights: {
+      en: [
+        "Deactivating or erasing an account now signs that person out immediately, on every device, instead of letting their open session run out on its own.",
+      ],
+      tr: [
+        "Bir hesabı pasifleştirmek veya silmek artık o kişiyi tüm cihazlarda anında oturumdan düşürüyor; açık oturumun kendiliğinden sona ermesi beklenmiyor.",
+      ],
+      de: [
+        "Ein Konto zu deaktivieren oder zu löschen meldet die Person jetzt sofort auf allen Geräten ab, statt die offene Sitzung von selbst auslaufen zu lassen.",
+      ],
+    },
+  },
+  {
+    version: '0.145.1-beta',
+    date: '2026-09-03',
+    time: '08:08',
+    commit: 'bf96f70',
+    highlights: {
+      en: [
+        "Enterprise SSO now refuses OIDC instead of silently saving a configuration that would lock a tenant out — SAML is the supported provider, OIDC is marked coming soon.",
+      ],
+      tr: [
+        "Kurumsal SSO artık OIDC'yi sessizce kaydedip kiracıyı girişten kilitlemek yerine reddediyor — desteklenen sağlayıcı SAML, OIDC \"yakında\" olarak işaretlendi.",
+      ],
+      de: [
+        "Enterprise-SSO lehnt OIDC jetzt ab, statt eine Konfiguration zu speichern, die einen Mandanten aussperrt — unterstützt wird SAML, OIDC ist als \"demnächst\" markiert.",
+      ],
+    },
+  },
+  {
+    version: '0.145.0-beta',
+    date: '2026-09-03',
+    time: '08:07',
+    commit: 'a720d96',
+    highlights: {
+      en: [
+        "A mistyped score no longer means deleting the evaluation: its author can correct it for 7 days, and the correction is recorded in the audit log.",
+        "An interview panel closed too early can be reopened — blind scoring applies again immediately, so nobody who has not submitted sees the other scorecards.",
+      ],
+      tr: [
+        "Yanlış girilmiş bir puan için değerlendirmeyi silmek gerekmiyor: yazarı 7 gün boyunca düzeltebilir ve düzeltme denetim kaydına yazılır.",
+        "Erken kapatılmış bir mülakat paneli yeniden açılabiliyor — kör değerlendirme anında yeniden geçerli olur, kendi puanını göndermemiş kimse diğer scorecard'ları görmez.",
+      ],
+      de: [
+        "Eine vertippte Note heißt nicht mehr, die Bewertung zu löschen: Die Verfasserin oder der Verfasser kann sie 7 Tage lang korrigieren, und die Korrektur landet im Prüfprotokoll.",
+        "Ein zu früh geschlossenes Interview-Panel lässt sich wieder öffnen — die verdeckte Bewertung gilt sofort wieder, wer nicht abgegeben hat, sieht die anderen Scorecards nicht.",
+      ],
+    },
+  },
+  {
+    version: '0.144.1-beta',
+    date: '2026-09-03',
+    time: '08:07',
+    commit: 'fc5d64f',
+    highlights: {
+      en: [
+        "The \"ask your mentor for a meeting\" link no longer appears for a mentee with no mentor or an archived mentorship, and the no-mentor message now mentions requesting a mentor yourself.",
+      ],
+      tr: [
+        "Mentörü olmayan ya da mentorluğu arşivlenmiş bir mentee artık \"mentörüne toplantı sor\" bağlantısını görmüyor; mentör atanmadığında gösterilen mesaj artık kendi mentör talebini gönderebileceğini de belirtiyor.",
+      ],
+      de: [
+        "Der Link \"Bitte deinen Mentor um ein Meeting\" erscheint nicht mehr für Mentees ohne Mentor oder mit archivierter Mentorship, und der Hinweis ohne Mentor weist jetzt auch darauf hin, dass eine Mentor-Anfrage gesendet werden kann.",
+      ],
+    },
+  },
+  {
+    version: '0.144.0-beta',
+    date: '2026-09-03',
+    time: '08:05',
+    commit: 'b998d9d',
+    highlights: {
+      en: [
+        "Mentees can now read their own activity summary at /portal/insights — the same one their mentor and the programme team see. Time on site and visited pages appear only while activity tracking is on; with it off the page says so instead of showing zeros. No comparison to anyone else, and always free.",
+      ],
+      tr: [
+        "Mentee'ler artık kendi etkinlik özetini /portal/insights adresinde okuyabiliyor — mentorunun ve program ekibinin gördüğü özetin aynısı. Sitede geçen süre ve gezilen sayfalar yalnızca etkinlik takibi açıkken görünüyor; kapalıysa sayfa sıfır göstermek yerine bunu açıkça söylüyor. Başkalarıyla kıyaslama yok ve her zaman ücretsiz.",
+      ],
+      de: [
+        "Mentees können ihre eigene Aktivitätsübersicht jetzt unter /portal/insights lesen — dieselbe, die Mentor und Programmteam sehen. Verweildauer und besuchte Seiten erscheinen nur bei aktiviertem Aktivitäts-Tracking; ist es aus, sagt die Seite das statt Nullen zu zeigen. Kein Vergleich mit anderen, und immer kostenlos.",
+      ],
+    },
+  },
+  {
+    version: '0.142.0-beta',
+    date: '2026-09-03',
+    time: '08:03',
+    commit: '1a2a0be',
+    highlights: {
+      en: [
+        "Admins get an Offers screen that answers what is still outstanding, what expires this week and what was declined — with saved views, filters and a nav badge for offers awaiting a decision.",
+      ],
+      tr: [
+        "Yöneticiler için Teklifler ekranı: hangi teklifler hâlâ bekliyor, hangileri bu hafta doluyor, hangileri neden reddedildi — hazır görünümler, filtreler ve karar bekleyen teklifler için menüde bir sayaç.",
+      ],
+      de: [
+        "Admins erhalten eine Angebote-Übersicht, die zeigt, was noch offen ist, was diese Woche abläuft und was abgelehnt wurde — mit gespeicherten Ansichten, Filtern und einem Navigations-Zähler für Angebote, die auf eine Entscheidung warten.",
+      ],
+    },
+  },
+  {
+    version: '0.141.1-beta',
+    date: '2026-09-03',
+    time: '08:00',
+    commit: 'ffc14fa',
+    highlights: {
+      en: [
+        "When the database is briefly unavailable, the sign-in page now says so in plain language instead of showing an internal error message — and the server brings the database back automatically.",
+      ],
+      tr: [
+        "Veritabanına geçici olarak ulaşılamadığında giriş sayfası artık teknik hata metni yerine anlaşılır bir mesaj gösteriyor; sunucu da veritabanını otomatik olarak yeniden ayağa kaldırıyor.",
+      ],
+      de: [
+        "Wenn die Datenbank kurzzeitig nicht erreichbar ist, zeigt die Anmeldeseite jetzt eine verständliche Meldung statt einer internen Fehlermeldung — und der Server startet die Datenbank automatisch wieder.",
+      ],
+    },
+  },
+  {
+    version: '0.141.0-beta',
+    date: '2026-09-03',
+    time: '07:59',
+    commit: '06c3637',
+    highlights: {
+      en: [
+        "Enlarged images now open inside the app: close them with ✕, Escape, a tap outside or your phone's back button, and zoom or step through several images without leaving the page.",
+      ],
+      tr: [
+        "Büyütülen resimler artık uygulamanın içinde açılıyor: ✕, Esc, dışarı dokunma veya telefonun geri tuşuyla kapatabilir; sayfadan çıkmadan yakınlaştırıp resimler arasında gezinebilirsiniz.",
+      ],
+      de: [
+        "Vergrößerte Bilder öffnen sich jetzt in der App: schließen per ✕, Escape, Tippen daneben oder der Zurück-Taste des Telefons — inklusive Zoom und Blättern zwischen mehreren Bildern.",
+      ],
+    },
+  },
+  {
+    version: '0.140.0-beta',
+    date: '2026-09-03',
+    time: '07:57',
+    commit: 'f5a334b',
+    highlights: {
+      en: [
+        "The get-started checklist now remembers where you are on the server: close it on one computer and it stays closed on the next.",
+        "Admins get the full launch list — stages, service levels, documents, evaluation framework, invitations, company and first mentorship — with a short guide behind every step.",
+      ],
+      tr: [
+        "Başlangıç kontrol listesi artık nerede kaldığını sunucuda hatırlıyor: bir bilgisayarda kapattığında diğerinde de kapalı kalıyor.",
+        "Yöneticiler tam başlatma listesini görüyor — aşamalar, hizmet seviyeleri, belgeler, değerlendirme çerçevesi, davetler, şirket ve ilk mentorluk — ve her adımın arkasında kısa bir rehber var.",
+      ],
+      de: [
+        "Die Einstiegs-Checkliste merkt sich deinen Stand jetzt serverseitig: Einmal ausgeblendet, bleibt sie es auch auf dem nächsten Rechner.",
+        "Admins sehen die vollständige Startliste — Stufen, Service-Level, Dokumente, Bewertungsrahmen, Einladungen, Unternehmen und erstes Mentoring — mit einer kurzen Anleitung hinter jedem Schritt.",
+      ],
+    },
+  },
+  {
+    version: '0.139.0-beta',
+    date: '2026-09-03',
+    time: '07:47',
+    commit: '1522801',
+    highlights: {
+      en: [
+        "Press ⌘K (Ctrl+K) anywhere to jump to a page, find a person or company, or run a quick action — and ? to see every keyboard shortcut.",
+      ],
+      tr: [
+        "Herhangi bir yerde ⌘K (Ctrl+K) ile bir sayfaya atla, kişi veya şirket bul, hızlı bir eylem çalıştır; ? tuşu tüm klavye kısayollarını gösterir.",
+      ],
+      de: [
+        "Mit ⌘K (Strg+K) überall zu einer Seite springen, Personen oder Unternehmen finden und Aktionen starten — mit ? erscheint die Liste aller Tastenkürzel.",
+      ],
+    },
+  },
+  {
+    version: '0.138.0-beta',
+    date: '2026-09-03',
+    time: '07:25',
+    commit: 'f00d27a',
+    highlights: {
+      en: [
+        "A public accessibility statement at /accessibility says which standard we meet (WCAG 2.2 AA, partially), how we check it, what is still broken, and where to report a barrier.",
+      ],
+      tr: [
+        "/accessibility adresindeki herkese açık erişilebilirlik beyanı hangi standardı karşıladığımızı (WCAG 2.2 AA, kısmen), bunu nasıl denetlediğimizi, neyin hâlâ bozuk olduğunu ve bir engeli nereye bildireceğinizi anlatıyor.",
+      ],
+      de: [
+        "Eine öffentliche Barrierefreiheits-Erklärung unter /accessibility nennt den erfüllten Standard (WCAG 2.2 AA, teilweise), wie wir das prüfen, was noch nicht funktioniert und wohin man eine Barriere meldet.",
+      ],
+    },
+  },
+  {
+    version: '0.137.1-beta',
+    date: '2026-09-03',
+    time: '07:15',
+    commit: '09428f8',
+    highlights: {
+      en: [
+        "Public and semi-public write endpoints now have protection against automated request bursts.",
+      ],
+      tr: [
+        "Herkese açık ve yarı açık yazma uç noktaları artık otomatik istek yoğunluğuna karşı korunuyor.",
+      ],
+      de: [
+        "Öffentliche und halböffentliche Schreib-Endpunkte sind jetzt gegen automatisierte Anfrage-Spitzen geschützt.",
+      ],
+    },
+  },
+  {
+    version: '0.137.0-beta',
+    date: '2026-09-03',
+    time: '07:15',
+    commit: '6fdc485',
+    highlights: {
+      en: [
+        "A new AI page explains which features use AI, what is sent, what is never sent and how to switch it off — and everything a model wrote now carries a ✨ marker.",
+      ],
+      tr: [
+        "Yeni yapay zekâ sayfası hangi özelliklerin yapay zekâ kullandığını, neyin gönderildiğini, neyin asla gönderilmediğini ve nasıl kapatılacağını anlatıyor; bir modelin yazdığı her metin artık ✨ işareti taşıyor.",
+      ],
+      de: [
+        "Eine neue KI-Seite erklärt, welche Funktionen KI nutzen, was gesendet wird, was nie gesendet wird und wie man sie abschaltet — und alles, was ein Modell geschrieben hat, trägt jetzt eine ✨-Markierung.",
+      ],
+    },
+  },
+  {
+    version: '0.136.0-beta',
+    date: '2026-09-03',
+    time: '07:12',
+    commit: '34c221f',
+    highlights: {
+      en: [
+        "Webhooks can now be edited, paused and test-pinged: change a subscription's URL or events without losing its signing secret, and send yourself a signed test event to prove your verification works.",
+      ],
+      tr: [
+        "Webhook’lar artık düzenlenebilir, duraklatılabilir ve test edilebilir: bir aboneliğin adresini ya da olaylarını imza anahtarını kaybetmeden değiştir, doğrulamanın çalıştığını kanıtlamak için kendine imzalı bir test olayı gönder.",
+      ],
+      de: [
+        "Webhooks lassen sich jetzt bearbeiten, pausieren und testen: URL oder Ereignisse einer Subscription ändern, ohne das Signatur-Secret zu verlieren, und ein signiertes Testereignis senden, um die eigene Prüfung zu verifizieren.",
+      ],
+    },
+  },
+  {
     version: '0.135.0-beta',
     date: '2026-09-02',
     time: '16:07',

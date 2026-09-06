@@ -37,7 +37,13 @@ ENV_PREFIX="${ENV_PREFIX:-}"
 # and its Plesk subdomain forever — nothing else ever revisits a closed PR.
 LEGACY_ENV_PREFIX="${LEGACY_ENV_PREFIX:-crm-}"
 CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/sites}"
-CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy}"
+# Same privilege story as topic-deploy.sh: /etc/caddy/sites is root:caddy 0775
+# and the deploy user is not in that group, and `systemctl reload` is root-only.
+# Without this a teardown left the route pointing at a container that no longer
+# exists — a 502 on a hostname the PR's author was told to visit (#2213).
+_SUDO=""; [ "$(id -u)" -eq 0 ] || _SUDO="sudo "
+_priv() { if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi; }
+CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && ${_SUDO}systemctl reload caddy}"
 
 CONTAINER="internship-crm-${TOPIC}"
 SUBLABEL="${ENV_PREFIX}${TOPIC}"
@@ -61,7 +67,7 @@ for _fq in "$FQDN" "$LEGACY_FQDN"; do
   [ -n "$_fq" ] || continue
   _site="${CADDY_SITES_DIR}/${_fq}.caddy"
   if [ -f "$_site" ]; then
-    rm -f "$_site"
+    _priv rm -f "$_site"
     echo "==> Removed Caddy route ${_site}"
     _removed_any=1
   fi

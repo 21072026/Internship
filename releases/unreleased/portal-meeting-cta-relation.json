@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Fixed** (#1423): the \"ask your mentor for a meeting\" link on a mentee's empty meetings card no longer appears without an active mentor relation — it used to point at `/portal/requests`, which has no request form for a mentee with no mentor or an archived mentorship. The no-mentor hint now also says a mentor request can be sent instead of only waiting for an admin.",
-  "notes": {
-    "en": ["The \"ask your mentor for a meeting\" link no longer appears for a mentee with no mentor or an archived mentorship, and the no-mentor message now mentions requesting a mentor yourself."],
-    "tr": ["Mentörü olmayan ya da mentorluğu arşivlenmiş bir mentee artık \"mentörüne toplantı sor\" bağlantısını görmüyor; mentör atanmadığında gösterilen mesaj artık kendi mentör talebini gönderebileceğini de belirtiyor."],
-    "de": ["Der Link \"Bitte deinen Mentor um ein Meeting\" erscheint nicht mehr für Mentees ohne Mentor oder mit archivierter Mentorship, und der Hinweis ohne Mentor weist jetzt auch darauf hin, dass eine Mentor-Anfrage gesendet werden kann."]
-  }
-}

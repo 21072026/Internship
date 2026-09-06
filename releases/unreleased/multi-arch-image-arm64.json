@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Multi-arch container image** (#2166): `build-image.yml` now publishes a `linux/amd64` + `linux/arm64` manifest, each arch built on its own native runner (`ubuntu-24.04-arm`) rather than under QEMU, and stitched with `imagetools create`. The merge job fails closed if either arch is missing. Prisma's `binaryTargets` gains `linux-arm64-openssl-3.0.x`."
-}

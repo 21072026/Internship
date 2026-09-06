@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- **In-app image viewer** (#2147). Images in messages, support tickets and announcements open in a dismissible lightbox (✕, Escape, backdrop tap, phone back button) with zoom, download and prev/next, instead of a chrome-less new tab the reader could not get out of.",
-  "notes": {
-    "en": ["Enlarged images now open inside the app: close them with ✕, Escape, a tap outside or your phone's back button, and zoom or step through several images without leaving the page."],
-    "tr": ["Büyütülen resimler artık uygulamanın içinde açılıyor: ✕, Esc, dışarı dokunma veya telefonun geri tuşuyla kapatabilir; sayfadan çıkmadan yakınlaştırıp resimler arasında gezinebilirsiniz."],
-    "de": ["Vergrößerte Bilder öffnen sich jetzt in der App: schließen per ✕, Escape, Tippen daneben oder der Zurück-Taste des Telefons — inklusive Zoom und Blättern zwischen mehreren Bildern."]
-  }
-}
