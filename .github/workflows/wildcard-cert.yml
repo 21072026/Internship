@@ -1,0 +1,93 @@
+name: Wildcard TLS certificate (manual)
+
+# Issue (and set up auto-renewal for) the wildcard certificate the topic
+# environments need, using the CF_API_TOKEN repo secret (#2166).
+#
+# WHY A WORKFLOW, AND WHY IT RUNS ON THE DEPLOY RUNNER
+#   A wildcard cert can only be validated over DNS-01, which needs a Cloudflare
+#   token — and the certificate has to land on the box that serves TLS. Those
+#   used to be two different machines, so infra-setup.yml shipped the script over
+#   SSH and passed the token base64'd through the hop.
+#
+#   The deploy runner now IS that box. So this job runs there directly: the token
+#   comes from the repo secret into the job's environment and never touches a
+#   shell anyone types into, a scrollback, or a shell history. acme.sh persists
+#   it under ~/.acme.sh (0600) and installs its own renewal cron, so this is a
+#   one-time run per host rather than something to remember.
+#
+# WHY A WILDCARD AT ALL
+#   Every PR gets its own hostname. This repo merged its last 100 PRs in 9 days,
+#   against Let's Encrypt's limit of 50 certificates per registered domain per
+#   week — so per-hostname issuance runs the domain out of quota within days and
+#   topic environments then fail TLS with nothing in the deploy log looking
+#   wrong. One wildcard covers all of them.
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Apex domain (cert covers it and *.<domain>)'
+        required: true
+        default: 'interncrm.com'
+        type: string
+      cert_dir:
+        description: 'Where to install the cert'
+        required: false
+        default: '/etc/caddy/certs'
+        type: string
+
+concurrency:
+  group: wildcard-cert
+  cancel-in-progress: false
+
+jobs:
+  issue:
+    name: Issue wildcard for ${{ inputs.domain }}
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
+    steps:
+      # #1239 — no `uses:` on a self-hosted job; see topic-preview.yml.
+      - name: Fetch the repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -d .git ] || git init -q .
+          rm -f .git/index.lock
+          git remote get-url origin >/dev/null 2>&1 \
+            || git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c credential.helper='!f() { echo "username=x-access-token"; echo "password=${GH_TOKEN}"; }; f' \
+            fetch -q --depth 1 origin "${GITHUB_SHA}"
+          git checkout -q --force FETCH_HEAD
+
+      - name: Issue and install
+        env:
+          CF_Token: ${{ secrets.CF_API_TOKEN }}
+          DOMAIN: ${{ inputs.domain }}
+          CERT_DIR: ${{ inputs.cert_dir }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_Token:-}" ]; then
+            echo "::error::CF_API_TOKEN is not set (or is empty). Rotating the token in Cloudflare does not update it here."
+            exit 1
+          fi
+          chmod +x infra/acme-issue-wildcard.sh
+          # Caddy reads the cert files directly, so a reload is all that is
+          # needed on renewal — no restart, no dropped connections.
+          sudo -E DOMAIN="$DOMAIN" CERT_DIR="$CERT_DIR" \
+               RELOAD_CMD='systemctl reload caddy' \
+               ./infra/acme-issue-wildcard.sh
+
+      - name: Verify the cert covers the wildcard
+        env:
+          DOMAIN: ${{ inputs.domain }}
+          CERT_DIR: ${{ inputs.cert_dir }}
+        run: |
+          set -euo pipefail
+          sudo test -s "${CERT_DIR}/${DOMAIN}.cer" || { echo "::error::no cert at ${CERT_DIR}/${DOMAIN}.cer"; exit 1; }
+          SANS="$(sudo openssl x509 -in "${CERT_DIR}/${DOMAIN}.cer" -noout -ext subjectAltName)"
+          echo "$SANS"
+          # Fail closed: a cert without the wildcard SAN would let topic
+          # environments fall back to per-hostname issuance, which is the exact
+          # rate-limit trap this exists to avoid.
+          printf '%s' "$SANS" | grep -q "DNS:\*\.${DOMAIN}" \
+            || { echo "::error::certificate does not cover *.${DOMAIN}"; exit 1; }
+          echo "OK — covers ${DOMAIN} and *.${DOMAIN}"
