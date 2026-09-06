@@ -107,12 +107,19 @@ step_packages() {
   apt-get update -qq
   # ca-certificates/curl/gnupg are needed to add the Docker and Caddy repos;
   # the rest is the "can I debug this box at 2am" set.
+  #
+  # `cron` is here for one reason: acme.sh REFUSES TO INSTALL without a crontab
+  # ("Pre-check failed, cannot install") and then the wildcard certificate cannot
+  # be issued at all. This box otherwise schedules everything with systemd
+  # timers, so nothing else would have pulled cron in — and the failure surfaces
+  # far from the cause, as a missing acme.sh binary.
   apt-get install -y -qq --no-install-recommends \
     ca-certificates curl gnupg git jq unzip zip \
     btop ncdu tmux ripgrep tree rsync \
     debian-keyring debian-archive-keyring apt-transport-https \
     mysql-client \
-    restic
+    restic \
+    cron
   ok "base packages installed"
 }
 
