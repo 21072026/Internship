@@ -274,16 +274,16 @@ const en = {
     confirmNotAccepting: 'This mentor has indicated they are not accepting new mentees. Assign anyway?',
     confirmAnyway: 'Assign anyway',
   },
-  // Mentor-matching feedback loop (#2040). Shared on purpose: the dismiss
-  // control on a suggestion card and the match-quality report on the analytics
-  // page must name a reason with the same words, or the report reads as a
-  // different feature from the button that fills it.
   // Match score explainability (#1785). The score is deterministic rule
   // arithmetic — never call it "AI" — and the footer below is required, not
   // optional: it is what keeps a ranking used for a hiring outcome
   // explainable and contestable.
   matchScore: {
     title: 'Match score',
+    // The visible figure. Turkish writes the sign first (%78) and German puts a
+    // space before it — hardcoding "{pct}%" in JSX left the one number a
+    // coordinator points at as the only unlocalised string in the component.
+    percent: '{n}%',
     srScore: '{n}% rule satisfaction',
     tiers: {
       strong: 'Strong match',
@@ -314,10 +314,33 @@ const en = {
       city: 'City',
       timezone: 'Time zone',
       capacityHeadroom: 'Mentor capacity',
-      managerExclusion: 'Not the direct manager',
-      previousPairing: 'Not paired before',
+      managerExclusion: 'Direct manager',
+      previousPairing: 'Previous pairing',
     },
+    // Why a rule BLOCKED, as a sentence. Kept apart from `dimensions` on
+    // purpose: the exclusion dimensions are named for the state that satisfies
+    // them ("Direct manager"), so reusing the dimension label as the blocking
+    // reason printed the exact opposite of what happened — a panel headed
+    // "Blocked by a hard rule" whose only line read "Not the direct manager".
+    violations: {
+      skills: 'The required skills are missing',
+      language: 'No shared working language',
+      field: 'The field does not match',
+      department: 'The department does not match',
+      university: 'The university does not match',
+      city: 'The cities do not match',
+      timezone: 'The time zones do not overlap',
+      capacityHeadroom: 'The mentor has no capacity left',
+      managerExclusion: 'The mentor is the direct manager of this mentee',
+      previousPairing: 'This pair has been matched before',
+    },
+    /** A rule from a registry newer than this bundle. Never the dimension name. */
+    violationFallback: 'Rule not satisfied: {name}',
   },
+  // Mentor-matching feedback loop (#2040). Shared on purpose: the dismiss
+  // control on a suggestion card and the match-quality report on the analytics
+  // page must name a reason with the same words, or the report reads as a
+  // different feature from the button that fills it.
   matchFeedback: {
     dismiss: 'Dismiss this suggestion',
     dismissTitle: 'Why is this not a match?',
@@ -4630,6 +4653,7 @@ const tr: Dict = {
   // edilebilir kılan cümle odur.
   matchScore: {
     title: 'Eşleşme skoru',
+    percent: '%{n}',
     srScore: 'Kural karşılama: %{n}',
     tiers: {
       strong: 'Güçlü eşleşme',
@@ -4660,9 +4684,22 @@ const tr: Dict = {
       city: 'Şehir',
       timezone: 'Saat dilimi',
       capacityHeadroom: 'Mentor kapasitesi',
-      managerExclusion: 'Doğrudan yöneticisi değil',
-      previousPairing: 'Daha önce eşleşmemiş',
+      managerExclusion: 'Doğrudan yönetici',
+      previousPairing: 'Önceki eşleşme',
     },
+    violations: {
+      skills: 'Gereken yetkinlikler eksik',
+      language: 'Ortak bir çalışma dili yok',
+      field: 'Alan uyuşmuyor',
+      department: 'Bölüm uyuşmuyor',
+      university: 'Üniversite uyuşmuyor',
+      city: 'Şehirler uyuşmuyor',
+      timezone: 'Saat dilimleri örtüşmüyor',
+      capacityHeadroom: 'Mentorun boş kapasitesi kalmamış',
+      managerExclusion: 'Mentor, bu menteenin doğrudan yöneticisi',
+      previousPairing: 'Bu çift daha önce eşleştirilmiş',
+    },
+    violationFallback: 'Kural karşılanmadı: {name}',
   },
   matchFeedback: {
     dismiss: 'Bu öneriyi kapat',
@@ -8927,6 +8964,7 @@ const de: Dict = {
   // beeinflusst, erklärbar und anfechtbar.
   matchScore: {
     title: 'Match-Score',
+    percent: '{n} %',
     srScore: '{n} % Regelerfüllung',
     tiers: {
       strong: 'Starke Übereinstimmung',
@@ -8957,9 +8995,22 @@ const de: Dict = {
       city: 'Stadt',
       timezone: 'Zeitzone',
       capacityHeadroom: 'Mentor-Kapazität',
-      managerExclusion: 'Nicht die direkte Führungskraft',
-      previousPairing: 'Noch nie gepaart',
+      managerExclusion: 'Direkte Führungskraft',
+      previousPairing: 'Frühere Paarung',
     },
+    violations: {
+      skills: 'Die geforderten Kompetenzen fehlen',
+      language: 'Keine gemeinsame Arbeitssprache',
+      field: 'Das Fachgebiet passt nicht',
+      department: 'Die Abteilung passt nicht',
+      university: 'Die Universität passt nicht',
+      city: 'Die Städte stimmen nicht überein',
+      timezone: 'Die Zeitzonen überschneiden sich nicht',
+      capacityHeadroom: 'Der Mentor hat keine freie Kapazität mehr',
+      managerExclusion: 'Der Mentor ist die direkte Führungskraft dieses Mentees',
+      previousPairing: 'Dieses Paar war bereits einmal zugeordnet',
+    },
+    violationFallback: 'Regel nicht erfüllt: {name}',
   },
   matchFeedback: {
     dismiss: 'Diesen Vorschlag verwerfen',
