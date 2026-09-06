@@ -2554,7 +2554,10 @@ const en = {
   interactionMeta: { autoLogged: 'Auto-logged', autoLoggedHint: 'Written automatically from a meeting that took place.' },
   nextActions: { logFirst: 'Log a first interaction', noContact: 'No contact in {d} days — reach out', lastContact: 'Last contact {d} days ago — follow up', pushHiring: 'Push toward hiring', onTrack: 'On track' },
   notFound: { title: 'Page not found', description: 'This page could not be found.', backHome: 'Back to home' },
-  errorBoundary: { title: 'Something went wrong', description: 'An unexpected error occurred. You can try again or go back to the dashboard.', retry: 'Try again', backHome: 'Back to dashboard' },
+  // `digest` labels the hash Next.js gives a server-side throw. It is the only
+  // thing an error boundary shows about the error itself — never the message or
+  // the stack — so that a report can be matched to the server log (#1602).
+  errorBoundary: { title: 'Something went wrong', description: 'An unexpected error occurred. You can try again or go back to the dashboard.', retry: 'Try again', backHome: 'Back to dashboard', digest: 'Error reference:' },
   theme: { toggle: 'Toggle theme', light: 'Light', dark: 'Dark', system: 'System', systemHint: 'Follows your device appearance.', next: 'next' },
   fontSize: { decrease: 'Decrease font size', increase: 'Increase font size', small: 'Small', medium: 'Normal', large: 'Large', extraLarge: 'X-Large' },
   density: { toggle: 'Toggle density', comfortable: 'Comfortable', compact: 'Compact', next: 'next' },
@@ -6925,7 +6928,7 @@ const tr: Dict = {
   interactionMeta: { autoLogged: 'Otomatik', autoLoggedHint: 'Gerçekleşen toplantıdan otomatik olarak eklendi.' },
   nextActions: { logFirst: 'İlk etkileşimi kaydet', noContact: '{d} gündür iletişim yok — iletişime geç', lastContact: 'Son iletişim {d} gün önce — takip et', pushHiring: 'İşe alıma yönlendir', onTrack: 'Yolunda' },
   notFound: { title: 'Sayfa bulunamadı', description: 'Bu sayfa bulunamadı.', backHome: 'Ana sayfaya dön' },
-  errorBoundary: { title: 'Bir şeyler ters gitti', description: 'Beklenmeyen bir hata oluştu. Tekrar deneyebilir veya panele dönebilirsin.', retry: 'Tekrar dene', backHome: 'Panele dön' },
+  errorBoundary: { title: 'Bir şeyler ters gitti', description: 'Beklenmeyen bir hata oluştu. Tekrar deneyebilir veya panele dönebilirsin.', retry: 'Tekrar dene', backHome: 'Panele dön', digest: 'Hata referansı:' },
   theme: { toggle: 'Temayı değiştir', light: 'Açık', dark: 'Koyu', system: 'Sistem', systemHint: 'Cihazının görünümünü takip eder.', next: 'sonraki' },
   fontSize: { decrease: 'Yazı boyutunu küçült', increase: 'Yazı boyutunu büyüt', small: 'Küçük', medium: 'Normal', large: 'Büyük', extraLarge: 'Çok Büyük' },
   density: { toggle: 'Yoğunluğu değiştir', comfortable: 'Ferah', compact: 'Sık', next: 'sonraki' },
@@ -11278,7 +11281,7 @@ const de: Dict = {
   interactionMeta: { autoLogged: 'Automatisch', autoLoggedHint: 'Automatisch aus einem stattgefundenen Meeting übernommen.' },
   nextActions: { logFirst: 'Erste Interaktion erfassen', noContact: 'Seit {d} Tagen kein Kontakt — melde dich', lastContact: 'Letzter Kontakt vor {d} Tagen — nachfassen', pushHiring: 'Richtung Einstellung drängen', onTrack: 'Auf Kurs' },
   notFound: { title: 'Seite nicht gefunden', description: 'Diese Seite konnte nicht gefunden werden.', backHome: 'Zurück zur Startseite' },
-  errorBoundary: { title: 'Etwas ist schiefgelaufen', description: 'Ein unerwarteter Fehler ist aufgetreten. Du kannst es erneut versuchen oder zum Dashboard zurückkehren.', retry: 'Erneut versuchen', backHome: 'Zurück zum Dashboard' },
+  errorBoundary: { title: 'Etwas ist schiefgelaufen', description: 'Ein unerwarteter Fehler ist aufgetreten. Du kannst es erneut versuchen oder zum Dashboard zurückkehren.', retry: 'Erneut versuchen', backHome: 'Zurück zum Dashboard', digest: 'Fehlerreferenz:' },
   theme: { toggle: 'Theme wechseln', light: 'Hell', dark: 'Dunkel', system: 'System', systemHint: 'Folgt dem Erscheinungsbild deines Geräts.', next: 'nächste' },
   fontSize: { decrease: 'Schrift verkleinern', increase: 'Schrift vergrößern', small: 'Klein', medium: 'Normal', large: 'Groß', extraLarge: 'Sehr groß' },
   density: { toggle: 'Dichte wechseln', comfortable: 'Komfortabel', compact: 'Kompakt', next: 'nächste' },
