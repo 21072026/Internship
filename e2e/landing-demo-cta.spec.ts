@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // an inline link in the bottom CTA block, and a footer link. All three point at
 // the demo host and are hidden on the demo instance itself (IS_DEMO_MODE) —
 // these tests run against non-demo envs, so they assert presence.
-const DEMO_URL = 'https://crm-demo.ersah.in';
+const DEMO_URL = 'https://demo.interncrm.com';
 
 test('the landing page links to the live demo (hero, CTA block, footer)', async ({ page }) => {
   await page.goto('/');

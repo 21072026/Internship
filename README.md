@@ -118,7 +118,7 @@ sign-in, admin login, and that the admin pages render without server errors.
 ```bash
 npm run test:e2e            # starts the app and runs headless
 npm run test:e2e:headed     # visible browser
-BASE_URL=https://crm-preview.ersah.in npm run test:e2e   # against a deployed env
+BASE_URL=https://preview.interncrm.com npm run test:e2e   # against a deployed env
 
 npm run test:stress         # load test (see docs/testing.md for thresholds/env)
 ```
@@ -136,9 +136,9 @@ preview and production; every PR additionally gets its own throwaway environment
 
 | Environment | URL | Trigger | Workflow |
 |-------------|-----|---------|----------|
-| Production | https://crm.ersah.in | push to `main` | [`deploy-prod.yml`](.github/workflows/deploy-prod.yml) |
-| Preview | https://crm-preview.ersah.in | push to `main` | [`deploy-preview.yml`](.github/workflows/deploy-preview.yml) |
-| Topic (per PR) | `https://crm-pr<N>.ersah.in` | every push to the PR | [`topic-preview.yml`](.github/workflows/topic-preview.yml) |
+| Production | https://interncrm.com | push to `main` | [`deploy-prod.yml`](.github/workflows/deploy-prod.yml) |
+| Preview | https://preview.interncrm.com | push to `main` | [`deploy-preview.yml`](.github/workflows/deploy-preview.yml) |
+| Topic (per PR) | `https://pr<N>.interncrm.com` | every push to the PR | [`topic-preview.yml`](.github/workflows/topic-preview.yml) |
 
 Each deploy builds the Docker image from source on the server, applies the schema with
 `prisma db push`, swaps the container and health-checks it. Prod and preview also run
@@ -171,8 +171,8 @@ source available to its users.
 
 ### Trademarks
 
-The AGPL covers the **code only**. The name "Internship CRM", the project's logo and the
-`crm.ersah.in` domain are **not** licensed with it — forks and derivative services must use
+The AGPL covers the **code only**. The name "Internship CRM" / "InternCRM", the project's logo
+and the `interncrm.com` domain are **not** licensed with it — forks and derivative services must use
 their own name and branding, and may not imply endorsement by or affiliation with the rights
 holder.
 
@@ -181,7 +181,7 @@ holder.
 The AGPL keeps the project open while ensuring improvements flow back to the community. Two
 paths exist for organizations:
 
-- **Hosted service** — use the maintained deployment at https://crm.ersah.in (support,
+- **Hosted service** — use the maintained deployment at https://interncrm.com (support,
   updates, backups included) instead of running it yourself.
 - **Commercial license** — if AGPL's source-sharing obligations don't fit your product (e.g.
   embedding in a closed-source offering), a separate commercial license is available. Because
