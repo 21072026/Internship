@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Uptime monitoring moves off the monitored box** (#2169): `uptime.yml` probes the three public environments from GitHub-hosted runners every five minutes. The previous monitor ran on the server it was watching, so the 2026-09-03 outage took the alerting with it and ran ~40 hours unreported. Alerts fire on state change only — an open `uptime-alert` issue is the alerting state, created on the way down and closed on the way back up — so an outage sends one mail, not one every five minutes."
-}
