@@ -1,0 +1,170 @@
+name: Uptime
+
+# External uptime monitoring for the public environments (#2169).
+#
+# WHY IT IS NOT ON THE SERVER
+#   It used to be: uptime-kuma ran on the same box it was watching. On
+#   2026-09-03 that box went down and took the monitoring with it — the outage
+#   ran for roughly 40 hours and nothing said so. A monitor that shares a
+#   failure domain with its target reports "all good" right up until it cannot
+#   report anything, which is worse than no monitor, because you believe it.
+#
+#   This runs on GitHub-hosted runners: different company, different network,
+#   no shared dependency with the box other than the internet between them.
+#
+# WHAT IT DOES NOT DO — read this before trusting it as your only monitor.
+#   GitHub's scheduled workflows are best-effort. `*/5` is the floor, not a
+#   promise: runs are routinely 5-20 minutes late and can be dropped entirely
+#   when the platform is busy. So this detects an outage within roughly a
+#   quarter of an hour, not within a minute. That is fine for "the site has
+#   been down since lunch" and useless for an SLA. A dedicated monitoring
+#   service is the right tool if minute-level detection matters; this is the
+#   zero-account, zero-third-party-ToS layer that works today.
+#
+# ALERTS ON STATE CHANGE, NOT ON EVERY FAILURE
+#   A five-minute monitor that mails on every failed check sends twelve emails
+#   an hour during an outage, and the next real alert arrives in a mailbox
+#   people have learned to ignore. An open issue with the label below IS the
+#   "currently alerting" state: it is created on the way down, closed on the way
+#   back up, and each transition sends exactly one mail.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+
+env:
+  ALERT_LABEL: uptime-alert
+
+jobs:
+  check:
+    name: Probe public environments
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        id: probe
+        env:
+          # Production first: it is the one whose failure matters most, and
+          # listing it first makes the subject line read correctly.
+          TARGETS: >-
+            https://interncrm.com/api/health
+            https://preview.interncrm.com/api/health
+            https://demo.interncrm.com/api/health
+        run: |
+          set -uo pipefail
+          probe_all() {
+            local failed=""
+            for url in $TARGETS; do
+              # `|| echo 000` here would APPEND to curl's own output: curl exits
+              # non-zero on a connection failure but has already printed `000`,
+              # so the code came out as "000000" in the alert. Let curl fail and
+              # only substitute when it printed nothing at all.
+              code="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)" || true
+              [ -n "$code" ] || code=000
+              # 000 is curl's "never got an answer" — DNS, TLS or connection.
+              # It is the shape a dead host takes, so it must not be treated as
+              # just another non-200.
+              if [ "$code" != "200" ]; then failed="${failed}${url} -> ${code}"$'\n'; fi
+            done
+            printf '%s' "$failed"
+          }
+
+          FAILED="$(probe_all)"
+          # One retry before declaring an outage. A single failed probe is
+          # usually a deploy swapping containers or a transient network blip,
+          # and paging on those is how a monitor gets muted.
+          if [ -n "$FAILED" ]; then
+            echo "first pass failed, retrying in 30s:"; printf '%s' "$FAILED"
+            sleep 30
+            FAILED="$(probe_all)"
+          fi
+
+          if [ -n "$FAILED" ]; then
+            echo "status=down" >> "$GITHUB_OUTPUT"
+            { echo 'detail<<EOF'; printf '%s' "$FAILED"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
+            printf 'DOWN:\n%s' "$FAILED"
+          else
+            echo "status=up" >> "$GITHUB_OUTPUT"
+            echo "all targets 200"
+          fi
+
+      - name: Find the current alert state
+        id: state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NUM="$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$ALERT_LABEL" \
+                   --state open --limit 1 --json number --jq '.[0].number // ""')"
+          echo "open_issue=${NUM}" >> "$GITHUB_OUTPUT"
+          echo "open alert issue: ${NUM:-none}"
+
+      # ── down, and not already alerting ────────────────────────────────────
+      - name: Open an incident
+        if: steps.probe.outputs.status == 'down' && steps.state.outputs.open_issue == ''
+        id: incident
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DETAIL: ${{ steps.probe.outputs.detail }}
+        run: |
+          set -euo pipefail
+          gh label create "$ALERT_LABEL" --repo "$GITHUB_REPOSITORY" \
+            --color B60205 --description "Automatic uptime alert" 2>/dev/null || true
+          BODY="$(printf 'Automatic uptime check failed twice, 30 seconds apart.\n\n```\n%s```\n\nRun: %s/%s/actions/runs/%s\n\nThis issue is the alert state: it closes itself when the checks pass again.\n' \
+                  "$DETAIL" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          URL="$(gh issue create --repo "$GITHUB_REPOSITORY" --label "$ALERT_LABEL" \
+                  --title "🔴 Site erişilemiyor" --body "$BODY")"
+          echo "created $URL"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # ── back up, and we were alerting ─────────────────────────────────────
+      - name: Close the incident
+        if: steps.probe.outputs.status == 'up' && steps.state.outputs.open_issue != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUM: ${{ steps.state.outputs.open_issue }}
+        run: |
+          set -euo pipefail
+          gh issue close "$NUM" --repo "$GITHUB_REPOSITORY" \
+            --comment "Checks are passing again as of $(date -u '+%Y-%m-%d %H:%M UTC')."
+          echo "closed #$NUM"
+
+      # Mail only on the two transitions. Checkout + npm ci cost ~40s, which is
+      # why they are here and not at the top: the overwhelmingly common case is
+      # a green check that needs neither.
+      - name: Checkout for the mailer
+        if: (steps.probe.outputs.status == 'down' && steps.state.outputs.open_issue == '') || (steps.probe.outputs.status == 'up' && steps.state.outputs.open_issue != '')
+        uses: actions/checkout@v7
+
+      - name: Install mailer deps
+        if: (steps.probe.outputs.status == 'down' && steps.state.outputs.open_issue == '') || (steps.probe.outputs.status == 'up' && steps.state.outputs.open_issue != '')
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Email the transition
+        if: (steps.probe.outputs.status == 'down' && steps.state.outputs.open_issue == '') || (steps.probe.outputs.status == 'up' && steps.state.outputs.open_issue != '')
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          STATUS: ${{ steps.probe.outputs.status }}
+          DETAIL: ${{ steps.probe.outputs.detail }}
+          INCIDENT: ${{ steps.incident.outputs.url }}
+        run: |
+          set -euo pipefail
+          if [ "$STATUS" = down ]; then
+            export ALERT_SUBJECT="🔴 InternCRM erişilemiyor"
+            export ALERT_BODY="$(printf 'Otomatik uptime kontrolü 30 saniye arayla iki kez başarısız oldu.\n\n%s\nOlay kaydı: %s\n' "$DETAIL" "$INCIDENT")"
+          else
+            export ALERT_SUBJECT="🟢 InternCRM tekrar erişilebilir"
+            export ALERT_BODY="Bütün kontroller yeniden 200 dönüyor. Olay kaydı kapatıldı."
+          fi
+          node scripts/send-alert-email.mjs
