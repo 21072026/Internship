@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT } from '@/i18n/client';
 import { copyToClipboard } from '@/lib/clipboard';
-import type { OrgPlan, OrgPlanLimits } from '@/lib/orgPlans';
+import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPlans';
 
 interface Organization {
   id: string;
@@ -100,6 +100,20 @@ function SpRow({ label, value, testId, link }: { label: string; value: string; t
   );
 }
 
+// Locked state for a premium editor (#1742). Cosmetic only — the gate is the
+// 403 from PATCH /api/admin/organizations; this just stops an admin filling in
+// a form whose save can only fail.
+function LockedNote({ text, testId }: { text: string; testId: string }) {
+  return (
+    <p
+      data-testid={testId}
+      className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+    >
+      {text}
+    </p>
+  );
+}
+
 export default function AdminOrganizationsPage() {
   const t = useT();
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -184,7 +198,8 @@ export default function AdminOrganizationsPage() {
         body: JSON.stringify({ id: brandOrgId, brandName, brandLogoUrl, brandColor, supportEmail: brandSupport }),
       });
       const data = await res.json().catch(() => ({}));
-      setBrandMsg(res.ok ? t.organizations.brandingSaved : data.error || t.common.error);
+      const failure = data.code === 'feature_locked' ? t.organizations.featureLocked : data.error || t.common.error;
+      setBrandMsg(res.ok ? t.organizations.brandingSaved : failure);
       if (res.ok) await load();
     } finally {
       setSaving(false);
@@ -226,8 +241,56 @@ export default function AdminOrganizationsPage() {
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-      setSsoMsg(res.ok ? t.organizations.ssoSaved : data.error || t.common.error);
+      const failure = data.code === 'feature_locked' ? t.organizations.featureLocked : data.error || t.common.error;
+      setSsoMsg(res.ok ? t.organizations.ssoSaved : failure);
       if (res.ok) { setSsoCertificate(''); await load(); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Is the selected tenant's plan entitled to each premium editor? Nothing is
+  // locked until an org is picked (there is no plan to judge before that).
+  const brandOrg = orgs.find((o) => o.id === brandOrgId);
+  const ssoOrg = orgs.find((o) => o.id === ssoOrgId);
+  const brandLocked = !!brandOrgId && !orgPlanHasFeature(brandOrg?.plan, 'WHITE_LABEL');
+  const ssoLocked = !!ssoOrgId && !orgPlanHasFeature(ssoOrg?.plan, 'SSO_SAML');
+
+  // Undoing is never gated (the API exempts a payload that can only null
+  // columns), so a locked editor still offers the way out: branding a tenant
+  // no longer pays for keeps rendering in every branded e-mail and on the
+  // certificate PDF until someone removes it, and a dead SSO switch left on is
+  // the thing an admin most wants to turn off.
+  const brandStored = !!(brandOrg && (brandOrg.branding.brandName || brandOrg.branding.brandLogoUrl
+    || brandOrg.branding.brandColor || brandOrg.branding.supportEmail));
+
+  const clearBranding = async () => {
+    if (!brandOrgId) return;
+    setSaving(true); setBrandMsg(null);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: brandOrgId, brandName: '', brandLogoUrl: '', brandColor: '', supportEmail: '' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setBrandMsg(res.ok ? t.organizations.brandingSaved : (data.error || t.common.error));
+      if (res.ok) { setBrandName(''); setBrandLogoUrl(''); setBrandColor(''); setBrandSupport(''); await load(); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const disableSso = async () => {
+    if (!ssoOrgId) return;
+    setSaving(true); setSsoMsg(null);
+    try {
+      const res = await fetch('/api/admin/organizations', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ssoOrgId, ssoEnabled: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setSsoMsg(res.ok ? t.organizations.ssoSaved : (data.error || t.common.error));
+      if (res.ok) { setSsoEnabled(false); await load(); }
     } finally {
       setSaving(false);
     }
@@ -288,15 +351,21 @@ export default function AdminOrganizationsPage() {
                 {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
             </div>
+            {brandLocked && <LockedNote testId="branding-locked" text={t.organizations.brandingLocked} />}
+            {brandLocked && brandStored && (
+              <Button type="button" variant="outline" loading={saving} onClick={clearBranding} data-testid="brand-clear">
+                {t.organizations.brandingClear}
+              </Button>
+            )}
             {brandOrgId && (
               <div className="flex flex-wrap gap-3">
-                <div className="flex-1 min-w-[160px]"><Input label={t.organizations.brandName} value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Internship CRM" /></div>
-                <div className="flex-1 min-w-[160px]"><Input label={t.organizations.brandColor} value={brandColor} onChange={(e) => setBrandColor(e.target.value)} placeholder="#2563eb" /></div>
-                <div className="flex-1 min-w-[220px]"><Input label={t.organizations.brandLogoUrl} value={brandLogoUrl} onChange={(e) => setBrandLogoUrl(e.target.value)} placeholder="https://…/logo.svg" /></div>
-                <div className="flex-1 min-w-[200px]"><Input label={t.organizations.brandSupportEmail} type="email" value={brandSupport} onChange={(e) => setBrandSupport(e.target.value)} placeholder="help@acme.com" /></div>
+                <div className="flex-1 min-w-[160px]"><Input label={t.organizations.brandName} value={brandName} disabled={brandLocked} onChange={(e) => setBrandName(e.target.value)} placeholder="Internship CRM" /></div>
+                <div className="flex-1 min-w-[160px]"><Input label={t.organizations.brandColor} value={brandColor} disabled={brandLocked} onChange={(e) => setBrandColor(e.target.value)} placeholder="#2563eb" /></div>
+                <div className="flex-1 min-w-[220px]"><Input label={t.organizations.brandLogoUrl} value={brandLogoUrl} disabled={brandLocked} onChange={(e) => setBrandLogoUrl(e.target.value)} placeholder="https://…/logo.svg" /></div>
+                <div className="flex-1 min-w-[200px]"><Input label={t.organizations.brandSupportEmail} type="email" value={brandSupport} disabled={brandLocked} onChange={(e) => setBrandSupport(e.target.value)} placeholder="help@acme.com" /></div>
               </div>
             )}
-            {brandOrgId && <Button type="submit" loading={saving} data-testid="brand-save">{t.common.save}</Button>}
+            {brandOrgId && <Button type="submit" loading={saving} disabled={brandLocked} data-testid="brand-save">{t.common.save}</Button>}
           </form>
           {brandMsg && <p className="text-sm text-gray-600 mt-2">{brandMsg}</p>}
         </Card>
@@ -320,6 +389,12 @@ export default function AdminOrganizationsPage() {
                 {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}{o.sso.active ? ' • SSO' : ''}</option>)}
               </select>
             </div>
+            {ssoLocked && <LockedNote testId="sso-locked" text={t.organizations.ssoLocked} />}
+            {ssoLocked && ssoOrg?.sso.ssoEnabled && (
+              <Button type="button" variant="outline" loading={saving} onClick={disableSso} data-testid="sso-disable">
+                {t.organizations.ssoDisable}
+              </Button>
+            )}
             {ssoOrgId && (
               <>
                 {(() => {
@@ -338,7 +413,7 @@ export default function AdminOrganizationsPage() {
                 <div className="flex flex-wrap gap-3">
                   <div className="min-w-[140px]">
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoProvider}</label>
-                    <select value={ssoProvider} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
+                    <select value={ssoProvider} disabled={ssoLocked} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
                       <option value="">—</option>
                       <option value="saml">SAML</option>
                       {/* OIDC is a roadmap item: the login route always builds a
@@ -347,13 +422,14 @@ export default function AdminOrganizationsPage() {
                       <option value="oidc" disabled>{`OIDC — ${t.organizations.ssoOidcSoon}`}</option>
                     </select>
                   </div>
-                  <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
-                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
+                  <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} disabled={ssoLocked} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
+                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.organizations.ssoCertificate}</label>
                   <textarea
                     value={ssoCertificate}
+                    disabled={ssoLocked}
                     onChange={(e) => setSsoCertificate(e.target.value)}
                     rows={3}
                     placeholder="-----BEGIN CERTIFICATE-----"
@@ -362,10 +438,10 @@ export default function AdminOrganizationsPage() {
                   <p className="text-xs text-gray-400 mt-1">{t.organizations.ssoCertHint}</p>
                 </div>
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" data-testid="sso-enabled" checked={ssoEnabled} onChange={(e) => setSsoEnabled(e.target.checked)} />
+                  <input type="checkbox" data-testid="sso-enabled" disabled={ssoLocked} checked={ssoEnabled} onChange={(e) => setSsoEnabled(e.target.checked)} />
                   {t.organizations.ssoEnable}
                 </label>
-                <Button type="submit" loading={saving} data-testid="sso-save">{t.common.save}</Button>
+                <Button type="submit" loading={saving} disabled={ssoLocked} data-testid="sso-save">{t.common.save}</Button>
               </>
             )}
           </form>
@@ -421,9 +497,13 @@ export default function AdminOrganizationsPage() {
                         aria-label={t.organizations.plan}
                         data-testid={`org-plan-${o.id}`}
                         value={o.plan}
-                        disabled={saving}
+                        // Changing the tier is a billing act and the premium
+                        // gate reads it, so the API refuses it for anyone but a
+                        // super admin (#1742). Disabled here to match; the
+                        // server check is the control.
+                        disabled={saving || !superAdmin}
                         onChange={(e) => changePlan(o.id, e.target.value)}
-                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-xs disabled:opacity-60"
                       >
                         {plans.map((p) => <option key={p} value={p}>{p}</option>)}
                       </select>

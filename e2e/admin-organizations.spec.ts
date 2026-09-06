@@ -57,6 +57,23 @@ test('admin creates an organization and it appears in the list', async ({ page }
       { timeout: 10_000 },
     ).toBe('PRO');
 
+    // Both premium blocks are ENTERPRISE-only (#1742): on PRO the write boundary
+    // refuses each of them before any field is validated or stored, and names
+    // the plan that sells it so a caller can render the upgrade CTA.
+    const brandOnPro = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, brandName: 'Acme Talent' },
+    });
+    expect(brandOnPro.status()).toBe(403);
+    expect(await brandOnPro.json()).toMatchObject({
+      code: 'feature_locked', feature: 'WHITE_LABEL', requiredPlan: 'ENTERPRISE',
+    });
+    const ssoOnPro = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, ssoEnabled: true, ssoProvider: 'saml' },
+    });
+    expect(ssoOnPro.status()).toBe(403);
+    expect((await ssoOnPro.json()).code).toBe('feature_locked');
+    await prisma.organization.update({ where: { id: org!.id }, data: { plan: 'ENTERPRISE' } });
+
     // White-label branding (#546): set fields via the API and confirm persistence.
     const brand = await page.request.patch('/api/admin/organizations', {
       data: { id: org!.id, brandName: 'Acme Talent', brandColor: '#2563eb', supportEmail: 'help@acme.test' },
@@ -200,11 +217,16 @@ test('a tenant admin can only reach their own organization', async ({ page }) =>
   const foreignSlug = `e2e-foreign-${tag}`;
   createdSlugs.push(ownSlug, foreignSlug);
 
-  const own = await prisma.organization.create({ data: { slug: ownSlug, name: `Own Tenant ${tag}` } });
+  // ENTERPRISE: this test is about the cross-tenant gate, so the tenant needs
+  // the premium entitlements the branding/SSO writes below require (#1742).
+  const own = await prisma.organization.create({
+    data: { slug: ownSlug, name: `Own Tenant ${tag}`, plan: 'ENTERPRISE' },
+  });
   const foreign = await prisma.organization.create({
     data: {
       slug: foreignSlug,
       name: `Foreign Tenant ${tag}`,
+      plan: 'ENTERPRISE',
       ssoProvider: 'saml',
       ssoIssuer: 'https://foreign-idp.test/metadata',
       ssoEntryPoint: 'https://foreign-idp.test/sso',
