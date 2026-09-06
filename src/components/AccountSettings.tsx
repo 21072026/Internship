@@ -22,7 +22,7 @@ import { NOTIFICATION_CATEGORIES } from '@/lib/notificationPrefs';
 import { EMAIL_GROUPS, emailGroupPrefKey, resolveEmailGroupPrefs, type EmailGroupId } from '@/lib/emailGroups';
 import { meetingNotesAutoOpen, setMeetingNotesAutoOpen } from '@/components/meeting/FloatingNotes';
 import { browserTimeZone, formatInTimeZone, resolveTimeZone, timeZoneOptions } from '@/lib/timezone';
-import { GoogleCalendarCard } from '@/components/GoogleCalendarCard';
+import { ConnectedCalendarsCard } from '@/components/ConnectedCalendarsCard';
 import { useAnnounce } from '@/components/ui/LiveRegion';
 import type { TrustedDeviceView } from '@/lib/trustedDevice';
 
@@ -760,7 +760,7 @@ export function AccountSettings() {
         <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{t.account.notesAutoOpenHint}</p>
       </Card>
 
-      <GoogleCalendarCard />
+      <ConnectedCalendarsCard />
 
       {/* `id` so the "wrong zone?" footer under every emailed meeting time can
           link straight here (/account#timezone) instead of dropping the reader
