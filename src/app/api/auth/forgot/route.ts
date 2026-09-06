@@ -31,12 +31,22 @@ export async function POST(request: Request) {
     // problem (#1150).
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, email: true, fullName: true, orgId: true },
+      // #1720: the mail goes to an existing account, so its own stored language
+      // decides. Deliberately not Accept-Language — this endpoint answers
+      // identically for an address that does not exist, so the person filling in
+      // the form is not necessarily the account holder.
+      select: { id: true, email: true, fullName: true, orgId: true, preferredLanguage: true },
     });
     if (user) {
       const token = await createPasswordResetToken(user.id, 'RESET');
       try {
-        await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
+        await sendPasswordResetEmail({
+          to: user.email,
+          token,
+          fullName: user.fullName,
+          orgId: user.orgId,
+          locale: user.preferredLanguage,
+        });
       } catch (e) {
         console.error('Password reset email failed:', e);
       }

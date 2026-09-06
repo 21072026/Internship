@@ -117,7 +117,7 @@ async function announceNextOccurrence(
     // with no unsubscribe footer and no List-Unsubscribe header. It is the one
     // select this change had to widen; every other send site already had the
     // recipient's id in scope.
-    include: { mentee: { select: { id: true, email: true, fullName: true, timezone: true } } },
+    include: { mentee: { select: { id: true, email: true, fullName: true, timezone: true, preferredLanguage: true } } },
   });
 
   let invited = 0;
@@ -139,6 +139,8 @@ async function announceNextOccurrence(
         // The mentee being invited, not `sessionUserId` (the mentor/admin who
         // created the series and is not mailed here at all).
         userId: rel.mentee.id,
+        // Their own language, for the same reason (#1720).
+        locale: rel.mentee.preferredLanguage,
         // A series occurrence has no Meeting row, so the UID is the same
         // synthetic id /api/calendar-events and the subscription feed emit for
         // it — the mailed occurrence and the subscribed one are one event.

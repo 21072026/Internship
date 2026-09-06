@@ -17,6 +17,7 @@ import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { copyToClipboard } from '@/lib/clipboard';
+import { locales } from '@/i18n/config';
 
 const inviteSchema = z.object({
   // Optional since #670: an empty address mints a shareable link instead of
@@ -24,6 +25,10 @@ const inviteSchema = z.object({
   email: z.union([z.string().email('Invalid email'), z.literal('')]).optional(),
   label: z.string().max(120).optional(),
   role: z.enum(['MENTOR', 'MENTEE', 'ADMIN']),
+  // Which language the invitation email is written in (#1720). The invitee has
+  // no account and therefore no stored preference, so this is the one thing only
+  // the inviter can supply; it defaults to their own UI language below.
+  locale: z.enum(locales),
   // Optional counterpart + project: with these set, registering through the link
   // creates the mentorship and the project membership straight away (#51).
   mentorId: z.string().optional(),
@@ -143,7 +148,9 @@ export default function InvitePage() {
     formState: { errors },
   } = useForm<InviteData>({
     resolver: zodResolver(inviteSchema),
-    defaultValues: { role: 'MENTEE' },
+    // The admin's own UI language is the default: a Turkish program is run from
+    // a Turkish console, and its invitees read Turkish (#1720).
+    defaultValues: { role: 'MENTEE', locale },
   });
 
   const watchedRole = watch('role');
@@ -190,7 +197,7 @@ export default function InvitePage() {
       );
       if (body.invitationId && body.registerUrl) setLinks((p) => ({ ...p, [body.invitationId]: body.registerUrl }));
       await loadInvites();
-      reset({ role: 'MENTEE' });
+      reset({ role: 'MENTEE', locale });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -283,6 +290,14 @@ export default function InvitePage() {
               data-testid="invite-label"
               {...register('label')}
               error={errors.label?.message}
+            />
+            <Select
+              label={t.invite.languageField}
+              hint={t.invite.languageHint}
+              data-testid="invite-locale"
+              options={locales.map((l) => ({ value: l, label: t.account.languages[l] }))}
+              {...register('locale')}
+              error={errors.locale?.message}
             />
             <Select
               label={t.invite.role}

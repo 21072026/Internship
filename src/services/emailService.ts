@@ -15,7 +15,7 @@ import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPre
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
-import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
+import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
@@ -401,6 +401,16 @@ export const __testable = {
   withUnsubscribeFooter,
   unsubscribeHeaders,
   htmlToText,
+  // #1720 — the localisable fragments shared by the system mails. Exported for
+  // the same reason as the footer builders above: SMTP never runs in a test
+  // env, so the only way to assert "does this render in Turkish" is against the
+  // string builders themselves. See e2e/system-mail-i18n.unit.spec.ts.
+  resolveLocale,
+  timeZoneNote,
+  inMinutesText,
+  organizerTimeLine,
+  participantClocks,
+  activityDigestTable,
 };
 // What actually happened to a message, mirroring the EmailLog row this call
 // writes (#1431). Returned rather than only recorded, because "did not throw"
@@ -656,31 +666,59 @@ export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: str
   }
 }
 
+// LOCALE (#1720): `locale` is REQUIRED thinking, not an optional nicety — the
+// invitee is the one recipient in this whole file who provably has no stored
+// preference, because they have no account at all. Reading Accept-Language is
+// not an option either: half these sends come from a bulk paste or a resend
+// long after the admin's browser is gone.
+//
+// So the language is a decision the inviting admin makes, captured on the
+// InvitationToken at creation time (`InvitationToken.locale`, chosen in the
+// invite form and defaulting to the inviter's own UI language) and replayed
+// from that column on every resend, so the second mail matches the first. The
+// caller passes that column through; when it is null — a pre-#1720 row, a
+// seeder/system invite — resolveLocale() falls back to the deployment default.
 export async function sendInvitationEmail({
   to,
   token,
   role,
   orgId,
+  locale,
 }: {
   to: string;
   token: string;
   role: string;
   orgId?: string | null;
+  /** The inviter's choice, stored on InvitationToken.locale. */
+  locale?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const registerUrl = `${appUrl}/auth/register?token=${token}`;
   const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const I = getDictionary(resolved).notifications.invitationEmail;
+  // An unknown role string (nothing else can reach this today) prints as-is
+  // rather than as an empty gap in the sentence.
+  const roleLabel = I.roles[role as keyof typeof I.roles] ?? role;
+  // Split rather than replace, so the role can be bolded without HTML entering
+  // the dictionary — and so a locale that opens the sentence with {role}
+  // (Turkish does) still renders correctly.
+  const [bodyBefore, bodyAfter = ''] = I.body.split('{role}');
 
   return await sendEmail({
     to,
     fromName: brand.name,
     category: 'invitation',
-    subject: `You have been invited to ${brand.name}`,
+    // An essential group, so there is no footer to translate here — but the
+    // locale is passed anyway, so this send behaves like every other one if the
+    // taxonomy ever moves it.
+    locale: resolved,
+    subject: I.subject.replace('{brand}', brand.name),
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, `Welcome to ${brand.name}`)}
-        <p>You have been invited to join as a <strong>${role}</strong>.</p>
-        <p>Click the button below to complete your registration:</p>
+        ${brandHeader(brand, esc(I.heading.replace('{brand}', brand.name)))}
+        <p>${esc(bodyBefore)}<strong>${esc(roleLabel)}</strong>${esc(bodyAfter)}</p>
+        <p>${esc(I.ctaIntro)}</p>
         <a href="${registerUrl}" style="
           display: inline-block;
           background-color: ${brand.accent};
@@ -690,53 +728,65 @@ export async function sendInvitationEmail({
           border-radius: 6px;
           margin: 16px 0;
         ">
-          Accept Invitation
+          ${esc(I.cta)}
         </a>
         <p style="color: #6b7280; font-size: 14px;">
-          This invitation will expire in 7 days. If you did not expect this email, please ignore it.
+          ${esc(I.expiry)}
         </p>
         <p style="color: #6b7280; font-size: 12px;">
-          Or copy this link: ${registerUrl}
+          ${esc(I.copyLink)} ${registerUrl}
         </p>
       </div>
     `,
   });
 }
 
+// LOCALE (#1720): a password reset is always for an EXISTING account, so the
+// language is that account's `User.preferredLanguage` — every caller reads the
+// row it is minting the token for and passes that column. Deliberately not the
+// browser's Accept-Language: /api/auth/forgot answers identically for an
+// unknown address (no enumeration), so the request that triggers this one is
+// often not the account owner's request at all.
+//
+// The SET_INITIAL half is the exception worth naming: the account was created
+// seconds ago by an admin/mentor and has no preference yet. Those callers pass
+// the CREATOR's language, on the same reasoning as the invitation — the person
+// setting the account up knows what the recipient reads.
 export async function sendPasswordResetEmail({
   to,
   token,
   fullName,
   purpose = 'RESET',
   orgId,
+  locale,
 }: {
   to: string;
   token: string;
   fullName?: string | null;
   purpose?: 'RESET' | 'SET_INITIAL';
   orgId?: string | null;
+  /** The account's User.preferredLanguage (or, for SET_INITIAL, its creator's). */
+  locale?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const resetUrl = `${appUrl}/auth/reset?token=${token}`;
   const isInitial = purpose === 'SET_INITIAL';
   const brand = await emailBrand(orgId);
-
-  const heading = isInitial ? 'Set your password' : 'Reset your password';
-  const intro = isInitial
-    ? `An account has been created for you on ${brand.name}. Set a password to activate it and sign in.`
-    : 'We received a request to reset your password. Click the button below to choose a new one.';
-  const cta = isInitial ? 'Set password' : 'Reset password';
+  const resolved = resolveLocale(locale);
+  const P = getDictionary(resolved).notifications.passwordResetEmail;
+  const V = isInitial ? P.setInitial : P.reset;
 
   return await sendEmail({
     to,
     fromName: brand.name,
     category: 'password-reset',
-    subject: isInitial ? `Activate your ${brand.name} account` : `Reset your ${brand.name} password`,
+    locale: resolved,
+    subject: V.subject.replace('{brand}', brand.name),
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, heading)}
-        ${fullName ? `<p>Hi ${fullName},</p>` : ''}
-        <p>${intro}</p>
+        ${brandHeader(brand, esc(V.heading))}
+        ${fullName ? `<p>${esc(P.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(V.body.replace('{brand}', brand.name))}</p>
         <a href="${resetUrl}" style="
           display: inline-block;
           background-color: ${brand.accent};
@@ -746,44 +796,58 @@ export async function sendPasswordResetEmail({
           border-radius: 6px;
           margin: 16px 0;
         ">
-          ${cta}
+          ${esc(V.cta)}
         </a>
         <p style="color: #6b7280; font-size: 14px;">
-          This link expires in ${isInitial ? '7 days' : '1 hour'}. If you did not expect this email, you can safely ignore it.
+          ${esc(V.expiry)}
         </p>
         <p style="color: #6b7280; font-size: 12px;">
-          Or copy this link: ${resetUrl}
+          ${esc(P.copyLink)} ${resetUrl}
         </p>
       </div>
     `,
   });
 }
 
+// LOCALE (#1720): address verification always follows an existing account, so
+// the language is that account's `User.preferredLanguage` — passed in by every
+// caller, never read from the browser (the public resend path answers the same
+// way for an address that does not exist, so the requester may not be the
+// account owner). At sign-up the row is seconds old and the column is usually
+// still null; registration through an invitation seeds it from
+// `InvitationToken.locale`, and anything still unset falls back to the
+// deployment default in resolveLocale().
 export async function sendVerificationEmail({
   to,
   token,
   fullName,
   orgId,
+  locale,
 }: {
   to: string;
   token: string;
   fullName?: string | null;
   orgId?: string | null;
+  /** The account's User.preferredLanguage. */
+  locale?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const verifyUrl = `${appUrl}/auth/verify?token=${token}`;
   const brand = await emailBrand(orgId);
+  const resolved = resolveLocale(locale);
+  const V = getDictionary(resolved).notifications.verificationEmail;
 
   await sendEmail({
     to,
     fromName: brand.name,
     category: 'verification',
-    subject: `Verify your ${brand.name} email`,
+    locale: resolved,
+    subject: V.subject.replace('{brand}', brand.name),
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, 'Confirm your email')}
-        ${fullName ? `<p>Hi ${fullName},</p>` : ''}
-        <p>Please confirm your email address to activate full access to your account.</p>
+        ${brandHeader(brand, esc(V.heading))}
+        ${fullName ? `<p>${esc(V.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(V.body)}</p>
         <a href="${verifyUrl}" style="
           display: inline-block;
           background-color: ${brand.accent};
@@ -793,13 +857,13 @@ export async function sendVerificationEmail({
           border-radius: 6px;
           margin: 16px 0;
         ">
-          Verify email
+          ${esc(V.cta)}
         </a>
         <p style="color: #6b7280; font-size: 14px;">
-          This link expires in 24 hours. Until you verify, your account has read-only access.
+          ${esc(V.expiry)}
         </p>
         <p style="color: #6b7280; font-size: 12px;">
-          Or copy this link: ${verifyUrl}
+          ${esc(V.copyLink)} ${verifyUrl}
         </p>
       </div>
     `,
@@ -819,6 +883,7 @@ export async function sendMeetingInviteEmail({
   userId,
   icsUid,
   sequence,
+  locale,
 }: {
   to: string;
   fullName?: string | null;
@@ -847,13 +912,25 @@ export async function sendMeetingInviteEmail({
   icsUid?: string | null;
   // Bumped by whoever mails a change to the same icsUid — see buildMeetingIcs.
   sequence?: number;
+  // LOCALE (#1720): the invitee is a User here (that is what `userId` means), so
+  // this is their `User.preferredLanguage` — every caller selects the column
+  // alongside `timezone`, which the mail already reads per recipient for exactly
+  // the same reason. Unset → the deployment default, as before.
+  locale?: string | null;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${appUrl}/rsvp/${rsvpToken}?r=yes`;
   const no = `${appUrl}/rsvp/${rsvpToken}?r=no`;
+  const resolved = resolveLocale(locale);
+  const M = getDictionary(resolved).notifications.meetingInviteEmail;
   // A meeting with no set time is just a shared link — skip the "when" line and
   // the RSVP ask entirely.
-  const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
+  // The date is the payload of an invitation, so it follows the body's language
+  // too — a Turkish invite that names the day in English is the half-translated
+  // shape #1720 exists to end.
+  const when = scheduledAt
+    ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))
+    : null;
   const askRsvp = Boolean(when && rsvpToken);
   // A link-only meeting (no scheduledAt) has no slot to occupy, so it gets no
   // attachment at all — an .ics without a DTSTART is not a thing.
@@ -875,22 +952,23 @@ export async function sendMeetingInviteEmail({
     to,
     userId,
     category: 'meeting-invite',
+    locale: resolved,
     ...(ics ? { attachments: [ics] } : {}),
-    subject: `Meeting invitation: ${title}`,
+    subject: M.subject.replace('{title}', title),
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #2563eb;">${title}</h2>
-        ${fullName ? `<p>Hi ${fullName},</p>` : ''}
-        <p>You're invited to a meeting.</p>
-        ${when ? `<p><strong>When:</strong> ${when}</p>` : ''}
-        ${when && scheduledAt ? organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName) : ''}
-        ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
+        ${fullName ? `<p>${esc(M.greeting.replace('{name}', fullName))}</p>` : ''}
+        <p>${esc(M.body)}</p>
+        ${when ? `<p><strong>${esc(M.when)}</strong> ${when}</p>` : ''}
+        ${when && scheduledAt ? organizerTimeLine(scheduledAt, organizerTimeZone, timeZone, organizerName, resolved) : ''}
+        ${meetLink ? `<p><strong>${esc(M.link)}</strong> <a href="${meetLink}">${meetLink}</a></p>` : ''}
         ${askRsvp ? `
-        <p style="margin-top: 20px;">Can you make it?</p>
-        <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
-        <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
+        <p style="margin-top: 20px;">${esc(M.rsvpAsk)}</p>
+        <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">${esc(M.rsvpYes)}</a>
+        <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.rsvpNo)}</a>
         ` : ''}
-        ${when ? timeZoneNote(timeZone) : ''}
+        ${when ? timeZoneNote(timeZone, resolved) : ''}
       </div>
     `,
   });
@@ -918,6 +996,7 @@ export async function sendMeetingGuestInviteEmail({
   organizerName,
   icsUid,
   sequence,
+  locale,
 }: {
   to: string;
   name?: string | null;
@@ -933,13 +1012,21 @@ export async function sendMeetingGuestInviteEmail({
   // so the attachment is their only route into a calendar (#2015).
   icsUid?: string | null;
   sequence?: number;
+  // LOCALE (#1720): the organizer's `User.preferredLanguage` — the same
+  // reasoning as `organizerTimeZone` two fields up. A guest has no profile, so
+  // there is no preference of their own to read; the only person who knows
+  // anything about them is whoever typed their address into the scheduler.
+  locale?: string | null;
 }) {
   const url = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const yes = `${url}/rsvp/${rsvpToken}?r=yes`;
   const no = `${url}/rsvp/${rsvpToken}?r=no`;
+  const resolved = resolveLocale(locale);
+  const M = getDictionary(resolved).notifications.meetingInviteEmail;
+  const T = getDictionary(resolved).notifications.emailTimes;
   const zone = resolveTimeZone(organizerTimeZone);
   const when = scheduledAt
-    ? `${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' })} (${zoneLabel(scheduledAt, zone)})`
+    ? `${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`
     : null;
   const invitedBy = organizerName ? esc(organizerName) : null;
   const ics =
@@ -958,31 +1045,35 @@ export async function sendMeetingGuestInviteEmail({
 
   await sendEmail({
     to,
-    subject: `Meeting invitation: ${title}`,
+    subject: M.subject.replace('{title}', title),
     ...(ics ? { attachments: [ics] } : {}),
     // no-user-row: a guest is an address somebody typed into the scheduler,
     // deliberately not an account here — there is no row to gate on and no
     // token to mint, and the mail says so in its own closing line instead.
     category: 'meeting-guest-invite',
+    locale: resolved,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #2563eb;">${esc(title)}</h2>
-        ${name ? `<p>Hi ${esc(name)},</p>` : ''}
-        <p>${invitedBy ? `${invitedBy} has invited you` : 'You are invited'} to a meeting.</p>
-        ${when ? `<p><strong>When:</strong> ${esc(when)}</p>` : ''}
-        ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
+        ${name ? `<p>${esc(M.greeting.replace('{name}', name))}</p>` : ''}
+        <p>${invitedBy ? esc(M.guestBody).replace('{organizer}', invitedBy) : esc(M.guestBodyAnonymous)}</p>
+        ${when ? `<p><strong>${esc(M.when)}</strong> ${esc(when)}</p>` : ''}
+        ${meetLink ? `<p><strong>${esc(M.link)}</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
         ${when ? `
-        <p style="margin-top: 20px;">Can you make it?</p>
-        <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">Yes, I'll attend</a>
-        <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Can't attend</a>
-        <p style="margin-top:16px;"><a href="${url}/rsvp/${rsvpToken}" style="color:#2563eb;font-size:14px;">Open the invitation</a></p>
+        <p style="margin-top: 20px;">${esc(M.rsvpAsk)}</p>
+        <a href="${yes}" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;margin-right:8px;">${esc(M.rsvpYes)}</a>
+        <a href="${no}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(M.rsvpNo)}</a>
+        <p style="margin-top:16px;"><a href="${url}/rsvp/${rsvpToken}" style="color:#2563eb;font-size:14px;">${esc(M.guestOpen)}</a></p>
         ` : ''}
         ${when ? `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
-          Times in this email are shown in ${esc(zone)}${invitedBy ? ` — the clock ${invitedBy} scheduled it on` : ''}.
+          ${
+            invitedBy
+              ? esc(T.guestZoneNoteOrganizer.replace('{zone}', zone)).replace('{name}', invitedBy)
+              : esc(T.guestZoneNote.replace('{zone}', zone))
+          }
         </p>` : ''}
         <p style="color:#9ca3af;font-size:12px;line-height:1.5;">
-          You received this because someone entered your address when scheduling this meeting.
-          You do not need an account to reply — the buttons above are enough.
+          ${esc(M.guestFooter)}
         </p>
       </div>
     `,
@@ -1069,14 +1160,26 @@ function appUrl(): string {
 // This is the small print that closes the loop: name the zone, and link to the
 // one place it can be corrected.
 //
-// Deliberately English like the rest of these templates: a translated footer
-// under an untranslated body reads as a bug, not as a courtesy.
-function timeZoneNote(timeZone?: string | null): string {
+// Localised since #1720. It used to be deliberately English, on the grounds that
+// a translated footer under an untranslated body reads as a bug — the bodies
+// that carry it are translated now, so the rule points the other way: pass the
+// same `locale` the body was rendered with. Omitting it still yields English,
+// which is correct for the templates that have not been translated yet.
+function timeZoneNote(timeZone?: string | null, locale?: string | null): string {
   const zone = resolveTimeZone(timeZone);
+  const T = getDictionary(resolveLocale(locale)).notifications.emailTimes;
   return `<p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
-    Times in this email are shown in ${esc(zone)}. Not your timezone?
-    <a href="${appUrl()}/account#timezone" style="color:#9ca3af;text-decoration:underline;">Change it in your settings</a>.
+    ${esc(T.zoneNote.replace('{zone}', zone))}
+    <a href="${appUrl()}/account#timezone" style="color:#9ca3af;text-decoration:underline;">${esc(T.zoneNoteLink)}</a>.
   </p>`;
+}
+
+// "in about 7 minutes" / "in about a minute", in the recipient's language.
+// Turkish and German both need the singular to be a different sentence, not a
+// stripped "s", so the two cases are separate keys rather than a suffix.
+function inMinutesText(minutes: number, locale?: string | null): string {
+  const T = getDictionary(resolveLocale(locale)).notifications.emailTimes;
+  return minutes === 1 ? T.inOneMinute : T.inMinutes.replace('{n}', String(minutes));
 }
 
 // The second reading: the clock the organizer set the time on. Printed only when
@@ -1088,11 +1191,16 @@ function organizerTimeLine(
   at: Date,
   organizerTimeZone: string | null | undefined,
   recipientTimeZone: string | null | undefined,
-  organizerName?: string | null
+  organizerName?: string | null,
+  locale?: string | null
 ): string {
   if (!organizerTimeZone || sameWallClock(organizerTimeZone, recipientTimeZone, at)) return '';
-  const who = organizerName ? `${esc(organizerName)}’s time` : 'Organizer’s time';
-  return `<p style="color:#6b7280;font-size:14px;">${who}: ${formatInTimeZone(at, organizerTimeZone, { dateStyle: 'medium', timeStyle: 'short' })}</p>`;
+  const loc = resolveLocale(locale);
+  const T = getDictionary(loc).notifications.emailTimes;
+  const who = organizerName
+    ? esc(T.organizerTime.replace('{name}', organizerName))
+    : esc(T.organizerTimeGeneric);
+  return `<p style="color:#6b7280;font-size:14px;">${who}: ${formatInTimeZone(at, organizerTimeZone, { dateStyle: 'medium', timeStyle: 'short' }, dateLocale(loc))}</p>`;
 }
 
 // The same instant on everyone *else's* clock — one line per distinct clock, so
@@ -1101,13 +1209,22 @@ function organizerTimeLine(
 // someone in Istanbul that it is also 17:00 in Istanbul for two colleagues adds
 // nothing. Empty when the whole team reads the same time, which is the common
 // case and should stay silent.
-function participantClocks(at: Date, viewerTimeZone: string | null | undefined, others: ZonedPerson[]): string {
+function participantClocks(
+  at: Date,
+  viewerTimeZone: string | null | undefined,
+  others: ZonedPerson[],
+  locale?: string | null
+): string {
   const elsewhere = others.filter((p) => !sameWallClock(p.timezone, viewerTimeZone, at));
   if (elsewhere.length === 0) return '';
-  const rows = readingsByZone(at, elsewhere)
+  const loc = resolveLocale(locale);
+  const T = getDictionary(loc).notifications.emailTimes;
+  // The readings themselves take the locale as well; a translated heading over
+  // rows still reading "Thu, 10 Sept" is worse than leaving both in English.
+  const rows = readingsByZone(at, elsewhere, dateLocale(loc))
     .map((r) => `<li>${esc(r.names.join(', '))} — ${esc(r.when)} (${esc(r.offsetLabel)})</li>`)
     .join('');
-  return `<p style="color:#6b7280;font-size:14px;margin-bottom:4px;">For the others:</p>
+  return `<p style="color:#6b7280;font-size:14px;margin-bottom:4px;">${esc(T.others)}</p>
     <ul style="color:#6b7280;font-size:14px;margin-top:0;padding-left:20px;">${rows}</ul>`;
 }
 
@@ -1261,6 +1378,16 @@ export async function sendMentorshipRequestEmail({
 // `locale` captured on submit (src/app/apply-as-mentor/page.tsx) is all we have.
 function resolveLocale(locale?: string | null): Locale {
   return isLocale(locale ?? undefined) ? (locale as Locale) : defaultLocale;
+}
+
+// The app's locale codes are 'en' | 'tr' | 'de'; Intl wants a BCP-47 tag. Every
+// helper in lib/timezone.ts defaults to 'en-GB', and bare 'en' resolves to
+// en-US — which would silently flip every English mail to "Sep 10, 2026, 5:00 PM"
+// while the rest of the product writes 24-hour times. #1720 is about writing the
+// mails in the recipient's language, not about re-formatting the English ones,
+// so English keeps the tag it always had and only tr/de change.
+function dateLocale(locale: Locale): string {
+  return locale === 'en' ? 'en-GB' : locale;
 }
 
 export async function sendMentorApplicationReceivedEmail({
@@ -2162,6 +2289,9 @@ export async function sendMeetingReminders() {
     emailNotifications: true,
     notificationPrefs: true,
     timezone: true,
+    // #1720: the reminder is written per participant anyway (each side reads the
+    // time on their own clock), so it reads the language on the same row.
+    preferredLanguage: true,
   } as const;
 
   const meetings = await prisma.meeting.findMany({
@@ -2220,9 +2350,15 @@ export async function sendMeetingReminders() {
 
     for (const user of participants) {
       const link = user.id === m.relation.mentorId ? '/mentor/meetings' : '/portal/calendar';
+      // LOCALE (#1720): the recipient is a signed-up participant, so the
+      // language is their own stored preference — for the mail below and for
+      // the date it is about. Resolved up here because the in-app notification
+      // carries the same pre-rendered string and is addressed to the same
+      // person.
+      const uLocale = resolveLocale(user.preferredLanguage);
       // Per participant: the two sides of a relation can sit in different zones,
       // and each must read the time on their own clock (#1030).
-      const when = formatInTimeZone(m.scheduledAt!, user.timezone);
+      const when = formatInTimeZone(m.scheduledAt!, user.timezone, undefined, dateLocale(uLocale));
       // In-app: unconditional (notify() never throws).
       await notify(
         user.id,
@@ -2235,24 +2371,29 @@ export async function sendMeetingReminders() {
       if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-reminder')) continue;
       try {
         const brand = await emailBrand(user.orgId);
+        const R = getDictionary(uLocale).notifications.meetingReminderEmail;
+        const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
         await sendEmail({
           category: 'meeting-reminder',
           userId: user.id,
           to: user.email,
           fromName: brand.name,
-          subject: `Reminder: ${m.title} starts soon`,
+          locale: uLocale,
+          subject: R.subject.replace('{title}', m.title),
           html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            ${brandHeader(brand, 'Upcoming meeting')}
-            <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(m.title)}</strong>.</p>
-            <p><strong>When:</strong> ${when} (in about ${minutes} minute${minutes === 1 ? '' : 's'})</p>
+            ${brandHeader(brand, esc(R.heading))}
+            <p>${esc(R.greeting.replace('{name}', user.fullName ?? ''))}</p>
+            <p>${esc(bodyBefore)}<strong>${esc(m.title)}</strong>${esc(bodyAfter)}</p>
+            <p><strong>${esc(R.when)}</strong> ${when} (${esc(inMinutesText(minutes, uLocale))})</p>
             ${participantClocks(
               m.scheduledAt!,
               user.timezone,
-              participants.filter((p) => p.id !== user.id).map((p) => ({ name: p.fullName, timezone: p.timezone }))
+              participants.filter((p) => p.id !== user.id).map((p) => ({ name: p.fullName, timezone: p.timezone })),
+              uLocale
             )}
-            ${m.meetLink ? `<p><strong>Meeting link:</strong> <a href="${m.meetLink}">${esc(m.meetLink)}</a></p>` : ''}
-            ${ctaBlock(brand, `${appUrl}${link}`, 'Open the app')}
-            ${timeZoneNote(user.timezone)}
+            ${m.meetLink ? `<p><strong>${esc(R.link)}</strong> <a href="${m.meetLink}">${esc(m.meetLink)}</a></p>` : ''}
+            ${ctaBlock(brand, `${appUrl}${link}`, esc(R.cta))}
+            ${timeZoneNote(user.timezone, uLocale)}
           </div>`,
         });
         emailed++;
@@ -2278,6 +2419,11 @@ export async function sendMeetingReminders() {
           meetLink: m.meetLink,
           organizerTimeZone: m.timeZone,
           minutes,
+          // LOCALE (#1720): a MeetingGuest has no account and therefore no
+          // preference. The mentor side of the relation is the person who
+          // scheduled this and typed the address in, so their language is the
+          // best evidence there is — the same rule the guest INVITE follows.
+          locale: m.relation.mentor?.preferredLanguage,
         });
         emailed++;
       } catch (e) {
@@ -2300,6 +2446,7 @@ async function sendMeetingGuestReminderEmail({
   meetLink,
   organizerTimeZone,
   minutes,
+  locale,
 }: {
   to: string;
   name?: string | null;
@@ -2308,23 +2455,29 @@ async function sendMeetingGuestReminderEmail({
   meetLink?: string | null;
   organizerTimeZone?: string | null;
   minutes: number;
+  /** The organizer's language — a guest has none of their own (#1720). */
+  locale?: string | null;
 }) {
   const zone = resolveTimeZone(organizerTimeZone);
-  const when = `${formatInTimeZone(scheduledAt, zone)} (${zoneLabel(scheduledAt, zone)})`;
+  const resolved = resolveLocale(locale);
+  const when = `${formatInTimeZone(scheduledAt, zone, undefined, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`;
+  const R = getDictionary(resolved).notifications.meetingReminderEmail;
+  const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
   await sendEmail({
     to,
     // no-user-row: the reminder half of the guest invite, addressed to the same
     // account-less MeetingGuest — and it already stops on its own when the guest
     // declines, which is the only "opt out" that address can express.
     category: 'meeting-guest-reminder',
-    subject: `Reminder: ${title} starts soon`,
+    locale: resolved,
+    subject: R.subject.replace('{title}', title),
     html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      ${name ? `<p>Hi ${esc(name)},</p>` : ''}
-      <p>This is a reminder for <strong>${esc(title)}</strong>.</p>
-      <p><strong>When:</strong> ${esc(when)} (in about ${minutes} minute${minutes === 1 ? '' : 's'})</p>
-      ${meetLink ? `<p><strong>Meeting link:</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
+      ${name ? `<p>${esc(R.greeting.replace('{name}', name))}</p>` : ''}
+      <p>${esc(bodyBefore)}<strong>${esc(title)}</strong>${esc(bodyAfter)}</p>
+      <p><strong>${esc(R.when)}</strong> ${esc(when)} (${esc(inMinutesText(minutes, resolved))})</p>
+      ${meetLink ? `<p><strong>${esc(R.link)}</strong> <a href="${meetLink}">${esc(meetLink)}</a></p>` : ''}
       <p style="color:#9ca3af;font-size:12px;line-height:1.5;margin-top:20px;">
-        You were invited to this meeting as a guest — no account needed, just open the link above.
+        ${esc(R.guestFooter)}
       </p>
     </div>`,
   });
@@ -2406,6 +2559,9 @@ export async function sendProjectMeetingSeriesReminders() {
         emailNotifications: true,
         notificationPrefs: true,
         timezone: true,
+        // #1720: same rule as the per-relation reminder — the mail is already
+        // rendered once per team member, so it reads their language too.
+        preferredLanguage: true,
       },
     });
     if (recipients.length === 0) continue;
@@ -2426,7 +2582,11 @@ export async function sendProjectMeetingSeriesReminders() {
       const projectName = series.project?.name ?? '';
       for (const user of recipients) {
         const link = `/projects/${series.projectId}`;
-        const whenLocal = formatInTimeZone(when, user.timezone);
+        // LOCALE (#1720): a project team member is a signed-up User, so their
+        // own stored preference decides — for the occurrence's date as much as
+        // for the sentence around it, and for the in-app copy of the same line.
+        const uLocale = resolveLocale(user.preferredLanguage);
+        const whenLocal = formatInTimeZone(when, user.timezone, undefined, dateLocale(uLocale));
         await notify(
           user.id,
           lead === 'HOUR_BEFORE' ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
@@ -2438,6 +2598,13 @@ export async function sendProjectMeetingSeriesReminders() {
         if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-series-reminder')) continue;
         try {
           const brand = await emailBrand(series.project?.orgId ?? null);
+          const S = getDictionary(uLocale).notifications.meetingSeriesReminderEmail;
+          // Two sentences, because the project name is only appended when there
+          // is one — and in Turkish and German that is not a suffix you can bolt
+          // on to the end of the translated sentence.
+          const template = projectName ? S.bodyWithProject : S.body;
+          const [bodyBefore, bodyRest = ''] = template.split('{title}');
+          const [bodyMiddle, bodyAfter = ''] = bodyRest.split('{project}');
           await sendEmail({
             // Split out of 'meeting-reminder' so the recurring project blast is
             // distinguishable in the delivery log; same group either way.
@@ -2445,22 +2612,25 @@ export async function sendProjectMeetingSeriesReminders() {
             userId: user.id,
             to: user.email,
             fromName: brand.name,
+            locale: uLocale,
             subject:
               lead === 'HOUR_BEFORE'
-                ? `Reminder: ${series.title} starts soon`
-                : `Tomorrow: ${series.title} (${projectName})`,
+                ? S.subjectSoon.replace('{title}', series.title)
+                : S.subjectTomorrow.replace('{title}', series.title).replace('{project}', projectName),
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              ${brandHeader(brand, 'Recurring project meeting')}
-              <p>Hi ${esc(user.fullName ?? '')}, this is a reminder for <strong>${esc(series.title)}</strong>${projectName ? ` (${esc(projectName)})` : ''}.</p>
-              <p><strong>When:</strong> ${whenLocal}</p>
+              ${brandHeader(brand, esc(S.heading))}
+              <p>${esc(S.greeting.replace('{name}', user.fullName ?? ''))}</p>
+              <p>${esc(bodyBefore)}<strong>${esc(series.title)}</strong>${esc(bodyMiddle)}${projectName ? esc(projectName) : ''}${esc(bodyAfter)}</p>
+              <p><strong>${esc(S.when)}</strong> ${whenLocal}</p>
               ${participantClocks(
                 when,
                 user.timezone,
-                recipients.filter((r) => r.id !== user.id).map((r) => ({ name: r.fullName, timezone: r.timezone }))
+                recipients.filter((r) => r.id !== user.id).map((r) => ({ name: r.fullName, timezone: r.timezone })),
+                uLocale
               )}
-              ${series.fixedLink ? `<p><strong>Meeting link:</strong> <a href="${series.fixedLink}">${esc(series.fixedLink)}</a></p>` : ''}
-              ${ctaBlock(brand, `${appUrl()}${link}`, 'Open the project')}
-              ${timeZoneNote(user.timezone)}
+              ${series.fixedLink ? `<p><strong>${esc(S.link)}</strong> <a href="${series.fixedLink}">${esc(series.fixedLink)}</a></p>` : ''}
+              ${ctaBlock(brand, `${appUrl()}${link}`, esc(S.cta))}
+              ${timeZoneNote(user.timezone, uLocale)}
             </div>`,
           });
           emailed++;
@@ -2490,6 +2660,9 @@ export async function sendWeeklyMentorDigests() {
       fullName: true,
       emailNotifications: true,
       notificationPrefs: true,
+      // #1720: this select did not fetch the language at all — the real bug
+      // behind "the digest is always English". It does now.
+      preferredLanguage: true,
       mentorRelations: {
         select: {
           startDate: true,
@@ -2510,21 +2683,32 @@ export async function sendWeeklyMentorDigests() {
     const upcoming = m.mentorRelations.reduce((n, r) => n + r.meetings.length, 0);
     const newApplications = m.mentorRelations.filter((r) => r.startDate >= weekAgo).length;
 
+    // LOCALE (#1720): the recipient is a registered mentor, so their stored
+    // `preferredLanguage` decides — no other source is needed or wanted.
+    const mLocale = resolveLocale(m.preferredLanguage);
+    const D = getDictionary(mLocale).notifications.mentorDigestEmail;
+    // The count is bolded, so each line is split on its {n} rather than
+    // replaced — the number is not at the same position in all three languages.
+    const countLine = (template: string, n: number) => {
+      const [before, after = ''] = template.split('{n}');
+      return `<li>${esc(before)}<strong>${n}</strong>${esc(after)}</li>`;
+    };
     try {
       await sendEmail({
         category: 'mentor-digest',
         userId: m.id,
         to: m.email,
-        subject: 'Your weekly mentoring summary',
+        locale: mLocale,
+        subject: D.subject,
         html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">Weekly summary</h2>
-          <p>Hi ${m.fullName}, here's your week at a glance:</p>
+          <h2 style="color:#2563eb;">${esc(D.heading)}</h2>
+          <p>${esc(D.greeting.replace('{name}', m.fullName))}</p>
           <ul>
-            <li><strong>${stale}</strong> mentee(s) with no interaction in 14+ days</li>
-            <li><strong>${upcoming}</strong> meeting(s) coming up this week</li>
-            <li><strong>${newApplications}</strong> new application(s) in the last 7 days</li>
+            ${countLine(D.stale, stale)}
+            ${countLine(D.upcoming, upcoming)}
+            ${countLine(D.newApplications, newApplications)}
           </ul>
-          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/mentor" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Open dashboard</a>
+          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/mentor" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
         </div>`,
       });
       sent++;
@@ -2538,20 +2722,31 @@ export async function sendWeeklyMentorDigests() {
 // Renders the per-mentee rows of the daily activity digest email. Page-view /
 // time-on-site columns are only meaningful for mentees who opted into activity
 // tracking; they simply read 0 for those who didn't.
-function activityDigestTable(items: MenteeActivity[]): string {
+function activityDigestTable(items: MenteeActivity[], locale?: string | null): string {
+  const A = getDictionary(resolveLocale(locale)).notifications.activityDigestEmail;
   const rows = items
     .map((m) => {
       const login =
         m.daysSinceLogin === null
-          ? 'never'
+          ? A.loginNever
           : m.daysSinceLogin <= 0
-            ? 'today'
-            : `${m.daysSinceLogin}d ago`;
+            ? A.loginToday
+            : A.loginDaysAgo.replace('{n}', String(m.daysSinceLogin));
       const flag = m.daysSinceLogin !== null && m.daysSinceLogin >= 7 ? ' ⚠️' : '';
+      // NOT lib/activityReport.ts § formatDuration: that one hardcodes "2h 5m",
+      // which is the last English left in an otherwise translated row (#1720).
+      // Same arithmetic, dictionary units.
+      const hours = Math.floor(m.timeOnSiteSec / 3600);
+      const mins = Math.round((m.timeOnSiteSec % 3600) / 60);
+      const onSite = `${
+        hours > 0
+          ? A.onSiteHours.replace('{h}', String(hours)).replace('{m}', String(mins))
+          : A.onSiteMinutes.replace('{m}', String(mins))
+      } · ${A.onSitePages.replace('{n}', String(m.pageViews))}`;
       return `<tr>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.menteeName}${flag}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${login}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${formatDuration(m.timeOnSiteSec)} · ${m.pageViews}p</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(login)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(onSite)}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.goalsCompleted}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.interactions}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.meetings}</td>
@@ -2560,12 +2755,13 @@ function activityDigestTable(items: MenteeActivity[]): string {
       </tr>`;
     })
     .join('');
+  const C = A.columns;
   return `<table style="border-collapse:collapse;width:100%;font-size:13px;">
     <thead><tr style="text-align:left;color:#6b7280;">
-      <th style="padding:6px 8px;">Mentee</th><th style="padding:6px 8px;">Login</th>
-      <th style="padding:6px 8px;">On site</th><th style="padding:6px 8px;">Goals</th>
-      <th style="padding:6px 8px;">Interac.</th><th style="padding:6px 8px;">Meet.</th>
-      <th style="padding:6px 8px;">Stage</th><th style="padding:6px 8px;">Msg s/r</th>
+      <th style="padding:6px 8px;">${esc(C.mentee)}</th><th style="padding:6px 8px;">${esc(C.login)}</th>
+      <th style="padding:6px 8px;">${esc(C.onSite)}</th><th style="padding:6px 8px;">${esc(C.goals)}</th>
+      <th style="padding:6px 8px;">${esc(C.interactions)}</th><th style="padding:6px 8px;">${esc(C.meetings)}</th>
+      <th style="padding:6px 8px;">${esc(C.stage)}</th><th style="padding:6px 8px;">${esc(C.messages)}</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -2582,24 +2778,29 @@ export async function sendDailyActivityDigests() {
 
   const mentors = await prisma.user.findMany({
     where: { role: 'MENTOR', isActive: true },
-    select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+    // #1720: `preferredLanguage` was missing here too — every recipient of this
+    // digest is a registered user, so their own preference is the whole answer.
+    select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
   for (const m of mentors) {
     if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'activity-digest')) continue;
     const items = await getMentorMenteeActivity(m.id, since);
     if (items.length === 0) continue;
+    const mLocale = resolveLocale(m.preferredLanguage);
+    const A = getDictionary(mLocale).notifications.activityDigestEmail;
     try {
       await sendEmail({
         category: 'activity-digest',
         userId: m.id,
         to: m.email,
-        subject: 'Daily mentee activity',
+        locale: mLocale,
+        subject: A.subject,
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">Daily mentee activity</h2>
-          <p>Hi ${m.fullName}, here's what your mentees did in the last 24 hours:</p>
-          ${activityDigestTable(items)}
-          <p style="margin-top:16px;"><a href="${appUrl}/mentor/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Open full report</a></p>
-          <p style="color:#9ca3af;font-size:12px;">Time-on-site and page views are shown only for mentees who enabled activity tracking.</p>
+          <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
+          <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
+          ${activityDigestTable(items, mLocale)}
+          <p style="margin-top:16px;"><a href="${appUrl}/mentor/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+          <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
         </div>`,
       });
       sent++;
@@ -2610,23 +2811,26 @@ export async function sendDailyActivityDigests() {
 
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
-    select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true },
+    select: { id: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
   });
   const adminItems = await getSystemMenteeActivity(since);
   if (adminItems.length > 0) {
     for (const a of admins) {
       if (!emailAllowed(a, 'digest') || !emailGroupAllowedForCategory(a, 'activity-digest')) continue;
+      const aLocale = resolveLocale(a.preferredLanguage);
+      const A = getDictionary(aLocale).notifications.activityDigestEmail;
       try {
         await sendEmail({
           category: 'activity-digest',
           userId: a.id,
           to: a.email,
-          subject: 'Daily mentee activity (all mentees)',
+          locale: aLocale,
+          subject: A.subjectAll,
           html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-            <h2 style="color:#2563eb;">Daily mentee activity</h2>
-            <p>Hi ${a.fullName}, system-wide mentee activity in the last 24 hours:</p>
-            ${activityDigestTable(adminItems)}
-            <p style="margin-top:16px;"><a href="${appUrl}/admin/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">Open full report</a></p>
+            <h2 style="color:#2563eb;">${esc(A.heading)}</h2>
+            <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
+            ${activityDigestTable(adminItems, aLocale)}
+            <p style="margin-top:16px;"><a href="${appUrl}/admin/mentee-activity" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           </div>`,
         });
         sent++;
@@ -3054,7 +3258,11 @@ export async function sendUnreadMessageDigests() {
   const cutoff = new Date(now.getTime() - UNREAD_DIGEST_AFTER_MIN * 60 * 1000);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-  const userSelect = { id: true, fullName: true, email: true, emailNotifications: true, notificationPrefs: true } as const;
+  // #1720: `preferredLanguage` was not selected here either — the highest-volume
+  // mail in the app went out in English to everyone. Both sides of a relation
+  // are loaded through this select, and the digest is rendered once per
+  // recipient, so each half reads its own language.
+  const userSelect = { id: true, fullName: true, email: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true } as const;
   const msgs = await prisma.message.findMany({
     // relationId is nullable since #768; the digest covers mentorship threads
     // only, so conversation-only messages are skipped (and left un-digested for
@@ -3084,7 +3292,11 @@ export async function sendUnreadMessageDigests() {
     const entry = byRecipient.get(recipient.id) ?? { recipient, items: [] };
     entry.items.push({
       relationId: rel.id,
-      from: sender?.fullName ?? 'Someone',
+      // In the recipient's language too — a deleted sender should not be the one
+      // English word in an otherwise Turkish digest (#1720).
+      from:
+        sender?.fullName ??
+        getDictionary(resolveLocale(recipient.preferredLanguage)).notifications.unreadDigestEmail.unknownSender,
       preview: m.body.slice(0, 120),
     });
     byRecipient.set(recipient.id, entry);
@@ -3097,6 +3309,11 @@ export async function sendUnreadMessageDigests() {
     // to direct_messages, so as a conjunct it suppressed a digest the surfaces
     // showed as ON; it is listed in digests.legacy instead.
     if (!emailGroupAllowedForCategory(recipient, 'unread-digest')) continue;
+    // LOCALE (#1720): a message recipient is always a registered participant of
+    // the relation, so their own stored preference is the only input.
+    const rLocale = resolveLocale(recipient.preferredLanguage);
+    const U = getDictionary(rLocale).notifications.unreadDigestEmail;
+    const one = items.length === 1;
     const rows = items
       .map((it) => {
         const safe = it.preview.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
@@ -3105,7 +3322,7 @@ export async function sendUnreadMessageDigests() {
         // high link count is one of the strongest spam signals there is —
         // exactly what this whole change set exists to avoid. The digest is a
         // "what did I miss" summary; reacting belongs on the message email.
-        return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || '(attachment)'} — <a href="${appUrl}/messages/${it.relationId}">Open</a></li>`;
+        return `<li style="margin-bottom:8px;"><strong>${it.from}:</strong> ${safe || esc(U.attachment)} — <a href="${appUrl}/messages/${it.relationId}">${esc(U.open)}</a></li>`;
       })
       .join('');
     // One link that clears the whole summary. Every item here belongs to the
@@ -3114,9 +3331,9 @@ export async function sendUnreadMessageDigests() {
     const markAllHtml = relationIds
       .map(
         (relationId, i) =>
-          `<a href="${markReadUrl(relationId, recipient.id)}" style="color:#6b7280;">${
-            relationIds.length === 1 ? 'Mark this conversation as read' : `Mark conversation ${i + 1} as read`
-          }</a>`,
+          `<a href="${markReadUrl(relationId, recipient.id)}" style="color:#6b7280;">${esc(
+            relationIds.length === 1 ? U.markOne : U.markNth.replace('{n}', String(i + 1)),
+          )}</a>`,
       )
       .join(' · ');
     try {
@@ -3124,13 +3341,21 @@ export async function sendUnreadMessageDigests() {
         to: recipient.email!,
         userId: recipient.id,
         category: 'unread-digest',
-        subject: `You have ${items.length} unread message${items.length === 1 ? '' : 's'}`,
+        locale: rLocale,
+        // One and many are separate keys, not an appended "s": Turkish puts the
+        // count before an uninflected noun and German inflects the noun itself.
+        subject: one ? U.subjectOne : U.subjectMany.replace('{n}', String(items.length)),
         html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-          <h2 style="color:#2563eb;">Unread messages</h2>
-          <p>Hi ${recipient.fullName}, you have ${items.length} unread message${items.length === 1 ? '' : 's'} waiting:</p>
+          <h2 style="color:#2563eb;">${esc(U.heading)}</h2>
+          <p>${esc(
+            (one ? U.greetingOne : U.greetingMany.replace('{n}', String(items.length))).replace(
+              '{name}',
+              recipient.fullName,
+            ),
+          )}</p>
           <ul style="padding-left:18px;">${rows}</ul>
           <p style="font-size:13px;color:#6b7280;">${markAllHtml}</p>
-          <p style="font-size:12px;color:#9ca3af;">Replying to a message also marks it — and everything before it — as read, so an answered conversation will not appear here again.</p>
+          <p style="font-size:12px;color:#9ca3af;">${esc(U.footer)}</p>
         </div>`,
       });
       sent++;

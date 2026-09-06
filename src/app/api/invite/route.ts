@@ -8,6 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { isProjectOwner } from '@/lib/projectAccess';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { locales } from '@/i18n/config';
 import { z } from 'zod';
 
 // Email invitations (#51).
@@ -37,6 +38,11 @@ const inviteSchema = z.object({
   // The sender's private note about the link — how they recognise it later.
   label: z.string().trim().max(TEXT_LIMITS.invitationLabel).optional().nullable(),
   role: z.enum(['MENTOR', 'MENTEE', 'ADMIN']),
+  // Which language the invitation mail is written in (#1720). The invitee has
+  // no account, so there is no `preferredLanguage` to read and no browser to ask
+  // — the inviter picks it in the form. Optional: an API client that omits it
+  // gets the inviter's own UI language, resolved below.
+  locale: z.enum(locales).optional().nullable(),
   mentorId: z.string().min(1).optional().nullable(),
   menteeId: z.string().min(1).optional().nullable(),
   projectId: z.string().min(1).optional().nullable(),
@@ -160,12 +166,27 @@ export async function POST(request: Request) {
       // auto-pairing pointers and the mail template have exactly one
       // implementation. A failed send is reported, never fatal: the token is
       // already persisted and the admin can still share registerUrl by hand.
+      // The invitation mail's language (#1720), in order of confidence:
+      //   1. what the inviter explicitly chose in the form;
+      //   2. the inviter's own `preferredLanguage` — a Turkish program is run by
+      //      an admin whose UI is Turkish, and their invitees read Turkish;
+      //   3. null, which sendInvitationEmail() resolves to the deployment
+      //      default. There is no org-level default locale to consult.
+      // Never Accept-Language: the same token is re-mailed later from a resend
+      // (and from the bulk board) where no browser of the invitee's is involved.
+      const inviter = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { preferredLanguage: true },
+      });
+      const locale = parsed.data.locale ?? inviter?.preferredLanguage ?? null;
+
       const { invitationId, registerUrl, emailSent } = await createInvitation({
         actor: { id: session.user.id, email: session.user.email },
         orgId: resolveOrgId(session),
         email,
         label,
         role,
+        locale,
         mentorId,
         menteeId,
         projectId,

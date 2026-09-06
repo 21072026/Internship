@@ -162,6 +162,8 @@ async function inviteAll(
           // One mail per invitee, so the id is this invitee's — the organizer is
           // not in `invitees` and must not be charged with anyone's opt-out.
           userId: inv.userId,
+          // …and the same goes for the language it is written in (#1720).
+          locale: inv.preferredLanguage,
         });
       } catch (e) {
         console.error('Instant meeting invite email failed:', e);

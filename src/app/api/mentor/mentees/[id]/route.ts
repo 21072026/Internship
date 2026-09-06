@@ -50,7 +50,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
       const mentee = await prisma.user.findUnique({
         where: { id },
-        select: { id: true, email: true, fullName: true, role: true, password: true, isActive: true, orgId: true },
+        // `preferredLanguage` for #1720: the activation mail below is written in
+        // the mentee's own language when they ever chose one.
+        select: { id: true, email: true, fullName: true, role: true, password: true, isActive: true, orgId: true, preferredLanguage: true },
       });
       if (!mentee || mentee.role !== 'MENTEE') {
         return NextResponse.json({ error: 'Mentee not found' }, { status: 404 });
@@ -97,12 +99,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
       let emailSent = true;
       try {
+        // #1720: prefer the mentee's own stored language when they have one —
+        // this row may be months old — and fall back to the mentor's, since a
+        // never-activated account has never chosen anything.
+        const activationLocale =
+          mentee.preferredLanguage ??
+          (await prisma.user.findUnique({ where: { id: session.user.id }, select: { preferredLanguage: true } }))
+            ?.preferredLanguage;
         emailSent = (await sendPasswordResetEmail({
           to: email,
           token,
           fullName: mentee.fullName,
           purpose: 'SET_INITIAL',
           orgId: mentee.orgId,
+          locale: activationLocale,
         })) === 'SENT';
       } catch (e) {
         console.error('Mentee activation email failed:', e);

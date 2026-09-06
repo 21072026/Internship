@@ -37,6 +37,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         emailVerified: true,
         pendingApproval: true,
         password: true,
+        // #1720: the mail is for THIS account, so it is written in the language
+        // this account reads — not the admin's who pressed the button.
+        preferredLanguage: true,
       },
     });
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -54,7 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const token = await createEmailVerificationToken(user.id);
     try {
-      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
+      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId, locale: user.preferredLanguage });
     } catch (e) {
       return NextResponse.json(
         { error: e instanceof Error ? e.message : 'Could not send the verification email' },

@@ -1,0 +1,18 @@
+{
+  "bump": "patch",
+  "changelog": "- **Localise the last English-only system mails** (#1720). Invitation, password reset / set-password, address verification, meeting invite (participant and guest), meeting reminder (participant, guest and recurring project series) and the weekly mentor / daily activity / unread-message digests now render subject and body in the recipient's language, with a matching unsubscribe footer — including the parts a translated template can still leave in English: the meeting's own date and time and the other-participants clock list (both now take the mail's locale, English keeping its `en-GB` 24-hour rendering), and the daily digest's On-site cell. The three digest queries never selected `preferredLanguage` at all — the actual bug behind \"the digest is always English\". Registered recipients use their stored preference; an invitee has no account, so the inviting admin picks the language in the invite form (defaulting to their own UI language), it is stored on `InvitationToken.locale` so resends repeat it, and registration seeds the new account's `preferredLanguage` from it. Open self-registration sends the language the form was filled in, alongside the timezone it already sent. Guest meeting mail follows the organizer's language. New `notifications.*Email` blocks in EN/TR/DE, plus `e2e/system-mail-i18n.unit.spec.ts` (placeholder parity, a scan for re-hardcoded English) and `e2e/system-mail-language.spec.ts`, which drives the invitation locale round-trip and an unread digest against a real database.",
+  "notes": {
+    "en": [
+      "Invitations, password resets, verification emails, meeting invites and reminders and the digest emails now arrive in your language, not only in English — dates and times included.",
+      "When you invite someone you choose the language of the invitation — it defaults to yours, and a resend repeats it."
+    ],
+    "tr": [
+      "Davetler, şifre sıfırlama, doğrulama e-postaları, toplantı davetleri ile hatırlatmaları ve özet e-postaları artık yalnızca İngilizce değil, tarih ve saatleriyle birlikte sizin dilinizde geliyor.",
+      "Birini davet ederken davetin dilini siz seçiyorsunuz — varsayılan olarak sizinki gelir ve tekrar gönderimlerde aynı dil kullanılır."
+    ],
+    "de": [
+      "Einladungen, Passwort-Zurücksetzungen, Bestätigungsmails, Termineinladungen und -erinnerungen sowie die Übersichts-Mails kommen jetzt in deiner Sprache statt nur auf Englisch – Datum und Uhrzeit inklusive.",
+      "Beim Einladen wählst du die Sprache der Einladung — voreingestellt ist deine, und beim erneuten Senden wird sie wiederholt."
+    ]
+  }
+}

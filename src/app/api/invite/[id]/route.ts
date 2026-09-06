@@ -40,8 +40,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   let emailSent = false;
   if (invite.email) {
     try {
-      // Same single source of truth as POST /api/invite (#1431).
-      emailSent = (await sendInvitationEmail({ to: invite.email, token: invite.token, role: invite.role, orgId: resolveOrgId(session) })) === 'SENT';
+      // Same single source of truth as POST /api/invite (#1431), and the same
+      // language as the FIRST mail (#1720): the choice was stored on the row at
+      // creation time precisely so a resend — often by a different admin than
+      // the inviter — does not switch language mid-conversation.
+      emailSent = (await sendInvitationEmail({
+        to: invite.email,
+        token: invite.token,
+        role: invite.role,
+        orgId: resolveOrgId(session),
+        locale: invite.locale,
+      })) === 'SENT';
     } catch (e) {
       console.error('Resend invitation email failed (token still valid):', e);
     }

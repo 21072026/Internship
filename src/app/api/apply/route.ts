@@ -141,7 +141,19 @@ export async function POST(request: Request) {
   // Let the applicant set a password so they can sign in to the portal.
   const token = await createPasswordResetToken(mentee.id, 'SET_INITIAL');
   try {
-    await sendPasswordResetEmail({ to: mentee.email, token, fullName: mentee.fullName, purpose: 'SET_INITIAL', orgId: mentee.orgId });
+    // #1720: the applicant's account is brand new, so the mail is written in the
+    // language of the MENTOR whose application link they used — a mentor running
+    // a Turkish cohort hands out a Turkish link. The public apply form does not
+    // capture the applicant's own UI language (unlike /apply-as-mentor, which
+    // does); wiring that through would be a better signal still.
+    await sendPasswordResetEmail({
+      to: mentee.email,
+      token,
+      fullName: mentee.fullName,
+      purpose: 'SET_INITIAL',
+      orgId: mentee.orgId,
+      locale: mentor.preferredLanguage,
+    });
   } catch (e) {
     console.error('Applicant set-password email failed:', e);
   }

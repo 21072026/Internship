@@ -90,6 +90,12 @@ function RegisterForm() {
           // and anything booked before they first open /account already read
           // right. Correctable any time under Settings → Timezone.
           timezone: browserTimeZone() ?? undefined,
+          // …and the language this form was filled in (#1720), for the same
+          // reason: an open sign-up has no invitation to inherit a language
+          // from, so without this the verification mail is English no matter
+          // which language the visitor read the page in. Correctable any time
+          // under Settings → Language.
+          locale,
         }),
       });
 

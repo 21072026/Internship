@@ -22,14 +22,15 @@ export async function POST(request: Request) {
     return await withTenantScope(session, async () => {
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, email: true, fullName: true, orgId: true, emailVerified: true },
+      // #1720: an existing account — its own `preferredLanguage` is the answer.
+      select: { id: true, email: true, fullName: true, orgId: true, emailVerified: true, preferredLanguage: true },
     });
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     if (user.emailVerified) return NextResponse.json({ ok: true, alreadyVerified: true });
 
     const token = await createEmailVerificationToken(user.id);
     try {
-      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
+      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId, locale: user.preferredLanguage });
     } catch (e) {
       console.error('Resend verification email failed:', e);
       return NextResponse.json({ error: 'Could not send the verification email. Please try again shortly.' }, { status: 502 });
@@ -47,12 +48,12 @@ export async function POST(request: Request) {
   // not be able to break the way back in (#1150).
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, fullName: true, orgId: true, emailVerified: true },
+    select: { id: true, email: true, fullName: true, orgId: true, emailVerified: true, preferredLanguage: true },
   });
   if (user && !user.emailVerified) {
     const token = await createEmailVerificationToken(user.id);
     try {
-      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId });
+      await sendVerificationEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId, locale: user.preferredLanguage });
     } catch (e) {
       console.error('Resend verification email failed (public path):', e);
     }
