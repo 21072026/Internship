@@ -1,6 +1,9 @@
 # InternCRM — Metin Bankası (copy bank)
 
-Tarih: 2026-09-06 · Sürüm referansı: 0.156.22-beta · Sahibi: **Mehmet Erşahin (gerçek kişi)**
+> Durum: taslak (2026-09-06)
+
+Tarih: 2026-09-06 · Sürüm referansı: **`npm run check:release-fragments` çıktısının son satırı**
+(bugün 0.156.25-beta) · Sahibi: **Mehmet Erşahin (gerçek kişi)**
 Kardeş doküman: [`go-to-market.md`](go-to-market.md) — *hangi kanal, ne zaman, hangi ön koşulla*.
 Bu doküman onun **metin** tarafıdır: kopyala-yapıştır, düzenle, gönder.
 
@@ -22,6 +25,11 @@ Bu doküman onun **metin** tarafıdır: kopyala-yapıştır, düzenle, gönder.
 
 Aşağıdaki tablo, bu dokümandaki metinlerin tamamının kanıt tabanıdır. Kod değişince önce tablo
 güncellenir, sonra metinler.
+
+**Bu tablo beş pazarlama dokümanının tamamı için tek sayı kaynağıdır** (2026-09-06 kararı):
+`go-to-market.md` §2 ve `content-calendar.md` §2 daha önce farklı sayılar veriyordu (~50 özellik,
+88 model, 353 e2e dosyası) — üçü de yanlıştı ve depo public olduğu için tek komutla çürütülebilirdi.
+Yeni sayı buraya, üretildiği komutla birlikte yazılmadan hiçbir metne girmez.
 
 | Metinlerde geçen iddia | Kaynak |
 |---|---|
@@ -245,12 +253,16 @@ What is honestly not there yet, since you will find it anyway:
   says so in its own header comment. Self-hosting works, but you are assembling it from the
   Dockerfile and the env list rather than running one command. That is the next thing I am
   writing.
-- No tagged releases until now, which is an embarrassing thing to admit about a project with a
-  6-hourly deploy pipeline. Fixed as of this week.
+  [GÖNDERİM GÜNÜ KONTROLÜ — bu madde koşulludur: üretim `docker-compose.yml` + `docs/self-hosting.md`
+  hazırsa madde **silinir**; hazır değilse Show HN zaten atılmaz, çünkü aynı hazırlık
+  `go-to-market.md` Faz 1'in giriş koşulu ve `copy-bank.md` §6.1'in sert ön koşuludur. İki metin
+  aynı fazda yayına gidiyor; biri "compose yok", diğeri "compose var" diyemez.]
+- The project had no tagged releases for a long time, which is an embarrassing thing to admit about
+  something with a 6-hourly deploy pipeline. Fixed — the first tagged release is out.
 - The AI features (CV feedback, interview prep, log summaries) call an external provider, are
   consent-gated and quota-gated, and are off unless you configure a key.
 - The public numbers on the landing page are small because the programme is small. I would rather
-  you see three mentors than a rounded-up number.
+  show you the real ones than a rounded-up number.
 
 Some of this codebase was written by the interns it tracks — the mentoring agreement includes
 contributing to the product, so the product is also the internship project. The commit history is
@@ -317,7 +329,7 @@ Open-source CRM for internship and mentoring programmes
 InternCRM is a mentor-mentee CRM for internship programmes. One pipeline of thirteen stages
 follows each person from first contact to a signed offer — with per-stage deadlines, weekly
 reports a mentor approves or returns, blind interview scorecards, and an offer state machine.
-English, Turkish and German. AGPL-3.0: use the hosted version or run it on your own server.
+English, Turkish and German. AGPL-3.0: run it on your own server.
 ```
 
 *Neden bu metin:* Product Hunt açıklaması taranarak okunur; ilk cümle kategori, ikinci cümle
@@ -371,9 +383,12 @@ sadece oy/yorum *talebini* yasaklıyor, geri bildirim davetini değil.
 ```text
 [EN]
 Q: Is this really free?
-A: The source is AGPL-3.0-or-later and you can run it on your own server at no cost, today. The
-hosted plans are on https://interncrm.com/pricing. Mentors and mentees never pay on the hosted
-version either — the programme owner does.
+A: Yes. The source is AGPL-3.0-or-later and you can run it on your own server at no cost, today.
+A hosted, paid offering is planned but does not exist yet, and neither does a price page — when it
+does, mentors and mentees will still not be the ones paying; the programme owner will.
+[ÖN KOŞUL — `/pricing` yayında (#1403): sayfa yayına girdiğinde bu cevabın ikinci cümlesi
+"The hosted plans are on https://interncrm.com/pricing." ile değiştirilir. O güne kadar yukarıdaki
+hâliyle kullanılır; Product Hunt zaten #1403 kapanmadan ateşlenmiyor (`go-to-market.md` §6.10).]
 
 Q: Can I self-host it?
 A: Yes, and that is the point of the licence. Right now you assemble it from the Dockerfile, a
@@ -392,9 +407,16 @@ employed — plus the two exits that are not failures. The other practical diffe
 can read the price and try the product without booking a call.
 
 Q: Where is the data hosted, and what about GDPR?
-A: Hosted instances run in the EU; the trust centre lists every third party that can receive data,
-what protects it, and — in the same list — what is not true yet:
-https://interncrm.com/trust. Or host it yourself and the question is yours to answer.
+A: This repository does not assert a hosting country and will not — the project is open source and
+other people run their own instances, so a region written into the source would be a claim about
+somebody else's server; the operator of a given deployment states its location on request. The
+trust centre lists every third party that can receive data, what protects it, and — in the same
+list — what is not true yet: https://interncrm.com/trust. Or host it yourself and the question is
+yours to answer.
+[Kaynak: `src/i18n/dictionaries.ts` → `trust.residencyBody`. Önceki hâli ("Hosted instances run in
+the EU") ürünün kendi `/trust` sayfasıyla çelişiyordu ve okuyucuyu iddiayı çürüten sayfaya
+yönlendiriyordu. AB barındırma bir satış argümanı olacaksa **önce** `src/lib/trust.ts` /
+`docs/trust/hosting-and-residency.md` içinde beyan edilir, sonra pazarlama metnine girer.]
 
 Q: Is there an API?
 A: Yes, a versioned public API with its own rate limits, plus an explorer in the app. See the docs
@@ -451,8 +473,11 @@ demo_url: https://demo.interncrm.com/auth/signin
 *Neden bu metin:* açıklama 249 karakterin altında ve listenin yasakladığı "open-source",
 "free", "self-hosted" kelimelerini hiç kullanmıyor (liste bunları zaten ima ediyor); `tags` ilk
 elemanı HRM, çünkü single-page modunda yazılım yalnızca ilk kategoride görünüyor ve HRM kategorisi
-ince; `demo_url` doğrudan tek tıkla giriş ekranına gidiyor — şablonun "link to the credentials
-directly" koşulunu karşılayan hâl budur.
+ince; `demo_url` doğrudan **sürtünmesiz giriş** ekranına gidiyor (giriş sayfası kimlik **göstermez**,
+üç rol butonu render eder — `SignInClient.tsx:246-269`); şablonun "link to the credentials
+directly" koşulunu karşılayan sayfa `/demo`'dur ve PR metni ona ayrıca link veriyor. Bakımcı
+elle doğrulayacağı için bu ayrımın metinde doğru durması şart: bu listede kılavuza uymayan katkı
+**ban** ile sonuçlanıyor.
 
 PR açıklaması:
 
@@ -463,8 +488,8 @@ Adding InternCRM, a self-hosted CRM for internship and mentoring programmes.
 I am the developer of the project. It has been in continuous development since early 2026 (see
 CHANGELOG.md and the release history), is deployed and running at https://interncrm.com, and has a
 public interactive demo at https://demo.interncrm.com/auth/signin where the three roles (admin,
-mentor, mentee) can be entered with one click — credentials are shown on the sign-in page itself,
-no account creation, no email.
+mentor, mentee) can be entered with one click — no credentials to type, no account creation, no
+email; the accounts are also listed at https://demo.interncrm.com/demo.
 
 Licence is AGPL-3.0-or-later. Installation instructions for a production deployment are in
 docs/self-hosting.md, verified from scratch against a clean host before opening this PR.
@@ -652,10 +677,15 @@ gönderiyor, neyi yapmıyor — gövdenin üçte birini kaplıyor; "no external 
 
 ### 6.2 r/opensource
 
+**Ön koşul:** yok — bugün gönderilebilir. (§6.1'in aksine üretim compose'u gerektirmiyor; ama
+aşağıdaki metin de compose'un varlığını **iddia etmiyor**.)
+
 **Kural uygunluk notu:** r/opensource kendi projesini paylaşmaya izin verir ve genellikle
 **lisansın açıkça belirtilmesini** ister; "open core" veya ücretli plan içeren projelerde bunun
-gizlenmesi en sık silinme sebebidir. Bu yüzden aşağıdaki metin ticari planların varlığını gövdede
-kendisi söylüyor. Salt tanıtım tonlu, tartışma açmayan gönderiler kaldırılabilir — metnin sonunda
+gizlenmesi en sık silinme sebebidir. Bizde bugün ücretli plan **yok** — `MT_ENFORCE_ISOLATION=false`
+(`docs/tenant-isolation.md`) ve `/pricing` sayfası da yok (#1403) — bu yüzden metin, olmayan bir
+ticari teklifi ima etmek yerine ticari niyeti **planlanan** olarak söylüyor. "Paid hosted plans"
+ifadesi `go-to-market.md` §3.3 ve `linkedin-playbook.md` §8'de UWG § 5 riski olarak yasaklı. Salt tanıtım tonlu, tartışma açmayan gönderiler kaldırılabilir — metnin sonunda
 gerçek bir soru var.
 
 ```text
@@ -670,7 +700,8 @@ It is AGPL-3.0-or-later, and I chose that on purpose rather than MIT: the whole 
 competes in is closed source, priced by sales call, and most vendors will not tell you what
 happens to candidate data. AGPL means an organisation that runs a modified version as a service
 has to publish those modifications, which is exactly the guarantee I want to be able to point at.
-There are paid hosted plans; the code is the same code.
+The licence is AGPL-3.0-or-later; you run it yourself. A hosted, paid offering is planned but does
+not exist yet — today one installation means one organisation.
 
 The part I would genuinely like opinions on: AGPL is also the reason some universities and public
 bodies bounce off, because their procurement teams have a checklist that stops at "copyleft" and
@@ -690,6 +721,14 @@ olunan bir soruyu sormak hem kural uyumu sağlıyor hem AGPL + dual licensing du
 
 ## 7. LinkedIn — 10 hazır gönderi
 
+**Bu bölüm takvim değildir.** Hangi hafta ne yayınlanacağının tek kaynağı `content-calendar.md` §2'dir;
+§2.0'daki eşleme tablosu hangi haftanın hangi metne düştüğünü (ve hangi haftanın metninin **henüz
+yazılmadığını**) satır satır gösterir. Aşağıdaki her başlığa o eşlemeden gelen etiket eklendi.
+
+**TR havuzu (§7.1-7.4):** dört TR metni bir haftaya sabit değildir. Takvim TR'yi yalnız hafta 11-12'de
+açar ve o iki haftada **iki** TR gönderisi vardır; ikisi bu havuzdan seçilir ve seçilen metin o haftanın
+temasını belirler. Havuzda kalan iki metin hafta 13+ için durur.
+
 Ortak kurallar (`go-to-market.md` #9, LinkedIn araştırma bloğu):
 
 - **Dış link gövdede yok, ilk yorumda yok.** Link profil "website" alanında, sayfa custom
@@ -702,6 +741,8 @@ Ortak kurallar (`go-to-market.md` #9, LinkedIn araştırma bloğu):
   Telegram'da onaylar, LinkedIn'e doğrudan istek atılmaz.
 
 ### 7.1 [TR] Kurucu sesi — çıkış aşamaları
+
+`TR havuzu · hafta 11 veya 12 · KP · P1`
 
 ```text
 [TR]
@@ -737,6 +778,8 @@ sorun.
 
 ### 7.2 [TR] Kurucu sesi — pasif ilk temas, üçüncü mail yok
 
+`TR havuzu · hafta 11 veya 12 · KP · P1`
+
 ```text
 [TR]
 Adayınız yanıt vermiyor. Kaç mail atmak dürüst?
@@ -770,6 +813,8 @@ sorumlusuna güvenli kılıyor (otomatik aşama değişikliği yok — `docs/dor
 
 ### 7.3 [TR] Kurucu sesi — teklif durum makinesi
 
+`TR havuzu · hafta 11 veya 12 · KP · P1`
+
 ```text
 [TR]
 Teklifin altı durumu var: taslak, gönderildi, kabul edildi, reddedildi, süresi doldu, geri çekildi.
@@ -800,6 +845,8 @@ paylaşılan post ürünü anlatan değil, okuyucunun kendi işine uygulayabildi
 
 ### 7.4 [TR] Kurucu sesi — kör puanlama
 
+`TR havuzu · hafta 11 veya 12 · KP · P1/P3`
+
 ```text
 [TR]
 Mülakat panelinde bir üye, kendi puanını girmeden diğerlerinin puanını göremiyor. Girdikten sonra
@@ -828,6 +875,8 @@ davranışsal olarak açıklıyor ve son paragraftaki kaçış-kapatma ayrıntı
 görmez) ürünün detaya indiğini kanıtlıyor — bu, "craft quality" iddiasının metinle yapılan hâli.
 
 ### 7.5 [DE] Persona A — Wochenberichte
+
+`Hafta 8 Çar · KP · P2`
 
 ```text
 [DE]
@@ -860,6 +909,8 @@ reddediyor** — `go-to-market.md` §3.3'teki yasak ifade tam olarak burada geç
 onu açıkça çürütmek metni hem hukuken hem itibaren güvenli kılıyor.
 
 ### 7.6 [DE] Persona A — Stage-SLA
+
+`Hafta 5 Per'in DE karşılığı — takvimde o hafta EN; DE hâli hafta 7 Per veya 9 Per için kullanılabilir · KP · P1`
 
 ```text
 [DE]
@@ -894,6 +945,8 @@ uyumluluk** vurgusu, kurumsal alıcının yazılım güncellemelerine dair asıl
 
 ### 7.7 [DE] Persona B — die Absage, die eine Antwort ist
 
+`Hafta 7 Per · KP · P1 (çıkış nedeni taksonomisi)`
+
 ```text
 [DE]
 Die unangenehmste Nachricht in einem Mentoring-Programm ist die Absage — und sie ist meistens die,
@@ -926,6 +979,8 @@ değil "begleiten"dir; post ürünü bu değer sistemine bağlıyor ve son cüml
 programın kendi ölçüsünü sorguluyor — bu ağlarda satış tonundan tek kaçış yolu budur.
 
 ### 7.8 [DE] Persona A/B — Demo ohne Anmeldung
+
+`Hafta 6 Per'in DE karşılığı — takvimde o hafta EN; DE hâli hafta 9 Per veya 10 Per için · KP · P7`
 
 **Ön koşul:** `/pricing` yayında (#1403) ve `utm_*` yakalama çalışıyor (#1388/#1390). Bu ikisi
 olmadan bu post yayınlanmaz — gelen trafiğin gidecek yeri ve ölçülecek hâli yok.
@@ -964,6 +1019,8 @@ değil profilde (LinkedIn dış link cezası).
 
 ### 7.9 [EN] Açık kaynak — trust centre
 
+`Hafta 4 Çar veya 6 Per · KP · P4/P7`
+
 ```text
 [EN]
 Our trust page has a section titled "what is not true yet". It is not a roadmap. It is a list of
@@ -998,6 +1055,8 @@ bir özellik satmıyor, `/trust` sayfasının `limitationsTitle` bölümünü bi
 sunuyor ve bunu yaparken üç gerçek sınırı (MT, sertifikasyon yok, a11y açıkları) yayınlıyor.
 
 ### 7.10 [EN] Açık kaynak — the interns wrote it
+
+`Hafta 12 Çar'ın EN kaynağı — o hafta DE yayınlanır, bu metin **çevrilmez, yeniden yazılır** · KP · P3`
 
 ```text
 [EN]
@@ -1473,6 +1532,11 @@ görüşmeye sokarken farkı yaratan tam bu tutumdur.
 
 ### 9.7 [DE] Rıza doğuran akış — webinar / kayıt sayfası metni
 
+**Ön koşul:** `/pricing` yayında (#1403) — kayıt sayfasındaki "wer die Preise sehen will, findet sie
+auf der Website" cümlesi fiyat sayfası olmadan yanlış beyandır. Sayfa yayında değilse o cümle
+**tamamen çıkarılır** (yerine "Preise auf Anfrage" yazılmaz — §11'in blok kuralı). Metnin geri kalanı
+ön koşulsuz kullanılabilir.
+
 Soğuk e-postanın **yerine geçen** yol: içerik → gönüllü kayıt → belgelenmiş double-opt-in → izinli
 iletişim. Kayıt sayfası metni ve onay maili aşağıda.
 
@@ -1491,7 +1555,8 @@ Inhalt:
 · Offene Fragerunde
 
 Es wird eine quelloffene Referenzimplementierung gezeigt (InternCRM, AGPL-3.0). Es gibt keinen
-Verkaufsteil und keine Preisfolie; wer die Preise sehen will, findet sie auf der Website.
+Verkaufsteil und keine Preisfolie.
+{ /pricing yayındaysa buraya eklenir: "Wer die Preise sehen will, findet sie auf der Website." }
 
 [ Vorname ] [ Nachname ] [ E-Mail ] [ Einrichtung / Unternehmen ]
 
@@ -1866,8 +1931,17 @@ Her metin için, gönder tuşuna basmadan önce:
 - [ ] **Vaat kontrolü** — çok kiracılılık, sertifika, Berichtsheft tanınırlığı, entegrasyon
       iddiası var mı? (`go-to-market.md` §3.3)
 - [ ] **Hak sahibi kontrolü** — herhangi bir şirket adı hak sahibi gibi mi görünüyor?
-- [ ] **Link kontrolü** — demo adresi `https://demo.interncrm.com/auth/signin` mi? Eski
-      `crm-demo.ersah.in` kalıntısı var mı?
+- [ ] **Link kontrolü** — demo adresi kanonik mi? İnsan tıklayacaksa
+      `https://demo.interncrm.com/auth/signin`, yalnız alan adı anılıyorsa `demo.interncrm.com`,
+      kimlik bilgisi gerekiyorsa `https://demo.interncrm.com/demo`
+      (`linkedin-playbook.md` §3.3 kanonik kural kutusu). Eski `crm-demo.ersah.in` kalıntısı var mı?
+- [ ] **Impressum linki tarayıcıda açıldı ve 200 döndü mü?** Kanonik yol `https://interncrm.com/imprint`
+      — uygulamada `/impressum` diye bir rota **yok** (`src/app/imprint/`, `src/app/sitemap.ts:68`,
+      `next.config.js` içinde yönlendirme yok). 404'e giden bir Impressum linki, § 5 DDG yükümlülüğünü
+      sağlamış gibi görünüp sağlamaz.
+- [ ] **Barındırma kontrolü** — metin "hosted plans / hosted version / hosted instances" diyor mu?
+      (Diyorsa yayınlanmaz: bugün satılabilir bir barındırma teklifi yok.) "AB'de barındırılıyor"
+      diyor mu? (Diyorsa yayınlanmaz: `/trust` bunu açıkça reddediyor.)
 - [ ] **Hukuk kontrolü (giden mesajlar)** — bu muhatabın rızası var mı, yoksa teması kendisi mi
       başlattı, yoksa bu bir mektup mu? Üçünden hiçbiri değilse **gönderilmez**.
 - [ ] **Impressum kontrolü** — giden ticari metinde gerçek gönderen adı, adres/iletişim ve
@@ -1891,3 +1965,29 @@ Her metin için, gönder tuşuna basmadan önce:
   ateşlenmez.
 - Yayınlanan her metin için tek satırlık bir kayıt tut: tarih, kanal, hangi bölüm, sonuç. Ölçüm
   altyapısı (#1388/#1390) gelene kadar kanal performansına dair elimizdeki tek şey bu kayıt olacak.
+
+---
+
+## Açık sorular
+
+*2026-09-06 eleştiri turunda uygulanan düzeltmelerin bıraktığı açık uçlar. Her satır tek bir soru;
+cevaplandığında ilgili bölüme işlenir ve satır buradan silinir.*
+
+- Eleştiri listesindeki son bulgu ("The spreadsheet was fine at ten people and unusable at fifty.")
+  **kesik geldi** — alıntı var, problem ve düzeltme metni yok. Bu yüzden **uygulanmadı**. Cümle bugün
+  §2.2 (Show HN) ve §6.1 (r/selfhosted) metinlerinde varyasyonlarıyla duruyor ve §0.1'deki hiçbir sayı
+  iddiasına bağlı değil (10 ve 50 programın kendi geçmişi, ürün metriği değil). Bulgunun tamamı
+  gelirse yeniden değerlendirilir.
+- §2.2'deki "The public numbers … three mentors" cümlesi için sunulan iki seçenekten **(a) sayıyı
+  çıkarmak** uygulandı; K2'ye "kendi zayıflığını kanıt olarak sunan gerçek sayı serbesttir" istisnası
+  **eklenmedi**. Bu istisna hâlâ tartışılabilir: bugünkü kural, dürüstlük amacıyla yazılmış doğrulanabilir
+  bir sayıyı da yasaklıyor. Kural değişirse §12 kontrol listesindeki madde de değişmeli.
+- §7.6 ve §7.8'in hafta etiketleri **kesin değil**: ikisi de DE metni ama takvimde karşılık gelen
+  haftalar (5 Per, 6 Per) EN fazında. Etiketler "hafta 7/9/10 Per için kullanılabilir" diye yazıldı;
+  kesin yerleşim, o haftaların metni yazılırken kararlaştırılacak.
+- §3.5'teki "hosted plans" cevabı bugünkü gerçeğe indirildi. Barındırılan bir teklif **gerçekten**
+  planlanıyorsa (fiyat, kapsam, kiracı modeli), o kararın kaynağı bu doküman değil `docs/` altındaki
+  bir ürün kararı olmalı; `MT_ENFORCE_ISOLATION` açılmadan hiçbir metinde geri gelemez.
+- §6.1'in "docker-compose file ... in docs/self-hosting.md" cümlesi hâlâ **var olmayan** bir dosyayı
+  tarif ediyor; bu bilinçli, çünkü bölümün sert ön koşulu zaten o dosyanın yazılmış olması. Yine de
+  metin bugün kopyalanıp gönderilebilir durumda — ön koşul satırı okunmazsa yanlış beyan olur.

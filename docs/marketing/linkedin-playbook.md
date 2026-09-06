@@ -1,14 +1,27 @@
 # LinkedIn oyun kitabı — InternCRM
 
+> Durum: taslak (2026-09-06)
+
 **Tarih:** 2026-09-06 · **Kapsam:** LinkedIn kanalının kurulumu, denetimi, yayın ritmi ve ölçümü.
 **Bu doküman tek başına yeterli değildir:** kanalın *neden* seçildiği ve diğer kanallarla sırası
 [`go-to-market.md`](go-to-market.md) §6.6'da, haftalık takvim ve içerik pilerleri
 [`content-calendar.md`](content-calendar.md)'da, gönderi metinlerinin kendisi `copy-bank.md`'de.
 Burada yalnız **LinkedIn'e özgü mekanik** var: hangi alana ne yazılır, hangi ölçü, hangi tık yolu.
 
-> **TODO — sayfa URL'i bilinmiyor.**
-> InternCRM'in LinkedIn şirket sayfası **zaten açık**, ama bu oturumda URL'i tespit edilemedi ve arama
-> motorlarında bulunamıyor (büyük olasılıkla boş ve indekssiz). İlk iş: sayfayı bul, URL'ini buraya yaz.
+> **HAFTA 1'İN BELİRLEYİCİ İŞİ — sayfa var mı, yok mu?**
+> InternCRM'in LinkedIn şirket sayfasının **zaten açık olduğu** düşünülüyor, ama bu oturumda URL'i
+> tespit edilemedi ve arama motorlarında bulunamıyor (büyük olasılıkla boş ve indekssiz).
+> Bu belirsizlik takvimle çelişiyordu: `content-calendar.md` hafta 2 sayfayı "açar", bu doküman "zaten
+> açık" diyordu. İkisi aynı anda doğru olamaz, ve asıl risk üçüncü ihtimalde: **impressumsuz, hâlihazırda
+> yayında olan ticari bir sayfa** — açılmamış bir sayfadan daha büyük bir § 5 DDG riski.
+>
+> **Hafta 1, tek karar işi (sırayla):**
+> 1. Me → **Manage** ile yönetici olduğun sayfaları listele; ürün adıyla LinkedIn araması yap.
+> 2. **Sayfa varsa:** URL'i aşağıya yaz · super admin ol · Website URL alanına
+>    `https://interncrm.com/imprint` **derhal** koy · Impressum hazır değilse sayfayı **yayından
+>    kaldır** (Edit page → Deactivate) ve hazır olunca geri aç. "Sonra doldururuz" bir seçenek değil.
+> 3. **Sayfa yoksa:** hafta 2'de açılır (`content-calendar.md` hafta 2) — ve açılırken Impressum alanı
+>    ilk doldurulan alandır. İkinci bir sayfa **açılmaz**: marka bölünmesi geri alınması pahalı bir hata.
 > Bulma yolu: linkedin.com'da oturum aç → sağ üst **Me** → **Manage** başlığı altında yönetici olduğun
 > sayfalar listelenir. Görünmüyorsa sayfa başka bir hesapla açılmış demektir; o hesaptan
 > **Admin tools → Manage admins** ile Mehmet super admin olarak eklenir.
@@ -19,16 +32,19 @@ sayfanın üzerinden tek tek geçilecek bir denetim listesidir.
 
 ---
 
-## 0. Yayın öncesi üç sert ön koşul
+## 0. Yayın öncesi ön koşullar — ikisi sert, biri dar
 
-Aşağıdaki üçü yeşil olmadan LinkedIn'de **tek gönderi bile yayınlanmaz**. Bu bir tercih değil; ilki
-hukuki, diğer ikisi kanalın işe yaramasının şartı.
+**ÖK1 ve ÖK2 yeşil olmadan LinkedIn'de tek gönderi bile yayınlanmaz.** ÖK3 sert bir kapı **değildir**:
+yalnız **fiyat iddiası taşıyan** metinleri kapatır. Önceki sürüm üçünü de sert kapı yapıyordu; bu,
+`content-calendar.md` ile birlikte okununca 12 hafta boyunca hiçbir gönderinin yayınlanamaması demekti
+(takvim hafta 3'ten itibaren haftada 2-3 gönderi planlıyor ve hafta 10'da `/pricing`'in hâlâ yayında
+olmayabileceğini kendisi kabul ediyor). Bir doküman diğerini kilitliyordu; kapı daraltıldı.
 
 | # | Ön koşul | Bugünkü durum | Neden bloklayıcı |
 |---|---|---|---|
-| ÖK1 | `interncrm.com/impressum` gerçek verilerle dolu (ad, ladungsfähige Adresse, e-posta, sorumlu kişi) | **Kırmızı** — "operatör tarafından doldurulacak" placeholder (#1371) | Ticari kullanılan sosyal medya varlığı § 5 DDG kapsamında impressum yükümlüsü. Eksik impressumla sayfa açmak, kendi kanalını Abmahnung'a açmaktır. Hak sahibi **Mehmet Erşahin (gerçek kişi)** yazılır, bcsit GmbH değil |
+| ÖK1 | `interncrm.com/imprint` gerçek verilerle dolu (ad, ladungsfähige Adresse, e-posta, sorumlu kişi) | **Kırmızı** — "operatör tarafından doldurulacak" placeholder (#1371) | Ticari kullanılan sosyal medya varlığı § 5 DDG kapsamında impressum yükümlüsü. Eksik impressumla sayfa açmak, kendi kanalını Abmahnung'a açmaktır. Hak sahibi **Mehmet Erşahin (gerçek kişi)** yazılır, bcsit GmbH değil |
 | ÖK2 | En az 3 ürün ekran görüntüsü (#1399) | **Kırmızı** | Sayfa banner'ı, gönderi görselleri ve carousel'in ortak hammaddesi. Görselsiz LinkedIn = text-only, en zayıf format |
-| ÖK3 | Sayfadan gidilecek iniş sayfası hazır: `/features`, `/for-companies`, `/pricing` (#1403) | `/pricing` **kırmızı**, diğerleri yeşil | Custom button'ın hedefi. Fiyat sayfası yokken "yayımlanmış EUR fiyat" konumlandırması gönderide iddia edilemez |
+| ÖK3 (**dar kapı**) | Sayfadan gidilecek iniş sayfası hazır: `/features`, `/for-companies` **yeşil** — `/pricing` (#1403) **kırmızı** | `/pricing` yayında değil | **Yalnız fiyat iddiası taşıyan metinleri kapatır**: "yayımlanmış EUR fiyat" konumlandırması, fiyat carousel'i (takvim hafta 10), Featured'daki fiyat linki, dizin profilinin fiyat alanı, mektuptaki fiyat satırı. Fiyat cümlesi içermeyen gönderiler ÖK3'e tabi değildir. Custom button'ın hedefi `/for-companies`'tir ve o yeşil |
 
 `utm_*` yakalama (#1390) ve dönüşüm olayı (#1388) **bloklayıcı değildir** — ama ölçüm yalnız
 §7.3'teki geçici çözüme dayanır ve bunu bilerek başlarız.
@@ -47,12 +63,12 @@ tablodaki her satırı sırayla kontrol et; "doğru değer" sütunundaki metinle
 | **Sayfa adı** | `InternCRM` | Ürün adı. Tüzel kişilik hâlâ açık soru (`docs/legal/legal-tax-framework.md`) ve hak sahibi gerçek kişi — sayfayı bcsit GmbH adıyla taşımak IP anlatısıyla çelişir | [LinkedIn Help — Pages oluşturma](https://www.linkedin.com/help/linkedin/answer/a543852) |
 | **Logo** | **400×400 px** (mutlak min. 268×268), PNG veya JPEG, **≤3 MB**, **opak zemin** | LinkedIn logoyu hem açık hem koyu zeminde gösteriyor; şeffaf PNG'de koyu logo koyu zeminde kayboluyor. Bizde şans var: `src/app/icon.svg` zaten opak `#1D4ED8` yuvarlak kare üzerine beyaz mezuniyet kepi — 400×400 PNG'ye **şeffaflık olmadan** export et, kenarlık eklemeye gerek yok | [Image specifications for Pages](https://www.linkedin.com/help/linkedin/answer/a563309/image-specifications-for-your-linkedin-pages-and-career-pages?lang=en) |
 | **Cover / banner** | **1512×256 px** (≈5,9:1), PNG/JPEG, ≤3 MB, animasyon yok | Üçüncü taraf 2026 blogları 1128×191 ve 4200×700 veriyor; **resmî LinkedIn Help ile çelişiyorlar** — resmî değeri kullan. Görsel farklı ekranlarda kırpılır: kritik metni ortadaki güvenli alana koy ve **sol-alt köşeyi boş bırak** (logo oraya biner) | aynı kaynak |
-| **Tagline** | 120 karakter sınırı; anlamı **ilk 60-70 karaktere** sığdır. Öneri: `Mentor → Praktikum → Einstellung: 13 Stufen, offener Quellcode, veröffentlichte Preise.` | Arama sonuçlarında ve dar ekranda yalnız ilk yarı görünür. **Sayı çelişkisi notu:** 120 karakteri resmî Help sayfaları yazmıyor; birden çok üçüncü taraf tutarlı veriyor — güvenli tarafta kal, 110 karakteri geçme | [Tagline alanı](https://derrick-app.com/linkedin/company-information/tagline) (üçüncü taraf) |
-| **About / Overview** | **1.500 karakterin altında** yaz. Konumlandırma ilk **300 karaktere** sığmalı: yayımlanmış EUR fiyat + mentor/mentee'ye ücretsiz çekirdek + AGPL self-host + mentee→staj→işe alım hunisi | "See more" kesme noktası ~300 karakter. **Sınır çelişkili:** kaynaklar 1.500 / 2.000 / 2.600 diyor, resmî Help hiçbir sayı vermiyor. 1.500 altı her senaryoda güvenli | [Karakter limitleri](https://authoredup.com/blog/linkedin-character-limit) (üçüncü taraf, çelişkili) |
+| **Tagline** | 120 karakter sınırı; anlamı **ilk 60-70 karaktere** sığdır. Metin burada yazılmaz: üç dilli kanonik tagline `copy-bank.md` §8.1'dedir (DE: `Praktikums- und Mentoring-CRM: 13 Stufen vom Erstkontakt bis zur Einstellung. AGPL-3.0, selbst hostbar.`). **"veröffentlichte Preise" ibaresi tagline'a girmez** — tagline sayfanın en kalıcı alanı ve `/pricing` yayında değil (ÖK3, #1403); sayfa yayına girdikten sonra eklenmesi ayrı bir karardır | Arama sonuçlarında ve dar ekranda yalnız ilk yarı görünür. **Sayı çelişkisi notu:** 120 karakteri resmî Help sayfaları yazmıyor; birden çok üçüncü taraf tutarlı veriyor — güvenli tarafta kal, 110 karakteri geçme | [Tagline alanı](https://derrick-app.com/linkedin/company-information/tagline) (üçüncü taraf) |
+| **About / Overview** | **1.500 karakterin altında** yaz. Kanonik metin `copy-bank.md` §8.2'dedir; burada yalnız mekanik var. Konumlandırma ilk **300 karaktere** sığmalı: mentee→staj→işe alım hunisi + 13 aşama + AGPL self-host + mentor/mentee'ye ücretsiz çekirdek. **"Yayımlanmış EUR fiyat" ibaresi ancak #1403 kapandıktan sonra** (ÖK3) | "See more" kesme noktası ~300 karakter. **Sınır çelişkili:** kaynaklar 1.500 / 2.000 / 2.600 diyor, resmî Help hiçbir sayı vermiyor. 1.500 altı her senaryoda güvenli | [Karakter limitleri](https://authoredup.com/blog/linkedin-character-limit) (üçüncü taraf, çelişkili) |
 | **Industry** | `Software Development` | Products sekmesi uygunluğu B2B software olmaya bağlı; ayrıca **Invite to follow** kilidini açan üç alandan biri | [Products sekmesi](https://www.linkedin.com/help/linkedin/answer/a564431) |
 | **Company size** | `1-10 employees` | Invite to follow kilidini açan alan. Küçük olmak dezavantaj değil — hikâyemiz zaten "tek kurucu + stajyerler" | [Sayfa tamamlama](https://www.linkedin.com/help/linkedin/answer/a553372/vyplneni-vasi-stranky-linkedin?lang=en-us&intendedLocale=cs) |
 | **Company type** | Tüzel kişilik netleşene kadar en dar doğru seçenek (`Self-Employed` / `Privately Held`); **GmbH işaretleme** | Yanlış tüzel kişilik beyanı hem IP anlatısıyla hem `legal-tax-framework.md` ile çelişir | [Pages oluşturma](https://www.linkedin.com/help/linkedin/answer/a543852) |
-| **Website URL** | **`https://interncrm.com/impressum`** (ÖK1 yeşil olduktan sonra) | LinkedIn'de ayrı Impressum alanı **yok**. Kabul gören çözüm: Website URL alanına kendi sitendeki tam Impressum linki — "iki tık" kuralı. Sayfanın ana sitesine giden link zaten custom button'da duruyor | [§5 DDG + LinkedIn](https://www.e-recht24.de/impressum/13397-impressum-linkedin.html), [§ 5 DDG](https://www.gesetze-im-internet.de/ddg/__5.html) |
+| **Website URL** | **`https://interncrm.com/imprint`** (ÖK1 yeşil olduktan sonra) | LinkedIn'de ayrı Impressum alanı **yok**. Kabul gören çözüm: Website URL alanına kendi sitendeki tam Impressum linki — "iki tık" kuralı. Sayfanın ana sitesine giden link zaten custom button'da duruyor | [§5 DDG + LinkedIn](https://www.e-recht24.de/impressum/13397-impressum-linkedin.html), [§ 5 DDG](https://www.gesetze-im-internet.de/ddg/__5.html) |
 | **Location** | Gerçek ladungsfähige adres (Impressum ile **birebir aynı**) | İki yerde farklı adres, impressum tartışmasında en kolay yakalanan tutarsızlık | § 5 DDG |
 | **Custom button** | `Visit website` → `https://interncrm.com/for-companies?utm_source=linkedin&utm_medium=page&utm_campaign=cta_button` | Seçenekler **kapalı liste**: Contact us · Learn more · Register · Sign up · Visit website. "Increase button visibility" toggle'ını da aç. Tıklama sayısı Visitor analytics'te ayrı raporlanıyor — bu bizim **tek gerçek attribution köprümüz** (§7.3) | [Custom button](https://www.linkedin.com/help/linkedin/answer/a5993422) |
 | **Hashtags** | **En fazla 3.** Başlangıç: `#Praktikum` `#DualesStudium` `#Mentoring` | Sayfa o akışlara girer ve **sayfa kimliğiyle** beğeni/yorum yapabilir — markanın topluluğa girmesinin tek yolu. TR tarafı ayrı gönderilerde hashtag'siz denenir | [Hashtag ilişkilendirme](https://www.linkedin.com/help/linkedin/answer/a1493822/associate-a-hashtag-with-your-linkedin-page?lang=en-us&intendedLocale=en) |
@@ -127,8 +143,9 @@ Medyada MP4/kısa klip öneriliyor.
 Üçüncü taraf iddiaları (500 karakter açıklama sınırı, 35 ek ürün sayfası, ziyaretçiye son 10'unun
 gösterilmesi) resmî sayfada **yok** — plan yaparken bunlara dayanma.
 Kaynak: [Products](https://www.linkedin.com/help/linkedin/answer/a564431)
-**Zamanlama:** hafta 4-5. ÖK2 (ekran görüntüleri) ve ÖK3 (`/pricing`) bitmeden açma; inceleme reddi
-tekrar denemeyi geciktirir.
+**Zamanlama:** hafta 4-5. ÖK2 (ekran görüntüleri) bitmeden açma; inceleme reddi tekrar denemeyi
+geciktirir. Ürün sayfasının **iniş URL'i** `/features`'tır — `/pricing` (#1403) yayına girene kadar
+ürün sayfasına fiyat yazılmaz (ÖK3 dar kapısı).
 
 ### 2.5 Newsletter (sayfa + kişisel)
 
@@ -182,17 +199,19 @@ Praktikant:innen, die darin betreut werden · Open Source (AGPL)
 **B — Sorun öncelikli (Persona A için, DE):**
 ```
 Praktikumsbetreuung läuft immer noch in Excel. Ich baue die Alternative: 13 Pipeline-Stufen,
-Berichtsheft-Freigabe, veröffentlichte Preise · InternCRM (AGPL, self-hostable)
+Berichtsheft-Freigabe, offener Quellcode · InternCRM (AGPL, self-hostable)
 ```
 
 **C — Teknik/topluluk (hafta 3-6 EN fazı için):**
 ```
 Building InternCRM — an open-source mentee→internship→hire pipeline (Next.js, Prisma, AGPL).
-15+ yrs shipping software. Public demo, published pricing, no demo-call gate.
+15+ yrs shipping software. Public demo, no demo-call gate, read the source.
 ```
 
-Kural: hangisi seçilirse seçilsin içinde **sayı iddiası yok** (kullanıcı/müşteri sayısı) ve
-**"multi-tenant SaaS" yok**.
+Kural: hangisi seçilirse seçilsin içinde **sayı iddiası yok** (kullanıcı/müşteri sayısı),
+**"multi-tenant SaaS" yok** ve **"published pricing / veröffentlichte Preise" yok** — sonuncusu
+ÖK3'e bağlıdır: `/pricing` (#1403) yayına girdikten sonra B ve C sürümlerine geri eklenebilir.
+B sürümündeki "veröffentlichte Preise" ibaresi de bugün **çıkarılır**.
 
 ### 3.2 About metni iskeleti
 
@@ -220,7 +239,7 @@ Featured ve Contact info'da duruyor.
 
 | Sıra | Ne | URL | Neden |
 |---|---|---|---|
-| 1 | Herkese açık demo | `https://demo.interncrm.com/?utm_source=linkedin&utm_medium=profile&utm_campaign=featured_demo` | Kanıtın kendisi. Sentetik veri, `robots.txt: Disallow: /` — indeksleme derdi yok |
+| 1 | Herkese açık demo | `https://demo.interncrm.com/auth/signin?utm_source=linkedin&utm_medium=profile&utm_campaign=featured_demo` | Kanıtın kendisi. **Kök adres değil giriş ekranı**: tek tıkla rol girişi butonları orada (`SignInClient.tsx:246`). Kanonik kural §3.3 altındaki kutuda. Sentetik veri, `robots.txt: Disallow: /` |
 | 2 | Özellik kataloğu | `https://interncrm.com/features?utm_source=linkedin&utm_medium=profile&utm_campaign=featured_features` | `src/lib/features.ts` (46 kayıtlı özellik) tek kaynaktan besleniyor; iddiaların doğrulanabilir hâli |
 | 3 | GitHub deposu | `https://github.com/21072026/Internship` | AGPL + açık geliştirme; "self-host edebilirsin" iddiasının kanıtı |
 | 4 | Fiyat sayfası | `https://interncrm.com/pricing?...&utm_campaign=featured_pricing` | **ÖK3 bitince eklenir** (#1403). Kama'nın en keskin ucu: yayımlanmış fiyat |
@@ -228,9 +247,18 @@ Featured ve Contact info'da duruyor.
 **Featured'ın gizli faydası:** LinkedIn'in gövde-içi dış link cezası (§5.3) Featured bölümünü
 kapsamıyor — link burada durur, gönderiye girmez.
 
+> **Kanonik demo adresi kuralı (dört dokümanda aynı).**
+> **İnsan tıklayacaksa:** `https://demo.interncrm.com/auth/signin` — tek tıkla rol girişi butonları
+> orada render ediliyor (`src/app/auth/signin/SignInClient.tsx:246`); kök adres ziyaretçiyi butonsuz
+> bir sayfada bırakır.
+> **Yalnız alan adı anılıyorsa** (metin içinde, konuşmada, QR altında): `demo.interncrm.com`.
+> **Kimlik bilgileri gerekiyorsa** (ör. awesome-selfhosted'ın "link to the credentials directly"
+> koşulu): `https://demo.interncrm.com/demo` — kimlikler o sayfada listeli.
+> Eski `crm-demo.ersah.in` hiçbir yerde geçmez.
+
 ### 3.4 Contact info ve banner
 
-- **Contact info → Add website** → `https://interncrm.com/impressum`, tür: **Other**, etiket `Impressum`.
+- **Contact info → Add website** → `https://interncrm.com/imprint`, tür: **Other**, etiket `Impressum`.
   Ticari kullanılan **kişisel profil** de § 5 DDG kapsamında ([e-recht24](https://www.e-recht24.de/impressum/13396-impressum-social-media.html)).
 - **Banner:** ürün ekranından bir kesit + tek cümle. Metni ortada tut; profil fotoğrafı sol-altı kapatır.
 - **Profil fotoğrafı:** gerçek yüz. Tek kurucu ürününde logo profil fotoğrafı, kanalın en büyük kaldıracını
@@ -297,23 +325,47 @@ Metinler **burada değil** — `copy-bank.md`'de. Burada konu, format, asset ve 
 Piler kısaltmaları `content-calendar.md` §4'ten: P1 kırık huni · P2 Berichtsheft · P3 stajyerlerin yazdığı
 ürün · P4 self-host · P5 fiyat gizlemesi · P6 üç dilli ürün · P7 yazılabilir demo.
 
-### 5.1 Plan
+### 5.1 Plan — format, asset ve ön koşul kolonu
 
-| # | Hafta / gün | Kanal | Dil | Piler | Konu | Format | Asset | Ön koşul |
-|---|---|---|---|---|---|---|---|---|
-| 1 | H3 Çar | KP | EN | P3 | "Bu CRM'i, içinde mentorluk alan stajyerler yazdı" — açılış gönderisi, kanalın manifestosu | Metin 1.500-1.800 kr + ekran görüntüsü | Pipeline board ekranı | ÖK1, ÖK2 |
-| 2 | H3 Cum | SP | EN | — | Sayfa açılışı: InternCRM ne yapar, demo herkese açık | Görsel + 600-800 kr | Landing hero kesiti | §1 denetimi yeşil |
-| 3 | H4 Çar | KP | EN | P1 | Neden 13 aşama: "Applied / Interviewing / Hired" üçlüsünün gizlediği şey | **Doküman PDF, 10 slayt** | Aşama listesi carousel'i (`docs/pipeline-stages.md`) | ÖK2 |
-| 4 | H4 Per | KP | EN | P7 | Demo'yu **yazılabilir** bırakmak: güven mühendisliği ve bunun bedeli | Kısa metin 700-900 kr, görselsiz | — | demo.interncrm.com ayakta |
-| 5 | H5 Çar | KP | DE | P2 | Berichtsheft/haftalık staj raporu onayı: kâğıttan akışa | Metin + ekran görüntüsü | Rapor onay ekranı (DE arayüz) | DE arayüz demo'da gezinebilir |
-| 6 | H5 Cum | SP | DE | P2 | Aynı meselenin kurumsal hâli: özellik kartı + demo daveti | Görsel + 500 kr | `/features` kartı | Products sekmesi (§2.4) |
-| 7 | H6 Çar | KP | EN | P5 | 16 rakip inceledim, 3'ü fiyat yayımlıyor: kategorinin demo-call kapısı | **Doküman PDF, 8-12 slayt** | Rakip/fiyat tablosu (`docs/research/competitive-analysis-2026-08.md`) | **ÖK3 — `/pricing` yayında** (#1403) |
-| 8 | H6 Per | KP | EN | P4 | Bir CRM'i self-host etmek: docker compose'dan ilk kullanıcıya | Metin + terminal/compose görseli | `docs/self-hosting.md` | Self-hosting dokümanı hazır |
-| 9 | H7 Çar | KP | DE | P1 | Aşama SLA'sı ve çıkış nedeni taksonomisi: "neden düştü" sorusunun cevabı | Metin 1.800+ kr, görselsiz (dwell time) | — | — |
-| 10 | H7 Cum | SP | DE | P6 | Üç dilli ürün geliştirmenin maliyeti (EN/TR/DE, CI'da anahtar paritesi) | Görsel + 600 kr | `npm run check:i18n` çıktısı görseli | — |
+> **Konu kolonu burada yoktur.** Gönderi konularının tek kaynağı `content-calendar.md` §2'nin haftalık
+> tablosudur (ve §2.0'daki metin eşlemesi). Önceki sürümde bu tabloda ayrı bir konu listesi vardı ve
+> takvimle **satır satır çakışıyordu** — aynı çarşamba için iki doküman iki farklı gönderi emrediyordu
+> (H5'te biri DE, diğeri EN dahi). Çakışan liste kaldırıldı; aşağıdaki tablo takvimin haftalarını
+> **izler** ve yalnız LinkedIn'e özgü kolonları taşır.
 
-**Not:** liste `content-calendar.md` §2'deki faz sırasıyla uyumlu (H3-6 EN, H5-10 DE). Bir gönderi
-**tek dilde** yazılır; çakışma haftalarında iki ana gönderi iki farklı fazın dilinde ve **farklı günlerde**.
+| Hafta / gün | Kanal | Dil (faz) | Format | Asset | Ön koşul |
+|---|---|---|---|---|---|
+| H3 Çar | KP | EN | Metin 1.500-1.800 kr + ekran görüntüsü | Depo README / lisans ekranı | ÖK1, ÖK2 |
+| H3 Per | KP | EN | Uzun metin 1.800+ kr, görselsiz | — | ÖK1 |
+| H3 Cum | SP | EN | Görsel + 600-800 kr | Landing hero kesiti | §1 denetimi yeşil |
+| H4 Çar | KP | EN | Kısa not 400-800 kr | — | — |
+| H4 Per | KP | EN | **Doküman PDF, 8-12 slayt** | `docker-compose` / env kod görseli | Self-hosting dokümanı hazır |
+| H5 Çar | KP | EN | Metin + ekran görüntüsü | Pipeline board ekranı (demo) | ÖK2 |
+| H5 Per | KP | EN | Kısa metin 700-900 kr | — | — |
+| H5 Cum | SP | EN | Görsel + 500 kr | `/features` kartı | Products sekmesi (§2.4) |
+| H6 Çar | KP | EN | Uzun metin 1.800+ kr | Demo üç rol ekran görüntüsü | demo.interncrm.com ayakta (Y1) |
+| H6 Per | KP | EN | Kısa metin, görselsiz | — | — |
+| H7 Çar | KP | DE | **Doküman PDF, 8-12 slayt** | Pipeline carousel'inin **Almancası** | DE arayüz demo'da gezilebilir |
+| H7 Per | KP | DE | Kısa metin | — | — |
+| H7 Cum | SP | DE | Görsel + 600 kr | `/for-companies` kesiti | — |
+| H8 Çar | KP | DE | Metin + ekran görüntüsü | Rapor onay ekranı (DE arayüz) | ÖK2 |
+| H8 Per | KP | DE | Kısa metin | — | — |
+| H9 Çar | KP | DE | Uzun metin 1.800+ kr, görselsiz (dwell time) | — | — |
+| H9 Per | KP | DE | Kısa metin + tablo görseli | Rol × endpoint matrisi | — |
+| H9 Cum | SP | DE | Görsel + 600 kr | `/trust` ekran görüntüsü | — |
+| H10 Çar | KP | DE | **Doküman PDF, 8-12 slayt** | Rakip/fiyat tablosu | **ÖK3 — fiyat iddiası taşıyor** (#1403); yayında değilse CTA `/features`, planlanan rakamlar "henüz yayında değil" ibaresiyle |
+| H10 Per | KP | DE | Kısa metin | — | — |
+| H11 Çar | KP | **EN** (§1.5 bilinçli istisnası) | Uzun metin + log görseli | `npm run check:i18n` çıktısı | — |
+| H11 Per | KP | TR | Kısa metin | — | TR havuzundan metin seçildi (`content-calendar.md` §2.0) |
+| H11 Cum | SP | DE | Görsel + 600 kr | Sürüm notu kartı | — |
+| H12 Çar | KP | DE | Metin + görsel | Commit grafiği | — |
+| H12 Per | KP | TR | Metin | — | TR havuzu |
+
+**SP satırları iki haftada birdir** (`content-calendar.md` §1.2 bütçe kararı): yukarıda H3, H5, H7, H9,
+H11 Cuma satırları var; H4/H6/H8/H10/H12 Cuma boştur.
+
+**Bir gönderi tek dilde yazılır.** Faz dili `content-calendar.md` §1.5'ten okunur; fazlar çakışmaz,
+tek istisna H11 Çarşamba'dır ve orada adlandırılmıştır.
 
 ### 5.2 Yayın saatleri
 
@@ -361,7 +413,8 @@ Piler kısaltmaları `content-calendar.md` §4'ten: P1 kırık huni · P2 Berich
 [ ] Hashtag 0-1
 [ ] Tek dil (karışık değil)
 [ ] Kullanıcı/müşteri SAYISI yok, "multi-tenant SaaS" yok
-[ ] Demo adresi: demo.interncrm.com  (crm-demo.ersah.in DEĞİL)
+[ ] Demo adresi: insan tıklayacaksa demo.interncrm.com/auth/signin, yalnız alan adı anılıyorsa
+    demo.interncrm.com  (crm-demo.ersah.in DEĞİL)
 [ ] Sonraki 60 dakika yorum yanıtlamaya müsait mi?
 ```
 
@@ -514,7 +567,7 @@ Kanonik örnekler (kopyala-yapıştır):
 
 ```
 https://interncrm.com/for-companies?utm_source=linkedin&utm_medium=page&utm_campaign=cta_button
-https://demo.interncrm.com/?utm_source=linkedin&utm_medium=profile&utm_campaign=featured_demo
+https://demo.interncrm.com/auth/signin?utm_source=linkedin&utm_medium=profile&utm_campaign=featured_demo
 https://interncrm.com/features?utm_source=linkedin&utm_medium=profile&utm_campaign=featured_features
 https://interncrm.com/pricing?utm_source=linkedin&utm_medium=profile&utm_campaign=featured_pricing
 ```
@@ -535,7 +588,7 @@ her LinkedIn yerleşimine **farklı bir iniş yolu** ver; böylece UTM olmadan d
 | Yerleşim | İniş yolu | Ayrışma mantığı |
 |---|---|---|
 | Sayfa custom button | `/for-companies` | Bu sayfaya başka kanaldan neredeyse hiç trafik gelmiyor |
-| Profil Featured — demo | `demo.interncrm.com` | Ayrı alan adı, ayrı sayım |
+| Profil Featured — demo | `demo.interncrm.com/auth/signin` | Ayrı alan adı, ayrı sayım |
 | Profil Featured — katalog | `/features` | — |
 | Profil Featured — fiyat | `/pricing` | ÖK3 sonrası; ayrıca en yüksek niyet sinyali |
 
@@ -568,7 +621,7 @@ Her satırın somut riski var. Bunlar "dikkatli kullanılacak" şeyler değil, *
 | **Sayfa gönderisini kişisel profilden boş paylaşmak** | Kendi yorumu olmayan paylaşım erişim almıyor; üstelik kişisel profili sayfanın megafonuna çevirir (§4.2 Kural 3) |
 | **Kullanıcı/müşteri sayısı yazmak veya ima etmek** | `/api/public/stats` bugün 3 mentor, 4 açık proje, 0 bekleyen aday. Zayıf sayı gösterilmez (`docs/landing-value-proposition.md` §4.3). Yuvarlamak, "büyüyen topluluk" demek de aynı yasağa girer |
 | **"Çok kiracılı SaaS" vaadi** | `MT_ENFORCE_ISOLATION=false`. Karşılanamayan performans vaadi hem sözleşme ihlali hem **UWG § 5** (yanıltıcı ticari beyan) riski. Satılabilir olan: tek kiracılı kurulum / self-host / pilot |
-| **`crm-demo.ersah.in` yazmak** | Eski adres; kodda hâlâ linkli ama ayrı PR ile düzeltiliyor. Tek geçerli demo adresi `https://demo.interncrm.com` |
+| **`crm-demo.ersah.in` yazmak** | Eski adres; koddaki son bağlantıları #2216 ile temizlendi. Tek geçerli demo adresi `https://demo.interncrm.com` |
 | **Autoposter hattının insan onayını atlaması** | Kategorik yayın yasağı: LinkedIn'e doğrudan istek yok, Telegram onay butonlarına ajan basmaz. İhlal görülürse **hat durdurulur** (`go-to-market.md` R10) |
 
 ---
@@ -577,8 +630,8 @@ Her satırın somut riski var. Bunlar "dikkatli kullanılacak" şeyler değil, *
 
 | Hafta | İş | Bitti kabul ölçüsü |
 |---|---|---|
-| H1 | Sayfayı bul, super admin ol, URL'i §0'a yaz | `LINKEDIN_PAGE_URL` dolu |
-| H1 | ÖK1: `/impressum` gerçek verilerle (#1371) | Placeholder yok |
+| H1 | **Sayfa var mı?** Me → Manage ile doğrula. Varsa: URL'i §0'a yaz, super admin ol, Website URL = `https://interncrm.com/imprint` **derhal**; Impressum hazır değilse sayfayı yayından kaldır. Yoksa: hafta 2'de açılır | `LINKEDIN_PAGE_URL` dolu **veya** "sayfa yok" yazılı olarak kayıtlı; yayında impressumsuz sayfa **kalmadı** |
+| H1 | ÖK1: `/imprint` gerçek verilerle (#1371) | Placeholder yok |
 | H1 | §1 denetim tablosunu baştan sona uygula | 15 satırın ≥13'ü yeşil |
 | H1 | Kişisel profil: headline (§3.1), About (§3.2), Featured 3 öğe (§3.3), Contact info Impressum | Profil "All-star" |
 | H2 | ÖK2: ≥3 ürün ekran görüntüsü (#1399); banner + logo export | Asset klasörü dolu |
@@ -608,3 +661,22 @@ Bu dokümandaki dış iddiaların üç sınıfı var; karar verirken sınıfı d
   (1.500 altı kal), haftalık frekans (Buffer ↔ van der Blom), en iyi saat (sabah ↔ akşam), dış link
   cezasının büyüklüğü (%18,8 ↔ %60), engagement benchmark'ları, Invite to follow kredi sayısı,
   anket %0,07. Bunların hiçbiri üzerine strateji kurulmaz; 4-6 haftalık kendi verinle karar ver.
+
+---
+
+## Açık sorular
+
+*2026-09-06 eleştiri turunda uygulanan düzeltmelerin bıraktığı açık uçlar. Her satır tek bir soru;
+cevaplandığında ilgili bölüme işlenir ve satır buradan silinir.*
+
+- **`LINKEDIN_PAGE_URL` hâlâ boş.** §0 artık bunu bir TODO değil hafta 1'in *belirleyici işi* olarak
+  tanımlıyor (sayfa var mı, yoksa hafta 2'de açılır), ama cevabı yalnız LinkedIn'de oturum açan kişi
+  verebilir. §2.6'daki üç iş (footer linki, README rozeti) bu cevap gelmeden başlayamaz.
+- Sayfa **zaten açıksa** ve Impressum alanı boşsa, bugün yayında olan ticari bir varlık § 5 DDG'yi
+  ihlal ediyor olabilir. §0 bunun için "derhal doldur ya da yayından kaldır" diyor; **ne kadar süredir
+  yayında olduğu** ve bir Abmahnung riskinin fiilen doğup doğmadığı bu dokümandan cevaplanamaz.
+- §5.1 artık konu belirlemiyor, takvimin haftalarını izliyor. Ama **H11 Çarşamba'nın EN olması**
+  (Faz 3 = DE+TR iken) bilinçli bir istisna olarak yazıldı; ikinci bir istisna gelirse kural
+  aşınır. Açık soru: faz dili kuralı "kitleye göre dil" olarak mı yeniden yazılmalı?
+- §1.1 tagline ve About artık `copy-bank.md` §8'e işaret ediyor; ama **Location alanı** hâlâ gerçek
+  ladungsfähige adrese bağlı ve o adres #1371 kapanmadan bilinmiyor.

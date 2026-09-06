@@ -1,5 +1,7 @@
 # İçerik takvimi — InternCRM dağıtım katmanı (12 hafta)
 
+> Durum: taslak (2026-09-06)
+
 > **Durum:** uygulama planı, 2026-09-06. Bu doküman **dağıtım** katmanını tarifler: ne zaman, hangi
 > kanala, hangi dilde, hangi metin. **On-site** katman (SEO, meta, ölçüm, dönüşüm) epic **#1360**
 > kapsamındadır ve burada tekrar edilmez — sadece ön koşul olarak referans verilir.
@@ -42,14 +44,17 @@ için ~5 saat ister. Kapasite 2-3 saat.
 
 **Karar:** gönderi sayısını değil, **izleme penceresi gerektiren gönderi sayısını** kısıyoruz.
 
-- **Şirket sayfası gönderileri izleme penceresi almaz.** Feed dağıtımının ~%5'i sayfalara gidiyor; o
-  saatin karşılığı yok. Sayfa bir **vitrin ve arşiv** katmanıdır: gelen kişi "bu ürün yaşıyor mu"
+- **Şirket sayfası gönderileri izleme penceresi almaz.** Feed dağıtımının büyük kısmı kişisel
+  profillere gidiyor; sayfaların organik erişimi 2024-2026 arasında düştü
+  (`linkedin-playbook.md` §3, üçüncü taraf kaynaklar — **yön tutarlı, katsayı çelişkili**; hiçbir
+  kaynakta doğrulanmış bir "%5" figürü yok, o yüzden nicelik yazmıyoruz). İzleme penceresine değecek
+  bir karşılığı yok. Sayfa bir **vitrin ve arşiv** katmanıdır: gelen kişi "bu ürün yaşıyor mu"
   sorusuna cevap arar, orada tartışma aramaz.
 - **Kişisel profilde haftada en fazla 2 "ana" gönderi** — ikisi de izleme penceresiyle.
 - **Üçüncü gönderi opsiyoneldir** ve düşük bahislidir (kısa build-in-public notu). Kapasite kalmadıysa
   atlanır ve bu bir başarısızlık değildir.
 
-### 1.2 Haftalık zaman bütçesi (hedef: ≤150 dakika)
+### 1.2 Haftalık zaman bütçesi (tavan: K1 = ~2-3 saat; bugünkü fiili plan ≈197 dk)
 
 | İş | Süre | Ne zaman | Kim |
 |---|---|---|---|
@@ -61,19 +66,33 @@ için ~5 saat ister. Kapasite 2-3 saat.
 | Ana gönderi #2 — ilk 60 dk penceresi | 20 dk | Aynı gün | Mehmet |
 | Şirket sayfası gönderisi (elle — sayfa API'si partner-gated) | 15 dk | Cuma | Mehmet |
 | Haftanın tek kanal işi (dizin kaydı, PR, outreach maili) | 30 dk | Değişken | Mehmet |
-| **Toplam** | **≈145 dk** | | |
+| Başkalarının gönderilerine yorum — 3 oturum × 10 dk (`linkedin-playbook.md` §6.3) | 30 dk | Değişken | Mehmet |
+| Hashtag akışında sayfa kimliğiyle yorum (`linkedin-playbook.md` §2.3) | 10 dk | Değişken | Mehmet |
+| Pazartesi metrik okuması M1-M5 (`linkedin-playbook.md` §7.1) | 10 dk | Pazartesi | Mehmet |
+| Haftalık elle çapraz okuma — buton tıklaması ↔ `/for-companies` (`linkedin-playbook.md` §7.3) | 10 dk | Cuma | Mehmet |
+| **Ara toplam (ham)** | **≈205 dk** | | |
+| **Karar: SP gönderisi iki haftada bire iner (−7,5 dk/hafta ort.)** | **−7,5 dk** | | |
+| **Karar: opsiyonel 3. gönderi 12 hafta boyunca kapalı** | **0 dk** | | |
+| **Toplam (uygulanan)** | **≈197 dk** | | |
 
-Opsiyonel 3. gönderi bütçeye **dahil değil**. Kapasite artarsa eklenir, azalırsa ilk düşen odur.
+**Bu tablo K1'i (haftada ~2-3 saat) hâlâ üst sınırında zorluyor ve bunu saklamıyoruz.** 197 dk ≈ 3,3
+saat, yani bant genişliğinin tavanı. Sıra bellidir ve §6 Y10 ile aynıdır: kapasite tutmazsa önce
+**yorum oturumu 30 → 20 dk**, sonra **SP gönderisi**, sonra **ana gönderi #2** düşer. Ana gönderi #1
+ve ilk 60 dakika penceresi en son düşen kalemlerdir.
+
+**Neden ham toplam 145 değil 205:** ilk sürüm yalnız *üretim* kalemlerini sayıyordu;
+`linkedin-playbook.md`'nun zorunlu ilan ettiği dört *dağıtım/ölçüm* kalemi (yorum oturumları, hashtag akışı, Pazartesi metriği,
+çapraz okuma) bütçeye hiç girmemişti. Sayılmayan iş, planlanmayan iştir.
 
 ### 1.3 Kanal / dil / format matrisi
 
 | Kanal | Sıklık | Gün + saat | Dil kuralı | Format |
 |---|---|---|---|---|
 | **Kişisel profil** (birincil kanal) | 2 ana + 0-1 opsiyonel / hafta | Çarşamba ve Perşembe/Cuma, **yerel 15:00-20:00** (Berlin) | Faza göre tek dil (§2). **Bir gönderi = tek dil**, karışık yazılmaz | 1.300-2.000 karakter, hook ilk **140** karaktere sığar (mobil kesme), 0-1 hashtag, link yok |
-| **Şirket sayfası** (`InternCRM`) | 1 / hafta | Cuma | Kişisel gönderiyle aynı dil, **yeniden yazılmış** — repost değil | Sürüm notu / özellik kartı / demo daveti. Custom button: "Visit website" |
+| **Şirket sayfası** (`InternCRM`) | **2 haftada 1** (bütçe kararı, §1.2) | Cuma | Kişisel gönderiyle aynı dil, **yeniden yazılmış** — repost değil | Sürüm notu / özellik kartı / demo daveti. Custom button: "Visit website" |
 | **GitHub deposu** | Sürekli | — | EN | Topics, homepage, README, Release notları. Kanal değil ama **her kanalın iniş noktası** |
-| **Awesome listeleri** | Tek seferlik | Hafta 4 (recruitment/hrtech), hafta 4+16 (selfhosted) | EN | PR |
-| **Yazılım dizinleri** (Capterra.de, GetApp, OMR, SoftwareAdvice) | Tek seferlik | Hafta 5-6 | DE + EN profil | Satıcı profili |
+| **Awesome listeleri** | Tek seferlik | Hafta 4 (recruitment/hrtech); **selfhosted: hafta 1'deki Release + 4 ay ≈ hafta 18** (sayaç Release'ten başlar, hafta 4'ten değil) | EN | PR |
+| **Yazılım dizinleri** (Capterra.de, GetApp, OMR, SoftwareAdvice) | Tek seferlik | **Hafta 5'te iki, hafta 6'da iki profil** (go-to-market §5 satır 4: efor M, R3: aynı anda en fazla 2 aktif kanal) | DE + EN profil | Satıcı profili |
 | **Show HN** | Tek seferlik | Hafta 6 **karar noktası** | EN | Başlık + demo linki + ilk yorumda bağlam |
 | **Doğrudan outreach** (Forum Mentoring e.V., digital-affin.de, Webrazzi) | Haftada ≤2 mail | Salı | Muhataba göre DE/TR/EN | E-posta |
 | **Product Hunt** | **12 hafta içinde YOK** | — | — | K9 gereği ertelendi |
@@ -93,15 +112,23 @@ pratikte ölü. Haftalık dönüşüm:
 
 Bir gönderi tek dilde yazılır. Faz sırası dili belirler:
 
+Bu tablo **§2'nin gerçek haftalık tablosundan** okunur ve dört dokümanın tek faz-dil kaynağıdır
+(`go-to-market.md` §4 aynı tabloyu tekrar eder):
+
 | Faz | Hafta | Birincil dil | Neden |
 |---|---|---|---|
-| Vitrin hazırlığı | 1-2 | — (yayın yok) | Kanallar kurulur, ilk iz atılır |
-| Open source + build-in-public | 3-6 | **EN** | GitHub / HN / awesome kitlesi İngilizce; site zaten İngilizce (lokalize rota yok — #1360 ön koşulu bu fazı bloklamaz) |
-| Persona B (yerleştirme yapan kurumlar) | 5-10 | **DE** | Praktikantenamt, dual-study koordinatörü, Forum Mentoring e.V. üyeleri |
-| Persona A (100-1000 çalışanlı işverenler) | 8-12 | **DE**, hafta 11-12'den itibaren **+TR** | DE/AT/CH işveren; TR işveren tarafı staj sezonu öncesi ısıtılır |
+| Faz 0 — Vitrin hazırlığı | **1-2** | — (yayın yok) | Kanallar kurulur, ilk iz atılır |
+| Faz 1 — Open source + build-in-public | **3-6** | **EN** | GitHub / HN / awesome kitlesi İngilizce; site zaten İngilizce (lokalize rota yok — #1360 ön koşulu bu fazı bloklamaz) |
+| Faz 2 — Persona B (yerleştirme yapan kurumlar) | **7-10** | **DE** | Praktikantenamt, dual-study koordinatörü, Forum Mentoring e.V. üyeleri |
+| Faz 3 — Persona A (100-1000 çalışanlı işverenler) | **11-12** | **DE + TR** | DE/AT/CH işveren; TR işveren tarafı staj sezonu öncesi ısıtılır |
 
-Fazlar üst üste biner (5-6 ve 8-10 çakışma haftaları): çakışma haftasında iki ana gönderi **iki farklı
-fazın** dilinde yazılır, aynı gün değil farklı günlerde yayınlanır.
+**Fazlar çakışmaz.** Önceki sürümde 5-6 ve 8-10 "çakışma haftası" ilan edilmişti ama tablo bu kuralı
+hiçbir haftada uygulamıyordu (5-6 tamamen EN, 8-10 tamamen DE); kural kaldırıldı. Kurumsal ağ işleri
+(Faz 2 outreach'i) Faz 1 haftalarında da arka planda yürür — bu bir yayın dili çakışması değil,
+*kanal işi* paralelliğidir.
+
+**Tek bilinçli istisna:** hafta 11 Çarşamba ana gönderisi (P6, üç dillilik/CI zanaatı) **EN** yazılır;
+kitlesi Faz 3 değil, Faz 1'in geliştirici kitlesidir. İstisna burada adlandırıldığı için kural sayılmaz.
 
 ---
 
@@ -110,32 +137,60 @@ fazın** dilinde yazılır, aynı gün değil farklı günlerde yayınlanır.
 Kısaltmalar: **KP** = kişisel profil · **SP** = şirket sayfası · **ÖK** = ön koşul.
 "Yayın yok" haftalarında LinkedIn gönderisi atılmaz; iş **altyapıdır**.
 
+### 2.0 Bu tablo tek kaynaktır — ve hangi metin nereye düşüyor
+
+**Gönderi konularının tek kaynağı aşağıdaki haftalık tablodur.** `linkedin-playbook.md` §5.1 artık
+konu belirlemez; orada yalnız format/asset/ön koşul kolonu vardır ve bu tabloya atıf yapar.
+
+Hazır metinler `copy-bank.md` §7'dedir. Bugünkü örtüşme **tam değildir** ve saklanmıyor:
+
+| Hafta | Ana gönderi (Çar) | Hazır metin | Ana gönderi (Per/Cum) | Hazır metin |
+|---|---|---|---|---|
+| 3 | Neden AGPL (P4, EN) | **yok** — hat yazar (§3.1 brief) | Veri modeli turu (P6/P1, EN) | **yok** — hat yazar |
+| 4 | Haftanın fragmanı, kısa (EN) | **yok** | Self-host carousel (P4, EN) | **yok** (iskelet: `copy-bank.md` §5 dev.to yazısı) |
+| 5 | 13 aşamalı huni (P1, EN) | **yok** — TR karşılığı `copy-bank.md` §7.1, EN'e yeniden yazılır | Aşama SLA'sı, kısa (P1, EN) | DE karşılığı `copy-bank.md` §7.6 |
+| 6 | Yazılabilir demo (P7, EN) | **yok** | Demo daveti, kısa (EN) | DE karşılığı `copy-bank.md` §7.8 (ön koşullu) |
+| 7 | Praktikantenamt carousel (P1/P2, DE) | **yok** | Çıkış nedeni taksonomisi, kısa (DE) | `copy-bank.md` §7.7 |
+| 8 | Wochenbericht (P2, DE) | **`copy-bank.md` §7.5** | Onay akışı, kısa (DE) | **yok** |
+| 9 | Veri sorumluluğu / self-host (P4, DE) | **yok** | Rol × endpoint matrisi, kısa (DE) | **yok** |
+| 10 | 16 Anbieter, 3 Preise (P5, DE) | **yok** (ÖK3 fiyat kapısı) | İş modeli cümlesi, kısa (DE) | **yok** |
+| 11 | Üç dillilik / CI (P6, **EN istisnası**) | **yok** | TR açılışı (P4, TR) | TR havuzundan seçilir (aşağı) |
+| 12 | Stajyerler yazdı (P3, DE) | EN sürümü `copy-bank.md` §7.10 — DE'ye **yeniden yazılır**, çevrilmez | Aynı hikâye (P3, TR) | TR havuzundan seçilir |
+
+**TR havuzu kuralı.** `copy-bank.md` §7.1-7.4 dört TR metni bir **havuzdur**, haftaya sabitlenmemiştir:
+takvim TR'yi yalnız hafta 11-12'de açar ve o iki haftada **iki** TR gönderisi vardır. Kural: hafta 11 ve
+12'nin TR gönderileri havuzdan seçilir; seçim haftanın temasını ezmez, temayı **belirler** — seçilen
+metin hangi pilere aitse o haftanın TR gönderisi odur. Havuzda kalan iki metin hafta 13+ için durur.
+
+**"Hazır metin yok" bir eksiklik değil, bir iş emridir:** o haftanın metnini Pazartesi brief'i + hat
+yazar (K6). Metin yazıldığında `copy-bank.md` §7'ye bölüm olarak eklenir ve bu tablo güncellenir.
+
 ### Faz 0 — Vitrin hazırlığı (hafta 1-2, yayın YOK)
 
 | Hafta | Tema | Ana içerik (kanal + dil) | Destek işler | Gereken asset | ÖK issue | Başarı ölçüsü |
 |---|---|---|---|---|---|---|
-| **1** | Ürünü bulunabilir yap | **Yayın yok.** GitHub deposunu vitrine çevir: `topics` ekle (`mentoring`, `internship`, `crm`, `self-hosted`, `open-source-alternative`, `nextjs`, `prisma`, `gdpr`), `homepage` alanına `https://interncrm.com`, description'ı "Mentor-Mentee CRM & Internship Management System" → mentee→staj→işe alım hunisini içeren bir cümleyle güncelle | **İlk git tag + GitHub Release** (`v0.156.22-beta` veya sonrası). Bu haftanın en önemli işi: awesome-selfhosted'ın 4 aylık sayacı CHANGELOG'dan değil bir **Release**'in varlığından başlıyor — bugün depoda 0 tag, 0 release var. Release gövdesi `CHANGELOG.md` + `/release-notes` üzerinden üretilir | Yok (metinsel iş) | Yok — **issue aç**: "GitHub Release + repo vitrini" | Depoda ≥1 Release görünür; topics sayfalarında (`github.com/topics/mentoring`) depo listeleniyor; GitHub Insights → Traffic'te referrer kaydı başlıyor |
-| **2** | Kanalları aç, hukuki kapıyı kapat | **Yayın yok.** LinkedIn şirket sayfası "InternCRM" adıyla açılır (desktop/iOS — Android desteklemiyor). Zorunlu alanlar: industry (B2B software), company size, overview, description, logo, website URL. Bu üçü (industry + size + overview) dolmadan **"Invite to follow" kullanılamaz** — sıfır takipçiden çıkışın tek organik aracı odur | `/impressum` doldurulur (**yayın öncesi sert blokaj**: § 5 DDG, ticari LinkedIn varlığı impressum yükümlüsü). Kişisel profil headline + banner. SP custom button "Visit website" → `interncrm.com/?utm_source=linkedin&utm_medium=page&utm_campaign=cta_button`. 3 hashtag: `#Praktikum #DualesStudium #Mentoring`. Autoposter'da **InternCRM hattı** kurulur (BCSIT hattından ayrı: farklı kitle, farklı ses, farklı kategoriler; Telegram onay adımı korunur) | Logo 400×400 PNG (açık **ve** koyu zeminde okunur — `src/app/icon.svg` türevi, opak zemin veya kontrast kenarlık), cover 1512×256 (sol-alt köşe logoya bırakılır) | **#1371** (impressum — sert blokaj) | Sayfa "complete" rozetini alır (LinkedIn: tam sayfalar haftalık ~%30 daha çok görüntüleme); "Invite to follow" açık; autoposter InternCRM hattı Telegram'a ilk önizlemeyi düşürüyor |
+| **1** | Ürünü bulunabilir yap | **Yayın yok.** GitHub deposunu vitrine çevir: `topics` ekle (`mentoring`, `internship`, `crm`, `self-hosted`, `open-source-alternative`, `nextjs`, `prisma`, `gdpr`), `homepage` alanına `https://interncrm.com`, description'ı "Mentor-Mentee CRM & Internship Management System" → mentee→staj→işe alım hunisini içeren bir cümleyle güncelle | **İlk git tag + GitHub Release** — numara sabit değildir: tag, o an bekleyen fragmanların türettiği en son sürümle atılır (`npm run check:release-fragments` çıktısının son satırı; bugün `v0.156.25-beta`). Bu haftanın en önemli işi: awesome-selfhosted'ın 4 aylık sayacı CHANGELOG'dan değil bir **Release**'in varlığından başlıyor — bugün depoda 0 tag, 0 release var. Release gövdesi `CHANGELOG.md` + `/release-notes` üzerinden üretilir | Yok (metinsel iş) | Yok — **issue aç**: "GitHub Release + repo vitrini" | Depoda ≥1 Release görünür; topics sayfalarında (`github.com/topics/mentoring`) depo listeleniyor; GitHub Insights → Traffic'te referrer kaydı başlıyor |
+| **2** | Kanalları **denetle ve tamamla**, hukuki kapıyı kapat | **Yayın yok.** LinkedIn şirket sayfası **denetlenir ve tamamlanır** (`linkedin-playbook.md` §1) — sayfa büyük olasılıkla **zaten açık**; hafta 1'in belirleyici işi onu bulmaktı. Yoksa bu hafta "InternCRM" adıyla açılır (sayfa oluşturma akışı masaüstü ve iOS uygulamasında var; Android istemcisinde bulunduğunu doğrulayan bir LinkedIn Help kaynağı **bulunamadı** — masaüstünden yap, iddiayı metne taşıma). Zorunlu alanlar: industry (B2B software), company size, overview, description, logo, website URL. Bu üçü (industry + size + overview) dolmadan **"Invite to follow" kullanılamaz** — sıfır takipçiden çıkışın tek organik aracı odur | `/imprint` doldurulur (**yayın öncesi sert blokaj**: § 5 DDG, ticari LinkedIn varlığı impressum yükümlüsü). Kişisel profil headline + banner. SP custom button "Visit website" → `https://interncrm.com/for-companies?utm_source=linkedin&utm_medium=page&utm_campaign=cta_button` (**ana sayfa değil** — `linkedin-playbook.md` §1.1 ve §7.3: `/for-companies`'e başka kanaldan neredeyse hiç trafik gelmediği için utm yakalama yokken (#1390) kanalı ayrıştıran tek proxy budur). Website URL alanı ayrı bir alandır: `https://interncrm.com/imprint`. 3 hashtag: `#Praktikum #DualesStudium #Mentoring`. Autoposter'da **InternCRM hattı** kurulur (BCSIT hattından ayrı: farklı kitle, farklı ses, farklı kategoriler; Telegram onay adımı korunur) | Logo 400×400 PNG (açık **ve** koyu zeminde okunur — `src/app/icon.svg` türevi, opak zemin veya kontrast kenarlık), cover 1512×256 (sol-alt köşe logoya bırakılır) | **#1371** (impressum — sert blokaj) | Sayfa "complete" rozetini alır (LinkedIn: tam sayfalar haftalık ~%30 daha çok görüntüleme); "Invite to follow" açık; autoposter InternCRM hattı Telegram'a ilk önizlemeyi düşürüyor |
 
 ### Faz 1 — Open source + build-in-public (hafta 3-6, dil: EN)
 
 | Hafta | Tema | Ana içerik (kanal + dil) | Destek gönderiler | Gereken asset | ÖK issue | Başarı ölçüsü |
 |---|---|---|---|---|---|---|
-| **3** | "Neden AGPL" | **KP / EN, metin+görsel (Çar):** Bir mentorluk CRM'ini neden AGPL-3.0-or-later ile açtık — kategoride 16 rakibin 13'ü her alıcıyı demo görüşmesine sokarken kaynak kodu göstermenin ne anlama geldiği. Kanıt: `LICENSE`, `docs/legal/licensing-strategy.md` | **KP / EN, uzun metin (Per):** "88 Prisma modeli ne işe yarar" — veri modelinin turu, `prisma/schema.prisma` üzerinden. **SP / EN (Cum):** depo linki + Release duyurusu | Depo README ekran görüntüsü; `prisma/schema.prisma` pipeline enum'unun sözdizimi renklendirilmiş kod görseli | Yok | GitHub Traffic'te LinkedIn referrer'ı görünür; depo yıldızı ≥1 artış; KP members reached temel çizgisi kurulur (bu ilk gerçek ölçüm haftası) |
+| **3** | "Neden AGPL" | **KP / EN, metin+görsel (Çar):** Bir mentorluk CRM'ini neden AGPL-3.0-or-later ile açtık — kategoride 16 rakibin 13'ü her alıcıyı demo görüşmesine sokarken kaynak kodu göstermenin ne anlama geldiği. Kanıt: `LICENSE`, `docs/legal/licensing-strategy.md` | **KP / EN, uzun metin (Per):** "Bir mentorluk programının veri modeli neye benzer" — veri modelinin turu, `prisma/schema.prisma` üzerinden. **Sayı başlıkta değil gövdede durur ve üretildiği komutla birlikte yazılır:** `grep -c '^model ' prisma/schema.prisma` → **92** (88 değil; doğrulanmış sayı tablosu `copy-bank.md` §0.1). **SP / EN (Cum):** depo linki + Release duyurusu | Depo README ekran görüntüsü; `prisma/schema.prisma` pipeline enum'unun sözdizimi renklendirilmiş kod görseli | Yok | GitHub Traffic'te LinkedIn referrer'ı görünür; depo yıldızı ≥1 artış; KP members reached temel çizgisi kurulur (bu ilk gerçek ölçüm haftası) |
 | **4** | Self-host edilebilirlik | **KP / EN, carousel PDF (Per):** "Bir mentorluk CRM'ini kendi sunucunda çalıştırmak" — 8-12 slayt: Docker imajı, MySQL, `prisma db push`, env değişkenleri, sağlık kontrolü | **KP / EN, kısa (Çar):** haftanın merge'lenen sürüm fragmanından tek bir teknik detay. **SP / EN (Cum):** `/source` sayfasına davet | Carousel PDF (1080×1350), `docker-compose` örneği kod görseli | Yok — **issue aç**: "üretim için self-host yolu (`docs/self-hosting.md` + üretim compose)". Repoda bugün sadece `docker-compose.dev.yml` var ve kendi başlık yorumu "NOT used in production or CI" diyor | **awesome-recruitment** ve **awesome-hrtech** PR'ları açılır (her biri 15 dk **zaman kutusu**, takip yatırımı yok, 8 hafta içinde merge gelmezse kanal kapanır). Ölçü: PR açıldı + carousel'in dwell time'ı text-only temel çizgisinin üstünde |
-| **5** | Kırık huni (P1 açılışı) | **KP / EN, metin+görsel (Çar):** "13 aşamalı bir huni neden bir elektronik tabloda tutulamaz" — `src/lib/pipeline.ts`'teki 11 on-path + 2 off-path aşama, `nextOnPathStatus`'un neden ham diziyi indeksleyemediği (devam eden stajı "yarım bıraktı"ya göndermesi) | **KP / EN, kısa (Per):** aşama SLA'sı — `prisma/schema.prisma` `StageSla` (satır 186), takvim günü / iş günü tercihi. **SP / EN (Cum):** `/features` kartı | Pipeline ekran görüntüsü (demo verisinden — **gerçek veri asla**, `docs/DATA_ACCESS_POLICY.md`), `ON_PATH_STATUSES` kod görseli | **#1399** (ürün ekran görüntüsü seti) | Demo'da `/admin` pipeline sayfası görüntülemeleri; GitHub Traffic'te "unique visitors" haftalık artış; Persona B kanal işine paralel: **Capterra.de + GetApp + OMR Reviews + SoftwareAdvice satıcı profilleri açılır** |
-| **6** | Yazılabilir demo + **Show HN karar noktası** | **KP / EN, uzun metin (Çar):** "Demo'yu yazılabilir bırakmak" — her düğmesi 403 dönen bir demo hiçbir şey göstermez; `src/lib/demoMode.ts` `DEMO_BLOCKED_WRITES` (satır 55) yalnızca üç kategoriyi reddediyor: hesap ele geçirme/kilitleme, demo dışına erişim, keyfi dosya depolama. Reset bir **operasyonel iş**, HTTP endpoint'i değil — `prisma/reset-demo.mjs` adı `_demo` ile bitmeyen bir veritabanına dokunmayı reddediyor ve `infra/test/reset-demo-guard.test.sh` bunu CI'da doğruluyor | **KP / EN, kısa (Per):** demo daveti (link gövdede değil — profil website alanında). **SP / EN (Cum):** `docs/DEMO.md` özeti | Demo'da üç rolün ekran görüntüsü (admin/mentor/mentee) | **Show HN ön koşulları:** (a) demo'da **tek tıkla rol girişi** — issue aç; bugün `/demo` kimlikleri tabloda gösterip elle yazdırıyor, HN kuralı tam bunu hedefliyor ("without barriers such as signups or emails"); (b) **#1362/#1376/#1378** OG/Twitter kartı — paylaşılan her link bugün önizlemesiz gri kutu | **KARAR:** iki ön koşul da kapandıysa Show HN hafta 6 sonunda ateşlenir (EN, Mehmet'in kendi hesabı, tek gönderim, sonrasında saatlerce yorumda). Kapanmadıysa **ertelenir** — K9. Ölçü: ön sayfa değil; depo yıldızı, demo'da rol bazlı oturum, `/features` + `/trust` görüntülemeleri |
+| **5** | Kırık huni (P1 açılışı) | **KP / EN, metin+görsel (Çar):** "13 aşamalı bir huni neden bir elektronik tabloda tutulamaz" — `src/lib/pipeline.ts`'teki 11 on-path + 2 off-path aşama, `nextOnPathStatus`'un neden ham diziyi indeksleyemediği (devam eden stajı "yarım bıraktı"ya göndermesi) | **KP / EN, kısa (Per):** aşama SLA'sı — `prisma/schema.prisma` `StageSla` (satır 186), takvim günü / iş günü tercihi. **SP / EN (Cum):** `/features` kartı | Pipeline ekran görüntüsü (demo verisinden — **gerçek veri asla**, `docs/DATA_ACCESS_POLICY.md`), `ON_PATH_STATUSES` kod görseli | **#1399** (ürün ekran görüntüsü seti) | Demo'da `/admin` pipeline sayfası görüntülemeleri; GitHub Traffic'te "unique visitors" haftalık artış; Persona B kanal işine paralel: **Capterra.de + GetApp satıcı profilleri açılır** (kalan iki profil — OMR Reviews + SoftwareAdvice — hafta 6'da; go-to-market §5 satır 4 bu işi **M = yarım–1 gün** olarak fiyatlıyor ve R3 aynı anda en fazla 2 aktif kanal diyor, dördü tek 30 dakikalık kutuya sığmaz) |
+| **6** | Yazılabilir demo + **Show HN karar noktası** | **KP / EN, uzun metin (Çar):** "Demo'yu yazılabilir bırakmak" — her düğmesi 403 dönen bir demo hiçbir şey göstermez; `src/lib/demoMode.ts` `DEMO_BLOCKED_WRITES` (satır 55) yalnızca üç kategoriyi reddediyor: hesap ele geçirme/kilitleme, demo dışına erişim, keyfi dosya depolama. Reset bir **operasyonel iş**, HTTP endpoint'i değil — `prisma/reset-demo.mjs` adı `_demo` ile bitmeyen bir veritabanına dokunmayı reddediyor ve `infra/test/reset-demo-guard.test.sh` bunu CI'da doğruluyor | **KP / EN, kısa (Per):** demo daveti (link gövdede değil — profil website alanında). **SP / EN (Cum):** `docs/DEMO.md` özeti | Demo'da üç rolün ekran görüntüsü (admin/mentor/mentee) | **Show HN ön koşulları:** (a) ~~demo'da tek tıkla rol girişi~~ — **kapandı (2026-09-06)**: `demo-quick-login` bloğu shipping (`src/app/auth/signin/SignInClient.tsx:246`, üç rol butonu 258-263; `e2e/landing-demo-cta.spec.ts:37` doğruluyor). HN'in "without barriers such as signups or emails" kuralı bugün karşılanıyor, issue açılmaz; (b) **#1362/#1376/#1378** OG/Twitter kartı — paylaşılan her link bugün önizlemesiz gri kutu. **Kalan tek ön koşul (b)'dir** | **KARAR:** kalan ön koşul (OG kartları) kapandıysa Show HN hafta 6 sonunda ateşlenir (EN, Mehmet'in kendi hesabı, tek gönderim, sonrasında saatlerce yorumda). Kapanmadıysa **ertelenir** — K9. Ölçü: ön sayfa değil; depo yıldızı, demo'da rol bazlı oturum, `/features` + `/trust` görüntülemeleri |
 
-### Faz 2 — Persona B: yerleştirme yapan kurumlar (hafta 5-10, dil: DE)
+### Faz 2 — Persona B: yerleştirme yapan kurumlar (hafta 7-10, dil: DE)
 
 | Hafta | Tema | Ana içerik (kanal + dil) | Destek gönderiler | Gereken asset | ÖK issue | Başarı ölçüsü |
 |---|---|---|---|---|---|---|
 | **7** | Praktikumsverwaltung | **KP / DE, carousel PDF (Çar):** "Was ein Praktikantenamt eigentlich in Excel verwaltet" — bir Praktikantenamt'ın elektronik tabloda tuttuğu 13 sütun, ve her birinin üründeki karşılığı. Bu, SEO araştırmasının **en zayıf rakipli** terimi: ilk 5'te tek bir gerçek ürün pazarlama sayfası yok | **KP / DE, kısa (Per):** çıkış nedeni taksonomisi — bir stajın neden yarım kaldığını kaydetmezsen ertesi yıl aynı hatayı yaparsın. **SP / DE (Cum):** `/for-companies`'e davet | Pipeline carousel'inin **Almancası** (aynı ekran, `?lang=de` çerezi ile), 8-12 slayt | **#1360** (lokalize rota + hreflang) — **not:** LinkedIn gönderisi bu blokaja tabi **değil** (gönderi native, siteye link yok); blokaj yalnızca `/de/praktikumsverwaltung` iniş sayfasını erteler | KP DE gönderisinde members reached; Almanca yorum sayısı (dil sinyalinin tuttuğunun kanıtı); **Forum Mentoring e.V.** (`https://forum-mentoring.de/`, ~120 üye, tam Persona B) üyelik/etkinlik takvimi incelenir ve ilk temas maili yazılır |
 | **8** | Berichtsheft / haftalık rapor | **KP / DE, metin+görsel (Çar):** "Wochenbericht mit Freigabe — was ein Berichtsheft-Tool nicht abdeckt". Ürün kanıtı: `prisma/schema.prisma` `WeeklyReport` (satır 2711) — `summary`, `hoursSpent`, `blockers`, `status`, `mentorComment`, `reviewedById`, `reviewedAt`; `@@unique([relationId, weekStart])` haftada tek rapor garantisi; `WeeklyReportReminder` teslimat idempotency'si. **HUKUKİ SINIR:** BBiG anlamında IHK'ya kabul ettirilebilir bir *Ausbildungsnachweis* olduğu **iddia edilmez** — "Berichtsheft-benzeri haftalık rapor onayı" denir | **KP / DE, kısa (Per):** onay akışının kendisi — raporu bir işe alım hunisine bağlamak, ücretsiz Berichtsheft araçlarının yapmadığı tek şey. **SP / DE (Cum):** `/weekly-reports` özellik kartı | Haftalık rapor + mentor onayı ekran görüntüsü (demo verisi), `WeeklyReport` şema kesiti | Yok | **digital-affin.de**'nin "Top 10+ digitales Berichtsheft" listesine editöryel temas maili gönderilir (SERP'te kendin sıralanmak yerine sıralanan sayfanın içinde ol). Ölçü: mail gönderildi + yanıt; DE gönderinin kaydetme (save) sayısı |
-| **9** | DSGVO = kod görünür + kendi sunucun | **KP / DE, uzun metin (Çar):** "DSGVO-konform, weil du es selbst hostest" — bir vaat ile bir kanıt arasındaki fark. Ürün kanıtı: `/trust` sayfası, `docs/pii-access-lifecycle.md`, `docs/security-audit-playbook.md`, AGPL deposu. **K3 UYARISI:** bu gönderide çok kiracılı SaaS vaadi **yok**; satılan tek kiracılı kurulum / self-host / pilot | **KP / DE, kısa (Per):** rol × endpoint erişim matrisi (`docs/role-access-matrix.md`) — güvenliği anlatmanın en sıkıcı ve en ikna edici yolu. **SP / DE (Cum):** `/trust` daveti | `/trust` sayfası ekran görüntüsü, rol matrisi tablosu görseli | Yok | Persona B'de ilk **nitelikli konuşma** (bir kurumdan gelen soru/demo talebi) hedefi bu hafta açılır. Ölçü: 1+ doğrudan mesaj veya mail |
-| **10** | Fiyat gizleme (P5 açılışı) | **KP / DE, carousel PDF (Çar):** "16 Anbieter, 3 Preise" — `docs/research/competitive-analysis-2026-08.md` bulgusu: incelenen 16 satıcının yalnızca 3'ü kullanılabilir rakam yayımlıyor, 13'ü her alıcıyı demo görüşmesine sokuyor, 7'sinde ne ücretsiz sürüm ne deneme var. Kategorinin giriş noktası ~5.000-10.000 USD/yıl | **KP / DE, kısa (Per):** "mentor ve mentee tarafı sonsuza kadar ücretsiz — parayı yetenek arayan taraf öder" iş modeli cümlesi. **SP / DE (Cum):** `/pricing` yayındaysa ona davet, değilse `/features` | Fiyat karşılaştırma carousel'i (rakip adları **verilir**, rakamlar yalnızca yayımlanmış olanlar için) | **#1403** (`/pricing` sayfası). **Yayında değilse** bu gönderi yine atılır ama CTA `/features`'a gider — fiyat sayfası olmayan bir "fiyat şeffaflığı" gönderisi ikiyüzlü olur, o yüzden metinde planlanan fiyatlar (Community €0 / Program €149 / Program Plus €399 / Enterprise €749, birim: **aylık aktif eşleşmiş çift**) açıkça "planlanan, henüz yayında değil" diye yazılır | En yüksek etkileşim beklenen hafta (kategorinin en çok şikâyet edilen davranışı). Ölçü: yorum sayısı; #1403'ün önceliğinin yükselmesi |
+| **9** | Veri sorumluluğu: kod görünür, sunucu sizin | **KP / DE, uzun metin (Çar):** "Sie hosten selbst — die Verarbeitung bleibt in Ihrer Infrastruktur und in Ihrer Verantwortung" — bir uyum **beyanı** ile bir **mekanizma** arasındaki fark. **Kayıtsız şartsız "DSGVO-konform" denmez** (`go-to-market.md` §3.3 yasak tablosu: uyumu operatör kurar, ürün kurmaz; UWG § 5 riski). Ürün kanıtı: `/trust` sayfası, `docs/pii-access-lifecycle.md`, `docs/security-audit-playbook.md`, AGPL deposu. **K3 UYARISI:** bu gönderide çok kiracılı SaaS vaadi **yok**; satılan tek kiracılı kurulum / self-host / pilot | **KP / DE, kısa (Per):** rol × endpoint erişim matrisi (`docs/role-access-matrix.md`) — güvenliği anlatmanın en sıkıcı ve en ikna edici yolu. **SP / DE (Cum):** `/trust` daveti | `/trust` sayfası ekran görüntüsü, rol matrisi tablosu görseli | Yok | Persona B'de ilk **nitelikli konuşma** (bir kurumdan gelen soru/demo talebi) hedefi bu hafta açılır. Ölçü: 1+ doğrudan mesaj veya mail |
+| **10** | Fiyat gizleme (P5 açılışı) | **KP / DE, carousel PDF (Çar):** "16 Anbieter, 3 Preise" — `docs/research/competitive-analysis-2026-08.md` bulgusu: incelenen 16 satıcının yalnızca 3'ü kullanılabilir rakam yayımlıyor, 13'ü her alıcıyı demo görüşmesine sokuyor, 7'sinde ne ücretsiz sürüm ne deneme var. Kategorinin giriş noktası ~5.000-10.000 USD/yıl | **KP / DE, kısa (Per):** "mentor ve mentee tarafı sonsuza kadar ücretsiz — parayı yetenek arayan taraf öder" iş modeli cümlesi. **SP / DE (Cum):** `/pricing` yayındaysa ona davet, değilse `/features` | Fiyat karşılaştırma carousel'i (rakip adları **verilir**, rakamlar yalnızca yayımlanmış olanlar için) | **#1403** (`/pricing` sayfası) — bu gönderi **fiyat iddiası taşıdığı için** playbook ÖK3'ün kapsamındadır; ÖK3 "hiç gönderi yayınlanmaz" anlamına gelmez, yalnız fiyat iddiası içeren metinleri kapatır (`linkedin-playbook.md` §0). **Yayında değilse** bu gönderi yine atılır ama CTA `/features`'a gider — fiyat sayfası olmayan bir "fiyat şeffaflığı" gönderisi ikiyüzlü olur, o yüzden metinde planlanan fiyatlar (Community €0 / Program €149 / Program Plus €399 / Enterprise €749, birim: **aylık aktif eşleşmiş çift**) açıkça "planlanan, henüz yayında değil" diye yazılır | En yüksek etkileşim beklenen hafta (kategorinin en çok şikâyet edilen davranışı). Ölçü: yorum sayısı; #1403'ün önceliğinin yükselmesi |
 
-### Faz 3 — Persona A: 100-1000 çalışanlı işverenler (hafta 8-12, dil: DE, hafta 11-12'den +TR)
+### Faz 3 — Persona A: 100-1000 çalışanlı işverenler (hafta 11-12, dil: DE + TR)
 
 | Hafta | Tema | Ana içerik (kanal + dil) | Destek gönderiler | Gereken asset | ÖK issue | Başarı ölçüsü |
 |---|---|---|---|---|---|---|
@@ -146,7 +201,7 @@ Kısaltmalar: **KP** = kişisel profil · **SP** = şirket sayfası · **ÖK** =
 
 | Ne zaman | İş | Neden burada |
 |---|---|---|
-| Hafta ~18-20 | **awesome-selfhosted PR'ı** (`software/interncrm.yml`, ilk tag `Human Resources Management (HRM)`) | Hafta 1'de atılan Release'ten **4 ay sonra**. Kategori bugün 3 kayıtlı ve ince; AGPL-3.0 kabul ediliyor (MintHCM emsali). **Ön koşul:** üretim self-host yolu (hafta 4'te açılan issue) — "working installation instructions" kriteri. **AJAN UYARISI:** o repo CONTRIBUTING'i "Machine/LLM-generated contributions ... will result in a ban" diyor; PR elle doğrulanmadan gönderilmez |
+| **Hafta ~18** (hafta 1'deki Release + 4 ay; sayaç Release'ten başlar) | **awesome-selfhosted PR'ı** (`software/interncrm.yml`, ilk tag `Human Resources Management (HRM)`) | Hafta 1'de atılan Release'ten **4 ay sonra**. Kategori bugün 3 kayıtlı ve ince; AGPL-3.0 kabul ediliyor (MintHCM emsali). **Ön koşul:** üretim self-host yolu (hafta 4'te açılan issue) — "working installation instructions" kriteri. **AJAN UYARISI:** o repo CONTRIBUTING'i "Machine/LLM-generated contributions ... will result in a ban" diyor; PR elle doğrulanmadan gönderilmez |
 | Hafta 13+ (koşullu) | **Product Hunt** self-hunt | K9 + ön koşullar: #1388/#1390 ölçüm, #1403 `/pricing`, #1399 görsel, #1362/#1376/#1378 OG, ve **200+ kişilik organik ön ilgi** (upvote istemek kategorik yasak, sonradan telafi edilemez) |
 | Hafta 6+ | LinkedIn **Newsletter** — sayfa 150 takipçiyi geçince | Bülten feed algoritmasını atlayıp push + e-posta ile gidiyor. Kişisel profilden bugün de açılabilir; sayfa bülteni 150 takipçi sonrası |
 
@@ -202,7 +257,7 @@ Geri bakışın çıktısı bu dokümana **işlenir** (takvim canlı bir doküma
 | Fragman yok (docs/CI) | İçerik yok. Zorlama | — | — |
 
 **Sayı gösterme kuralı burada da geçerlidir (K2):** "N. sürüm", "X özellik", "Y kullanıcı" gibi ifadeler
-yalnızca sayı gerçekten güçlüyse kullanılır. `0.156.22-beta` bir sürüm numarası olarak güçlü değil —
+yalnızca sayı gerçekten güçlüyse kullanılır. `0.156.25-beta` gibi bir sürüm numarası güçlü değil —
 "beta" etiketi dürüsttür ve saklanmaz, ama gönderinin başlığı olmaz.
 
 ---
@@ -271,7 +326,7 @@ abartılmaz — abartılırsa aynı doğrulanabilirlik aleyhe döner.
 |---|---|---|---|---|
 | 4.1 | "Neden AGPL, neden çift lisans" | Uzun metin | EN | `docs/legal/licensing-strategy.md` |
 | 4.2 | "Bir mentorluk CRM'ini kendi sunucunda çalıştırmak" — imaj, MySQL, `db push`, env, health check | Carousel | EN/DE | `Dockerfile`, `.env.example`, `/api/health` |
-| 4.3 | "DSGVO-konform, weil du es selbst hostest" — vaat ile kanıt arasındaki fark | Uzun metin | DE | `/trust`, `docs/pii-access-lifecycle.md` |
+| 4.3 | "Selbst hosten heißt: die Verarbeitung bleibt bei Ihnen" — uyum **beyanı** ile **mekanizma** arasındaki fark. Kayıtsız şartsız "DSGVO-konform" yasak (`go-to-market.md` §3.3) | Uzun metin | DE | `/trust`, `docs/pii-access-lifecycle.md` |
 | 4.4 | "KVKK uyumu için kodu görebilmek" — TR karşılığı, TR SERP'inde bu eksen boş | Metin | TR | Aynı |
 | 4.5 | "Rol × endpoint erişim matrisi" — güvenliği anlatmanın en sıkıcı, en ikna edici yolu | Tablo görseli | EN/DE | `docs/role-access-matrix.md` |
 | 4.6 | "Bir güvenlik denetimi nasıl yürütülür" — playbook'un kendisi açık | Metin | EN | `docs/security-audit-playbook.md` |
@@ -330,9 +385,9 @@ Faz dilini piler seçimi belirlemez; piler faza **hizmet eder**:
 
 | Faz | Baskın pilerler | Destek |
 |---|---|---|
-| Hafta 3-6 (OSS/BIP, EN) | P4, P7, P6 | P1 |
-| Hafta 5-10 (Persona B, DE) | P1, P2 | P4, P5 |
-| Hafta 8-12 (Persona A, DE/TR) | P5, P3 | P1, P6 |
+| Faz 1 — hafta 3-6 (OSS/BIP, EN) | P4, P7, P6 | P1 |
+| Faz 2 — hafta 7-10 (Persona B, DE) | P1, P2 | P4, P5 |
+| Faz 3 — hafta 11-12 (Persona A, DE+TR) | P5, P3 | P1, P6 |
 
 Aynı piler **üst üste iki hafta ana gönderi olamaz** — tekrar, van der Blom'un ölçtüğü içerik
 yorgunluğu etkisini (−%45'e kadar) hızlandırır.
@@ -351,7 +406,7 @@ yorgunluğu etkisini (−%45'e kadar) hızlandırır.
 
 | Pencere | Kabaca ne zaman | Kimin acısı yüksek | Hangi mesaj karşılık bulur | Bu takvimdeki hafta |
 |---|---|---|---|---|
-| **Ausbildung başvuru sezonunun ortası** | Sonbahar — bir sonraki Ağustos/Eylül'de başlayacak Ausbildungsjahr için başvurular bu dönemde toplanır | Ausbildungsleiter, Praktikantenamt: elinde yüzlerce başvuru, elektronik tabloda takip | **P1 kırık huni**, aşama SLA'sı, çıkış nedeni | 5, 7 |
+| **Ausbildung başvuru sezonunun ortası** | Sonbahar — bir sonraki Ağustos/Eylül'de başlayacak Ausbildungsjahr için başvurular bu dönemde toplanır | Ausbildungsleiter, Praktikantenamt: elinde yüzlerce başvuru, elektronik tabloda takip | **P1 kırık huni**, aşama SLA'sı, çıkış nedeni | 5 (EN), 7 (DE) |
 | **Wintersemester başlangıcı** (Ekim) | Ekim başı | Üniversite kariyer merkezleri, dual-study koordinatörleri: yeni kohort, yeni eşleştirme dalgası | **P1 + P4** (DSGVO/self-host — kamu kurumunda satın alma tetikleyicisi) | 7, 9 |
 | **Berichtsheft yorgunluğu** | Dönem içi, ilk 6-8 haftadan sonra | Ausbilder: haftalık raporlar birikti, kimse onaylamadı | **P2 Berichtsheft** | 8 |
 | **Bütçe planlama dönemi** | Sonbahar sonu — bir sonraki yılın bütçesi yapılır | Program sorumlusu: satıcı fiyatı bulamıyor, bütçe kalemi yazamıyor | **P5 fiyat gizleme** — yılın en iyi zamanlaması | 10 |
@@ -393,7 +448,7 @@ esnetilmez. Bir gönderiyi kaçırmanın maliyeti bir haftadır; kırık bir ür
 | **Y4** | **Sayı zayıf** | Gönderi bir sayı içeriyor ve o sayı bugün zayıf (`/api/public/stats`: 3 mentor, 4 açık proje, 0 bekleyen aday) | **Sayı çıkarılır, gönderi kalır.** Sayıyı güçlendirmek için beklenmez, uydurulmaz, ima edilmez, "yüzlerce" gibi belirsizleştirilmez (K2, `docs/landing-value-proposition.md` §4.3) | Sayı gerçekten güçlendiğinde |
 | **Y5** | **Vaat ürünü aşıyor** | Metinde çok kiracılı SaaS, self-servis kaydol-kullan, IHK-geçerli Ausbildungsnachweis, MÜDEK/YÖKAK raporlama, OBS/BİLSİS entegrasyonu geçiyor | Gönderi **yeniden yazılır** — bunların hiçbiri bugün yok (K3 ve §2 hafta 8 notu). Yayınlanmaz | Özellik gerçekten shipping olduğunda (fragman + `src/lib/features.ts` kaydı ile) |
 | **Y6** | **İlk 60 dakika müsait değil** | Yayın saatinden sonraki 60 dk boyunca yorumlara erişilebilir olunmayacak | **O gönderi yayınlanmaz**, ertesi güne veya haftaya kayar. İlk saatte ölen gönderi toparlanmıyor; boşa harcanmış bir fikirdir | Müsait bir gün |
-| **Y7** | **Hukuki kapı açık** | `/impressum` eksik (#1371) veya iletişim/veri sorumlusu hâlâ "operatör tarafından doldurulacak" | Ticari LinkedIn varlığı **yayına açılmaz** (§ 5 DDG, Abmahnung riski) | Impressum tamamlandığında |
+| **Y7** | **Hukuki kapı açık** | `/imprint` eksik (#1371) veya iletişim/veri sorumlusu hâlâ "operatör tarafından doldurulacak" | Ticari LinkedIn varlığı **yayına açılmaz** (§ 5 DDG, Abmahnung riski) | Impressum tamamlandığında |
 | **Y8** | **Metin gerçeği doğrulanmadı** | Gönderi bir dış kural/limit/ölçü iddia ediyor ama URL yok, ya da bir ürün iddiası var ama dosya yolu yok | Gönderi durur, kanıt bulunur veya iddia çıkarılır | Kanıt eklendiğinde |
 | **Y9** | **Gerçek veri sızma riski** | Ekran görüntüsü preview/prod ortamından alınmış | Görsel çöpe. Tüm görseller **demo veya lokal sentetik veriden** alınır (`docs/DATA_ACCESS_POLICY.md`) | Yeni görsel demo'dan alındığında |
 | **Y10** | **Kapasite yok** | Hafta 2-3 saatlik bütçeyi karşılamıyor (yoğun sprint, tatil, ürün krizi) | **Sıklık düşer, kalite düşmez.** Sırayla düşen: opsiyonel 3. gönderi → SP gönderisi → ana #2. Ana #1 en son düşer | Kapasite döndüğünde. Kaçırılan hafta telafi edilmez, üst üste yayın yapılmaz |
@@ -430,3 +485,26 @@ demo.interncrm.com'da 25+ demo girişi · 5+ nitelikli mentor/işveren konuşmas
 
 **Takipçi sayısı ve impression tek başına başarı sayılmaz.** Bu takvimin tek gerçek başarı ölçüsü,
 hafta 12 sonunda ürünle ilgili **konuşmaya girmiş nitelikli insan sayısıdır**.
+
+---
+
+## Açık sorular
+
+*2026-09-06 eleştiri turunda uygulanan düzeltmelerin bıraktığı açık uçlar. Her satır tek bir soru;
+cevaplandığında ilgili bölüme işlenir ve satır buradan silinir.*
+
+- §1.2 bütçesi düzeltildikten sonra **197 dakika** çıkıyor ve bu, K1'in "~2-3 saat" tavanının üst
+  ucunda. SP gönderisi iki haftada bire indirildi, opsiyonel 3. gönderi kapatıldı; buna rağmen bant
+  dolu. Açık soru: **ana gönderi sayısı 2'den 1'e mi inmeli?** Karar verilmedi, çünkü bu takvimin
+  tamamını (12 hafta × 2 ana gönderi) yeniden yazmayı gerektirir. Ölçü: hafta 4 geri bakışında fiili
+  harcanan saat 3'ü aşıyorsa ana gönderi sayısı düşer.
+- §2.0 eşleme tablosundaki "hazır metin **yok**" satırları (hafta 3, 4, 6, 9, 10, 11 Çar) hâlâ boş.
+  "Kopyala-yapıştır, gönder" vaadi ilk yayın haftasında bu yüzden **çalışmıyor**; metinler Pazartesi
+  brief'i + hat tarafından yazılacak. Açık soru: hafta 3'ün iki metni yayın haftasından önce mi
+  yazılmalı (güvenli) yoksa hattın ilk gerçek testi mi olmalı (hızlı)?
+- Hafta 2'deki "Android istemcisinde sayfa açılamıyor" iddiası **kaynaksız olduğu için çıkarıldı**;
+  yerine "masaüstünden yap" talimatı kondu. Doğrulanmış bir LinkedIn Help kaynağı bulunursa iddia
+  kaynağıyla geri konabilir.
+- §5 sezon tablosunun tamamı hâlâ **varsayım** (dokümanın kendi güven notu). Faz aralıkları 7-10/11-12
+  olarak sabitlendiğinde tablodaki hafta atıfları da kaydı; ilk ölçüm dönemine kadar bu hizalama
+  doğrulanmış sayılmaz.

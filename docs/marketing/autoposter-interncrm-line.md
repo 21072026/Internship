@@ -1,5 +1,7 @@
 # Autoposter — InternCRM hattı (işletim dokümanı)
 
+> Durum: taslak (2026-09-06)
+
 > **Durum:** uygulama sözleşmesi, 2026-09-06. Bu doküman `autoposter.ersah.in` üzerinde açılacak
 > **ikinci hattın** — InternCRM hattının — kimliğini, kategori setini, fikir şemasını, tekrar
 > engelleme kayıtlarını, görsel politikasını ve yayın yasağını tanımlar.
@@ -56,9 +58,11 @@ varsayılanından değil:
 | **EN** | ~%25 | Open source / self-host / GitHub / HN kitlesi | Build-in-public, teknik, mühendis-mühendise. Pazarlama sıfatı yok |
 | **TR** | ~%15 | TR işveren tarafı ve TR yazılım/kariyer topluluğu | **Kurucu sesi** — birinci tekil, "bunu neden böyle yaptım". Tek "ben" konuşan dil budur |
 
-Faz sırası (`content-calendar.md` §1.5) bu payları haftalık olarak eğer: hafta 3-6 EN ağırlıklı,
-hafta 5-10 DE ağırlıklı, hafta 11-12'den itibaren TR devreye girer. Yukarıdaki oran **12 haftanın
-toplamı** için geçerlidir, tek bir hafta için değil.
+Faz sırası (`content-calendar.md` §1.5 — dört dokümanın tek faz-dil kaynağı) bu payları haftalık
+olarak eğer: **hafta 1-2 yayın yok · 3-6 EN · 7-10 DE · 11-12 DE+TR** (tek istisna hafta 11 Çarşamba:
+EN zanaat gönderisi). Yukarıdaki oran **12 haftanın toplamı** için geçerlidir, tek bir hafta için
+değil — ve `go-to-market.md` §5'teki kanal matrisi 9/10 numaralı satırların dil hücresinde aynı
+dizilimi taşır (matris artık "DE + TR" demiyor; ilk fazın tamamı EN'dir).
 
 ### 2.2 Ton kuralları
 
@@ -100,7 +104,7 @@ IT-Infrastruktur | Compliance | Mitarbeiter-Awareness` setinin InternCRM karşı
 | `Mentoring-Programme` | P3 | Mentor ↔ mentee eşleştirmesi, etkileşim günlüğü, mentorun imzasının ne anlama geldiği, mentorluk anlaşması kapsamında koda katkı hikâyesi | Koçluk/gelişim metodolojisi dersleri (rakiplerin durduğu yer orası), "kültür dönüşümü" söylemi |
 | `Recruiting-Pipeline` | P1 (işe alım ucu) | 13 aşamalı huni, 2 aşamanın **çıkış** olması ve bunun başarısızlık olmaması, çıkış nedeni taksonomisi, kör puanlamalı mülakat paneli (`Evaluation.submittedAt`), teklif durum makinesi | ATS yerine geçme iddiası, CV parsing vaadi (`docs/research/cv-parsing.md` araştırma aşamasında — shipping değil) |
 | `Open-Source-Selfhosting` | P4, P6 | AGPL-3.0-or-later + çift lisans mantığı, kendi sunucunda çalıştırma (`Dockerfile`, `.env.example`, `/api/health`), üç dilli geliştirmenin maliyeti, CI'da anahtar paritesi (`npm run check:i18n`) | "tek komutla kurulum" — bugün prod docker-compose **yok**, `copy-bank.md` bunu zaten açıkça yazıyor |
-| `Datenschutz-DSGVO` | P4, P7 | Self-host'un veri sorumluluğuna etkisi, rol × endpoint erişim matrisi (`docs/role-access-matrix.md`), PII yaşam döngüsü (`docs/pii-access-lifecycle.md`), `/trust` sayfası, güvenlik denetimi playbook'unun açık olması | **Hukuki tavsiye.** "DSGVO-konform" tek başına bir vaat olarak kullanılmaz; "weil du es selbst hostest" gibi **mekanizmayı** anlatan biçimde kullanılır. AVV/DPA şablonu vaadi yok |
+| `Datenschutz-DSGVO` | P4, P7 | Self-host'un veri sorumluluğuna etkisi, rol × endpoint erişim matrisi (`docs/role-access-matrix.md`), PII yaşam döngüsü (`docs/pii-access-lifecycle.md`), `/trust` sayfası, güvenlik denetimi playbook'unun açık olması | **Hukuki tavsiye.** **"DSGVO-konform" / "DSGVO-compliant" hiç kullanılmaz** — "weil du es selbst hostest" eki de kurtarmaz, çünkü uyumu operatör kurar, ürün kurmaz (`go-to-market.md` §3.3 yasak tablosu, UWG § 5 riski). Yazılan yalnız **mekanizma**dır: "Sie hosten selbst — die Verarbeitung bleibt in Ihrer Infrastruktur und in Ihrer Verantwortung." AVV/DPA şablonu vaadi yok |
 | `Markt-und-Preise` | P5 | Kategorinin fiyat gizlemesi (16 satıcıdan 3'ü kullanılabilir rakam yayımlıyor, 7'sinde ne ücretsiz sürüm ne deneme var — `docs/research/competitive-analysis-2026-08.md`), birimin neden "aylık aktif eşleşmiş çift" olduğu, mentor/mentee çekirdeğinin sonsuza kadar ücretsiz olması | **Kesin fiyat rakamı — `/pricing` sayfası yayında değil (#1403).** Rakam ancak sayfa yayına girdikten sonra metne girer. İsim vererek rakip fiyatı karşılaştırması yok |
 | `Produkt-Update` | Sürüm notları | Merge olmuş sürüm fragmanlarından çıkan kullanıcıya dönük değişiklik (`releases/unreleased/*.json` → `notes`), yeni özellik kartı (`src/lib/features.ts`, bugün 46 kayıt) | Yol haritası vaadi ("yakında gelecek"). Sadece **shipping olan** anlatılır: fragman + features kaydı yoksa gönderi yok (`content-calendar.md` §3.3) |
 
@@ -115,15 +119,30 @@ güncellemesi hattın omurgası değil, ritim işaretidir.
 BCSIT hattı günlük 6 fikir üretiyor. InternCRM hattı **haftalık 6 fikir** üretir — kapasite
 haftada 2-3 gönderi (K1), o yüzden parti bir **havuz**dur, yayın kuyruğu değil.
 
+**Kota faza bağlıdır.** Sabit "3 persona-b / 2 persona-a / 1 oss" dağılımı Faz 1 ile çakışıyordu:
+hafta 3-6'da takvim iki ana gönderiyi de EN/OSS yapıyor, ama haftalık parti tek bir `oss` fikri
+içeriyordu — insanın seçebileceği EN fikir sayısı en fazla 1 kalıyordu. Faza göre kota:
+
+| Faz (hafta) | Kota | Not |
+|---|---|---|
+| **Faz 1 (3-6, EN)** | 3 `oss` / 2 `persona-b` / 1 `persona-a` | Ana gönderilerin ikisi de EN; havuzda en az 3 EN fikir olmalı |
+| **Faz 2 (7-10, DE)** | 3 `persona-b` / 2 `persona-a` / 1 `oss` | Aşağıdaki tablonun "steady state" hâli |
+| **Faz 3 (11-12, DE+TR)** | 2 `persona-a` / 2 `persona-b` / 1 `oss` / 1 **tr-dönüşüm** | TR dönüşümü artık `persona-a`ya kilitli değil (aşağı) |
+
+Aşağıdaki tablo **Faz 2** dağılımını (steady state) tarif eder; diğer fazlarda yukarıdaki satır geçerlidir.
+
 | Adet | Kitle (`audience`) | Konu havuzu | Baskın dil |
 |---|---|---|---|
 | 3 | **`persona-b`** — yerleştirme yapan kurum (kariyer merkezi, dual-study koordinatörü, meslek eğitimi sağlayıcısı, mentorluk derneği) | Berichtsheft onay akışı, aşama SLA'sı, pasif ilk temas, çıkış nedeni taksonomisi, mentor imzası | DE |
 | 2 | **`persona-a`** — 100-1000 çalışanlı işverenin staj/graduate program sorumlusu | Kırık huni, kör puanlamalı mülakat, teklif durum makinesi, fiyat şeffaflığı, birim seçimi | DE |
 | 1 | **`oss`** — open source / self-host / GitHub / HN | AGPL + çift lisans, self-host, üç dilli geliştirme, demo'nun yazılabilir olması, güvenlik playbook'u | EN |
 
-**TR kotası ayrı bir satır değildir**, bir **dönüşümdür**: hafta 11'den itibaren `persona-a`
-fikirlerinden **biri** TR'ye çevrilir (dil alanı `tr`, ses kurucu sesi). Ayrı bir TR fikri
-üretilmez — aynı fikir, farklı kitle, farklı ses.
+**TR kotası ayrı bir satır değildir**, bir **dönüşümdür**: hafta 11'den itibaren partideki fikirlerden
+**biri** TR'ye çevrilir (dil alanı `tr`, ses kurucu sesi). Ayrı bir TR fikri üretilmez — aynı fikir,
+farklı kitle, farklı ses.
+**Hangi kitleden dönüştürüleceği haftaya göre serbesttir.** Önceki sürüm dönüşümü `persona-a`ya
+kilitliyordu, ama takvimin hafta 11 TR gönderisi P4 (KVKK / açık kaynak) — yani `oss` kitlesi.
+Kural: dönüşüm, o haftanın takvimdeki TR temasına uyan kitleden yapılır.
 
 ### 4.1 Parti → yayın dönüşümü (BCSIT hattından bilinçli sapma)
 
@@ -165,7 +184,7 @@ Dosya: `<calisma-klasoru>/<YYYY-MM-DD>/fikirler.json` (klasör kararı §9.2).
       "zeitbezug": "immergruen",
       "gorsel": {
         "tur": "produkt-screenshot",
-        "kaynakUrl": "https://demo.interncrm.com/admin/pipeline",
+        "kaynakUrl": "https://demo.interncrm.com/admin/board",
         "rol": "admin.demo@demo.example.com",
         "dosya": "gorseller/ic_20260907_1-pipeline-board.png",
         "durum": "cekilecek"
@@ -192,7 +211,7 @@ Dosya: `<calisma-klasoru>/<YYYY-MM-DD>/fikirler.json` (klasör kararı §9.2).
 | `zeitbezug` | ✔ | `immergruen` \| `zeitkritisch` | `Produkt-Update` ve sezon pencerelerine bağlı fikirler `zeitkritisch` |
 | `gorsel` | ✔ | nesne (aşağıda) | Görselsiz fikir de olabilir: `{"tur": "yok"}` |
 | `gorsel.tur` | ✔ | `produkt-screenshot` \| `codebild` \| `tablo` \| `carousel-pdf` \| `yok` | §7 |
-| `gorsel.kaynakUrl` | koşullu | demo URL'i | `produkt-screenshot` ise zorunlu ve **demo.interncrm.com** ile başlamak zorunda |
+| `gorsel.kaynakUrl` | koşullu | demo URL'i | `produkt-screenshot` ise zorunlu ve **demo.interncrm.com** ile başlamak zorunda. **Rotanın gerçekten var olduğu doğrulanır** (§11): pipeline panosu `/admin/board`'dur — `/admin/pipeline` diye bir rota **yok** (`src/app/admin/` altında `pipeline` dizini bulunmuyor) |
 | `gorsel.rol` | koşullu | demo hesabı | Hangi rolde giriş yapılıp çekileceği |
 | `gorsel.dosya` | koşullu | `gorseller/<id>-<slug>.png` | Çekildikten sonra doldurulur |
 | `gorsel.durum` | ✔ | `cekilecek` \| `hazir` \| `yok` | `hazir` olmayan görselli fikir hatta beslenmez |
@@ -436,9 +455,12 @@ kırık bir ürünün içeriğini üretmenin anlamı yok.
 
 ```
 [ ] 6 fikir, id'ler benzersiz, `ic_` önekli
-[ ] Kitle dağılımı: 3 persona-b / 2 persona-a / 1 oss
+[ ] Kitle dağılımı **o haftanın faz kotasına uygun** (§4 faz tablosu: Faz 1 3/2/1 oss-ağırlıklı,
+    Faz 2 3/2/1 persona-b-ağırlıklı, Faz 3 2/2/1 + 1 tr-dönüşüm)
 [ ] Hiçbir kategori 3 kez geçmiyor; Produkt-Update en fazla 1
 [ ] Her fikrin `kanit` alanı dolu ve doğrulanabilir (dosya yolu / URL / issue)
+[ ] Her `produkt-screenshot` fikrinin `gorsel.kaynakUrl`'i demo'da **gerçekten açılıyor** (404 değil)
+    — `kanit` alanı kontrol ediliyordu, `kaynakUrl` hiçbir kontrolden geçmiyordu
 [ ] Hiçbir `tema` son 90 günde kullanılmamış (T1)
 [ ] Hiçbir `kaynak` son 14 günde kullanılmamış (T2)
 [ ] Baskın piler, geçen haftanın ana gönderi pileri DEĞİL (T3)
@@ -449,7 +471,9 @@ kırık bir ürünün içeriğini üretmenin anlamı yok.
 [ ] Hiçbir metinde IHK-geçerli Ausbildungsnachweis / MÜDEK / OBS-BİLSİS iddiası yok (Y5)
 [ ] Hiçbir metinde kesin fiyat rakamı yok (/pricing yayında değil — #1403)
 [ ] Hiçbir görsel preview/prod ortamından değil; hepsi demo.interncrm.com veya lokal sentetik
-[ ] Demo adresi yalnız https://demo.interncrm.com (crm-demo.ersah.in DEĞİL)
+[ ] Demo adresi kanonik: insan tıklayacaksa https://demo.interncrm.com/auth/signin, yalnız alan adı
+    anılıyorsa demo.interncrm.com, kimlik gerekiyorsa /demo
+    (`linkedin-playbook.md` §3.3 kanonik kural kutusu). crm-demo.ersah.in DEĞİL
 [ ] Hiçbir metinde/profilde bcsit GmbH hak sahibi gösterilmiyor
 [ ] `gorsel.durum` hazır olmayan hiçbir fikir hatta beslenmedi
 [ ] Hiçbir yazma endpoint'ine dokunulmadı; Telegram butonuna basılmadı (§8)
@@ -469,3 +493,20 @@ metrikleri `content-calendar.md` §7'de):
 | Haftalık insan süresi | ≤40 dk | Fiili | Görsel adımı (20 dk) en pahalı kalem; `carousel`/`kurznotiz` oranı artırılır |
 | Yanlış hatta düşen fikir sayısı | **0** | BCSIT kuyruğu | G1 doğrulanana kadar §9.3 elle akışa dönülür |
 | §8 ihlali | **0** | — | Hat durdurulur (`go-to-market.md` R10) |
+
+---
+
+## Açık sorular
+
+*2026-09-06 eleştiri turunda uygulanan düzeltmelerin bıraktığı açık uçlar. Her satır tek bir soru;
+cevaplandığında ilgili bölüme işlenir ve satır buradan silinir.*
+
+- §9.1'deki asıl bilinmeyen duruyor: **autoposter bugün ikinci hattı destekliyor mu?** Faz kotası,
+  kategori seti ve `line: "interncrm"` alanı bu cevaba bağlı; desteklenmiyorsa §9.3'teki elle akış
+  geçerli kalır ve `fikirler.json` bir dosya olarak kalır, endpoint'e gitmez.
+- §5 kanonik örneğindeki `kaynakUrl` `/admin/board` olarak düzeltildi ve §11'e 404 kontrolü eklendi;
+  ama **kontrol elle**. Şema doğrulaması `kaynakUrl`'i hâlâ makine olarak denetlemiyor. Açık soru:
+  parti üretiminin sonunda basit bir HEAD isteği turu (6 URL) otomatikleştirilmeli mi?
+- Faz kotası (§4) `content-calendar.md` §1.5'in faz tablosuna bağlandı. **Faz sınırında düşen bir
+  hafta** (ör. hafta 6 → 7 geçişi) için kota kuralı yazılmadı; bugünkü varsayım "haftanın numarası
+  hangi faza düşüyorsa o kota".

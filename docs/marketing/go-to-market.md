@@ -1,6 +1,9 @@
 # InternCRM — Dağıtım (Go-to-Market) Planı
 
-Tarih: 2026-09-06 · Sürüm referansı: 0.156.22-beta · Sahibi: Mehmet Erşahin (gerçek kişi)
+> Durum: taslak (2026-09-06)
+
+Tarih: 2026-09-06 · Sürüm referansı: **`npm run check:release-fragments` çıktısının son satırı**
+(bugün 0.156.21-beta + 4 bekleyen fragman → **0.156.25-beta**) · Sahibi: Mehmet Erşahin (gerçek kişi)
 Takvim: göreli (hafta 1..12), sabit tarih yok.
 
 ---
@@ -32,7 +35,7 @@ Bu doküman #1360'ı **tekrar etmez**, ona **bağımlıdır**: aşağıdaki tabl
 | Ürün canlı mı | Evet, https://interncrm.com (`/api/health` ok) | canlı |
 | Public demo | Evet, https://demo.interncrm.com — 3 rol, sentetik veri, `robots.txt: Disallow: /` | canlı |
 | Demo kimlikleri | `admin.demo@…`, `mentor.aylin@…`, `mentee.deniz@…` / `DemoPass123!` | https://demo.interncrm.com/demo |
-| Eski demo adresi | `crm-demo.ersah.in` kodda hâlâ linkli (ayrı PR ile düzeltiliyor) | dokümanlarda **kullanılmaz** |
+| Eski demo adresi | `crm-demo.ersah.in` — kodda kalmıştı, #2216/PR #2218 ile düzeltildi (canlıda `0.158.0-beta`) | dokümanlarda **kullanılmaz** |
 | Metadata | Tüm sayfalar tek İngilizce title/description paylaşıyor | `src/app/layout.tsx:19-21` |
 | OG/Twitter kartı | Pazarlama sayfalarında **yok** (yalnız `/p/[userId]` var) | #1362 #1376 #1378 |
 | Dil ve URL | Dil **sadece çerezle** seçiliyor; `/de`, `/tr` rotası yok, hreflang yok | `src/i18n/server.ts`, `src/app/sitemap.ts` |
@@ -45,7 +48,7 @@ Bu doküman #1360'ı **tekrar etmez**, ona **bağımlıdır**: aşağıdaki tabl
 | GitHub vitrini | 2 yıldız, 4 fork, 643 açık issue, **topics boş**, **homepage boş**, Discussions açık | github.com/21072026/Internship |
 | GitHub release | **Sıfır release, sıfır tag** (`list_releases` → `[]`, `list_tags` → `[]`) | API, 2026-09-06 |
 | Self-host yolu | Üretim compose'u yok; `docker-compose.dev.yml` başlığı "NOT used in production" | repo kökü, `docs/` (32 dosya, `self-hosting.md` yok) |
-| Ürün yüzeyi | ~50 özellik, 88 Prisma modeli, EN/TR/DE tam sözlük, 353 dosya Playwright, k6, PWA, `/trust`, `/release-notes` | `src/lib/features.ts` vb. |
+| Ürün yüzeyi | **46 kayıtlı özellik, 92 Prisma modeli**, EN/TR/DE tam sözlük, **389 dosyalık** Playwright paketi, k6, PWA, `/trust`, `/release-notes` | Doğrulanmış sayı tablosu: `copy-bank.md` §0.1 (tek kaynak). Komutlar: `grep -c '^model ' prisma/schema.prisma` → 92 · `ls e2e \| wc -l` → 389 · `src/lib/features.ts` → 46 |
 
 **Bu tablonun okunuşu:** ürün hazır, vitrin hazır değil. Dağıtımın ilk işi kanal açmak değil,
 kanalın gönderdiği trafiğin çarpacağı yüzeyi düzeltmektir.
@@ -63,7 +66,12 @@ AGPL self-host + mentee→staj→işe alım hunisi** (13 aşama, aşama SLA'sı,
 Berichtsheft benzeri **haftalık rapor onay akışı**, kör puanlamalı mülakat panelleri, teklif durum makinesi.
 Mentorluk satıcıları "gelişimde" durur, deneyimsel öğrenme pazaryerleri "projede" durur; huniyi kimse modellemiyor.
 
-### 3.2 Persona başına tek cümle (yayına hazır hâlleriyle)
+### 3.2 Persona başına tek cümle (yayına hazır — fiyat yan cümlesi `/pricing` yayına girdikten sonra, #1403)
+
+> **Ön koşul:** aşağıdaki Persona A cümlelerinde geçen "prices published in euro / veröffentlichten
+> Preisen / fiyatı görüşmeye girmeden okursunuz" yan cümlesi, `/pricing` (#1403) yayına girene kadar
+> **çıkarılır**; cümlenin geri kalanı ön koşulsuz kullanılabilir. `copy-bank.md` §11'in "blok tamamen
+> çıkarılır" kuralının aynısı: yerine "fiyat için yazın" **yazılmaz**.
 
 **Persona A — 100-1000 çalışanlı işverenin staj/graduate program sorumlusu (DE/AT/CH, TR)**
 
@@ -114,6 +122,8 @@ commit geçmişi public. Satış cümlesi değil, olgudur — öyle sunulur.
 | Şirketi hak sahibi göstermek (bcsit GmbH vb.) | Hak sahibi Mehmet Erşahin, gerçek kişi. Faturalama tüzel kişiliği hâlâ açık (`docs/legal/legal-tax-framework.md`) |
 | "Kurumsal düzeyde ölçeklenir", ölçüsüz büyüklük iddiaları | Yük profili k6 ile ölçülüyor; ölçülmemiş rakam verilmez |
 | `crm-demo.ersah.in` | Eski adres. Tek demo adresi: https://demo.interncrm.com |
+| **"DSGVO-konform" / "DSGVO-compliant" tek başına** (ör. "DSGVO-konform, weil Sie es selbst hosten") | Uyumu **operatör** kurar, ürün kurmaz: TOM, Verarbeitungsverzeichnis, silme süreleri, AVV. Kayıtsız şartsız uyum beyanı UWG § 5 riski. Denir: "Sie hosten selbst — die Verarbeitung bleibt in Ihrer Infrastruktur und in Ihrer Verantwortung" |
+| "Barındırılan planlarımız var / hosted plans" | Bugün satılabilir bir barındırma teklifi **yok**, `/pricing` sayfası da yok (#1403). Denir: "self-host bugün ücretsiz; barındırılan plan planlanıyor, henüz yok" |
 
 ---
 
@@ -122,6 +132,20 @@ commit geçmişi public. Satış cümlesi değil, olgudur — öyle sunulur.
 Fazlar **kapılıdır**: giriş koşulu sağlanmadan o fazın kanalları ateşlenmez. Tek kullanımlık kozlar
 (Show HN, Product Hunt) erken harcanamaz.
 
+**Faz → hafta → dil tablosu (tek kaynak).** Dört dokümanın tamamı bu tabloya atıf yapar; farklı bir
+aralık gören her yer hatadır. Kaynak tablo `content-calendar.md` §2'nin gerçek haftalık tablosudur:
+
+| Faz | Hafta | Birincil dil |
+|---|---|---|
+| Faz 0 — Vitrin | 1-2 | — (yayın yok) |
+| Faz 1 — Açık kaynak & build-in-public | 3-6 | EN |
+| Faz 2 — Persona B kurumları | 7-10 | DE |
+| Faz 3 — Persona A işverenler | 11-12 | DE + TR (hafta 11 Çarşamba zanaat gönderisi bilinçli EN istisnası) |
+| Faz sonrası | 13+ | duruma göre |
+
+Fazlar **çakışmaz**; kurumsal ağ işleri (Faz 2) Faz 1 haftalarında da arka planda yürür, ama
+*yayın dili* yukarıdaki tablodan okunur.
+
 ### Faz 0 — Vitrin (hafta 1-2)
 
 Kanal açmadan önce, kanalın gönderdiği trafiğin çarpacağı yüzeyi düzeltmek.
@@ -129,34 +153,37 @@ Kanal açmadan önce, kanalın gönderdiği trafiğin çarpacağı yüzeyi düze
 - **Giriş koşulu:** yok, bugün başlar.
 - **İşler:** (1) `git tag` + **GitHub Release** — 4 aylık awesome-selfhosted sayacını başlatır;
   (2) GitHub topics + homepage alanı + description + README konumlandırması;
-  (3) `interncrm.com/impressum` gerçek verilerle (#1371) — Almanya'da kanal açmanın hukuki ön koşulu;
+  (3) `interncrm.com/imprint` gerçek verilerle (#1371) — Almanya'da kanal açmanın hukuki ön koşulu;
   (4) #1360'tan **minimum set**: sayfa başına title/description, OG/Twitter kartı, en az 3 ürün ekran
   görüntüsü (#1399); (5) `utm_*` yakalama + demo giriş/oturum dönüşüm olayı (#1388/#1390);
   (6) üretim self-host yolu (`docs/self-hosting.md` + üretim compose).
 - **Çıkış ölçüsü:** bir GitHub Release yayımlandı; paylaşılan her URL önizlemeli geliyor; Impressum dolu;
-  bir dış link tıklaması analytics'te utm ile görünüyor; `/pricing` yayında (#1403).
+  bir dış link tıklaması analytics'te utm ile görünüyor. `/pricing` (#1403) Faz 0 hedefidir ama çıkış
+  koşulu değildir — yayında değilse yalnız fiyat iddiası içeren metinler bekler.
 
-### Faz 1 — Açık kaynak & build-in-public (hafta 2-8)
+### Faz 1 — Açık kaynak & build-in-public (hafta 3-6, EN)
 
 Ürünün en savunulabilir iddiası (AGPL + self-host + demo) üzerinden ilk izi bırakmak.
 
-- **Giriş koşulu:** Faz 0'ın (1)(2)(4)(5) maddeleri bitti; `/pricing` yayında; self-host yolu yazıldı.
+- **Giriş koşulu:** Faz 0'ın (1)(2)(4)(5) maddeleri bitti; self-host yolu yazıldı.
+  `/pricing` (#1403) **fazın kapısı değildir**: yalnız **fiyat iddiası taşıyan** metinlerin ön koşuludur
+  (`linkedin-playbook.md` ÖK3). Fiyat sayfası yokken fiyat cümlesi kurulmaz — kanal yine de açılır.
 - **Kanallar:** GitHub vitrini, dizin kayıtları (Capterra.de/GetApp/OMR/SoftwareAdvice),
   awesome-recruitment + awesome-hrtech, **Show HN**, r/selfhosted, LinkedIn organik + InternCRM autoposter hattı.
 - **Çıkış ölçüsü:** ürün adıyla arandığında kendi domain'imiz ilk sonuç; en az 3 dizin profili canlı;
   Show HN gönderildi ve yorumları yanıtlandı; demo'da rol bazlı oturum sayısı ölçülebilir hâlde ve sıfırdan farklı.
 
-### Faz 2 — Persona B kurumları (hafta 4-12+, Faz 1 ile paralel)
+### Faz 2 — Persona B kurumları (hafta 7-10, DE — kurumsal temaslar Faz 1 boyunca arka planda hazırlanır)
 
 Kurumsal ağlar yavaştır; erken başlatılır, geç meyve verir.
 
-- **Giriş koşulu:** Impressum dolu, `/pricing` yayında, Almanca ekran görüntüleri hazır,
-  demo'da DE arayüz gezilebilir.
+- **Giriş koşulu:** Impressum dolu, Almanca ekran görüntüleri hazır, demo'da DE arayüz gezilebilir.
+  Fiyat konuşulan temaslarda (dizin profili, mektup, teklif) ek ön koşul: `/pricing` yayında (#1403).
 - **Kanallar:** Forum Mentoring e.V., csnd (Career Service Netzwerk Deutschland), DGM, DHBW dualer Partner,
   IHK Praktikanten-/Lehrstellenbörse, fiziki mektup (Briefwerbung), etkinlik/oturum önerileri.
 - **Çıkış ölçüsü:** 3 kurumdan yanıt; 2 tanıtım görüşmesi; 1 pilot niyeti veya 1 duale-Partner statüsü.
 
-### Faz 3 — Persona A işverenler (hafta 10+)
+### Faz 3 — Persona A işverenler (hafta 11-12, DE + TR)
 
 - **Giriş koşulu:** Faz 2'den en az bir referans anlatısı (pilot ya da kurumsal kullanım) ve
   ölçülebilir bir huni (utm → demo → pilot talebi).
@@ -176,16 +203,16 @@ Getiri, bugünkü sıfır iz durumuna göre **göreli** yazılmıştır; mutlak 
 | # | Kanal | Persona | Dil | Emek | Beklenen getiri | Ön koşul | Faz | İlk adım |
 |---|---|---|---|---|---|---|---|---|
 | 1 | GitHub vitrini (topics, homepage, description, README) | A/B/C + geliştirici | EN | S | Yüksek — sıfır maliyetli ilk indekslenebilir iz | Yok | 0 | Repo Settings → About → topics: `mentoring`, `internship`, `crm`, `self-hosted`, `nextjs`, `prisma`, `gdpr`, `open-source-alternative`; homepage: https://interncrm.com |
-| 2 | GitHub Release + git tag | — (ön koşul) | EN | S | Dolaylı ama kritik: awesome-selfhosted 4 ay sayacını başlatır | Yok | 0 | `git tag v0.156.22-beta` + GitHub Release notu (`/release-notes` içeriğinden) |
+| 2 | GitHub Release + git tag | — (ön koşul) | EN | S | Dolaylı ama kritik: awesome-selfhosted 4 ay sayacını başlatır | Yok | 0 | Tag, o an bekleyen fragmanların türettiği **en son** sürümle atılır (bugün `v0.156.25-beta`). Numarayı tag atmadan önce `npm run check:release-fragments` ile doğrula — çıktının son satırı canlı sürümdür. Ardından GitHub Release notu (`/release-notes` içeriğinden) |
 | 3 | Üretim self-host yolu (`docs/self-hosting.md` + compose) | geliştirici/B | EN | M | Orta-yüksek; iki kanalın (awesome-selfhosted, r/selfhosted) kabul koşulu | Yok | 0 | Dockerfile + MySQL için tek komutluk üretim compose'u yaz, sıfırdan doğrula |
-| 4 | Dizin kayıtları: Capterra.de, GetApp, OMR Reviews, SoftwareAdvice | A/B | EN+DE | M | Yüksek — "web'de sıfır iz"i tek hamlede kıran en ucuz iş; kategori SERP'ini dizinler tutuyor | Impressum, `/pricing`, ekran görüntüleri | 1 | Her birinde ücretsiz satıcı profili aç, aynı ekran görüntüsü setini yükle |
-| 5 | Show HN | geliştirici → A/B'ye sıçrama | EN | M | En yüksek asimetrik getiri; tek kullanımlık | OG kartları (#1362/#1376/#1378), demo'da tek tıkla rol girişi | 1 | Demo'ya rol butonları eklendikten sonra Mehmet kendi hesabından gönderir, saatlerce yorumda kalır |
+| 4 | Dizin kayıtları: Capterra.de, GetApp, OMR Reviews, SoftwareAdvice | A/B | EN+DE | M (dört profil ≈ iki yarım gün, **tek 30 dk kutusuna sığmaz**) | Yüksek — "web'de sıfır iz"i tek hamlede kıran en ucuz iş; kategori SERP'ini dizinler tutuyor | Impressum, ekran görüntüleri; **fiyat alanı doldurulacaksa** `/pricing` (#1403) | 1 | Hafta 5 ve 6'ya **ikişer** profil (R3: aynı anda en fazla 2 aktif kanal). Her birinde ücretsiz satıcı profili aç, aynı ekran görüntüsü setini yükle |
+| 5 | Show HN | geliştirici → A/B'ye sıçrama | EN | M | En yüksek asimetrik getiri; tek kullanımlık | **Tek kalan ön koşul: OG kartları (#1362/#1376/#1378).** Demo'da tek tıkla rol girişi **zaten shipping** (`src/app/auth/signin/SignInClient.tsx:246`, `data-testid="demo-quick-login"`; `e2e/landing-demo-cta.spec.ts:37` test ediyor) | 1 | OG kartları bitince Mehmet kendi hesabından gönderir, saatlerce yorumda kalır |
 | 6 | r/selfhosted | geliştirici | EN | S | Orta; self-host yolu yoksa negatif | Üretim compose + self-hosting dokümanı; **gönderim öncesi subreddit kurallarını oku** | 1 | Kural sayfasını oku, self-promo/gönderim gününe uy, demo + repo + compose linkiyle tek gönderi |
 | 7 | awesome-recruitment (Sjamilla) | B | EN | S | Düşük — birkaç yüz görüntüleme + backlink | Yok | 1 | README'ye tek satır ekleyen PR; 15 dk zaman kutusu, takip yatırımı yok |
 | 8 | awesome-hrtech (Talentbait) | B | EN | S | Düşük | Yok | 1 | Aynı: tek satır PR |
-| 9 | LinkedIn organik (kişisel profil + şirket sayfası) | A/B | DE + TR | L | Orta-yüksek, süregelen; DE'de tek yasal "outbound benzeri" görünürlük | **Impressum linki hazır olmadan şirket sayfası açılmaz** | 1→3 | Kişisel profilden başla; şirket sayfası açılırken Info → Website URL = tam Impressum linki |
-| 10 | InternCRM autoposter hattı (Telegram onaylı) | A/B | DE + TR | M | Orta; içerik üretimini sürdürülebilir kılar | BCSIT hattından ayrı kategori/ses; kategorik yayın yasağına tabi | 1 | Yeni içerik kategorisi tanımla, fikir besle; metni HAT yazar, insan Telegram'da onaylar |
-| 11 | awesome-selfhosted (HRM kategorisi) | B + geliştirici | EN | M | **Stratejik olarak en değerli liste**; HRM kategorisi ince (3 kayıt) | Release'ten **4 ay** + çalışan kurulum talimatı | 2 (hafta ~18) | Bugün değil: takvime "Release + 4 ay" notu; sonra `software/interncrm.yml` PR'ı |
+| 9 | LinkedIn organik (kişisel profil + şirket sayfası) | A/B | **EN (hafta 3-6) → DE (7-10) → DE+TR (11-12)** (§4 faz-dil tablosu) | L | Orta-yüksek, süregelen; DE'de tek yasal "outbound benzeri" görünürlük | **Sayfa Impressum linki hazır olmadan yayına açık kalmaz** — sayfa hâlihazırda açıksa (`linkedin-playbook.md` §0) hafta 1'de ya alan doldurulur ya sayfa yayından kaldırılır | 1→3 | Önce sayfanın var olup olmadığını doğrula (Me → Manage); sonra kişisel profilden başla, Info → Website URL = tam Impressum linki |
+| 10 | InternCRM autoposter hattı (Telegram onaylı) | A/B | **EN (3-6) → DE (7-10) → DE+TR (11-12)**; 12 haftanın toplamı ~%60 DE / %25 EN / %15 TR (`autoposter-interncrm-line.md` §2.1) | M | Orta; içerik üretimini sürdürülebilir kılar | BCSIT hattından ayrı kategori/ses; kategorik yayın yasağına tabi | 1 | Yeni içerik kategorisi tanımla, fikir besle; metni HAT yazar, insan Telegram'da onaylar |
+| 11 | awesome-selfhosted (HRM kategorisi) | B + geliştirici | EN | M | **Stratejik olarak en değerli liste**; HRM kategorisi ince (3 kayıt) | Release'ten **4 ay** + çalışan kurulum talimatı | Faz sonrası (hafta ~18) | Bugün değil: takvime "Release + 4 ay" notu; sonra `software/interncrm.yml` PR'ı |
 | 12 | Forum Mentoring e.V. | B | DE | M | Yüksek nitelik: 120+ üniversitede program yürüten koordinatörler | DE ekran görüntüleri | 2 | AG/Jahrestagung takvimini izle; kalite standartları ↔ ekran eşleme tablosunu (1 sayfa DE) hazırla |
 | 13 | csnd — Career Service Netzwerk Deutschland | B | DE | M | Yüksek: ~200 üye, Persona B'nin en yoğun havuzu | Impressum, `/pricing`, DE demo | 2 | Üye listesinden hedef listesi çıkar (**soğuk e-posta listesi değil**); Geschäftsstelle'ye oturum önerisi |
 | 14 | DGM — Deutsche Gesellschaft für Mentoring | A/B | DE | M | Orta-yüksek; sertifikalı program listesi = adresli Persona B | Kendi mentorluk programının yazılı tanımı; sertifikasyon ücretli | 2 | Üyelik başvurusu; ardından kendi programını DGM standardına göre sertifikalandırmayı değerlendir |
@@ -255,10 +282,11 @@ eksik olanlar (çok kiracılı izolasyon kapalı, fiyatlar yeni yayımlandı) �
 kazandırır.
 **Etik:** oy/yorum istemek **kategorik yasak** ("Please don't ask friends to upvote or comment"), çoklu hesap
 yasak, self-promo ara sıra olmalı.
-**Tipik red/ölüm sebebi:** (a) kayıt duvarı — bu yüzden demo'da **tek tıkla rol girişi** ön koşul;
-(b) gönderen yorumlarda yok; (c) başlıkta süsleme/sayı; (d) landing page göndermek.
-**Zamanlama kuralı:** başarısız gönderim ~1 yıl tekrar edilemez. OG kartları ve tek tıkla demo girişi
-bitmeden ateşlenmez.
+**Tipik red/ölüm sebebi:** (a) kayıt duvarı — bizde **yok**: demo'da tek tıkla rol girişi shipping
+(`src/app/auth/signin/SignInClient.tsx:246`), bu madde bizim için **kapalı**; (b) gönderen yorumlarda
+yok; (c) başlıkta süsleme/sayı; (d) landing page göndermek.
+**Zamanlama kuralı:** başarısız gönderim ~1 yıl tekrar edilemez. Kalan tek kapı **OG kartları**
+(#1362/#1376/#1378); onlar bitmeden ateşlenmez.
 
 ### 6.4 Dizin kayıtları — Capterra.de / GetApp / OMR Reviews / SoftwareAdvice (Faz 1, EN+DE)
 
@@ -268,9 +296,14 @@ organik girilmez, ama **profil açmak ücretsiz** ve aynı SERP'e içeriden giri
 kategori (Mentoring / HR), EUR fiyat, demo linki.
 **Kural:** yorum/derecelendirme talep ederken teşvik verilmez; sahte inceleme kategorik olarak dışarıda.
 **Tipik red:** ürün canlı değil, ekran görüntüsü yok, fiyat "contact us" — üçü de bizde Faz 0 sonrası çözülü.
-**Ayırt edici cümle (DE):** "DSGVO-konform, weil Sie es selbst hosten" — bir vaat değil, doğrulanabilir bir yapı.
+**Ayırt edici cümle (DE):** "Sie hosten selbst — die Verarbeitung bleibt in Ihrer Infrastruktur und in
+Ihrer Verantwortung; wir erhalten keine Teilnehmerdaten."
+**Neden bu biçim:** kayıtsız şartsız "DSGVO-konform" beyanı hem UWG § 5 açısından klasik bir Abmahnung
+hedefi hem içerik olarak yanlış — self-host uyumu üretmez; kendi sunucusunda çalıştıran kurum
+*Verantwortlicher* olur ve uyum TOM'lara, Verarbeitungsverzeichnis'e, silme sürelerine ve AVV'lere
+bağlıdır. Söylenebilecek olan **mekanizma**dır, uyum sonucu değil (bkz. §3.3 son satır).
 
-### 6.5 awesome-selfhosted (Faz 2, hafta ~18, EN)
+### 6.5 awesome-selfhosted (Faz sonrası, hafta ~18 — hafta 1 Release + 4 ay, EN)
 
 **Nereye:** PR **ana repoya gitmez**; `awesome-selfhosted/awesome-selfhosted-data` içinde
 `software/interncrm.yml`.
@@ -279,7 +312,9 @@ licenses (`AGPL-3.0` listede kabul — MintHCM emsali), platforms (`Nodejs`, `Do
 **Kategori:** `tags` listesinin **ilk** öğesi tek sayfa görünümünü belirler → **Human Resources Management (HRM)**
 (kategori ince: 3 kayıt), sonra CRM / Learning and Courses.
 **Kabul kriterleri:** PR başına tek yazılım · aktif bakım · **ilk sürümden 4 ay** · çalışan kurulum talimatı ·
-demo linki etkileşimli ve **kimlik bilgilerine doğrudan link** (bizde https://demo.interncrm.com/demo) ·
+demo linki etkileşimli ve **kimlik bilgilerine doğrudan link** (bizde `/demo` sayfası kimlikleri
+listelediği için o koşulu karşılayan sayfa odur; `demo_url` alanına ise sürtünmesiz giriş ekranı
+yazılır — `copy-bank.md` §4.1 ile birebir aynı: `https://demo.interncrm.com/auth/signin`) ·
 yorumlar ve kullanılmayan alanlar silinmiş · dosya adı kebab-case.
 **Ajan uyarısı (bu repo için kritik):** CONTRIBUTING açık: "Machine/LLM-generated contributions, that do not
 respect project guidelines are not allowed and will result in a ban." PR elle doğrulanmadan gönderilmez.
@@ -292,8 +327,13 @@ ediyor); rakip alternatifiyse sonuna `(alternative to …)`.
 **Serbest olan:** şirket sayfasından ve kişisel profilden organik içerik, başkalarının gönderilerine yorum,
 gruplarda tartışma, karşı taraf yazdıktan **sonra** yanıt, LinkedIn'in ücretli reklam envanteri.
 **Yasak olan:** tanıtım içeren DM/InMail, tanıtım metni gömülü bağlantı isteği (OLG Hamm).
-**Impressum:** ticari kullanılan sosyal medya profili § 5 DDG kapsamında — şirket sayfası **açılmadan önce**
-Info → Website URL alanına kendi sitendeki tam Impressum linki konur (iki tık kuralı, açıkça etiketli).
+**Impressum:** ticari kullanılan sosyal medya profili § 5 DDG kapsamında — sayfa **yayına açık kalmadan
+önce** Info → Website URL alanına kendi sitendeki tam Impressum linki konur
+(`https://interncrm.com/imprint`; iki tık kuralı, açıkça etiketli).
+**Uyarı:** şirket sayfasının **zaten açık** olma ihtimali var ve URL'i bu oturumda tespit edilemedi
+(`linkedin-playbook.md` §0). Hafta 1'in ilk işi bunu belirlemektir: sayfa varsa Impressum alanı
+**derhal** doldurulur veya sayfa yayından kaldırılır; yoksa hafta 2'de açılır. Impressumsuz ve
+hâlihazırda yayında olan ticari bir sayfa, açılmamış bir sayfadan daha büyük risktir.
 **Autoposter hattı:** InternCRM hattı BCSIT hattından **ayrı** olmalı (farklı kitle, ses, kategoriler).
 Hattın kuralları aynen geçerli: metni **hat** yazar, fikir besleyen taraf metin yazmaz; fikir ekleme
 endpoint'i dışında yazma endpoint'i kullanılmaz; **kategorik yayın yasağı** — LinkedIn'e doğrudan istek yok,
@@ -345,7 +385,11 @@ bilgi notu + Art. 21(2) itiraz hakkı bildirimi + demo.interncrm.com QR kodu.
 **Hazır açılış (DE):**
 > Sehr geehrte Frau …, Sie koordinieren bei … das Mentoring-Programm. Wir haben für genau diesen Ablauf eine
 > quelloffene Anwendung gebaut — von den Praktikantinnen und Praktikanten, die darin betreut werden.
-> Ausprobieren ohne Registrierung: demo.interncrm.com. Preise stehen offen auf interncrm.com/pricing.
+> Ausprobieren ohne Registrierung: demo.interncrm.com/auth/signin — ein Klick, drei Rollen.
+
+**Fiyat cümlesi ön koşulludur.** `/pricing` (#1403) yayına girene kadar mektuba fiyat satırı
+**hiç yazılmaz** — "Preise auf Anfrage" da yazılmaz, blok tamamen çıkarılır (`copy-bank.md` §11 kuralı).
+Sayfa yayına girdiğinde eklenecek cümle: "Preise stehen offen auf interncrm.com/pricing."
 **Ölçek kuralı:** 20-30 adetlik ölçülü partiler; toplu kampanya değil.
 
 ### 6.10 Product Hunt (Faz 3, EN — tek kullanımlık, 6 ay kilit)
@@ -484,13 +528,37 @@ Kaynak: https://www.vergabevorschriften.de/uvgo/14 · https://www.auftragsberatu
 
 1. `git tag` + GitHub Release (4 aylık sayaç başlasın).
 2. GitHub About: topics, homepage, description; README ilk ekranı.
-3. `interncrm.com/impressum` gerçek verilerle (#1371) — kanal açmanın hukuki ön koşulu.
+3. `interncrm.com/imprint` gerçek verilerle (#1371) — kanal açmanın hukuki ön koşulu.
 4. Sayfa başına title/description + OG/Twitter kartı (#1362/#1376/#1378, #1360 kapsamı).
 5. En az 3 ürün ekran görüntüsü (#1399) — beş kanalın ortak varlığı.
 6. `utm_*` yakalama (#1390) + demo girişi/rol seçimi dönüşüm olayı (#1388).
 7. `/pricing` yayına (#1403) — hem SEO hem Persona B'nin eşik-altı satın alma argümanı.
 8. `docs/self-hosting.md` + üretim compose; sıfırdan doğrula.
-9. Demo'ya **tek tıkla rol girişi** butonları (Show HN'in sürtünme testi).
-10. Dizin profilleri: Capterra.de, GetApp, OMR Reviews, SoftwareAdvice.
+9. ~~Demo'ya tek tıkla rol girişi butonları~~ — **kapandı (2026-09-06)**: `demo-quick-login` bloğu
+   shipping (`src/app/auth/signin/SignInClient.tsx:246`). Show HN'in sürtünme testi bugün geçiliyor.
+10. Dizin profilleri: Capterra.de, GetApp, OMR Reviews, SoftwareAdvice — hafta 5 ve 6'ya **ikişer**
+    dağıtılır (R3: aynı anda en fazla 2 aktif kanal; dört profili tek 30 dakikalık kutuya sığdırmak
+    bu kuralı ve M eforunu ihlal ediyordu).
 
 Bunlar bittiğinde Faz 1 kapısı açılır: Show HN, r/selfhosted, awesome-recruitment/hrtech, LinkedIn hattı.
+
+---
+
+## Açık sorular
+
+*2026-09-06 eleştiri turunda uygulanan düzeltmelerin bıraktığı açık uçlar. Her satır tek bir soru;
+cevaplandığında ilgili bölüme işlenir ve satır buradan silinir.*
+
+- `/impressum` → `/imprint` **kalıcı yönlendirmesi** (Alman kullanıcı refleksle `/impressum` yazar) bu
+  turda **açılmadı**: görev yalnız `docs/marketing/` altındaki beş dosyayı değiştirmeye izin veriyordu,
+  `next.config.js` dokunulmadı. Dokümanlar kanonik `/imprint`'e sabitlendi; yönlendirme isteniyorsa ayrı
+  bir issue gerekiyor ve Faz 0 iş listesine madde olarak eklenmeli. Bu, hiçbir metnin ön koşulu değildir.
+- ÖK3 (`/pricing`, #1403) için sunulan iki seçenekten **daraltma** uygulandı: fiyat sayfası artık yalnız
+  *fiyat iddiası taşıyan* metinlerin kapısı. Alternatif — #1403'ü hafta 1-2 işi yapıp ÖK3'ü gerçekten
+  kapatmak — hâlâ tercih edilebilir; o kararı veren kişi §4 Faz 0 iş listesine ve takvimin hafta 1-2
+  satırlarına aynı anda yazmalı. **Bugünkü hâlde `/pricing` Faz 0 hedefi, hiçbir fazın kapısı değil.**
+- Persona A cümlelerindeki fiyat yan cümlesi ön koşullu hâle getirildi ama **üç dilde ayrı bir
+  "fiyatsız sürüm" yazılmadı**; cümleyi kullanan kişi yan cümleyi elle çıkarıyor. Yayına girmeden önce
+  üç dilde fiyatsız sürümlerin `copy-bank.md`'ye eklenmesi daha güvenli olur.
+- Kanal matrisindeki "Beklenen getiri" sütunu hâlâ göreli ve ölçümsüz (#1388/#1390). Ölçüm açıldığında
+  bu sütun gerçek sayılarla değiştirilmeli; bugün bir tahmin olduğu **yazılı değil**.
