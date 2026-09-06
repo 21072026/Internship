@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { INTERACTION_TYPES } from '@/lib/interactionTypes';
 import { InteractionSummary } from '@/components/InteractionSummary';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -82,12 +83,6 @@ interface RelationDetail {
   }[];
 }
 
-const typeOptions = [
-  { value: 'Meeting', label: 'Meeting' },
-  { value: 'Feedback', label: 'Feedback' },
-  { value: 'Email', label: 'Email' },
-];
-
 export default function MenteeDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -96,6 +91,10 @@ export default function MenteeDetailPage() {
   const label = useStageLabel();
   const stages = useResolvedStages();
   const toast = useToast();
+
+  // Keys from the shared constant, labels from the dictionary (#1354) — the
+  // menu must offer every type the API accepts, in the reader's language.
+  const typeOptions = INTERACTION_TYPES.map((ty) => ({ value: ty, label: t.interactionTypes[ty] }));
 
   const [relation, setRelation] = useState<RelationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +121,7 @@ export default function MenteeDetailPage() {
 
   const handleAddInteraction = async () => {
     if (!formData.date || !formData.notes) {
-      setFormError('Date and notes are required');
+      setFormError(t.mentor.dateAndNotesRequired);
       return;
     }
     setSubmitting(true);
@@ -448,7 +447,7 @@ export default function MenteeDetailPage() {
                     data-testid="interaction-log-notes"
                     value={formData.notes}
                     onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
-                    placeholder="What was discussed..."
+                    placeholder={t.mentor.notesPlaceholder}
                     maxLength={TEXT_LIMITS.interactionNotes}
                     showCounter
                   />
