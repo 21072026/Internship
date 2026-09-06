@@ -262,3 +262,30 @@ export function browserTimeZone(): string | null {
     return null;
   }
 }
+
+/**
+ * Browser-side counterpart to `resolveTimeZone`: which clock should a *screen*
+ * print this instant on? Saved `User.timezone` first — a zone the person chose
+ * beats one their laptop guessed, and it is also the zone their emails already
+ * use — then the browser's own zone, then the deployment default (#1422).
+ *
+ * The middle step is what makes this different from `resolveTimeZone`, which is
+ * written for the server, where there is no viewer. The `window` guard is there
+ * because `browserTimeZone()` in Node reports the *container's* zone (UTC),
+ * which is nobody's clock.
+ *
+ * Call this from CLIENT components only. The last step is not the same value on
+ * both sides of the boundary: `appTimeZone()` reads `process.env.APP_TIMEZONE`,
+ * which is not `NEXT_PUBLIC_`-prefixed and therefore does not exist in the
+ * client bundle, so a deployment with `APP_TIMEZONE="Europe/Berlin"` resolves
+ * Berlin on the server and `FALLBACK_TIMEZONE` in the browser. A server
+ * component that formatted a slot through this for a user with no saved zone
+ * would hydrate into a "(GMT+2)" → "(GMT+3)" flip — the very class of bug #1030
+ * and #1422 exist to stop. On the server use `resolveTimeZone(user.timezone)`,
+ * which is what the mailer already does.
+ */
+export function viewerTimeZone(saved?: string | null): string {
+  if (isValidTimeZone(saved)) return saved;
+  const browser = typeof window === 'undefined' ? null : browserTimeZone();
+  return isValidTimeZone(browser) ? browser : appTimeZone();
+}

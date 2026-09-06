@@ -76,7 +76,7 @@ export function TagFilter({
       </div>
       {/* Cohort, source and tag are three different things and people conflate
           them within a week of shipping — say the boundary where it is used. */}
-      <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t.tags.vsCohort}</p>
+      <p className="mt-2 text-xs text-gray-400">{t.tags.vsCohort}</p>
     </div>
   );
 }

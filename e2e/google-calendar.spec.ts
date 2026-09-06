@@ -33,7 +33,7 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
 
     // The card is offered because the integration is switched on in this run.
     await page.goto('/account');
-    await expect(page.getByTestId('google-calendar-card')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('connected-calendars-card')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('google-calendar-connect')).toBeVisible();
 
     // Connect: the app redirects to the consent screen. We do not have Google's,

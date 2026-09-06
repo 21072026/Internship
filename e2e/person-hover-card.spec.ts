@@ -33,6 +33,15 @@ test('a person card opens from a name and offers a way to reach them', async ({ 
     const trigger = page.getByTestId(`person-trigger-${mentee.id}`);
     await expect(trigger).toBeVisible({ timeout: 15_000 });
 
+    // #2131: an icon-only trigger is the whole target, and the glyph is 14x14 —
+    // WCAG 2.2 target-size (AA) asks 24x24, so the trigger box carries the hit
+    // area. Asserted here because the same pattern is in the /messages inbox,
+    // where axe caught it; both call sites size the box, not the icon.
+    const box = await trigger.boundingBox();
+    expect(box, 'the person-card trigger must be laid out').not.toBeNull();
+    expect(box!.width).toBeGreaterThanOrEqual(24);
+    expect(box!.height).toBeGreaterThanOrEqual(24);
+
     // The recipient checkbox is the neighbouring control; opening the card must
     // not tick it.
     const checkbox = page.getByRole('checkbox').nth(1);

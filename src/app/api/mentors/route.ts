@@ -5,6 +5,17 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { applyScanCap, matchesTextFilters, pageSlice, toStringArray } from '@/lib/mentorDirectory';
+import type { Prisma } from '@prisma/client';
+
+// Upper bound on the rows the in-memory filter branch is allowed to scan
+// (#1820). It exists only because the skill/language filters still have to run
+// in JavaScript; it is NOT a page size and it is NOT silent — whenever the scan
+// actually reaches it the response says `partial: true` and names the cap, and
+// the directory renders a "this list may be incomplete" notice. Once the
+// taxonomy join table (#1815) lands, the filter moves into `where` and this
+// whole branch — cap included — goes away.
+const JS_FILTER_SCAN_CAP = 2000;
 
 // GET — mentee-facing mentor directory (#938, story #900). Privacy-safe by
 // construction: a mentor is listed ONLY with publicProfile=true AND an active
@@ -30,10 +41,9 @@ export async function GET(request: Request) {
     const acceptingOnly = searchParams.get('accepting') === '1';
     // Single-mentor lookup (#1773): the portal's request panel has to resolve
     // one specific id — the ?mentor=<id> deep link — and cannot do that by
-    // searching a page of the list, because the list is capped at 50 rows while
-    // the directory itself pages through up to 500. Narrowing the SAME
-    // visibility where-clause to one id keeps that resolution honest: an empty
-    // result means "not directory-visible", not "not on this page".
+    // searching a page of the list, because a page holds at most 50 rows and
+    // the mentor it needs may be on any of them. Asking for the one id instead
+    // is both cheaper and honest about what a miss means.
     const mentorId = (searchParams.get('mentorId') || '').trim().slice(0, 64);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '12', 10) || 12));
@@ -41,56 +51,66 @@ export async function GET(request: Request) {
     // Visibility = publicProfile opt-in AND an active MENTOR_DIRECTORY_VISIBILITY
     // consent (#937, GDPR basis for mentee-facing exposure). Revoking the
     // consent removes the mentor from the directory immediately.
-    const rows = await prisma.user.findMany({
-      where: {
-        role: 'MENTOR',
-        isActive: true,
-        publicProfile: true,
-        orgId: resolveOrgId(session),
-        consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
-        ...(mentorId ? { id: mentorId } : {}),
-      },
-      // Mentor counts are small; fetch the consented set and filter/paginate in
-      // JS — the skill/language filters match inside JSON arrays, which MySQL
-      // `contains` can't do case-insensitively.
-      take: 500,
-      orderBy: { fullName: 'asc' },
-      select: {
-        id: true,
-        fullName: true,
-        displayName: true,
-        avatarUrl: true,
-        bio: true,
-        city: true,
-        country: true,
-        skills: true,
-        languages: true,
-        interests: true,
-        mentorCapacity: true,
-        acceptingMentees: true,
-      },
-    });
+    const where: Prisma.UserWhereInput = {
+      role: 'MENTOR',
+      isActive: true,
+      publicProfile: true,
+      orgId: resolveOrgId(session),
+      consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
+    };
 
-    // One groupBy covers every mentor's ACTIVE-mentee count (same approach as
-    // /api/users?view=mentorAvailability) instead of a query per mentor.
-    const counts = rows.length
-      ? await prisma.mentorshipRelation.groupBy({
-          by: ['mentorId'],
-          where: { mentorId: { in: rows.map((r) => r.id) }, status: 'ACTIVE' },
-          _count: { _all: true },
-        })
-      : [];
-    const activeCountByMentorId = new Map(counts.map((c) => [c.mentorId, c._count._all]));
+    // Single-mentor lookup (#1773): narrowing the SAME visibility clause to one
+    // id is what makes the portal's ?mentor=<id> resolution honest — an empty
+    // result means "not directory-visible", never "not on the page you looked
+    // at". It has to be a narrowing of this object and not a separate query, or
+    // the two would drift the first time the visibility rule changes.
+    if (mentorId) where.id = mentorId;
 
-    const asArray = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x)) : []);
+    const select = {
+      id: true,
+      fullName: true,
+      displayName: true,
+      avatarUrl: true,
+      bio: true,
+      city: true,
+      country: true,
+      skills: true,
+      languages: true,
+      interests: true,
+      mentorCapacity: true,
+      acceptingMentees: true,
+    } as const;
 
-    let mentors = rows.map((r) => {
-      const availability = getMentorAvailability({
-        mentorCapacity: r.mentorCapacity,
-        activeMenteeCount: activeCountByMentorId.get(r.id) ?? 0,
-        acceptingMentees: r.acceptingMentees,
+    // `fullName` is neither unique nor indexed, so ordering by it alone leaves
+    // ties to the filesort — and MySQL is explicitly free to break them
+    // differently for a different LIMIT/OFFSET. With `skip`/`take` paging over
+    // that, two mentors sharing a name can land on page 1 AND page 2, or on
+    // neither. The `id` tiebreaker makes the order total, which is what makes
+    // the pages disjoint and complete (same shape as /api/offers).
+    const orderBy: Prisma.UserOrderByWithRelationInput[] = [{ fullName: 'asc' }, { id: 'asc' }];
+
+    const fetchCards = (args: { where: Prisma.UserWhereInput; skip?: number; take?: number }) =>
+      prisma.user.findMany({ where: args.where, select, orderBy, skip: args.skip, take: args.take });
+    type CardRow = Awaited<ReturnType<typeof fetchCards>>[number];
+
+    // One groupBy covers the ACTIVE-mentee count of every mentor in `ids` (same
+    // approach as /api/users?view=mentorAvailability) instead of a query per
+    // mentor. Callers pass the smallest set they can get away with: the page,
+    // or — when `accepting=1` forces it — the rows that survived the text
+    // filters. Never the whole pre-filter scan.
+    const activeCounts = async (ids: string[]) => {
+      if (!ids.length) return new Map<string, number>();
+      const counts = await prisma.mentorshipRelation.groupBy({
+        by: ['mentorId'],
+        where: { mentorId: { in: ids }, status: 'ACTIVE' },
+        _count: { _all: true },
       });
-      return {
+      return new Map(counts.map((c) => [c.mentorId, c._count._all]));
+    };
+
+    const toCards = async (rows: CardRow[]) => {
+      const counts = await activeCounts(rows.map((r) => r.id));
+      return rows.map((r) => ({
         id: r.id,
         fullName: r.fullName,
         displayName: r.displayName,
@@ -98,32 +118,96 @@ export async function GET(request: Request) {
         bio: r.bio,
         city: r.city,
         country: r.country,
-        skills: asArray(r.skills),
-        languages: asArray(r.languages),
+        skills: toStringArray(r.skills),
+        languages: toStringArray(r.languages),
         interests: r.interests,
         mentorCapacity: r.mentorCapacity,
         acceptingMentees: r.acceptingMentees,
-        availabilityStatus: availability.status,
-      };
-    });
+        availabilityStatus: getMentorAvailability({
+          mentorCapacity: r.mentorCapacity,
+          activeMenteeCount: counts.get(r.id) ?? 0,
+          acceptingMentees: r.acceptingMentees,
+        }).status,
+      }));
+    };
 
-    if (skill) {
-      mentors = mentors.filter(
-        (m) =>
-          m.skills.some((s) => s.toLowerCase().includes(skill)) ||
-          (m.interests ?? '').toLowerCase().includes(skill)
+    // Which filters can the database do, and which are still stuck in JS?
+    //   skill / language — matched inside the `skills` / `languages` JSON
+    //     arrays, which MySQL cannot search case-insensitively. Blocked on the
+    //     Skill/UserSkill join table (#1815); after that this becomes an
+    //     ordinary relation `where`.
+    //   accepting        — derived from getMentorAvailability(), i.e. the
+    //     mentor's own preference compared against a *counted* number of ACTIVE
+    //     relations. Not a column, so not a `where` clause either.
+    if (!(skill || language || acceptingOnly)) {
+      // The whole query is expressible in SQL, so let the database do both jobs:
+      // one page of rows, and a count over the SAME where the page came from.
+      // This is the branch /api/candidates already uses (#1392).
+      const [rows, total] = await Promise.all([
+        fetchCards({ where, skip: (page - 1) * pageSize, take: pageSize }),
+        prisma.user.count({ where }),
+      ]);
+      return NextResponse.json({ mentors: await toCards(rows), total, page, pageSize, partial: false });
+    }
+
+    // Fetch → filter → slice. The old code did `take: 500` here and then
+    // reported the size of the survivors as the total, so a mentor holding the
+    // searched skill but sorting 501st did not exist and nothing said the
+    // answer was partial (#1820). The cap is now far higher, and — the actual
+    // fix — reaching it is reported instead of hidden.
+    //
+    // The scan reads only the columns the JS filter itself needs. /mentors
+    // re-runs this 300 ms after every keystroke in the skill/language boxes, so
+    // dragging up to CAP full cards (bio and all) through the Node heap per
+    // keystroke would be a real regression; the card payload is re-read below
+    // for the ≤ pageSize rows that actually survive.
+    const scanned = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        skills: true,
+        languages: true,
+        interests: true,
+        mentorCapacity: true,
+        acceptingMentees: true,
+      },
+      orderBy,
+      take: JS_FILTER_SCAN_CAP + 1, // limit+1 probe: the extra row is what makes `partial` exact
+    });
+    const { rows: scanRows, truncated: partial } = applyScanCap(scanned, JS_FILTER_SCAN_CAP);
+
+    let matches = scanRows.filter((r) => matchesTextFilters(r, skill, language));
+    if (acceptingOnly) {
+      const counts = await activeCounts(matches.map((r) => r.id));
+      matches = matches.filter(
+        (r) =>
+          getMentorAvailability({
+            mentorCapacity: r.mentorCapacity,
+            activeMenteeCount: counts.get(r.id) ?? 0,
+            acceptingMentees: r.acceptingMentees,
+          }).status === 'available'
       );
     }
-    if (language) {
-      mentors = mentors.filter((m) => m.languages.some((l) => l.toLowerCase().includes(language)));
-    }
-    if (acceptingOnly) {
-      mentors = mentors.filter((m) => m.availabilityStatus === 'available');
-    }
 
-    const total = mentors.length;
-    const pageRows = mentors.slice((page - 1) * pageSize, page * pageSize);
+    // `total` describes the set that was actually filtered — never a truncated
+    // read dressed up as a complete one. If the scan itself hit the cap, say so
+    // explicitly so the UI can warn instead of quietly under-reporting.
+    const total = matches.length;
+    const pageIds = pageSlice(matches, page, pageSize).map((r) => r.id);
+    // Re-read the full card payload for just this page. The visibility `where`
+    // is re-applied alongside the ids, so the allowlisted select can never be
+    // reached through an id that would not pass the consent gate on its own.
+    const cardRows = pageIds.length ? await fetchCards({ where: { AND: [where, { id: { in: pageIds } }] } }) : [];
+    const byId = new Map(cardRows.map((r) => [r.id, r]));
+    const ordered = pageIds.map((id) => byId.get(id)).filter((r): r is CardRow => Boolean(r));
 
-    return NextResponse.json({ mentors: pageRows, total, page, pageSize });
+    return NextResponse.json({
+      mentors: await toCards(ordered),
+      total,
+      page,
+      pageSize,
+      partial,
+      ...(partial ? { cap: JS_FILTER_SCAN_CAP } : {}),
+    });
   });
 }

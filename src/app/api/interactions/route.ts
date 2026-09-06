@@ -8,13 +8,14 @@ import { z } from 'zod';
 import { dispatchWebhook } from '@/lib/webhooks';
 import { notifyIfAllowed } from '@/lib/notify';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { INTERACTION_TYPES } from '@/lib/interactionTypes';
 
 const createInteractionSchema = z.object({
   relationId: z.string().min(1),
   date: z.string().min(1),
   subject: z.string().max(TEXT_LIMITS.interactionSubject).optional(),
   notes: z.string().min(1, 'Notes are required').max(TEXT_LIMITS.interactionNotes),
-  type: z.enum(['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp']),
+  type: z.enum(INTERACTION_TYPES),
 });
 
 export async function GET(request: Request) {
