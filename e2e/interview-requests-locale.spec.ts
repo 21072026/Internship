@@ -81,11 +81,13 @@ test('a Turkish UI on a US-locale browser prints 25.08.2026 and names the slot z
   await page.evaluate(() => { document.cookie = 'locale=tr;path=/'; });
   await gotoSettled(page, '/admin/interview-requests');
 
-  // Scope everything to the card for THIS request: the queue is a list and an
-  // unscoped text locator would match any other seeded row that happens to be
-  // in the same org.
+  // Scope everything to the card for THIS request. It has to be the card's own
+  // testid, not `locator('div').filter({ hasText })`: filter+first() returns the
+  // first match in DOM order, which is the `space-y-4` wrapper around the whole
+  // list — so the slot assertion below would read whichever request happened to
+  // be rendered first.
   const queue = page.getByTestId('admin-interview-requests');
-  const card = queue.locator('div').filter({ hasText: `Loc Dates Req ${stamp}` }).first();
+  const card = queue.getByTestId(`interview-request-${request.id}`);
   await expect(card).toBeVisible({ timeout: 20_000 });
 
   // The request date: Turkish gg.aa.yyyy, never the en-US M/D/YYYY the browser
@@ -95,7 +97,10 @@ test('a Turkish UI on a US-locale browser prints 25.08.2026 and names the slot z
 
   // The proposed slot: read on the admin's saved Istanbul clock (16:30), not on
   // the browser's New York one (09:30), and saying which clock that was.
-  const slot = card.locator('li').filter({ hasText: '2026' }).first();
+  // One seeded slot, so this also proves the scoping above held: an unscoped
+  // card locator would drag in every other request's slots too.
+  await expect(card.locator('li')).toHaveCount(1);
+  const slot = card.locator('li').first();
   await expect(slot).toContainText('16:30');
   await expect(slot).toContainText('(GMT+3)');
   await expect(slot).not.toContainText('09:30');

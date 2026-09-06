@@ -39,11 +39,31 @@ function sourceFiles(paths) {
   return out;
 }
 
-// Blank out comments and string/template literals, preserving newlines and
-// length so reported line numbers still point at the real source. Without this
-// the header of src/lib/timezone.ts — which *quotes* the bug it fixed — reports
-// itself, and the guard cries wolf on the one file that documents the rule.
-function stripNonCode(source) {
+// Blank out COMMENTS — and only comments — preserving newlines and length so
+// reported line numbers still point at the real source. Comment stripping is
+// the part that actually needs doing: the header of src/lib/timezone.ts *quotes*
+// the bug it fixed, and without this the guard cries wolf on the one file that
+// documents the rule.
+//
+// String and template literals are deliberately kept. An earlier version blanked
+// them too and went blind twice over:
+//   • `` `saved ${d.toLocaleTimeString()}` `` — the offending call sits inside a
+//     template *interpolation*, which is code, not text, and is the single most
+//     idiomatic shape for this bug (the site this check was written for was one
+//     `.replace('{t}', …)` refactor away from it);
+//   • `<p>Don't panic: {d.toLocaleDateString()}</p>` — a bare apostrophe in JSX
+//     text opened a "string" that swallowed the rest of the file.
+// Keeping the contents costs only the reverse risk — a `.toLocaleDateString()`
+// written inside an actual string would be reported — and that failure is loud
+// and one comment away from a fix, where a missed call site is silent forever.
+//
+// The quote scanner is still needed so that a `//` inside a string ("https://…")
+// is not mistaken for a comment. Two details keep a mis-lex cheap: a quoted JS
+// string cannot contain a raw newline, so a stray apostrophe can only ever
+// mislead the scanner to the end of its own line; and a template literal is
+// copied verbatim through to its closing backtick, so nothing inside one can
+// look like a comment.
+function stripComments(source) {
   let out = '';
   let i = 0;
   const blank = (text) => text.replace(/[^\n]/g, ' ');
@@ -59,17 +79,24 @@ function stripNonCode(source) {
       const stop = end === -1 ? source.length : end + 2;
       out += blank(source.slice(i, stop));
       i = stop;
-    } else if (source[i] === '"' || source[i] === "'" || source[i] === '`') {
+    } else if (source[i] === '"' || source[i] === "'") {
       const quote = source[i];
       let j = i + 1;
-      while (j < source.length) {
-        if (source[j] === '\\') j += 2;
-        else if (source[j] === quote) { j++; break; }
-        else j++;
+      while (j < source.length && source[j] !== '\n') {
+        if (source[j] === '\\') { j += 2; continue; }
+        if (source[j] === quote) { j++; break; }
+        j++;
       }
-      // Keep the quotes so the surrounding expression still parses visually;
-      // blank the contents.
-      out += quote + blank(source.slice(i + 1, Math.max(i + 1, j - 1))) + (j <= source.length ? quote : '');
+      out += source.slice(i, j); // kept verbatim, contents and all
+      i = j;
+    } else if (source[i] === '`') {
+      let j = i + 1;
+      while (j < source.length) {
+        if (source[j] === '\\') { j += 2; continue; }
+        if (source[j] === '`') { j++; break; }
+        j++;
+      }
+      out += source.slice(i, j);
       i = j;
     } else {
       out += source[i];
@@ -84,21 +111,55 @@ function stripNonCode(source) {
 // argument (a locale string, a variable, `locale`) passes.
 const BARE_CALL = /\.toLocale(?:Date|Time)?String\s*\(\s*(?:\)|undefined\b)/g;
 
+// Every locale-less call in one source, as { line, method }.
+function bareCalls(raw) {
+  const source = stripComments(raw);
+  const found = [];
+  BARE_CALL.lastIndex = 0;
+  let m;
+  while ((m = BARE_CALL.exec(source))) {
+    found.push({
+      line: source.slice(0, m.index).split('\n').length,
+      method: /toLocale(?:Date|Time)?String/.exec(m[0])[0],
+    });
+  }
+  return found;
+}
+
+// The guard checks itself before it checks the tree. Every case below is one
+// this script has actually got wrong, so a future "simplification" of
+// stripComments fails here rather than by quietly passing a real call site.
+const SELF_TESTS = [
+  ['a bare call in JSX', 'const a = <p>{d.toLocaleDateString()}</p>;', 1],
+  ['inside a template interpolation', 'const a = <p>{`saved ${d.toLocaleTimeString()}`}</p>;', 1],
+  ["after an apostrophe in JSX text", "const a = <p>Don't panic: {d.toLocaleDateString()}</p>;", 1],
+  ['undefined as the locale', 'const a = d.toLocaleString(undefined, { hour: "2-digit" });', 1],
+  ['two on separate lines', 'const a = d.toLocaleDateString();\nconst b = d.toLocaleTimeString();', 2],
+  ['a locale was passed', "const a = d.toLocaleDateString(locale);", 0],
+  ['a literal locale was passed', "const a = d.toLocaleDateString('tr', opts);", 0],
+  ['a line comment quoting the bug', '// never write d.toLocaleDateString() here\nconst a = 1;', 0],
+  ['a block comment quoting the bug', '/*\n * d.toLocaleDateString() is the bug.\n */\nconst a = 1;', 0],
+  ['a URL in a string is not a comment', "const u = 'https://x/y'; const a = d.toLocaleDateString();", 1],
+];
+
+const selfFailures = SELF_TESTS.filter(([, code, want]) => bareCalls(code).length !== want);
+if (selfFailures.length > 0) {
+  console.error('locale dates guard is BROKEN — its own self-test failed, so its verdict on src means nothing:\n');
+  for (const [name, code, want] of selfFailures) {
+    console.error(`  • ${name}: expected ${want} hit(s), got ${bareCalls(code).length}\n      ${code.replace(/\n/g, '\\n')}`);
+  }
+  console.error('\nSee stripComments() in this file and issue #1422.');
+  process.exit(1);
+}
+
 const problems = [];
 let scanned = 0;
-let callSites = 0;
 
 for (const file of sourceFiles(ROOTS)) {
   const raw = readFileSync(file, 'utf8');
   if (!raw.includes('toLocale')) continue;
   scanned++;
-  const source = stripNonCode(raw);
-  BARE_CALL.lastIndex = 0;
-  let m;
-  while ((m = BARE_CALL.exec(source))) {
-    callSites++;
-    const line = source.slice(0, m.index).split('\n').length;
-    const method = /toLocale(?:Date|Time)?String/.exec(m[0])[0];
+  for (const { line, method } of bareCalls(raw)) {
     problems.push(
       `${file}:${line}  \`${method}()\` with no locale — this renders in the BROWSER's language, ` +
         "not the app's, so a Turkish UI on a US-locale machine prints 8/25/2026. Use " +
@@ -117,6 +178,7 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `locale dates OK — ${scanned} file(s) mention toLocale*; ${callSites} locale-less call site(s) found. ` +
-    'Every displayed date/time goes through the app-locale helpers in src/lib/relativeTime.ts.'
+  `locale dates OK — self-test green (${SELF_TESTS.length} cases); ${scanned} file(s) mention toLocale*, ` +
+    'none of them locale-less. Every displayed date/time goes through the app-locale helpers in ' +
+    'src/lib/relativeTime.ts.'
 );

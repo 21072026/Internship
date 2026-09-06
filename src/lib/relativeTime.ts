@@ -26,6 +26,16 @@ export function relativeTime(date: Date | string, locale: string): string {
 // the app's selected language (TR/DE) instead of the browser's default.
 // `options` overrides the defaults below (e.g. a caller needing a long
 // weekday/month form) while still resolving against the app's locale.
+//
+// House rule for the whole family (formatDate / formatDateTime / formatTime /
+// formatDateTimeWithZone): every time of day is written on a 24-hour clock,
+// `hourCycle: 'h23'`, in every locale. TR and DE get that from the locale
+// anyway; `en` does not, so without it the same admin would read "16:30" in the
+// meeting list and "04:30 PM" in the e-mail log one screen later. The pickers,
+// the meeting list and lib/timezone.ts § readingsByZone all write "16:30", and
+// a lone "04:30 PM" is exactly the ambiguity this family exists to remove.
+// A caller that genuinely wants the locale's own clock passes
+// `{ hourCycle: undefined }`.
 export function formatDate(date: Date | string, locale: string, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit', ...options }).format(d);
@@ -34,14 +44,13 @@ export function formatDate(date: Date | string, locale: string, options?: Intl.D
 export function formatDateTime(date: Date | string, locale: string, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat(locale, {
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', ...options,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...options,
   }).format(d);
 }
 
 // Time of day only ("14:32"), still on the app's locale rather than the
-// browser's. `hourCycle: 'h23'` matches how the rest of the app writes times
-// (the pickers, the meeting list, lib/timezone.ts § readingsByZone): a stray
-// "02:32 PM" in a Turkish UI is exactly the mismatch this family exists to stop.
+// browser's, and on the family's 24-hour clock (see the house rule above).
 export function formatTime(date: Date | string, locale: string, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...options }).format(d);

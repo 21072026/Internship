@@ -9,6 +9,12 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
 
+// The delivery log answers "did our mail actually go out, and when?", and a
+// newsletter or announcement send writes one EmailLog row per recipient — 50
+// rows all stamped "25.08.2026 16:30" cannot tell a burst apart from a stall.
+// The old `toLocaleString()` here carried seconds; keep them (#1422).
+const WITH_SECONDS: Intl.DateTimeFormatOptions = { second: '2-digit' };
+
 export default function AdminSettingsPage() {
   const t = useT();
   const locale = useLocale();
@@ -351,7 +357,7 @@ export default function AdminSettingsPage() {
             <div className="text-sm" data-testid="email-delivery-health">
               <span className="text-gray-600 dark:text-gray-300">
                 {emailHealth.lastOkAt
-                  ? t.settings.deliveryLastOk.replace('{t}', formatDateTime(emailHealth.lastOkAt, locale))
+                  ? t.settings.deliveryLastOk.replace('{t}', formatDateTime(emailHealth.lastOkAt, locale, WITH_SECONDS))
                   : t.settings.deliveryNeverOk}
               </span>
               {emailHealth.failuresSinceOk > 0 ? (
@@ -444,7 +450,7 @@ export default function AdminSettingsPage() {
                     {emailLog.entries.map((e) => (
                       <tr key={e.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
                         <td className="py-1.5 pr-2 whitespace-nowrap text-gray-400">
-                          {formatDateTime(e.createdAt, locale)}
+                          {formatDateTime(e.createdAt, locale, WITH_SECONDS)}
                         </td>
                         <td className="py-1.5 pr-2 whitespace-nowrap">
                           <span

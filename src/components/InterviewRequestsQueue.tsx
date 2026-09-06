@@ -97,7 +97,7 @@ export function InterviewRequestsQueue({ mentor = false }: { mentor?: boolean })
                 })}`
               : null;
             return (
-              <Card key={item.id}>
+              <Card key={item.id} data-testid={`interview-request-${item.id}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="break-words font-semibold text-gray-900 dark:text-gray-100">{item.requisition.title}</h2>
