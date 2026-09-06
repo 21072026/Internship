@@ -208,6 +208,18 @@ workaround, #636, and it compiled on every PR push).
   `executablePath` workaround, the role × endpoint matrix method, **which areas already tested
   clean** (don't re-litigate them; breaking one is a regression), and what was never examined.
   Root tracking issue for the 2026-07 audit: **#951**.
+- **Multi-tenancy** (`docs/tenant-isolation.md`, #543): a model that holds tenant data needs
+  an `orgId` column **and** an entry in `TENANT_MODELS` (`src/lib/orgContext.ts`) — the Prisma
+  middleware ignores unregistered models in silence, so a row with an `orgId` that nobody
+  registered only *looks* scoped. `npm run check:tenant-models` (in CI, #1560) compares the
+  schema against the registry in both directions and fails on either kind of drift; a
+  deliberate exception goes in the script's `EXEMPT` map with its reason, never in a comment
+  somewhere else. **It is not yet green-means-clean:** the eight models of #1559 are already
+  unprotected, and they sit in a `PENDING_REGISTRATION` ratchet that the check warns about
+  (a GitHub annotation in CI) instead of failing on — so the guard's job until #1559 lands is
+  to stop that set from *growing*. Its length is pinned by an `EXPECTED_PENDING` literal;
+  adding a name means moving the number in the same diff, and registering one means deleting
+  the entry (a stale entry fails the check).
 - **Landing page copy** lives in the three `landing:` blocks of `src/i18n/dictionaries.ts`
   (EN/TR/DE — key parity is enforced by `npm run check:i18n` and CI). Several e2e specs
   assert exact landing strings (e.g. "Connect Talent with", "Everything you need",

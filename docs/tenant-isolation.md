@@ -62,6 +62,53 @@ All of this is exercised against a real DB by `e2e/org-isolation.spec.ts` and
 never called `orgScoped()`** is still isolated purely because it ran inside
 `runWithOrg()` with the flag on, and is a no-op with the flag off.
 
+### Keeping the registry honest (`npm run check:tenant-models`)
+
+The middleware only scopes models that are named in `TENANT_MODELS`. An
+unregistered model is a **silent** pass-through — nothing throws and nothing
+logs, so a row that carries an `orgId` column merely *looks* isolated while it
+is protected by whatever `where` clause the last developer remembered. The set
+drifted from the schema once and eight tenant-keyed models stayed unprotected
+for months.
+
+`scripts/check-tenant-models.mjs` (wired into `.github/workflows/ci.yml` as
+`npm run check:tenant-models`) compares the two lists on every PR and fails in
+both directions:
+
+- a model in `prisma/schema.prisma` that declares `orgId` and is not registered;
+- a name in `TENANT_MODELS` that is not a model, or is a model that no longer
+  has the column — a typo is the same silent no-op as a missing entry.
+
+Two escape hatches live inside the script, and both require a written reason.
+
+`EXEMPT` is for a model that is deliberately never auto-scoped. Today it holds
+one name: `Organization`, which *is* the tenant rather than a row inside one and
+can never grow an `orgId` of its own. An exemption is only granted against a
+schema someone has read, so `Setting` is **not** pre-exempted even though its
+column is coming: when #1551 adds `orgId` to `Setting` this check will fail, and
+the register-vs-exempt call gets made then, against the real shape. (#1557
+records the intent — `Setting`'s legacy rows will stay `orgId = NULL` as the
+global fallback layer — but #1560 also says `Setting` must be *registered* and
+behave specially, and those two have to be reconciled with the column in hand.)
+
+`PENDING_REGISTRATION` is for a model that is known to be unprotected and is
+waiting on its own reviewed change — the eight models of #1559. It is a ratchet,
+not an allowlist:
+
+- every run prints each pending model with its own reason, and in CI emits a
+  GitHub **warning annotation** on `src/lib/orgContext.ts`, so the PR page shows
+  the unprotected set instead of burying it in a green step's log;
+- while anything is pending the summary line does **not** say "OK" — it reads
+  `no NEW drift, but N model(s) remain unprotected`;
+- the list length is pinned by an `EXPECTED_PENDING` literal, so a ninth
+  unprotected model cannot be waved through by appending a line: the number has
+  to move in the same diff, in front of a reviewer;
+- an entry that has since been registered, or whose model lost its `orgId`,
+  fails the check until it is deleted.
+
+So the guard's job while #1559 is open is to stop the set of unprotected models
+from *growing*, and to say on every run exactly which ones they are.
+
 ### Per-route rollout status
 
 Handlers adopt the engine by wrapping their body in `withTenantScope(session, …)`.
