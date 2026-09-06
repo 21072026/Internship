@@ -87,6 +87,12 @@ export default defineConfig({
           // assertions about what an anonymous caller may see would be vacuous.
           HEALTH_TOKEN: E2E_HEALTH_TOKEN,
           INBOUND_SECRET: E2E_INBOUND_SECRET,
+          // Shared with e2e/error-boundary.spec.ts (#1602). Unlocks the two
+          // test-only routes that throw on purpose so the route-level error
+          // boundaries can be exercised; a NODE_ENV check would not work here
+          // because CI serves a production build. Unset everywhere else, so the
+          // routes are a 404 on preview and production.
+          E2E_ERROR_ROUTES: '1',
           JAAS_WEBHOOK_SECRET: E2E_JAAS_WEBHOOK_SECRET,
           // Google Calendar (#709): credentials that only mean anything to the
           // local stub above, plus the master switch the integration is gated
