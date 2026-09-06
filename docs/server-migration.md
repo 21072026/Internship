@@ -302,6 +302,65 @@ kesme sonrası bir hafta silinmiyor.
 
 ---
 
+## Taşınmanın e-postayı kırdığı iki nokta (2026-09-06)
+
+Kesmeden ~14 saat sonra bütün giden e-postalar `Connection timeout` vermeye
+başladı — 202 başarısız gönderim, aralarında gerçek kullanıcı mesajları,
+toplantı hatırlatmaları ve pasif-temas mailleri. İki bağımsız sebep vardı ve
+**ikisi de taşımanın kendisinden** kaynaklandı.
+
+### 1. Bir hostname'i yönlendirmek, onu servis adresi olarak kullanan her şeyi kırar
+
+`SMTP_HOST=crm.ersah.in` idi. O isim eski kutuyu gösteriyordu ve orada Plesk'in
+mail sunucusu vardı. Eski linkler ölmesin diye `crm.ersah.in`'i yeni sunucuya
+yönlendirdik — ve yeni sunucuda 80/443'ten başka bir şey yok.
+
+Bir DNS kaydını "eski URL'ler çalışsın" diye taşırken, o ismin **web dışında**
+neye hizmet ettiğini kontrol et: SMTP, IMAP, veritabanı, webhook hedefi. Bir
+hostname birden fazla protokole bakabilir ve HTTP yönlendirmesi diğerlerini
+sessizce koparır.
+
+**Düzeltme:** `SMTP_HOST=s.ersah.in` — mail sunucusunun kendi adı, kendi
+sertifikasıyla (`CN=s.ersah.in`).
+
+### 2. Plesk subdomain'ini silmek, mail domain'ini de siler
+
+Eski kutuyu temizlerken `crm.ersah.in` Plesk subdomain'i kaldırıldı. O subdomain
+aynı zamanda bir **mail domain**'iydi ve `reply@crm.ersah.in` posta kutusu onunla
+birlikte gitti. Sonuç sadece "gelen posta çalışmıyor" değildi:
+
+Uygulamanın gelen-posta okuyucusu (`MailBridge`) **60 saniyede bir** o kutuya
+bağlanmaya devam etti. Her deneme dovecot'ta `auth_failed` üretti → `plesk-dovecot`
+jail'i IP'yi banladı → tekrarlanan banlar `recidive` jail'ini tetikledi → **7
+günlük, bütün portları kapsayan** ban. Giden posta (465) da o bana takıldı.
+
+Yani gelen postanın kırılması, **gideni de öldürdü** — ve `Connection timeout`
+hatası bunun hiçbirini söylemiyor.
+
+**Teşhis izi:** giden mail timeout veriyorsa, mail sunucusundaki
+`iptables -S | grep <istemci-ip>` ve `fail2ban-client status recidive` bak. Bir
+kimlik doğrulama döngüsü, ilgisiz görünen bir portu kapatabilir.
+
+### Bunu düzeltirken öğrenilen üçüncü şey
+
+`docker restart` **env dosyasını yeniden okumaz.** Container oluşturulduğu andaki
+değişkenlerle kalkar. `prod.env`'i düzeltip `docker restart` demek hiçbir şey
+değiştirmez — container'ın **yeniden yaratılması** gerekir. `deploy-prod.sh`
+zaten öyle yapıyor; elle müdahalede unutmak kolay.
+
+### Açık kalan: gelen posta
+
+`INBOUND_IMAP_ENABLED=0` ile okuyucu susturuldu (ban döngüsünü durdurmak için).
+Gelen yanıtlar şu an işlenmiyor. Üç seçenek:
+
+| | Ne gerekir | Değerlendirme |
+|---|---|---|
+| Eski kutuda mail domain'ini geri kur | Plesk'te `crm.ersah.in` + `reply@` kutusu | Çalışan hâle en hızlı dönüş, ama InternCRM'i emekli kutuya geri koyar |
+| Cloudflare Email Routing → Worker → `/api/inbound-email` | interncrm.com'a MX, bir Worker, `INBOUND_SECRET` | Kutusuz, ücretsiz, doğru uzun vade. Uygulamada webhook ucu **zaten var** |
+| Yeni sunucuda postfix/dovecot | Kurulum + SPF/DKIM/DMARC + teslimat itibarı | En çok iş, en çok bakım |
+
+---
+
 ## Doğrulama listesi
 
 ```bash
