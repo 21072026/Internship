@@ -15,7 +15,7 @@ import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPre
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
-import { getMentorMenteeActivity, getSystemMenteeActivity, formatDuration, type MenteeActivity } from '@/lib/activityReport';
+import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
@@ -925,7 +925,12 @@ export async function sendMeetingInviteEmail({
   const M = getDictionary(resolved).notifications.meetingInviteEmail;
   // A meeting with no set time is just a shared link — skip the "when" line and
   // the RSVP ask entirely.
-  const when = scheduledAt ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }) : null;
+  // The date is the payload of an invitation, so it follows the body's language
+  // too — a Turkish invite that names the day in English is the half-translated
+  // shape #1720 exists to end.
+  const when = scheduledAt
+    ? formatInTimeZone(scheduledAt, timeZone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))
+    : null;
   const askRsvp = Boolean(when && rsvpToken);
   // A link-only meeting (no scheduledAt) has no slot to occupy, so it gets no
   // attachment at all — an .ics without a DTSTART is not a thing.
@@ -1021,7 +1026,7 @@ export async function sendMeetingGuestInviteEmail({
   const T = getDictionary(resolved).notifications.emailTimes;
   const zone = resolveTimeZone(organizerTimeZone);
   const when = scheduledAt
-    ? `${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' })} (${zoneLabel(scheduledAt, zone)})`
+    ? `${formatInTimeZone(scheduledAt, zone, { dateStyle: 'full', timeStyle: 'short' }, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`
     : null;
   const invitedBy = organizerName ? esc(organizerName) : null;
   const ics =
@@ -1190,11 +1195,12 @@ function organizerTimeLine(
   locale?: string | null
 ): string {
   if (!organizerTimeZone || sameWallClock(organizerTimeZone, recipientTimeZone, at)) return '';
-  const T = getDictionary(resolveLocale(locale)).notifications.emailTimes;
+  const loc = resolveLocale(locale);
+  const T = getDictionary(loc).notifications.emailTimes;
   const who = organizerName
     ? esc(T.organizerTime.replace('{name}', organizerName))
     : esc(T.organizerTimeGeneric);
-  return `<p style="color:#6b7280;font-size:14px;">${who}: ${formatInTimeZone(at, organizerTimeZone, { dateStyle: 'medium', timeStyle: 'short' })}</p>`;
+  return `<p style="color:#6b7280;font-size:14px;">${who}: ${formatInTimeZone(at, organizerTimeZone, { dateStyle: 'medium', timeStyle: 'short' }, dateLocale(loc))}</p>`;
 }
 
 // The same instant on everyone *else's* clock — one line per distinct clock, so
@@ -1211,8 +1217,11 @@ function participantClocks(
 ): string {
   const elsewhere = others.filter((p) => !sameWallClock(p.timezone, viewerTimeZone, at));
   if (elsewhere.length === 0) return '';
-  const T = getDictionary(resolveLocale(locale)).notifications.emailTimes;
-  const rows = readingsByZone(at, elsewhere)
+  const loc = resolveLocale(locale);
+  const T = getDictionary(loc).notifications.emailTimes;
+  // The readings themselves take the locale as well; a translated heading over
+  // rows still reading "Thu, 10 Sept" is worse than leaving both in English.
+  const rows = readingsByZone(at, elsewhere, dateLocale(loc))
     .map((r) => `<li>${esc(r.names.join(', '))} — ${esc(r.when)} (${esc(r.offsetLabel)})</li>`)
     .join('');
   return `<p style="color:#6b7280;font-size:14px;margin-bottom:4px;">${esc(T.others)}</p>
@@ -1369,6 +1378,16 @@ export async function sendMentorshipRequestEmail({
 // `locale` captured on submit (src/app/apply-as-mentor/page.tsx) is all we have.
 function resolveLocale(locale?: string | null): Locale {
   return isLocale(locale ?? undefined) ? (locale as Locale) : defaultLocale;
+}
+
+// The app's locale codes are 'en' | 'tr' | 'de'; Intl wants a BCP-47 tag. Every
+// helper in lib/timezone.ts defaults to 'en-GB', and bare 'en' resolves to
+// en-US — which would silently flip every English mail to "Sep 10, 2026, 5:00 PM"
+// while the rest of the product writes 24-hour times. #1720 is about writing the
+// mails in the recipient's language, not about re-formatting the English ones,
+// so English keeps the tag it always had and only tr/de change.
+function dateLocale(locale: Locale): string {
+  return locale === 'en' ? 'en-GB' : locale;
 }
 
 export async function sendMentorApplicationReceivedEmail({
@@ -2331,9 +2350,15 @@ export async function sendMeetingReminders() {
 
     for (const user of participants) {
       const link = user.id === m.relation.mentorId ? '/mentor/meetings' : '/portal/calendar';
+      // LOCALE (#1720): the recipient is a signed-up participant, so the
+      // language is their own stored preference — for the mail below and for
+      // the date it is about. Resolved up here because the in-app notification
+      // carries the same pre-rendered string and is addressed to the same
+      // person.
+      const uLocale = resolveLocale(user.preferredLanguage);
       // Per participant: the two sides of a relation can sit in different zones,
       // and each must read the time on their own clock (#1030).
-      const when = formatInTimeZone(m.scheduledAt!, user.timezone);
+      const when = formatInTimeZone(m.scheduledAt!, user.timezone, undefined, dateLocale(uLocale));
       // In-app: unconditional (notify() never throws).
       await notify(
         user.id,
@@ -2346,9 +2371,6 @@ export async function sendMeetingReminders() {
       if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-reminder')) continue;
       try {
         const brand = await emailBrand(user.orgId);
-        // LOCALE (#1720): the recipient is a signed-up participant, so the
-        // language is their own stored preference.
-        const uLocale = resolveLocale(user.preferredLanguage);
         const R = getDictionary(uLocale).notifications.meetingReminderEmail;
         const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
         await sendEmail({
@@ -2437,8 +2459,8 @@ async function sendMeetingGuestReminderEmail({
   locale?: string | null;
 }) {
   const zone = resolveTimeZone(organizerTimeZone);
-  const when = `${formatInTimeZone(scheduledAt, zone)} (${zoneLabel(scheduledAt, zone)})`;
   const resolved = resolveLocale(locale);
+  const when = `${formatInTimeZone(scheduledAt, zone, undefined, dateLocale(resolved))} (${zoneLabel(scheduledAt, zone)})`;
   const R = getDictionary(resolved).notifications.meetingReminderEmail;
   const [bodyBefore, bodyAfter = ''] = R.body.split('{title}');
   await sendEmail({
@@ -2560,7 +2582,11 @@ export async function sendProjectMeetingSeriesReminders() {
       const projectName = series.project?.name ?? '';
       for (const user of recipients) {
         const link = `/projects/${series.projectId}`;
-        const whenLocal = formatInTimeZone(when, user.timezone);
+        // LOCALE (#1720): a project team member is a signed-up User, so their
+        // own stored preference decides — for the occurrence's date as much as
+        // for the sentence around it, and for the in-app copy of the same line.
+        const uLocale = resolveLocale(user.preferredLanguage);
+        const whenLocal = formatInTimeZone(when, user.timezone, undefined, dateLocale(uLocale));
         await notify(
           user.id,
           lead === 'HOUR_BEFORE' ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
@@ -2572,9 +2598,6 @@ export async function sendProjectMeetingSeriesReminders() {
         if (!user.email || !emailAllowed(user, 'meetingReminders') || !emailGroupAllowedForCategory(user, 'meeting-series-reminder')) continue;
         try {
           const brand = await emailBrand(series.project?.orgId ?? null);
-          // LOCALE (#1720): a project team member is a signed-up User, so their
-          // own stored preference decides.
-          const uLocale = resolveLocale(user.preferredLanguage);
           const S = getDictionary(uLocale).notifications.meetingSeriesReminderEmail;
           // Two sentences, because the project name is only appended when there
           // is one — and in Turkish and German that is not a suffix you can bolt
@@ -2710,10 +2733,20 @@ function activityDigestTable(items: MenteeActivity[], locale?: string | null): s
             ? A.loginToday
             : A.loginDaysAgo.replace('{n}', String(m.daysSinceLogin));
       const flag = m.daysSinceLogin !== null && m.daysSinceLogin >= 7 ? ' ⚠️' : '';
+      // NOT lib/activityReport.ts § formatDuration: that one hardcodes "2h 5m",
+      // which is the last English left in an otherwise translated row (#1720).
+      // Same arithmetic, dictionary units.
+      const hours = Math.floor(m.timeOnSiteSec / 3600);
+      const mins = Math.round((m.timeOnSiteSec % 3600) / 60);
+      const onSite = `${
+        hours > 0
+          ? A.onSiteHours.replace('{h}', String(hours)).replace('{m}', String(mins))
+          : A.onSiteMinutes.replace('{m}', String(mins))
+      } · ${A.onSitePages.replace('{n}', String(m.pageViews))}`;
       return `<tr>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.menteeName}${flag}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(login)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${formatDuration(m.timeOnSiteSec)} · ${m.pageViews}p</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(onSite)}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.goalsCompleted}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.interactions}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.meetings}</td>

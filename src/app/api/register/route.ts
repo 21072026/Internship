@@ -6,7 +6,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { z } from 'zod';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
-import { isLocale } from '@/i18n/config';
+import { isLocale, locales } from '@/i18n/config';
 import { passwordSchema } from '@/lib/password';
 import { notify } from '@/lib/notify';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
@@ -36,6 +36,14 @@ const registerSchema = z.object({
   // until they happened to open the app and TimezoneSync noticed. An invalid or
   // absent value is simply dropped: registration must never fail over this.
   timezone: z.string().max(80).optional(),
+  // The UI language the form was filled in (#1720). Same reasoning as
+  // `timezone` directly above: an open sign-up has no invitation to inherit a
+  // language from and no stored preference yet, and it is the highest-volume
+  // verification send there is — so the browser's own answer is the only
+  // evidence available, and without it a German cohort gets an English mail.
+  // Anything outside the app's locales is dropped by the enum, exactly like an
+  // invalid zone: registration must never fail over this.
+  locale: z.enum(locales).optional(),
 });
 
 export async function POST(request: Request) {
@@ -153,7 +161,7 @@ export async function POST(request: Request) {
     const orgId = invitedOrgId ?? (await defaultOrgId());
 
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId, preferredLanguage: invitationLocale },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId, preferredLanguage: invitationLocale ?? parsed.data.locale ?? null },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
     });
 
@@ -249,10 +257,11 @@ export async function POST(request: Request) {
     } else {
       const verifyToken = await createEmailVerificationToken(user.id);
       try {
-        // Open self-registration: there is no invitation and no stored
-        // preference yet, so this one legitimately falls back to the deployment
-        // default (#1720).
-        await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName });
+        // Open self-registration: no invitation and no stored preference yet,
+        // so the language the form was filled in is the only signal there is
+        // (#1720). Absent (an API client, an old cached page) it still falls
+        // back to the deployment default.
+        await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName, locale: parsed.data.locale });
       } catch (e) {
         console.error('Verification email failed:', e);
       }

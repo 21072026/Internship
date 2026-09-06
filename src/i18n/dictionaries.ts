@@ -1968,6 +1968,13 @@ const en = {
       loginNever: 'never',
       loginToday: 'today',
       loginDaysAgo: '{n}d ago',
+      // The "On site" cell: a duration plus a page count, in the same language
+      // as the header above it (#1720). Hours and minutes are separate keys
+      // because a sub-hour visit must not print a leading "0h", and the page
+      // suffix is a word in German rather than a bare letter.
+      onSiteHours: '{h}h {m}m',
+      onSiteMinutes: '{m}m',
+      onSitePages: '{n}p',
     },
     unreadDigestEmail: {
       subjectOne: 'You have 1 unread message',
@@ -5305,7 +5312,7 @@ const tr: Dict = {
     openBoard: 'Davet panosu →',
     boardHint: 'Tüm davetler, durumları ve toplu işlemler panoda:',
     languageField: 'Davet dili',
-    languageHint: 'Davet e-postasının yazılacağı dil. Varsayılan olarak sizinki gelir; tekrar gönderimlerde burada seçtiğiniz dil kullanılır.',
+    languageHint: 'Davet e-postasının yazılacağı dil. Varsayılan olarak seninki gelir; tekrar gönderimlerde burada seçtiğin dil kullanılır.',
   },
   invitations: {
     title: 'Davet panosu',
@@ -6474,6 +6481,9 @@ const tr: Dict = {
       loginNever: 'hiç',
       loginToday: 'bugün',
       loginDaysAgo: '{n}g önce',
+      onSiteHours: '{h}sa {m}dk',
+      onSiteMinutes: '{m}dk',
+      onSitePages: '{n} sf.',
     },
     unreadDigestEmail: {
       subjectOne: 'Okunmamış 1 mesajınız var',
@@ -10958,6 +10968,9 @@ const de: Dict = {
       loginNever: 'nie',
       loginToday: 'heute',
       loginDaysAgo: 'vor {n} T.',
+      onSiteHours: '{h} Std. {m} Min.',
+      onSiteMinutes: '{m} Min.',
+      onSitePages: '{n} S.',
     },
     unreadDigestEmail: {
       subjectOne: 'Du hast 1 ungelesene Nachricht',

@@ -163,6 +163,12 @@ test.describe('the fragments every meeting mail shares follow the body', () => {
     expect(named).toContain('Ayşe');
     expect(named).not.toMatch(/\{[a-zA-Z]+\}/);
     expect(named).not.toBe(organizerTimeLine(at, 'Europe/Istanbul', 'America/New_York', 'Ayşe', 'en'));
+    // …and the DATE follows too. `formatInTimeZone` takes a locale and defaults
+    // to en-GB when it is not given, so a translated label sitting on top of
+    // "10 Sept 2026" is the exact half-translated shape this issue exists to
+    // end — and it is invisible to an assertion that only reads the label.
+    expect(named).toContain('Eyl');
+    expect(named).not.toContain('Sept');
     // Same clock on both sides → still silent, in every language.
     expect(organizerTimeLine(at, 'Europe/Berlin', 'Europe/Berlin', 'Ayşe', 'de')).toBe('');
   });
@@ -174,6 +180,14 @@ test.describe('the fragments every meeting mail shares follow the body', () => {
     expect(de).toContain('Jonas');
     expect(de).toContain(getDictionary('de').notifications.emailTimes.others);
     expect(de).not.toBe(participantClocks(at, 'Europe/Berlin', others, 'en'));
+    // The rows under the heading are built by `readingsByZone`, which takes its
+    // own locale argument — forget it and a Turkish "Diğerleri için:" sits
+    // directly on top of "Thu, 10 Sept, 23:00". German is no use as a probe
+    // here (its short month is "Sept." too), so Turkish is the one that tells
+    // the two apart.
+    const tr = participantClocks(at, 'Europe/Berlin', others, 'tr');
+    expect(tr).toContain('Eyl');
+    expect(tr).not.toContain('Sept');
   });
 
   test('the activity digest table headers and login column are translated', () => {
@@ -215,6 +229,11 @@ test.describe('the fragments every meeting mail shares follow the body', () => {
       // "never" for a mentee who has not signed in yet.
       expect(html).toContain(A.loginNever);
       expect(html).toContain(A.loginDaysAgo.replace('{n}', '3'));
+      // The On-site cell is part of the same row and used to be the one thing
+      // left in English in it — `lib/activityReport.ts § formatDuration`
+      // hardcodes "2h 5m", and the page-view suffix was a bare "p".
+      expect(html).toContain(A.onSiteMinutes.replace('{m}', '2'));
+      expect(html).toContain(A.onSitePages.replace('{n}', '4'));
       expect(html).not.toMatch(/\{[a-zA-Z]+\}/);
     }
     expect(activityDigestTable(items, 'tr')).not.toBe(activityDigestTable(items, 'en'));
@@ -305,18 +324,15 @@ test.describe('no localisable string is left hardcoded in these mails', () => {
     }
   });
 
-  test('an invitation carries the language its inviter chose', { tag: '@smoke' }, () => {
+  test('an invitation has somewhere to remember its language', { tag: '@smoke' }, () => {
     // The invitee is the one recipient with no account, so the language cannot
     // be looked up at send time — it is stored on the row and replayed on every
-    // resend. If this select or this column goes away, a resend silently reverts
-    // to English.
-    const invite = fs.readFileSync(path.join(process.cwd(), 'src/lib/inviteCreate.ts'), 'utf8');
-    expect(invite).toContain('locale: input.locale ?? null');
-    expect(invite).toContain('locale: invitation.locale');
-
-    const resend = fs.readFileSync(path.join(process.cwd(), 'src/app/api/invite/[id]/route.ts'), 'utf8');
-    expect(resend).toContain('locale: invite.locale');
-
+    // resend. Only the COLUMN is asserted here, because that is the one fact a
+    // source scan can establish honestly; that the value is actually written,
+    // and actually reused by the resend, is driven against a real database in
+    // e2e/system-mail-language.spec.ts. Substring-matching the two call sites
+    // (as this test first did) went red on a harmless refactor and stayed green
+    // on a dropped `select` — the opposite of what a guard is for.
     const schema = fs.readFileSync(path.join(process.cwd(), 'prisma/schema.prisma'), 'utf8');
     const model = schema.slice(schema.indexOf('model InvitationToken {'));
     expect(model.slice(0, model.indexOf('\n}'))).toMatch(/^\s*locale\s+String\?/m);
