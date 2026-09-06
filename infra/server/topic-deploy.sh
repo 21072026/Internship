@@ -68,14 +68,32 @@ set -euo pipefail
 : "${TOPIC:?}" "${PORT:?}" "${IMAGE:?}" "${BASE_DOMAIN:?}"
 NGINX_CONF_DIR="${NGINX_CONF_DIR:-/etc/nginx/conf.d}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-nginx -t && systemctl reload nginx}"
-CERT_DIR="${CERT_DIR:-/etc/nginx/ssl}"
+# Where the wildcard certificate lives differs per host. The Plesk box kept it
+# under nginx's ssl dir; on the migrated box bootstrap.sh creates
+# /etc/caddy/certs owned by the deploy user, and that is where wildcard-cert.yml
+# installs it. Defaulting to the nginx path on a Caddy host meant the cert was
+# never found and every topic env silently fell back to per-hostname issuance —
+# 50 certificates per domain per week, which this repo's PR rate exhausts in
+# days, after which topic environments fail TLS with nothing looking wrong (#2213).
+if [ -z "${CERT_DIR:-}" ]; then
+  if [ -d /etc/caddy/certs ]; then CERT_DIR=/etc/caddy/certs; else CERT_DIR=/etc/nginx/ssl; fi
+fi
 # Hostname prefix for environment names. Empty by default: on a domain bought
 # for this product, `pr123.<domain>` says everything `crm-pr123.<domain>` did.
 # The `crm-` prefix existed because the app used to live under a personal domain
 # shared with other services, where it had to distinguish itself.
 ENV_PREFIX="${ENV_PREFIX:-}"
 CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/sites}"
-CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy}"
+# Writing a site file and reloading the service both need privilege the runner
+# does not have as itself: bootstrap.sh creates /etc/caddy/sites as root:caddy
+# 0775 and adds the deploy user to `docker` but never to `caddy`, and
+# `systemctl reload` is root-only regardless of that. wildcard-cert.yml already
+# reloads this same service with `sudo systemctl reload caddy`, so sudo is
+# available on this box — use it rather than inventing a second mechanism.
+# Running as root (bootstrap, a manual run) skips sudo entirely.
+_SUDO=""; [ "$(id -u)" -eq 0 ] || _SUDO="sudo "
+_priv() { if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi; }
+CADDY_RELOAD_CMD="${CADDY_RELOAD_CMD:-caddy validate --config /etc/caddy/Caddyfile && ${_SUDO}systemctl reload caddy}"
 
 # ── Secrets: explicit base64 (hosted) OR an env file (self-hosted) ───────────
 if [ -n "${B64_DB:-}" ]; then
@@ -347,7 +365,7 @@ echo "==> Router: ${ROUTER}"
 
 route_caddy() {
 # This is the whole thing — the ~90 lines the Plesk branch needs for the same job.
-mkdir -p "$CADDY_SITES_DIR"
+_priv mkdir -p "$CADDY_SITES_DIR"
 
 # Prefer the installed wildcard cert. NOT an optimisation: this repo merged its
 # last 100 PRs in 9 days and every PR gets its own hostname, while Let's Encrypt
@@ -374,12 +392,12 @@ fi
   if [ -n "$tls_line" ]; then echo "$tls_line"; fi
   echo "    reverse_proxy 127.0.0.1:${PORT}"
   echo "}"
-} > "${CADDY_SITES_DIR}/${FQDN}.caddy"
+} | _priv tee "${CADDY_SITES_DIR}/${FQDN}.caddy" >/dev/null
 
 # Validate before reloading: Caddy loads one config for the whole box, so a bad
 # topic file would take production, preview and every other topic down with it.
 if ! eval "$CADDY_RELOAD_CMD"; then
-  rm -f "${CADDY_SITES_DIR}/${FQDN}.caddy"
+  _priv rm -f "${CADDY_SITES_DIR}/${FQDN}.caddy"
   eval "$CADDY_RELOAD_CMD" || true
   echo "ERROR: caddy rejected the generated site file; removed it and reloaded" >&2
   exit 1
