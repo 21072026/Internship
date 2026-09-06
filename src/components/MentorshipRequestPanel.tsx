@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Send, Clock, CheckCircle2, XCircle, ListChecks } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -35,6 +36,14 @@ interface DirectoryMentor {
 export function MentorshipRequestPanel() {
   const t = useT();
   const q = t.mentorshipRequests;
+  const dir = t.mentorDirectory;
+  // "Request this mentor" deep link (#1773): the directory card and the public
+  // profile both link here as /portal?mentor=<id>. It only ever PRESELECTS the
+  // picker below — POST /api/mentorship-requests re-validates the id against
+  // active MENTOR + publicProfile + a live MENTOR_DIRECTORY_VISIBILITY consent,
+  // and that server rule is the only thing that decides.
+  const searchParams = useSearchParams();
+  const requestedMentorId = searchParams.get('mentor') ?? '';
   const [requests, setRequests] = useState<RequestRow[] | null>(null);
   const [gate, setGate] = useState<Gate | null>(null);
   const [message, setMessage] = useState('');
@@ -44,6 +53,7 @@ export function MentorshipRequestPanel() {
   const [preferredLanguages, setPreferredLanguages] = useState('');
   const [preferredMentorId, setPreferredMentorId] = useState('');
   const [mentors, setMentors] = useState<DirectoryMentor[]>([]);
+  const [mentorsLoaded, setMentorsLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -57,14 +67,35 @@ export function MentorshipRequestPanel() {
 
   // Only directory-visible mentors are offered — the same set the server
   // accepts as preferredMentorId. A failed fetch just leaves the picker empty.
+  // pageSize is raised to the API maximum because this list is also what the
+  // ?mentor=<id> prefill is matched against: at the default page of 12, the
+  // 13th mentor in the directory would be reported as "no longer available".
   useEffect(() => {
-    fetch('/api/mentors')
+    let cancelled = false;
+    fetch('/api/mentors?pageSize=50')
       .then((r) => (r.ok ? r.json() : { mentors: [] }))
-      .then((d) => setMentors(d.mentors ?? []))
-      .catch(() => {});
+      .then((d) => { if (!cancelled) setMentors(d.mentors ?? []); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setMentorsLoaded(true); });
+    return () => { cancelled = true; };
   }, []);
 
+  // Seed the picker from ?mentor=<id>, but ONLY for an id that is actually in
+  // the consent-gated list above. An unknown id (revoked consent, deactivated
+  // mentor, a hand-typed URL) leaves the picker empty and shows the fallback
+  // line instead of arming a submit the server would reject. The picker stays
+  // editable either way — a later manual choice is never overwritten, because
+  // this only fills a still-empty value.
+  useEffect(() => {
+    if (!requestedMentorId) return;
+    if (!mentors.some((m) => m.id === requestedMentorId)) return;
+    setPreferredMentorId((current) => current || requestedMentorId);
+  }, [requestedMentorId, mentors]);
+
   if (!requests) return null;
+  const requestedMentorMissing =
+    Boolean(requestedMentorId) && mentorsLoaded && !mentors.some((m) => m.id === requestedMentorId);
+  const selectedMentor = mentors.find((m) => m.id === preferredMentorId);
   const pending = requests.find((r) => r.status === 'PENDING');
   const latest = requests[0];
 
@@ -125,6 +156,22 @@ export function MentorshipRequestPanel() {
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{q.hint}</p>
+          {selectedMentor && (
+            <p
+              className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700"
+              data-testid="request-preferred-mentor-confirmation"
+            >
+              {dir.requestingMentor.replace('{name}', selectedMentor.displayName || selectedMentor.fullName)}
+            </p>
+          )}
+          {requestedMentorMissing && (
+            <p
+              className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700"
+              data-testid="request-preferred-mentor-unavailable"
+            >
+              {dir.requestedMentorUnavailable}
+            </p>
+          )}
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}

@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { getServerSession } from 'next-auth';
 import { GraduationCap } from 'lucide-react';
+import { authOptions } from '@/lib/auth';
+import { hasSessionCookie } from '@/lib/sessionCookie';
 import { prisma } from '@/lib/prisma';
 import { getPublicEvaluationSummary } from '@/lib/testimonials';
 import { getServerDictionary } from '@/i18n/server';
@@ -37,6 +40,15 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
       languages: true,
       mentorCapacity: true,
       publicShowProjects: true,
+      // Directory consent (#1773): the "request this mentor" CTA is only shown
+      // for a mentor the request API would actually accept as a preferred
+      // mentor — publicProfile alone is not enough, an active
+      // MENTOR_DIRECTORY_VISIBILITY consent is the second half of that gate.
+      consents: {
+        where: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null },
+        select: { id: true },
+        take: 1,
+      },
       _count: {
         select: {
           mentorRelations: { where: { status: 'ACTIVE' } },
@@ -69,6 +81,18 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   // Consent-gated mentor evaluation summary (#1094) — every gate enforced
   // server-side in the lib; null means the section does not exist at all.
   const evaluationSummary = user.role === 'MENTEE' ? await getPublicEvaluationSummary(userId) : null;
+
+  // "Request this mentor" (#1773) — a shortcut into the portal's request panel,
+  // so it is offered only to a signed-in MENTEE looking at a directory-visible
+  // mentor. Cosmetic only: POST /api/mentorship-requests re-validates the role
+  // AND the preferred mentor's consent, and this page never bypasses that.
+  // The session decode is skipped entirely when no session cookie is present —
+  // this page is mostly served to signed-out visitors (#1197).
+  const viewerIsMentee =
+    user.role === 'MENTOR' &&
+    user.consents.length > 0 &&
+    (await hasSessionCookie()) &&
+    (await getServerSession(authOptions))?.user?.role === 'MENTEE';
 
   const skills = Array.isArray(user.skills) ? (user.skills as string[]) : [];
   const languages = Array.isArray(user.languages) ? (user.languages as string[]) : [];
@@ -263,6 +287,18 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
                   {l.label}
                 </a>
               ))}
+            </div>
+          )}
+
+          {viewerIsMentee && (
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <Link
+                href={`/portal?mentor=${userId}`}
+                data-testid="public-profile-request-mentor"
+                className="inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                {t.mentorDirectory.requestMentor}
+              </Link>
             </div>
           )}
 

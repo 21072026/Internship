@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
@@ -143,7 +144,13 @@ export default async function PortalDashboard() {
       {/* Also offered to a mentee whose mentorship is archived (#1408): finishing
           one round is a reason to ask for the next mentor, not a reason to lose
           the way to ask. */}
-      {(!relation || isArchived) && <MentorshipRequestPanel />}
+      {/* Suspense boundary: the panel reads ?mentor=<id> with useSearchParams
+          to preselect the requested mentor (#1773). */}
+      {(!relation || isArchived) && (
+        <Suspense fallback={null}>
+          <MentorshipRequestPanel />
+        </Suspense>
+      )}
 
       {/* Offer card (#809) — kept above the fold: an offer needing a decision is
           the single most time-sensitive thing a mentee can see here. */}

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **\"Request this mentor\" CTA** (#1773). The mentor directory card and a mentor's public profile now offer a signed-in mentee a direct \"Request this mentor\" link to `/portal?mentor=<id>`, which preselects that mentor in the mentorship request panel and confirms the choice above the form. The picker stays editable, an id that is not in the consent-gated directory list falls back to an empty picker plus a visible notice, and `POST /api/mentorship-requests` still re-validates the preferred mentor server-side.",
+  "notes": {
+    "en": [
+      "Mentor directory cards and mentor profiles now have a \"Request this mentor\" button that takes you straight to the request form with that mentor already selected."
+    ],
+    "tr": [
+      "Mentor dizini kartlarına ve mentor profillerine \"Bu mentoru iste\" düğmesi eklendi: seni doğrudan, o mentorun önceden seçili olduğu talep formuna götürür."
+    ],
+    "de": [
+      "Mentorenkarten im Verzeichnis und Mentorenprofile haben jetzt die Schaltfläche \"Diesen Mentor anfragen\" — sie führt direkt zum Anfrageformular, in dem dieser Mentor bereits ausgewählt ist."
+    ]
+  }
+}
