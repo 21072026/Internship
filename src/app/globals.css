@@ -136,7 +136,15 @@ html.dark .text-gray-700 { color: #d1d5db; }
 html.dark .text-gray-600 { color: #9ca3af; }
 html.dark .text-gray-500 { color: #9ca3af; }
 /* Dark keeps gray-400 at #9ca3af (7.0:1 on gray-900): the light-mode raise
-   above would be a REGRESSION here, dark text on a dark surface. */
+   above would be a REGRESSION here, dark text on a dark surface.
+   NOTE the same trap the "Variant utilities" block below describes, in the
+   other direction: with darkMode:'class' Tailwind emits `dark:text-*` as
+   `.dark .dark\:text-gray-500` — specificity (0,2,0) — while this rule is
+   `html.dark .text-gray-400`, (0,2,1), so it OUTRANKS any `dark:text-*`
+   written on the same element. The ten `text-gray-400 dark:text-gray-500`
+   pairs that existed when this landed were therefore dead in dark mode and
+   were dropped in #2131; if you need a per-element dark colour on a remapped
+   base utility, pin it with a `dark:!` utility instead. */
 html.dark .text-gray-400 { color: #9ca3af; }
 /* Borders */
 html.dark .border-gray-100 { border-color: #1f2937; }

@@ -11,12 +11,26 @@ nothing. Every row below is a candidate for its own good-first-issue.
 
 **Totals** — critical: 0 · serious: 0 · moderate: 0 · minor: 0
 
-> ℹ️ **Hand-edited in #2131, not yet regenerated.** The nine serious findings
-> that used to sit here were the `text-gray-400` muted-text token and the 14×14
-> inbox person-card trigger; both were fixed in that PR, but the container it was
-> written in has no browser and no database, so the scan could not be re-run.
-> Run `A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts` once and
-> commit whatever it writes — this note disappears with it.
+> ℹ️ **Hand-edited in #2131 — read how these numbers were obtained.** The
+> generated section above the manual marker was written by hand: the container
+> #2131 was authored in has no browser and no database, so
+> `A11Y_UPDATE_BASELINE=1` could not be run there. What each number rests on:
+>
+> - **critical: 0 · serious: 0** — *measured*, by CI. The Playwright smoke job
+>   runs this very spec on every push with `e2e/a11y-baseline.json` at `{}` for
+>   all sixteen page/theme keys, so a green run **is** the assertion that no
+>   critical or serious violation exists on any of them. The first attempt at
+>   #2131 was red here on exactly one node the fix had missed
+>   (`/admin/settings` · `.text-green-600`, #16a34a at 3.3:1, the e-mail-log
+>   summary line) — that node and its amber sibling are now `-700` shades.
+> - **moderate: 0 · minor: 0**, and the empty findings table — *carried over*
+>   from the last real regenerate, which reported the same. The gate ignores
+>   these severities, so CI does not re-measure them; nothing in #2131 could
+>   introduce one, but this half of the report is inherited, not observed.
+>
+> Run `A11Y_UPDATE_BASELINE=1 npx playwright test e2e/a11y-scan.spec.ts` against
+> a real environment once and commit whatever it writes — that closes the gap
+> and this note goes with it.
 
 
 **The gate** (`e2e/a11y-baseline.json`): the counts of *critical* and *serious*
