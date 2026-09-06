@@ -5688,3 +5688,31 @@ bağımlılık grafiğinde `src/lib/auth.ts` varsa otomatik yükseliyor. Gerekç
 değildi: auth dosyası `enforceRateLimit`'i değil doğrudan `rateLimit()`'i çağırıyor ve o
 fonksiyonun gövdesi hiç değişmemişti. Böyle bir etikette yapılacak şey paniklemek değil,
 çağrı yerlerini tek tek sayıp raporun iddiasını doğrulamak.
+
+## 2026-09-06 — Tek sağlayıcıyla "çok sağlayıcılı" kart yazmak (#1993)
+
+**İkinci sağlayıcı yokken bile registry şekli doğru karar.** #1991 (Microsoft) kodda hiç
+yok; karta sabit bir "Microsoft" satırı koymak, arkasında hiçbir kod olmayan bir sağlayıcı
+hakkında kalıcı olarak "yapılandırılmamış" diyen ölü bir UI olurdu. Onun yerine
+`src/lib/calendarProviders.ts` bir **dizi** registry: tek girdi Google. Sağlayıcı eklemek
+diziye bir nesne eklemek demek — ne `/api/integrations/calendar/status` ne de
+`ConnectedCalendarsCard` değişiyor. Kartın satır bazlı `data-testid`'leri de sağlayıcı
+id'sinden türüyor (`${provider}-calendar-connect`), böylece eski Google testid'leri aynen
+korunuyor ve yeni sağlayıcı bedava testid alıyor.
+
+**"Operatör kurmuş mu" ile "ben bağlamış mıyım" iki ayrı durum.** Eski kart
+`!enabled` iken `null` dönüyordu; kullanıcı hiçbir şey görmüyordu. Üç durumu (kurulu değil
+/ kurulu ama bağlı değil / bağlı) ayrı ayrı render etmek, "çalışamayacak bir düğme"yi
+göstermeden dürüst kalmanın tek yolu.
+
+**Token sızmasını `select` allowlist'i ile kanıtla, `delete` ile değil.** Uç nokta
+`accessTokenEnc`/`refreshTokenEnc` sütunlarını hiç okumuyor; yanıt kurulduktan sonra
+silmiyor. e2e'de iki kullanıcıya birden bağlantı satırı açıp yanıtın tamamını
+`JSON.stringify` edip *tanınabilir* sahte token değerlerini aramak, kural bozulduğunda
+kırılan tek ucuz assertion.
+
+**`lastError` sağlayıcının kendi metni, sansürden geçmeli.** `src/lib/sanitizeError.ts`
+zaten bunun için var (#2008): Google'ın token yenileme hatası hesabı ve bazen refresh
+token'ı ekoluyor. Kartta hatanın *kendisini* göstermek gerekiyor (`invalid_grant`,
+"yeniden bağlan" ile "destek çağır" arasındaki fark), ama sunucudan çıkarken
+sanitize edilmiş hâlde.

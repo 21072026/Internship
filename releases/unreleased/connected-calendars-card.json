@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "- **One \"Connected calendars\" card, with connection health** (#1993). The Google-only card is replaced by a provider-shaped `ConnectedCalendarsCard` fed by a new `GET /api/integrations/calendar/status`, which reads `session.user.id` and returns one row per entry in the new `src/lib/calendarProviders.ts` registry (Google is the only entry until #1991) through an explicit column allowlist — never a token, never another user's row. Each row renders three distinct states: not configured by the operator (no dead button), configured but not connected, and connected — the latter showing the account e-mail, a relative \"last synced\" label and, when `lastError` is set, a warning strip with the provider's own message and a Reconnect button. `lastError` and `lastSyncAt` were already stored and nothing on screen read them, so a revoked token read as \"connected\" while meetings quietly stopped syncing.",
+  "notes": {
+    "en": [
+      "Your account settings now show a \"Connected calendars\" card that tells you which calendar account is connected, when it last synced, and warns you with a Reconnect button when the connection has stopped working."
+    ],
+    "tr": [
+      "Hesap ayarlarında artık \"Bağlı takvimler\" kartı var: hangi takvim hesabının bağlı olduğunu, en son ne zaman eşitlendiğini gösteriyor ve bağlantı çalışmayı bıraktığında \"Yeniden bağlan\" düğmesiyle seni uyarıyor."
+    ],
+    "de": [
+      "In den Kontoeinstellungen gibt es jetzt die Karte \"Verbundene Kalender\": Sie zeigt, welches Kalenderkonto verbunden ist und wann zuletzt synchronisiert wurde — und warnt mit einer Schaltfläche \"Erneut verbinden\", sobald die Verbindung nicht mehr funktioniert."
+    ]
+  }
+}
