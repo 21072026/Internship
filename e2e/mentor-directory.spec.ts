@@ -183,6 +183,27 @@ test.describe('mentor directory', () => {
     await expect(page.getByTestId('mentors-partial-notice')).toHaveCount(0);
   });
 
+  // The scan cap (2000 consented mentors) is unreachable in a seeded e2e run,
+  // so handing the page a partial response is the only way to see the notice in
+  // a browser at all. Without this the amber banner, the `cap` payload and the
+  // {cap} placeholder substitution ship untested (#1820).
+  test('a partial answer renders the incompleteness notice with the real cap', async ({ page }) => {
+    await signIn(page, menteeEmail, pw, '/portal');
+    await page.route('**/api/mentors?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ mentors: [], total: 0, page: 1, pageSize: 12, partial: true, cap: 2000 }),
+      });
+    });
+    await page.goto('/mentors');
+    const notice = page.getByTestId('mentors-partial-notice');
+    await expect(notice).toBeVisible();
+    // The cap is substituted into the string, not left as a raw placeholder.
+    await expect(notice).toContainText('2000');
+    await expect(notice).not.toContainText('{cap}');
+  });
+
   test('COMPANY users get 403 from the API and are bounced off the page', async ({ page }) => {
     await signIn(page, companyEmail, pw, '/company');
 
