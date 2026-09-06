@@ -419,6 +419,12 @@ Bu bölüm bağlayıcıdır: aşağıda "yapılamaz" yazan hiçbir taktik, "dikk
 Tek kişilik bir üründe asıl tehlike ceza miktarı değil **kesintidir**: bir Unterlassungserklärung imzalandıktan
 sonra sistemin yanlışlıkla attığı tek bir mail dört haneli otomatik borç doğurur.
 
+> **Bu bölüm hukuki tavsiye değildir.** Kaynaklar (kanun metni, mahkeme kararları) doğrudan
+> linklendi ve iddialar oradan çıkarıldı, ama bir avukatın değerlendirmesinin yerine geçmez.
+> Fiili outbound başlamadan önce — özellikle §7 Abs. 3 istisnası, double-opt-in ispat düzeni ve
+> Impressum metni — bir Fachanwalt für IT-Recht ile bir kez gözden geçirilmeli. Buradaki kurallar
+> "en dar ve en güvenli yorum" olarak yazıldı: sınıra yaklaşan taktik zaten YAPILAMAZ tarafında.
+
 ### 7.1 YAPILAMAZ
 
 | Taktik | Hüküm / karar | Kaynak |
