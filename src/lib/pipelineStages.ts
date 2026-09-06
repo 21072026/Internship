@@ -7,10 +7,10 @@
 // canonical stages, so single-tenant production is unchanged.
 
 import { prisma } from './prisma';
-import { defaultPipelineStages, onPathKeys, stageLabel, type ResolvedStage } from './pipeline';
+import { defaultPipelineStages, onPathKeys, stageLabel, startStageKey, type ResolvedStage } from './pipeline';
 import type { Locale } from '@/i18n/config';
 
-export { defaultPipelineStages, onPathKeys, stageLabel, type ResolvedStage };
+export { defaultPipelineStages, onPathKeys, stageLabel, startStageKey, type ResolvedStage };
 
 // Resolve the stages for a tenant: its custom rows if any, else the canonical
 // defaults. Cheap single indexed query; falls back safely for a null org.
@@ -54,4 +54,45 @@ export async function resolveCustomStages(
     isOffPath: r.isOffPath,
     color: r.color,
   }));
+}
+
+// The stage a relation created RIGHT NOW in this tenant must start on (#1634).
+//
+// One helper for every create path so the four of them cannot drift: the admin
+// assignment (POST /api/mentorship), the mentor's own "add a mentee" form, the
+// mentorship-request approval and the invitation auto-link. Each one used to let
+// the schema default apply, which put the relation on `APPLICATION_100` even in
+// an org whose stage set does not contain that key.
+//
+// Seeders and the legacy CSV importer are deliberately NOT routed through this:
+// they carry a real, intended stage per row (a spreadsheet's status column, a
+// demo journey) and must keep writing it verbatim.
+export async function resolveStartStage(
+  orgId: string | null | undefined,
+  locale: Locale = 'en',
+): Promise<string> {
+  return startStageKey(await resolvePipelineStages(orgId, locale));
+}
+
+/** Resolves an org's start stage; see `createStartStageResolver`. */
+export type StartStageResolver = (orgId: string | null | undefined) => Promise<string>;
+
+// The same lookup, memoized for a caller that asks about many relations at once
+// — the daily dormancy sweep and the mentor onboarding checklist both walk a
+// whole roster and would otherwise re-query per row.
+//
+// Deliberately per-call rather than module-level: an admin who edits the stage
+// set must not be answered from a cache that outlives the request. There is one
+// definition of "the first stage" in the codebase (`startStageKey`) and every
+// reader goes through it or through this.
+export function createStartStageResolver(locale: Locale = 'en'): StartStageResolver {
+  const cache = new Map<string, string>();
+  return async (orgId) => {
+    const cacheKey = orgId ?? '';
+    const hit = cache.get(cacheKey);
+    if (hit !== undefined) return hit;
+    const key = await resolveStartStage(orgId, locale);
+    cache.set(cacheKey, key);
+    return key;
+  };
 }

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { createStartStageResolver, type StartStageResolver } from '@/lib/pipelineStages';
 
 // Mentor-side onboarding wizard (#51).
 //
@@ -25,8 +26,12 @@ export const ONBOARDING_STEPS = [
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
-/** The stage every relation starts on; moving off it is the "pipeline" step. */
-const FIRST_STAGE = 'APPLICATION_100';
+// The stage a relation starts on is per tenant, not a constant (#1634): a
+// custom-stage org starts its relations on its own first on-path stage, so
+// comparing against a hardcoded `APPLICATION_100` would report the "move them
+// off the first stage" step as already done the second the relation exists —
+// and it is derived, so a mentor could never un-tick it. `startStageKey` is the
+// single definition of "the first stage"; this asks it per org.
 
 export interface OnboardingState {
   menteeId: string;
@@ -53,7 +58,11 @@ function readStoredSteps(value: unknown): Partial<Record<OnboardingStep, boolean
  * are not connected at all (no mentorship and no shared project), which is the
  * authorization rule for the wizard.
  */
-export async function loadOnboardingState(mentorId: string, menteeId: string): Promise<OnboardingState | null> {
+export async function loadOnboardingState(
+  mentorId: string,
+  menteeId: string,
+  startStage: StartStageResolver = createStartStageResolver(),
+): Promise<OnboardingState | null> {
   const mentee = await prisma.user.findUnique({
     where: { id: menteeId },
     select: { id: true, fullName: true, role: true, cvUrl: true, university: true, bio: true },
@@ -64,7 +73,7 @@ export async function loadOnboardingState(mentorId: string, menteeId: string): P
     prisma.mentorshipRelation.findFirst({
       where: { mentorId, menteeId },
       orderBy: { startDate: 'desc' },
-      select: { id: true, startDate: true, pipelineStatus: true, projectId: true },
+      select: { id: true, orgId: true, startDate: true, pipelineStatus: true, projectId: true },
     }),
     prisma.projectMember.findFirst({
       where: { userId: menteeId, project: { members: { some: { userId: mentorId } } } },
@@ -94,12 +103,13 @@ export async function loadOnboardingState(mentorId: string, menteeId: string): P
   ]);
 
   const stored = readStoredSteps(record?.steps);
+  const firstStage = relation ? await startStage(relation.orgId) : null;
   const observed: Record<OnboardingStep, boolean> = {
     welcomeMessage: messageCount > 0,
     kickoffMeeting: meetingCount > 0,
     projectAndChat: Boolean(sharedProject),
     goals: goalCount > 0,
-    pipeline: Boolean(relation && relation.pipelineStatus !== FIRST_STAGE),
+    pipeline: Boolean(relation && relation.pipelineStatus !== firstStage),
     // Nothing observable: "did you actually look at their profile/CV?".
     profileReview: false,
   };
@@ -149,7 +159,10 @@ export async function pendingOnboardings(mentorId: string): Promise<OnboardingSt
   const menteeIds = [...new Set([...relations.map((r) => r.menteeId), ...sharedMembers.map((m) => m.userId)])];
   if (menteeIds.length === 0) return [];
 
-  const states = await Promise.all(menteeIds.map((id) => loadOnboardingState(mentorId, id)));
+  // One resolver for the whole roster: every mentee here is almost certainly in
+  // the same org, so this is a single stage lookup rather than one per mentee.
+  const startStage = createStartStageResolver();
+  const states = await Promise.all(menteeIds.map((id) => loadOnboardingState(mentorId, id, startStage)));
   return states
     .filter((s): s is OnboardingState => s !== null && !s.dismissedAt && s.remaining > 0)
     .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));

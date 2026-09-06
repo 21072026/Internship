@@ -234,6 +234,37 @@ export function onPathKeys(stages: ResolvedStage[]): string[] {
   return stages.filter((s) => !s.isOffPath).sort((a, b) => a.order - b.order).map((s) => s.key);
 }
 
+// The stage a brand-new relation must start on (#1634).
+//
+// `MentorshipRelation.pipelineStatus` defaults to the canonical first key in the
+// schema, which is right for a tenant on the built-in catalogue and wrong for
+// every tenant that customised its pipeline: a relation parked on a key that is
+// absent from the tenant's own set has no board column, no funnel row and no way
+// out — the mentee is simply invisible. So a create resolves the tenant's stages
+// and writes the first ON-PATH one explicitly.
+//
+// Off-path stages (the dropped / found-elsewhere kind, `isOffPath`) can never be
+// a start: `onPathKeys` already drops them, so a tenant that ordered its
+// "Withdrew" stage first still starts on its first real stage. Pure and
+// Prisma-free — the DB-backed wrapper is `resolveStartStage()` in
+// src/lib/pipelineStages.ts.
+//
+// The canonical key is the fallback for an EMPTY set only, which is exactly the
+// org that resolves to the built-in catalogue — so single-tenant behaviour is
+// byte-identical. A tenant whose set is non-empty but has no on-path stage at
+// all (the editor accepts `isOffPath` on every row) must NOT get the canonical
+// key: it is in none of its `PipelineStage` rows, which is precisely the
+// invisible-relation bug this exists to prevent. Its own first stage by order
+// is a stage it can at least see and move out of.
+export const DEFAULT_START_STAGE = 'APPLICATION_100';
+
+export function startStageKey(stages: ResolvedStage[]): string {
+  const onPath = onPathKeys(stages);
+  if (onPath.length > 0) return onPath[0];
+  const firstByOrder = [...stages].sort((a, b) => a.order - b.order)[0];
+  return firstByOrder?.key ?? DEFAULT_START_STAGE;
+}
+
 // Label lookup over a resolved set, falling back to the canonical label and then
 // the raw key — so a custom key always renders something sensible.
 export function stageLabel(stages: ResolvedStage[], key: string, locale: Locale = 'en'): string {
