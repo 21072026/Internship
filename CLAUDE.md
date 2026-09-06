@@ -43,7 +43,7 @@ the full suite is the scheduled safety net (see below). The **smoke set** is the
 tagged `@smoke` (`test('…', { tag: '@smoke' }, …)`) — boot, auth, landing i18n, invite,
 pipeline, free-core regression. When you add a spec for a *critical* flow, tag it
 `@smoke`; keep the set small (~15-20 tests) so the PR gate stays fast. Locally `test:e2e`
-boots the dev server; set `BASE_URL=https://crm-preview.ersah.in` to run against a
+boots the dev server; set `BASE_URL=https://preview.interncrm.com` to run against a
 deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
@@ -144,9 +144,9 @@ workaround, #636, and it compiled on every PR push).
 
 | Env | Container | Port | URL | Image tag | Trigger |
 |-----|-----------|------|-----|-----------|---------|
-| Production | `internship-crm` | 3200 | https://crm.ersah.in | `prod-<sha>` | push to `main` (+6h drift check, manual) |
-| Preview | `internship-crm-preview` | 3201 | `https://preview.<domain>` | `preview-<sha>` | push to `main` (+6h drift check, manual) |
-| Topic (per PR) | `internship-crm-pr<N>` | 34xx | `https://pr<N>.<domain>` | `topic-pr<N>` | every push to the PR |
+| Production | `internship-crm` | 3200 | https://interncrm.com | `prod-<sha>` | push to `main` (+6h drift check, manual) |
+| Preview | `internship-crm-preview` | 3201 | https://preview.interncrm.com | `preview-<sha>` | push to `main` (+6h drift check, manual) |
+| Topic (per PR) | `internship-crm-pr<N>` | 3400–3499 | `https://pr<N>.interncrm.com` | `topic-pr<N>` | every push to the PR |
 
 - `deploy-prod.yml` / `deploy-preview.yml` — **both follow `main` automatically**. Every merge
   lands on preview and prod. Three jobs: **gate** (self-hosted; resolves the target sha and
@@ -173,7 +173,7 @@ workaround, #636, and it compiled on every PR push).
   deploy, seeded with the synthetic demo set (`admin.demo@demo.example.com` / `DemoPass123!`)
   and dropped when the PR closes — so a `db push` on a PR affects nobody else, and no real
   preview data is reachable from a topic environment. The **shared preview env** at
-  `crm-preview.ersah.in` still has its own single DB; `db push` there is global.
+  `preview.interncrm.com` still has its own single DB; `db push` there is global.
 
 ## Conventions & gotchas for agents
 

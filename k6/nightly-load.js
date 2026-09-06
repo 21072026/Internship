@@ -37,7 +37,7 @@
  * `npm run check:k6` (a `k6 archive` parse) is what CI has to catch a typo.
  *
  * Run it locally (needs the k6 binary — it is not an npm dependency):
- *   BASE_URL=https://crm-preview.ersah.in k6 run k6/nightly-load.js
+ *   BASE_URL=https://preview.interncrm.com k6 run k6/nightly-load.js
  *   npm run test:load                          # the full ~6m ramp against preview
  *   K6_SMOKE=1 K6_PEAK_VUS=3 npm run test:load # ~40s: "does my script still work"
  */
@@ -56,7 +56,7 @@ function numEnv(name, fallback) {
 // contributor can run by reflex, and it must not put a six-minute ramp on the
 // live site because they forgot to set BASE_URL. The nightly workflow always
 // passes its own target explicitly, so it is unaffected by this default.
-const BASE_URL = (__ENV.BASE_URL || 'https://crm-preview.ersah.in').replace(/\/+$/, '');
+const BASE_URL = (__ENV.BASE_URL || 'https://preview.interncrm.com').replace(/\/+$/, '');
 // Clamped, because the file's whole safety argument rests on "modest load" and
 // the workflow forwards a free-text `peak_vus` dispatch input straight through.
 // A typo of 2000 must not become 2000 VUs against a shared environment.

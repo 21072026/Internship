@@ -118,7 +118,7 @@ sign-in, admin login, and that the admin pages render without server errors.
 ```bash
 npm run test:e2e            # starts the app and runs headless
 npm run test:e2e:headed     # visible browser
-BASE_URL=https://crm-preview.ersah.in npm run test:e2e   # against a deployed env
+BASE_URL=https://preview.interncrm.com npm run test:e2e   # against a deployed env
 
 npm run test:stress         # load test (see docs/testing.md for thresholds/env)
 ```
@@ -136,9 +136,9 @@ preview and production; every PR additionally gets its own throwaway environment
 
 | Environment | URL | Trigger | Workflow |
 |-------------|-----|---------|----------|
-| Production | https://crm.ersah.in | push to `main` | [`deploy-prod.yml`](.github/workflows/deploy-prod.yml) |
-| Preview | https://crm-preview.ersah.in | push to `main` | [`deploy-preview.yml`](.github/workflows/deploy-preview.yml) |
-| Topic (per PR) | `https://crm-pr<N>.ersah.in` | every push to the PR | [`topic-preview.yml`](.github/workflows/topic-preview.yml) |
+| Production | https://interncrm.com | push to `main` | [`deploy-prod.yml`](.github/workflows/deploy-prod.yml) |
+| Preview | https://preview.interncrm.com | push to `main` | [`deploy-preview.yml`](.github/workflows/deploy-preview.yml) |
+| Topic (per PR) | `https://pr<N>.interncrm.com` | every push to the PR | [`topic-preview.yml`](.github/workflows/topic-preview.yml) |
 
 Each deploy builds the Docker image from source on the server, applies the schema with
 `prisma db push`, swaps the container and health-checks it. Prod and preview also run

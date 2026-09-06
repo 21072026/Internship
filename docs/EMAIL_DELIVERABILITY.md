@@ -6,6 +6,15 @@ reminders, digests, mentor↔mentee messages). Two things must work:
 1. **Outbound** — our mail actually reaches inboxes (especially Gmail).
 2. **Inbound** — a reply to a message email comes back into the app's Messages.
 
+> **Mail did not move with the app (2026-09, #2166/#2197).** The application now
+> runs on `interncrm.com`, but mail still belongs to the old `ersah.in` zone:
+> outbound goes out over `s.ersah.in`, and `SMTP_FROM` / SPF / DKIM / DMARC are
+> still the `crm.ersah.in` records described below. So the `ersah.in` names in
+> this document are **mail** hostnames, not stale app URLs — leave them until
+> the MX side is migrated. See `docs/server-migration.md` for the current state
+> of inbound (the `reply@crm.ersah.in` mailbox went away with the old Plesk
+> subdomain and the IMAP bridge is disabled).
+
 ## 1. The 550-5.7.26 error (SPF/DKIM)
 
 ```
@@ -522,7 +531,7 @@ deliberately ship without a `Reply-To`, since the token is relation-scoped
 To test the endpoint directly once a relation exists (token from `replyAddress()`):
 
 ```bash
-curl -X POST https://crm.ersah.in/api/inbound-email \
+curl -X POST https://interncrm.com/api/inbound-email \
   -H 'content-type: application/json' \
   -H "x-inbound-secret: $INBOUND_SECRET" \
   -d '{"to":"reply+<relationId>.<sig>@crm.ersah.in","from":"mentee@example.com","text":"Test reply"}'

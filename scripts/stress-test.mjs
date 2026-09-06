@@ -22,7 +22,7 @@
  *   STRESS_WARMUP_MS    ignore results before   (default 1000)
  *
  * Usage:
- *   BASE_URL=https://crm-preview.ersah.in node scripts/stress-test.mjs
+ *   BASE_URL=https://preview.interncrm.com node scripts/stress-test.mjs
  */
 import { writeFileSync } from 'node:fs';
 

@@ -27,7 +27,7 @@ builder ready for the connect route.
    `.../auth/calendar.events`, `openid`, `email`; add test users while in
    testing.
 3. **Credentials → OAuth client ID → Web application**. Authorized redirect URI:
-   `https://crm.ersah.in/api/integrations/google/callback`
+   `https://interncrm.com/api/integrations/google/callback`
    (and the preview URL for staging).
 4. Put the client id/secret in the server env file (`/etc/internship-crm/prod.env`):
 
@@ -35,7 +35,7 @@ builder ready for the connect route.
    GOOGLE_CLIENT_ID=...
    GOOGLE_CLIENT_SECRET=...
    # optional; otherwise derived from NEXTAUTH_URL:
-   GOOGLE_OAUTH_REDIRECT_URI=https://crm.ersah.in/api/integrations/google/callback
+   GOOGLE_OAUTH_REDIRECT_URI=https://interncrm.com/api/integrations/google/callback
    ```
 
    Redeploy. The Integrations page will flip to **Configured**.

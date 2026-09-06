@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Post-migration domain cleanup** (#2197). The offline fallback screen and the API docs' base-URL field now point at `interncrm.com` instead of the retired `crm.ersah.in`, and `DEMO_URL` at `demo.interncrm.com`. `CLAUDE.md`, `README.md`, `SECURITY.md`'s disclosure scope, the ops docs, `infra/README.md`, the topic/infra workflows (`BASE_DOMAIN` now falls back to `interncrm.com`), `playwright.config.ts`, `k6/nightly-load.js` and `scripts/stress-test.mjs` name the live hosts. Deliberately untouched: the frozen iCalendar UID domain in `src/lib/ics.ts` (now carrying a comment explaining why), the `INBOUND_EMAIL_DOMAIN` fallbacks and the mail docs (the MX side has not moved), the licensing/contributor-terms texts, and the historical changelog/release notes.",
+  "notes": {
+    "en": [
+      "The offline screen, the public demo link and the API documentation now point at interncrm.com instead of the retired crm.ersah.in address."
+    ],
+    "tr": [
+      "Çevrimdışı ekranı, herkese açık demo bağlantısı ve API dokümantasyonu artık kullanımdan kaldırılan crm.ersah.in yerine interncrm.com adresini gösteriyor."
+    ],
+    "de": [
+      "Die Offline-Seite, der Link zur öffentlichen Demo und die API-Dokumentation verweisen jetzt auf interncrm.com statt auf die stillgelegte Adresse crm.ersah.in."
+    ]
+  }
+}

@@ -66,6 +66,12 @@ export function buildMeetingIcs(opts: {
     'CALSCALE:GREGORIAN',
     `METHOD:${method}`,
     'BEGIN:VEVENT',
+    // The UID domain stays `crm.ersah.in` even though the app now lives on
+    // interncrm.com (#2197). An iCalendar UID is an opaque identity, not a URL:
+    // changing it would orphan every event already delivered to an attendee,
+    // because the update/cancel .ics would carry a UID their client has never
+    // seen — it would land as a *new* event and the old one would never be
+    // cancelled. This string must outlive the domain.
     `UID:${opts.uid}@crm.ersah.in`,
     `DTSTAMP:${toICSDate(new Date())}`,
     `DTSTART:${toICSDate(opts.start)}`,
@@ -100,6 +106,7 @@ export function buildFeedIcs(name: string, events: { uid: string; title: string;
       const end = new Date(e.start.getTime() + (e.durationMinutes ?? 30) * 60000);
       return [
         'BEGIN:VEVENT',
+        // Frozen domain — see the UID comment in buildMeetingIcs above.
         `UID:${e.uid}@crm.ersah.in`,
         `DTSTAMP:${toICSDate(new Date())}`,
         `DTSTART:${toICSDate(e.start)}`,

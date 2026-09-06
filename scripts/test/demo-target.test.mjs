@@ -14,7 +14,7 @@ test('refuses the shared preview and production databases', () => {
   for (const url of [
     'mysql://user:pw@db.internal:3306/internship_crm',
     'mysql://user:pw@db.internal:3306/internship_crm_preview',
-    'mysql://user:pw@crm.ersah.in:3306/internship_crm?connection_limit=5',
+    'mysql://user:pw@s.interncrm.com:3306/internship_crm?connection_limit=5',
   ]) {
     assert.equal(isSafeDemoTarget(url), false, `should refuse ${url}`);
   }

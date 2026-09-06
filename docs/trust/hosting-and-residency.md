@@ -15,9 +15,9 @@ That machine runs three kinds of environment at once:
 
 | Environment | Container | Port | URL | Database |
 |---|---|---|---|---|
-| Production | `internship-crm` | 3200 | `https://crm.ersah.in` | `internship_crm` |
-| Shared preview | `internship-crm-preview` | 3201 | `https://crm-preview.ersah.in` | its own single preview database |
-| Per-pull-request | `internship-crm-pr<N>` | 33xx | `https://crm-pr<N>.ersah.in` | `internship_pr<N>`, created on first deploy and **dropped when the PR closes** |
+| Production | `internship-crm` | 3200 | `https://interncrm.com` | `internship_crm` |
+| Shared preview | `internship-crm-preview` | 3201 | `https://preview.interncrm.com` | its own single preview database |
+| Per-pull-request | `internship-crm-pr<N>` | 34xx | `https://pr<N>.interncrm.com` | `internship_pr<N>`, created on first deploy and **dropped when the PR closes** |
 
 **Say this plainly, because it matters for a risk assessment: production, the
 shared preview and every pull-request environment share one host.** They are

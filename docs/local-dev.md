@@ -1,9 +1,9 @@
 # Local development — running the app and logging in
 
-The production/preview database (`crm-preview.ersah.in:3306`) is **closed to the
+The production/preview database (`s.interncrm.com:3306`) is **closed to the
 public internet by design** — that's why a fresh local checkout shows:
 
-> Can't reach database server at `crm-preview.ersah.in:3306`
+> Can't reach database server at `s.interncrm.com:3306`
 
 You do **not** need to open that port (doing so would be a security regression).
 Use a **local database** instead. Two options, recommended first.
@@ -59,7 +59,7 @@ session; nothing new is opened to the internet.
 
 ```bash
 # Forward local 127.0.0.1:3307 → the DB's localhost:3306 on the server.
-ssh -N -L 3307:127.0.0.1:3306 root@ersah.in
+ssh -N -L 3307:127.0.0.1:3306 ubuntu@s.interncrm.com
 ```
 
 Then in `.env.local`:

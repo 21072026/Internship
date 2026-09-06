@@ -50,7 +50,7 @@ point at a live preview/production environment.
 npm run test:stress
 
 # Against a deployed environment
-BASE_URL=https://crm-preview.ersah.in npm run test:stress
+BASE_URL=https://preview.interncrm.com npm run test:stress
 ```
 
 ### Configuration (env vars)
@@ -86,7 +86,7 @@ failure.
 
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — already used by deploy.
 - `ALERT_EMAIL_TO` — optional; comma-separated recipient(s) for failure alerts. Defaults to the maintainer if unset. **(new)**
-- `STRESS_TARGET_URL` — optional; the env to stress. Defaults to `https://crm.ersah.in`. **(new)**
+- `STRESS_TARGET_URL` — optional; the env to stress. Defaults to `https://interncrm.com`. **(new)**
 
 The same alert script can be reused by any other CI job that wants to email on failure
 (e.g. adding an `if: failure()` step to `e2e.yml`).
@@ -103,7 +103,7 @@ or per-endpoint budget is exceeded. k6 is a standalone binary, **not** an npm de
 curl -fsSL https://github.com/grafana/k6/releases/download/v1.8.1/k6-v1.8.1-linux-amd64.tar.gz \
   | tar -xz --strip-components=1 -C ~/.local/bin
 
-BASE_URL=https://crm-preview.ersah.in npm run test:load   # ~6m00s, the real ramp
+BASE_URL=https://preview.interncrm.com npm run test:load   # ~6m00s, the real ramp
 K6_SMOKE=1 K6_PEAK_VUS=3 npm run test:load                # ~40s, "does my script still parse"
 ```
 
@@ -115,7 +115,7 @@ legitimately fails its `count>0` threshold.
 
 | Var | Default | Meaning |
 |-----|---------|---------|
-| `BASE_URL` | `https://crm-preview.ersah.in` | Target origin. Preview, not prod, so a reflexive `npm run test:load` cannot ramp the live site |
+| `BASE_URL` | `https://preview.interncrm.com` | Target origin. Preview, not prod, so a reflexive `npm run test:load` cannot ramp the live site |
 | `K6_PEAK_VUS` | `20` | Peak virtual users; the ramp's intermediate steps scale with it. Clamped to 1–50 |
 | `K6_SMOKE` | — | `1` collapses the ramp to ~40s (script check only) |
 | `K6_SUMMARY_FILE` | `k6-summary.json` | Where `handleSummary` writes the machine-readable summary |
@@ -227,7 +227,7 @@ K6_REPORT_DRY_RUN=1 K6_REPORT_MODE=always \
 
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — already used by deploy.
 - `ALERT_EMAIL_TO` — optional; defaults to the maintainer.
-- `STRESS_TARGET_URL` — optional; shared with `stress.yml`. Defaults to `https://crm.ersah.in`.
+- `STRESS_TARGET_URL` — optional; shared with `stress.yml`. Defaults to `https://interncrm.com`.
 - `K6_REPORT_MODE` — optional repository *variable*; `always` to get green summaries too.
 
 ### Adding a new k6 test
@@ -349,7 +349,7 @@ back to red-only alerts.
 ## Demo-seed fidelity gate (#2063)
 
 The demo seed (`prisma/seed-demo.mjs`) is the only data most people ever see: the
-public demo, every per-PR topic environment at `crm-pr<N>.ersah.in`, and every new
+public demo, every per-PR topic environment at `pr<N>.interncrm.com`, and every new
 contributor's local box. The failure mode this gate exists for is not a crash — a
 feature ships, nobody adds a matching block to the seeder, and its screen renders
 *perfectly* and *empty* in all three places. Nothing goes red; the first person to

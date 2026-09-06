@@ -10,8 +10,8 @@ and no certificate work per topic.
 
 | Foundation | Set up once | Per-topic cost afterwards |
 |---|---|---|
-| Wildcard DNS `*.ersah.in` | 1 Cloudflare A record | none |
-| Wildcard TLS `*.ersah.in` | `acme-issue-wildcard.sh` | none |
+| Wildcard DNS `*.interncrm.com` | 1 Cloudflare A record | none |
+| Wildcard TLS `*.interncrm.com` | `acme-issue-wildcard.sh` | none |
 | Reverse-proxy routing | see "Routing" below | tiny generated vhost (CI) |
 
 ---
@@ -24,10 +24,10 @@ Add a single record so **every** subdomain resolves to the server:
 Type: A    Name: *    Content: <server IP>    Proxy: on (orange)    TTL: Auto
 ```
 
-Now `crm-preview.ersah.in`, `crm-topic5.ersah.in`, `crm-topic9.ersah.in`, … all
+Now `preview.interncrm.com`, `pr5.interncrm.com`, `pr9.interncrm.com`, … all
 resolve without ever touching DNS again.
 
-> Keep the existing explicit records (`crm`, `crm-preview`, …); the wildcard only
+> Keep the existing explicit records (`@`, `www`, `preview`, …); the wildcard only
 > answers names that have no explicit record.
 
 ## 2. Wildcard TLS certificate
@@ -35,7 +35,7 @@ resolve without ever touching DNS again.
 The error you hit —
 
 ```
-No TXT record found at _acme-challenge.ersah.in
+No TXT record found at _acme-challenge.interncrm.com
 ```
 
 — is because a wildcard cert must be validated with the **DNS-01** challenge, and
@@ -47,7 +47,7 @@ removes it), and installs a cron job so **renewals are automatic**.
 # Create a SCOPED Cloudflare API token (My Profile → API Tokens → Custom):
 #   Zone → DNS  → Edit
 #   Zone → Zone → Read
-#   Zone resources → Include → Specific zone → ersah.in
+#   Zone resources → Include → Specific zone → interncrm.com
 export CF_Token="<scoped token>"        # never commit this; not stored in the repo
 
 ./infra/acme-issue-wildcard.sh          # DOMAIN/CERT_DIR/RELOAD_CMD overridable
@@ -63,17 +63,23 @@ don't need it again.
 
 ### Alternative: Cloudflare Origin CA
 If traffic always goes through Cloudflare's proxy (orange cloud), you can skip
-Let's Encrypt entirely: generate a Cloudflare **Origin Certificate** (`*.ersah.in`,
+Let's Encrypt entirely: generate a Cloudflare **Origin Certificate** (`*.interncrm.com`,
 15-year, free), install it once, set SSL mode **Full (strict)**. Lowest
 maintenance, but it's dashboard-driven and requires the proxy to stay on. We use
 the acme.sh path above because it's fully scripted and proxy-independent.
 
-## 3. Routing `crm-<topic>.ersah.in` → the right container
+## 3. Routing `pr<N>.interncrm.com` → the right container
+
+> **Rewritten by the 2026-09 server migration (#2166).** The box now runs **Caddy**,
+> and `infra/server/topic-deploy.sh` detects it and writes
+> `$CADDY_SITES_DIR/<fqdn>.caddy` instead of an nginx vhost. The Plesk/nginx
+> description below is kept because the script still supports that path, but it
+> describes the retired host — read `topic-deploy.sh` for what actually runs.
 
 **Decision: Plesk-native nginx routing** (Plesk keeps owning 80/443, so production
-`crm.ersah.in` is untouched). Each topic runs its own container on a derived port
-(3300–3399; `topic5` → `3305`). On deploy, `infra/server/topic-deploy.sh` writes a
-self-contained nginx server block for `crm-<topic>.ersah.in` into `$NGINX_CONF_DIR`
+`interncrm.com` is untouched). Each topic runs its own container on a derived port
+(3400–3499; `pr5` → `3405`). On deploy, `infra/server/topic-deploy.sh` writes a
+self-contained nginx server block for `pr<N>.interncrm.com` into `$NGINX_CONF_DIR`
 (default `/etc/nginx/conf.d`) that terminates TLS with the **one** wildcard cert
 from step 2 and `proxy_pass`es to the topic's port; teardown removes it. Both
 reload nginx afterwards.
@@ -88,7 +94,7 @@ by `TRUSTED_PROXY_COUNT` hops (`src/lib/rateLimit.ts`).
 
 **One hop today**, so the default of `1` is correct for all three environments.
 The wildcard DNS record in step 1 is orange-clouded, but the explicit `crm`
-record is not — `curl -sI https://crm.ersah.in` returns no `cf-ray`, i.e. the
+record is not — `curl -sI https://interncrm.com` returns no `cf-ray`, i.e. the
 request reaches nginx directly. **If a hostname is ever moved behind
 Cloudflare's proxy, bump `TRUSTED_PROXY_COUNT` to `2` for it in the same
 change**, or every visitor will be bucketed as the Cloudflare edge and one
@@ -99,12 +105,12 @@ what `playwright.config.ts` sets for the e2e webServer.
 
 ### One-time server setup this requires
 - The stock `include /etc/nginx/conf.d/*.conf;` must be active (default on Plesk).
-  These hostnames are **not** Plesk-managed domains (only `crm`/`crm-preview` are),
+  These hostnames are **not** Plesk-managed domains (only the apex/`preview` are),
   so Plesk never rewrites the topic files. If your install uses a different include
   dir, set `NGINX_CONF_DIR` in the deploy step / server env.
 - The SSH deploy user must be able to write to `$NGINX_CONF_DIR` and reload nginx
   (a sudoers rule for `NGINX_RELOAD_CMD`, default `nginx -t && systemctl reload nginx`).
-- Wildcard cert installed at `$CERT_DIR/ersah.in.cer` + `.key` (step 2 default).
+- Wildcard cert installed at `$CERT_DIR/interncrm.com.cer` + `.key` (step 2 default).
 
 > Alternative considered: a standalone Traefik proxy (container-label auto-routing).
 > Rejected for now because it needs to own 80/443, which Plesk holds. If Plesk ever
@@ -122,8 +128,8 @@ on the server:
 - **PR opened / pushed to / reopened** → `build-image.yml` builds and pushes
   `ghcr.io/21072026/internship:topic-pr<N>` on `ubuntu-latest`, then (on the
   self-hosted runner) `infra/server/topic-deploy.sh` pulls it, starts
-  `internship-crm-pr<N>` on its derived port (3300–3399, `3300 + N%100`) and
-  **routes it through a Plesk subdomain** `crm-pr<N>.ersah.in` (see below). A bot
+  `internship-crm-pr<N>` on its derived port (3400–3499, `3400 + N%100`) and
+  **routes it through the reverse proxy** at `pr<N>.interncrm.com` (see below). A bot
   comment on the PR carries the URL (updated on every push).
 - **Fork PRs get no topic environment** — GitHub keeps their `GITHUB_TOKEN`
   read-only (the image can't be pushed) and withholds repo secrets, and building
@@ -137,7 +143,7 @@ Plesk vhost bound to the server IP (`listen <IP>:443 ssl`); a raw all-addresses
 `listen 443 ssl` block in `conf.d` loses the nginx address-group match, so its
 `server_name` is never evaluated and requests fall to Plesk's default vhost
 (`login_up.php` / 404). So `topic-deploy.sh` instead:
-1. `plesk bin subdomain --create crm-pr<N> -domain ersah.in -ssl true` (idempotent),
+1. `plesk bin subdomain --create pr<N> -domain interncrm.com -ssl true` (idempotent),
 2. writes the same reverse proxy crm-preview uses into Plesk's supported custom
    include `/var/www/vhosts/system/<fqdn>/conf/vhost_nginx.conf`:
    `location ~ ^/.* { proxy_pass http://0.0.0.0:<port>; … }`,
@@ -162,7 +168,7 @@ drops it when the PR closes; the daily topic sweep drops any that leak.
 Two consequences worth stating: a `prisma db push` on one PR no longer reshapes the
 schema under every other PR, and **no real preview data is reachable from a topic
 environment** — sign in with `admin.demo@demo.example.com` / `DemoPass123!`. The
-shared preview env at `crm-preview.ersah.in` keeps its own single database.
+shared preview env at `preview.interncrm.com` keeps its own single database.
 
 Privileges usually need no setup: the script runs as root on the database host,
 so if the app user cannot create databases it falls back to the local root
@@ -178,14 +184,14 @@ GRANT ALL PRIVILEGES ON `internship\_pr%`.* TO '<preview-user>'@'%';
 ### Prerequisites on the server
 - Self-hosted runner registered; its user (root here) can run `docker` and the
   `plesk` CLI (`plesk bin subdomain`, `plesk sbin httpdmng`).
-- Wildcard DNS `*.ersah.in` → the server (Cloudflare-proxied), so `crm-pr<N>`
+- Wildcard DNS `*.interncrm.com` → the server (Cloudflare-proxied), so `pr<N>`
   resolves. Plesk issues/uses the subdomain's TLS; Cloudflare terminates at the edge.
 - `/etc/internship-crm/preview.env` (chmod 600) with `DATABASE_URL` (the shared
   preview DB), `NEXTAUTH_SECRET`, `SMTP_*`.
 
 ### Verified live
 Confirmed end-to-end on the live box: opening a PR builds the image, creates the
-`crm-pr<N>.ersah.in` Plesk subdomain proxying to the container, comments the URL,
+`pr<N>.interncrm.com` route proxying to the container, comments the URL,
 and serves the app (`/api/health` → 200); closing the PR removes the subdomain and
 container.
 
@@ -252,7 +258,7 @@ sudo mkdir -p /etc/internship-crm
 sudo tee /etc/internship-crm/prod.env >/dev/null <<'ENV'
 DATABASE_URL=mysql://...
 NEXTAUTH_SECRET=...
-NEXTAUTH_URL=https://crm.ersah.in
+NEXTAUTH_URL=https://interncrm.com
 SMTP_HOST=...
 SMTP_PORT=587
 SMTP_USER=...
@@ -308,8 +314,8 @@ cron entry gives push-to-deploy with no inbound port and no listener:
 
 | Workflow | Env | Container | Port | Image | Triggers |
 |----------|-----|-----------|------|-------|----------|
-| `deploy-preview.yml` | https://crm-preview.ersah.in | `internship-crm-preview` | 3201 | `…:preview-<sha>` | push to `main`, every 6h (`:23`), manual |
-| `deploy-prod.yml` | https://crm.ersah.in | `internship-crm` | 3200 | `…:prod-<sha>` | push to `main`, every 6h (`:53`), manual |
+| `deploy-preview.yml` | https://preview.interncrm.com | `internship-crm-preview` | 3201 | `…:preview-<sha>` | push to `main`, every 6h (`:23`), manual |
+| `deploy-prod.yml` | https://interncrm.com | `internship-crm` | 3200 | `…:prod-<sha>` | push to `main`, every 6h (`:53`), manual |
 
 Each runs three jobs — **gate** (self-hosted, one curl + one `ls-remote`) → **build**
 (`ubuntu-latest`, via `build-image.yml`) → **deploy** (self-hosted,
@@ -338,7 +344,7 @@ gate entirely: it always rebuilds, and accepts any branch/tag/SHA.
 `/etc/internship-crm/*.env` on the server and never enter a workflow.
 
 **Preview secrets** live in `/etc/internship-crm/preview.env`, same shape as `prod.env`
-but with `NEXTAUTH_URL=https://crm-preview.ersah.in`. There is no need to write it by
+but with `NEXTAUTH_URL=https://preview.interncrm.com`. There is no need to write it by
 hand: when absent, `deploy-prod.sh` derives it from the running preview container. The
 workflow keeps a valid file and only deletes one that fails to `source` or has no
 `DATABASE_URL`, so an automatic run can never destroy the only copy of those values.
@@ -349,7 +355,7 @@ workflow keeps a valid file and only deletes one that fails to `source` or has n
 
 ### Topic-preview foundations without Actions
 ```bash
-# DNS (from anywhere): wildcard *.ersah.in A record
+# DNS (from anywhere): wildcard *.interncrm.com A record
 export CF_Token="<scoped Cloudflare token>"
 SERVER_IP=<server ip> ./infra/setup-dns-cloudflare.sh
 # TLS (on the server): wildcard cert + auto-renew

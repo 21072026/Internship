@@ -53,7 +53,7 @@ the security anchors.
 
 ### SP identifiers to register in the IdP (per tenant)
 **Don't copy these by hand — we publish them.** For a tenant with slug `<slug>`
-on base URL `<BASE>` (e.g. `https://crm-preview.ersah.in`):
+on base URL `<BASE>` (e.g. `https://preview.interncrm.com`):
 
 - **SP metadata (#1931):** `GET <BASE>/api/auth/sso/<slug>/metadata` returns SAML
   2.0 SP metadata as `application/samlmetadata+xml`, which most IdPs import in
