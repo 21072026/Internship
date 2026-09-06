@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { INTERACTION_TYPES } from '@/lib/interactionTypes';
 import { InteractionSummary } from '@/components/InteractionSummary';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -31,6 +32,7 @@ import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
@@ -82,12 +84,6 @@ interface RelationDetail {
   }[];
 }
 
-const typeOptions = [
-  { value: 'Meeting', label: 'Meeting' },
-  { value: 'Feedback', label: 'Feedback' },
-  { value: 'Email', label: 'Email' },
-];
-
 export default function MenteeDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -96,6 +92,10 @@ export default function MenteeDetailPage() {
   const label = useStageLabel();
   const stages = useResolvedStages();
   const toast = useToast();
+
+  // Keys from the shared constant, labels from the dictionary (#1354) — the
+  // menu must offer every type the API accepts, in the reader's language.
+  const typeOptions = INTERACTION_TYPES.map((ty) => ({ value: ty, label: t.interactionTypes[ty] }));
 
   const [relation, setRelation] = useState<RelationDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +122,7 @@ export default function MenteeDetailPage() {
 
   const handleAddInteraction = async () => {
     if (!formData.date || !formData.notes) {
-      setFormError('Date and notes are required');
+      setFormError(t.mentor.dateAndNotesRequired);
       return;
     }
     setSubmitting(true);
@@ -153,14 +153,30 @@ export default function MenteeDetailPage() {
   const confirmDeleteInteraction = async () => {
     if (!deleteInteractionId || deletingInteraction) return;
     setDeletingInteraction(true);
+    let deleted = false;
+    let failure = '';
+    // #1355: the response used to go unread, so a 403/404/500 still produced the
+    // green "deleted" toast. Only the DELETE is guarded here — see below for why
+    // the refresh is not.
     try {
-      await fetch(`/api/interactions/${deleteInteractionId}`, { method: 'DELETE' });
-      await fetchRelation();
-      toast(t.mentor.interactionDeleted);
+      const res = await fetch(`/api/interactions/${deleteInteractionId}`, { method: 'DELETE' });
+      if (res.ok) deleted = true;
+      else failure = apiErrorMessage(res, t.common, t.common.deleteFailed);
+    } catch {
+      failure = t.common.deleteFailed;
     } finally {
       setDeletingInteraction(false);
       setDeleteInteractionId(null);
     }
+    // The refresh sits outside that try on purpose, and swallows its own error:
+    // a refetch that throws (connectivity dropped in the ~200ms after the
+    // DELETE, or a proxy answered HTML mid-deploy) must never be narrated as
+    // "nothing was removed" when the row is already gone from the database.
+    // It runs on the failure path too, so the list converges on what the server
+    // actually kept — a 404 means the row went away, whoever removed it.
+    await fetchRelation().catch(() => {});
+    if (deleted) toast(t.mentor.interactionDeleted);
+    else toast(failure, 'error');
   };
 
   const handlePipelineChange = async (pipelineStatus: string) => {
@@ -448,7 +464,7 @@ export default function MenteeDetailPage() {
                     data-testid="interaction-log-notes"
                     value={formData.notes}
                     onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
-                    placeholder="What was discussed..."
+                    placeholder={t.mentor.notesPlaceholder}
                     maxLength={TEXT_LIMITS.interactionNotes}
                     showCounter
                   />
@@ -460,7 +476,7 @@ export default function MenteeDetailPage() {
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-3" data-testid="interaction-list">
               {relation.interactions.length === 0 && (
                 <div>
                   <p className="text-sm text-gray-400 text-center pt-4 pb-3">{t.mentor.noInteractionsYet}</p>
@@ -491,6 +507,8 @@ export default function MenteeDetailPage() {
                   </div>
                   <button
                     onClick={() => handleDeleteInteraction(interaction.id)}
+                    aria-label={t.common.delete}
+                    data-testid={`interaction-delete-${interaction.id}`}
                     className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
                   >
                     <Trash2 className="h-4 w-4" />

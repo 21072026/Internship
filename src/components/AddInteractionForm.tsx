@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { useT } from '@/i18n/client';
-
-const TYPES = ['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] as const;
+import { INTERACTION_TYPES, type InteractionType } from '@/lib/interactionTypes';
 
 // Compact "log an interaction" form for admins on the candidate detail screen —
 // parity with what a mentor can do (#707). Posts to /api/interactions (which
@@ -14,7 +13,7 @@ const TYPES = ['Meeting', 'Feedback', 'Email', 'Call', 'WhatsApp'] as const;
 export function AddInteractionForm({ relationId, onAdded }: { relationId: string; onAdded: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<(typeof TYPES)[number]>('Meeting');
+  const [type, setType] = useState<InteractionType>('Meeting');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [subject, setSubject] = useState('');
   const [notes, setNotes] = useState('');
@@ -66,10 +65,10 @@ export function AddInteractionForm({ relationId, onAdded }: { relationId: string
         <select
           aria-label={t.logInteraction.type}
           value={type}
-          onChange={(e) => setType(e.target.value as (typeof TYPES)[number])}
+          onChange={(e) => setType(e.target.value as InteractionType)}
           className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
         >
-          {TYPES.map((ty) => (
+          {INTERACTION_TYPES.map((ty) => (
             <option key={ty} value={ty}>{t.interactionTypes[ty]}</option>
           ))}
         </select>

@@ -1,0 +1,18 @@
+{
+  "bump": "minor",
+  "changelog": "- **One \"Connected calendars\" card, with connection health** (#1993). The Google-only card is replaced by a provider-shaped `ConnectedCalendarsCard` fed by a new `GET /api/integrations/calendar/status`, which reads `session.user.id` and returns one row per entry in the new `src/lib/calendarProviders.ts` registry (Google is the only entry until #1991) through an explicit column allowlist — never a token, never another user's row. Each row renders four distinct states: not configured by the operator (no dead button), configured but switched off for everyone, available but not connected, and connected — the last showing the account e-mail, a relative \"last synced\" label and a warning strip whenever meetings are not reaching that calendar, either because `lastError` is set (the provider's own message plus Reconnect) or because the provider is switched off here (no Reconnect — the connect route can only bounce — but Disconnect stays). `lastError` and `lastSyncAt` were already stored and nothing on screen read them, so a revoked token read as \"connected\" while meetings quietly stopped syncing. Disconnect now checks the DELETE response and re-reads the status endpoint instead of assuming it worked, so a refused revocation no longer flashes \"disconnected and access revoked\" over tokens that are still stored. `lib/sanitizeError` no longer swallows the word after a bare \"token\"/\"key\"/\"secret\": it redacts everything after an explicit `:`/`=`, but for a whitespace-separated value only when that value looks like a credential (12+ characters carrying non-alphabetic material). The old rule turned Google's \"Token refresh failed\" into \"<redacted> failed\" on every surface that renders connector errors.",
+  "notes": {
+    "en": [
+      "Your account settings now show a \"Connected calendars\" card that tells you which calendar account is connected, when it last synced, and warns you with a Reconnect button when the connection has stopped working.",
+      "The card no longer claims a calendar is healthy when the installation has switched that provider off, and a disconnect that fails now says so instead of pretending it worked."
+    ],
+    "tr": [
+      "Hesap ayarlarında artık \"Bağlı takvimler\" kartı var: hangi takvim hesabının bağlı olduğunu, en son ne zaman eşitlendiğini gösteriyor ve bağlantı çalışmayı bıraktığında \"Yeniden bağlan\" düğmesiyle seni uyarıyor.",
+      "Kurulumda ilgili sağlayıcı kapatıldığında kart artık takvimi \"çalışıyor\" gibi göstermiyor; başarısız olan bir bağlantı kaldırma işlemi de olmuş gibi davranmak yerine durumu açıkça söylüyor."
+    ],
+    "de": [
+      "In den Kontoeinstellungen gibt es jetzt die Karte \"Verbundene Kalender\": Sie zeigt, welches Kalenderkonto verbunden ist und wann zuletzt synchronisiert wurde — und warnt mit einer Schaltfläche \"Erneut verbinden\", sobald die Verbindung nicht mehr funktioniert.",
+      "Die Karte behauptet nicht mehr, ein Kalender sei in Ordnung, wenn der Anbieter in dieser Installation abgeschaltet ist — und ein fehlgeschlagenes Trennen wird als solches gemeldet, statt als erledigt zu gelten."
+    ]
+  }
+}

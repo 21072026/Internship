@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { useFloatingNotes } from '@/components/meeting/FloatingNotes';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 
 type Category = 'MEETING' | 'FEEDBACK' | 'TASKS' | 'PERSONAL';
 const CATEGORIES: Category[] = ['MEETING', 'FEEDBACK', 'TASKS', 'PERSONAL'];
@@ -76,14 +77,29 @@ export function NotesPanel() {
   const confirmRemove = async () => {
     if (!deleteId || deleting) return;
     setDeleting(true);
+    let deleted = false;
+    let failure = '';
+    // #1355: the response was never read, so a rejected delete still showed the
+    // green "deleted" toast. Only the DELETE is guarded here.
     try {
-      await fetch(`/api/notes/${deleteId}`, { method: 'DELETE' });
-      await load();
-      toast(t.portal.notes.deleted);
+      const res = await fetch(`/api/notes/${deleteId}`, { method: 'DELETE' });
+      if (res.ok) deleted = true;
+      else failure = apiErrorMessage(res, t.common, t.common.deleteFailed);
+    } catch {
+      failure = t.common.deleteFailed;
     } finally {
       setDeleting(false);
       setDeleteId(null);
     }
+    // The reload is outside that try and swallows its own error: a reload that
+    // throws must not be reported as a failed delete after the note is already
+    // gone. It runs on the failure path too, so the list shows what the server
+    // kept — this route answers 403 (not 404) for a note that no longer exists,
+    // so without the reload a note deleted from another tab would stay listed
+    // and 403 forever.
+    await load().catch(() => {});
+    if (deleted) toast(t.portal.notes.deleted);
+    else toast(failure, 'error');
   };
 
   const startEdit = (note: Note) => {

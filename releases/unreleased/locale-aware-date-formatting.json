@@ -1,0 +1,21 @@
+{
+  "bump": "patch",
+  "changelog": "- **Dates follow the app language, not the browser** (#1422). The five remaining `toLocaleDateString()`/`toLocaleString()`/`toLocaleTimeString()` calls with no locale (interview requests queue, admin settings delivery health + e-mail log, meeting notes) now go through `formatDate`/`formatDateTime`/`formatTime` in `lib/relativeTime.ts`. Proposed interview slots additionally render through the new `formatDateTimeWithZone`, on the viewer's saved `User.timezone` (returned as `viewerTimezone` from `GET /api/interview-requests`, resolved client-side by the new `viewerTimeZone()`), with an explicit \"(GMT+3)\" label. The whole helper family now writes times on one clock — `hourCycle: 'h23'` is a `formatDateTime` default too, so an `en` UI no longer reads \"16:30\" on one screen and \"04:30 PM\" on the next — and the e-mail delivery log keeps the second-level precision its `toLocaleString()` used to give it, which is what tells a 50-recipient burst apart from a stall. `npm run check:locale-dates` guards the rule in CI; it sees through template interpolations and JSX apostrophes (both of which hid a call site from an earlier draft) and self-tests those cases before it trusts its own verdict.",
+  "notes": {
+    "en": [
+      "Dates and times now follow the language you picked in the app, so a Turkish or German interface no longer shows dates in US format.",
+      "Proposed interview times say which timezone they are in, and use the timezone saved on your profile.",
+      "Times are shown on a 24-hour clock everywhere, so the same appointment no longer reads 16:30 on one screen and 4:30 PM on the next."
+    ],
+    "tr": [
+      "Tarih ve saatler artık uygulamada seçtiğiniz dile göre gösteriliyor; Türkçe arayüzde tarihler ABD biçiminde görünmüyor.",
+      "Önerilen mülakat saatleri hangi saat diliminde olduklarını yazıyor ve profilinizde kayıtlı saat dilimini kullanıyor.",
+      "Saatler her ekranda 24 saat biçiminde gösteriliyor; aynı randevu bir yerde 16:30, başka bir yerde 4:30 PM görünmüyor."
+    ],
+    "de": [
+      "Datums- und Zeitangaben richten sich jetzt nach der in der App gewählten Sprache — eine deutsche Oberfläche zeigt keine US-Datumsformate mehr.",
+      "Vorgeschlagene Interviewtermine nennen ihre Zeitzone und verwenden die in Ihrem Profil gespeicherte Zeitzone.",
+      "Uhrzeiten erscheinen überall im 24-Stunden-Format – derselbe Termin steht nicht mehr auf einem Bildschirm als 16:30 und auf dem nächsten als 4:30 PM."
+    ]
+  }
+}

@@ -175,7 +175,14 @@ export default async function MessagesInboxPage() {
                             The icon is aria-hidden, so `name` is what gives this
                             trigger its accessible name (see PersonHoverCard). */}
                         {th.otherId && (
-                          <PersonHoverCard personId={th.otherId} name={th.otherName} className="no-underline">
+                          /* The 14x14 icon is the whole visible trigger, but WCAG
+                             2.2 target-size (AA) asks for 24x24 — so the trigger
+                             box is sized, not the glyph (#2131). */
+                          <PersonHoverCard
+                            personId={th.otherId}
+                            name={th.otherName}
+                            className="no-underline inline-flex h-6 w-6 shrink-0 items-center justify-center"
+                          >
                             <UserRound className="h-3.5 w-3.5 text-gray-400 hover:text-blue-600" aria-hidden />
                           </PersonHoverCard>
                         )}

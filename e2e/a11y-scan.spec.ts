@@ -44,14 +44,31 @@ import { signInAsFreshUser } from './helpers/auth';
 //     panned without a mouse (tabIndex on HorizontalScrollArea's scroller).
 //   - aria-command-name — the inbox's person-card trigger is an aria-hidden icon
 //     in a role="button" and announced nothing (it now takes the person's name).
-// The remaining nine ARE frozen into e2e/a11y-baseline.json, and that is the one
-// thing this file's own warning tells you to justify rather than do quietly:
-// eight of them are the single `text-gray-400` muted-text token at 2.38–2.53:1
-// (plus its dark-mode mirror on the board header) and two are the 14x14px inbox
-// trigger. Both are token/spacing changes that would move baseline keys on
-// pages this task does not own, so they are #2131 — with the measurements — and
-// docs/a11y-audit.md carries the row-by-row list. A frozen entry is a debt with
-// an issue number, never a pass mark.
+// The remaining nine were frozen into e2e/a11y-baseline.json as #2131, because
+// they were a handful of root causes rather than nine bugs and each moved pages
+// that task did not own. What each frozen entry covered:
+//   - /messages, /notifications, /notifications#dark, /mentor/board,
+//     /admin/board, /admin/settings — color-contrast on the single
+//     `text-gray-400` muted-text token at 2.38–2.53:1 on white.
+//   - /admin/board#dark — the same rule, mirrored: the board's `bg-white/40`
+//     stage-group panel was never retinted, so `text-gray-800` remapped to
+//     #e5e7eb sat on a 40%-white wash at 3.26:1.
+//   - /messages and /messages#dark — target-size on the 14x14px inbox
+//     person-card trigger.
+// #2131 cleared all of them: the token is raised once in globals.css, the panel
+// is retinted beside the other `bg-white/*` remaps, the board's own gray-100
+// count chip is pinned to gray-700, and the trigger got a 24x24 hit area — so
+// every baseline entry here is back to {}.
+//
+// One trap that cost #2131 a red run, worth knowing before you zero an entry:
+// `scan()` counts one violation per RULE per page, not per NODE, because
+// results.violations is already grouped that way. `/admin/settings`'s single
+// baselined `color-contrast: 1` was therefore hiding TWO offending nodes — the
+// gray-400 status line and an unrelated `text-green-600` (#16a34a, 3.3:1) on the
+// e-mail-log summary. Fixing one and zeroing the entry still fails the gate.
+// Zeroing an entry is a claim about every node the rule matches on that page;
+// let CI, not the diff, be the thing that proves it. A frozen entry is a debt
+// with an issue number, never a pass mark.
 
 const GATED_SEVERITIES = new Set(['critical', 'serious']);
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];

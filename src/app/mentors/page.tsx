@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Users } from 'lucide-react';
+import { Users, AlertTriangle } from 'lucide-react';
 import type { MentorAvailabilityStatus } from '@/lib/mentorAvailability';
 
 interface DirectoryMentor {
@@ -39,6 +39,10 @@ export default function MentorDirectoryPage() {
   const t = useT();
   const [mentors, setMentors] = useState<DirectoryMentor[]>([]);
   const [total, setTotal] = useState(0);
+  // The API says so explicitly when it could not scan the whole directory
+  // (#1820) — a partial answer must never pretend to be a complete one.
+  const [partial, setPartial] = useState(false);
+  const [cap, setCap] = useState(0);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
   const [loading, setLoading] = useState(true);
@@ -70,6 +74,8 @@ export default function MentorDirectoryPage() {
       const data = await res.json();
       setMentors(data.mentors || []);
       setTotal(typeof data.total === 'number' ? data.total : (data.mentors?.length ?? 0));
+      setPartial(data.partial === true);
+      setCap(typeof data.cap === 'number' ? data.cap : 0);
     } catch {
       setError(t.mentorDirectory.loadError);
     } finally {
@@ -88,6 +94,8 @@ export default function MentorDirectoryPage() {
   }, [skillFilter, languageFilter, acceptingOnly]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
 
   return (
     <div>
@@ -131,6 +139,18 @@ export default function MentorDirectoryPage() {
         </div>
       </div>
 
+      {/* The result set was capped before filtering — say so rather than
+          quietly under-reporting (#1820). */}
+      {!loading && partial && (
+        <div
+          data-testid="mentors-partial-notice"
+          className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800"
+        >
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <span>{t.mentorDirectory.partialNotice.replace('{cap}', String(cap))}</span>
+        </div>
+      )}
+
       {/* Mentor cards */}
       {loading ? (
         <Card><SkeletonRows rows={6} /></Card>
@@ -143,6 +163,13 @@ export default function MentorDirectoryPage() {
           />
         </Card>
       ) : (
+        <>
+        <p data-testid="mentors-total" className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+          {t.mentorDirectory.showing
+            .replace('{from}', String(from))
+            .replace('{to}', String(to))
+            .replace('{total}', String(total))}
+        </p>
         <div data-testid="mentors-list" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {mentors.map((mentor) => {
             const name = mentor.displayName || mentor.fullName;
@@ -210,6 +237,7 @@ export default function MentorDirectoryPage() {
             );
           })}
         </div>
+        </>
       )}
 
       {!loading && totalPages > 1 && (

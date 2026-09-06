@@ -51,7 +51,15 @@ export async function GET(request: Request) {
         decidedBy: { select: { id: true, fullName: true } },
       },
     });
-    return NextResponse.json({ requests });
+    // The queue prints proposed interview slots with an explicit zone label
+    // (#1422). The browser can guess a zone, but a zone the person actually
+    // *saved* is the one their reminder emails already use, so hand it over and
+    // let the client prefer it (`viewerTimeZone`). Null when they never set one.
+    const viewer = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { timezone: true },
+    });
+    return NextResponse.json({ requests, viewerTimezone: viewer?.timezone ?? null });
   });
 }
 

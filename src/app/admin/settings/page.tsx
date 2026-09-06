@@ -4,12 +4,20 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
 
+// The delivery log answers "did our mail actually go out, and when?", and a
+// newsletter or announcement send writes one EmailLog row per recipient — 50
+// rows all stamped "25.08.2026 16:30" cannot tell a burst apart from a stall.
+// The old `toLocaleString()` here carried seconds; keep them (#1422).
+const WITH_SECONDS: Intl.DateTimeFormatOptions = { second: '2-digit' };
+
 export default function AdminSettingsPage() {
   const t = useT();
+  const locale = useLocale();
   const [reminderDays, setReminderDays] = useState('14');
   const [retentionMonths, setRetentionMonths] = useState('12');
   const [supportEmail, setSupportEmail] = useState('');
@@ -273,7 +281,14 @@ export default function AdminSettingsPage() {
                   <div key={r.row} className="border-b border-gray-50 last:border-0">
                     <div className="flex items-center gap-2 px-2 py-1">
                       <span className="w-6 text-gray-400">{r.row}</span>
-                      <span className={`w-16 font-medium ${r.status === 'error' ? 'text-red-600' : r.status === 'skip' ? 'text-amber-600' : 'text-green-600'}`}>{r.status}</span>
+                      {/* 700, not 600, on every status colour on this page (#2131):
+                          green-600 (#16a34a) is 3.3:1 on white and amber-600
+                          (#d97706) 3.2:1, both under the 4.5:1 AA asks of body
+                          text — axe caught the green one on the e-mail-log
+                          summary below. The -700 shades are ~5:1; dark mode
+                          keeps the -400 companions, which the class-strategy
+                          `dark:` utility still wins on specificity. */}
+                      <span className={`w-16 font-medium ${r.status === 'error' ? 'text-red-600 dark:text-red-400' : r.status === 'skip' ? 'text-amber-700 dark:text-amber-400' : 'text-green-700 dark:text-green-400'}`}>{r.status}</span>
                       <span className="flex-1 truncate text-gray-600">{r.email}{r.reason ? ` · ${r.reason}` : ''}</span>
                     </div>
                     {r.possibleDuplicates && r.possibleDuplicates.length > 0 && (
@@ -305,7 +320,7 @@ export default function AdminSettingsPage() {
           {smtpInfo && (
             <div className="text-sm">
               {smtpInfo.smtp?.ok ? (
-                <span className="text-green-600 dark:text-green-400">● {t.settings.smtpConnected}</span>
+                <span className="text-green-700 dark:text-green-400">● {t.settings.smtpConnected}</span>
               ) : (
                 <span className="text-red-600 dark:text-red-400">● {t.settings.smtpFailed}{smtpInfo.smtp?.error ? `: ${smtpInfo.smtp.error}` : ''}</span>
               )}
@@ -320,7 +335,7 @@ export default function AdminSettingsPage() {
               {!smtpInfo.bulkSmtp.configured ? (
                 <span className="text-gray-400">○ {t.settings.bulkChannelOff}</span>
               ) : smtpInfo.bulkSmtp.ok ? (
-                <span className="text-green-600 dark:text-green-400">
+                <span className="text-green-700 dark:text-green-400">
                   ● {t.settings.bulkChannelOn}
                   {smtpInfo.channels?.bulk?.from && (
                     <span className="text-gray-400"> · {t.settings.sendingFrom} {smtpInfo.channels.bulk.from}</span>
@@ -349,16 +364,16 @@ export default function AdminSettingsPage() {
             <div className="text-sm" data-testid="email-delivery-health">
               <span className="text-gray-600 dark:text-gray-300">
                 {emailHealth.lastOkAt
-                  ? t.settings.deliveryLastOk.replace('{t}', new Date(emailHealth.lastOkAt).toLocaleString())
+                  ? t.settings.deliveryLastOk.replace('{t}', formatDateTime(emailHealth.lastOkAt, locale, WITH_SECONDS))
                   : t.settings.deliveryNeverOk}
               </span>
               {emailHealth.failuresSinceOk > 0 ? (
-                <span className={emailHealth.failuresSinceOk >= 3 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>
+                <span className={emailHealth.failuresSinceOk >= 3 ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}>
                   {' · '}
                   {t.settings.deliveryFailures.replace('{n}', String(emailHealth.failuresSinceOk))}
                 </span>
               ) : (
-                emailHealth.lastOkAt && <span className="text-green-600 dark:text-green-400"> · {t.settings.deliveryHealthy}</span>
+                emailHealth.lastOkAt && <span className="text-green-700 dark:text-green-400"> · {t.settings.deliveryHealthy}</span>
               )}
             </div>
           )}
@@ -376,7 +391,7 @@ export default function AdminSettingsPage() {
 
           {testResult && (
             testResult.ok ? (
-              <p className="text-sm text-green-600 dark:text-green-400">✓ {t.settings.testSent}</p>
+              <p className="text-sm text-green-700 dark:text-green-400">✓ {t.settings.testSent}</p>
             ) : (
               <p className="text-sm text-red-600 dark:text-red-400">{t.settings.testFailed.replace('{e}', testResult.error ?? '')}</p>
             )
@@ -393,7 +408,7 @@ export default function AdminSettingsPage() {
 
             {emailLog && (
               <p className="text-xs mb-2">
-                <span className="text-green-600 dark:text-green-400">{t.settings.emailLogSent.replace('{n}', String(emailLog.summary.SENT))}</span>
+                <span className="text-green-700 dark:text-green-400">{t.settings.emailLogSent.replace('{n}', String(emailLog.summary.SENT))}</span>
                 {' · '}
                 <span className={emailLog.summary.FAILED > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}>
                   {t.settings.emailLogFailed.replace('{n}', String(emailLog.summary.FAILED))}
@@ -442,13 +457,13 @@ export default function AdminSettingsPage() {
                     {emailLog.entries.map((e) => (
                       <tr key={e.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
                         <td className="py-1.5 pr-2 whitespace-nowrap text-gray-400">
-                          {new Date(e.createdAt).toLocaleString()}
+                          {formatDateTime(e.createdAt, locale, WITH_SECONDS)}
                         </td>
                         <td className="py-1.5 pr-2 whitespace-nowrap">
                           <span
                             className={
                               e.status === 'SENT'
-                                ? 'text-green-600 dark:text-green-400'
+                                ? 'text-green-700 dark:text-green-400'
                                 : 'text-red-600 dark:text-red-400'
                             }
                           >
