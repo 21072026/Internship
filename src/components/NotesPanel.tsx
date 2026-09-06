@@ -77,20 +77,29 @@ export function NotesPanel() {
   const confirmRemove = async () => {
     if (!deleteId || deleting) return;
     setDeleting(true);
+    let deleted = false;
+    let failure = '';
+    // #1355: the response was never read, so a rejected delete still showed the
+    // green "deleted" toast. Only the DELETE is guarded here.
     try {
       const res = await fetch(`/api/notes/${deleteId}`, { method: 'DELETE' });
-      // #1355: the response was never read, so a rejected delete still showed
-      // the green "deleted" toast. On failure keep the note on screen and skip
-      // the reload — the list must not imply something was removed.
-      if (!res.ok) throw new Error(await apiErrorMessage(res, t.common.deleteFailed));
-      await load();
-      toast(t.portal.notes.deleted);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : t.common.deleteFailed, 'error');
+      if (res.ok) deleted = true;
+      else failure = apiErrorMessage(res, t.common, t.common.deleteFailed);
+    } catch {
+      failure = t.common.deleteFailed;
     } finally {
       setDeleting(false);
       setDeleteId(null);
     }
+    // The reload is outside that try and swallows its own error: a reload that
+    // throws must not be reported as a failed delete after the note is already
+    // gone. It runs on the failure path too, so the list shows what the server
+    // kept — this route answers 403 (not 404) for a note that no longer exists,
+    // so without the reload a note deleted from another tab would stay listed
+    // and 403 forever.
+    await load().catch(() => {});
+    if (deleted) toast(t.portal.notes.deleted);
+    else toast(failure, 'error');
   };
 
   const startEdit = (note: Note) => {

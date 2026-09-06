@@ -38,6 +38,10 @@ export default function AvailabilityPage() {
     setSlots(d.slots ?? []);
     setZone(d.timezone ?? '');
     setZoneSet(d.timezoneSet !== false);
+    // The delete box below describes this list and has no dismiss control of
+    // its own; a list that just reloaded successfully makes it stale (#1355).
+    // `confirmRemove` re-sets it after its own reload, so a real failure stays.
+    setDeleteError('');
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -80,19 +84,27 @@ export default function AvailabilityPage() {
     if (!deleteId || deleting) return;
     setDeleting(true);
     setDeleteError('');
+    let failure = '';
+    // #1355: the response was never read, so a rejected delete quietly reloaded
+    // and the slot reappeared with no explanation. Say why — in the slots card,
+    // not the add-slot form's box. Only the DELETE is guarded here.
     try {
       const res = await fetch(`/api/availability?id=${deleteId}`, { method: 'DELETE' });
-      // #1355: the response was never read, so a rejected delete quietly
-      // reloaded and the slot reappeared with no explanation. Say why — in the
-      // slots card, not the add-slot form's box — and leave the list alone.
-      if (!res.ok) throw new Error(await apiErrorMessage(res, t.common.deleteFailed));
-      await load();
-    } catch (e2) {
-      setDeleteError(e2 instanceof Error ? e2.message : t.common.deleteFailed);
+      if (!res.ok) failure = apiErrorMessage(res, t.common, t.common.deleteFailed);
+    } catch {
+      failure = t.common.deleteFailed;
     } finally {
       setDeleting(false);
       setDeleteId(null);
     }
+    // Outside the try, and swallowing its own error: a reload that throws must
+    // not be reported as a failed delete after the slot is already gone. It runs
+    // on the failure path too, so a slot the server no longer has (404) stops
+    // being listed instead of sitting there failing on every retry.
+    await load().catch(() => {});
+    // After load(), which clears the box — a successful reload says nothing
+    // about whether this delete worked.
+    if (failure) setDeleteError(failure);
   };
 
   return (

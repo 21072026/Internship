@@ -1,18 +1,32 @@
 /**
- * Turn a failed `fetch` Response into a message worth putting in front of a user.
+ * Localized reason for a request the server rejected.
  *
- * A 4xx body's `error` is a statement about *this* request — "Forbidden",
- * "Interaction not found" — and is worth surfacing: it tells the user why
- * retrying will not help. A 5xx body's is an internal detail ("Internal server
- * error") that says nothing actionable and can leak implementation, so those
- * collapse to the caller's localized fallback, as does an unparseable body.
+ * The **status** is the only part of a failure this app puts in front of a user.
+ * Every 4xx body on the routes these call sites reach carries a hardcoded
+ * English literal — `'Unauthorized'`, `'Forbidden'`, `'Not found'`,
+ * `'Interaction not found'`, `'Validation failed'` — so rendering `body.error`
+ * would hand a Turkish or German mentor an English toast, and would publish
+ * whatever text a future route happens to put there. Same stance as
+ * `@/lib/authErrors`: a server-authored message is never shown verbatim.
  *
- * Callers pass a localized `fallback` (e.g. `t.common.deleteFailed`) so the
- * generic case is never English-only.
+ * A status that carries genuinely request-specific detail the client cannot
+ * reconstruct is read at its own call site instead — see the 409 `code:
+ * 'overlap'` branch in the availability add-form, which names the interval it
+ * collided with.
  */
-export async function apiErrorMessage(res: Response, fallback: string): Promise<string> {
-  if (res.status >= 500) return fallback;
-  const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
-  const reason = typeof body?.error === 'string' ? body.error.trim() : '';
-  return reason || fallback;
+export interface ApiErrorCopy {
+  /** 401 — the session is gone, so retrying as-is cannot work. */
+  sessionExpired: string;
+  /** 403 — signed in, but this row is not the caller's to touch. */
+  forbidden: string;
+  /** 404 — the row is already gone; the screen is out of date, not the user. */
+  alreadyGone: string;
+}
+
+/** `fallback` is the caller's own localized "this did not work" line. */
+export function apiErrorMessage(res: Response, copy: ApiErrorCopy, fallback: string): string {
+  if (res.status === 401) return copy.sessionExpired;
+  if (res.status === 403) return copy.forbidden;
+  if (res.status === 404) return copy.alreadyGone;
+  return fallback;
 }

@@ -29,6 +29,11 @@ export function ContactActions({ relationId, phone, onLogged }: { relationId: st
     setAsk(null);
     if (!reached || !channel) return;
     setSaving(true);
+    let logged = false;
+    let failure = '';
+    // #1355: the response went unread, so a rejected POST still said "contact
+    // logged" — and `onLogged` refetched a history that never gained the row.
+    // Only the POST is guarded here.
     try {
       const res = await fetch('/api/interactions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -39,15 +44,20 @@ export function ContactActions({ relationId, phone, onLogged }: { relationId: st
           notes: channel === 'Call' ? t.contact.loggedCall : t.contact.loggedWhatsApp,
         }),
       });
-      // #1355: the response went unread, so a rejected POST still said "contact
-      // logged" — and `onLogged` refetched a history that never gained the row.
-      if (!res.ok) throw new Error(await apiErrorMessage(res, t.contact.logFailed));
-      onLogged?.();
-      toast(t.contact.logged);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : t.contact.logFailed, 'error');
+      if (res.ok) logged = true;
+      else failure = apiErrorMessage(res, t.common, t.contact.logFailed);
+    } catch {
+      failure = t.contact.logFailed;
     } finally {
       setSaving(false);
+    }
+    // The history refresh is outside that try: a refresh that fails must never
+    // be narrated as "the contact was not logged" once the row exists.
+    if (logged) {
+      onLogged?.();
+      toast(t.contact.logged);
+    } else {
+      toast(failure, 'error');
     }
   };
 

@@ -332,6 +332,9 @@ const en = {
     next: 'Next',
     confirmDelete: 'Are you sure you want to delete this?',
     deleteFailed: 'Could not delete. Nothing was removed.',
+    sessionExpired: 'Your session has expired. Please sign in again.',
+    forbidden: 'You are not allowed to do that.',
+    alreadyGone: 'That record is no longer there — it may have been removed already.',
   },
   imageViewer: {
     title: 'Image viewer',
@@ -4637,6 +4640,9 @@ const tr: Dict = {
     next: 'Sonraki',
     confirmDelete: 'Bunu silmek istediğinize emin misiniz?',
     deleteFailed: 'Silinemedi. Hiçbir kayıt kaldırılmadı.',
+    sessionExpired: 'Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.',
+    forbidden: 'Bunu yapma yetkiniz yok.',
+    alreadyGone: 'Bu kayıt artık mevcut değil — daha önce kaldırılmış olabilir.',
   },
   imageViewer: {
     title: 'Resim görüntüleyici',
@@ -8896,6 +8902,9 @@ const de: Dict = {
     next: 'Weiter',
     confirmDelete: 'Möchtest du das wirklich löschen?',
     deleteFailed: 'Löschen fehlgeschlagen. Es wurde nichts entfernt.',
+    sessionExpired: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
+    forbidden: 'Dazu bist du nicht berechtigt.',
+    alreadyGone: 'Dieser Eintrag existiert nicht mehr – er wurde vermutlich bereits entfernt.',
   },
   imageViewer: {
     title: 'Bildanzeige',

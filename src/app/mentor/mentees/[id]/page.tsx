@@ -154,21 +154,30 @@ export default function MenteeDetailPage() {
   const confirmDeleteInteraction = async () => {
     if (!deleteInteractionId || deletingInteraction) return;
     setDeletingInteraction(true);
+    let deleted = false;
+    let failure = '';
+    // #1355: the response used to go unread, so a 403/404/500 still produced the
+    // green "deleted" toast. Only the DELETE is guarded here — see below for why
+    // the refresh is not.
     try {
       const res = await fetch(`/api/interactions/${deleteInteractionId}`, { method: 'DELETE' });
-      // #1355: the response used to go unread, so a 403/404/500 still produced
-      // the green "deleted" toast. On failure the row is deliberately left in
-      // place and the list is *not* refetched — what the mentor sees has to
-      // match what the server actually kept.
-      if (!res.ok) throw new Error(await apiErrorMessage(res, t.common.deleteFailed));
-      await fetchRelation();
-      toast(t.mentor.interactionDeleted);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : t.common.deleteFailed, 'error');
+      if (res.ok) deleted = true;
+      else failure = apiErrorMessage(res, t.common, t.common.deleteFailed);
+    } catch {
+      failure = t.common.deleteFailed;
     } finally {
       setDeletingInteraction(false);
       setDeleteInteractionId(null);
     }
+    // The refresh sits outside that try on purpose, and swallows its own error:
+    // a refetch that throws (connectivity dropped in the ~200ms after the
+    // DELETE, or a proxy answered HTML mid-deploy) must never be narrated as
+    // "nothing was removed" when the row is already gone from the database.
+    // It runs on the failure path too, so the list converges on what the server
+    // actually kept — a 404 means the row went away, whoever removed it.
+    await fetchRelation().catch(() => {});
+    if (deleted) toast(t.mentor.interactionDeleted);
+    else toast(failure, 'error');
   };
 
   const handlePipelineChange = async (pipelineStatus: string) => {
