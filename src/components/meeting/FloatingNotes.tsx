@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { formatTime } from '@/lib/relativeTime';
 import { openFloatingWindow, type FloatingWindow } from '@/lib/floatingWindow';
 
 // Notes taken during a meeting, in a window that stays on top of everything
@@ -173,6 +174,7 @@ function NotesWindowBody({
   onClose: () => void;
 }) {
   const t = useT();
+  const locale = useLocale();
   const [text, setText] = useState('');
   const [state, setState] = useState<SaveState>('idle');
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -218,7 +220,10 @@ function NotesWindowBody({
       const data = await res.json();
       if (data?.note?.id) noteIdRef.current = data.note.id;
       setState('saved');
-      setSavedAt(new Date().toLocaleTimeString());
+      // The viewer's own clock, but written on the app's locale rather than the
+      // browser's — a Turkish UI must not print "02:32 PM" (#1422). No zone
+      // label: this is "saved a moment ago", not an appointment.
+      setSavedAt(formatTime(new Date(), locale));
       // Only now is it safe to drop the local copy.
       try {
         localStorage.removeItem(DRAFT_KEY);
@@ -228,7 +233,9 @@ function NotesWindowBody({
     } catch {
       setState('error');
     }
-  }, [meetingId]);
+    // `locale` is a plain string, so it is a safe dependency — unlike the
+    // dictionary `useT()` returns, which is a fresh object on every render.
+  }, [meetingId, locale]);
 
   const onChange = (value: string) => {
     setText(value);

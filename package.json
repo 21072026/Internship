@@ -25,6 +25,7 @@
     "test:mentor-directory": "node --test --experimental-strip-types scripts/test/mentor-directory.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
+    "check:locale-dates": "node scripts/check-locale-dates.mjs",
     "check:k6": "node scripts/check-k6.mjs",
     "check:openapi": "node scripts/check-openapi.mjs",
     "gen:openapi": "node scripts/openapi-generate.cjs",
