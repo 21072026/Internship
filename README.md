@@ -181,7 +181,7 @@ holder.
 The AGPL keeps the project open while ensuring improvements flow back to the community. Two
 paths exist for organizations:
 
-- **Hosted service** — use the maintained deployment at https://crm.ersah.in (support,
+- **Hosted service** — use the maintained deployment at https://interncrm.com (support,
   updates, backups included) instead of running it yourself.
 - **Commercial license** — if AGPL's source-sharing obligations don't fit your product (e.g.
   embedding in a closed-source offering), a separate commercial license is available. Because

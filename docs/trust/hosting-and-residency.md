@@ -1,15 +1,15 @@
 # Hosting and data residency
 
-**Last updated: 2026-09-02**
+**Last updated: 2026-09-06**
 
 The written answer to "where does our data live, and can we keep it in the EU?"
 
 ## Where the data is today
 
 **On one server.** The application runs as a Docker container on a single
-Plesk-managed host, next to its MySQL database and its backups. There is no
-managed database service, no object store and no CDN holding application data —
-the whole of it is on that machine.
+Linux host behind a Caddy reverse proxy, next to its MySQL database and its
+backups. There is no control panel, no managed database service, no object store
+and no CDN holding application data — the whole of it is on that machine.
 
 That machine runs three kinds of environment at once:
 

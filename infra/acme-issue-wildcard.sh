@@ -3,7 +3,7 @@
 # Issue (and auto-renew) a wildcard Let's Encrypt certificate for the CRM's
 # domain using acme.sh with Cloudflare's DNS-01 challenge.
 #
-# WHY DNS-01: wildcard certs (*.ersah.in) can ONLY be validated via the DNS-01
+# WHY DNS-01: wildcard certs (*.interncrm.com) can ONLY be validated via the DNS-01
 # challenge — HTTP-01 does not support wildcards. DNS-01 needs a TXT record at
 # _acme-challenge.<domain>; acme.sh creates and removes it automatically through
 # the Cloudflare API, so there is nothing to add by hand (that manual TXT step
@@ -16,21 +16,21 @@
 #   Create a scoped Cloudflare API token (My Profile → API Tokens → Custom):
 #     - Zone → DNS  → Edit
 #     - Zone → Zone → Read
-#     - Zone resources: Include → Specific zone → ersah.in
+#     - Zone resources: Include → Specific zone → interncrm.com
 #
 # USAGE:
 #   export CF_Token="<your scoped cloudflare token>"   # never commit this
 #   ./infra/acme-issue-wildcard.sh
 #
 # Env overrides (all optional):
-#   DOMAIN         apex domain                (default: ersah.in)
+#   DOMAIN         apex domain                (default: interncrm.com)
 #   CERT_DIR       where the cert is installed (default: /etc/nginx/ssl)
 #   RELOAD_CMD     reload after install/renew  (default: systemctl reload nginx)
 #   ACME_SERVER    CA to use                   (default: letsencrypt)
 #
 set -euo pipefail
 
-DOMAIN="${DOMAIN:-ersah.in}"
+DOMAIN="${DOMAIN:-interncrm.com}"
 CERT_DIR="${CERT_DIR:-/etc/nginx/ssl}"
 RELOAD_CMD="${RELOAD_CMD:-systemctl reload nginx}"
 ACME_SERVER="${ACME_SERVER:-letsencrypt}"
