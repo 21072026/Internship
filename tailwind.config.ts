@@ -6,6 +6,10 @@ const config: Config = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // src/lib too: shared style maps live there (e.g. INTERACTION_TYPE_STYLE in
+    // src/lib/interactionTypes.ts), and a class only referenced from an unscanned
+    // file is silently never generated.
+    './src/lib/**/*.{js,ts}',
   ],
   theme: {
     extend: {

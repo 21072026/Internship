@@ -15,7 +15,7 @@ function Code({ children }: { children: React.ReactNode }) {
 
 export default function ApiDocsPage() {
   const t = useT();
-  const [base, setBase] = useState('https://crm.ersah.in');
+  const [base, setBase] = useState('https://interncrm.com');
 
   useEffect(() => {
     setBase(window.location.origin);

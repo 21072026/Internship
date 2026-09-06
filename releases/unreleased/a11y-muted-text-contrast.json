@@ -1,0 +1,21 @@
+{
+  "bump": "patch",
+  "changelog": "- **Muted secondary text and the inbox person-card trigger now meet WCAG AA** (#2131). `text-gray-400` (#9ca3af) was the app's muted-text token and measured 2.38-2.53:1 on white where AA asks 4.5:1 — axe found it on `/messages`, `/notifications`, both boards and `/admin/settings` at once, so it is raised once in `globals.css` to gray-500 (4.83:1) rather than patched per screen; dark mode keeps #9ca3af, and the ten `text-gray-400 dark:text-gray-500` pairs that the dark remap now outranks are dropped so source and rendering agree. Also: the admin board's `bg-white/40` stage-group panel is finally retinted for dark (its `text-gray-800` header sat at 3.26:1 on a 40%-white wash), its gray-100 count chip is pinned to gray-700, the read-notification row drops `opacity-60` (it faded the text and the card under it by the same amount, 2.3:1 light / 3.4:1 dark, so no colour token could win — the row's existing gray muting and its border now carry the state on their own), `/admin/settings` moves its green and amber status colours from the -600 shades (3.3:1 and 3.2:1 on white) to -700 (~5:1), and the 14x14px icon-only person-card trigger in the inbox gets a 24x24 hit area for WCAG 2.2 target-size. With those in, the a11y gate passes at an all-`{}` `e2e/a11y-baseline.json` — no page carries a frozen critical or serious violation any more.",
+  "notes": {
+    "en": [
+      "Grey secondary text — inbox previews, timestamps, card details and status lines — is darker and now readable at the contrast level WCAG AA requires.",
+      "Green and amber status text on the admin settings page is darker for the same reason.",
+      "The small person icon in each inbox row is easier to hit on a touchscreen."
+    ],
+    "tr": [
+      "Gri ikincil yazılar — gelen kutusu önizlemeleri, zaman damgaları, kart ayrıntıları ve durum satırları — koyulaştırıldı; artık WCAG AA'nın istediği kontrast seviyesinde okunuyor.",
+      "Yönetici ayarları sayfasındaki yeşil ve turuncu durum yazıları da aynı nedenle koyulaştırıldı.",
+      "Gelen kutusundaki küçük kişi simgesine dokunmatik ekranda dokunmak kolaylaştı."
+    ],
+    "de": [
+      "Grauer Sekundärtext — Posteingangs-Vorschauen, Zeitstempel, Kartendetails und Statuszeilen — ist dunkler und erreicht jetzt den von WCAG AA geforderten Kontrast.",
+      "Die grünen und orangefarbenen Statustexte auf der Administrator-Einstellungsseite sind aus demselben Grund dunkler.",
+      "Das kleine Personensymbol in jeder Posteingangszeile lässt sich auf dem Touchscreen leichter treffen."
+    ]
+  }
+}

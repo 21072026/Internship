@@ -71,25 +71,41 @@ export function CompanyEntitlements({
           <p className="text-center py-8 text-gray-400">{t.common.loading}</p>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
-            {PREMIUM_FEATURES.map((f) => (
-              <label key={f.key} className="flex items-start justify-between gap-4 py-3 cursor-pointer">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                    {labels[f.key] ?? f.key}
-                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                      {(e.phase as string).replace('{n}', String(f.phase))}
-                    </span>
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 flex-shrink-0"
-                  checked={!!features[f.key]}
-                  disabled={busy === f.key}
-                  onChange={(ev) => toggle(f.key, ev.target.checked)}
-                />
-              </label>
-            ))}
+            {PREMIUM_FEATURES.map((f) => {
+              // A tenant-scoped feature is decided by Organization.plan, and a
+              // CompanyEntitlement row for it grants nothing (#1742). Shown but
+              // read-only, with the reason: an operator who ticked it and told
+              // the customer to go configure branding used to get a 403 from
+              // the other screen and no explanation anywhere.
+              const orgScoped = f.scope === 'org';
+              return (
+                <label
+                  key={f.key}
+                  className={`flex items-start justify-between gap-4 py-3 ${orgScoped ? 'cursor-default' : 'cursor-pointer'}`}
+                >
+                  <div className="min-w-0">
+                    <p className={`text-sm font-medium ${orgScoped ? 'text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                      {labels[f.key] ?? f.key}
+                      <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                        {(e.phase as string).replace('{n}', String(f.phase))}
+                      </span>
+                    </p>
+                    {orgScoped && (
+                      <p data-testid={`entitlement-org-scoped-${f.key}`} className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        {e.orgScoped}
+                      </p>
+                    )}
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 flex-shrink-0"
+                    checked={!!features[f.key]}
+                    disabled={orgScoped || busy === f.key}
+                    onChange={(ev) => toggle(f.key, ev.target.checked)}
+                  />
+                </label>
+              );
+            })}
           </div>
         )}
 

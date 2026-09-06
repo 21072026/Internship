@@ -150,6 +150,60 @@ test.describe('mentor directory', () => {
     }
   });
 
+  // #1820 — the directory used to read the first 500 consented mentors, filter
+  // those in JS and report the survivors as the total. The unfiltered path is
+  // now counted in SQL, and any remaining cap is reported instead of hidden.
+  test('the total is honest and the page says how many of how many it shows', async ({ page }) => {
+    await signIn(page, menteeEmail, pw, '/portal');
+
+    // Unfiltered: the count comes from the database over the same `where`, so
+    // it must be at least the two consented mentors seeded here even though a
+    // page only holds 12 — and nothing is partial.
+    const unfiltered = await page.request.get('/api/mentors?page=1&pageSize=1');
+    expect(unfiltered.ok()).toBeTruthy();
+    const body = await unfiltered.json();
+    expect(body.mentors).toHaveLength(1);
+    expect(body.total).toBeGreaterThanOrEqual(2);
+    expect(body.total).toBeGreaterThan(body.mentors.length);
+    expect(body.partial).toBe(false);
+
+    // Filtered: the total describes the FILTERED set, not a truncated read.
+    const filtered = await page.request.get(`/api/mentors?skill=${SKILL_A}`);
+    const filteredBody = await filtered.json();
+    expect(filteredBody.total).toBe((filteredBody.mentors as unknown[]).length);
+    expect(filteredBody.total).toBeGreaterThanOrEqual(2);
+    // Two seeded mentors is nowhere near the scan cap, so this answer is whole
+    // and must not claim otherwise.
+    expect(filteredBody.partial).toBe(false);
+
+    // The "showing N of M" line is rendered, and the incompleteness notice is
+    // absent while the answer is complete.
+    await page.goto('/mentors');
+    await expect(page.getByTestId('mentors-total')).toBeVisible();
+    await expect(page.getByTestId('mentors-partial-notice')).toHaveCount(0);
+  });
+
+  // The scan cap (2000 consented mentors) is unreachable in a seeded e2e run,
+  // so handing the page a partial response is the only way to see the notice in
+  // a browser at all. Without this the amber banner, the `cap` payload and the
+  // {cap} placeholder substitution ship untested (#1820).
+  test('a partial answer renders the incompleteness notice with the real cap', async ({ page }) => {
+    await signIn(page, menteeEmail, pw, '/portal');
+    await page.route('**/api/mentors?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ mentors: [], total: 0, page: 1, pageSize: 12, partial: true, cap: 2000 }),
+      });
+    });
+    await page.goto('/mentors');
+    const notice = page.getByTestId('mentors-partial-notice');
+    await expect(notice).toBeVisible();
+    // The cap is substituted into the string, not left as a raw placeholder.
+    await expect(notice).toContainText('2000');
+    await expect(notice).not.toContainText('{cap}');
+  });
+
   test('COMPANY users get 403 from the API and are bounced off the page', async ({ page }) => {
     await signIn(page, companyEmail, pw, '/company');
 

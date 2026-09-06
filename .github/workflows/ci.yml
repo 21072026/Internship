@@ -61,6 +61,12 @@ jobs:
       # these assertions do.
       - name: time-in-stage counts visits and candidates separately (#1427)
         run: npm run test:stage-aging
+      # The mentor directory's scan cap is only reachable with 2000+ consented
+      # mentors, so no e2e run ever drives the `partial` branch. A complete
+      # answer that claims to be truncated is as wrong as a truncated one that
+      # claims to be complete (#1820).
+      - name: mentor directory reports a truncated scan exactly (#1820)
+        run: npm run test:mentor-directory
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # MentorApplication.adminNote is private admin commentary; an e-mail
@@ -74,6 +80,12 @@ jobs:
       # lookup into a different query. The tree is clean; this keeps it that way.
       - name: no unvalidated request body in a Prisma filter
         run: npm run check:query-scalars
+      # `toLocaleDateString()` with no argument formats in the BROWSER's
+      # language, so a fully-Turkish screen printed 8/25/2026 and an interview
+      # slot carried no timezone at all (#1422). The tree is clean; this stops
+      # the next call site from re-introducing it.
+      - name: dates are formatted on the app locale, not the browser's (#1422)
+        run: npm run check:locale-dates
       # A renamed route would silently drop out of the demo's write blocklist,
       # re-enabling password changes and uploads on the public demo (#966).
       - name: demo write blocklist still matches the routes (#966)

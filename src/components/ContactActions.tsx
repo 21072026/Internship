@@ -5,6 +5,7 @@ import { Phone, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 
 // Quick contact channels for a mentee's number. Opens tel:/wa.me, then asks the
 // mentor whether they reached the mentee — a "yes" logs a Call/WhatsApp
@@ -28,8 +29,13 @@ export function ContactActions({ relationId, phone, onLogged }: { relationId: st
     setAsk(null);
     if (!reached || !channel) return;
     setSaving(true);
+    let logged = false;
+    let failure = '';
+    // #1355: the response went unread, so a rejected POST still said "contact
+    // logged" — and `onLogged` refetched a history that never gained the row.
+    // Only the POST is guarded here.
     try {
-      await fetch('/api/interactions', {
+      const res = await fetch('/api/interactions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           relationId,
@@ -38,10 +44,20 @@ export function ContactActions({ relationId, phone, onLogged }: { relationId: st
           notes: channel === 'Call' ? t.contact.loggedCall : t.contact.loggedWhatsApp,
         }),
       });
-      onLogged?.();
-      toast(t.contact.logged);
+      if (res.ok) logged = true;
+      else failure = apiErrorMessage(res, t.common, t.contact.logFailed);
+    } catch {
+      failure = t.contact.logFailed;
     } finally {
       setSaving(false);
+    }
+    // The history refresh is outside that try: a refresh that fails must never
+    // be narrated as "the contact was not logged" once the row exists.
+    if (logged) {
+      onLogged?.();
+      toast(t.contact.logged);
+    } else {
+      toast(failure, 'error');
     }
   };
 

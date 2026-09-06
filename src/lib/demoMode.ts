@@ -1,7 +1,7 @@
 // Public demo instance (#966).
 //
 // WHAT THIS IS
-//   A separate deployment (crm-demo.ersah.in) running the same image against
+//   A separate deployment (demo.interncrm.com) running the same image against
 //   its OWN database, seeded with prisma/seed-demo.mjs' fully synthetic data.
 //   Visitors sign in with shared credentials shown on /demo and can actually
 //   use the product — moving candidates through the pipeline, logging
@@ -97,7 +97,7 @@ export const DEMO_PASSWORD = 'DemoPass123!';
 // Where the public demo lives. Linked from the landing page, the public footer
 // and the feature catalogue on every NON-demo instance (the demo itself hides
 // those links — it has the banner instead). One constant so they can't drift.
-export const DEMO_URL = 'https://crm-demo.ersah.in';
+export const DEMO_URL = 'https://demo.interncrm.com';
 
 export const DEMO_ACCOUNTS: readonly { role: 'admin' | 'mentor' | 'mentee'; email: string }[] = [
   { role: 'admin', email: `admin.demo@${DEMO_DOMAIN}` },

@@ -6,7 +6,7 @@ same image as production against its **own** database full of synthetic data
 
 | | |
 |---|---|
-| URL | `https://crm-demo.ersah.in` |
+| URL | `https://demo.interncrm.com` |
 | Container | `internship-crm-demo` |
 | Port | 3203 |
 | Database | `internship_crm_demo` (its own — **not** the shared preview DB) |
@@ -78,7 +78,7 @@ mysql -e "GRANT ALL ON internship_crm_demo.* TO 'crm-demo'@'%' IDENTIFIED BY '<p
 
 # 2. /etc/internship-crm/demo.env  (chmod 600)
 #    DATABASE_URL=mysql://crm-demo:<password>@host.docker.internal:3306/internship_crm_demo
-#    NEXTAUTH_URL=https://crm-demo.ersah.in
+#    NEXTAUTH_URL=https://demo.interncrm.com
 #    NEXTAUTH_SECRET=<a secret of its own — never production's>
 #    DEMO_MODE=true
 #    SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD / SEED_ADMIN_NAME
@@ -86,7 +86,8 @@ mysql -e "GRANT ALL ON internship_crm_demo.* TO 'crm-demo'@'%' IDENTIFIED BY '<p
 #    Deliberately NO SMTP_*: mail is skipped in demo mode anyway, and leaving the
 #    credentials off the box means a mistake cannot send anything.
 
-# 3. Plesk vhost for crm-demo.ersah.in -> 127.0.0.1:3203
+# 3. Reverse-proxy vhost for demo.interncrm.com -> 127.0.0.1:3203
+#    (the box moved off Plesk to Caddy in 2026-09 — see docs/server-migration.md)
 
 # 4. first fill
 gh workflow run demo-reset.yml
