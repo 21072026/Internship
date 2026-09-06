@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Fix: every topic deploy failed because Caddy could not read the wildcard key** (#2213). acme.sh installs the private key `0600 owner:owner` and Caddy runs as a different user, so loading the config failed — and since Caddy loads one config for the whole machine, the entire reload failed and every `Deploy topic environment` job died with a misleading \"caddy rejected the generated site file\". The reload now goes through a helper that makes the certificates group-readable first, and it is registered as acme.sh's reload command so the renewal in 60 days cannot reintroduce it."
+}
