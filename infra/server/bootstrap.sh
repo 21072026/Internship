@@ -111,7 +111,8 @@ step_packages() {
     ca-certificates curl gnupg git jq unzip zip \
     btop ncdu tmux ripgrep tree rsync \
     debian-keyring debian-archive-keyring apt-transport-https \
-    mysql-client
+    mysql-client \
+    restic
   ok "base packages installed"
 }
 

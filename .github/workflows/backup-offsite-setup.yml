@@ -1,0 +1,100 @@
+name: Off-site backup setup (manual)
+
+# One-time (and safely repeatable) setup of the encrypted off-site backup
+# repository on Cloudflare R2 (#2169).
+#
+# WHY IT IS A WORKFLOW
+#   The credentials are four secrets that have to reach a file on the server.
+#   Every hand-carried attempt at this during the migration failed silently —
+#   twice an empty file, once a file containing the paste command itself — and
+#   each looked like it had worked. The runner is the server, so the secrets go
+#   from GitHub into the job and into a 0600 file, with nothing typed anywhere.
+#
+# ⚠ THE REPOSITORY PASSWORD
+#   restic encrypts the repository; losing the password loses the backups, with
+#   no recovery path. That is the point of encryption, and it is also a way to
+#   lose everything twice over: if the password lives only on this server, then
+#   the disaster that takes the server takes the ability to read the backups of
+#   the server.
+#
+#   So it must exist in a third place, and the job says so loudly if it does not:
+#   set RESTIC_PASSWORD as a repo secret. If it is unset, this generates one on
+#   the server and stops with the command to copy it into a secret WITHOUT ever
+#   printing it — the value never enters a log, a terminal or a chat window.
+on:
+  workflow_dispatch:
+    inputs:
+      bucket:
+        description: 'R2 bucket name'
+        required: true
+        default: 'internship-crm-backups'
+        type: string
+
+concurrency:
+  group: backup-offsite-setup
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    name: Configure and initialise the R2 repository
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'self-hosted' }}
+    steps:
+      - name: Write credentials and initialise
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RESTIC_PASSWORD_SECRET: ${{ secrets.RESTIC_PASSWORD }}
+          BUCKET: ${{ inputs.bucket }}
+        run: |
+          set -euo pipefail
+          for v in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            if [ -z "${!v:-}" ]; then echo "::error::$v secret is not set (or is empty)"; exit 1; fi
+          done
+          command -v restic >/dev/null || { echo "::error::restic is not installed — run bootstrap.sh --only packages"; exit 1; }
+
+          ENVF=/opt/internship-crm/secrets/offsite.env
+          sudo install -d -m 0700 /opt/internship-crm/secrets
+
+          # Reuse an existing password before anything else: re-initialising with
+          # a new one would orphan every snapshot already in the bucket while
+          # reporting success.
+          EXISTING="$(sudo sh -c "grep -m1 '^RESTIC_PASSWORD=' $ENVF 2>/dev/null | cut -d= -f2-" || true)"
+          if [ -n "${RESTIC_PASSWORD_SECRET:-}" ]; then
+            PW="$RESTIC_PASSWORD_SECRET"; SRC="repo secret"
+          elif [ -n "$EXISTING" ]; then
+            PW="$EXISTING"; SRC="existing file on the server"
+          else
+            PW="$(openssl rand -base64 48 | tr -d '\n/+=' | head -c 48)"; SRC="freshly generated"
+          fi
+
+          # Written by root, 0600, never echoed.
+          printf '%s\n' \
+            "RESTIC_REPOSITORY=s3:https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${BUCKET}" \
+            "AWS_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}" \
+            "AWS_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}" \
+            "RESTIC_PASSWORD=${PW}" \
+            | sudo tee "$ENVF" >/dev/null
+          sudo chmod 600 "$ENVF"
+          echo "credentials written to $ENVF (0600); password source: $SRC"
+
+          # The env file is SOURCED inside the root shell, never expanded onto a
+          # command line. `sudo env $(cat secrets) restic ...` would work and
+          # would also put the R2 key and the repository password into argv,
+          # where any `ps` on the box reads them.
+          restic_as_root() { sudo sh -c "set -a; . $ENVF; set +a; restic \"\$@\"" -- "$@"; }
+
+          # `restic cat config` is the cheapest thing that proves the bucket, the
+          # credentials AND the password all agree. `init` on an existing repo
+          # fails, so this ordering also makes the job re-runnable.
+          if restic_as_root cat config >/dev/null 2>&1; then
+            echo "repository already initialised"
+          else
+            restic_as_root init
+            echo "repository initialised"
+          fi
+
+          if [ -z "${RESTIC_PASSWORD_SECRET:-}" ]; then
+            echo "::warning::RESTIC_PASSWORD is not a repo secret. It exists only on this server and in R2's encryption — a failure that takes the server takes the ability to read its backups. Store it in a third place with:"
+            echo "::warning::  ssh <user>@<host> 'sudo grep ^RESTIC_PASSWORD= /opt/internship-crm/secrets/offsite.env | cut -d= -f2-' | gh secret set RESTIC_PASSWORD"
+          fi

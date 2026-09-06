@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Off-site backups move to encrypted object storage** (#2169): `backup-offsite.sh` gains a restic mode targeting Cloudflare R2, replacing the interim rsync push to the retiring old host. The dumps carry CVs, phone numbers and mentor notes, so they are encrypted before they leave the machine. Verification downloads and re-hashes part of the repository rather than trusting an exit code, and retention (14 daily / 8 weekly / 12 monthly) prunes in the same pass to stay inside the free tier."
+}
