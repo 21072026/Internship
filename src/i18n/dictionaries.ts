@@ -395,6 +395,10 @@ const en = {
     prev: 'Previous',
     next: 'Next',
     confirmDelete: 'Are you sure you want to delete this?',
+    deleteFailed: 'Could not delete. Nothing was removed.',
+    sessionExpired: 'Your session has expired. Please sign in again.',
+    forbidden: 'You are not allowed to do that.',
+    alreadyGone: 'That record is no longer there — it may have been removed already.',
   },
   imageViewer: {
     title: 'Image viewer',
@@ -2557,6 +2561,7 @@ const en = {
     loggedCall: 'Phone call',
     loggedWhatsApp: 'WhatsApp contact',
     logged: 'Contact logged',
+    logFailed: 'Could not log the contact. Nothing was saved.',
   },
   apiDocs: {
     title: 'API documentation',
@@ -4779,6 +4784,10 @@ const tr: Dict = {
     prev: 'Önceki',
     next: 'Sonraki',
     confirmDelete: 'Bunu silmek istediğinize emin misiniz?',
+    deleteFailed: 'Silinemedi. Hiçbir kayıt kaldırılmadı.',
+    sessionExpired: 'Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.',
+    forbidden: 'Bunu yapma yetkiniz yok.',
+    alreadyGone: 'Bu kayıt artık mevcut değil — daha önce kaldırılmış olabilir.',
   },
   imageViewer: {
     title: 'Resim görüntüleyici',
@@ -6913,6 +6922,7 @@ const tr: Dict = {
     loggedCall: 'Telefon görüşmesi',
     loggedWhatsApp: 'WhatsApp iletişimi',
     logged: 'İletişim kaydedildi',
+    logFailed: 'İletişim kaydedilemedi. Hiçbir şey kaydedilmedi.',
   },
   apiDocs: {
     title: 'API dokümantasyonu',
@@ -9117,6 +9127,10 @@ const de: Dict = {
     prev: 'Zurück',
     next: 'Weiter',
     confirmDelete: 'Möchtest du das wirklich löschen?',
+    deleteFailed: 'Löschen fehlgeschlagen. Es wurde nichts entfernt.',
+    sessionExpired: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
+    forbidden: 'Dazu bist du nicht berechtigt.',
+    alreadyGone: 'Dieser Eintrag existiert nicht mehr – er wurde vermutlich bereits entfernt.',
   },
   imageViewer: {
     title: 'Bildanzeige',
@@ -11251,6 +11265,7 @@ const de: Dict = {
     loggedCall: 'Telefonat',
     loggedWhatsApp: 'WhatsApp-Kontakt',
     logged: 'Kontakt protokolliert',
+    logFailed: 'Kontakt konnte nicht protokolliert werden. Es wurde nichts gespeichert.',
   },
   apiDocs: {
     title: 'API-Dokumentation',

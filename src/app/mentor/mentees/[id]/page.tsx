@@ -32,6 +32,7 @@ import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
@@ -152,14 +153,30 @@ export default function MenteeDetailPage() {
   const confirmDeleteInteraction = async () => {
     if (!deleteInteractionId || deletingInteraction) return;
     setDeletingInteraction(true);
+    let deleted = false;
+    let failure = '';
+    // #1355: the response used to go unread, so a 403/404/500 still produced the
+    // green "deleted" toast. Only the DELETE is guarded here — see below for why
+    // the refresh is not.
     try {
-      await fetch(`/api/interactions/${deleteInteractionId}`, { method: 'DELETE' });
-      await fetchRelation();
-      toast(t.mentor.interactionDeleted);
+      const res = await fetch(`/api/interactions/${deleteInteractionId}`, { method: 'DELETE' });
+      if (res.ok) deleted = true;
+      else failure = apiErrorMessage(res, t.common, t.common.deleteFailed);
+    } catch {
+      failure = t.common.deleteFailed;
     } finally {
       setDeletingInteraction(false);
       setDeleteInteractionId(null);
     }
+    // The refresh sits outside that try on purpose, and swallows its own error:
+    // a refetch that throws (connectivity dropped in the ~200ms after the
+    // DELETE, or a proxy answered HTML mid-deploy) must never be narrated as
+    // "nothing was removed" when the row is already gone from the database.
+    // It runs on the failure path too, so the list converges on what the server
+    // actually kept — a 404 means the row went away, whoever removed it.
+    await fetchRelation().catch(() => {});
+    if (deleted) toast(t.mentor.interactionDeleted);
+    else toast(failure, 'error');
   };
 
   const handlePipelineChange = async (pipelineStatus: string) => {
@@ -459,7 +476,7 @@ export default function MenteeDetailPage() {
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-3" data-testid="interaction-list">
               {relation.interactions.length === 0 && (
                 <div>
                   <p className="text-sm text-gray-400 text-center pt-4 pb-3">{t.mentor.noInteractionsYet}</p>
@@ -490,6 +507,8 @@ export default function MenteeDetailPage() {
                   </div>
                   <button
                     onClick={() => handleDeleteInteraction(interaction.id)}
+                    aria-label={t.common.delete}
+                    data-testid={`interaction-delete-${interaction.id}`}
                     className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
                   >
                     <Trash2 className="h-4 w-4" />

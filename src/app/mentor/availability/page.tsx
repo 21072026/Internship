@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
 import { Trash2, Globe } from 'lucide-react';
 import { useT } from '@/i18n/client';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 
 interface Slot { id: string; weekday: number; startTime: string; endTime: string }
 
@@ -22,6 +23,7 @@ export default function AvailabilityPage() {
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   // A slot has no zone of its own: it is read in the mentor's profile time zone
   // (#1363). The endpoint says which, and whether it was actually chosen or
   // fell back — the two get different copy, because "your hours are Istanbul"
@@ -36,6 +38,10 @@ export default function AvailabilityPage() {
     setSlots(d.slots ?? []);
     setZone(d.timezone ?? '');
     setZoneSet(d.timezoneSet !== false);
+    // The delete box below describes this list and has no dismiss control of
+    // its own; a list that just reloaded successfully makes it stale (#1355).
+    // `confirmRemove` re-sets it after its own reload, so a real failure stays.
+    setDeleteError('');
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -77,13 +83,28 @@ export default function AvailabilityPage() {
   const confirmRemove = async () => {
     if (!deleteId || deleting) return;
     setDeleting(true);
+    setDeleteError('');
+    let failure = '';
+    // #1355: the response was never read, so a rejected delete quietly reloaded
+    // and the slot reappeared with no explanation. Say why — in the slots card,
+    // not the add-slot form's box. Only the DELETE is guarded here.
     try {
-      await fetch(`/api/availability?id=${deleteId}`, { method: 'DELETE' });
-      await load();
+      const res = await fetch(`/api/availability?id=${deleteId}`, { method: 'DELETE' });
+      if (!res.ok) failure = apiErrorMessage(res, t.common, t.common.deleteFailed);
+    } catch {
+      failure = t.common.deleteFailed;
     } finally {
       setDeleting(false);
       setDeleteId(null);
     }
+    // Outside the try, and swallowing its own error: a reload that throws must
+    // not be reported as a failed delete after the slot is already gone. It runs
+    // on the failure path too, so a slot the server no longer has (404) stops
+    // being listed instead of sitting there failing on every retry.
+    await load().catch(() => {});
+    // After load(), which clears the box — a successful reload says nothing
+    // about whether this delete worked.
+    if (failure) setDeleteError(failure);
   };
 
   return (
@@ -140,6 +161,14 @@ export default function AvailabilityPage() {
 
       <Card>
         <CardHeader><CardTitle>{t.availability.yourSlots} ({slots.length})</CardTitle></CardHeader>
+        {deleteError && (
+          <div
+            data-testid="availability-delete-error"
+            className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
+          >
+            {deleteError}
+          </div>
+        )}
         {slots.length === 0 ? (
           <p className="text-center py-8 text-gray-400">{t.availability.none}</p>
         ) : (
