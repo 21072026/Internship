@@ -10,6 +10,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { planLimits, isOrgPlan } from '@/lib/orgPlans';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { createInvitation, discardInvitation } from '@/lib/inviteCreate';
+import { locales } from '@/i18n/config';
 import {
   BULK_INVITE_MAX_CHARS,
   BULK_INVITE_ROLES,
@@ -35,6 +36,10 @@ const schema = z.object({
   rows: z.string().min(1).max(BULK_INVITE_MAX_CHARS),
   defaultRole: z.enum(BULK_INVITE_ROLES),
   dryRun: z.boolean().optional(),
+  // One language for the whole paste (#1720). A roster is normally one cohort,
+  // and the alternative — a per-row language column — is a parsing feature
+  // nobody asked for. Omitted → the admin's own UI language, resolved below.
+  locale: z.enum(locales).optional().nullable(),
 });
 
 // How many invitations may be in flight to the relay at once. Small on
@@ -95,6 +100,13 @@ export async function POST(request: Request) {
       }
       const { defaultRole } = parsedBody.data;
       const dryRun = parsedBody.data.dryRun === true;
+      // #1720: same precedence as the single-address form — the admin's explicit
+      // choice, then their own UI language, then (null) the deployment default.
+      const bulkInviter = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { preferredLanguage: true },
+      });
+      const inviteLocale = parsedBody.data.locale ?? bulkInviter?.preferredLanguage ?? null;
       const orgId = resolveOrgId(session);
 
       const parsed = parseBulkInvite(parsedBody.data.rows);
@@ -152,6 +164,7 @@ export async function POST(request: Request) {
             email: entry.email,
             label: raw?.label ?? null,
             role: entry.role,
+            locale: inviteLocale,
             request,
           });
           if (result.mailError) {

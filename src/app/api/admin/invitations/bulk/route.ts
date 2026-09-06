@@ -109,6 +109,9 @@ export async function POST(request: Request) {
           registeredAt: true,
           verifiedAt: true,
           revokedAt: true,
+          // #1720: the language the invitation was originally written in, so a
+          // bulk resend repeats it rather than defaulting back to English.
+          locale: true,
         },
       });
 
@@ -191,7 +194,15 @@ export async function POST(request: Request) {
           let mailed = false;
           try {
             mailed =
-              (await sendInvitationEmail({ to: row.email, token: row.token, role: row.role, orgId })) === 'SENT';
+              (await sendInvitationEmail({
+                to: row.email,
+                token: row.token,
+                role: row.role,
+                orgId,
+                // The language the invitation was created in (#1720) — a bulk
+                // resend must not flip a Turkish invitee to English.
+                locale: row.locale,
+              })) === 'SENT';
           } catch (mailErr) {
             // The token is still valid and the expiry is already refreshed, so a
             // failed send costs the batch nothing — it is reported as

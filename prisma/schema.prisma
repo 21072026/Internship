@@ -2413,6 +2413,14 @@ model InvitationToken {
   used         Boolean   @default(false)
   createdAt    DateTime  @default(now())
   expiresAt    DateTime
+  // Which language the invitation mail was written in (#1720). An invitee has
+  // no account and therefore no `preferredLanguage`, so the choice is the
+  // inviter's — made in the invite form, defaulting to the inviter's own UI
+  // language. Stored on the row rather than recomputed, because a RESEND (and a
+  // bulk resend) happens later, possibly by a different admin: the second mail
+  // must arrive in the same language as the first. Null = pre-#1720 rows and
+  // seeder/system invites; those fall back to the deployment default locale.
+  locale       String?
   // The inviter's tenant, captured at invite time (#1272) so registration can
   // assign the org immediately instead of leaving the account org-less until
   // the next deploy's backfill (fail-closed org scoping 403s COMPANY reads in

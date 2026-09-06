@@ -149,12 +149,20 @@ export async function POST(request: Request) {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
         setPasswordUrl = `${appUrl}/auth/reset?token=${token}`;
         try {
+          // #1720: the mentee account was created moments ago and has no
+          // language of its own, so the activation mail follows the MENTOR who
+          // created it — they know who they just added.
+          const creator = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { preferredLanguage: true },
+          });
           await sendPasswordResetEmail({
             to: mentee.email,
             token,
             fullName: mentee.fullName,
             purpose: 'SET_INITIAL',
             orgId,
+            locale: creator?.preferredLanguage,
           });
         } catch (e) {
           console.error('Mentee set-password email failed:', e);

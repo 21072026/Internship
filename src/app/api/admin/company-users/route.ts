@@ -40,6 +40,14 @@ export async function POST(request: Request) {
   });
 
   const token = await createPasswordResetToken(user.id, 'SET_INITIAL');
+  // #1720: the account is seconds old and has no `preferredLanguage` yet, so the
+  // activation mail is written in the CREATING admin's language — the same rule
+  // an invitation follows, and for the same reason: the person setting the
+  // account up is the only one who knows anything about the recipient.
+  const creator = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { preferredLanguage: true },
+  });
   // The link is emailed and NOT returned (#987, the decision recorded in
   // docs/pii-access-lifecycle.md). It is a live, single-use credential: putting
   // it in an HTTP response body puts it in reverse-proxy logs, browser
@@ -51,7 +59,15 @@ export async function POST(request: Request) {
   // an account was reachable when nobody could sign in to it.
   let emailSent = true;
   try {
-    emailSent = (await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, purpose: 'SET_INITIAL', orgId: user.orgId })) === 'SENT';
+    emailSent =
+      (await sendPasswordResetEmail({
+        to: user.email,
+        token,
+        fullName: user.fullName,
+        purpose: 'SET_INITIAL',
+        orgId: user.orgId,
+        locale: creator?.preferredLanguage,
+      })) === 'SENT';
   } catch (e) {
     console.error('Company-user set-password email failed:', e);
     emailSent = false;

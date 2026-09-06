@@ -6,6 +6,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { z } from 'zod';
 import { createEmailVerificationToken } from '@/lib/emailVerification';
 import { sendVerificationEmail } from '@/services/emailService';
+import { isLocale } from '@/i18n/config';
 import { passwordSchema } from '@/lib/password';
 import { notify } from '@/lib/notify';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy';
@@ -76,6 +77,11 @@ export async function POST(request: Request) {
     // The address the invitation itself named, if any — null for an email-less
     // shareable link, which is what separates "proven address" from "typed in".
     let invitationEmail: string | null = null;
+    // The language the invitation mail was written in (#1720). Carried onto the
+    // new account so the app, and the verification mail that follows seconds
+    // later, keep speaking the language the invitee was first addressed in —
+    // instead of dropping them into English the moment they register.
+    let invitationLocale: string | null = null;
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
 
     if (token) {
@@ -106,6 +112,7 @@ export async function POST(request: Request) {
       role = invitation.role;
       referredById = invitation.invitedById;
       invitedOrgId = invitation.orgId;
+      invitationLocale = isLocale(invitation.locale) ? invitation.locale : null;
       autoLink = { mentorId: invitation.mentorId, menteeId: invitation.menteeId, projectId: invitation.projectId };
     } else {
       // An open registration may still carry a referral link.
@@ -146,7 +153,7 @@ export async function POST(request: Request) {
     const orgId = invitedOrgId ?? (await defaultOrgId());
 
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId },
+      data: { email, password: hashedPassword, fullName, role, skills: [], emailVerified, isActive: !selfRegistered, pendingApproval: pending, consentAt: new Date(), referredById, timezone, orgId, preferredLanguage: invitationLocale },
       select: { id: true, email: true, fullName: true, role: true, createdAt: true, orgId: true },
     });
 
@@ -234,7 +241,7 @@ export async function POST(request: Request) {
       if (!emailVerified) {
         const verifyToken = await createEmailVerificationToken(user.id);
         try {
-          await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName });
+          await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName, locale: invitationLocale });
         } catch (e) {
           console.error('Verification email failed:', e);
         }
@@ -242,6 +249,9 @@ export async function POST(request: Request) {
     } else {
       const verifyToken = await createEmailVerificationToken(user.id);
       try {
+        // Open self-registration: there is no invitation and no stored
+        // preference yet, so this one legitimately falls back to the deployment
+        // default (#1720).
         await sendVerificationEmail({ to: user.email, token: verifyToken, fullName: user.fullName });
       } catch (e) {
         console.error('Verification email failed:', e);

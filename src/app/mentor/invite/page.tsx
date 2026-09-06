@@ -24,10 +24,15 @@ import { Badge } from '@/components/ui/Badge';
 import { Check, Copy, Send, UserPlus } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
+import { locales } from '@/i18n/config';
+import { Select } from '@/components/ui/Select';
 
 const schema = z.object({
   email: z.union([z.string().email('Invalid email'), z.literal('')]).optional(),
   label: z.string().max(120).optional(),
+  // See the admin invite page: the invitee has no account, so the language of
+  // the invitation mail is the inviter's call (#1720).
+  locale: z.enum(locales),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -67,7 +72,7 @@ export default function MentorInvitePage() {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { locale } });
 
   const onSubmit = handleSubmit(async (data) => {
     setLoading(true);
@@ -77,7 +82,12 @@ export default function MentorInvitePage() {
       const res = await fetch('/api/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'MENTEE', email: data.email || undefined, label: data.label || undefined }),
+        body: JSON.stringify({
+          role: 'MENTEE',
+          email: data.email || undefined,
+          label: data.label || undefined,
+          locale: data.locale,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Failed');
@@ -85,7 +95,7 @@ export default function MentorInvitePage() {
       setSuccess(
         body.emailSent ? `${t.invite.emailedTo} ${data.email}` : data.email ? t.invite.createdNoEmail : t.invite.createdLinkOnly
       );
-      reset({ email: '', label: '' });
+      reset({ email: '', label: '', locale });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
@@ -159,6 +169,14 @@ export default function MentorInvitePage() {
               data-testid="mentor-invite-label"
               {...register('label')}
               error={errors.label?.message}
+            />
+            <Select
+              label={t.invite.languageField}
+              hint={t.invite.languageHint}
+              data-testid="mentor-invite-locale"
+              options={locales.map((l) => ({ value: l, label: t.account.languages[l] }))}
+              {...register('locale')}
+              error={errors.locale?.message}
             />
             <Button type="submit" className="w-full" loading={loading} data-testid="mentor-invite-submit">
               <Send className="h-4 w-4" />

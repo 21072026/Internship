@@ -132,6 +132,18 @@ export async function inviteGuests({
 }): Promise<{ id: string; email: string; name: string | null; rsvp: string }[]> {
   const created: { id: string; email: string; name: string | null; rsvp: string }[] = [];
 
+  // LOCALE (#1720): a MeetingGuest is an address, not an account — there is no
+  // `preferredLanguage` to read and no browser of theirs in play. The organizer
+  // is the only person who knows anything about this recipient (they typed the
+  // address in), so their language is what the guest mail is written in — the
+  // same reasoning `organizerTimeZone` already follows. Read here rather than at
+  // the two call sites so both can never drift apart.
+  const organizer = await prisma.user.findUnique({
+    where: { id: invitedById },
+    select: { preferredLanguage: true },
+  });
+  const locale = organizer?.preferredLanguage ?? null;
+
   for (const g of guests) {
     let row;
     try {
@@ -163,6 +175,7 @@ export async function inviteGuests({
         rsvpToken: row.rsvpToken,
         organizerTimeZone,
         organizerName,
+        locale,
         // Same UID as the account-holders' invite for this meeting, so a guest
         // who also has a calendar entry from elsewhere sees one event, not two.
         icsUid: meetingId,

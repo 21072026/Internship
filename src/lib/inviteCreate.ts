@@ -30,6 +30,17 @@ export interface CreateInvitationInput {
   email: string | null;
   label: string | null;
   role: 'MENTOR' | 'MENTEE' | 'ADMIN';
+  /**
+   * Which language the invitation mail is written in (#1720).
+   *
+   * The invitee has no account and therefore no `preferredLanguage`, and reading
+   * Accept-Language is not available on a resend hours later — so the language
+   * is the INVITER's decision: picked in the invite form, defaulting to their
+   * own UI language. It is stored on the row so a resend (possibly by a
+   * different admin, possibly from the bulk board) repeats the same language
+   * instead of switching mid-conversation. Null → the deployment default.
+   */
+  locale?: string | null;
   mentorId?: string | null;
   menteeId?: string | null;
   projectId?: string | null;
@@ -64,6 +75,7 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Cr
       label: input.label,
       role: input.role,
       expiresAt,
+      locale: input.locale ?? null,
       invitedById: input.actor.id,
       orgId: input.orgId,
       mentorId: input.mentorId ?? null,
@@ -89,7 +101,13 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Cr
       // The transport reports what it did, so demo mode and an unconfigured
       // SMTP are honestly "not sent" rather than a guess about SMTP_USER.
       emailSent =
-        (await sendInvitationEmail({ to: input.email, token, role: input.role, orgId: input.orgId })) === 'SENT';
+        (await sendInvitationEmail({
+          to: input.email,
+          token,
+          role: input.role,
+          orgId: input.orgId,
+          locale: invitation.locale,
+        })) === 'SENT';
     } catch (err) {
       mailError = err;
       console.error('Invitation email failed (token still valid):', err);

@@ -145,7 +145,9 @@ export async function POST(request: Request) {
         : { id: { in: relationIds }, mentorId: session.user.id };
     const relations = await prisma.mentorshipRelation.findMany({
       where,
-      include: { mentee: { select: { id: true, email: true, fullName: true, timezone: true } } },
+      // `preferredLanguage` for #1720, next to `timezone` for the same reason:
+      // the invite is rendered once per invitee, in their own settings.
+      include: { mentee: { select: { id: true, email: true, fullName: true, timezone: true, preferredLanguage: true } } },
     });
 
     // Bulk scheduling creates ONE shared meeting: everyone selected joins the
@@ -208,6 +210,9 @@ export async function POST(request: Request) {
           // sendEmail's central enforcement (group meeting_invites), which is
           // the entire point of the change.
           userId: rel.mentee.id,
+          // #1720: the invitee's stored language — they have an account, so
+          // nothing has to be guessed.
+          locale: rel.mentee.preferredLanguage,
           // The Meeting row's own id, so the attachment, the public token route
           // and any later reschedule mail all address the same calendar event.
           icsUid: meeting.id,

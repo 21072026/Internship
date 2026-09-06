@@ -48,7 +48,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // an account was reachable when nobody could sign in to it.
   let emailSent = true;
   try {
-    emailSent = (await sendPasswordResetEmail({ to: user.email, token, fullName: user.fullName, orgId: user.orgId })) === 'SENT';
+    // #1720: an existing account, so the mail is written in the language that
+    // account chose — not the admin's, and not the browser's.
+    emailSent =
+      (await sendPasswordResetEmail({
+        to: user.email,
+        token,
+        fullName: user.fullName,
+        orgId: user.orgId,
+        locale: user.preferredLanguage,
+      })) === 'SENT';
   } catch (e) {
     console.error('Admin reset email failed:', e);
     emailSent = false;

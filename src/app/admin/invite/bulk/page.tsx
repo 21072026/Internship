@@ -13,7 +13,8 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Badge } from '@/components/ui/Badge';
 import { Users, ArrowLeft, Copy, Check } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useT, useLocale } from '@/i18n/client';
+import { locales } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { BULK_INVITE_MAX_CHARS, type BulkInviteReason, type BulkInviteRole } from '@/lib/bulkInvite';
 
@@ -45,8 +46,12 @@ interface Report {
 
 export default function BulkInvitePage() {
   const t = useT();
+  const uiLocale = useLocale();
   const [rows, setRows] = useState('');
   const [defaultRole, setDefaultRole] = useState<BulkInviteRole>('MENTEE');
+  // One language for the whole paste (#1720) — a roster is normally one cohort.
+  // Defaults to the admin's own UI language, same as the single-address form.
+  const [inviteLocale, setInviteLocale] = useState<string>(uiLocale);
   const [preview, setPreview] = useState<Report | null>(null);
   const [result, setResult] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,7 +83,7 @@ export default function BulkInvitePage() {
       const res = await fetch('/api/admin/invite/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, defaultRole, ...(dryRun ? { dryRun: true } : {}) }),
+        body: JSON.stringify({ rows, defaultRole, locale: inviteLocale, ...(dryRun ? { dryRun: true } : {}) }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || t.bulkInvite.failed);
@@ -180,6 +185,15 @@ export default function BulkInvitePage() {
                 setDefaultRole(e.target.value as BulkInviteRole);
                 invalidate();
               }}
+            />
+
+            <Select
+              label={t.invite.languageField}
+              hint={t.invite.languageHint}
+              data-testid="bulk-invite-locale"
+              options={locales.map((l) => ({ value: l, label: t.account.languages[l] }))}
+              value={inviteLocale}
+              onChange={(e) => setInviteLocale(e.target.value)}
             />
 
             <div className="flex flex-wrap gap-2">

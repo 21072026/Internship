@@ -17,6 +17,8 @@ export interface Invitee {
   email: string;
   fullName: string | null;
   timezone?: string | null;
+  /** The invitee's own language, for the mail (#1720) — same role as `timezone`. */
+  preferredLanguage?: string | null;
   emailNotifications?: boolean | null;
   notificationPrefs?: unknown;
   // Set only for RELATION context: the relation this invitee is reached through,
@@ -57,6 +59,9 @@ const INVITEE_SELECT = {
   email: true,
   fullName: true,
   timezone: true,
+  // #1720: the meeting mail is written per invitee (each reads the time on their
+  // own clock), so it reads their language off the same row.
+  preferredLanguage: true,
   emailNotifications: true,
   notificationPrefs: true,
 } as const;
