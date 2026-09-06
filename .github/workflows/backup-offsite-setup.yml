@@ -60,6 +60,23 @@ jobs:
           # a new one would orphan every snapshot already in the bucket while
           # reporting success.
           EXISTING="$(sudo sh -c "grep -m1 '^RESTIC_PASSWORD=' $ENVF 2>/dev/null | cut -d= -f2-" || true)"
+
+          # A repository already exists and a secret is also set: they MUST be
+          # the same string. Preferring the secret blindly would overwrite a
+          # working password with a mistyped one and leave every existing
+          # snapshot unreadable — restic has no recovery path, so this is not a
+          # mistake you find out about later and undo. Compared by hash so
+          # neither value is ever printed.
+          if [ -n "${RESTIC_PASSWORD_SECRET:-}" ] && [ -n "$EXISTING" ]; then
+            H_SECRET="$(printf '%s' "$RESTIC_PASSWORD_SECRET" | sha256sum | cut -c1-16)"
+            H_FILE="$(printf '%s' "$EXISTING" | sha256sum | cut -c1-16)"
+            if [ "$H_SECRET" != "$H_FILE" ]; then
+              echo "::error::RESTIC_PASSWORD does not match the password this server already uses (secret ${H_SECRET}… vs server ${H_FILE}…). Overwriting it would make every existing snapshot unreadable. Fix the secret, or clear it to keep using the server's."
+              exit 1
+            fi
+            echo "repo secret matches the server's password (${H_FILE}…)"
+          fi
+
           if [ -n "${RESTIC_PASSWORD_SECRET:-}" ]; then
             PW="$RESTIC_PASSWORD_SECRET"; SRC="repo secret"
           elif [ -n "$EXISTING" ]; then
