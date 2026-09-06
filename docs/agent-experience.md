@@ -5801,3 +5801,70 @@ düzeltme pasını ikinci commit yapmak temiz bir akış.
 (update) ise sadece id+url. 13 issue'luk bir ağacı bağlarken bu fark ciddi bağlam yiyor;
 skill'in "önce hepsini yarat, id→parent haritasını dosyaya yaz, bağlamayı en sona bırak"
 tavsiyesi doğru ve bu turda da işe yaradı.
+
+## 2026-09-06 — Bağımlılığı olmayan bir görevin yarısını teslim etmek (#1697)
+
+**Görev "on çağrı yerini `emit()`'e taşı" diyordu; `emit()` depoda yoktu.** Brief bile
+"önce `emit()` implementasyonunu oku" diye başlıyordu. `src/lib/events/` diye bir dizin
+yok, `DomainEvent` modeli yok, bağımlılıklar (#1691 katalog, #1693 emit) ikisi de açık ve
+uzakta dalları bile yok. **İlk iş, brief'in varsaydığı şeyin gerçekten var olduğunu
+doğrulamak olmalı** — `ls`, `grep` ve `git ls-remote --heads origin | grep <konu>` üç
+komutla bunu söylüyor; bunu atlayıp koda dalmak, ya sahte bir `emit()` yazmaya ya da
+görevi "yapılamaz" diye bırakmaya götürüyor.
+
+**Eksik bağımlılığı kendin yazmak, kapsam ihlalinin en pahalı türü.** Buradaki cazibe
+`src/lib/events/emit.ts`'i `dispatchWebhook` üstüne ince bir sarmalayıcı olarak yazmaktı.
+#1693'ün kapsam sınırı bunu açıkça yasaklıyor ("ikinci bir katalog, ikinci bir yazma yolu
+açma") — yani o kodu yazmak, sonraki issue'nun ilk işini "benim yazdığımı sök" yapardı.
+Doğru hamle: **işin bağımsız duran yarısını tam olarak teslim et**, diğerini PR gövdesinde
+ve dönüş değerinde adıyla ve gerekçesiyle söyle.
+
+**Bir "ratchet" guard, taşıma yapılamıyorken bile değerli.** On çağrı yeri duruyor ama
+`scripts/check-events.mjs` on birincisini kırmızıya çeviriyor. İki ayrıntı guard'ı
+listeden ibaret olmaktan çıkarıyor: (1) her satır hangi olayı ürettiğini ve o çağrı yerine
+özgü tuzağı taşıyor (tek `meeting.scheduled` adı altındaki **üç farklı** yük şekli;
+`stageChangeEffects`'teki `from === to` no-op muhafızı), yani liste aynı zamanda taşıma
+kontrol listesi; (2) **bayat girdi de hata veriyor** — bir üretici `emit()`'e geçtiğinde
+satırını silmezse build kırmızı. Böylece liste yalnızca küçülebilir, kalıcı muafiyete
+dönüşemez. Guard'ı iki yönden de kanıtla: sahte bir on birinci çağrı ekle, çalıştır, çıkış
+kodunu ve mesajı PR'a yapıştır, geri al.
+
+**`Closes` mi `Refs` mi, kabul kriterlerine bakarak karar verilir.** Standart yönerge
+"`Closes #N` yaz" diyor; ama kabul kriterlerinin çoğu bu PR'la tiklenmiyorsa `Closes`
+merge anında issue'yu haksız yere kapatır. Bu turda `Refs` doğruydu ve PR gövdesinde
+neden `Closes` olmadığı ilk paragrafta yazıyor.
+
+## 2026-09-06 — Bir guard'ın gücü, guard'ın kendisi hakkında yazdığından fazla olamaz (#1697, ikinci tur)
+
+**Kendi yazdığın guard'ı, kaçınmaya çalışan biri gibi test et.** İlk turda
+`scripts/check-events.mjs` "on birinci doğrudan çağrı kırmızıdır" diyordu ve *yeni bir
+dosya* için doğruydu; ama tarama döngüsü listedeki bir dosyada ilk eşleşmede `continue`
+ettiği için, **zaten listede olan** bir route'a ikinci bir `dispatchWebhook()` eklemek
+yeşil geçiyordu. Listedeki on dosyanın altısı birden çok HTTP handler'ı olan `route.ts` —
+yani kaçırdığı senaryo, en olası senaryoydu. Ders: "yeni dosya ekle, kırmızı mı?" testi
+yetmez; **var olan bir istisna satırını genişletmeyi de dene**. Dosya değil **çağrı yeri**
+say (`matchAll(...).length`, `search()` değil) ve beklenen sayıyı listeye yaz.
+
+**Bir modülün tek bir çıkışı olduğunu varsayma — `export`'ları oku.** `src/lib/webhooks.ts`
+iki kapı açıyor: `dispatchWebhook` (abonelere fan-out) ve `deliverToWebhook` (tek alıcıya
+imzalı POST). İkincisi birincinin gövdesinden altı satır kopyalanarak aynı sonucu veriyor
+ve tarama sadece ilk ismi arıyordu. Yeni bir guard yazarken **`grep "^export" <modül>`**
+ile başla; korunan kaynağa giden her ismi tara, meşru olan tek çağıranı ayrı bir izin
+listesine (kendi sayacıyla) koy.
+
+**Hata mesajı da politikanın parçası.** İlk turda mesaj "emit() uymuyorsa nedenini
+PENDING_MIGRATION'a yaz" diyordu — yani kırmızı build gören katkıcıya, listeye kendini
+eklemesini öneriyordu. Başlıkta "bu bir muafiyet listesi değil" yazması bunu engellemiyor;
+**mekanik olarak engelle**: sayıların toplanması gereken ayrı bir `PENDING_CALL_SITES`
+sabiti koy, yorumuna "yalnızca düşebilir" yaz. Listeyi büyütmek artık ikinci, gözle görülür
+şekilde yük taşıyan bir sayıyı düzenlemeyi gerektiriyor.
+
+**Dokümana bugünkü kuralı yaz, hedeflenen kuralı değil.** `docs/testing.md`'ye "bir olay
+ürünü `emit()` üzerinden terk eder" satırını eklemiştim; `src/lib/events/` depoda yok, on
+route hâlâ doğrudan çağırıyor. Okuyan ya ağacın kuralı ihlal ettiğini sanıyor ya da hiç
+yazılmamış bir modülü arıyor. Kısmi teslimatlarda doküman cümlesi **CI'ın bugün
+reddettiği şeyi** anlatmalı, sonraki issue'yu değil.
+
+**Metin taramasının sınırını guard'ın kendi başlığına yaz.** Yorum satırına alınmış bir
+çağrı hâlâ çağrı sayılır; `import { dispatchWebhook as fire }` kaçar. Bunlar grep şeklindeki
+bir guard'ın bedeli — ama yazılmamışsa, bir sonraki okuyucu guard'ı olduğundan güçlü sanar.

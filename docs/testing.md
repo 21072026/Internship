@@ -21,10 +21,13 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Stress / load** | Latency percentiles, throughput, error rate under sustained concurrency | `scripts/stress-test.mjs` | **weekly cron**, Mon 02:30 UTC (`stress.yml`) + on demand |
 | **Load / performance (k6)** | Staged VU ramp: per-endpoint latency budgets, error rate, "was this endpoint even reached" | `k6/nightly-load.js` | **nightly cron**, 23:40 UTC (`k6-load.yml`) + on demand |
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
+| **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) beyond the ten call sites the script lists by name and count; those ten move onto `emit()` when #1693 lands (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
 
 The first ten are **functional / correctness** tests: given an input, is the output
-right? The last two are **non-functional**: the app may be correct yet too slow or
+right? The two load rows are **non-functional**: the app may be correct yet too slow or
 fragile under load — those catch that. They are not redundant with each other.
+The final two rows are neither: they never run the app, they read the source tree and the
+demo data and assert a rule about their *shape*.
 `stress-test.mjs` is a flat hammer (fixed concurrency, one aggregate p95, weekly);
 the k6 scenario adds a *ramp* (where does latency start to bend?), *per-endpoint*
 budgets, and a threshold engine that names exactly which budget broke.
