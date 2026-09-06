@@ -93,8 +93,10 @@ jobs:
       # `dispatchWebhook()` posts from inside whichever handler noticed the
       # change, so every direct caller is a place the next cross-cutting concern
       # (the durable queue, a DomainEvent row, tenant scoping, the audit trail)
-      # silently does not apply. Ten producers do that today and are listed in
-      # the script; this caps it at ten — an eleventh is a red build (#1697).
+      # silently does not apply. Ten call sites do that today and are listed in
+      # the script by file and count; this caps it at ten — an eleventh direct
+      # call is a red build, including a second one in a file already on the
+      # list, and `deliverToWebhook()` is scanned as the same door (#1697).
       - name: an event leaves through one door (#1697)
         run: npm run check:events
       # Nothing else in CI looks at k6/: `next lint` only visits src/, and
