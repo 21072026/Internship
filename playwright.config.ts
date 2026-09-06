@@ -20,6 +20,9 @@ export const E2E_HEALTH_TOKEN = 'e2e-health-token';
 // the shape production actually runs (secret required AND supplied) instead of
 // the lenient path.
 export const E2E_INBOUND_SECRET = 'e2e-inbound-secret';
+// Shared with e2e/job-queue-health.spec.ts (#1674): the operator address the
+// dead-letter alert mails when the queue is not empty.
+export const E2E_ALERT_EMAIL_TO = 'ops-alert@e2e.local';
 // Shared with e2e/meeting-end.spec.ts. Unset, /api/webhooks/jaas answers 404
 // to everything and the live-room assertions would be vacuous.
 export const E2E_JAAS_WEBHOOK_SECRET = 'e2e-jaas-webhook-secret';
@@ -86,6 +89,13 @@ export default defineConfig({
           // keeps its legacy fully-public response and health.spec.ts's
           // assertions about what an anonymous caller may see would be vacuous.
           HEALTH_TOKEN: E2E_HEALTH_TOKEN,
+          // Operator alert address (#1674). Pinned to a synthetic one rather
+          // than left to whatever the environment inherits: the dead-letter
+          // alert's "silent when green, one mail when not" contract is only
+          // testable when an address exists, and a real one must never be the
+          // address a test run picks up. SMTP_USER is blank above, so the send
+          // still stops at a SKIPPED EmailLog row.
+          ALERT_EMAIL_TO: E2E_ALERT_EMAIL_TO,
           INBOUND_SECRET: E2E_INBOUND_SECRET,
           // Shared with e2e/error-boundary.spec.ts (#1602). Unlocks the two
           // test-only routes that throw on purpose so the route-level error

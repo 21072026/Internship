@@ -20,6 +20,7 @@ import { expireOffers } from '@/lib/offerNotify';
 import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
+import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
 
 export async function GET(request: Request) {
   try {
@@ -65,6 +66,13 @@ export async function GET(request: Request) {
     if (job === 'dormant') {
       const dormantSweep = await sweepDormantFirstContacts();
       return NextResponse.json({ message: 'Dormant first contacts ran', dormantSweep, dormantCheckIns: await sendDormantCheckIns() });
+    }
+    // Dead-letter alert (#1674) — named only, deliberately NOT part of the
+    // batch below. The batch is "run everything now", which an admin may click
+    // several times while fixing something; the alert's whole contract is one
+    // mail a day, and it is silent when the queue is clean either way.
+    if (job === 'dlq-alert') {
+      return NextResponse.json({ message: 'Dead-letter alert ran', dlqAlert: await runDeadLetterAlert() });
     }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { initCronJobs } from '@/services/emailService';
 import { initNewsletterCron } from '@/lib/newsletterDispatch';
+import { initDeadLetterAlertCron } from '@/lib/jobs/dlqAlert';
 
 // node-cron timers live in this process; nothing about them works on the edge.
 export const runtime = 'nodejs';
@@ -31,5 +32,9 @@ export async function POST(request: Request) {
   // Registered here rather than inside initCronJobs so the dependency stays
   // one-way (newsletterDispatch imports emailService, never the reverse, #1469).
   initNewsletterCron();
+  // Same reason as above (#1674): the dead-letter alert imports emailService to
+  // send its mail, so registering it inside initCronJobs would close the import
+  // graph into a cycle.
+  initDeadLetterAlertCron();
   return NextResponse.json({ ok: true, started: true });
 }

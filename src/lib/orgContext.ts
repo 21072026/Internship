@@ -62,6 +62,12 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // one org must never be listed by — or authenticate into — another.
   'ApiKey',
   'MatchFeedback',
+  // Queued background work (#1674). A job's payload belongs to whichever tenant
+  // enqueued it, so the row carries orgId and is listed here. The operational
+  // readers — /api/health's counters and the daily dead-letter alert — run
+  // outside any request scope, where the middleware does not engage, so they
+  // still see the whole queue.
+  'Job',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.
