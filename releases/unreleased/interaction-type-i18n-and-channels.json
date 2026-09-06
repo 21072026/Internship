@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Interaction type menu localized, Call and WhatsApp added** (#1354). The mentor's \"log an interaction\" form built its type menu from a hardcoded English three-item list; it now reads the shared `INTERACTION_TYPES` constant (`src/lib/interactionTypes.ts`, mirroring the Prisma `InteractionType` enum) and labels each option from `t.interactionTypes`, so all five channels are offered in EN/TR/DE. The form's \"date and notes are required\" error and its notes placeholder moved into the dictionaries, the interaction PATCH schema stopped rejecting `Call`/`WhatsApp`, and `InteractionTypeBadge` now maps a distinct colour per type instead of lumping three of them into one catch-all.",
+  "notes": {
+    "en": [
+      "Mentors can now log a phone call or a WhatsApp conversation — the interaction type menu offers all five channels, fully translated."
+    ],
+    "tr": [
+      "Mentorlar artık telefon görüşmesi ve WhatsApp yazışması da kaydedebiliyor — etkileşim türü menüsü beş kanalın hepsini, tamamen Türkçe olarak sunuyor."
+    ],
+    "de": [
+      "Mentorinnen und Mentoren können jetzt auch Anrufe und WhatsApp-Gespräche protokollieren — das Menü für den Interaktionstyp bietet alle fünf Kanäle, vollständig übersetzt."
+    ]
+  }
+}

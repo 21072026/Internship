@@ -4,11 +4,14 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { INTERACTION_TYPES } from '@/lib/interactionTypes';
 
 const updateInteractionSchema = z.object({
   date: z.string().optional(),
   notes: z.string().min(1).max(TEXT_LIMITS.interactionNotes).optional(),
-  type: z.enum(['Meeting', 'Feedback', 'Email']).optional(),
+  // Same five types the create route accepts — this list used to stop at
+  // Email, so a Call or WhatsApp log could be created but never edited (#1354).
+  type: z.enum(INTERACTION_TYPES).optional(),
 });
 
 async function getInteractionAndVerifyAccess(id: string, userId: string, role: string) {
