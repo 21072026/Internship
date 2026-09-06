@@ -30,21 +30,24 @@ const SCHEMA_FILE = 'prisma/schema.prisma';
 const ORG_CONTEXT_FILE = 'src/lib/orgContext.ts';
 
 // ── Deliberate exclusions ────────────────────────────────────────────────────
-// A model listed here carries (or will carry) `orgId` and is knowingly NOT
-// auto-scoped. Every entry needs a written reason, so that an intentional
-// omission is a code-review conversation and is distinguishable from a
-// forgotten one. An entry naming a model that does not carry `orgId` *yet* is
-// inert rather than an error — it is a standing decision about that model, and
-// it starts applying the day the column lands.
+// A model listed here carries `orgId` and is knowingly NOT auto-scoped. Every
+// entry needs a written reason, so that an intentional omission is a
+// code-review conversation and is distinguishable from a forgotten one.
+//
+// An exemption is only granted against a schema someone has actually read.
+// `Setting` is deliberately NOT listed here even though it is coming: it has no
+// `orgId` column today (#1551 adds one, and #1557 records that its legacy rows
+// will stay NULL as the global fallback layer), while #1560 says it "must be
+// registered but behaves specially". Pre-granting the exemption would keep this
+// guard green on the day the column lands and the register-vs-exempt decision
+// would never get made. Better that it fails then, loudly, against the real
+// schema.
+//
+// `Organization` is different: it is the tenant itself and can never grow an
+// `orgId`, so the entry is permanent documentation rather than a standing
+// decision about a shape nobody has seen. The summary below flags it as
+// declared-but-not-applicable rather than counting it as an active exemption.
 const EXEMPT = new Map([
-  [
-    'Setting',
-    // Key-value system settings. The tenant-aware rows are looked up per org, but
-    // the legacy rows stay `orgId = NULL` on purpose: they are the global
-    // fallback layer a tenant's own row overrides (#1557). Auto-scoping the
-    // model would hide that fallback from every tenant at once.
-    'legacy rows stay orgId = NULL as the global fallback layer (#1557)',
-  ],
   [
     'Organization',
     // The tenant itself, keyed by `id`. It is the root of the scope, not a row
@@ -59,22 +62,29 @@ const EXEMPT = new Map([
 // starts injecting orgId into their creates too), so it is its own reviewed
 // piece of work — #1559 — with its own cross-tenant spec.
 //
-// This list only ever shrinks: an entry that has since been registered, or
-// whose model has lost its `orgId`, fails the check and must be deleted. Adding
-// a NEW name here is not a way to pass CI — it is a deliberate declaration that
-// the model is unprotected, and reviewers should treat it as such.
-const PENDING_REGISTRATION = new Map(
-  [
-    'Tag',
-    'StageSla',
-    'PipelineStage',
-    'CompanyInquiry',
-    'Offer',
-    'InterviewPanel',
-    'EvaluationTemplate',
-    'InvitationToken',
-  ].map((model) => [model, 'awaiting registration + cross-tenant spec in #1559']),
-);
+// These are the eight #1560 was filed about, so this script does NOT report a
+// clean tree while they are here: every run prints them (and a GitHub Actions
+// warning annotation), and the summary line drops the word "OK".
+//
+// The list only ever shrinks: an entry that has since been registered, or whose
+// model has lost its `orgId`, fails the check and must be deleted. Adding a NEW
+// name is not a way to pass CI — the length is pinned by EXPECTED_PENDING
+// below, so the set cannot grow without a reviewer seeing the number move.
+const PENDING_REGISTRATION = new Map([
+  ['Tag', 'awaiting registration + cross-tenant spec in #1559'],
+  ['StageSla', 'awaiting registration + cross-tenant spec in #1559'],
+  ['PipelineStage', 'awaiting registration + cross-tenant spec in #1559'],
+  ['CompanyInquiry', 'awaiting registration + cross-tenant spec in #1559'],
+  ['Offer', 'awaiting registration + cross-tenant spec in #1559'],
+  ['InterviewPanel', 'awaiting registration + cross-tenant spec in #1559'],
+  ['EvaluationTemplate', 'awaiting registration + cross-tenant spec in #1559'],
+  ['InvitationToken', 'awaiting registration + cross-tenant spec in #1559'],
+]);
+
+// How many entries PENDING_REGISTRATION is allowed to hold. Pinned as a literal
+// on purpose: a ninth unprotected model cannot be waved through by appending a
+// line, and the count only moves in a diff a human approves.
+const EXPECTED_PENDING = 8;
 
 // ── Parsing ──────────────────────────────────────────────────────────────────
 
@@ -184,6 +194,19 @@ for (const model of PENDING_REGISTRATION.keys()) {
   }
 }
 
+// 4. The ratchet cannot grow (or shrink) without the pinned count moving with
+//    it, so "add a line to the pending list" is never a way to get to green.
+if (PENDING_REGISTRATION.size !== EXPECTED_PENDING) {
+  problems.push(
+    `PENDING_REGISTRATION holds ${PENDING_REGISTRATION.size} entr${
+      PENDING_REGISTRATION.size === 1 ? 'y' : 'ies'
+    }, but EXPECTED_PENDING in this script says ${EXPECTED_PENDING}. The set of knowingly ` +
+      'unprotected models is pinned to a literal so it cannot change quietly: update ' +
+      'EXPECTED_PENDING in the same diff and say in the PR why a model was added to — or ' +
+      'removed from — the unprotected list.',
+  );
+}
+
 if (problems.length > 0) {
   console.error('tenant models FAILED — the middleware registry has drifted from the schema:\n');
   for (const problem of problems) console.error(`  • ${problem}`);
@@ -191,20 +214,37 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-// Pending entries are not a failure, but they are unprotected tenant data — say
-// so on every run rather than letting the list settle into the background.
+// Pending entries are not a hard failure — registering them is #1559's reviewed
+// change, not this guard's — but they ARE unprotected tenant data, so they get
+// said out loud on every run, with a GitHub annotation so the PR page shows it
+// rather than burying it in a green step's log.
 const pending = [...PENDING_REGISTRATION.keys()].filter((m) => models.get(m)?.orgId);
 if (pending.length > 0) {
-  console.warn(
-    `tenant models: ${pending.length} model(s) carry orgId and are NOT auto-scoped yet — ` +
-      `${pending.join(', ')} (${PENDING_REGISTRATION.get(pending[0])}).`,
-  );
+  const headline =
+    `${pending.length} model(s) carry orgId and are NOT auto-scoped yet — their rows are ` +
+    'protected only by hand-written `where` clauses:';
+  const lines = pending.map((model) => `  • ${model} — ${PENDING_REGISTRATION.get(model)}`);
+  if (process.env.GITHUB_ACTIONS) {
+    const body = [headline, ...lines].join('%0A');
+    console.log(`::warning file=${ORG_CONTEXT_FILE},title=Unprotected tenant models::${body}`);
+  }
+  console.warn(`tenant models: ${headline}`);
+  for (const line of lines) console.warn(line);
 }
 
-const exemptApplicable = [...EXEMPT.keys()].filter((m) => models.get(m)?.orgId);
+const exemptActive = [...EXEMPT.keys()].filter((m) => models.get(m)?.orgId);
+const exemptInert = [...EXEMPT.keys()].filter((m) => !models.get(m)?.orgId);
+const verdict =
+  pending.length > 0
+    ? `tenant models: no NEW drift, but ${pending.length} model(s) remain unprotected (#1559)`
+    : 'tenant models OK';
 console.log(
-  `tenant models OK — ${tenantKeyed.length} model(s) declare orgId; ${registeredSet.size} ` +
-    `registered in TENANT_MODELS, ${pending.length} pending (#1559), ${exemptApplicable.length} ` +
-    `exempt by declared exception; every registered name resolves to a model that still has ` +
-    'the column.',
+  `${verdict} — ${tenantKeyed.length} model(s) declare orgId; ${registeredSet.size} registered ` +
+    `in TENANT_MODELS, ${pending.length} pending (#1559), ${exemptActive.length} exempt by ` +
+    'declared exception' +
+    (exemptInert.length > 0
+      ? ` (${exemptInert.length} further exemption(s) declared but not applicable — ` +
+        `${exemptInert.join(', ')} carr${exemptInert.length === 1 ? 'ies' : 'y'} no orgId column)`
+      : '') +
+    '; every registered name resolves to a model that still has the column.',
 );
