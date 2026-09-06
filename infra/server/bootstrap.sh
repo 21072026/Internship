@@ -288,6 +288,10 @@ step_caddy() {
   # crm-pr<N>.caddy in here and reload — which replaces ~200 lines of Plesk
   # subdomain creation + nginx vhost generation with a two-line file.
   install -d -o root -g caddy -m 0775 /etc/caddy/sites
+  # Owned by the deploy user: the wildcard certificate is issued by a workflow
+  # running as that user (wildcard-cert.yml), and acme.sh installs the files
+  # here. Group caddy so the server can read them; 0750 so nobody else can.
+  install -d -o "$LOGIN_USER" -g caddy -m 0750 /etc/caddy/certs
 
   if [ ! -f /etc/caddy/Caddyfile.pre-bootstrap ] && [ -f /etc/caddy/Caddyfile ]; then
     cp -a /etc/caddy/Caddyfile /etc/caddy/Caddyfile.pre-bootstrap
@@ -332,6 +336,10 @@ step_sites() {
   # rebuild of this box would silently lose them — exactly the "what was running
   # here?" problem this script exists to prevent.
   install -d -o root -g caddy -m 0775 /etc/caddy/sites
+  # Owned by the deploy user: the wildcard certificate is issued by a workflow
+  # running as that user (wildcard-cert.yml), and acme.sh installs the files
+  # here. Group caddy so the server can read them; 0750 so nobody else can.
+  install -d -o "$LOGIN_USER" -g caddy -m 0750 /etc/caddy/certs
 
   local my_ip
   my_ip="$(curl -fsS --max-time 10 -4 https://api.ipify.org 2>/dev/null || true)"

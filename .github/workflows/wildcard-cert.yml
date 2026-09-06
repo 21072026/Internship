@@ -70,11 +70,23 @@ jobs:
             exit 1
           fi
           chmod +x infra/acme-issue-wildcard.sh
-          # Caddy reads the cert files directly, so a reload is all that is
-          # needed on renewal — no restart, no dropped connections.
-          sudo -E DOMAIN="$DOMAIN" CERT_DIR="$CERT_DIR" \
-               RELOAD_CMD='systemctl reload caddy' \
-               ./infra/acme-issue-wildcard.sh
+          # NOT under sudo. This box's sudoers ignores `-E`, so the token simply
+          # did not arrive and acme.sh stopped with "CF_Token is not set" while
+          # the workflow log showed the secret present — a confusing pair. The
+          # obvious repair, `sudo CF_Token="$CF_Token" ...`, does work here but
+          # puts the token in argv where any `ps` can read it.
+          #
+          # So the script runs as the runner user instead. It only needed root
+          # for two things, and both are granted narrowly: $CERT_DIR is owned by
+          # that user, and the reload goes through sudo as a single fixed command
+          # that carries no environment. acme.sh itself installs into ~/.acme.sh
+          # and registers a user crontab, neither of which wants root.
+          #
+          # Caddy reads the cert files directly, so a reload is all a renewal
+          # needs — no restart, no dropped connections.
+          DOMAIN="$DOMAIN" CERT_DIR="$CERT_DIR" \
+            RELOAD_CMD='sudo systemctl reload caddy' \
+            ./infra/acme-issue-wildcard.sh
 
       - name: Verify the cert covers the wildcard
         env:
@@ -82,8 +94,8 @@ jobs:
           CERT_DIR: ${{ inputs.cert_dir }}
         run: |
           set -euo pipefail
-          sudo test -s "${CERT_DIR}/${DOMAIN}.cer" || { echo "::error::no cert at ${CERT_DIR}/${DOMAIN}.cer"; exit 1; }
-          SANS="$(sudo openssl x509 -in "${CERT_DIR}/${DOMAIN}.cer" -noout -ext subjectAltName)"
+          test -s "${CERT_DIR}/${DOMAIN}.cer" || { echo "::error::no cert at ${CERT_DIR}/${DOMAIN}.cer"; exit 1; }
+          SANS="$(openssl x509 -in "${CERT_DIR}/${DOMAIN}.cer" -noout -ext subjectAltName)"
           echo "$SANS"
           # Fail closed: a cert without the wildcard SAN would let topic
           # environments fall back to per-hostname issuance, which is the exact
