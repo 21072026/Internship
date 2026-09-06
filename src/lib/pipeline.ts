@@ -245,14 +245,24 @@ export function onPathKeys(stages: ResolvedStage[]): string[] {
 //
 // Off-path stages (the dropped / found-elsewhere kind, `isOffPath`) can never be
 // a start: `onPathKeys` already drops them, so a tenant that ordered its
-// "Withdrew" stage first still starts on its first real stage. The fallback is
-// the schema default, so an org with no stages behaves byte-identically to
-// before. Pure and Prisma-free — the DB-backed wrapper is
-// `resolveStartStage()` in src/lib/pipelineStages.ts.
+// "Withdrew" stage first still starts on its first real stage. Pure and
+// Prisma-free — the DB-backed wrapper is `resolveStartStage()` in
+// src/lib/pipelineStages.ts.
+//
+// The canonical key is the fallback for an EMPTY set only, which is exactly the
+// org that resolves to the built-in catalogue — so single-tenant behaviour is
+// byte-identical. A tenant whose set is non-empty but has no on-path stage at
+// all (the editor accepts `isOffPath` on every row) must NOT get the canonical
+// key: it is in none of its `PipelineStage` rows, which is precisely the
+// invisible-relation bug this exists to prevent. Its own first stage by order
+// is a stage it can at least see and move out of.
 export const DEFAULT_START_STAGE = 'APPLICATION_100';
 
 export function startStageKey(stages: ResolvedStage[]): string {
-  return onPathKeys(stages)[0] ?? DEFAULT_START_STAGE;
+  const onPath = onPathKeys(stages);
+  if (onPath.length > 0) return onPath[0];
+  const firstByOrder = [...stages].sort((a, b) => a.order - b.order)[0];
+  return firstByOrder?.key ?? DEFAULT_START_STAGE;
 }
 
 // Label lookup over a resolved set, falling back to the canonical label and then

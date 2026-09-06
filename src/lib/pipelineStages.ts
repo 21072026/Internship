@@ -73,3 +73,26 @@ export async function resolveStartStage(
 ): Promise<string> {
   return startStageKey(await resolvePipelineStages(orgId, locale));
 }
+
+/** Resolves an org's start stage; see `createStartStageResolver`. */
+export type StartStageResolver = (orgId: string | null | undefined) => Promise<string>;
+
+// The same lookup, memoized for a caller that asks about many relations at once
+// — the daily dormancy sweep and the mentor onboarding checklist both walk a
+// whole roster and would otherwise re-query per row.
+//
+// Deliberately per-call rather than module-level: an admin who edits the stage
+// set must not be answered from a cache that outlives the request. There is one
+// definition of "the first stage" in the codebase (`startStageKey`) and every
+// reader goes through it or through this.
+export function createStartStageResolver(locale: Locale = 'en'): StartStageResolver {
+  const cache = new Map<string, string>();
+  return async (orgId) => {
+    const cacheKey = orgId ?? '';
+    const hit = cache.get(cacheKey);
+    if (hit !== undefined) return hit;
+    const key = await resolveStartStage(orgId, locale);
+    cache.set(cacheKey, key);
+    return key;
+  };
+}

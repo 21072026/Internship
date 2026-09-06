@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, uniqueEmail } from './helpers/db';
-import { defaultPipelineStages, resolvePipelineStages, onPathKeys } from '../src/lib/pipelineStages';
+import { defaultPipelineStages, resolvePipelineStages, onPathKeys, startStageKey } from '../src/lib/pipelineStages';
 
 // Per-tenant pipeline stages (#747, Phase A). Behavior-preserving: no rows → the
 // canonical enum defaults; rows → the tenant's override. Exercised against a real
@@ -51,4 +51,24 @@ test('an org with custom rows overrides the defaults', async () => {
     await prisma.pipelineStage.deleteMany({ where: { orgId: org.id } });
     await prisma.organization.deleteMany({ where: { id: org.id } });
   }
+});
+
+// The start stage a create writes (#1634). The interesting case is the set that
+// is non-empty but has NO on-path stage: falling back to the canonical
+// `APPLICATION_100` there would write a key the tenant does not have — exactly
+// the invisible-relation bug #1634 exists to close.
+test('startStageKey never returns a key outside a non-empty stage set', () => {
+  const stage = (key: string, order: number, isOffPath = false) => ({
+    key, label: key, order, isTerminal: false, isOffPath, color: null,
+  });
+
+  // Built-in catalogue: unchanged.
+  expect(startStageKey(defaultPipelineStages())).toBe('APPLICATION_100');
+  // Off-path stage ordered first is skipped, and order — not array position — wins.
+  expect(startStageKey([stage('SCREENING', 2), stage('WITHDRAWN', 0, true), stage('SOURCED', 1)]))
+    .toBe('SOURCED');
+  // All off-path: the tenant's own first stage, not a key it has never heard of.
+  expect(startStageKey([stage('LOST', 1, true), stage('WITHDRAWN', 0, true)])).toBe('WITHDRAWN');
+  // Genuinely empty (an org on the defaults, resolved elsewhere): canonical floor.
+  expect(startStageKey([])).toBe('APPLICATION_100');
 });

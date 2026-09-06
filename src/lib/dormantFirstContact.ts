@@ -23,8 +23,7 @@
 // message is exactly the thing the mentor still owes.
 
 import { prisma } from './prisma';
-import { onPathKeys } from './pipeline';
-import { resolvePipelineStages } from './pipelineStages';
+import { createStartStageResolver } from './pipelineStages';
 
 /**
  * How long the silence must have lasted before it counts as dormancy.
@@ -54,23 +53,6 @@ export interface DormantCandidate {
   stageDeadline: Date | null;
 }
 
-// The first stage of a tenant's pipeline. Custom stages (#747) may rename or
-// replace APPLICATION_100, so the key is resolved per org rather than hardcoded;
-// an org on the built-in stages resolves to APPLICATION_100. Memoized per call
-// site so the daily cron doesn't re-query for every relation.
-function createFirstStageResolver() {
-  const cache = new Map<string, string>();
-  return async (orgId: string | null | undefined): Promise<string> => {
-    const cacheKey = orgId ?? '';
-    const hit = cache.get(cacheKey);
-    if (hit) return hit;
-    const stages = await resolvePipelineStages(orgId);
-    const first = onPathKeys(stages)[0] ?? 'APPLICATION_100';
-    cache.set(cacheKey, first);
-    return first;
-  };
-}
-
 // Which of the given relations are dormant first contacts. Returns a set of
 // relation ids; the extra lookups are scoped to the first-stage relations only,
 // so a caller passing its whole active set pays nothing for the rest.
@@ -78,7 +60,10 @@ export async function findDormantFirstContacts(relations: DormantCandidate[]): P
   const dormant = new Set<string>();
   if (relations.length === 0) return dormant;
 
-  const firstStageKey = createFirstStageResolver();
+  // Same resolver the create paths use (#1634), memoized per sweep — so
+  // "parked at first contact" and "created at first contact" can never mean
+  // two different stages, and the cron does not re-query per relation.
+  const firstStageKey = createStartStageResolver();
   const candidates: DormantCandidate[] = [];
   for (const r of relations) {
     // A deadline the mentor set on purpose is a deliberate "chase this one".

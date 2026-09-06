@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle } from './helpers/auth';
+import { loadOnboardingState } from '../src/lib/menteeOnboarding';
 
 // A new relation starts on the TENANT'S first on-path stage (#1634).
 //
@@ -67,6 +68,13 @@ test('a relation created in a custom-pipeline org starts on that org\'s first on
     await page.goto('/admin/board');
     const column = page.getByTestId('board-column-SOURCED');
     await expect(column.getByText('Start Stage Mentee', { exact: true })).toBeVisible({ timeout: 15_000 });
+
+    // …and the mentor's onboarding checklist still asks them to move the mentee
+    // off it. That step is DERIVED from "is the relation still on the first
+    // stage?", so a hardcoded APPLICATION_100 would read as already done the
+    // moment the relation exists — a tick no mentor could ever undo.
+    const onboarding = await loadOnboardingState(mentor.id, mentee.id);
+    expect(onboarding?.steps.pipeline.done).toBe(false);
   } finally {
     await prisma.statusChange.deleteMany({ where: { relation: { orgId: org.id } } });
     await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });

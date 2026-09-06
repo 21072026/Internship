@@ -560,9 +560,16 @@ run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
 # Move relations that were created on the schema default (APPLICATION_100) in a
 # tenant whose custom stage set does not contain that key (#1634). They render
 # in no board column and count in no funnel row; each move writes a StatusChange
-# so it is auditable. Converges to a no-op once every relation is inside its
-# org's own set.
-run_tool node prisma/backfill-relation-start-stage.mjs || true
+# so it is auditable.
+#
+# It moves ONLY rows that can just be the bug: still on APPLICATION_100, still
+# ACTIVE, and never moved (zero StatusChange rows). It deliberately does NOT
+# repair every relation whose key is outside the org's current set — renaming a
+# stage in the editor puts a tenant's whole in-flight pipeline in that state for
+# a moment, and sweeping it would drag placed and completed mentees back to
+# stage 1 unattended. The script is dry-run by default; `--apply` is this line's
+# deliberate choice. Converges to a no-op after the first deploy.
+run_tool node prisma/backfill-relation-start-stage.mjs --apply || true
 
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
