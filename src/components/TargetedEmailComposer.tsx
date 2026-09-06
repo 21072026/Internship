@@ -175,7 +175,11 @@ export function TargetedEmailComposer() {
                   {/* Clicking the NAME here ticks the box, so the card hangs off
                       its own icon instead — the selection gesture is untouched
                       and the card still opens on hover/tap/focus (#1166). */}
-                  <PersonHoverCard personId={r.mentee.id} role="MENTEE" className="no-underline">
+                  <PersonHoverCard
+                    personId={r.mentee.id}
+                    role="MENTEE"
+                    className="no-underline inline-flex h-6 w-6 shrink-0 items-center justify-center"
+                  >
                     <UserRound className="h-3.5 w-3.5 text-gray-400 hover:text-blue-600" aria-hidden />
                   </PersonHoverCard>
                   <LanguageBadge language={r.mentee.preferredLanguage} className="ml-auto" />

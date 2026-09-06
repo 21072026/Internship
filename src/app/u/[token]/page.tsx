@@ -372,7 +372,7 @@ export default function UnsubscribePage({ params }: { params: Promise<{ token: s
                     <p className="mt-1 pl-7 text-xs text-gray-500 dark:text-gray-400">
                       {groupDesc(g.id)}
                       {busyGroup === g.id && (
-                        <span className="ml-2 text-gray-400 dark:text-gray-500">{t.unsubscribe.saving}</span>
+                        <span className="ml-2 text-gray-400">{t.unsubscribe.saving}</span>
                       )}
                     </p>
                   </li>
@@ -399,7 +399,7 @@ export default function UnsubscribePage({ params }: { params: Promise<{ token: s
                         className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"
                       >
                         <span className="text-sm text-gray-700 dark:text-gray-200">{groupName(g.id)}</span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                        <span className="text-xs text-gray-400">
                           {t.unsubscribe.alwaysSent}
                         </span>
                       </li>

@@ -343,7 +343,10 @@ export default function AdminBoardPage() {
                 <span className="text-sm font-semibold text-gray-800">
                   {(t.adminBoard.groups as Record<string, string>)[group.key]}
                 </span>
-                <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{groupTotal}</span>
+                {/* gray-700, not the muted token: this chip carries its own
+                    gray-100 background, and even the raised gray-500 only makes
+                    4.4:1 on it (4.1:1 on the dark remap) — #2131. */}
+                <span className="text-xs text-gray-700 bg-gray-100 rounded-full px-2 py-0.5">{groupTotal}</span>
               </button>
               {!isCollapsed && (
                 <HorizontalScrollArea
