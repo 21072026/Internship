@@ -77,7 +77,17 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('GET /api/meetings withholds the rsvpToken from the mentor (#1548)', async ({ page }) => {
+// Tagged @smoke: this is the one assertion that proves the credential is
+// withheld from someone who is not the mentee, and the PR gate runs only the
+// smoke subset (CLAUDE.md). Untagged, the sole regression test for a token leak
+// would run in neither this PR's gate nor the gate of the PR that reintroduces
+// the leak — and `main` auto-deploys to production. The other two cases stay
+// untagged to keep the set small: the admin case exercises the *same* single
+// `role === 'MENTEE'` conditional in the handler's `select` (only the `where`
+// clause differs between the two roles, and that is not what is under test),
+// and the mentee case guards the opposite over-correction, which is a visible
+// portal breakage the full 4x/day suite catches soon enough.
+test('GET /api/meetings withholds the rsvpToken from the mentor (#1548)', { tag: '@smoke' }, async ({ page }) => {
   await signIn(page, mentorEmail, '/mentor');
 
   const meetings = await fetchMeetings(page);
