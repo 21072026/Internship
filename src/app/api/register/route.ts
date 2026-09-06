@@ -14,6 +14,7 @@ import { createOrGetProjectConversation } from '@/lib/conversations';
 import { getSetting } from '@/lib/settings';
 import { isValidTimeZone } from '@/lib/timezone';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
+import { resolveStartStage } from '@/lib/pipelineStages';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -201,7 +202,11 @@ export async function POST(request: Request) {
         if (pair) {
           const already = await prisma.mentorshipRelation.findFirst({ where: pair, select: { id: true } });
           if (!already) {
-            await prisma.mentorshipRelation.create({ data: { ...pair, orgId: user.orgId } });
+            // The invitation auto-link creates a real relation, so it starts on
+            // the tenant's own first on-path stage too (#1634).
+            await prisma.mentorshipRelation.create({
+              data: { ...pair, orgId: user.orgId, pipelineStatus: await resolveStartStage(user.orgId) },
+            });
           }
           const counterpartId = pair.mentorId === user.id ? pair.menteeId : pair.mentorId;
           await notify(

@@ -10,6 +10,7 @@ import { slugify } from '@/lib/transliterate';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
+import { resolveStartStage } from '@/lib/pipelineStages';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 
@@ -136,8 +137,15 @@ export async function POST(request: Request) {
         },
       });
 
+      // The tenant's own first on-path stage (#1634), not the schema default —
+      // a mentee added here must land in a column the mentor can actually see.
       await prisma.mentorshipRelation.create({
-        data: { mentorId: session.user.id, menteeId: mentee.id, orgId },
+        data: {
+          mentorId: session.user.id,
+          menteeId: mentee.id,
+          orgId,
+          pipelineStatus: await resolveStartStage(orgId),
+        },
       });
 
       // If the mentee has a real email, send a "set your password" link so they

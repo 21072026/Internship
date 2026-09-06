@@ -13,6 +13,7 @@ import { emailAllowed } from '@/lib/notificationPrefs';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
+import { resolveStartStage } from '@/lib/pipelineStages';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -204,11 +205,18 @@ export async function POST(request: Request) {
           ? ['mentor_not_accepting']
           : [];
 
+    // Start on the tenant's own first on-path stage, not the schema default
+    // (#1634) — an org with custom stages has no `APPLICATION_100` column to
+    // show the new relation in. Falls back to the canonical first stage for an
+    // org that never touched the stage editor.
+    const pipelineStatus = await resolveStartStage(mentee.orgId);
+
     const relation = await prisma.mentorshipRelation.create({
       data: {
         mentorId,
         menteeId,
         orgId: mentee.orgId,
+        pipelineStatus,
         companyId: companyId || null,
         projectId: projectId || null,
         startDate: startDate ? new Date(startDate) : new Date(),

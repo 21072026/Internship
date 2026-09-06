@@ -557,6 +557,13 @@ run_tool node prisma/backfill-sso-plan.mjs || true
 # note. Only ever fills NULLs — idempotent.
 run_tool node prisma/backfill-mentor-application-admin-note.mjs || true
 
+# Move relations that were created on the schema default (APPLICATION_100) in a
+# tenant whose custom stage set does not contain that key (#1634). They render
+# in no board column and count in no funnel row; each move writes a StatusChange
+# so it is auditable. Converges to a no-op once every relation is inside its
+# org's own set.
+run_tool node prisma/backfill-relation-start-stage.mjs || true
+
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
 # stopped and removed the running container BEFORE proving the new image works,

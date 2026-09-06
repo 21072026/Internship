@@ -234,6 +234,27 @@ export function onPathKeys(stages: ResolvedStage[]): string[] {
   return stages.filter((s) => !s.isOffPath).sort((a, b) => a.order - b.order).map((s) => s.key);
 }
 
+// The stage a brand-new relation must start on (#1634).
+//
+// `MentorshipRelation.pipelineStatus` defaults to the canonical first key in the
+// schema, which is right for a tenant on the built-in catalogue and wrong for
+// every tenant that customised its pipeline: a relation parked on a key that is
+// absent from the tenant's own set has no board column, no funnel row and no way
+// out — the mentee is simply invisible. So a create resolves the tenant's stages
+// and writes the first ON-PATH one explicitly.
+//
+// Off-path stages (the dropped / found-elsewhere kind, `isOffPath`) can never be
+// a start: `onPathKeys` already drops them, so a tenant that ordered its
+// "Withdrew" stage first still starts on its first real stage. The fallback is
+// the schema default, so an org with no stages behaves byte-identically to
+// before. Pure and Prisma-free — the DB-backed wrapper is
+// `resolveStartStage()` in src/lib/pipelineStages.ts.
+export const DEFAULT_START_STAGE = 'APPLICATION_100';
+
+export function startStageKey(stages: ResolvedStage[]): string {
+  return onPathKeys(stages)[0] ?? DEFAULT_START_STAGE;
+}
+
 // Label lookup over a resolved set, falling back to the canonical label and then
 // the raw key — so a custom key always renders something sensible.
 export function stageLabel(stages: ResolvedStage[], key: string, locale: Locale = 'en'): string {

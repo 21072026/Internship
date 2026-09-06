@@ -6,6 +6,7 @@ import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendMentorshipDecisionEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
+import { resolveStartStage } from '@/lib/pipelineStages';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
 // so the mentor's own accept/reject step (#1188) shares one behavior: same
@@ -108,8 +109,15 @@ export async function decideMentorshipRequest(opts: {
           ? ['mentor_not_accepting']
           : [];
 
+    // Same start stage as a direct admin assignment (#1634): the tenant's own
+    // first on-path stage. Resolved before the transaction — it is a read, and
+    // an interactive query inside a `$transaction([...])` array is not possible.
+    const pipelineStatus = await resolveStartStage(gate.orgId);
+
     const [relation] = await prisma.$transaction([
-      prisma.mentorshipRelation.create({ data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId } }),
+      prisma.mentorshipRelation.create({
+        data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus },
+      }),
       prisma.mentorshipRequest.update({
         where: { id: req.id },
         data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date() },
