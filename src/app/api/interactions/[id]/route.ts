@@ -10,7 +10,8 @@ const updateInteractionSchema = z.object({
   date: z.string().optional(),
   notes: z.string().min(1).max(TEXT_LIMITS.interactionNotes).optional(),
   // Same five types the create route accepts — this list used to stop at
-  // Email, so a Call or WhatsApp log could be created but never edited (#1354).
+  // Email, so a Call or WhatsApp log could be created but never edited by the
+  // PUT handler below (#1354).
   type: z.enum(INTERACTION_TYPES).optional(),
 });
 
