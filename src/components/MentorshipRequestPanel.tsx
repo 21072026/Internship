@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Send, Clock, CheckCircle2, XCircle, ListChecks } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +18,7 @@ interface RequestRow {
   id: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   message?: string | null;
+  preferredMentor?: { id: string; fullName: string } | null;
   createdAt: string;
   decidedAt?: string | null;
 }
@@ -35,6 +37,14 @@ interface DirectoryMentor {
 export function MentorshipRequestPanel() {
   const t = useT();
   const q = t.mentorshipRequests;
+  const dir = t.mentorDirectory;
+  // "Request this mentor" deep link (#1773): the directory card and the public
+  // profile both link here as /portal?mentor=<id>. It only ever PRESELECTS the
+  // picker below — POST /api/mentorship-requests re-validates the id against
+  // active MENTOR + publicProfile + a live MENTOR_DIRECTORY_VISIBILITY consent,
+  // and that server rule is the only thing that decides.
+  const searchParams = useSearchParams();
+  const requestedMentorId = searchParams.get('mentor') ?? '';
   const [requests, setRequests] = useState<RequestRow[] | null>(null);
   const [gate, setGate] = useState<Gate | null>(null);
   const [message, setMessage] = useState('');
@@ -44,6 +54,10 @@ export function MentorshipRequestPanel() {
   const [preferredLanguages, setPreferredLanguages] = useState('');
   const [preferredMentorId, setPreferredMentorId] = useState('');
   const [mentors, setMentors] = useState<DirectoryMentor[]>([]);
+  // The ?mentor=<id> deep link is resolved by its OWN lookup, kept separate
+  // from the picker's page of options — see the effects below.
+  const [requestedMentor, setRequestedMentor] = useState<DirectoryMentor | null>(null);
+  const [requestedMentorChecked, setRequestedMentorChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -57,14 +71,61 @@ export function MentorshipRequestPanel() {
 
   // Only directory-visible mentors are offered — the same set the server
   // accepts as preferredMentorId. A failed fetch just leaves the picker empty.
+  // This is the picker's page of OPTIONS, nothing more: it is capped at the
+  // API's maximum of 50 while the directory itself pages through up to 500, so
+  // "not in here" says nothing about whether a given mentor exists.
   useEffect(() => {
-    fetch('/api/mentors')
+    let cancelled = false;
+    fetch('/api/mentors?pageSize=50')
       .then((r) => (r.ok ? r.json() : { mentors: [] }))
-      .then((d) => setMentors(d.mentors ?? []))
+      .then((d) => { if (!cancelled) setMentors(d.mentors ?? []); })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
+  // Resolve ?mentor=<id> with a lookup of its own (`mentorId=` re-runs the same
+  // consent-gated where-clause for that one id). Deriving this from the paged
+  // list instead would misreport the 51st directory mentor as gone, and would
+  // turn any failed fetch into a positive claim that the mentor is gone: the
+  // `checked` flag is set ONLY on a successful response, so a 401/500/offline
+  // falls back to silence rather than to a wrong answer.
+  useEffect(() => {
+    if (!requestedMentorId) return;
+    let cancelled = false;
+    fetch(`/api/mentors?mentorId=${encodeURIComponent(requestedMentorId)}&pageSize=1`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('mentor lookup failed'))))
+      .then((d: { mentors?: DirectoryMentor[] }) => {
+        if (cancelled) return;
+        setRequestedMentor(d.mentors?.[0] ?? null);
+        setRequestedMentorChecked(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [requestedMentorId]);
+
+  // Seed the picker once the id has resolved to a real, directory-visible
+  // mentor. The picker stays editable — a later manual choice is never
+  // overwritten, because this only fills a still-empty value.
+  useEffect(() => {
+    if (!requestedMentor) return;
+    setPreferredMentorId((current) => current || requestedMentor.id);
+  }, [requestedMentor]);
+
   if (!requests) return null;
+  // The resolved mentor may sit past the picker's first page, so it is merged
+  // into the options — otherwise the deep link would preselect a value the
+  // <Select> cannot render, and the "pick another one" advice below would point
+  // at a list that does not contain the mentor in question.
+  const mentorOptions =
+    requestedMentor && !mentors.some((m) => m.id === requestedMentor.id)
+      ? [...mentors, requestedMentor]
+      : mentors;
+  // Only claim a mentor is gone when the lookup actually said so, and only
+  // while nothing is selected — once the mentee picks someone the notice would
+  // contradict the confirmation line right above it.
+  const requestedMentorMissing =
+    Boolean(requestedMentorId) && requestedMentorChecked && !requestedMentor && !preferredMentorId;
+  const selectedMentor = mentorOptions.find((m) => m.id === preferredMentorId);
   const pending = requests.find((r) => r.status === 'PENDING');
   const latest = requests[0];
 
@@ -109,9 +170,25 @@ export function MentorshipRequestPanel() {
     <Card className="mb-6" data-testid="mentorship-request">
       <CardHeader><CardTitle>{q.title}</CardTitle></CardHeader>
       {pending ? (
-        <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2" data-testid="request-pending">
-          <Clock className="h-4 w-4" /> {q.pendingInfo}
-        </p>
+        <>
+          <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2" data-testid="request-pending">
+            <Clock className="h-4 w-4" /> {q.pendingInfo}
+          </p>
+          {/* A "request this mentor" click that lands here has nowhere to go —
+              the form is hidden while a request is pending. Say so, rather than
+              dropping the ?mentor= param without a trace (#1773). Not when the
+              pending request already names that mentor, though: that is the
+              state a successful submit from this very panel leaves behind, and
+              "not added" would be exactly backwards. */}
+          {requestedMentorId && pending.preferredMentor?.id !== requestedMentorId && (
+            <p
+              className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700"
+              data-testid="request-preferred-mentor-pending"
+            >
+              {dir.requestedMentorPending}
+            </p>
+          )}
+        </>
       ) : (
         <>
           {latest?.status === 'APPROVED' && (
@@ -125,6 +202,22 @@ export function MentorshipRequestPanel() {
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{q.hint}</p>
+          {selectedMentor && (
+            <p
+              className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700"
+              data-testid="request-preferred-mentor-confirmation"
+            >
+              {dir.requestingMentor.replace('{name}', selectedMentor.displayName || selectedMentor.fullName)}
+            </p>
+          )}
+          {requestedMentorMissing && (
+            <p
+              className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700"
+              data-testid="request-preferred-mentor-unavailable"
+            >
+              {dir.requestedMentorUnavailable}
+            </p>
+          )}
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -156,7 +249,7 @@ export function MentorshipRequestPanel() {
               onChange={(e) => setPreferredMentorId(e.target.value)}
               options={[
                 { value: '', label: q.preferredMentorNone },
-                ...mentors.map((m) => ({ value: m.id, label: m.displayName || m.fullName })),
+                ...mentorOptions.map((m) => ({ value: m.id, label: m.displayName || m.fullName })),
               ]}
               data-testid="request-preferred-mentor"
             />

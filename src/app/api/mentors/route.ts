@@ -39,6 +39,12 @@ export async function GET(request: Request) {
     const skill = (searchParams.get('skill') || '').trim().slice(0, 60).toLowerCase();
     const language = (searchParams.get('language') || '').trim().slice(0, 60).toLowerCase();
     const acceptingOnly = searchParams.get('accepting') === '1';
+    // Single-mentor lookup (#1773): the portal's request panel has to resolve
+    // one specific id — the ?mentor=<id> deep link — and cannot do that by
+    // searching a page of the list, because a page holds at most 50 rows and
+    // the mentor it needs may be on any of them. Asking for the one id instead
+    // is both cheaper and honest about what a miss means.
+    const mentorId = (searchParams.get('mentorId') || '').trim().slice(0, 64);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
     const pageSize = Math.min(50, Math.max(1, parseInt(searchParams.get('pageSize') || '12', 10) || 12));
 
@@ -52,6 +58,13 @@ export async function GET(request: Request) {
       orgId: resolveOrgId(session),
       consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },
     };
+
+    // Single-mentor lookup (#1773): narrowing the SAME visibility clause to one
+    // id is what makes the portal's ?mentor=<id> resolution honest — an empty
+    // result means "not directory-visible", never "not on the page you looked
+    // at". It has to be a narrowing of this object and not a separate query, or
+    // the two would drift the first time the visibility rule changes.
+    if (mentorId) where.id = mentorId;
 
     const select = {
       id: true,

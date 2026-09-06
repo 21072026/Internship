@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useT } from '@/i18n/client';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -37,6 +38,12 @@ const AVAILABILITY_VARIANT: Record<MentorAvailabilityStatus, 'success' | 'warnin
 // enforces that; this page just renders what it returns.
 export default function MentorDirectoryPage() {
   const t = useT();
+  // The "request this mentor" CTA (#1773) is a mentee-only shortcut into the
+  // portal's request panel. MENTOR/ADMIN viewers browse the same directory but
+  // cannot file a request (POST /api/mentorship-requests 403s them), so hiding
+  // the button is cosmetic honesty — never the access control itself.
+  const { data: session } = useSession();
+  const isMentee = session?.user?.role === 'MENTEE';
   const [mentors, setMentors] = useState<DirectoryMentor[]>([]);
   const [total, setTotal] = useState(0);
   // The API says so explicitly when it could not scan the whole directory
@@ -225,13 +232,24 @@ export default function MentorDirectoryPage() {
                   </p>
                 )}
 
-                <div className="mt-auto pt-2">
+                <div className="mt-auto flex flex-wrap items-center gap-3 pt-2">
                   <Link
                     href={`/p/${mentor.id}`}
                     className="text-sm text-blue-600 dark:text-blue-300 hover:underline"
                   >
                     {t.mentorDirectory.viewProfile}
                   </Link>
+                  {isMentee && (
+                    /* A styled Link, not a <Button> inside a <Link>: nested
+                       interactive elements are an axe violation (a11y-scan). */
+                    <Link
+                      href={`/portal?mentor=${mentor.id}`}
+                      data-testid={`mentor-request-${mentor.id}`}
+                      className="ml-auto inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                    >
+                      {t.mentorDirectory.requestMentor}
+                    </Link>
+                  )}
                 </div>
               </Card>
             );
