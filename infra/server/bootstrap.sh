@@ -301,6 +301,31 @@ step_caddy() {
   # here. Group caddy so the server can read them; 0750 so nobody else can.
   install -d -o "$LOGIN_USER" -g caddy -m 0750 /etc/caddy/certs
 
+  # acme.sh writes the private key 0600 <owner>:<owner> on every install AND on
+  # every renewal, so setting the directory's group is not enough — Caddy runs
+  # as `caddy` and could not read the key. That failure is not local to one
+  # site: Caddy loads a single config for the whole machine, so an unreadable
+  # key makes the entire reload fail, and every topic environment's deploy dies
+  # with "caddy rejected the generated site file" (#2213).
+  #
+  # This runs as part of the reload, not once at setup, because the renewal 60
+  # days from now would otherwise put the permissions back and break it again
+  # with nobody touching anything.
+  cat > /usr/local/bin/caddy-reload-certs <<'EOF'
+#!/bin/sh
+# Make the installed certificates readable by the caddy service, then reload.
+# Invoked as acme.sh's --reloadcmd (see .github/workflows/wildcard-cert.yml).
+set -e
+chgrp caddy /etc/caddy/certs/*.cer /etc/caddy/certs/*.key 2>/dev/null || true
+chmod 644 /etc/caddy/certs/*.cer 2>/dev/null || true
+chmod 640 /etc/caddy/certs/*.key 2>/dev/null || true
+exec systemctl reload caddy
+EOF
+  chmod 0755 /usr/local/bin/caddy-reload-certs
+  # Fix anything already installed by an earlier run.
+  [ -n "$(ls -A /etc/caddy/certs 2>/dev/null)" ] && /usr/local/bin/caddy-reload-certs >/dev/null 2>&1 || true
+  ok "caddy cert dir + reload helper (key stays 0640, readable by caddy)"
+
   if [ ! -f /etc/caddy/Caddyfile.pre-bootstrap ] && [ -f /etc/caddy/Caddyfile ]; then
     cp -a /etc/caddy/Caddyfile /etc/caddy/Caddyfile.pre-bootstrap
   fi
@@ -348,6 +373,31 @@ step_sites() {
   # running as that user (wildcard-cert.yml), and acme.sh installs the files
   # here. Group caddy so the server can read them; 0750 so nobody else can.
   install -d -o "$LOGIN_USER" -g caddy -m 0750 /etc/caddy/certs
+
+  # acme.sh writes the private key 0600 <owner>:<owner> on every install AND on
+  # every renewal, so setting the directory's group is not enough — Caddy runs
+  # as `caddy` and could not read the key. That failure is not local to one
+  # site: Caddy loads a single config for the whole machine, so an unreadable
+  # key makes the entire reload fail, and every topic environment's deploy dies
+  # with "caddy rejected the generated site file" (#2213).
+  #
+  # This runs as part of the reload, not once at setup, because the renewal 60
+  # days from now would otherwise put the permissions back and break it again
+  # with nobody touching anything.
+  cat > /usr/local/bin/caddy-reload-certs <<'EOF'
+#!/bin/sh
+# Make the installed certificates readable by the caddy service, then reload.
+# Invoked as acme.sh's --reloadcmd (see .github/workflows/wildcard-cert.yml).
+set -e
+chgrp caddy /etc/caddy/certs/*.cer /etc/caddy/certs/*.key 2>/dev/null || true
+chmod 644 /etc/caddy/certs/*.cer 2>/dev/null || true
+chmod 640 /etc/caddy/certs/*.key 2>/dev/null || true
+exec systemctl reload caddy
+EOF
+  chmod 0755 /usr/local/bin/caddy-reload-certs
+  # Fix anything already installed by an earlier run.
+  [ -n "$(ls -A /etc/caddy/certs 2>/dev/null)" ] && /usr/local/bin/caddy-reload-certs >/dev/null 2>&1 || true
+  ok "caddy cert dir + reload helper (key stays 0640, readable by caddy)"
 
   local my_ip
   my_ip="$(curl -fsS --max-time 10 -4 https://api.ipify.org 2>/dev/null || true)"
