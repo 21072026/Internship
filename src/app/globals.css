@@ -224,6 +224,20 @@ html.dark .bg-purple-50.text-purple-500,
 html.dark .bg-purple-50 .text-purple-500 { color: #d8b4fe; } /* purple-300 */
 
 /*
+ * MatchScoreBreakdown (#1785). The rules above only rescue accent text that
+ * sits INSIDE a retinted bg-*-50 box. This component also puts mid-tone accent
+ * text straight on the white card — the score ring (stroke: currentColor), the
+ * tier label, the per-rule check/cross and the blocked rule names — which in
+ * dark mode would be e.g. green-700 on gray-900. Retinting those utilities
+ * globally would be far too broad, so the override is scoped to the
+ * component's own `.match-score` root, same compound pattern as the blue rules.
+ * Its blocked panel (bg-red-50 + text-red-700/800) is already covered above.
+ */
+html.dark .match-score .text-green-700 { color: #86efac; } /* green-300 */
+html.dark .match-score .text-amber-700 { color: #fcd34d; } /* amber-300 */
+html.dark .match-score .text-red-700 { color: #fca5a5; }   /* red-300 */
+
+/*
  * Accent color system.
  * The product's primary color is blue by default. We expose that primary as a
  * palette of CSS custom properties (--accent-50 … --accent-900) and remap the

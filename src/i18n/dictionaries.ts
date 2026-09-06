@@ -278,6 +278,46 @@ const en = {
   // control on a suggestion card and the match-quality report on the analytics
   // page must name a reason with the same words, or the report reads as a
   // different feature from the button that fills it.
+  // Match score explainability (#1785). The score is deterministic rule
+  // arithmetic — never call it "AI" — and the footer below is required, not
+  // optional: it is what keeps a ranking used for a hiring outcome
+  // explainable and contestable.
+  matchScore: {
+    title: 'Match score',
+    srScore: '{n}% rule satisfaction',
+    tiers: {
+      strong: 'Strong match',
+      partial: 'Partial match',
+      weak: 'Weak match',
+      blocked: 'Blocked',
+    },
+    blockedTitle: 'Blocked by a hard rule',
+    blockedHelp: 'This pairing breaks a non-negotiable rule. That is not a low score — the pair cannot be suggested at all.',
+    rulesTitle: 'Rule by rule',
+    weightValue: 'weight {n}',
+    pointsValue: '{n} pts',
+    matched: 'Matched',
+    notMatched: 'Not matched',
+    noRules: 'No rules were evaluated for this pair.',
+    footer: 'Score is a rule-satisfaction percentage, not a prediction of success.',
+    kinds: {
+      WEIGHTED: 'Weighted',
+      HARD_REQUIRE: 'Required',
+      HARD_EXCLUDE: 'Excluded',
+    },
+    dimensions: {
+      skills: 'Skills',
+      language: 'Language',
+      field: 'Field',
+      department: 'Department',
+      university: 'University',
+      city: 'City',
+      timezone: 'Time zone',
+      capacityHeadroom: 'Mentor capacity',
+      managerExclusion: 'Not the direct manager',
+      previousPairing: 'Not paired before',
+    },
+  },
   matchFeedback: {
     dismiss: 'Dismiss this suggestion',
     dismissTitle: 'Why is this not a match?',
@@ -4584,6 +4624,46 @@ const tr: Dict = {
     confirmNotAccepting: 'Bu mentor yeni mentee kabul etmediğini belirtmiş. Yine de atamak istiyor musunuz?',
     confirmAnyway: 'Yine de ata',
   },
+  // Eşleşme skoru açıklanabilirliği (#1785). Skor deterministik kural
+  // aritmetiğidir — asla "yapay zekâ" denmez — ve alttaki ibare zorunludur:
+  // işe alım sonucunu etkileyen bir sıralamayı açıklanabilir ve itiraz
+  // edilebilir kılan cümle odur.
+  matchScore: {
+    title: 'Eşleşme skoru',
+    srScore: 'Kural karşılama: %{n}',
+    tiers: {
+      strong: 'Güçlü eşleşme',
+      partial: 'Kısmi eşleşme',
+      weak: 'Zayıf eşleşme',
+      blocked: 'Engellendi',
+    },
+    blockedTitle: 'Kesin bir kural engelliyor',
+    blockedHelp: 'Bu eşleşme pazarlığa kapalı bir kuralı ihlal ediyor. Bu düşük skor değil: çift hiç önerilemez.',
+    rulesTitle: 'Kural kural',
+    weightValue: 'ağırlık {n}',
+    pointsValue: '{n} puan',
+    matched: 'Tuttu',
+    notMatched: 'Tutmadı',
+    noRules: 'Bu çift için hiçbir kural değerlendirilmedi.',
+    footer: 'Skor bir başarı tahmini değil, kural karşılama yüzdesidir.',
+    kinds: {
+      WEIGHTED: 'Ağırlıklı',
+      HARD_REQUIRE: 'Zorunlu',
+      HARD_EXCLUDE: 'Dışlayıcı',
+    },
+    dimensions: {
+      skills: 'Yetkinlikler',
+      language: 'Dil',
+      field: 'Alan',
+      department: 'Bölüm',
+      university: 'Üniversite',
+      city: 'Şehir',
+      timezone: 'Saat dilimi',
+      capacityHeadroom: 'Mentor kapasitesi',
+      managerExclusion: 'Doğrudan yöneticisi değil',
+      previousPairing: 'Daha önce eşleşmemiş',
+    },
+  },
   matchFeedback: {
     dismiss: 'Bu öneriyi kapat',
     dismissTitle: 'Neden uygun değil?',
@@ -8840,6 +8920,46 @@ const de: Dict = {
     confirmAtCapacity: 'Dieser Mentor scheint seine Kapazität erreicht zu haben. Trotzdem zuweisen?',
     confirmNotAccepting: 'Dieser Mentor hat angegeben, aktuell keine neuen Mentees anzunehmen. Trotzdem zuweisen?',
     confirmAnyway: 'Trotzdem zuweisen',
+  },
+  // Erklärbarkeit des Match-Scores (#1785). Der Score ist deterministische
+  // Regelarithmetik — niemals als "KI" bezeichnen — und der Hinweis unten ist
+  // verpflichtend: Er hält ein Ranking, das eine Einstellungsentscheidung
+  // beeinflusst, erklärbar und anfechtbar.
+  matchScore: {
+    title: 'Match-Score',
+    srScore: '{n} % Regelerfüllung',
+    tiers: {
+      strong: 'Starke Übereinstimmung',
+      partial: 'Teilweise Übereinstimmung',
+      weak: 'Schwache Übereinstimmung',
+      blocked: 'Gesperrt',
+    },
+    blockedTitle: 'Durch eine harte Regel gesperrt',
+    blockedHelp: 'Diese Paarung verstößt gegen eine nicht verhandelbare Regel. Das ist kein niedriger Score — die Paarung kann gar nicht vorgeschlagen werden.',
+    rulesTitle: 'Regel für Regel',
+    weightValue: 'Gewicht {n}',
+    pointsValue: '{n} Pkt.',
+    matched: 'Erfüllt',
+    notMatched: 'Nicht erfüllt',
+    noRules: 'Für dieses Paar wurde keine Regel ausgewertet.',
+    footer: 'Der Score ist eine Regelerfüllungsquote, keine Vorhersage über den Erfolg.',
+    kinds: {
+      WEIGHTED: 'Gewichtet',
+      HARD_REQUIRE: 'Erforderlich',
+      HARD_EXCLUDE: 'Ausschluss',
+    },
+    dimensions: {
+      skills: 'Fähigkeiten',
+      language: 'Sprache',
+      field: 'Fachgebiet',
+      department: 'Abteilung',
+      university: 'Hochschule',
+      city: 'Stadt',
+      timezone: 'Zeitzone',
+      capacityHeadroom: 'Mentor-Kapazität',
+      managerExclusion: 'Nicht die direkte Führungskraft',
+      previousPairing: 'Noch nie gepaart',
+    },
   },
   matchFeedback: {
     dismiss: 'Diesen Vorschlag verwerfen',
