@@ -90,7 +90,7 @@ jobs:
           # them: a job output that holds a secret value is redacted on delivery,
           # so routing it through `needs` would blank the email's target line
           # exactly when STRESS_TARGET_URL is configured.
-          BASE_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://crm.ersah.in' }}
+          BASE_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://interncrm.com' }}
           K6_PEAK_VUS: ${{ github.event.inputs.peak_vus || '20' }}
           K6_SUMMARY_FILE: k6-summary.json
         run: k6 run --quiet k6/nightly-load.js
@@ -139,7 +139,7 @@ jobs:
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO || 'mehmetersahin@gmail.com' }}
           K6_SUMMARY_FILE: k6-out/k6-summary.json
-          K6_TARGET_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://crm.ersah.in' }}
+          K6_TARGET_URL: ${{ github.event.inputs.base_url || secrets.STRESS_TARGET_URL || 'https://interncrm.com' }}
           K6_REPORT_MODE: ${{ vars.K6_REPORT_MODE || 'failures' }}
           K6_RUN_CONTEXT: 'k6-load · ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
         run: |

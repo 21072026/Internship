@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- **Fix: the nightly load test was measuring a redirect** (#2166). `k6-load.yml` and `stress.yml` fell back to `https://crm.ersah.in`, which became a 301 to the new domain at cutover — so the 2026-09-06 run breached its `checks` threshold and mailed a false alarm about production being unhealthy. The fallback now names the current production URL."
+}
