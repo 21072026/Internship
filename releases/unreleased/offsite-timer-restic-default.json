@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **The off-site timer now targets the encrypted object store** (#2169). The restic credentials are deliberately absent from the systemd unit — unit files are world-readable, so the repository password and R2 key stay in a 0600 file the script sources itself."
-}

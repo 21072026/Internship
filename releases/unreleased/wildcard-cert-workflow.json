@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Wildcard certificate issuance is a workflow** (#2166): `wildcard-cert.yml` runs `acme-issue-wildcard.sh` on the deploy runner with `CF_API_TOKEN` from the repo secret, so the Cloudflare token never touches a shell, a scrollback or a shell history. It fails closed if the resulting certificate does not carry the `*.<domain>` SAN."
-}

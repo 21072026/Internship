@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Added** — webhook subscriptions can now be edited instead of only created and deleted: `PATCH /api/admin/webhooks?id=…` changes the URL (through the same SSRF guard as create) and the event set without touching the signing secret, and writes `active`, which until now had no writer anywhere — so a hook can be paused while its receiver is redeployed and resumed afterwards. Secret rotation is its own explicit endpoint (`POST /api/admin/webhooks/rotate-secret?id=…`, returning the new secret once), and `POST /api/admin/webhooks/test?id=…` delivers a signed `ping` through the normal delivery path and reports the receiver's status code and latency — rate-limited per hook, not per IP, so the button cannot be used to hammer a third party from the production host. `/admin/integrations` grows an inline edit form, a pause/resume toggle, a paused badge and a test button that renders the result next to the hook.",
-  "notes": {
-    "en": ["Webhooks can now be edited, paused and test-pinged: change a subscription's URL or events without losing its signing secret, and send yourself a signed test event to prove your verification works."],
-    "tr": ["Webhook’lar artık düzenlenebilir, duraklatılabilir ve test edilebilir: bir aboneliğin adresini ya da olaylarını imza anahtarını kaybetmeden değiştir, doğrulamanın çalıştığını kanıtlamak için kendine imzalı bir test olayı gönder."],
-    "de": ["Webhooks lassen sich jetzt bearbeiten, pausieren und testen: URL oder Ereignisse einer Subscription ändern, ohne das Signatur-Secret zu verlieren, und ein signiertes Testereignis senden, um die eigene Prüfung zu verifizieren."]
-  }
-}

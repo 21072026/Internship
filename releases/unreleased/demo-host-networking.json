@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Fix: the public demo could not reach the database on the new host** (#2166). `demo-refresh.sh` hardcoded bridge networking because the old host's demo `DATABASE_URL` pointed at `host.docker.internal`. Where MySQL itself runs in a container publishing on `127.0.0.1`, that address reaches nothing — the container started and every reset failed inside it. It now follows `NETWORK` like `deploy-prod.sh`, defaulting to host."
-}
