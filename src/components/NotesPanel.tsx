@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { useFloatingNotes } from '@/components/meeting/FloatingNotes';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 
 type Category = 'MEETING' | 'FEEDBACK' | 'TASKS' | 'PERSONAL';
 const CATEGORIES: Category[] = ['MEETING', 'FEEDBACK', 'TASKS', 'PERSONAL'];
@@ -77,9 +78,15 @@ export function NotesPanel() {
     if (!deleteId || deleting) return;
     setDeleting(true);
     try {
-      await fetch(`/api/notes/${deleteId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/notes/${deleteId}`, { method: 'DELETE' });
+      // #1355: the response was never read, so a rejected delete still showed
+      // the green "deleted" toast. On failure keep the note on screen and skip
+      // the reload — the list must not imply something was removed.
+      if (!res.ok) throw new Error(await apiErrorMessage(res, t.common.deleteFailed));
       await load();
       toast(t.portal.notes.deleted);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : t.common.deleteFailed, 'error');
     } finally {
       setDeleting(false);
       setDeleteId(null);

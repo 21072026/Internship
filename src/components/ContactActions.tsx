@@ -5,6 +5,7 @@ import { Phone, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 
 // Quick contact channels for a mentee's number. Opens tel:/wa.me, then asks the
 // mentor whether they reached the mentee — a "yes" logs a Call/WhatsApp
@@ -29,7 +30,7 @@ export function ContactActions({ relationId, phone, onLogged }: { relationId: st
     if (!reached || !channel) return;
     setSaving(true);
     try {
-      await fetch('/api/interactions', {
+      const res = await fetch('/api/interactions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           relationId,
@@ -38,8 +39,13 @@ export function ContactActions({ relationId, phone, onLogged }: { relationId: st
           notes: channel === 'Call' ? t.contact.loggedCall : t.contact.loggedWhatsApp,
         }),
       });
+      // #1355: the response went unread, so a rejected POST still said "contact
+      // logged" — and `onLogged` refetched a history that never gained the row.
+      if (!res.ok) throw new Error(await apiErrorMessage(res, t.contact.logFailed));
       onLogged?.();
       toast(t.contact.logged);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : t.contact.logFailed, 'error');
     } finally {
       setSaving(false);
     }

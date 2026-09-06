@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Failed deletes no longer report success** (#1355). `confirmDeleteInteraction` on the mentee detail page ignored the DELETE response, so a 403/404/500 still fired the green \"Interaction deleted\" toast and refetched the list. It now checks `res.ok`, surfaces the reason in an error toast and leaves the row in place. Same unchecked-response fix applied to the portal note delete (`NotesPanel`), the quick Call/WhatsApp contact log (`ContactActions`) and the mentor availability slot delete. New `apiErrorMessage()` helper (`src/lib/apiErrorMessage.ts`) surfaces a 4xx body's `error` and collapses 5xx internals to a localized fallback.",
+  "notes": {
+    "en": [
+      "A delete or contact log that the server rejects now shows a red error instead of a green \"done\" — and the record stays visible."
+    ],
+    "tr": [
+      "Sunucunun reddettiği bir silme veya iletişim kaydı artık yeşil \"tamam\" yerine kırmızı hata gösteriyor; kayıt da ekranda kalıyor."
+    ],
+    "de": [
+      "Wird ein Löschen oder ein Kontakteintrag vom Server abgelehnt, erscheint jetzt ein roter Fehler statt einer grünen Erfolgsmeldung – und der Eintrag bleibt sichtbar."
+    ]
+  }
+}

@@ -31,6 +31,7 @@ import { formatDate, formatDateTime } from '@/lib/relativeTime';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { cvViewHref } from '@/lib/cvLink';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { WeeklyReportsPanel } from '@/components/WeeklyReportsPanel';
@@ -154,9 +155,16 @@ export default function MenteeDetailPage() {
     if (!deleteInteractionId || deletingInteraction) return;
     setDeletingInteraction(true);
     try {
-      await fetch(`/api/interactions/${deleteInteractionId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/interactions/${deleteInteractionId}`, { method: 'DELETE' });
+      // #1355: the response used to go unread, so a 403/404/500 still produced
+      // the green "deleted" toast. On failure the row is deliberately left in
+      // place and the list is *not* refetched — what the mentor sees has to
+      // match what the server actually kept.
+      if (!res.ok) throw new Error(await apiErrorMessage(res, t.common.deleteFailed));
       await fetchRelation();
       toast(t.mentor.interactionDeleted);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : t.common.deleteFailed, 'error');
     } finally {
       setDeletingInteraction(false);
       setDeleteInteractionId(null);
@@ -460,7 +468,7 @@ export default function MenteeDetailPage() {
               </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-3" data-testid="interaction-list">
               {relation.interactions.length === 0 && (
                 <div>
                   <p className="text-sm text-gray-400 text-center pt-4 pb-3">{t.mentor.noInteractionsYet}</p>
@@ -491,6 +499,8 @@ export default function MenteeDetailPage() {
                   </div>
                   <button
                     onClick={() => handleDeleteInteraction(interaction.id)}
+                    aria-label={t.common.delete}
+                    data-testid={`interaction-delete-${interaction.id}`}
                     className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
                   >
                     <Trash2 className="h-4 w-4" />
