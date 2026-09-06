@@ -96,7 +96,13 @@ fi
 : "${DATABASE_URL:?DATABASE_URL missing (B64_DB or ENV_FILE)}"
 : "${NEXTAUTH_SECRET:?NEXTAUTH_SECRET missing (B64_SEC or ENV_FILE)}"
 
-HOST="crm-${TOPIC}.${BASE_DOMAIN}"
+# The hostname the reverse proxy actually serves. This MUST follow ENV_PREFIX,
+# because the routing block below builds FQDN the same way — when this line
+# hardcoded `crm-` (its shape before ENV_PREFIX was emptied in #2182) the
+# container was told NEXTAUTH_URL=https://crm-pr<N>.<domain> while Caddy served
+# pr<N>.<domain>, so every sign-in callback on a topic env pointed at a host
+# that does not resolve.
+HOST="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"
 URL="https://${HOST}"
 CONTAINER="internship-crm-${TOPIC}"
 CONF="${NGINX_CONF_DIR}/crm-${TOPIC}.${BASE_DOMAIN}.conf"  # legacy raw route (cleaned up below)
@@ -226,12 +232,35 @@ _query=""
 case "$DATABASE_URL" in *\?*) _query="?${DATABASE_URL#*\?}" ;; esac
 TOPIC_DATABASE_URL="${_base}/${TOPIC_DB}${_query}"
 
-# Reach the host's MySQL from inside the container the same way the preview
-# deploy does.
-CONTAINER_DB=$(echo "$TOPIC_DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s|127\.0\.0\.1|host.docker.internal|g')
+# ── Networking mode (#2213) ──────────────────────────────────────────────────
+# How a container reaches the host's MySQL is a property of the HOST, not of
+# this script, and it changed under us in #2166. On the old Plesk box MariaDB
+# was reachable on the docker bridge, so `host.docker.internal` mapped to
+# host-gateway worked. The migrated box publishes MySQL on 127.0.0.1 only,
+# where the gateway address (172.17.0.1) reaches nothing — this script kept
+# the bridge unconditionally and every topic deploy since the cutover died on
+# "P1001: Can't reach database server at host.docker.internal:3306".
+#
+# deploy-prod.sh (:155) and demo-refresh.sh (:72) were both given this switch
+# during the migration; this, the third caller of the same pattern, was missed.
+# Default 'host' matches them. NETWORK=bridge restores the old behaviour for a
+# host whose DB user is granted from the gateway rather than from loopback.
+NETWORK="${NETWORK:-host}"
+if [ "$NETWORK" = host ]; then
+  # Container shares the host's network namespace: the loopback URL is already
+  # correct, and the app is told which port to bind instead of publishing one.
+  CONTAINER_DB=$(echo "$TOPIC_DATABASE_URL" | sed 's|host\.docker\.internal|127.0.0.1|g')
+  NET_ARGS=(--network=host)
+  APP_NET_ARGS=(--network=host -e PORT="$PORT")
+else
+  CONTAINER_DB=$(echo "$TOPIC_DATABASE_URL" | sed 's|localhost|host.docker.internal|g; s|127\.0\.0\.1|host.docker.internal|g')
+  NET_ARGS=(--add-host=host.docker.internal:host-gateway)
+  APP_NET_ARGS=(--add-host=host.docker.internal:host-gateway -p "${PORT}:3000")
+fi
+echo "==> Container networking: ${NETWORK}"
 
 _in_image() {
-  docker run --rm --add-host=host.docker.internal:host-gateway \
+  docker run --rm "${NET_ARGS[@]}" \
     -e DATABASE_URL="$CONTAINER_DB" "$@"
 }
 
@@ -254,7 +283,7 @@ if [ "${EXISTING_TABLES:-0}" -eq 0 ]; then
   # only unlocks an internship_pr<N> target (prisma/seed-demo.mjs); it cannot
   # reach preview or prod even if this script were called with the wrong URL.
   echo "==> Fresh topic database — seeding synthetic demo data"
-  docker run --rm --add-host=host.docker.internal:host-gateway \
+  docker run --rm "${NET_ARGS[@]}" \
     -e DATABASE_URL="$CONTAINER_DB" -e SEED_DEMO_FORCE=1 \
     "$IMAGE" node prisma/seed-demo.mjs || echo "WARN: demo seeding failed — the environment is up but empty"
 else
@@ -269,8 +298,7 @@ docker rm   "$CONTAINER" 2>/dev/null || true
 # half worth being able to see.
 docker run -d \
   --name "$CONTAINER" \
-  -p "${PORT}:3000" \
-  --add-host=host.docker.internal:host-gateway \
+  "${APP_NET_ARGS[@]}" \
   --restart=unless-stopped \
   -e DATABASE_URL="$CONTAINER_DB" \
   -e NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
@@ -304,7 +332,7 @@ echo "==> Container health http://127.0.0.1:${PORT}/api/health -> ${code}"
 
 # ── Routing ──────────────────────────────────────────────────────────────────
 SUBLABEL="${ENV_PREFIX}${TOPIC}"              # e.g. pr725
-FQDN="${ENV_PREFIX}${TOPIC}.${BASE_DOMAIN}"   # e.g. pr725.interncrm.com
+FQDN="$HOST"                                  # e.g. pr725.interncrm.com — one source, see :99
 
 # Which reverse proxy sits in front of the containers? The new host runs Caddy and
 # has no panel; the old one runs Plesk, which owns 80/443 there. Auto-detect, so
