@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- **Security:** Added rate limits to unprotected write endpoints (#1547).",
-  "notes": {
-    "en": ["Public and semi-public write endpoints now have protection against automated request bursts."],
-    "tr": ["Herkese açık ve yarı açık yazma uç noktaları artık otomatik istek yoğunluğuna karşı korunuyor."],
-    "de": ["Öffentliche und halböffentliche Schreib-Endpunkte sind jetzt gegen automatisierte Anfrage-Spitzen geschützt."]
-  }
-}
