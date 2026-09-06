@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "- **Premium org features gated on the write** (#1742). `PATCH /api/admin/organizations` now refuses white-label branding fields without the WHITE_LABEL entitlement and the SSO block without SSO_SAML, returning `403 { code: 'feature_locked', feature }`. The entitlement is derived from the tenant's plan by a new pure helper `orgPlanHasFeature()` in `src/lib/orgPlans.ts` (interim source of truth until #1733's `entitled(orgId, feature)` lands). Losing the entitlement never deletes stored config: `isSsoActive()` additionally requires SSO_SAML, so an unentitled tenant's IdP stops being accepted at sign-in while issuer, entry point and certificate survive an upgrade back. The admin screen renders a locked state on both editors (EN/TR/DE).",
+  "notes": {
+    "en": [
+      "White-label branding and SAML single sign-on can now only be configured on a plan that includes them — and a downgrade no longer risks your saved settings: they are kept and simply become inactive until you upgrade again."
+    ],
+    "tr": [
+      "White-label markalama ve SAML tek oturum açma artık yalnızca bu özellikleri içeren planlarda yapılandırılabiliyor; plan düşerse kayıtlı ayarlarınız silinmiyor, yalnızca pasifleşiyor ve yükseltmede olduğu gibi geri geliyor."
+    ],
+    "de": [
+      "White-Label-Branding und SAML-Single-Sign-on lassen sich jetzt nur noch in Plänen konfigurieren, die sie enthalten — und eine Herabstufung löscht nichts: Die gespeicherten Einstellungen bleiben erhalten, sind nur inaktiv, bis Sie wieder hochstufen."
+    ]
+  }
+}

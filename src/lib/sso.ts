@@ -7,6 +7,8 @@
 //
 // Safe to import from the server; no client-only concerns.
 
+import { orgPlanHasFeature, type OrgPlan } from '@/lib/orgPlans';
+
 export type SsoProvider = 'saml' | 'oidc';
 
 export interface SsoConfig {
@@ -49,13 +51,29 @@ export function isSsoConfigComplete(c: Partial<SsoConfig> | null | undefined): b
   return true;
 }
 
+// The tenant's stored config plus the plan it is on — an Organization row
+// satisfies this as-is, which is how every caller passes it.
+export type SsoActivation = Partial<SsoConfig> & { plan?: OrgPlan | string | null };
+
 // The guard the login/ACS path checks: SSO is only active for a tenant when it
-// is switched on, completely configured AND names a provider we can actually
-// complete a login with. The provider check is what keeps an already-stored
-// `oidc` row (written before that was refused) from producing a broken redirect
-// — such a tenant falls back to password login instead of a dead end.
-export function isSsoActive(c: Partial<SsoConfig> | null | undefined): boolean {
-  return !!c?.ssoEnabled && isSsoConfigComplete(c) && isSsoProviderImplemented(c.ssoProvider);
+// is switched on, completely configured, names a provider we can actually
+// complete a login with AND the tenant's plan includes SSO_SAML. The provider
+// check is what keeps an already-stored `oidc` row (written before that was
+// refused) from producing a broken redirect — such a tenant falls back to
+// password login instead of a dead end.
+//
+// Why the entitlement is checked HERE and not by deleting the config (#1742):
+// SAML is a premium feature, so losing the entitlement has to stop IdP logins
+// from being accepted — but a downgrade must not destroy the tenant's issuer,
+// entry point and signing certificate. Wiping them would mean an upgrade back
+// costs the customer's IT team another round-trip through their IdP, and a
+// billing lapse would silently discard data we were trusted with. So the
+// config survives untouched and only its *activation* is withdrawn: re-grant
+// the plan and SSO resumes with nothing re-entered. The write boundary in
+// PATCH /api/admin/organizations refuses to *change* the config meanwhile.
+export function isSsoActive(c: SsoActivation | null | undefined): boolean {
+  return !!c?.ssoEnabled && isSsoConfigComplete(c) && isSsoProviderImplemented(c.ssoProvider)
+    && orgPlanHasFeature(c.plan, 'SSO_SAML');
 }
 
 // Validate an admin's incoming config before persisting. Returns an error

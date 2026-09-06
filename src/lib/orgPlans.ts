@@ -9,6 +9,11 @@
 // creation yet (single-tenant prod runs on the grandfathered ENTERPRISE
 // "default" org, which is unlimited). A later guarded slice can turn a chosen
 // limit into a hard gate via isOverLimit().
+//
+// The plan ALSO decides which premium features a tenant may configure — see
+// orgPlanHasFeature() at the bottom of this file (#1742).
+
+import type { PremiumFeature } from '@/lib/entitlementsCatalog';
 
 export type OrgPlan = 'FREE' | 'PRO' | 'ENTERPRISE';
 
@@ -42,4 +47,27 @@ export function planLimits(plan: OrgPlan): OrgPlanLimits {
 export function isOverLimit(plan: OrgPlan, metric: keyof OrgPlanLimits, usage: number): boolean {
   const limit = planLimits(plan)[metric];
   return limit != null && usage > limit;
+}
+
+// --- Premium features by plan (#1742) -------------------------------------
+//
+// INTERIM source of truth. The real entitlement system (#1733's
+// `entitled(orgId, feature)`, backed by the Subscription / OrgEntitlement
+// tables of #1731) has not landed yet, and src/lib/entitlements.ts is
+// COMPANY-scoped — the wrong axis for a tenant-level feature. Until #1733
+// ships, the org's stored `plan` is the only per-tenant signal available, so
+// this map is the single place that decides who may configure white-label
+// branding or SAML SSO. When #1733 lands, this map is what gets deleted;
+// nothing else needs to know how the answer was derived.
+const PLAN_FEATURES: Record<OrgPlan, readonly PremiumFeature[]> = {
+  FREE: [],
+  PRO: ['WHITE_LABEL'],
+  ENTERPRISE: ['WHITE_LABEL', 'SSO_SAML'],
+};
+
+// Does a plan include a premium feature? An unknown/absent plan is never
+// entitled — a caller that cannot name the tenant's plan gets the free tier.
+export function orgPlanHasFeature(plan: OrgPlan | string | null | undefined, feature: PremiumFeature): boolean {
+  if (!isOrgPlan(plan)) return false;
+  return PLAN_FEATURES[plan].includes(feature);
 }

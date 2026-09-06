@@ -108,6 +108,15 @@ test('admin creates an organization and it appears in the list', async ({ page }
     const cleared = await prisma.organization.findUnique({ where: { id: org!.id } });
     expect(cleared?.brandName).toBeNull();
 
+    // SAML SSO is ENTERPRISE-only (#1742): on PRO the write boundary refuses the
+    // whole SSO block before any of it is validated or stored.
+    const ssoOnPro = await page.request.patch('/api/admin/organizations', {
+      data: { id: org!.id, ssoEnabled: true, ssoProvider: 'saml' },
+    });
+    expect(ssoOnPro.status()).toBe(403);
+    expect((await ssoOnPro.json()).code).toBe('feature_locked');
+    await prisma.organization.update({ where: { id: org!.id }, data: { plan: 'ENTERPRISE' } });
+
     // Enterprise SSO (#545): cannot enable without a complete config.
     const badEnable = await page.request.patch('/api/admin/organizations', {
       data: { id: org!.id, ssoEnabled: true, ssoProvider: 'saml' },
@@ -200,11 +209,16 @@ test('a tenant admin can only reach their own organization', async ({ page }) =>
   const foreignSlug = `e2e-foreign-${tag}`;
   createdSlugs.push(ownSlug, foreignSlug);
 
-  const own = await prisma.organization.create({ data: { slug: ownSlug, name: `Own Tenant ${tag}` } });
+  // ENTERPRISE: this test is about the cross-tenant gate, so the tenant needs
+  // the premium entitlements the branding/SSO writes below require (#1742).
+  const own = await prisma.organization.create({
+    data: { slug: ownSlug, name: `Own Tenant ${tag}`, plan: 'ENTERPRISE' },
+  });
   const foreign = await prisma.organization.create({
     data: {
       slug: foreignSlug,
       name: `Foreign Tenant ${tag}`,
+      plan: 'ENTERPRISE',
       ssoProvider: 'saml',
       ssoIssuer: 'https://foreign-idp.test/metadata',
       ssoEntryPoint: 'https://foreign-idp.test/sso',

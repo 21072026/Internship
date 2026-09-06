@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
-import { ORG_PLAN_KEYS, planLimits, isOrgPlan, type OrgPlan } from '@/lib/orgPlans';
+import { ORG_PLAN_KEYS, planLimits, isOrgPlan, orgPlanHasFeature, type OrgPlan } from '@/lib/orgPlans';
 import { isHexColor, isSafeBrandLogoUrl } from '@/lib/branding';
 import { validateSsoConfig, isSsoActive } from '@/lib/sso';
 import { spEntityId, acsUrl, metadataUrl } from '@/lib/ssoSaml';
@@ -173,6 +173,22 @@ function orNull(v: string | undefined): string | null | undefined {
   return t.length ? t : null; // blank → clear
 }
 
+// White-label branding and SAML SSO are premium features, and this handler is
+// the ONLY way either is written — so this is where they are gated (#1742). The
+// entitlement comes from the tenant's plan (orgPlanHasFeature); an unentitled
+// tenant is refused with the shared feature_locked shape below. The locked card
+// on the admin screen is cosmetic; this is the gate.
+function featureLocked(feature: 'WHITE_LABEL' | 'SSO_SAML') {
+  return NextResponse.json(
+    {
+      code: 'feature_locked',
+      feature,
+      error: `This feature (${feature}) is not included in the organization's current plan`,
+    },
+    { status: 403 }
+  );
+}
+
 // PATCH — change an organization's plan, branding and/or SSO config.
 // The target org comes from the request body, so this is where a tenant ADMIN
 // could otherwise overwrite ANOTHER customer's SAML entry point and signing
@@ -199,6 +215,28 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // Fetched before the field validation below so the entitlement answer never
+  // depends on whether the payload happened to be well-formed.
+  const existing = await prisma.organization.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+
+  // Entitlement is read from the plan this request leaves the org on: sending a
+  // plan change together with the fields it unlocks is exactly equivalent to
+  // sending two requests, and refusing it would only be confusing.
+  const effectivePlan = plan ?? existing.plan;
+
+  const touchesBranding = brandName !== undefined || brandLogoUrl !== undefined ||
+    brandColor !== undefined || supportEmail !== undefined;
+  if (touchesBranding && !orgPlanHasFeature(effectivePlan, 'WHITE_LABEL')) {
+    return featureLocked('WHITE_LABEL');
+  }
+
+  const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
+    ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined;
+  if (touchesSso && !orgPlanHasFeature(effectivePlan, 'SSO_SAML')) {
+    return featureLocked('SSO_SAML');
+  }
+
   // Validate an explicitly-set (non-blank) brand color as a hex value.
   if (brandColor && brandColor.trim() && !isHexColor(brandColor)) {
     return NextResponse.json({ error: 'Brand color must be a hex value like #2563eb' }, { status: 400 });
@@ -214,9 +252,6 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const existing = await prisma.organization.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
-
   const data: Record<string, unknown> = {};
   if (plan !== undefined) data.plan = plan;
   const bn = orNull(brandName); if (bn !== undefined) data.brandName = bn;
@@ -227,8 +262,6 @@ export async function PATCH(request: Request) {
   // SSO fields: only touch what's provided, then validate the effective config
   // (existing merged with the incoming changes) — so enabling requires a
   // complete config even if some fields were set in an earlier request.
-  const touchesSso = ssoEnabled !== undefined || ssoProvider !== undefined ||
-    ssoIssuer !== undefined || ssoEntryPoint !== undefined || ssoCertificate !== undefined;
   if (touchesSso) {
     if (ssoEnabled !== undefined) data.ssoEnabled = ssoEnabled;
     const sp = orNull(ssoProvider); if (sp !== undefined) data.ssoProvider = sp;
