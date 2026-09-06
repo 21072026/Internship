@@ -5833,3 +5833,38 @@ kodunu ve mesajı PR'a yapıştır, geri al.
 "`Closes #N` yaz" diyor; ama kabul kriterlerinin çoğu bu PR'la tiklenmiyorsa `Closes`
 merge anında issue'yu haksız yere kapatır. Bu turda `Refs` doğruydu ve PR gövdesinde
 neden `Closes` olmadığı ilk paragrafta yazıyor.
+
+## 2026-09-06 — Bir guard'ın gücü, guard'ın kendisi hakkında yazdığından fazla olamaz (#1697, ikinci tur)
+
+**Kendi yazdığın guard'ı, kaçınmaya çalışan biri gibi test et.** İlk turda
+`scripts/check-events.mjs` "on birinci doğrudan çağrı kırmızıdır" diyordu ve *yeni bir
+dosya* için doğruydu; ama tarama döngüsü listedeki bir dosyada ilk eşleşmede `continue`
+ettiği için, **zaten listede olan** bir route'a ikinci bir `dispatchWebhook()` eklemek
+yeşil geçiyordu. Listedeki on dosyanın altısı birden çok HTTP handler'ı olan `route.ts` —
+yani kaçırdığı senaryo, en olası senaryoydu. Ders: "yeni dosya ekle, kırmızı mı?" testi
+yetmez; **var olan bir istisna satırını genişletmeyi de dene**. Dosya değil **çağrı yeri**
+say (`matchAll(...).length`, `search()` değil) ve beklenen sayıyı listeye yaz.
+
+**Bir modülün tek bir çıkışı olduğunu varsayma — `export`'ları oku.** `src/lib/webhooks.ts`
+iki kapı açıyor: `dispatchWebhook` (abonelere fan-out) ve `deliverToWebhook` (tek alıcıya
+imzalı POST). İkincisi birincinin gövdesinden altı satır kopyalanarak aynı sonucu veriyor
+ve tarama sadece ilk ismi arıyordu. Yeni bir guard yazarken **`grep "^export" <modül>`**
+ile başla; korunan kaynağa giden her ismi tara, meşru olan tek çağıranı ayrı bir izin
+listesine (kendi sayacıyla) koy.
+
+**Hata mesajı da politikanın parçası.** İlk turda mesaj "emit() uymuyorsa nedenini
+PENDING_MIGRATION'a yaz" diyordu — yani kırmızı build gören katkıcıya, listeye kendini
+eklemesini öneriyordu. Başlıkta "bu bir muafiyet listesi değil" yazması bunu engellemiyor;
+**mekanik olarak engelle**: sayıların toplanması gereken ayrı bir `PENDING_CALL_SITES`
+sabiti koy, yorumuna "yalnızca düşebilir" yaz. Listeyi büyütmek artık ikinci, gözle görülür
+şekilde yük taşıyan bir sayıyı düzenlemeyi gerektiriyor.
+
+**Dokümana bugünkü kuralı yaz, hedeflenen kuralı değil.** `docs/testing.md`'ye "bir olay
+ürünü `emit()` üzerinden terk eder" satırını eklemiştim; `src/lib/events/` depoda yok, on
+route hâlâ doğrudan çağırıyor. Okuyan ya ağacın kuralı ihlal ettiğini sanıyor ya da hiç
+yazılmamış bir modülü arıyor. Kısmi teslimatlarda doküman cümlesi **CI'ın bugün
+reddettiği şeyi** anlatmalı, sonraki issue'yu değil.
+
+**Metin taramasının sınırını guard'ın kendi başlığına yaz.** Yorum satırına alınmış bir
+çağrı hâlâ çağrı sayılır; `import { dispatchWebhook as fire }` kaçar. Bunlar grep şeklindeki
+bir guard'ın bedeli — ama yazılmamışsa, bir sonraki okuyucu guard'ı olduğundan güçlü sanar.
