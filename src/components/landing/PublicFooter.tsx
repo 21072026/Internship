@@ -26,6 +26,9 @@ export async function PublicFooter() {
       links: [
         { href: '/features', label: n.features },
         { href: '/for-companies', label: n.forCompanies },
+        // #1732 — the price is a Product answer, not a legal one, and the
+        // footer is where a visitor who scrolled past the band looks for it.
+        { href: '/pricing', label: n.pricing },
         { href: '/projects', label: n.showcase },
         { href: '/release-notes', label: n.whatsNew },
         // The demo links to itself from its own footer — hide it there.
