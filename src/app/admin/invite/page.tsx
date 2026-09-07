@@ -185,6 +185,13 @@ export default function InvitePage() {
       const body = await res.json();
 
       if (!res.ok) {
+        // #419: pre-linking a mentee who already has an active mentor is
+        // refused here, at the form, rather than silently at registration.
+        // Keyed on `code`, so it stays right when the route gains other 409s.
+        if (body.code === 'already_mentored') {
+          setError(t.assignMentor.alreadyAssigned);
+          return;
+        }
         throw new Error(body.error || 'Failed to send invitation');
       }
 

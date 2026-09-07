@@ -22,6 +22,11 @@
 // a pick here costs nothing and says what it means.
 // ---------------------------------------------------------------------------
 
+// The "does this mentee already have an ACTIVE mentor" question lives in
+// src/lib/activeMentorship.ts, NOT here: this module is deliberately
+// dependency-free (zero imports) because portal pages import it, and giving it
+// a prisma dependency would drag the client into a page bundle.
+
 /** Statuses a mentee's portal will render — anything else is not their record. */
 export const MENTEE_RELATION_STATUSES = ['ACTIVE', 'COMPLETED'] as const;
 

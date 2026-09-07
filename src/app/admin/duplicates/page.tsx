@@ -99,7 +99,20 @@ function DuplicatePairCard({ pair, onMerged }: {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error || t.duplicates.failed);
+        // The endpoint answers with a MergeError CODE, not prose — rendering
+        // `body.error` put the literal token ('linked_by_mentorship') in front
+        // of the admin. Every code has translated text; anything unknown falls
+        // back to the generic failure line.
+        const codes = t.duplicates.mergeErrors as Record<string, string>;
+        const code = String(body.code ?? body.error ?? '');
+        let msg = codes[code] ?? t.duplicates.failed;
+        const detail = body.detail as { primaryMentorName?: string; duplicateMentorName?: string } | undefined;
+        if (detail?.primaryMentorName || detail?.duplicateMentorName) {
+          msg = msg
+            .replace('{a}', detail.primaryMentorName ?? '')
+            .replace('{b}', detail.duplicateMentorName ?? '');
+        }
+        setError(msg);
         return;
       }
       const counts = (body.counts ?? {}) as Record<string, number>;

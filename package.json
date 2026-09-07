@@ -19,6 +19,7 @@
     "check:demo-fidelity": "node scripts/check-demo-fidelity.mjs",
     "check:i18n": "node --experimental-strip-types scripts/check-i18n.ts",
     "check:release-fragments": "node scripts/check-release-fragments.mjs",
+    "check:active-mentors": "node prisma/check-active-mentor-duplicates.mjs",
     "check:stage-keys": "node scripts/check-stage-keys.mjs",
     "check:tenant-models": "node scripts/check-tenant-models.mjs",
     "test:unit": "node --test --experimental-strip-types scripts/test/*.test.mjs",

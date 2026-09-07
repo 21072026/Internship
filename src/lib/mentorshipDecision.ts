@@ -7,6 +7,12 @@ import { sendMentorshipDecisionEmail, sendMenteeAssignedEmail } from '@/services
 import { checkActiveRelationLimitForMentee, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { resolveStartStage } from '@/lib/pipelineStages';
+import {
+  findActiveMentorship,
+  ALREADY_MENTORED_ERROR,
+  AlreadyMentoredError,
+} from '@/lib/activeMentorship';
+import { Prisma } from '@prisma/client';
 
 // Deciding a MentorshipRequest — extracted from the admin queue route (#590)
 // so the mentor's own accept/reject step (#1188) shares one behavior: same
@@ -76,12 +82,11 @@ export async function decideMentorshipRequest(opts: {
     if (!mentor || !mentor.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
       return { status: 400, body: { error: 'Invalid mentor' } };
     }
-    const existing = await prisma.mentorshipRelation.findFirst({
-      where: { menteeId: req.menteeId, status: 'ACTIVE' },
-      select: { id: true },
-    });
-    if (existing) {
-      return { status: 409, body: { error: 'Mentee already has an active mentorship', code: 'already_mentored' } };
+    // One mentee, at most one ACTIVE mentor (#419). Cheap pre-flight; the real
+    // guard runs inside the transaction below. Both refusals now share one body
+    // with POST /api/mentorship instead of hand-rolling a second sentence.
+    if (await findActiveMentorship(prisma, req.menteeId)) {
+      return { status: 409, body: { ...ALREADY_MENTORED_ERROR } };
     }
 
     // Plan gate (#547): approving a request creates a new active relation.
@@ -111,18 +116,39 @@ export async function decideMentorshipRequest(opts: {
 
     // Same start stage as a direct admin assignment (#1634): the tenant's own
     // first on-path stage. Resolved before the transaction — it is a read, and
-    // an interactive query inside a `$transaction([...])` array is not possible.
+    // a read kept outside is one less statement holding the transaction open.
     const pipelineStatus = await resolveStartStage(gate.orgId);
 
-    const [relation] = await prisma.$transaction([
-      prisma.mentorshipRelation.create({
-        data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus },
-      }),
-      prisma.mentorshipRequest.update({
-        where: { id: req.id },
-        data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date() },
-      }),
-    ]);
+    // Interactive form (was an array `$transaction`) so the ACTIVE-mentor guard
+    // sits INSIDE the transaction that writes (#419) — the pre-flight above ran
+    // before the plan gate, the availability count and resolveStartStage.
+    let relation;
+    try {
+      relation = await prisma.$transaction(async (tx) => {
+        const active = await findActiveMentorship(tx, req.menteeId);
+        if (active) throw new AlreadyMentoredError(req.menteeId, active.id);
+        const created = await tx.mentorshipRelation.create({
+          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus },
+        });
+        // `status: 'PENDING'` in the where is the real serializer for THIS
+        // request: the UPDATE takes the row lock MySQL grants anyway, so two
+        // concurrent approvals of the same request cannot both match. The loser
+        // hits zero rows (P2025) and the whole transaction rolls back.
+        await tx.mentorshipRequest.update({
+          where: { id: req.id, status: 'PENDING' },
+          data: { status: 'APPROVED', decidedById: actorId, decidedAt: new Date() },
+        });
+        return created;
+      });
+    } catch (e) {
+      if (e instanceof AlreadyMentoredError) {
+        return { status: 409, body: { ...ALREADY_MENTORED_ERROR } };
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        return { status: 409, body: { error: 'Request already decided', code: 'already_decided' } };
+      }
+      throw e;
+    }
     await notify(req.menteeId, 'mentorship_request.approved', {}, '/portal');
     // The mentor deciding their own queue doesn't need to be told about
     // themself — no echo (#886 rule).

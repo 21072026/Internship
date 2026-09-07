@@ -164,7 +164,10 @@ export function AssignMentorInline({
         return;
       }
       const d = await res.json().catch(() => ({}));
-      setErr(res.status === 409 ? a.alreadyAssigned : d.error || t.common.error);
+      // Keyed on the body's `code`, not the status (#419): a second 409 reason
+      // on this route would otherwise render as "already has an active mentor",
+      // which would be a lie.
+      setErr(d.code === 'already_mentored' ? a.alreadyAssigned : t.common.error);
     } catch {
       setErr(t.common.error);
     } finally {

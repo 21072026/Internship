@@ -284,6 +284,9 @@ async function main() {
       },
     });
 
+    // One mentee, at most one ACTIVE mentor (#419) — no status filter on
+    // purpose: a demo mentee that already has ANY relation is skipped entirely,
+    // so a re-seed can never add a second one.
     const existingRel = await prisma.mentorshipRelation.findFirst({ where: { menteeId: mentee.id } });
     if (existingRel) continue;
 
