@@ -33,11 +33,19 @@ function canManageMembers(user: { id: string; role: string }, project: { members
   return project.members.some((m) => m.userId === user.id && m.role === 'OWNER');
 }
 
+// GET — this project's roster, for the people who manage it. The guard used to
+// be "any signed-in user who is not a MENTEE" (#2270), which was wrong twice: it
+// let any mentor or company account read any project's roster (names, roles, user
+// ids), and it locked a MENTEE **owner** out of their own project's member list.
+// Same test as every other write here: an admin, or an OWNER of this project.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role === 'MENTEE') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return await withTenantScope(session, async () => {
     const { id } = await params;
+    const project = await loadContext(id);
+    if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!canManageMembers(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const members = await prisma.projectMember.findMany({
       where: { projectId: id },
       orderBy: { addedAt: 'asc' },
@@ -56,6 +64,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const project = await loadContext(id);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (!canManageMembers(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // A MENTEE owner does not add people directly (#2270). `canManageMembers`
+    // is role-blind, so opening self-service creation would otherwise let the
+    // lowest-privilege role add any active mentee in the tenant — with no
+    // relation check, a notification and a seat in the project group chat each
+    // time. They grow their team through the join-request flow instead
+    // ([id]/join-requests), which the applicant starts.
+    if (session.user.role === 'MENTEE') {
+      return NextResponse.json(
+        { error: 'Approve a join request to add someone to your project', code: 'mentee_owner_invite' },
+        { status: 403 }
+      );
+    }
 
     const parsed = addSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
@@ -137,9 +157,14 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       const nextOwner = owners.find((o) => o.userId !== userId);
       if (nextOwner) {
         const nextUser = await prisma.user.findUnique({ where: { id: nextOwner.userId }, select: { role: true } });
+        // ownerType follows who the successor actually is (#2270). The old
+        // two-way ternary wrote 'MENTOR' for a mentee successor, producing a row
+        // `resolveOwner()` would reject and that ProjectOwnerType contradicts.
+        const ownerType =
+          nextUser?.role === 'ADMIN' ? 'ADMIN' : nextUser?.role === 'MENTEE' ? 'MENTEE' : 'MENTOR';
         await prisma.project.update({
           where: { id },
-          data: { ownerUserId: nextOwner.userId, ownerType: nextUser?.role === 'ADMIN' ? 'ADMIN' : 'MENTOR' },
+          data: { ownerUserId: nextOwner.userId, ownerType },
         });
       }
     }

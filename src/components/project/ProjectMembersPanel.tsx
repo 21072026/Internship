@@ -22,7 +22,21 @@ interface Member {
   user: { id: string; fullName: string; role: string };
 }
 
-export function ProjectMembersPanel({ projectId, myId }: { projectId: string; myId: string }) {
+export function ProjectMembersPanel({
+  projectId,
+  myId,
+  canAdd = true,
+}: {
+  projectId: string;
+  myId: string;
+  /**
+   * Whether this viewer may ADD people. False for a MENTEE owner (#2270): the
+   * member POST refuses them by design — they grow the team by approving join
+   * requests — and the pickers would be empty anyway, since /api/users is
+   * ADMIN/MENTOR-only. Removing a member stays available to any owner.
+   */
+  canAdd?: boolean;
+}) {
   const t = useT();
   const [members, setMembers] = useState<Member[]>([]);
   const [mentors, setMentors] = useState<{ id: string; fullName: string }[]>([]);
@@ -42,6 +56,7 @@ export function ProjectMembersPanel({ projectId, myId }: { projectId: string; my
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
+    if (!canAdd) return; // /api/users is ADMIN/MENTOR-only; don't ask for a 401
     fetch('/api/users?view=picker')
       .then((r) => (r.ok ? r.json() : { users: [] }))
       .then((d) => {
@@ -50,7 +65,7 @@ export function ProjectMembersPanel({ projectId, myId }: { projectId: string; my
         setMentees(users.filter((u) => u.role === 'MENTEE'));
       })
       .catch(() => {});
-  }, []);
+  }, [canAdd]);
 
   const call = async (method: 'POST' | 'DELETE', body: Record<string, unknown>) => {
     setError('');
@@ -118,71 +133,79 @@ export function ProjectMembersPanel({ projectId, myId }: { projectId: string; my
         ))}
       </div>
 
-      {/* Owners & mentors. Stacked on a phone: three controls side by side leave
-          the select ~60px wide and unreadable. */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <select
-          value={addUserId}
-          onChange={(e) => setAddUserId(e.target.value)}
-          data-testid="member-picker"
-          className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
-        >
-          <option value="">—</option>
-          {mentors.filter((m) => !members.some((x) => x.user.id === m.id)).map((m) => (
-            <option key={m.id} value={m.id}>{m.fullName}</option>
-          ))}
-        </select>
-        <select
-          value={addRole}
-          onChange={(e) => setAddRole(e.target.value as 'OWNER' | 'MENTOR')}
-          className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
-        >
-          <option value="MENTOR">{t.projects.roleMentorMember}</option>
-          <option value="OWNER">{t.projects.roleOwner}</option>
-        </select>
-        <div className="flex gap-2">
-          <Button type="button" size="sm" variant="outline" disabled={!addUserId} onClick={() => call('POST', { userId: addUserId, role: addRole }).then((ok) => { if (ok) setAddUserId(''); })} data-testid="member-add">
-            {t.projects.add}
-          </Button>
-          {iAmOwner && (
-            <Button type="button" size="sm" variant="secondary" disabled={!addUserId} onClick={transferTo} data-testid="member-transfer">
-              {t.projects.transfer}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Mentee members with a functional (job) role (#51). */}
-      <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-800">
-        <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">{t.projects.addMenteeMember}</p>
+      {canAdd ? (
+        <>
+        {/* Owners & mentors. Stacked on a phone: three controls side by side leave
+            the select ~60px wide and unreadable. */}
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <select
-            value={addMenteeId}
-            onChange={(e) => setAddMenteeId(e.target.value)}
-            data-testid="mentee-picker"
+            value={addUserId}
+            onChange={(e) => setAddUserId(e.target.value)}
+            data-testid="member-picker"
             className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
           >
             <option value="">—</option>
-            {mentees.filter((m) => !members.some((x) => x.user.id === m.id)).map((m) => (
+            {mentors.filter((m) => !members.some((x) => x.user.id === m.id)).map((m) => (
               <option key={m.id} value={m.id}>{m.fullName}</option>
             ))}
           </select>
           <select
-            value={addFunc}
-            onChange={(e) => setAddFunc(e.target.value as 'DEVELOPER' | 'TESTER' | 'MARKETING')}
-            data-testid="functional-role-picker"
+            value={addRole}
+            onChange={(e) => setAddRole(e.target.value as 'OWNER' | 'MENTOR')}
             className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
           >
-            {(['DEVELOPER', 'TESTER', 'MARKETING'] as const).map((fr) => (
-              <option key={fr} value={fr}>{(t.projects.functionalRoles as Record<string, string>)[fr]}</option>
-            ))}
+            <option value="MENTOR">{t.projects.roleMentorMember}</option>
+            <option value="OWNER">{t.projects.roleOwner}</option>
           </select>
-          <Button type="button" size="sm" variant="outline" disabled={!addMenteeId} onClick={() => call('POST', { userId: addMenteeId, role: 'MENTEE', functionalRole: addFunc }).then((ok) => { if (ok) setAddMenteeId(''); })} data-testid="mentee-add">
-            {t.projects.add}
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="outline" disabled={!addUserId} onClick={() => call('POST', { userId: addUserId, role: addRole }).then((ok) => { if (ok) setAddUserId(''); })} data-testid="member-add">
+              {t.projects.add}
+            </Button>
+            {iAmOwner && (
+              <Button type="button" size="sm" variant="secondary" disabled={!addUserId} onClick={transferTo} data-testid="member-transfer">
+                {t.projects.transfer}
+              </Button>
+            )}
+          </div>
         </div>
-        {mentees.length === 0 && <p className="mt-1.5 text-xs text-gray-400">{t.projects.noMenteesToAdd}</p>}
-      </div>
+
+        {/* Mentee members with a functional (job) role (#51). */}
+        <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+          <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">{t.projects.addMenteeMember}</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <select
+              value={addMenteeId}
+              onChange={(e) => setAddMenteeId(e.target.value)}
+              data-testid="mentee-picker"
+              className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
+            >
+              <option value="">—</option>
+              {mentees.filter((m) => !members.some((x) => x.user.id === m.id)).map((m) => (
+                <option key={m.id} value={m.id}>{m.fullName}</option>
+              ))}
+            </select>
+            <select
+              value={addFunc}
+              onChange={(e) => setAddFunc(e.target.value as 'DEVELOPER' | 'TESTER' | 'MARKETING')}
+              data-testid="functional-role-picker"
+              className="w-full min-w-0 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900 sm:w-auto"
+            >
+              {(['DEVELOPER', 'TESTER', 'MARKETING'] as const).map((fr) => (
+                <option key={fr} value={fr}>{(t.projects.functionalRoles as Record<string, string>)[fr]}</option>
+              ))}
+            </select>
+            <Button type="button" size="sm" variant="outline" disabled={!addMenteeId} onClick={() => call('POST', { userId: addMenteeId, role: 'MENTEE', functionalRole: addFunc }).then((ok) => { if (ok) setAddMenteeId(''); })} data-testid="mentee-add">
+              {t.projects.add}
+            </Button>
+          </div>
+          {mentees.length === 0 && <p className="mt-1.5 text-xs text-gray-400">{t.projects.noMenteesToAdd}</p>}
+        </div>
+        </>
+      ) : (
+        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="members-add-blocked">
+          {t.projects.ownerInviteViaJoinRequests}
+        </p>
+      )}
     </div>
   );
 }
