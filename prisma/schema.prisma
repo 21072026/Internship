@@ -205,6 +205,9 @@ model PipelineStage {
   orgId      String
   org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   key        String
+  /// A label the tenant actually typed, shown verbatim in every language — or
+  /// "" meaning "use the built-in localized label for this key" (#2268). Always
+  /// read it through resolvePipelineStages()/useResolvedStages(), never raw.
   label      String
   order      Int
   isTerminal Boolean      @default(false)

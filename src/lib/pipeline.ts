@@ -1,7 +1,7 @@
 // Single source of truth for the mentee pipeline stages (mirrors the Prisma
 // PipelineStatus enum). Enum identifiers are English; display labels are
 // localized (EN/TR).
-import type { Locale } from '@/i18n/config';
+import { locales, type Locale } from '@/i18n/config';
 
 export const PIPELINE_STATUSES = [
   'APPLICATION_100',
@@ -266,7 +266,36 @@ export function startStageKey(stages: ResolvedStage[]): string {
 }
 
 // Label lookup over a resolved set, falling back to the canonical label and then
-// the raw key — so a custom key always renders something sensible.
+// the raw key — so a custom key always renders something sensible. A blank
+// stored label falls through too; see `isDefaultLabel`.
 export function stageLabel(stages: ResolvedStage[], key: string, locale: Locale = 'en'): string {
-  return stages.find((s) => s.key === key)?.label ?? pipelineLabel(key, locale);
+  return stages.find((s) => s.key === key)?.label || pipelineLabel(key, locale);
+}
+
+// Is this stored label one the tenant never actually chose? Two shapes count:
+// blank (what a save now writes for an untouched built-in stage), and a
+// byte-for-byte copy of one of OUR OWN built-in labels — which is what the stage
+// editor used to persist. Its GET prefilled the 13 built-in labels resolved in
+// the wrong language and Save posted them straight back, so one click on an
+// untouched editor froze English into the DB for every reader in every language
+// (#2268).
+//
+// Matching ANY locale, not just the viewer's, is deliberate: it means an admin
+// who only recoloured or reordered the built-in stages keeps translated labels.
+// The cost is that a tenant cannot pin our German string as a fixed label for
+// Turkish readers — the right trade for a stage nobody renamed. Typing anything
+// that differs by a character is still honoured verbatim.
+export function isDefaultLabel(key: string, label: string): boolean {
+  const trimmed = label.trim();
+  if (!trimmed) return true;
+  if (!(PIPELINE_STATUSES as readonly string[]).includes(key)) return false;
+  return locales.some((l) => pipelineLabel(key, l) === trimmed);
+}
+
+// Fill in the built-in localized label for every stage the tenant did not
+// rename, leaving genuinely custom labels exactly as they were set.
+export function localizeStageLabels(stages: ResolvedStage[], locale: Locale): ResolvedStage[] {
+  return stages.map((s) =>
+    isDefaultLabel(s.key, s.label) ? { ...s, label: pipelineLabel(s.key, locale) } : s
+  );
 }

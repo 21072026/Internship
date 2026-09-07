@@ -5975,3 +5975,40 @@ yaptığı atıfları düzeltmek gerekiyor. Marker kalmaması, metnin doğru olm
 kendiliğinden birleşti; yine de `grep -n "key: '"` ile iki girdinin de yerinde olduğuna
 baktım. Otomatik birleşme "çatışma yok" demektir, "iki taraf da korundu" demek değildir —
 kayıt defteri gibi dosyalarda sessizce bir girdi düşerse hiçbir tip hatası vermez.
+
+## 2026-09-07 — Bir kilit değerin kaynağı veriyse, kodu düzeltmek veriyi de iyileştirebilir (#2268)
+
+İki küçük kusuru tek PR'da kapattım (#2269). İkincisinin — Türkçe arayüzde İngilizce
+pipeline aşama etiketleri — bulgusu "isDataNotCode: true" idi ve doğruydu: semptomu üreten
+şey `PipelineStage.label` satırlarıydı. Refleks çözüm bir backfill betiği yazıp
+`infra/deploy-prod.sh`'e eklemek olurdu; bu, canlı satırları her ortamda yeniden yazmak
+demekti ve onay gerektirirdi. Bunun yerine **okuma yolunu** "bu etiket hâlâ bizim yerleşik
+etiketimizse, okuyanın diliyle çevir" diye değiştirdim. Aynı sonuç, sıfır veri mutasyonu,
+sıfır operatör adımı. Ders: veriden gelen bir semptomda önce "bu değeri kim okuyor ve
+okurken düzeltebilir miyim?" diye sor — backfill en son çare.
+
+**"Herhangi bir dilde eşleşiyor mu" kontrolü, kapatılması en zor deliği kapatıyor.**
+`isDefaultLabel` sadece okuyanın dilindeki yerleşik etiketle karşılaştırsaydı, editörde
+yalnızca **rengi** değiştirip kaydeden bir yönetici hâlâ bir dili dondururdu (prefill
+İngilizceydi, karşılaştırma Türkçeydi, eşleşme olmazdı). Üç dilin hepsine bakmak bu deliği
+kapatıyor; bedeli — bir kiracı Almanca yerleşik dizeyi Türkçe okuyuculara sabitleyemiyor —
+kod yorumuna yazılmalı, yoksa bir sonraki okuyan bunu hata sanar.
+
+**Konu numarasını issue'yu AÇTIKTAN sonra yaz.** Yorumlara ve release fragment'ına `#2270`
+yazdım (sıradaki numarayı tahmin ederek); `gh issue create` `#2268` verdi ve tahminim iki
+şey birden kaydırmıştı. Dokuz dosyada `sed` ile düzeltip kontrolleri baştan koşturmak
+gerekti. Ya issue'yu ilk iş aç, ya da numarayı yer tutucu bırakıp commit'ten önce doldur.
+
+**`npm install`, PR'ına versiyon değişikliği sızdırır.** Yerel `node_modules` eksikti
+(`@axe-core/playwright`, `web-push` yüzünden `tsc` 13 sahte hata veriyordu), `npm install`
+sorunu çözdü ama `package-lock.json`'ın `version` alanını 0.135.0 → 0.156.21 diye
+güncelledi. CLAUDE.md PR'ların versiyon dosyalarına dokunmamasını söylüyor: commit'ten önce
+`git checkout -- package-lock.json`. `git status`'u diff'e bakmadan `git add -A` ile
+geçmeyin.
+
+**`node --experimental-strip-types` `@/` takma adını çözmez.** `scripts/test/*.test.mjs`
+birim koşucusu `.ts` dosyalarını doğrudan import ediyor, ama `src/lib/pipeline.ts`
+`@/i18n/config`'ten import ettiği için o koşucudan erişilemiyor (coverage raporu da
+"Playwright altında, #1598 bekliyor" diyor). Saf yardımcıları yine de doğrulamak için
+`/tmp`'ye kopyalayıp import satırını `sed`'le göreceli hale getirdim: 30 saniye, ve üç
+dilin çıktısını gözle gördüm. Veritabanı olmadan da saf mantık kanıtlanabilir.

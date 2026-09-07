@@ -7,10 +7,18 @@
 // canonical stages, so single-tenant production is unchanged.
 
 import { prisma } from './prisma';
-import { defaultPipelineStages, onPathKeys, stageLabel, startStageKey, type ResolvedStage } from './pipeline';
+import {
+  defaultPipelineStages,
+  isDefaultLabel,
+  localizeStageLabels,
+  onPathKeys,
+  stageLabel,
+  startStageKey,
+  type ResolvedStage,
+} from './pipeline';
 import type { Locale } from '@/i18n/config';
 
-export { defaultPipelineStages, onPathKeys, stageLabel, startStageKey, type ResolvedStage };
+export { defaultPipelineStages, isDefaultLabel, onPathKeys, stageLabel, startStageKey, type ResolvedStage };
 
 // Resolve the stages for a tenant: its custom rows if any, else the canonical
 // defaults. Cheap single indexed query; falls back safely for a null org.
@@ -24,14 +32,19 @@ export async function resolvePipelineStages(
       orderBy: { order: 'asc' },
     });
     if (rows.length > 0) {
-      return rows.map((r) => ({
-        key: r.key,
-        label: r.label,
-        order: r.order,
-        isTerminal: r.isTerminal,
-        isOffPath: r.isOffPath,
-        color: r.color,
-      }));
+      // A row the tenant never renamed reads back in the CALLER'S locale, not
+      // in whatever language the editor happened to persist (#2268).
+      return localizeStageLabels(
+        rows.map((r) => ({
+          key: r.key,
+          label: r.label,
+          order: r.order,
+          isTerminal: r.isTerminal,
+          isOffPath: r.isOffPath,
+          color: r.color,
+        })),
+        locale,
+      );
     }
   }
   return defaultPipelineStages(locale);
@@ -40,6 +53,8 @@ export async function resolvePipelineStages(
 // Resolve a tenant's CUSTOM stages, or null when it uses the built-in defaults.
 // Fed to the client PipelineStagesProvider so default-stage labels can stay
 // localized on the client while custom labels render as the tenant set them.
+// Deliberately locale-free: the labels go out raw (a not-renamed one possibly
+// blank) and the client hook localizes them in the viewer's own locale.
 export async function resolveCustomStages(
   orgId: string | null | undefined,
 ): Promise<ResolvedStage[] | null> {
