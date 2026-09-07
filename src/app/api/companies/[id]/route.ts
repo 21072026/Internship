@@ -7,21 +7,21 @@ import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const updateCompanySchema = z.object({
-  name: z.string().min(1).optional(),
+  name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
   description: z.string().max(TEXT_LIMITS.companyDescription).optional(),
-  contactEmail: z.string().email().optional().or(z.literal('')),
-  industry: z.string().optional(),
-  logoUrl: z.string().url().or(z.literal('')).optional(),
-  size: z.string().max(40).optional(),
-  address: z.string().max(300).optional(),
+  contactEmail: z.string().email().max(TEXT_LIMITS.companyContactEmail).optional().or(z.literal('')),
+  industry: z.string().max(TEXT_LIMITS.companyIndustry).optional(),
+  logoUrl: z.string().url().max(TEXT_LIMITS.companyLogoUrl).or(z.literal('')).optional(),
+  size: z.string().max(TEXT_LIMITS.companySize).optional(),
+  address: z.string().max(TEXT_LIMITS.companyAddress).optional(),
   quota: z.number().int().min(0).max(10000).nullable().optional(),
   needs: z
     .array(
       z.object({
         id: z.string().optional(),
-        position: z.string().min(1),
+        position: z.string().min(1).max(TEXT_LIMITS.companyNeedPosition),
         count: z.number().int().min(1),
-        period: z.string().min(1),
+        period: z.string().min(1).max(TEXT_LIMITS.companyNeedPeriod),
       })
     )
     .optional(),

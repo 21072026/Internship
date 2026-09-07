@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { canManageProject, isProjectMember } from '@/lib/projectAccess';
 import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/goalTemplates';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // The goal/task template pool (#51, reworked in #1113).
 //
@@ -22,12 +23,15 @@ import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/g
 // would blank the wording for everyone who has it. Archived means "stop offering
 // this"; adding the same wording back revives the row.
 
-const localeText = z.string().trim().max(300).optional();
+// ProjectTaskTemplate.title is VARCHAR(191): a wider cap here was a P2000 in
+// the driver, and neither handler catches, so it reached the admin as a 500
+// with an empty body (#1433).
+const localeText = z.string().trim().max(TEXT_LIMITS.todoTitle).optional();
 const translationsSchema = z.object({ en: localeText, tr: localeText, de: localeText });
 // `title` alone is still accepted: that is how the automatic capture and the
 // older clients add a template.
 const createSchema = z.object({
-  title: z.string().min(1).max(300).optional(),
+  title: z.string().min(1).max(TEXT_LIMITS.todoTitle).optional(),
   translations: translationsSchema.optional(),
 });
 const updateSchema = z.object({ id: z.string().min(1), translations: translationsSchema });

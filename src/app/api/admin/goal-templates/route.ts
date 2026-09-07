@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/goalTemplates';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // The shared goal-template pool (#51 follow-up).
 //
@@ -17,7 +18,10 @@ import { canonicalTitle, normalizeTranslations, readTranslations } from '@/lib/g
 // by whoever leads that project, through
 // /api/projects/[id]/task-templates — not here.
 
-const localeText = z.string().trim().max(300).optional();
+// ProjectTaskTemplate.title is VARCHAR(191): a wider cap here was a P2000 in
+// the driver, and neither handler catches, so it reached the admin as a 500
+// with an empty body (#1433).
+const localeText = z.string().trim().max(TEXT_LIMITS.todoTitle).optional();
 const translationsSchema = z.object({ en: localeText, tr: localeText, de: localeText });
 
 const createSchema = z.object({ translations: translationsSchema });

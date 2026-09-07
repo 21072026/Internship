@@ -7,20 +7,25 @@ import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const companySchema = z.object({
-  name: z.string().min(1, 'Company name is required'),
+  name: z.string().min(1, 'Company name is required').max(TEXT_LIMITS.companyName),
   description: z.string().max(TEXT_LIMITS.companyDescription).optional(),
-  contactEmail: z.string().email('Invalid contact email').optional().or(z.literal('')),
-  industry: z.string().optional(),
-  logoUrl: z.string().url().or(z.literal('')).optional(),
-  size: z.string().max(40).optional(),
-  address: z.string().max(300).optional(),
+  contactEmail: z
+    .string()
+    .email('Invalid contact email')
+    .max(TEXT_LIMITS.companyContactEmail)
+    .optional()
+    .or(z.literal('')),
+  industry: z.string().max(TEXT_LIMITS.companyIndustry).optional(),
+  logoUrl: z.string().url().max(TEXT_LIMITS.companyLogoUrl).or(z.literal('')).optional(),
+  size: z.string().max(TEXT_LIMITS.companySize).optional(),
+  address: z.string().max(TEXT_LIMITS.companyAddress).optional(),
   quota: z.number().int().min(0).max(10000).nullable().optional(),
   needs: z
     .array(
       z.object({
-        position: z.string().min(1),
+        position: z.string().min(1).max(TEXT_LIMITS.companyNeedPosition),
         count: z.number().int().min(1),
-        period: z.string().min(1),
+        period: z.string().min(1).max(TEXT_LIMITS.companyNeedPeriod),
       })
     )
     .optional(),

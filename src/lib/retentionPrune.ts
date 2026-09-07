@@ -75,7 +75,13 @@ export interface RetentionOutcome {
   masked?: number;
   /** True when the entry hit its budget and there is more to do next run. */
   capped?: boolean;
-  /** One short operator-facing note, when the counts alone would mislead. */
+  /**
+   * One short operator-facing note, when the counts alone would mislead — it is
+   * rendered into the audit line, so keep it to a handful of characters (the
+   * whole line has 191 to share). "Every tenant has this window switched off"
+   * and "it ran and found nothing" are both `deleted: 0`; the note is what
+   * tells them apart a week later.
+   */
   note?: string;
 }
 
@@ -290,15 +296,24 @@ export async function runRetention(options: RetentionRunOptions = {}): Promise<R
  * oversized value does not truncate — it throws P2000 and loses the whole audit
  * row (#1268). So the line is built to fit: silent tables are dropped, and
  * anything still over the limit is cut with an ellipsis rather than risked.
+ *
+ * An entry's `note` rides in parentheses after its counts, and a note is by
+ * itself enough to make the entry non-silent. Some outcomes are not a number:
+ * "every tenant keeps notifications forever" is `deleted: 0`, identical in the
+ * audit row to "the table was already clean" unless the note reaches it — and
+ * this row is the record an operator audits the sweep from.
  */
 export function formatRetentionSummary(result: RetentionRunResult, maxLen = 191): string {
   const parts: string[] = [];
   for (const r of result.results) {
-    if (r.error) parts.push(`${r.key}=ERR`);
-    else if (r.deleted || r.masked || r.capped) {
-      const masked = r.masked ? `/${r.masked}m` : '';
-      parts.push(`${r.key}=${r.deleted}${masked}${r.capped ? '+' : ''}`);
+    if (r.error) {
+      parts.push(`${r.key}=ERR`);
+      continue;
     }
+    if (!r.deleted && !r.masked && !r.capped && !r.note) continue;
+    const masked = r.masked ? `/${r.masked}m` : '';
+    const counts = `${r.deleted}${masked}${r.capped ? '+' : ''}`;
+    parts.push(r.note ? `${r.key}=${counts}(${r.note})` : `${r.key}=${counts}`);
   }
   const body = parts.length > 0 ? parts.join(' ') : 'nothing to prune';
   const line = `${body} (${Math.round(result.durationMs / 100) / 10}s)`;

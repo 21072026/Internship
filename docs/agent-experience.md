@@ -5955,3 +5955,23 @@ OIDC turu `test.skip(!SSO_IMPLEMENTED_PROVIDERS.includes('oidc'), …)` ile duru
 'oidc'yi listeye eklediği gün test kendiliğinden koşmaya başlıyor. Gövdesini protokolden
 bağımsız tut (henüz olmayan callback yoluna bel bağlama), yoksa açıldığı gün yanlış
 nedenle kırmızı olur.
+
+## 2026-09-07 — Aynı dosyaya iki PR de "sadece bir satır" ekliyorsa çatışma toplama işidir, seçme değil (#1780)
+
+Aynı partiden dört kardeş PR main'e inince #1780'in dalı üç yerde çatıştı:
+`SETTING_DEFAULTS`, yönetici ayarları zod şeması ve `docs/pii-access-lifecycle.md`.
+Üçünde de her iki taraf **ekleme** yapıyordu — biri bildirim penceresini (#1646), diğeri
+sahipsiz başvuru hesabı süresini. Böyle bir çatışmada "hangisi doğru?" yanlış sorudur;
+doğru soru "hangi sırayla?" Telemetri pencerelerinin yanına telemetri girdisini, hesap
+girdisini en sona koydum; tabloda da aynı sıra.
+
+**Kendi tarafının metni, öteki taraf araya bir bölüm sokunca yanlış olabilir.** #1780'in
+tablo satırı "Ayrıntısı hemen aşağıda" diyordu; #1646 tam oraya uzun bir alt bölüm
+eklediğinde bu işaret artık yanlış hedefi gösteriyordu. Çatışmayı çözerken sadece
+markerları temizlemek yetmiyor — birleşen metni **baştan okuyup** iki tarafın birbirine
+yaptığı atıfları düzeltmek gerekiyor. Marker kalmaması, metnin doğru olması demek değil.
+
+**`git status`'ta `UU` görünmeyen dosyayı da doğrula.** `src/lib/retentionEntries.ts`
+kendiliğinden birleşti; yine de `grep -n "key: '"` ile iki girdinin de yerinde olduğuna
+baktım. Otomatik birleşme "çatışma yok" demektir, "iki taraf da korundu" demek değildir —
+kayıt defteri gibi dosyalarda sessizce bir girdi düşerse hiçbir tip hatası vermez.

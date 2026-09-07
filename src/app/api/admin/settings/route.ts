@@ -42,6 +42,12 @@ const schema = z.object({
   pageViewRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   pushSubscriptionStaleDays: z.string().regex(/^\d{1,4}$/).optional(),
   jobRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  // Notification history (#1646). Unlike the four above, this one IS on the
+  // settings form — how long a bell keeps its history is a programme decision
+  // an org has an opinion about. `0` means keep forever; the prune raises
+  // anything else to its 30-day floor and never touches an unread row, so no
+  // value posted here can empty a bell.
+  notificationRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   // The only retention window that governs a PERSON'S ACCOUNT rather than a
   // telemetry row (#1780) — omitting it here made the documented way to widen
   // it a silent no-op, since `z.object` strips unknown keys. Note that the
