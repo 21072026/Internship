@@ -249,3 +249,121 @@ Paylaşılan önizleme ortamı gerçek veriyle çalışıyordu. `scripts/sanitiz
 başlığındaki liste hangi modelin yeniden yazıldığını, hangisinin boşaltıldığını,
 hangisinin silindiğini ve hangisinin **bilerek** dokunulmadığını sayar. Yeni bir
 PII alanı eklerken o listeye de eklenmezse sızıntı olur.
+
+## Saklama süreleri ve günlük temizlik işi (#1678)
+
+Bu bölüme kadar anlatılan her şey **erişim** hakkındaydı. Burası **süre**
+hakkında: hangi tablo ne kadar sonra temizleniyor, neden o süre, ve yeni bir
+tablo bu kurala nasıl ekleniyor.
+
+Kaynak kod: [`src/lib/retentionPrune.ts`](../src/lib/retentionPrune.ts) (kayıt
+defteri, toplu silme yardımcısı, koşucu — içinde Prisma yok, bilerek) ve
+[`src/lib/retentionEntries.ts`](../src/lib/retentionEntries.ts) (politikanın
+veritabanına değdiği yer, zamanlama ve denetim satırı).
+
+### Önceki durum
+
+Üründe **tek bir tablo** temizleniyordu: `EmailLog`, hem de 09:00 hatırlatma
+tick'inin içine gömülmüş bir satırla. Geri kalan her şey sonsuza kadar
+büyüyordu — bunların ikisi kişisel veri tutuyor: `ActivityLog` (IP adresi ve
+tarayıcı bilgisi) ve `PageView` (kullanıcı bazlı gezinme geçmişi). Artık işe
+yaramayan kişisel veriyi tutmak bir disk sorunu değil, **saklama sınırı**
+ilkesinin ihlalidir (GDPR m. 5(1)(e)); üstelik gizlilik metni zaten "gerekenden
+uzun tutmuyoruz" diyor.
+
+### Pencereler ve gerekçeleri
+
+Her süre bir ayardır (`SETTING_DEFAULTS`, `src/lib/settings.ts`) ve her ayarın
+gerekçesi kayıt girdisinin `reason` alanında yazılıdır. Ayarlar bilerek
+**yönetici formunda değil**: bunlar tercih değil, veri koruma sonucu olan
+operasyon kararları — gerekçesi yanında olmayan bir sayı, yayımlanmış bir
+saklama sözünün kazara çiğnenmesidir. Gerektiğinde `PUT /api/admin/settings`
+ile değiştirilir.
+
+| Tablo | Ayar | Varsayılan | Neden bu süre |
+|---|---|---|---|
+| `ActivityLog` | `activityLogRetentionDays` | 365 gün | Güvenlik defteri; dördünün en uzunu. `ip`/`userAgent` taşıdığı için "bu gerçekten kullanıcı mıydı?" sorusunu ancak o cevaplıyor ve bu soru aylar sonra, tam bir yıllık denetim döngüsü içinde soruluyor. |
+| `PageView` | `pageViewRetentionDays` | 180 gün | En kısası, çünkü en müdahaleci ve eskidikçe en işe yaramaz olan bu. Onu okuyan **tek** yüzey (mentee aktivite raporu) en fazla 30 gün geriye bakabiliyor; 180 gün bunun altı katı ve yukarıdaki 6 aylık mentorluk sonrası penceresiyle aynı. |
+| `PushSubscription` | `pushSubscriptionStaleDays` | 180 gün | Şema yorumunun kendi deyimiyle "ölü ağırlık". Asıl temizlik push sağlayıcısının reddinde oluyor (`src/lib/webPush.ts`: 404/410 anında siler, 5 ardışık hatadan sonra da siler); bu girdi yalnızca hiç push gönderilmemiş satırı yakalar. |
+| `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
+| `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
+
+### Denetim kaydı silinmiyor — kimliklendiriciler siliniyor
+
+`ActivityLog`'un tamamı operasyonel iz değil. Beş eylem **kanıttır** ve yaşa
+göre asla silinmez (`RETAINED_ACTIVITY_ACTIONS`):
+
+- `email.unsubscribe` / `email.resubscribe` — [`EMAIL_DELIVERABILITY.md`](EMAIL_DELIVERABILITY.md)
+  açıkça şunu diyor: "satır bırakmayan bir çıkış, 'ben iki kere istedim' diyen
+  alıcıya kanıtlanamaz". Güncel tercih `User` satırında durduğu için bu satırları
+  silmek kimseyi yeniden abone yapmaz; yalnızca **ne zaman istediğinin** cevabını
+  yok eder.
+- `account.delete` / `account.export` — silme ve taşınabilirlik talebinin yerine
+  getirildiğinin kaydı. Silmenin kaydını silmek, silmenin yapıldığını
+  gösterecek hiçbir şey bırakmaz.
+- `contributor_terms.accepted` — fikrî hak zinciri
+  ([`legal/contributor-terms-in-app.md`](legal/contributor-terms-in-app.md)).
+  Asıl kanıt `ContributorTermsAcceptance` satırı; bu onun çapraz kontrolü.
+
+Satırı tutmak, üstündeki her şeyi tutmak değildir: aynı sınırdan sonra bu
+satırların `ip` ve `userAgent` alanları **boşaltılır**. Geriye kim/ne/ne zaman
+kalır, ağ kimliklendiricileri kalmaz. (Bu aynı zamanda kayıt defterinin
+"silmeyen girdi" yeteneğinin ürün içindeki ilk örneği.)
+
+### Kayıt defteri sözleşmesi — yeni bir tablo nasıl eklenir
+
+Üründe **tek bir saklama zamanlaması** var: `initRetentionCron()`, her gün
+03:20 UTC. İkinci bir temizlik işi, ikinci bir zamanlayıcı ya da ikinci bir
+prune modülü açılmıyor. Yeni bir tablo **tek bir `registerRetention()`
+çağrısıdır**:
+
+```ts
+registerRetention({
+  key: 'notification',
+  settingKey: 'notificationRetentionDays',
+  defaultDays: 90,
+  reason: 'Neden bu süre — bir cümle. Zorunlu.',
+  run: async (ctx) => { /* ctx.cutoff, ctx.batchSize, ctx.budget */ return { deleted: n }; },
+});
+```
+
+Girdi bir **fonksiyondur**, `{ tablo, tarih alanı }` tanımı değil. Sıradaki dört
+tablonun hiçbiri düz bir `deleteMany` değil: #1646 okunmamış bildirimi asla
+silmemeli, #2056 satırı silmiyor `deletedForEveryoneAt` ile **maskeliyor**,
+#1585'in kendi ayrı penceresi var, #1691 basit ama aynı kapıdan giriyor.
+Yalnızca `deleteMany` yapabilen bir tasarım bunların hiçbirini ifade edemezdi.
+
+Üç kural girdiden bağımsız olarak koşucunun garantisi:
+
+1. **Toplu silme zorunlu.** `pruneInBatches()` önce kimlikleri seçer, sonra
+   yalnızca o kimliklerle siler. Bir yıl boyunca temizlenmemiş bir tabloya tek
+   bir `DELETE ... WHERE createdAt < ?` atmak, ifade süresince eşleşen her satırı
+   kilitler ve o tabloya yazan herkesi arkasına dizer — bu iş tam olarak bunu
+   önlemek için var. Varsayılan parti 500 satır.
+2. **Koşu başına tavan.** Girdi başına 50.000 satır. 500 binlik bir birikim tek
+   bir sabah yerine on gecede erir; girdi `capped: true` döndürdüğü için operatör
+   "hâlâ yetişiyor" ile "temiz" arasındaki farkı görür.
+3. **Bir girdinin patlaması koşuyu durdurmaz.** Hata yakalanır, kaydedilir ve
+   diğerleri çalışır. İlk hatada duran bir temizlik işi, diğer dört tabloyu
+   sessizce temizlemeyi bırakır ve belirtisi "satırların yavaşça yok olmaması"
+   olduğu için kimse fark etmez.
+
+### Görünürlük
+
+Her koşu tek bir `retention.pruned` `ActivityLog` satırı bırakır; `detail`
+alanında tablo başına sayılar durur (`pageView=340 job=88 (1.2s)`). Sütun
+`VARCHAR(191)` olduğu için satır bu sınıra göre kısaltılır — taşan bir değer
+P2000 ile **tüm** kaydı düşürürdü (#1268). Bu satır da ayrıcalıklı değil:
+`ActivityLog` penceresine tabi ve kanıt listesinde değil, yani bir yıl sonra iş
+kendi eski makbuzlarını da siliyor.
+
+Aynı sayılar `/api/health?jobs=1` yanıtında `retention` altında görünüyor
+(#1674'ün kuyruk sayaçlarıyla aynı kapı: gerçek bir `HEALTH_TOKEN` ya da ADMIN
+oturumu; anonim çağrı için tek sorgu bile çalışmıyor). Oradaki asıl soru "kaç
+satır silindi" değil, **"iş çalıştı mı"**: durmuş bir temizlik işiyle silecek
+şeyi olmayan bir temizlik işi aynı görünür (ikisi de sıfır satır siler) ve
+aradaki fark, söz verdiğimiz halde hâlâ tuttuğumuz kişisel veridir. `ageHours`
+bu ikisini ayırır.
+
+Elle çalıştırmak: `GET /api/cron?job=retention` (ADMIN). Toplu "hepsini
+çalıştır" çağrısının **içinde değil** — geri alınamaz iş, istenmeyi hak eder.

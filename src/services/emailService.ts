@@ -15,6 +15,9 @@ import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPre
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
 import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
+// The batched-sweep helper only; `retentionPrune` holds no Prisma import and
+// imports nothing of ours, so this stays a leaf dependency and cannot cycle.
+import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getOrgBranding } from '@/lib/orgBranding';
@@ -3379,10 +3382,37 @@ export async function sendUnreadMessageDigests() {
 // rules already govern.
 export const EMAIL_LOG_RETENTION_DAYS = 90;
 
-export async function pruneEmailLog(retentionDays: number = EMAIL_LOG_RETENTION_DAYS) {
+/**
+ * Prune the delivery ledger. Called by the daily retention job (#1678), which
+ * registers it as the `emailLog` entry of the one retention registry — this is
+ * no longer a line inside the 09:00 mail tick.
+ *
+ * Batched since #1678, and the reason is the first run rather than the steady
+ * state: after a year of unpruned growth a single `DELETE ... WHERE createdAt <
+ * ?` locks every matched row for the length of the statement, and every mail
+ * being logged queues behind it. The steady state is a few hundred rows a day
+ * either way.
+ */
+export async function pruneEmailLog(
+  retentionDays: number = EMAIL_LOG_RETENTION_DAYS,
+  opts: { batchSize?: number; budget?: number } = {}
+) {
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-  const { count } = await prisma.emailLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
-  return { deleted: count, cutoff };
+  const { processed, capped } = await pruneInBatches({
+    batchSize: opts.batchSize,
+    budget: opts.budget,
+    selectIds: async (take) =>
+      (
+        await prisma.emailLog.findMany({
+          where: { createdAt: { lt: cutoff } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+          take,
+        })
+      ).map((r) => r.id),
+    handleBatch: async (ids) => (await prisma.emailLog.deleteMany({ where: { id: { in: ids } } })).count,
+  });
+  return { deleted: processed, cutoff, capped };
 }
 
 const scheduledTasks = new Map<string, ReturnType<typeof cron.schedule>>();
@@ -3409,10 +3439,11 @@ export function initCronJobs() {
       console.log(`[Cron] Retention re-consent reminders: ${rr.reminded}`);
       const nm = await checkCompanyNeedMatches();
       console.log(`[Cron] Company need-match alerts: ${nm.alerts}`);
-      // Housekeeping, not mail: keeps the delivery log inside its retention
-      // window so recipient addresses do not accumulate indefinitely (#1211).
-      const pruned = await pruneEmailLog();
-      console.log(`[Cron] Email log pruned: ${pruned.deleted} row(s) older than ${EMAIL_LOG_RETENTION_DAYS} days`);
+      // The EmailLog prune used to be the last line of this tick. It moved to
+      // the one retention job (#1678, `src/lib/retentionEntries.ts`, 03:20 UTC)
+      // together with the four other tables that need a window — housekeeping
+      // that happens to be about mail is still housekeeping, and the product
+      // should have exactly one place where rows are deleted on a clock.
     } catch (error) {
       console.error('[Cron] Error running reminder check:', error);
     }
