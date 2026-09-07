@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { getSetting } from '@/lib/settings';
 import {
+  ORPHAN_ANONYMIZE_PER_RUN,
   ORPHAN_APPLICANT_GRACE_DAYS,
   ORPHAN_GRACE_SETTING_KEY,
   countOrphanApplicants,
@@ -21,7 +22,9 @@ import {
 // There is no second deletion path.
 //
 // It shares `listOrphanApplicants()` with the sweep, so the list an admin reads
-// and the set the job takes cannot drift apart.
+// and the set the job takes cannot drift apart — and it reads the grace period
+// from the same (global) layer the sweep reads it from, so the countdown it
+// prints is the countdown that fires.
 //
 // The list is capped: a backlog of thousands is a number to act on, not a page
 // to scroll, and `total` reports the real size either way.
@@ -34,7 +37,12 @@ export async function GET() {
   }
 
   return await withTenantScope(session, async () => {
-    const parsed = Number.parseInt(await getSetting(ORPHAN_GRACE_SETTING_KEY), 10);
+    // Read from the GLOBAL layer explicitly (`orgId: null`), because that is
+    // the only layer the sweep can see: `runRetentionPrune` calls
+    // `getSettings()` with no org bound. Resolving tenant → global here instead
+    // would let this page count down from a window that never fires — the one
+    // way the page and the job could still disagree once they share the rule.
+    const parsed = Number.parseInt(await getSetting(ORPHAN_GRACE_SETTING_KEY, null), 10);
     // Same fallback contract as the retention runner: an unusable setting must
     // widen nothing and shorten nothing.
     const graceDays =
@@ -55,6 +63,10 @@ export async function GET() {
       graceDays,
       total,
       due,
+      // What ONE run actually takes. `due` can be far larger than this on the
+      // first run against a backlog, and "800 will be anonymised tonight" when
+      // 200 will is wrong in exactly the situation an admin most needs it right.
+      perRun: ORPHAN_ANONYMIZE_PER_RUN,
       truncated: total > items.length,
       items,
     });

@@ -6,6 +6,7 @@ import { getSettings, type SettingKey } from '@/lib/settings';
 import { EMAIL_LOG_RETENTION_DAYS, pruneEmailLog } from '@/services/emailService';
 import { anonymizeUser } from '@/lib/accountErasure';
 import {
+  ORPHAN_ANONYMIZE_PER_RUN,
   ORPHAN_APPLICANT_GRACE_DAYS,
   ORPHAN_GRACE_SETTING_KEY,
   orphanApplicantWhere,
@@ -218,19 +219,6 @@ async function pruneFinishedJobs(ctx: RetentionContext) {
 }
 
 /**
- * Rows one orphan-applicant run may anonymize.
- *
- * Two orders of magnitude below the registry's own 50 000 budget, and
- * deliberately so: every other entry issues one `deleteMany` per 500 ids, while
- * this one runs `anonymizeUser` — a dozen statements in a transaction, plus a
- * device revocation — once PER ACCOUNT. A first run against a backlog that has
- * accumulated since the apply link shipped would otherwise be a long write
- * storm at 03:20. Two hundred a night drains any realistic backlog inside a
- * fortnight, and the entry reports `capped: true` while it is still catching up.
- */
-const ORPHAN_ANONYMIZE_PER_RUN = 200;
-
-/**
  * Anonymize orphan applicant accounts past the grace period (#1780).
  *
  * The only entry in the registry that touches a person's account rather than a
@@ -351,6 +339,10 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
   },
   {
     key: 'orphanApplicant',
+    // Resolved from the GLOBAL settings row: `runRetentionPrune` calls
+    // `getSettings()` with no org bound and sweeps every tenant's rows in one
+    // pass, so a per-tenant override would be written and never read. The admin
+    // dry run reads the same layer for the same reason (#1780).
     settingKey: ORPHAN_GRACE_SETTING_KEY,
     defaultDays: ORPHAN_APPLICANT_GRACE_DAYS,
     reason:

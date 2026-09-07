@@ -16,6 +16,7 @@ interface OrphanRow {
   createdAt: string;
   declinedAt: string | null;
   declinedBy: string | null;
+  activationPending: boolean;
   ageDays: number;
   daysUntilAnonymize: number;
 }
@@ -24,6 +25,8 @@ interface OrphanPayload {
   graceDays: number;
   total: number;
   due: number;
+  /** How many accounts ONE nightly run takes at most. */
+  perRun: number;
   truncated: boolean;
   items: OrphanRow[];
 }
@@ -41,13 +44,19 @@ interface OrphanPayload {
  * Both per-row actions go to endpoints that already existed: the erasure gates
  * of `UserEraseForm` (name + the admin's own password) and the admin
  * send-a-link endpoint for the case where the decline was a mistake or the
- * address was simply wrong.
+ * address was simply wrong. Sending that link is a REAL rescue, not a gesture:
+ * a live token takes the account out of the sweep for as long as it lasts
+ * (clause 7 of `src/lib/orphanApplicant.ts`), and the row says so afterwards.
  */
 export function OrphanApplicantsPanel() {
   const t = useT();
   const o = t.orphanApplicants;
   const locale = useLocale();
   const [data, setData] = useState<OrphanPayload | null>(null);
+  // Tracked apart from `data === null` on purpose: on the one page whose job is
+  // to show what is about to be destroyed, "the query failed" must never render
+  // as "there is nothing to clean up" while the 03:20 sweep carries on.
+  const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [erasing, setErasing] = useState<string | null>(null);
   const [sent, setSent] = useState<Record<string, 'ok' | 'failed'>>({});
@@ -57,9 +66,12 @@ export function OrphanApplicantsPanel() {
     setLoading(true);
     try {
       const res = await fetch('/api/admin/orphan-applicants');
-      setData(res.ok ? await res.json() : null);
+      if (!res.ok) throw new Error(String(res.status));
+      setData(await res.json());
+      setFailed(false);
     } catch {
       setData(null);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -76,7 +88,12 @@ export function OrphanApplicantsPanel() {
       const body = await res.json().catch(() => ({}));
       // The endpoint reports what the transport actually did, so a demo-mode or
       // no-SMTP install does not get told the mail went out.
-      setSent((prev) => ({ ...prev, [row.id]: res.ok && body.emailSent !== false ? 'ok' : 'failed' }));
+      const ok = res.ok && body.emailSent !== false;
+      setSent((prev) => ({ ...prev, [row.id]: ok ? 'ok' : 'failed' }));
+      // Reload so the row shows its reprieve: a live link postpones the sweep
+      // (src/lib/orphanApplicant.ts, clause 7), and an admin who just rescued
+      // an account should see that on the row rather than take it on trust.
+      if (ok) await load();
     } catch {
       setSent((prev) => ({ ...prev, [row.id]: 'failed' }));
     } finally {
@@ -104,7 +121,12 @@ export function OrphanApplicantsPanel() {
         </p>
         {data && data.due > 0 && (
           <p data-testid="orphan-applicants-due" className="mt-2 text-sm font-medium text-red-700 dark:text-red-300">
-            {o.dueNow.replace('{n}', String(data.due))}
+            {/* One run is capped, so a backlog is not "all of them tonight" —
+                the first run after a deploy is exactly when the number an admin
+                reacts to has to be the real one. */}
+            {data.due > data.perRun
+              ? o.dueBacklog.replace('{n}', String(data.due)).replace('{cap}', String(data.perRun))
+              : o.dueNow.replace('{n}', String(data.due))}
           </p>
         )}
       </div>
@@ -112,6 +134,16 @@ export function OrphanApplicantsPanel() {
       {loading ? (
         <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
           <SkeletonRows rows={3} />
+        </div>
+      ) : failed ? (
+        <div
+          data-testid="orphan-applicants-error"
+          className="rounded-2xl border border-red-200 bg-red-50 p-10 text-center text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+        >
+          <p>{o.loadFailed}</p>
+          <Button size="sm" variant="outline" className="mt-3" onClick={() => void load()}>
+            {o.loadRetry}
+          </Button>
         </div>
       ) : !data || data.total === 0 ? (
         <div
@@ -152,13 +184,24 @@ export function OrphanApplicantsPanel() {
                     {formatDate(row.createdAt, locale)}
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
-                    {row.declinedBy ?? o.noDecision}
+                    {/* "No decision recorded" is only true when there is no
+                        decision. A declined request whose decider's account has
+                        since been deleted has a DATE — printing both would put
+                        two contradictory statements in one cell. */}
+                    {row.declinedBy ?? (row.declinedAt ? o.unknownDecider : o.noDecision)}
                     {row.declinedAt && (
                       <div className="text-xs text-gray-400">{formatDate(row.declinedAt, locale)}</div>
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    {/* The countdown already accounts for an outstanding
+                        set-password link, which holds the sweep off until it
+                        expires (clause 7 in src/lib/orphanApplicant.ts) — so a
+                        rescued row can never still read "Next run". The caption
+                        says WHY, because a number that moved on its own is not
+                        self-explanatory. */}
                     <span
+                      data-testid={`orphan-due-${row.id}`}
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                         row.daysUntilAnonymize === 0
                           ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
@@ -169,6 +212,14 @@ export function OrphanApplicantsPanel() {
                         ? o.dueLabel
                         : o.daysLeft.replace('{n}', String(row.daysUntilAnonymize))}
                     </span>
+                    {row.activationPending && (
+                      <div
+                        data-testid={`orphan-hold-${row.id}`}
+                        className="mt-1 text-xs text-green-700 dark:text-green-300"
+                      >
+                        {o.activationHold}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {erasing === row.id ? (

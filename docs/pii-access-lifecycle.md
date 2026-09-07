@@ -287,7 +287,7 @@ ile değiştirilir.
 | `PushSubscription` | `pushSubscriptionStaleDays` | 180 gün | Şema yorumunun kendi deyimiyle "ölü ağırlık". Asıl temizlik push sağlayıcısının reddinde oluyor (`src/lib/webPush.ts`: 404/410 anında siler, 5 ardışık hatadan sonra da siler); bu girdi yalnızca hiç push gönderilmemiş satırı yakalar. |
 | `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
-| **Sahipsiz başvuru hesapları** (`User`) | `orphanApplicantGraceDays` | 90 gün | Kayıt defterindeki **tek kişisel hesap** girdisi ve tek satır silmeyen-anonimleştiren girdi. Ayrıntısı hemen aşağıda. |
+| **Sahipsiz başvuru hesapları** (`User`) | `orphanApplicantGraceDays` | 90 gün | Kayıt defterindeki **tek kişisel hesap** girdisi ve tek satır silmeyen-anonimleştiren girdi. Yalnızca **global** katmandan okunur (koşu hiçbir kiracıya bağlı değildir), kiracıya özel bir satır yazılsa da çalışan pencere o olmaz. Ayrıntısı hemen aşağıda. |
 
 ### Denetim kaydı silinmiyor — kimliklendiriciler siliniyor
 
@@ -391,7 +391,18 @@ tartışmaya kapalıdır:
    mentoru ve **kaç gün kaldığını** listeler; sayfa ile gece koşusu aynı
    `orphanApplicantWhere()` fonksiyonunu okur, dolayısıyla listelenen ile alınan
    ayrışamaz. Yönetici o listeden hesabı hemen silebilir ya da (karar yanlışsa)
-   şifre belirleme bağlantısını yollayıp hesabı kurtarabilir.
+   şifre belirleme bağlantısını yollayıp hesabı kurtarabilir. **Kurtarma
+   gerçekten kurtarır:** açık (kullanılmamış ve süresi dolmamış) bir şifre
+   bağlantısı olan hesabı gece koşusu almaz — bağlantı yaşadığı sürece (ilk
+   şifre bağlantısında 7 gün) geri sayım uzar ve satırın altında "Açık bir şifre
+   bağlantısı var — süresi dolana kadar temizlik bekler" notu görünür. Bu kural olmadan koşu, hesabı anonimleştirirken
+   `anonymizeUser()` az önce yollanan bağlantıyı da silerdi; başvuran ertesi gün
+   ölü bir bağlantıya tıklardı. Erteler, iptal etmez: kimsenin tıklamadığı bir
+   bağlantı terk edilmiş bir hesabı sonsuza kadar ayakta tutmamalı, yeniden
+   göndermek ise tek tık.
+   Bir koşuda en fazla **200 hesap** anonimleştirilir (en eskiden başlayarak);
+   ilk koşuda biriken bir liste varsa sayfa bunu ayrıca söyler, çünkü "800
+   hesap bu gece gidecek" ile "bu gece 200'ü gidecek" aynı cümle değildir.
 3. **Her yaşam belirtisi hesabı kuralın dışına çıkarır.** Rıza kaydı, etiket,
    yüklenmiş CV veya belge, destek talebi, şirket ilgisi, mülakat talebi, proje
    üyeliği, açılmış bir konuşma, başlamış onboarding, bekleyen/onaylanmış bir

@@ -42,6 +42,13 @@ const schema = z.object({
   pageViewRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   pushSubscriptionStaleDays: z.string().regex(/^\d{1,4}$/).optional(),
   jobRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  // The only retention window that governs a PERSON'S ACCOUNT rather than a
+  // telemetry row (#1780) — omitting it here made the documented way to widen
+  // it a silent no-op, since `z.object` strips unknown keys. Note that the
+  // sweep reads this from the GLOBAL layer (it runs with no org bound), so on a
+  // multi-tenant installation a per-tenant write would not be the number that
+  // fires; the window is an installation-wide decision, like the job itself.
+  orphanApplicantGraceDays: z.string().regex(/^\d{1,4}$/).optional(),
 });
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.

@@ -33,7 +33,8 @@ import { APPLY_NO_LOGIN_PASSWORD, ERASED_EMAIL_DOMAIN } from '@/lib/menteeAccoun
 //   3. it has NO mentorship relation, in either direction;
 //   4. every mentorship request it ever filed is REJECTED (or it filed none);
 //   5. it shows no other sign of life at all (see below);
-//   6. it is not already erased.
+//   6. it is not already erased;
+//   7. and — for the SWEEP only — no activation link is outstanding on it.
 //
 // ── Why the rule is conservative, and deliberately narrower than it could be ─
 //
@@ -59,6 +60,36 @@ import { APPLY_NO_LOGIN_PASSWORD, ERASED_EMAIL_DOMAIN } from '@/lib/menteeAccoun
 // foreign key to `User` (see the header of `src/lib/accountErasure.ts`), so
 // there is no relation to filter on — and an account with no password cannot
 // sign in to write one either way.
+//
+// ── The rescue, and why it is part of the rule ──────────────────────────────
+//
+// The dry run's whole promise is that an admin who spots a wrong decision can
+// stop the sweep — and the only button that does that non-destructively is
+// "send set-password link". That mints a `PasswordResetToken` and mails it;
+// nothing on the `User` row changes, so without clause 7 the sweep would take
+// the account that same night AND `anonymizeUser` would delete the very token
+// it had just mailed (src/lib/accountErasure.ts). The applicant would click a
+// dead link into an erased account, which is precisely the outcome the panel
+// exists to prevent.
+//
+// So an OUTSTANDING link — unused and unexpired — postpones the sweep for as
+// long as it is live (7 days for a SET_INITIAL link). It postpones rather than
+// cancels on purpose: a link nobody acts on must not keep an abandoned account
+// alive forever, and re-sending it is one click. The account stays on the list
+// throughout, flagged, so the admin can see the reprieve rather than infer it,
+// and `daysUntilAnonymize` counts down to whichever of the two gates clears
+// last — a countdown that ignored the hold would print a date that is not when
+// anything happens.
+//
+// Note that `/apply` itself issues a 7-day SET_INITIAL link to every account it
+// mints, so a fresh applicant is held for its first week. That costs nothing:
+// the grace period is 90 days, and the link is a fortnight dead by the time the
+// age gate opens. The hold only ever decides the answer when a human sent a new
+// one — which is exactly the case it exists for.
+//
+// The exclusion is on the SWEEP's branch only — the listing still shows the
+// account, because the page's job is to show everything the rule holds, with
+// its state, not only what is due tonight.
 //
 // ── The clock ───────────────────────────────────────────────────────────────
 //
@@ -94,21 +125,50 @@ export const ORPHAN_APPLICANT_GRACE_DAYS = 90;
 /** The `Setting` key holding the live grace period. */
 export const ORPHAN_GRACE_SETTING_KEY = 'orphanApplicantGraceDays';
 
+/**
+ * Rows one nightly run may anonymize.
+ *
+ * Two orders of magnitude below the retention registry's own 50 000 budget, and
+ * deliberately so: every other entry issues one `deleteMany` per 500 ids, while
+ * this one runs `anonymizeUser` — a dozen statements in a transaction, plus a
+ * device revocation — once PER ACCOUNT. A first run against a backlog that has
+ * accumulated since the apply link shipped would otherwise be a long write
+ * storm at 03:20. Two hundred a night drains any realistic backlog inside a
+ * fortnight, and the entry reports `capped: true` while it is still catching up.
+ *
+ * It lives here rather than next to the job because the admin dry run has to
+ * say the same number: "800 are due" and "the next run takes 800" are not the
+ * same sentence, and the second one is the one an admin acts on.
+ */
+export const ORPHAN_ANONYMIZE_PER_RUN = 200;
+
 export interface OrphanApplicant {
   id: string;
   fullName: string;
   email: string;
   /** When the application came in. */
   createdAt: Date;
-  /** When the mentor declined, when a declined request exists. */
+  /** When the request was declined, when a declined request exists. */
   declinedAt: Date | null;
-  /** Who declined it — the mentor the application named. */
+  /**
+   * Who actually decided it (`MentorshipRequest.decidedBy`), falling back to
+   * the mentor the application named when the decider's account is gone.
+   * `null` with a non-null `declinedAt` means "declined, decider unknown" —
+   * which is a different statement from "no decision recorded", and the panel
+   * renders it as one.
+   */
   declinedBy: string | null;
+  /**
+   * An unused, unexpired password link is outstanding on this account, so the
+   * sweep will not take it while that lasts (clause 7 — see the header).
+   */
+  activationPending: boolean;
   /** Whole days since the later of `createdAt` and `declinedAt`. */
   ageDays: number;
   /**
-   * Whole days before the nightly sweep would anonymize this row, given the
-   * grace period in force. `0` means "the next run takes it".
+   * Whole days before the nightly sweep would anonymize this row: the LATER of
+   * the grace period running out and any outstanding link expiring, because the
+   * sweep needs both gates open. `0` means "the next run takes it".
    */
   daysUntilAnonymize: number;
 }
@@ -173,6 +233,10 @@ export function orphanApplicantWhere(agedBefore?: Date): Prisma.UserWhereInput {
               OR: [{ status: { not: 'REJECTED' } }, { decidedAt: { gte: agedBefore } }],
             },
           },
+          // Clause 7, sweep-only: an admin who sent a set-password link has
+          // intervened, and the sweep would otherwise erase the account and
+          // delete the link in the same transaction. See "The rescue" above.
+          passwordResetTokens: { none: { used: false, expiresAt: { gt: new Date() } } },
         }
       : {}),
   };
@@ -225,7 +289,24 @@ export async function listOrphanApplicants(options: {
         where: { status: 'REJECTED' },
         orderBy: { decidedAt: 'desc' },
         take: 1,
-        select: { decidedAt: true, preferredMentor: { select: { fullName: true } } },
+        select: {
+          decidedAt: true,
+          // Who decided, not who was asked: `preferredMentor` is the mentor the
+          // applicant picked and may never have touched the request (an admin
+          // usually clears the queue). It is the fallback only, for when the
+          // decider's own account has since been deleted — `decidedById` is
+          // nulled by the erasure path, `preferredMentorId` by `SetNull`.
+          decidedBy: { select: { fullName: true } },
+          preferredMentor: { select: { fullName: true } },
+        },
+      },
+      // Clause 7: the same predicate the sweep excludes on, read back so the
+      // page can say WHY a row that looks due is not going anywhere tonight.
+      passwordResetTokens: {
+        where: { used: false, expiresAt: { gt: now } },
+        orderBy: { expiresAt: 'desc' },
+        select: { expiresAt: true },
+        take: 1,
       },
     },
     orderBy: { createdAt: 'asc' },
@@ -238,15 +319,24 @@ export async function listOrphanApplicants(options: {
     // The later of the two clocks — see "The clock" in the header.
     const anchor = declinedAt && declinedAt > u.createdAt ? declinedAt : u.createdAt;
     const ageDays = Math.max(0, Math.floor((now.getTime() - anchor.getTime()) / DAY_MS));
+    // An outstanding link holds the sweep off until it expires; rounded UP, so
+    // the countdown never promises the account is gone while the link still
+    // works for part of that day.
+    const liveLink = u.passwordResetTokens[0]?.expiresAt ?? null;
+    const linkDays = liveLink
+      ? Math.max(0, Math.ceil((liveLink.getTime() - now.getTime()) / DAY_MS))
+      : 0;
     return {
       id: u.id,
       fullName: u.fullName,
       email: u.email,
       createdAt: u.createdAt,
       declinedAt,
-      declinedBy: decision?.preferredMentor?.fullName ?? null,
+      declinedBy: decision?.decidedBy?.fullName ?? decision?.preferredMentor?.fullName ?? null,
+      activationPending: liveLink !== null,
       ageDays,
-      daysUntilAnonymize: Math.max(0, graceDays - ageDays),
+      // Both gates, not just the age one — see "The rescue" in the header.
+      daysUntilAnonymize: Math.max(0, graceDays - ageDays, linkDays),
     };
   });
 }
