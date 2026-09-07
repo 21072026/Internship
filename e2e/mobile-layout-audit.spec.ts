@@ -1,6 +1,17 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
+import {
+  PHONE,
+  TABLET,
+  REFLOW,
+  ZOOM_400,
+  auditLayout,
+  setLocale,
+  settle,
+  settlePublic,
+  sidewaysScroll,
+} from './helpers/layoutAudit';
 
 /**
  * Phone-width layout audit across the role shells (#1305).
@@ -11,153 +22,15 @@ import { signInAndSettle, gotoSettled } from './helpers/auth';
  * to ~18px — the row showed "E·" and the expertise chips ran under the buttons.
  * Nothing overflowed the *page*, so the existing sideways-scroll check missed it.
  *
- * Four mechanical rules, in the order they catch things:
- *   1. the page must not scroll sideways;
- *   2. nothing visible may reach past the right edge of the screen (unless it
- *      lives in a container that scrolls horizontally — a wide table inside
- *      `overflow-x-auto` is reachable, not broken);
- *   3. no box may spill its own content sideways — that is how a squeezed row
- *      announces itself even when the page still fits;
- *   4. a truncating text box narrower than 110px is not readable; the buttons
- *      next to it are what pushed it there.
+ * The four mechanical rules, the viewport constants and the readiness helpers all
+ * live in `e2e/helpers/layoutAudit.ts` — shared with the coverage sweep that
+ * measures the rest of the product (`e2e/mobile-layout-coverage.spec.ts`, #1615),
+ * so the two files can never end up measuring different things.
  *
  * The audit runs in Turkish and German because those dictionaries carry the
  * longest labels — several of the rows this spec covers fit in English and only
  * break once translated.
  */
-
-const PHONE = { width: 360, height: 800 };
-// The tier nothing measured (#828): between `sm:` and `lg:`, where the sidebar is
-// still hidden but two-column grids have already switched on. 768 is exactly
-// Tailwind's `md:` breakpoint, so it is the first width at which `md:` rules
-// apply — the worst case for a layout that assumes `md:` implies "roomy".
-const TABLET = { width: 768, height: 1024 };
-// The WCAG 1.4.10 (Reflow) floor: 320 CSS pixels wide. Everything must be
-// reachable without scrolling in two directions at this width.
-const REFLOW = { width: 320, height: 568 };
-// 400% zoom, emulated the way the success criterion defines it: content at 400%
-// on a 1280x1024 desktop lays out in a quarter of that in each direction, so a
-// 320x256 viewport is the equivalent. The width matches REFLOW on purpose —
-// what this case adds is the *vertical* squeeze, where sticky headers and fixed
-// bottom bars start eating the page.
-const ZOOM_400 = { width: 320, height: 256 };
-// Narrower than this and a truncated label stops carrying information.
-const MIN_TEXT_WIDTH = 110;
-
-/**
- * Rule 1 of the audit on its own, for the reflow cases.
- *
- * The full `auditLayout()` sweep is the right tool for a list or a form, but the
- * board and the calendar deliberately contain scrollers (13 kanban columns, a
- * month grid), and at 320px the interesting question is the one 1.4.10 actually
- * asks: does the PAGE make you scroll in two directions? Returns the offending
- * measurement, or null.
- */
-async function sidewaysScroll(page: Page) {
-  return page.evaluate(() => {
-    const content = document.documentElement.scrollWidth;
-    // 1px of slack, same as auditLayout: sub-pixel rounding is not an overflow.
-    return content > window.innerWidth + 1
-      ? `${content}px of content in a ${window.innerWidth}px viewport`
-      : null;
-  });
-}
-
-async function setLocale(page: Page, locale: 'tr' | 'de') {
-  // Same trick as i18n-coverage.spec: the cookie wins over the user preference,
-  // and it needs an origin to be set on, hence the navigation first.
-  await page.goto('/auth/signin');
-  await page.evaluate((l) => { document.cookie = `locale=${l};path=/`; }, locale);
-}
-
-/** Let the client-side lists land before measuring a half-empty page. */
-async function settle(page: Page) {
-  await page.getByTestId('account-menu-button').waitFor({ state: 'visible', timeout: 20_000 });
-  // Every list on these pages renders SkeletonRows while it fetches; waiting for
-  // the last one to go is more reliable than `networkidle`, which these shells
-  // never reach (see helpers/auth.ts).
-  await expect
-    .poll(async () => page.locator('.animate-pulse').count(), { timeout: 20_000 })
-    .toBe(0);
-}
-
-/**
- * The public-page equivalent of `settle()`. /release-notes has no account
- * shell (there is no `account-menu-button` to wait for — that testid only
- * exists on the authenticated role shells) and it is server-rendered with no
- * client fetch, so there are no skeleton rows either; waiting for the main
- * heading to paint is enough signal that the DOM the audit measures is there.
- */
-async function settlePublic(page: Page) {
-  await page.getByRole('heading', { level: 1 }).first().waitFor({ state: 'visible', timeout: 20_000 });
-}
-
-async function auditLayout(page: Page) {
-  return page.evaluate((minTextWidth) => {
-    const problems: string[] = [];
-    const viewport = window.innerWidth;
-    // 1px of slack: sub-pixel rounding on scaled layouts is not an overflow.
-    if (document.documentElement.scrollWidth > viewport + 1) {
-      problems.push(`page scrolls sideways: ${document.documentElement.scrollWidth}px > ${viewport}px`);
-    }
-
-    const describe = (el: Element) => {
-      const testId = el.getAttribute('data-testid');
-      const cls = (el.getAttribute('class') || '').split(' ').slice(0, 4).join('.');
-      return `${el.tagName.toLowerCase()}${testId ? `[${testId}]` : ''}${cls ? `.${cls}` : ''}`;
-    };
-
-    for (const el of Array.from(document.querySelectorAll('body *'))) {
-      const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) continue;
-      const style = getComputedStyle(el);
-      if (style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
-      // Screen-reader-only helpers are a 1px box by design.
-      if (/(^|\s)sr-only(\s|$)/.test(el.getAttribute('class') || '')) continue;
-
-      let inScroller = false;
-      for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
-        if (/auto|scroll/.test(getComputedStyle(a).overflowX)) { inScroller = true; break; }
-      }
-
-      if (rect.right > viewport + 1 && style.position !== 'fixed' && !inScroller) {
-        problems.push(`${describe(el)} reaches ${Math.round(rect.right)}px, past the ${viewport}px screen`);
-      }
-
-      // A child pulled out with a negative margin (row hover backgrounds bleeding
-      // into the card padding) widens scrollWidth on purpose.
-      const negativeMargin = Array.from(el.children).some((c) => {
-        const cs = getComputedStyle(c);
-        return parseFloat(cs.marginLeft) < 0 || parseFloat(cs.marginRight) < 0;
-      });
-      const spills =
-        el.scrollWidth > el.clientWidth + 4 &&
-        el.clientWidth > 0 &&
-        !negativeMargin &&
-        !/auto|scroll/.test(style.overflowX) &&
-        style.overflow !== 'hidden' &&
-        // Text scrolling inside a form control is normal.
-        !['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName);
-      if (spills) {
-        problems.push(`${describe(el)} spills its content: ${el.clientWidth}px box, ${el.scrollWidth}px content`);
-      }
-
-      const text = (el.textContent || '').trim();
-      const isLeaf = !Array.from(el.children).some((c) => (c.textContent || '').trim().length > 0);
-      if (
-        isLeaf &&
-        text.length > 3 &&
-        el.clientWidth > 0 &&
-        el.clientWidth < minTextWidth &&
-        el.scrollWidth > el.clientWidth + 6 &&
-        !/auto|scroll/.test(style.overflowX)
-      ) {
-        problems.push(`${describe(el)} is ${el.clientWidth}px wide for "${text.slice(0, 30)}"`);
-      }
-    }
-    return [...new Set(problems)];
-  }, MIN_TEXT_WIDTH);
-}
 
 test.afterAll(async () => {
   await prisma.$disconnect();
