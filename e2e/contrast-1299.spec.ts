@@ -147,15 +147,21 @@ test('issue #1299 the unread notification badge meets AA contrast in both themes
       const theme = dark ? 'dark' : 'light';
       await page.goto('/portal');
       await forceTheme(page, dark);
-      // `:visible` is load-bearing — see the locator note at the top of the
-      // file. The count is fetched client-side, so wait for the badge itself
-      // rather than for the bell; the bell is there either way.
-      const visibleBadge = '[data-testid="notifications-unread-badge"]:visible';
+      // `:visible` is load-bearing for the Playwright locator — see the note
+      // at the top of the file — but it is a Playwright-only pseudo-class:
+      // AxeBuilder#include() resolves selectors with the browser's own
+      // `document.querySelectorAll`, which throws on it ("':visible' is not
+      // a valid selector"). axe's color-contrast rule already skips
+      // non-visible nodes on its own, so the plain testid selector (matching
+      // both the hidden mobile-bar badge and the visible desktop one) is
+      // enough to scope the scan to the one node that actually renders.
+      const badgeSelector = '[data-testid="notifications-unread-badge"]';
+      const visibleBadge = `${badgeSelector}:visible`;
       await expect(
         page.locator(visibleBadge).first(),
         `the unread badge should render in ${theme}`
       ).toBeVisible({ timeout: 20_000 });
-      await expectNoContrastViolation(page, visibleBadge, theme);
+      await expectNoContrastViolation(page, badgeSelector, theme);
     }
   } finally {
     await cleanupByEmail(email);
