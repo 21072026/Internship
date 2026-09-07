@@ -83,6 +83,14 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // there is no null-org fallback row to reason about.
   'ProgramCost',
   'Placement',
+  // The commercial spine (#1731). What a tenant pays for, and every feature
+  // granted to it outside its plan. Both carry a REQUIRED orgId. Reading
+  // another tenant's subscription would leak its plan, its trial and its
+  // discount; writing one would change what somebody else is billed — so
+  // these are registered from the moment the tables exist, before anything
+  // reads them.
+  'Subscription',
+  'OrgEntitlement',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.
