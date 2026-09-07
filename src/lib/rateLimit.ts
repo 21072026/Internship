@@ -1,63 +1,67 @@
 import { NextResponse } from 'next/server';
 import { logActivity } from '@/lib/activity';
 import { clientIp } from '@/lib/clientIp';
+import { logger } from '@/lib/logger';
+import {
+  countRequest,
+  createMemoryRateLimitStore,
+  selectRateLimitStore,
+  setRateLimitStoreLogger,
+  type RateLimitEntry,
+  type RateLimitStore,
+  type RateLimitStoreStatus,
+} from '@/lib/rateLimitStore';
 
 // Re-exported for the several call sites that have always imported it from
 // here; the implementation moved to its own module so activity.ts can use it
 // without a cycle (rateLimit → activity → rateLimit).
 export { clientIp };
 
+// The counter store and its types live in `rateLimitStore.ts` (#1696); they are
+// re-exported here because that is where they used to be defined.
+export { createMemoryRateLimitStore };
+export type { RateLimitEntry, RateLimitStore, RateLimitStoreStatus };
+
 // Simple fixed-window rate limiter. Keyed by client IP + a bucket name.
 //
 // The counters live behind a pluggable store (#1541) rather than directly in a
 // Map. `rateLimit()` keeps its synchronous signature — all ~28 call sites are
-// untouched — while the *where* becomes swappable: a shared store (Redis, when
-// there is ever more than one replica to share between) drops in through
-// `setRateLimitStore()` without another sweep through the call sites. Until
-// then the default store is the same per-process Map it always was: fine for a
-// single container, resets on redeploy, not distributed.
+// untouched — while the *where* is chosen by configuration (#1696): set
+// `RATE_LIMIT_REDIS_URL` and every replica counts into one shared counter;
+// leave it unset and the store is the same per-process Map it always was — fine
+// for a single container, resets on redeploy, not distributed.
+//
+// The shared store FAILS OPEN: if it is unreachable the limiter falls back to
+// the in-process mirror and says so in the log and on /api/health, rather than
+// erroring a request or locking anyone out of sign-in. See rateLimitStore.ts
+// for the reasoning and for the bounded overshoot that buys.
 //
 // Deliberately NOT the durable brute-force lockout: that one must survive a
 // redeploy and be visible to an admin, so it lives in MySQL — see
 // `src/lib/accountLockout.ts`. This is the cheap in-front-of-everything brake.
-export interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
 
-/**
- * A counter store. Synchronous on purpose — `rateLimit()` is called from
- * synchronous route guards, and an async store would ripple through every
- * caller. A network-backed implementation therefore reads through a local
- * cache and writes behind it, rather than awaiting each hit.
- */
-export interface RateLimitStore {
-  get(key: string): RateLimitEntry | undefined;
-  set(key: string, entry: RateLimitEntry): void;
-  delete(key: string): void;
-  size(): number;
-  /** Drop entries whose window closed at or before `now`. */
-  sweep(now: number): void;
-}
+// The store module has no imports of its own (so it stays unit-testable with
+// `node --test`); the app's logger is handed to it here, before the first store
+// is built, so a degradation is reported through the same structured log as
+// everything else.
+setRateLimitStoreLogger(logger);
 
-export function createMemoryRateLimitStore(): RateLimitStore {
-  const map = new Map<string, RateLimitEntry>();
-  return {
-    get: (key) => map.get(key),
-    set: (key, entry) => void map.set(key, entry),
-    delete: (key) => void map.delete(key),
-    size: () => map.size,
-    sweep: (now) => {
-      for (const [k, v] of map) if (v.resetAt <= now) map.delete(k);
-    },
-  };
-}
-
-let store: RateLimitStore = createMemoryRateLimitStore();
+let store: RateLimitStore = selectRateLimitStore().store;
 
 /** Swap the counter store (tests, or a future shared implementation). */
 export function setRateLimitStore(next: RateLimitStore): void {
   store = next;
+}
+
+/**
+ * Which backend the limiter is counting into, and whether it is degraded.
+ * Surfaced by /api/health so a silently per-process limiter is visible to an
+ * operator instead of being discovered during an incident.
+ */
+export function rateLimitStoreHealth(): RateLimitStoreStatus {
+  return (
+    store.status?.() ?? { backend: 'memory', degraded: false, degradedSince: null, lastError: null }
+  );
 }
 
 // Bucket housekeeping (#864). `sweepRateLimitBuckets` existed but nothing ever
@@ -84,19 +88,7 @@ export function rateLimit(
 ): { ok: boolean; retryAfter: number } {
   const now = Date.now();
   housekeep(now);
-  const entry = store.get(key);
-  if (!entry || entry.resetAt <= now) {
-    store.set(key, { count: 1, resetAt: now + windowMs });
-    return { ok: true, retryAfter: 0 };
-  }
-  entry.count += 1;
-  // Written back explicitly: the memory store hands out the live object, but a
-  // store that returns a copy (any out-of-process one) would otherwise lose it.
-  store.set(key, entry);
-  if (entry.count > limit) {
-    return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  return { ok: true, retryAfter: 0 };
+  return countRequest(store, key, { limit, windowMs }, now);
 }
 
 const BREACH_LOG_EVERY_MS = 60_000;
@@ -132,7 +124,10 @@ export function enforceRateLimit(
   //
   // Coalesced to one row per key per minute: a flood is exactly when this fires,
   // and a DB insert per blocked request would turn the rate limiter into an
-  // amplifier for the attack it is supposed to absorb.
+  // amplifier for the attack it is supposed to absorb. The coalescing window is
+  // per-process even with a shared store, which is the safe direction: with N
+  // replicas a sustained flood costs at most N rows a minute, never N inserts a
+  // request.
   if (shouldLogBreach(key)) {
     void logActivity({
       action: 'ratelimit.exceeded',
@@ -147,7 +142,8 @@ export function enforceRateLimit(
 }
 
 // Clear a key's counter (e.g. on a successful login, so good logins never
-// count toward the brute-force limit).
+// count toward the brute-force limit). With a shared store this clears the
+// shared counter too, not just this replica's mirror.
 export function clearRateLimit(key: string) {
   store.delete(key);
 }
