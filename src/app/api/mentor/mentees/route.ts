@@ -13,6 +13,11 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveStartStage } from '@/lib/pipelineStages';
 import { NO_LOGIN_PASSWORD, PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
+import {
+  findActiveMentorship,
+  ALREADY_MENTORED_ERROR,
+  AlreadyMentoredError,
+} from '@/lib/activeMentorship';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -118,35 +123,57 @@ export async function POST(request: Request) {
         if (!source) return NextResponse.json({ error: 'Source not found' }, { status: 400 });
       }
 
-      const mentee = await prisma.user.create({
-        data: {
-          email: finalEmail,
-          password: NO_LOGIN_PASSWORD,
-          role: 'MENTEE',
-          fullName,
-          orgId,
-          skills: [],
-          phone: rest.phone || null,
-          whatsapp: rest.whatsapp || null,
-          city: rest.city || null,
-          university: rest.university || null,
-          department: rest.department || null,
-          referralSource: rest.referralSource || null,
-          referredById,
-          sourceId,
-        },
-      });
-
       // The tenant's own first on-path stage (#1634), not the schema default —
       // a mentee added here must land in a column the mentor can actually see.
-      await prisma.mentorshipRelation.create({
-        data: {
-          mentorId: session.user.id,
-          menteeId: mentee.id,
-          orgId,
-          pipelineStatus: await resolveStartStage(orgId),
-        },
-      });
+      // Read, so it stays outside the transaction.
+      const pipelineStatus = await resolveStartStage(orgId);
+
+      // Account + mentorship in ONE transaction: a failure between the two used
+      // to leave a mentee account with no relation, invisible to the mentor who
+      // had just created it. The ACTIVE-mentor assertion (#419) is safe today
+      // only because `mentee` was created two statements ago — it is here so
+      // that the day this route grows a "link an existing candidate" branch
+      // (which the duplicate pre-flight above makes a natural next feature) the
+      // guard is already in place.
+      let mentee;
+      try {
+        mentee = await prisma.$transaction(async (tx) => {
+          const created = await tx.user.create({
+            data: {
+              email: finalEmail,
+              password: NO_LOGIN_PASSWORD,
+              role: 'MENTEE',
+              fullName,
+              orgId,
+              skills: [],
+              phone: rest.phone || null,
+              whatsapp: rest.whatsapp || null,
+              city: rest.city || null,
+              university: rest.university || null,
+              department: rest.department || null,
+              referralSource: rest.referralSource || null,
+              referredById,
+              sourceId,
+            },
+          });
+          const active = await findActiveMentorship(tx, created.id);
+          if (active) throw new AlreadyMentoredError(created.id, active.id);
+          await tx.mentorshipRelation.create({
+            data: {
+              mentorId: session.user.id,
+              menteeId: created.id,
+              orgId,
+              pipelineStatus,
+            },
+          });
+          return created;
+        });
+      } catch (e) {
+        if (e instanceof AlreadyMentoredError) {
+          return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
+        }
+        throw e;
+      }
 
       // If the mentee has a real email, send a "set your password" link so they
       // can activate their account. The link is also returned so the UI can show

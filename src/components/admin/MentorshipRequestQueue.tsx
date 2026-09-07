@@ -99,7 +99,11 @@ export function MentorshipRequestQueue({ mentors, onApproved }: {
         if (action === 'approve') onApproved();
       } else {
         const d = await res.json().catch(() => ({}));
-        setErr(d.error || t.common.error);
+        // The approval path answers `already_mentored` (#419) and
+        // `already_decided`; both used to arrive here as the server's English
+        // literal. Anything unrecognised falls back to the generic line rather
+        // than publishing whatever text a route happens to carry.
+        setErr(d.code === 'already_mentored' ? a.alreadyAssigned : t.common.error);
       }
     } catch {
       setErr(t.common.error);

@@ -150,14 +150,21 @@ export default function MentorshipPage() {
         }),
       });
       if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error || 'Failed');
+        // Switch on the body's `code`, never on the status: 409 is
+        // already_mentored (#419) today but the route also answers 403 for the
+        // plan gate, and a future 409 may mean something else. The server's
+        // `error` string is English literal text and is never rendered.
+        const body = await res.json().catch(() => ({}));
+        setFormError(
+          body.code === 'already_mentored' ? t.assignMentor.alreadyAssigned : t.mentorships.assignFailed
+        );
+        return;
       }
       await fetchRelations();
       setShowForm(false);
       setFormData({ mentorId: '', menteeId: '', companyId: '' });
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to create');
+    } catch {
+      setFormError(t.mentorships.assignFailed);
     } finally {
       setSubmitting(false);
     }

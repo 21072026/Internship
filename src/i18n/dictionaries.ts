@@ -604,6 +604,7 @@ const en = {
     mentorMenteeRequired: 'Mentor and Mentee are required',
     loadFailed: 'Failed to load data',
     assignSubmit: 'Assign',
+    assignFailed: 'The mentorship could not be created.',
   },
   companiesPage: {
     title: 'Companies',
@@ -1717,6 +1718,19 @@ const en = {
       university: 'Same university',
     },
     mergeAction: 'Compare & merge',
+    // Every MergeError code the merge endpoint can answer with. The page used to
+    // render the raw token ('linked_by_mentorship') in its red text.
+    mergeErrors: {
+      same_user: 'That is the same record twice.',
+      not_found: 'One of the two records no longer exists.',
+      org_mismatch: 'The two records belong to different organizations.',
+      not_mentee: 'Only candidate records can be merged.',
+      erased: 'An erased record cannot be merged.',
+      linked_by_mentorship:
+        'These two records are linked by a mentorship relation, so they are not the same person. Resolve that first.',
+      active_mentor_conflict:
+        'Both records have an active mentor ({a} and {b}). Close one of the two mentorships first, then merge — we will not decide for you which mentor is the real one.',
+    },
     mergeTitle: 'Merge records',
     mergeHint:
       'Everything attached to the absorbed record (interactions, messages, documents, goals, evaluations, stage history, consents) is moved to the kept record, then the absorbed record is deleted. This cannot be undone.',
@@ -1804,6 +1818,8 @@ const en = {
       'mentorship_request.rejected': 'Your mentorship request was reviewed but could not be approved right now.',
       'application.received': '{name} applied to be your mentee.',
       'mentorship.connected': '{name} joined through your invitation — you are now connected.',
+      'mentorship.autoLinkSkipped':
+        '{name} registered through an invitation, but the pre-linked candidate already has an active mentor — no mentorship was created.',
       'signup.pendingApproval': 'New self-registration pending approval: {name}.',
       'signup.new': 'New self-registration: {name} — active once the email is verified.',
       'signup.companyInquiry': 'Company enquiry from {companyName} ({contactName}).',
@@ -5349,6 +5365,7 @@ const tr: Dict = {
     mentorMenteeRequired: 'Mentor ve Mentee zorunludur',
     loadFailed: 'Veriler yüklenemedi',
     assignSubmit: 'Ata',
+    assignFailed: 'Mentorluk oluşturulamadı.',
   },
   companiesPage: {
     title: 'Şirketler',
@@ -6436,6 +6453,17 @@ const tr: Dict = {
       university: 'Aynı üniversite',
     },
     mergeAction: 'Karşılaştır ve birleştir',
+    mergeErrors: {
+      same_user: 'Bu aynı kaydın kendisi.',
+      not_found: 'İki kayıttan biri artık mevcut değil.',
+      org_mismatch: 'İki kayıt farklı organizasyonlara ait.',
+      not_mentee: 'Yalnızca aday kayıtları birleştirilebilir.',
+      erased: 'Silinmiş bir kayıt birleştirilemez.',
+      linked_by_mentorship:
+        'Bu iki kayıt bir mentorluk ilişkisiyle bağlı, yani aynı kişi değiller. Önce bunu çözün.',
+      active_mentor_conflict:
+        'İki kaydın da aktif bir mentörü var ({a} ve {b}). Önce bu iki mentorluktan birini kapatın, sonra birleştirin — hangi mentörün gerçek olduğuna sizin yerinize karar vermeyiz.',
+    },
     mergeTitle: 'Kayıtları birleştir',
     mergeHint:
       'Silinecek kayda bağlı her şey (etkileşimler, mesajlar, belgeler, hedefler, değerlendirmeler, aşama geçmişi, onaylar) tutulan kayda taşınır, ardından silinecek kayıt kaldırılır. Bu işlem geri alınamaz.',
@@ -6519,6 +6547,8 @@ const tr: Dict = {
       'mentorship_request.rejected': 'Mentorluk talebin incelendi ancak şu an onaylanamadı.',
       'application.received': '{name} mentee’n olmak için başvurdu.',
       'mentorship.connected': '{name} davetinle katıldı — artık bağlantıdasınız.',
+      'mentorship.autoLinkSkipped':
+        '{name} bir davetle kayıt oldu, ancak ön-eşleştirilen adayın zaten aktif bir mentörü var — mentorluk oluşturulmadı.',
       'signup.pendingApproval': 'Onay bekleyen yeni kayıt: {name}.',
       'signup.new': 'Yeni kayıt: {name} — e-posta doğrulanınca etkinleşecek.',
       'signup.companyInquiry': '{companyName} firmasından kurumsal başvuru ({contactName}).',
@@ -10019,6 +10049,7 @@ const de: Dict = {
     mentorMenteeRequired: 'Mentor und Mentee sind erforderlich',
     loadFailed: 'Daten konnten nicht geladen werden',
     assignSubmit: 'Zuweisen',
+    assignFailed: 'Die Mentorschaft konnte nicht erstellt werden.',
   },
   companiesPage: {
     title: 'Unternehmen',
@@ -11106,6 +11137,17 @@ const de: Dict = {
       university: 'Gleiche Universität',
     },
     mergeAction: 'Vergleichen & zusammenführen',
+    mergeErrors: {
+      same_user: 'Das ist zweimal derselbe Datensatz.',
+      not_found: 'Einer der beiden Datensätze existiert nicht mehr.',
+      org_mismatch: 'Die beiden Datensätze gehören zu verschiedenen Organisationen.',
+      not_mentee: 'Nur Kandidaten-Datensätze können zusammengeführt werden.',
+      erased: 'Ein gelöschter Datensatz kann nicht zusammengeführt werden.',
+      linked_by_mentorship:
+        'Diese beiden Datensätze sind über eine Mentorschaft verbunden, sind also nicht dieselbe Person. Kläre das zuerst.',
+      active_mentor_conflict:
+        'Beide Datensätze haben einen aktiven Mentor ({a} und {b}). Schließe zuerst eine der beiden Mentorschaften, dann führe zusammen — wir entscheiden nicht für dich, welcher Mentor der richtige ist.',
+    },
     mergeTitle: 'Datensätze zusammenführen',
     mergeHint:
       'Alles, was am aufgehenden Datensatz hängt (Interaktionen, Nachrichten, Dokumente, Ziele, Bewertungen, Phasenverlauf, Einwilligungen), wird auf den behaltenen Datensatz übertragen; danach wird der aufgehende Datensatz gelöscht. Das lässt sich nicht rückgängig machen.',
@@ -11189,6 +11231,8 @@ const de: Dict = {
       'mentorship_request.rejected': 'Deine Mentoring-Anfrage wurde geprüft, konnte aber derzeit nicht genehmigt werden.',
       'application.received': '{name} hat sich als dein Mentee beworben.',
       'mentorship.connected': '{name} ist über deine Einladung beigetreten — ihr seid jetzt verbunden.',
+      'mentorship.autoLinkSkipped':
+        '{name} hat sich über eine Einladung registriert, aber der vorverknüpfte Kandidat hat bereits einen aktiven Mentor — es wurde keine Mentorschaft angelegt.',
       'signup.pendingApproval': 'Neue Selbstregistrierung wartet auf Freigabe: {name}.',
       'signup.new': 'Neue Selbstregistrierung: {name} — aktiv nach E-Mail-Bestätigung.',
       'signup.companyInquiry': 'Unternehmensanfrage von {companyName} ({contactName}).',

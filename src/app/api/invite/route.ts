@@ -10,6 +10,7 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { locales } from '@/i18n/config';
 import { z } from 'zod';
+import { hasOtherActiveMentorship, ALREADY_MENTORED_ERROR } from '@/lib/activeMentorship';
 
 // Email invitations (#51).
 //
@@ -130,6 +131,16 @@ export async function POST(request: Request) {
       if (role === 'MENTEE') menteeId = null;
       if (role === 'MENTOR') mentorId = null;
       if (role === 'ADMIN') { mentorId = null; menteeId = null; }
+
+      // Back door (#419): pre-linking a mentee is what creates the relation at
+      // registration (register/route.ts), so the 409 POST /api/mentorship gives
+      // is owed HERE — while the admin is still looking at the form, not
+      // silently days later in a click they never see. Only the mentee
+      // direction can conflict: a named mentor is paired with a person who does
+      // not exist yet, so there is nothing for them to already have.
+      if (menteeId && (await hasOtherActiveMentorship(prisma, menteeId))) {
+        return NextResponse.json(ALREADY_MENTORED_ERROR, { status: 409 });
+      }
 
       // Only somebody who runs the project may hand out membership to it.
       const projectId: string | null = parsed.data.projectId || null;
