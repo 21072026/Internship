@@ -5907,6 +5907,77 @@ reddettiği şeyi** anlatmalı, sonraki issue'yu değil.
 çağrı hâlâ çağrı sayılır; `import { dispatchWebhook as fire }` kaçar. Bunlar grep şeklindeki
 bir guard'ın bedeli — ama yazılmamışsa, bir sonraki okuyucu guard'ı olduğundan güçlü sanar.
 
+## 2026-09-07 — Ekran görüntüsünü doğrulamak, üretmekten daha kolay (#2233)
+
+**`ffmpeg` yoksa süreyi başlıktan oku.** Klip için "en fazla 5 saniye" kuralını
+`ffprobe` ile zorlamak CI'da mümkün değil (kurulu değil, kurmak da 60 MB). WebM = EBML;
+`Segment > Info > Duration` alanını okumak 60 satırlık bir vint ayrıştırıcı. Ama
+Playwright kaydı **canlı mux ediyor**, yani `Duration` her zaman yazılmıyor — bu yüzden
+ikinci kaynak olarak son `Cluster` zaman kodunu kullan: hep **eksik** tahmin eder, yani
+üst sınır için güvenli yön. Aynı mantık PNG için de geçerli: `IHDR` sabit ofsette, genişlik
+ve yükseklik dört baytlık iki tam sayı — sayfanın `width`/`height` vermesi için kullanıcıya
+piksel yazdırmaya gerek yok.
+
+**Bir e2e dosyası "üretici" olacaksa, projeyi koşullu tanımla.** Playwright'ta bir spec'i
+"varsayılan koşuda çalışmasın" yapmanın temiz yolu grep değil: varsayılan projeye
+`testIgnore`, üreticiye ise yalnızca bir env değişkeni varken var olan **ayrı bir proje**.
+Böylece hem PR gate'i hem 4x günlük tam koşu dosyayı hiç görmüyor — etiket unutulsa bile.
+
+**İkili fixture'ı depoya koymak yerine baytı testte üret.** Geçerli PNG (CRC32 + zlib) ve
+geçerli EBML üretmek ~80 satır; karşılığında testler "gerçekten 469 KB olan bir PNG" veya
+"gerçekten 9 saniye diyen bir WebM" ile çalışıyor, depoda tek bir blob yok ve her kural
+kendi özelliğini taşıyan bir dosyayla kanıtlanıyor.
+
+**`prefers-reduced-motion` için videoyu duraklatmak yetmez.** Doğru davranış videoyu
+**hiç mount etmemek**: SSR poster'ı basar, istemci tercihi okuyup sadece hareket serbestse
+`<video>`'ya geçer. Duraklatılmış video hâlâ indiriliyor ve hâlâ bir video; poster ise
+CHANGELOG.md'nin ve WebM çözemeyen tarayıcının da ihtiyacı olan tek dosya.
+
+**"Konteynerde tarayıcı yok" diye varsayma — önce dene.** Bu oturumun ilk yarısında
+fragment medyasız gitti, gerekçe "tarayıcı ve veritabanı yok" idi. İkisi de yanlış çıktı:
+`/opt/pw-browsers` altında bir chromium duruyor (beklenen revizyon numarasına symlink, ya da
+doğrudan `executablePath` — CLAUDE.md'nin anlattığı numara) ve **Prisma'ya dokunmayan
+sayfalar veritabanı olmadan açılıyor**: `DATABASE_URL` sahte bir dize olsa bile `next dev`
+kalkıyor, `/release-notes` ve `/features` 200 dönüyor (landing `/` dönmüyor, o public stats
+okuyor), çünkü bu sayfalar yalnızca `releaseNotes.ts` + fragment'leri okuyor.
+Yani gerçek bir element ekran görüntüsü alınabiliyordu; alındı, commit edildi ve "hep skip
+eden" üç render testi artık gerçekten koşuyor. Ders: bir kabul kriterini "ortam elvermiyor"
+diye atlamadan önce en ucuz denemeyi yap — sunucuyu kaldır, `curl` at.
+
+**Kendi özelliğini kullanan bir PR'ı iki geçişte yakala.** Poster, üstünde poster olan kartı
+göstermeli — ama fragment'e medya eklenmeden kart medyayı göstermiyor. Sıra: (1) kartı çek,
+(2) fragment'e `media` bloğunu ekle, (3) sunucuyu yeniden başlat (fragment'ler `next.config.js`
+içinde, config yükünde okunuyor — dosyayı değiştirmek dev'i tetiklemiyor), (4) artık resim
+taşıyan kartı yeniden çek. Tek özyineleme seviyesi, dürüst bir görsel.
+
+**Compaction çıktısını gerçekten çalıştırıp derle.** "Şablon dizesi doğru TypeScript üretiyor"
+iddiası ancak üretilen dosya `tsc` geçerse doğrudur: depoyu `/tmp`'ye kopyala, `release-compact.mjs`
+çalıştır, sonucun üstünde `npx tsc --noEmit` koştur. Beş dakika, ve compaction cron'unun
+haftalar sonra kıracağı bir hatayı PR içinde yakalıyor.
+
+**Üst düzey script kodu unit test edilemez.** `release-compact.mjs` import edildiği anda
+çalışan bir script; içindeki iki yazıcı fonksiyona hiçbir test erişemiyordu. Saf string üreten
+yardımcıları importlanabilir bir modüle (`release-media.cjs`) taşımak yeterli — script onları
+`require` ediyor, test de.
+
+**`recordVideo` kaydı `newContext()` ile başlar, ilk aksiyonla değil.** Dosyada navigasyon da
+var, `next dev`'in rotayı ilk isabet-te derlediği saniyeler de — tek başına 5 saniyelik WCAG
+sınırını patlatmaya yeter, üstelik hata mesajı "testi kısalt" diyerek yanlış yere baktırır.
+Rotayı **kayıt bağlamının dışında** ısıt. Ayrıca elle kurulan bir `browser.newContext()`
+projenin `use` ayarlarından **hiçbirini** miras almaz: `baseURL` de, `storageState` de elle
+verilmeli — yoksa göreli `goto()` patlar ve çerez bandı kaydın ilk karesi olur.
+
+**Poster ile klip iki ayrı çekim, iki ayrı şekil.** Still kırpılmış bir element, klip
+ölçeklenmiş bir viewport; poster'ın IHDR ölçüsünü `<video>`'ya vermek klibi kendi çerçevesinin
+ortasına küçültüyordu (`object-fit: contain`). Klibin kendi `PixelWidth`/`PixelHeight` değerini
+`Tracks > TrackEntry > Video`'dan okumak ~15 satır ve sorunu kökten bitiriyor.
+
+**"En az biri farklı olmalı" türü assertion'lar doğru veriyi kırar.** Üç dilde `alt` zorunlu
+olabilir; üçünün *farklı* olması zorunlu değildir — "Kanban", "Dashboard", "CV Upload" üç dilde
+aynı yazılır. Böyle bir assertion, kimsenin dokunmadığı bir sayfada zamanlanmış koşuyu
+kırmızıya çevirir. Dil geçişini kanıtlamak istiyorsan `<html lang>`'e bak, metinlerin
+birbirinden farklı olmasına değil.
+
 ## 2026-09-07 — Aynı sayıyı üçüncü kez yazmadan önce ikisinin ayrıştığını fark et (#1724)
 
 **"Formülü kopyala" görevinde önce mevcut kopyaların birbirini tutup tutmadığına bak.**

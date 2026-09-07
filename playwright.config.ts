@@ -149,9 +149,15 @@ export default defineConfig({
         {
           name: 'chromium',
           use: { ...devices['Desktop Chrome'] },
-          // e2e/isolation/** belongs to the `isolation` project below; those specs
-          // assert cross-tenant behaviour that only holds with the flag on.
-          testIgnore: '**/isolation/**',
+          // Two exclusions, for two different reasons:
+          //   e2e/isolation/** belongs to the `isolation` project below (#1566);
+          //     those specs assert cross-tenant behaviour that only holds with
+          //     MT_ENFORCE_ISOLATION on.
+          //   e2e/release-media.spec.ts is a capture PRODUCER, not a test (#2233):
+          //     it writes PNG/WebM into public/release-media/, so a run in the PR
+          //     gate or the scheduled suite would rewrite committed bytes on an
+          //     unrelated change.
+          testIgnore: ['**/isolation/**', '**/release-media.spec.ts'],
         },
       ]
       : []),
@@ -161,6 +167,15 @@ export default defineConfig({
           name: 'isolation',
           testMatch: '**/isolation/**/*.spec.ts',
           use: { ...devices['Desktop Chrome'], baseURL: ISOLATION_URL },
+        },
+      ]
+      : []),
+    ...(process.env.CAPTURE_RELEASE_MEDIA
+      ? [
+        {
+          name: 'release-media',
+          testMatch: /release-media\.spec\.ts/,
+          use: { ...devices['Desktop Chrome'] },
         },
       ]
       : []),

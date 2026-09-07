@@ -171,3 +171,10 @@ e2e/.state/
 /.claude/worktrees/
 playwright.local.config.ts
 playwright.repro.config.ts
+
+# Output of the two TEMPLATE captures in e2e/release-media.spec.ts (#2233).
+# `npm run test:e2e:media` runs them alongside your own capture and drops ~100 KB
+# of throwaway bytes into public/release-media/; a real fragment's media is named
+# after its slug, never "example-".
+/public/release-media/example-*.png
+/public/release-media/example-*.webm

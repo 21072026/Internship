@@ -30,6 +30,136 @@ never conflict):
 - Trivial non-user-facing changes (pure docs, CI config) still need **no**
   fragment at all, same as before.
 
+## Media on a release note (#2233)
+
+A note that says *"mentees can now request a mentor straight from the directory
+card"* tells a reader who has never seen that screen nothing at all. One small
+picture answers it — and Playwright is already driving that exact screen, so the
+picture is nearly free.
+
+A fragment may therefore carry an **optional** `media` block:
+
+```json
+{
+  "bump": "minor",
+  "changelog": "- **Request a mentor from the card** (#1234). …",
+  "notes": { "en": ["…"], "tr": ["…"], "de": ["…"] },
+  "media": {
+    "poster": "release-media/request-mentor-cta.png",
+    "video": "release-media/request-mentor-cta.webm",
+    "alt": {
+      "en": "The mentor card with its new Request mentor button",
+      "tr": "Yeni \"Mentor talep et\" butonuyla mentor kartı",
+      "de": "Die Mentorenkarte mit der neuen Schaltfläche \"Mentor anfragen\""
+    }
+  }
+}
+```
+
+**Optional, permanently.** A backfill, a CI guard, an API fix has no screen to
+show. A fragment without `media` is completely valid and renders exactly as it
+always has — this is never a checklist item that blocks a PR, and reviewers must
+not treat it as one.
+
+### When it is worth adding
+
+| Add a **still** | Add a **clip** | Add **nothing** |
+|---|---|---|
+| A new control, badge, column, empty state — anything a reader could recognise on the screen | Motion is the point: a drag, a reveal, a live update, a transition that explains the change | Backend, CI, schema, performance, a fix with no visible surface |
+
+A still is **always required**; the clip is always optional and rides on top of
+it. Three surfaces show this media and **none of them can play video**:
+`CHANGELOG.md` is markdown, an older iOS PWA install may not decode WebM, and a
+reader who has asked for reduced motion must be shown something that does not
+move. One poster PNG serves all three, so "clip + poster" is the natural shape
+rather than extra work — and a `video` without a `poster` is rejected.
+
+**WebM, never GIF.** Playwright records WebM natively with no `ffmpeg`
+dependency, and the same clip as a GIF is roughly ten times the bytes.
+
+### How to capture
+
+`e2e/release-media.spec.ts` is the capture spec. It is a **producer, not a
+test**: it does not run in the PR gate and it does not run in the scheduled full
+suite (`playwright.config.ts` only declares its project when
+`CAPTURE_RELEASE_MEDIA` is set). Copy one of the two templates in it, point it
+at your screen, then:
+
+```bash
+npm run test:e2e:media                      # capture everything in the spec
+npm run test:e2e:media -- --grep "poster"   # just one
+```
+
+- **Stills** use `locator.screenshot()` — an **element**, never `page`. A
+  cropped component stays small and does not churn every time unrelated page
+  chrome moves.
+- **Clips** use Playwright's `recordVideo`, which records **per BrowserContext,
+  whole viewport, for the whole test**. Playwright cannot crop to an element or
+  trim to the interesting seconds, so do not try: keep the capture test minimal,
+  so the whole test *is* the content, and set `recordVideo.size` modestly.
+- **Recording starts at `browser.newContext()`, not at your first action.** The
+  navigation is in the file, and against `npm run dev` so is the several seconds
+  Next.js spends compiling the route on its first hit — enough on its own to
+  blow the five-second cap and get the fragment rejected. Warm the route in
+  another page/context *before* creating the recording context (the clip
+  template does exactly that), and remember a hand-built context inherits
+  nothing from `use` — pass `baseURL` and `storageState` yourself.
+- **Match the shapes.** Keep `recordVideo.size` at the viewport's aspect ratio
+  (otherwise Playwright letterboxes the picture inside the file), and crop the
+  poster to roughly the same shape as the clip. The poster is what a
+  reduced-motion reader sees *instead of* the clip and what shows in the moment
+  before autoplay begins; the page sizes the `<video>` from the clip's own
+  dimensions, so wildly different shapes make the picture jump when playback
+  starts.
+- Captures are **light theme only** — two themes would mean two files per note.
+  The page frames the picture in a visible border and pins a white background,
+  so a light capture still reads as *a screenshot* on the dark page.
+
+Commit the files with the PR, under `public/release-media/`, named after the
+fragment slug: `release-media/<fragment-slug>.{png,webm}`.
+
+### The caps, and what enforces them
+
+`npm run check:release-fragments` reads the actual bytes (no `ffmpeg` — the PNG
+header for the size, the EBML header for the duration) and fails on:
+
+| Rule | Why |
+|---|---|
+| `poster` present whenever `media` is | Markdown, WebM-less browsers and reduced motion all need a still |
+| `poster` is a `.png` under `release-media/`, `video` a `.webm` | One directory, one naming convention, no GIFs |
+| the referenced file exists under `public/` | A broken image on a page that must always render |
+| poster ≤ **150 KB** | A cropped element screenshot is 40-80 KB; the cap catches a full-page capture pasted in by mistake |
+| clip ≤ **1.5 MB** | Bounded repo growth — the media is committed, not uploaded off-site |
+| clip ≤ **5 seconds** | WCAG 2.2.2: longer auto-playing motion would need a pause control on every card (recording starts at `newContext()` — a cold route compile counts) |
+| `alt` in all of EN/TR/DE | Same rule as `notes` — the picture carries meaning, so its description is localized |
+
+Why committed to `public/` rather than object storage: R2 exists here for
+backups, but putting release media there would add a deploy-time dependency and
+a broken-image failure mode to a page that must always render. Bounded by the
+caps, this costs roughly 20 MB a year.
+
+### Accepted trade-off: it goes stale
+
+A note from three months ago will show a screen that no longer looks like that.
+For a historical changelog that is **correct**, not a bug — every entry already
+carries its version, date and commit. There is deliberately no re-capture job,
+and stale media is never a CI failure.
+
+### Where it ends up
+
+- `/release-notes` — at most 480px wide, rounded, framed, with localized `alt`
+  and the picture's own pixel size set so the list does not reflow (the
+  poster's on the `<img>`, the clip's own on the `<video>` — they are two
+  different captures with two different shapes). With a clip:
+  `autoplay loop muted playsinline`, poster as the fallback, and under
+  `prefers-reduced-motion: reduce` the **poster** renders and the video is never
+  mounted at all.
+- `CHANGELOG.md` — the compaction writes the **poster** as a markdown image
+  under the section, because markdown cannot play a video.
+- `src/lib/releaseNotes.ts` — the compaction carries the whole `media` block
+  (including the pixel size) into the permanent entry, so the picture survives
+  long after the fragment is deleted.
+
 ## One fragment = one release (#1457)
 
 Every fragment gets **its own version number, its own date and time, and the

@@ -23,6 +23,9 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { FRAGMENT_DIR, resolveRelease } = require('./release-derive.cjs');
+// The two media writers (#2233) live in the media module so they can be unit
+// tested — this file is top-level script code and cannot be imported.
+const { changelogMedia, releaseNotesMedia } = require('./release-media.cjs');
 
 // The public repository, for the commit links in the changelog. Same URL as
 // src/components/landing/links.ts (a .mjs script cannot import the TS module).
@@ -77,7 +80,7 @@ const sections = newestFirst
     const meta = entry.sha
       ? `_Shipped ${entry.date} ${entry.time} UTC · commit [${entry.commit}](${REPO_URL}/commit/${entry.sha})_\n\n`
       : '';
-    return `## [${entry.version}] - ${entry.date || today}\n\n${meta}${entry.changelog.trim()}\n\n`;
+    return `## [${entry.version}] - ${entry.date || today}\n\n${meta}${entry.changelog.trim()}\n\n${changelogMedia(entry.media)}`;
   })
   .join('');
 const clNext = cl.slice(0, anchor) + sections + cl.slice(anchor);
@@ -107,7 +110,7 @@ ${list(entry.notes.tr)}
 ${list(entry.notes.de)}
       ],
     },
-  },
+${releaseNotesMedia(entry.media)}  },
 `)
     .join('');
   const at = i + rnAnchor.length;
