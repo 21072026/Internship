@@ -1,0 +1,21 @@
+{
+  "bump": "minor",
+  "changelog": "- **\"Who accessed my account\" — impersonation history on the account page** (#1587). Support impersonation already wrote `IMPERSONATE_START`/`IMPERSONATE_STOP` audit rows and told the account holder once, in a notification that scrolled away; the one party who could never look it up again was the person whose account was entered. Every role now has a read-only **Account access history** card on `/account`, fed by `GET /api/account/impersonations`: who entered (display name only — never the admin's e-mail or id: a name is what accountability needs, a login identifier is not), when, how long the visit lasted, and the reason the admin typed. The reason is now written to `AuditLog.detail` as well as the ActivityLog row, so it is readable from the history rather than only from the admin-side log. Start rows are paired with the following stop row *per admin*, so two overlapping visits do not cross-pair; a start with no stop renders as \"ended automatically\" with its duration clamped to the 30-minute session cap (now one exported constant shared with the JWT callback) instead of implying a live session, and an orphan stop is dropped rather than shown as a zero-length visit. The endpoint reads `session.user.id` and accepts no user id — a query parameter cannot widen it — and selects an explicit column allowlist. `AuditLog` gains `@@index([targetId])`, the column this list filters on. Nothing anywhere deletes these rows: an access record the accessing party can erase is worth nothing. The empty state distinguishes \"nobody has ever signed in to your account except you\" from the bounded phrasing that takes over automatically once `AuditLog` joins the retention registry (#1585).",
+  "notes": {
+    "en": [
+      "Your account page now has an \"Account access history\": if support staff ever signed in to your account to help with a problem, you can see who it was, when, how long they stayed and why.",
+      "The list is permanent and read-only — nobody, not even an administrator, can remove a line from it.",
+      "When nobody has ever entered your account, the card says so plainly."
+    ],
+    "tr": [
+      "Hesap sayfana \"Hesap erişim geçmişi\" eklendi: destek ekibinden biri bir sorununu çözmek için hesabına giriş yaptıysa kimin girdiğini, ne zaman, ne kadar süreyle ve hangi gerekçeyle girdiğini görebilirsin.",
+      "Liste kalıcı ve salt okunur — yöneticiler dahil hiç kimse bu listeden bir satır silemez.",
+      "Hesabına hiç kimse girmemişse kart bunu açıkça söylüyor."
+    ],
+    "de": [
+      "Deine Kontoseite hat jetzt einen \"Zugriffsverlauf\": Wenn sich Support-Mitarbeitende jemals in deinem Konto angemeldet haben, um ein Problem zu lösen, siehst du, wer das war, wann, wie lange und warum.",
+      "Die Liste ist dauerhaft und schreibgeschützt — niemand, auch keine Administratorin und kein Administrator, kann eine Zeile daraus entfernen.",
+      "Hat noch nie jemand dein Konto betreten, sagt die Karte das klar und deutlich."
+    ]
+  }
+}
