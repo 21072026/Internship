@@ -3,6 +3,7 @@ import { getRetentionReview, getRetentionMonths, RETENTION_GRACE_DAYS } from '@/
 import { getServerDictionary } from '@/i18n/server';
 import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { OrphanApplicantsPanel } from '@/components/admin/OrphanApplicantsPanel';
 
 // Admin retention review (GDPR Art. 5(1)(e)): candidates whose consent has
 // passed the retention limit. "overdue" ones (past the grace period without
@@ -71,6 +72,10 @@ export default async function AdminRetentionPage() {
           </table>
         </div>
       )}
+
+      {/* The accounts the consent rule above can never see (#1780): a /apply
+          account has no consentAt to age, so it would sit here forever. */}
+      <OrphanApplicantsPanel />
     </div>
   );
 }

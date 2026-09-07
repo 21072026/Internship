@@ -118,6 +118,14 @@ export const SETTING_DEFAULTS = {
   pushSubscriptionStaleDays: '180',
   // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
   jobRetentionDays: '30',
+  // Grace period, in days, before the retention sweep ANONYMIZES an orphan
+  // applicant account — a /apply account whose mentor declined and which shows
+  // no other sign of life (#1780). The rule itself, and why 90 days, live in
+  // src/lib/orphanApplicant.ts; the dry run an admin reads before it happens is
+  // /admin/retention. Same fallback contract as the windows above: 0, negative
+  // or unparseable falls back to the entry's default rather than erasing
+  // everything.
+  orphanApplicantGraceDays: '90',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

@@ -11,6 +11,7 @@ import { dispatchWebhook } from '@/lib/webhooks';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
+import { APPLY_NO_LOGIN_PASSWORD } from '@/lib/menteeAccount';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
 // "not right now" (acceptingMentees=false), or when a set mentorCapacity is
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
   const mentee = await prisma.user.create({
     data: {
       email,
-      password: '!apply-no-login',
+      password: APPLY_NO_LOGIN_PASSWORD,
       role: 'MENTEE',
       fullName,
       orgId: mentor.orgId,

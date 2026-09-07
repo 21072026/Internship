@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { isTagMode, parseTagIds } from '@/lib/tags';
+import { markOrphanApplicants, orphanApplicantWhere } from '@/lib/orphanApplicant';
 
 export async function GET(request: Request) {
   try {
@@ -27,6 +28,13 @@ export async function GET(request: Request) {
     // Deactivated ("archived") candidates are hidden by default and only shown
     // when the archive view is requested (?archived=1).
     const archived = searchParams.get('archived') === '1';
+    // Orphan applicants (#1780): accounts the public apply link created and a
+    // mentor declined, which show no other sign of life. `?orphan=1` narrows
+    // the list to exactly them; without it they are still MARKED, because the
+    // point is to be able to tell one from a real candidate at a glance.
+    // The rule itself is never restated here — src/lib/orphanApplicant.ts owns
+    // it, and this route asks that module both times.
+    const orphanOnly = searchParams.get('orphan') === '1';
     // Pagination. `all=1` returns everything (used by CSV/Excel export so the
     // download isn't limited to the current page).
     const all = searchParams.get('all') === '1';
@@ -111,7 +119,9 @@ export async function GET(request: Request) {
         },
       },
     };
-    const normalize = (c: { skills: unknown }) => ({ ...c, skills: (c.skills ?? []) as string[] });
+    // Generic so the spread keeps the row's other columns in the type — the
+    // `orphan` flag below is attached to these objects and needs `id`.
+    const normalize = <T extends { skills: unknown }>(c: T) => ({ ...c, skills: (c.skills ?? []) as string[] });
     const matchesSkills = (c: { skills: string[] }) => {
       if (skillList.length === 0) return true;
       const owned = c.skills.map((k) => k.toLowerCase());
@@ -120,13 +130,19 @@ export async function GET(request: Request) {
       return skillList.every((term) => owned.some((k) => k.includes(term)));
     };
 
+    // Composed with AND rather than spread into `where`: the orphan rule already
+    // constrains `menteeRelations` and `NOT`, and both of those keys are set
+    // above by the stage filter and by nothing respectively — merging by spread
+    // would silently drop one of the two rules instead of intersecting them.
+    const query = orphanOnly ? { AND: [where, orphanApplicantWhere()] } : where;
+
     let candidates;
     let total: number;
     if (skillList.length === 0) {
       // No JSON-skill filter → paginate at the database level.
-      total = await prisma.user.count({ where });
+      total = await prisma.user.count({ where: query });
       const raw = await prisma.user.findMany({
-        where,
+        where: query,
         select,
         orderBy: { createdAt: 'desc' },
         ...(all ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
@@ -135,13 +151,24 @@ export async function GET(request: Request) {
     } else {
       // Skill filter is applied in-memory (MySQL JSON arrays don't support
       // hasSome), so fetch, filter, then slice the page from the filtered set.
-      const raw = await prisma.user.findMany({ where, select, orderBy: { createdAt: 'desc' } });
+      const raw = await prisma.user.findMany({ where: query, select, orderBy: { createdAt: 'desc' } });
       const filtered = raw.map(normalize).filter(matchesSkills);
       total = filtered.length;
       candidates = all ? filtered : filtered.slice((page - 1) * pageSize, page * pageSize);
     }
 
-    return NextResponse.json({ candidates, total, page, pageSize });
+    // One extra query for the page in hand rather than a per-row check or a
+    // second copy of the rule on the client. Skipped for `all=1` (the CSV/Excel
+    // export), which is unbounded and does not render a badge — an `IN` list of
+    // every candidate in the org is not worth a column nothing reads.
+    const orphanIds = all || orphanOnly ? null : await markOrphanApplicants(candidates.map((c) => c.id));
+    const withOrphan = candidates.map((c) => ({
+      ...c,
+      // Under `?orphan=1` every row matched the rule by construction.
+      orphan: orphanIds ? orphanIds.has(c.id) : orphanOnly,
+    }));
+
+    return NextResponse.json({ candidates: withOrphan, total, page, pageSize });
     });
   } catch (error) {
     console.error('Get candidates error:', error);

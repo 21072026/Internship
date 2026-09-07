@@ -287,6 +287,7 @@ ile değiştirilir.
 | `PushSubscription` | `pushSubscriptionStaleDays` | 180 gün | Şema yorumunun kendi deyimiyle "ölü ağırlık". Asıl temizlik push sağlayıcısının reddinde oluyor (`src/lib/webPush.ts`: 404/410 anında siler, 5 ardışık hatadan sonra da siler); bu girdi yalnızca hiç push gönderilmemiş satırı yakalar. |
 | `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
+| **Sahipsiz başvuru hesapları** (`User`) | `orphanApplicantGraceDays` | 90 gün | Kayıt defterindeki **tek kişisel hesap** girdisi ve tek satır silmeyen-anonimleştiren girdi. Ayrıntısı hemen aşağıda. |
 
 ### Denetim kaydı silinmiyor — kimliklendiriciler siliniyor
 
@@ -367,3 +368,43 @@ bu ikisini ayırır.
 
 Elle çalıştırmak: `GET /api/cron?job=retention` (ADMIN). Toplu "hepsini
 çalıştır" çağrısının **içinde değil** — geri alınamaz iş, istenmeyi hak eder.
+
+### Sahipsiz başvuru hesapları (#1780)
+
+**Kural, tek cümleyle:** genel başvuru bağlantısının açtığı, mentorun
+reddettiği, hiç giriş yapılmamış ve başka hiçbir yaşam belirtisi taşımayan bir
+mentee hesabı, karardan **90 gün** sonra (`orphanApplicantGraceDays`) otomatik
+olarak **anonimleştirilir** — silinmez.
+
+Kuralın tek kaynağı [`src/lib/orphanApplicant.ts`](../src/lib/orphanApplicant.ts);
+gerekçesi ve her istisnası o dosyanın başlığında yazılı. Buradaki üç sınır
+tartışmaya kapalıdır:
+
+1. **Silme değil, anonimleştirme.** Kapanmış bir dönemin huni sayıları, raporu
+   üç ay sonra yeniden açan yöneticinin altında değişmemeli. Satır ve reddedilmiş
+   `MentorshipRequest` kalır; giden şey kişisel veridir. İşi
+   [`src/lib/accountErasure.ts`](../src/lib/accountErasure.ts)'in
+   `anonymizeUser()` fonksiyonu yapar — **ikinci bir silme yolu yok**, yönetici
+   düğmesi de aynı fonksiyonu çağırır.
+2. **Önce kuru koşu.** Otomatik ve geri alınamaz bir iş, önce görülebilmelidir:
+   `/admin/retention` sayfası her sahipsiz hesabı, başvuru tarihini, reddeden
+   mentoru ve **kaç gün kaldığını** listeler; sayfa ile gece koşusu aynı
+   `orphanApplicantWhere()` fonksiyonunu okur, dolayısıyla listelenen ile alınan
+   ayrışamaz. Yönetici o listeden hesabı hemen silebilir ya da (karar yanlışsa)
+   şifre belirleme bağlantısını yollayıp hesabı kurtarabilir.
+3. **Her yaşam belirtisi hesabı kuralın dışına çıkarır.** Rıza kaydı, etiket,
+   yüklenmiş CV veya belge, destek talebi, şirket ilgisi, mülakat talebi, proje
+   üyeliği, açılmış bir konuşma, başlamış onboarding, bekleyen/onaylanmış bir
+   başvuru, herhangi bir mentorluk ilişkisi, doğrulanmış e-posta, bir kez bile
+   giriş — tek biri yeter. Şüpheli durum hesabın **lehine** çözülür.
+
+Bu hesaplar neden mevcut saklama incelemesine düşmüyordu: o inceleme
+`User.consentAt` üzerine kuruluydu ve bir başvuru hesabında `consentAt` hiç
+oluşmuyor. Yani sonsuza kadar tutulan, hiçbir kuyrukta görünmeyen kişisel
+veriydi — saklama sınırı ihlali (GDPR m. 5(1)(e) / KVKK m. 4).
+
+Denetim izi: koşu, ortak `retention.pruned` satırına ek olarak kendi
+`retention.orphanApplicants` `ActivityLog` satırını bırakır (kaç hesap
+anonimleştirildi, kaçı hata verdi, hangi gün penceresiyle) — üründe bir kişinin
+verisini kendiliğinden silen tek iş bu olduğu için "hangi gece gitti?" sorusunun
+tek başına cevaplanabilmesi gerekiyor.
