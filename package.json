@@ -29,6 +29,7 @@
     "test:note-privacy": "node --test scripts/test/mentor-application-note-privacy.test.mjs",
     "test:impersonation-history": "node --test --experimental-strip-types scripts/test/impersonation-history.test.mjs",
     "test:rate-limit-store": "node --test --experimental-strip-types scripts/test/rate-limit-store.test.mjs",
+    "test:roi": "node --test --experimental-strip-types scripts/test/roi.test.mjs",
     "check:auth-reads": "node scripts/check-auth-reads.mjs",
     "check:api-key-routes": "node scripts/check-api-key-routes.mjs",
     "check:query-scalars": "node scripts/check-query-scalars.mjs",
