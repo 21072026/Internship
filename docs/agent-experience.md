@@ -6055,3 +6055,59 @@ yazmak demek. `DATABASE_URL="mysql://e2e:e2epass@127.0.0.1:3306/internship_e2e"`
 export edilir (Next `.env`'i process env'in üzerine yazmaz), `prisma db push
 --accept-data-loss` + `npm run build`, sonra `CI=1 npx playwright test` — prod build'e karşı
 136/136 smoke yeşil, yeni spec dahil.
+
+## 2026-09-07 — Bir rozetin yanlış olması, kuralın yanlış yerden okunması demekti (#2275)
+
+**Bulgu, tek bir sorunun cevabıydı: "temas" nereden okunuyor?** Mentor panosunda 11 satırlık
+"Dikkat gerektiriyor" listesi vardı ve satırların çoğu, mentorun o hafta yazıştığı
+mentee'lerdi. Kodun tek kusuru `r.interactions[0]?.date` idi: temas, mentorun ayrıca
+doldurmayı hatırladığı formdan okunuyordu. Ürünün etkileşim yüzeyi taşındığında (uygulama
+içi mesajlaşma), tazelik hesabı taşınmayı unutmuş. Aynı yanlış girdi beş yüzeyi besliyordu
+(kuyruk, günlük hatırlatma, haftalık özet, mentee kartları, aday sayfasındaki "Sıradaki
+aksiyon"), dolayısıyla doğru düzeltme beş yerde `||` eklemek değil, **kuralı tek modüle
+çıkarmak**tı.
+
+**Kuralın kendisini bağımlılıksız modüle koy, sorguları ayrı tut.** Repo deseni bu
+(`stageAging.ts`): `lastContactRule.ts` hiç `@/` importu içermiyor, bu yüzden
+`node --experimental-strip-types` ile birim testi yazılabiliyor; `lastContact.ts` üç grouped
+aggregate'i çalıştırıp aynı fonksiyonu çağırıyor ve her şeyi re-export ediyor, böylece çağrı
+yerleri tek yerden import ediyor. İlk denemede ikisini tek dosyada yazdım ve test
+`ERR_MODULE_NOT_FOUND` ile patladı — `@/lib/prisma` alias'ını strip-types çözemiyor. Yeni
+modülün gerçek bir suite'i olunca `scripts/check-unit-coverage.mjs`'teki `FLOORS`'a kaydını
+**aynı PR'da** eklemek gerekiyor, yoksa yarın kuralı silen bir refactor hiçbir yeri
+kırmızıya çevirmez.
+
+**Prisma `groupBy`, `where` içinde ilişki filtresi kabul ediyor.** Grup mesajının
+`relationId`'si yok (yazma yolu yalnızca DIRECT sohbette damgalıyor), dolayısıyla yazara göre
+aramak gerekiyor: `groupBy({ by: ['senderId'], where: { senderId: { in: ids },
+conversation: { type: 'GROUP' } }, _max: { createdAt: true } })`. Aynı imkân, "birebir mesaj"
+tarafını da yazma yoluna güvenmek yerine **inşa gereği** doğru tutmayı sağlıyor
+(`OR: [{ conversationId: null }, { conversation: { type: 'DIRECT' } }]`).
+
+**Simetrik kural burada yanlış olurdu.** "Mesaj = temas" derken grup mesajlarını da katmak
+en kısa diff'ti ve tam ters hatayı üretirdi: dokuz mentee'nin bulunduğu kanala mentorun
+attığı tek satır, kuyruğu dokuz kişi için birden susturur. Sınır şu: **birebir** mesaj her iki
+yönde sayılır, **grup** mesajı yalnızca mentee kendi yazdıysa sayılır. Bir asimetriyi
+"tutarsızlık" diye düzleştirmeden önce, iki tarafın aynı şeyi mi ölçtüğüne bakmak gerekiyor.
+
+**Sayaçlara dokunmamak da bir karar ve yazıya geçmesi gerekiyor.** "Toplam Etkileşim" ve
+`/mentor/interactions` hâlâ `InteractionLog` satırlarını sayıyor: orası bir kayıt defteri,
+bozuk olan şey tazelikti. PR'da ve `docs/last-contact.md`'de açıkça yazmasam, bir sonraki
+oturum bunu eksik iş sanıp defteri de bozardı.
+
+**Bu container'da lokal e2e reçetesi (güncel adımlar):**
+- `apt-get install mariadb-server` **önce `apt-get update` istiyor** — bayat paket indeksi
+  iproute2/libmysqlclient21 için 404 veriyor ve mesaj "maybe run apt-get update" diye
+  gerçek sebebi söylüyor. `mariadbd --user=mysql` elle başlatılıyor (`service` yok,
+  `policy-rc.d` restart'ı reddediyor), `/run/mysqld` dizinini önce açmak gerekiyor.
+- **Playwright'ın pinlenmiş build'i (`chromium_headless_shell-1234`) yok, kurulu olan
+  1194** — ve iki sürümün **dizin düzeni farklı**: yenisi
+  `chrome-headless-shell-linux64/chrome-headless-shell`, eskisi `chrome-linux/headless_shell`.
+  Yani dizin sembolik bağı yetmiyor; beklenen yolu açıp **binary'ye** bağ vermek gerekiyor
+  (`mkdir -p .../chromium_headless_shell-1234/chrome-headless-shell-linux64` + `ln -s`
+  `.../chromium_headless_shell-1194/chrome-linux/headless_shell`), ayrıca
+  `INSTALLATION_COMPLETE` dosyasına dokunmak.
+- **Seed edilmemiş DB'ye karşı koşulan smoke, `AccountLockout` bırakıyor.** `admin@example.com`
+  yokken 5 spec düşüyor; `prisma db seed` sonrası **aynı 5 spec yine düşüyor**, bu kez
+  "Too many attempts" ile — ve bu, gerçek bir auth regresyonu gibi okunuyor. `delete from
+  AccountLockout` sonrası 9/9 yeşil. Önce seed et, sonra koş; sıra ters gittiyse kilidi sil.

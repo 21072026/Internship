@@ -20,6 +20,7 @@ import { getRetentionMonths, RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
 import { findDormantFirstContacts, sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
+import { getLastContacts } from '@/lib/lastContact';
 import { getOrgBranding } from '@/lib/orgBranding';
 import { formatInTimeZone, readingsByZone, resolveTimeZone, sameWallClock, zoneLabel, type ZonedPerson } from '@/lib/timezone';
 import { seriesOccurrences } from '@/lib/meetingSeriesOccurrences';
@@ -1916,12 +1917,16 @@ export async function checkMentorInteractionReminders() {
     include: {
       mentor: true,
       mentee: true,
-      interactions: {
-        orderBy: { date: 'desc' },
-        take: 1,
-      },
     },
   });
+
+  // "Contact" is not "a row in InteractionLog": a mentor who is mid-thread with
+  // a mentee in the app's messaging has been in touch, and nagging them to log
+  // it is how this reminder taught mentors to ignore it. Same rule and same
+  // implementation as the in-app attention queue (lib/lastContact.ts).
+  const lastContacts = await getLastContacts(
+    activeRelations.map((relation) => ({ id: relation.id, menteeId: relation.menteeId })),
+  );
 
   const remindersToSend: typeof activeRelations = [];
 
@@ -1936,14 +1941,13 @@ export async function checkMentorInteractionReminders() {
       menteeId: relation.menteeId,
       pipelineStatus: relation.pipelineStatus,
       stageDeadline: relation.stageDeadline,
-      lastInteractionAt: relation.interactions[0]?.date ?? null,
     })),
   );
 
   for (const relation of activeRelations) {
     if (dormant.has(relation.id)) continue;
-    const lastInteraction = relation.interactions[0];
-    const stale = !lastInteraction || lastInteraction.date < fourteenDaysAgo;
+    const lastContact = lastContacts.get(relation.id);
+    const stale = !lastContact || lastContact.at < fourteenDaysAgo;
     if (stale) {
       remindersToSend.push(relation);
       // In-app notification once per staleness episode (#573): only when we
@@ -1992,13 +1996,13 @@ export async function checkMentorInteractionReminders() {
 
     const rows = relations
       .map((relation) => {
-        const lastDate = relation.interactions[0]?.date;
+        const lastDate = lastContacts.get(relation.id)?.at;
         const daysSince = lastDate
           ? Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
           : null;
         const since = daysSince !== null
-          ? `${daysSince} day${daysSince === 1 ? '' : 's'} since the last interaction`
-          : 'no interactions logged yet';
+          ? `${daysSince} day${daysSince === 1 ? '' : 's'} since the last contact`
+          : 'no contact yet';
         return `<li style="margin-bottom:6px;"><strong>${relation.mentee.fullName}</strong> — ${since}</li>`;
       })
       .join('');
@@ -2668,21 +2672,30 @@ export async function sendWeeklyMentorDigests() {
       preferredLanguage: true,
       mentorRelations: {
         select: {
+          id: true,
+          menteeId: true,
           startDate: true,
-          interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
           meetings: { where: { scheduledAt: { gt: now, lte: in7d } }, select: { id: true } },
         },
       },
     },
   });
 
+  // One grouped read for every mentor's relations rather than one per mentor —
+  // and the same definition of contact the attention queue uses, so the digest
+  // and the dashboard cannot disagree about who is stale (lib/lastContact.ts).
+  const lastContacts = await getLastContacts(
+    mentors.flatMap((m) => m.mentorRelations.map((r) => ({ id: r.id, menteeId: r.menteeId }))),
+  );
+
   let sent = 0;
   for (const m of mentors) {
     if (m.mentorRelations.length === 0) continue;
     if (!emailAllowed(m, 'digest') || !emailGroupAllowedForCategory(m, 'mentor-digest')) continue;
-    const stale = m.mentorRelations.filter(
-      (r) => !r.interactions[0] || r.interactions[0].date < fourteenDaysAgo
-    ).length;
+    const stale = m.mentorRelations.filter((r) => {
+      const contact = lastContacts.get(r.id);
+      return !contact || contact.at < fourteenDaysAgo;
+    }).length;
     const upcoming = m.mentorRelations.reduce((n, r) => n + r.meetings.length, 0);
     const newApplications = m.mentorRelations.filter((r) => r.startDate >= weekAgo).length;
 

@@ -15,7 +15,9 @@
 // visible everywhere they were before (mentee list, pipeline board, search).
 //
 // Anything that looks like a live thread keeps the relation on the list:
-//   - the mentee wrote a message,
+//   - the mentee wrote a message (in the 1:1 thread, or in a group chat — a
+//     post they wrote themselves is a sign of life wherever they wrote it, the
+//     same rule lib/lastContact.ts applies to "last contact"),
 //   - the mentee has an unanswered question,
 //   - a meeting request is pending,
 //   - the mentor put a deadline on the stage (a deliberate "chase this one").
@@ -74,13 +76,24 @@ export async function findDormantFirstContacts(relations: DormantCandidate[]): P
   if (candidates.length === 0) return dormant;
 
   const ids = candidates.map((r) => r.id);
-  const [messages, interactions, openQuestions, pendingMeetings] = await Promise.all([
+  const candidateMenteeIds = [...new Set(candidates.map((r) => r.menteeId))];
+  const [messages, groupPosts, interactions, openQuestions, pendingMeetings] = await Promise.all([
     // The timestamps only, and only for relations parked at first contact —
     // threads that by definition never got going. Whole rows are not needed and
     // a message body is the one expensive column here.
     prisma.message.findMany({
       where: { relationId: { in: ids } },
       select: { relationId: true, senderId: true, createdAt: true },
+    }),
+    // The mentee's own posts in group chats. Not outreach and not thread
+    // traffic — but somebody writing in a project channel is plainly not a
+    // person who registered and vanished, which is the only thing this rule is
+    // trying to identify. A GROUP message carries no relationId, so it has to
+    // be looked up by author (see lib/lastContact.ts for the same rule).
+    prisma.message.groupBy({
+      by: ['senderId'],
+      where: { senderId: { in: candidateMenteeIds }, conversation: { type: 'GROUP' } },
+      _max: { createdAt: true },
     }),
     // Reaching out is not the same as logging that you reached out, so a logged
     // interaction and a message from the mentor are the same kind of event to
@@ -111,6 +124,17 @@ export async function findDormantFirstContacts(relations: DormantCandidate[]): P
     }
   }
   for (const i of interactions) noteOutreach(i.relationId, i.date);
+
+  const groupPostByMentee = new Map<string, Date>();
+  for (const row of groupPosts) {
+    if (row._max.createdAt) groupPostByMentee.set(row.senderId, row._max.createdAt);
+  }
+  for (const r of candidates) {
+    const at = groupPostByMentee.get(r.menteeId);
+    if (!at) continue;
+    const seen = lastMenteeActivity.get(r.id);
+    if (!seen || at > seen) lastMenteeActivity.set(r.id, at);
+  }
 
   const withOpenQuestion = new Set(openQuestions.map((q) => q.relationId));
   const withPendingMeeting = new Set(pendingMeetings.map((m) => m.relationId));

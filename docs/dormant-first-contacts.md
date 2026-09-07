@@ -22,6 +22,12 @@ Bir ilişki şu koşulların **hepsi** sağlandığında "pasif ilk temas" sayı
 | **Bir temas var**: `InteractionLog` **veya** mentee dışında birinin (mentor/admin) attığı bir mesaj — hangisi daha yeniyse | Mentor üzerine düşeni yapmış. Mesaj atmak ile "etkileşim kaydı" formunu doldurmak aynı şey değil; kural yalnızca `InteractionLog`'a bakarsa, dört kez yazılmış bir mentee listede kalır (#1512) |
 | **Sessizliğin başlangıcından** (mentee'nin yanıtlamadığı **ilk** temas) en az **`DORMANT_GRACE_DAYS` (14) gün** geçmiş | Dünkü sessizlik bir cevap değildir. Sayaç **son** temastan ölçülürse mentorun ısrarına ait olur: üç haftadır yanıt vermeyen birine atılan bir "Hi?" onu iki hafta daha listeye döndürür ve her kovalama bir iki hafta daha satın alır (#1516) |
 | Mentee'nin **son mesajından sonra en az bir cevapsız temas var**, **yanıtsız soru yok**, **bekleyen toplantı talebi yok** | Soru "top kimde?" — mentee'nin son mesajından beri mentor hiç yazmamışsa cevap borcu **mentordadır**, kişi listede kalır |
+
+Mentee tarafındaki "yaşam belirtisi", birebir başlıktaki mesajlarıyla sınırlı değil:
+**kendi yazdığı bir grup mesajı** da sayılır (#2275). Bir proje kanalına yazan kişi,
+kayıt olup kaybolmuş biri değildir — ki bu kuralın tespit etmeye çalıştığı tek şey odur.
+Mentorun grup mesajı ise hiçbir yerde temas sayılmaz; ayrıntısı
+[last-contact.md](last-contact.md).
 | Aşamaya **mentor tarafından konmuş bir termin yok** (`stageDeadline`) | Termin, "bunu takip et" demenin bilinçli hâlidir |
 
 Hiç kimsenin yazmadığı bir ilişki **asla** pasif sayılmaz: orada eksik olan şey zaten

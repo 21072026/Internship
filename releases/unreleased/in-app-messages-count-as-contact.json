@@ -1,0 +1,21 @@
+{
+  "bump": "patch",
+  "changelog": "- **In-app messaging now counts as contact, so the attention queue stops flagging mentees the mentor talks to daily** (#2275). \"Last contact\" was read from `InteractionLog` alone — the form a mentor has to remember to fill in separately — so a mentor mid-conversation with a mentee still saw *Yakın zamanda temas yok* next to their name, and an 11-row queue of active mentorships is a queue mentors stop reading (the same failure #1499 was opened for, from the other side). One rule now answers the question for every surface, `src/lib/lastContactRule.ts` (dependency-free and unit-tested) with its queries in `src/lib/lastContact.ts`: the newest of a logged interaction, a **1:1 (DIRECT) message in the mentorship thread in either direction**, and a **group message the mentee wrote themselves**. A group message somebody *else* wrote is deliberately not contact — a group chat is a broadcast, and one mentor line into a channel with nine mentees in it would otherwise silence the queue for all nine at once. A mentee's group post is one timestamp applied to every mentorship they are in: the sign of life belongs to the person, not to one pairing. Read receipts, reactions and logins stay out (presence, not contact — that is `lib/activityReport.ts`). Wired into `getAttentionItems()`, the daily `checkMentorInteractionReminders()` bell item + grouped mentor email, `sendWeeklyMentorDigests()`'s stale count, the `/mentor` mentee cards and `/admin/candidates/[id]`'s \"next action\" (via a new server-computed `lastContactAt` on `/api/users/[id]`); `lib/dormantFirstContact.ts` now treats a mentee's own group post as a sign of life too, so it clears `dormantSince` and the nudge counters. Interaction **counts** are untouched by design — \"Toplam Etkileşim\", the mentee-list badge and `/mentor/interactions` are a logbook of `InteractionLog` rows, and what was wrong was freshness, not the ledger. Rule and rationale: [docs/last-contact.md](docs/last-contact.md).",
+  "notes": {
+    "en": [
+      "Messages you exchange in the app now count as contact: a mentee you have been messaging is no longer flagged \"No recent contact\", and the mentee card's \"last contact\" counts from your last message as well as from a logged interaction.",
+      "The daily reminder email and the weekly digest use the same rule, so they no longer chase you about mentees you are already talking to.",
+      "Group chats are treated as the broadcasts they are: another person's group message is not contact with you — but a mentee posting in a group themselves counts, because it shows they are still there."
+    ],
+    "tr": [
+      "Uygulama içindeki yazışmalar artık temas sayılıyor: mesajlaştığınız bir mentee'ye artık \"Yakın zamanda temas yok\" denmiyor ve mentee kartındaki \"son temas\", etkileşim kaydı kadar son mesajınızdan da sayılıyor.",
+      "Günlük hatırlatma e-postası ve haftalık özet aynı kuralı kullanıyor; hâlihazırda konuştuğunuz mentee'ler için sizi artık sıkıştırmıyorlar.",
+      "Grup sohbetleri olduğu gibi, yani bir yayın olarak değerlendiriliyor: başkasının grup mesajı sizinle temas değildir — ama mentee'nin gruba kendi yazdığı mesaj sayılır, çünkü orada olduğunu gösterir."
+    ],
+    "de": [
+      "Nachrichten in der App zählen jetzt als Kontakt: Ein Mentee, mit dem Sie geschrieben haben, wird nicht mehr mit \"Kein Kontakt in letzter Zeit\" markiert, und der \"letzte Kontakt\" auf der Mentee-Karte zählt auch ab Ihrer letzten Nachricht, nicht nur ab einem erfassten Kontakt.",
+      "Die tägliche Erinnerungs-E-Mail und die Wochenübersicht verwenden dieselbe Regel und mahnen Sie deshalb nicht mehr zu Mentees, mit denen Sie ohnehin im Gespräch sind.",
+      "Gruppenchats werden als das behandelt, was sie sind — eine Rundnachricht: Die Gruppennachricht einer anderen Person ist kein Kontakt mit Ihnen. Schreibt ein Mentee selbst in eine Gruppe, zählt das dagegen, denn es zeigt, dass er noch da ist."
+    ]
+  }
+}

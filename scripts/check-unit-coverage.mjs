@@ -82,6 +82,10 @@ const FLOORS = new Map([
     'src/lib/stageAging.ts',
     { floor: 95, measured: 100.0, why: 'stage visits counted separately from candidates (#1427)' },
   ],
+  [
+    'src/lib/lastContactRule.ts',
+    { floor: 95, measured: 100.0, why: 'what counts as contact: 1:1 yes, group only if the mentee wrote it (#2275)' },
+  ],
 ]);
 
 // ── Awaiting tests (a ratchet, not an allowlist) ─────────────────────────────
