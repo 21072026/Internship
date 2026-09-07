@@ -25,6 +25,7 @@ import type { Session } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { isIsolationEnforced, resolveOrgId } from './orgScope';
+import { registerTenantAmbient } from './tenantAmbient';
 
 // The value carried per request: the tenant id to scope to (or null when the
 // request has no resolvable org — e.g. an unauthenticated/public route).
@@ -68,6 +69,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // outside any request scope, where the middleware does not engage, so they
   // still see the whole queue.
   'Job',
+  // Product settings (#1553). Registered so that any code touching
+  // `prisma.setting` directly can only ever see its own tenant's rows. The
+  // settings readers/writers in src/lib/settings.ts deliberately opt OUT (they
+  // run inside `runWithOrg(null, …)`), because the org → GLOBAL (orgId = NULL)
+  // → code-default fallback chain needs to read a row this filter would hide;
+  // they compute the org themselves from the bound context instead.
+  'Setting',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.
@@ -245,3 +253,15 @@ function ensureApiKeyOrgGuard(): void {
 export function withTenantScope<T>(session: Session | null | undefined, fn: () => T): T {
   return runWithOrg(resolveOrgId(session), fn);
 }
+
+// Publish this engine to the client-safe seam (src/lib/tenantAmbient.ts) so
+// modules that must not import THIS file — it pulls in node:async_hooks, which
+// webpack refuses to bundle for a client graph — can still read the bound org
+// and run a query outside the tenant filter. `src/lib/settings.ts` is the one
+// that needs both; see the header there. Evaluating this module is what
+// registers it, and any request that binds a tenant has evaluated it, because
+// `withTenantScope` above is how the binding happens.
+registerTenantAmbient({
+  currentOrgId,
+  runUnscoped: (fn) => runWithOrg(null, fn),
+});
