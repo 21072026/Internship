@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Hand, ListChecks, Plus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -9,7 +9,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
+import { useAnnounce } from '@/components/ui/LiveRegion';
 import { useCharacterCounter } from '@/hooks/useCharacterCounter';
+import { apiErrorMessage } from '@/lib/apiErrorMessage';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { TodoRow, todoText, type Todo } from '@/components/todos/TodoRow';
 
@@ -26,6 +28,7 @@ export function MyTodos({ myId }: { myId: string }) {
   const t = useT();
   const locale = useLocale();
   const toast = useToast();
+  const announce = useAnnounce();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [open, setOpen] = useState<Todo[]>([]);
   const [archive, setArchive] = useState<Todo[]>([]);
@@ -57,7 +60,12 @@ export function MyTodos({ myId }: { myId: string }) {
         method,
         ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || t.common.error);
+      // Never `body.error`: every 4xx on these routes carries a hardcoded English
+      // literal ('Forbidden', 'Validation failed', 'Nothing to create'), and this
+      // now goes into a toast rather than a small line — so a Turkish admin would
+      // get an English one, centre stage. Same stance as every other call site
+      // in the app: the status is what gets translated (@/lib/apiErrorMessage).
+      if (!res.ok) throw new Error(apiErrorMessage(res, t.common, t.common.error));
       await load();
       return true;
     } catch (e) {
@@ -97,6 +105,23 @@ export function MyTodos({ myId }: { myId: string }) {
   // is close to that, so the box stays quiet for the one-line to-dos that are
   // the normal case, and the limit is visible exactly when it starts to matter.
   const draftCounter = useCharacterCounter(draft, TEXT_LIMITS.todoTitle);
+
+  // WCAG 4.1.3, the rule `Textarea` states and implements for the same widget:
+  // the counter is a visual-only cue, so a screen-reader user pasting an
+  // over-long line hears nothing while the field silently clips it. Announce the
+  // two THRESHOLD CROSSINGS only — `state` changes at most twice per draft, so
+  // this never speaks per keystroke, which would make the box unusable.
+  const previousCounterState = useRef(draftCounter.state);
+  useEffect(() => {
+    const previous = previousCounterState.current;
+    previousCounterState.current = draftCounter.state;
+    if (previous === draftCounter.state) return;
+    if (draftCounter.state === 'error') {
+      announce(t.a11y.characterLimitReached, 'assertive');
+    } else if (draftCounter.state === 'warning') {
+      announce(t.a11y.charactersRemaining.replace('{count}', String(Math.max(0, draftCounter.remaining))));
+    }
+  }, [draftCounter.state, draftCounter.remaining, announce, t]);
 
   if (loading) {
     return (

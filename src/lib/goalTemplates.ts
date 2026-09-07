@@ -1,4 +1,5 @@
 import { locales, defaultLocale, isLocale, type Locale } from '@/i18n/config';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 
 // Multilingual goal templates (#51 follow-up).
 //
@@ -11,7 +12,13 @@ import { locales, defaultLocale, isLocale, type Locale } from '@/i18n/config';
 
 export type TemplateTranslations = Partial<Record<Locale, string>>;
 
-const MAX_TITLE = 300;
+// ProjectTaskTemplate.title is VARCHAR(191), and a template's wording is copied
+// into ProjectTask.title verbatim — so this is the same bound, not a second one
+// (#1433). It was 300 here, so a 250-character goal passed the slice untouched,
+// passed the route's matching `max(300)` and was thrown out by the driver as a
+// P2000 — and neither goal-template route catches, so that reached the admin as
+// a 500 with an empty body.
+const MAX_TITLE = TEXT_LIMITS.todoTitle;
 
 /** Keep only known locales with non-empty text, trimmed and length-bounded. */
 export function normalizeTranslations(input: unknown): TemplateTranslations {

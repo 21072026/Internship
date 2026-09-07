@@ -21,30 +21,53 @@ const optionalText = z.string().nullish().transform((v) => v ?? '');
 
 // The schema is built per render because the length messages are translated —
 // a cap the user can hit has to explain itself in their own language (#1433).
-// `name` and `address` are VARCHAR(191) columns: an uncapped name meant a
+// Every text field here writes a VARCHAR column, and an uncapped one meant a
 // 250-character paste passed the form, passed the API and died as a Prisma
 // P2000, which reached the admin as "Internal server error".
+//
+// NO `maxLength` ON THESE INPUTS, deliberately. The browser enforces
+// `maxLength` silently on paste: a 250-character legal entity name would be
+// clipped to 191, sail through `.max()` and be saved 59 characters short with
+// nothing shown. The cap has to be reported, not applied behind the user's
+// back, so the bound lives only in zod and surfaces on the field. (The
+// description box is a `<Textarea showCounter>`, where the hard stop *is*
+// visible.)
 function buildCompanySchema(t: ClientDictionary) {
   const tooLong = (max: number) => t.companyForm.tooLong.replace('{max}', String(max));
+  /** An optional free-text column: normalize null → '' first, then bound it. */
+  const boundedOptional = (max: number) => optionalText.pipe(z.string().max(max, tooLong(max)));
+  /**
+   * Same, for the two fields that are also format-checked. The length check is
+   * a SEPARATE `.pipe()` stage ahead of the `x.or(z.literal(''))` union on
+   * purpose: inside the union, an over-long value fails every branch and zod
+   * reports the union's own "Invalid input" instead of the message that says
+   * what is actually wrong.
+   */
+  const boundedFormat = (max: number, format: z.ZodType<string, z.ZodTypeDef, string>) =>
+    optionalText.pipe(z.string().max(max, tooLong(max))).pipe(format.or(z.literal('')));
   return z.object({
     name: z
       .string()
       .min(1, 'Company name is required')
       .max(TEXT_LIMITS.companyName, tooLong(TEXT_LIMITS.companyName)),
     description: optionalText,
-    contactEmail: z.string().email('Invalid email').or(z.literal('')).nullish().transform((v) => v ?? ''),
-    industry: optionalText,
-    logoUrl: z.string().url('Enter a valid URL').or(z.literal('')).nullish().transform((v) => v ?? ''),
-    size: optionalText,
-    address: optionalText.pipe(
-      z.string().max(TEXT_LIMITS.companyAddress, tooLong(TEXT_LIMITS.companyAddress)),
-    ),
+    contactEmail: boundedFormat(TEXT_LIMITS.companyContactEmail, z.string().email('Invalid email')),
+    industry: boundedOptional(TEXT_LIMITS.companyIndustry),
+    logoUrl: boundedFormat(TEXT_LIMITS.companyLogoUrl, z.string().url('Enter a valid URL')),
+    size: boundedOptional(TEXT_LIMITS.companySize),
+    address: boundedOptional(TEXT_LIMITS.companyAddress),
     quota: z.coerce.number().int().min(0).nullish(),
     needs: z.array(
       z.object({
-        position: z.string().min(1, 'Position is required'),
+        position: z
+          .string()
+          .min(1, 'Position is required')
+          .max(TEXT_LIMITS.companyNeedPosition, tooLong(TEXT_LIMITS.companyNeedPosition)),
         count: z.coerce.number().int().min(1, 'Count must be at least 1'),
-        period: z.string().min(1, 'Period is required'),
+        period: z
+          .string()
+          .min(1, 'Period is required')
+          .max(TEXT_LIMITS.companyNeedPeriod, tooLong(TEXT_LIMITS.companyNeedPeriod)),
       })
     ).optional(),
   });
@@ -102,7 +125,6 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
         <Input
           label={t.companyForm.name}
           required
-          maxLength={TEXT_LIMITS.companyName}
           {...register('name')}
           error={errors.name?.message}
         />
@@ -147,7 +169,6 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing }: Co
       <Input
         label={t.companyForm.address}
         placeholder={t.companyForm.addressPlaceholder}
-        maxLength={TEXT_LIMITS.companyAddress}
         {...register('address')}
         error={errors.address?.message}
       />

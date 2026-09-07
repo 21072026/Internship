@@ -33,6 +33,21 @@ export const TEXT_LIMITS = {
   companyDescription: 2000,
   /** Company.address — VARCHAR(191) */
   companyAddress: 191,
+  /** Company.industry — VARCHAR(191) */
+  companyIndustry: 191,
+  /** Company.logoUrl — VARCHAR(191) */
+  companyLogoUrl: 191,
+  /**
+   * Company.contactEmail — VARCHAR(191). RFC 5321 allows an address up to 254
+   * characters; the column does not, so the shorter of the two is the bound.
+   */
+  companyContactEmail: 191,
+  /** Company.size — VARCHAR(191); the field holds a bracket label ("11-50") */
+  companySize: 40,
+  /** CompanyNeed.position — VARCHAR(191) */
+  companyNeedPosition: 191,
+  /** CompanyNeed.period — VARCHAR(191) */
+  companyNeedPeriod: 191,
   /** MentorshipRequest.message — @db.Text */
   mentorshipRequestMessage: 1000,
   /** Public contact form message — Message.body, @db.Text */
@@ -86,10 +101,15 @@ export const TEXT_LIMITS = {
   /** Call-to-action target — same width as Announcement.link */
   newsletterCtaUrl: 500,
   /**
-   * ProjectTask.title — VARCHAR(191). One column, three writers: a to-do you
-   * write yourself (`/api/todos`), a project task, and a rename
-   * (`/api/project-tasks/[taskId]`). All three capped at 300 before #1433, so
-   * a 250-character paste passed validation and died as a P2000 in the driver.
+   * ProjectTask.title AND ProjectTaskTemplate.title — both VARCHAR(191).
+   *
+   * Two columns, five writers: a to-do you write yourself (`/api/todos`), a
+   * project task, a rename (`/api/project-tasks/[taskId]`), the shared goal pool
+   * (`/api/admin/goal-templates`) and a project's own pool
+   * (`/api/projects/[id]/task-templates`). All five capped at 300 before #1433,
+   * so a 250-character paste passed validation and died as a P2000 in the
+   * driver. A template's wording becomes a task's title verbatim, so the two
+   * columns cannot be bounded independently.
    */
   todoTitle: 191,
   /** InvitationToken.label — the inviter's private note, VARCHAR(191) */

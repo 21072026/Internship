@@ -1,15 +1,15 @@
 {
   "bump": "patch",
-  "changelog": "- **Two zod upper bounds were wider than their column** (#1433). `Company.name` had no `max()` at all and `ProjectTask.title` was capped at 300 against `VARCHAR(191)`, so a long paste passed validation and died as a Prisma P2000 — a 500 in the company modal, and an empty-bodied 500 with no UI feedback at all when adding a to-do. `TEXT_LIMITS` gains `companyName`, `companyAddress` and `todoTitle`, used in the server schema, the client schema and the `maxLength` prop; `POST /api/todos` is wrapped so it can never answer without a JSON body, and a failed add now raises a toast. `e2e/text-limits-columns.unit.spec.ts` checks each constant against the column width parsed from `prisma/schema.prisma` and asserts rejection at exactly one character over.",
+  "changelog": "- **zod upper bounds now match the column they guard** (#1433). Every text field of the \"Add company\" modal and of the to-do/goal-template surface was capped wider than its `VARCHAR(191)` column, or not capped at all, so a long paste passed validation and died as a Prisma P2000 — a 500 in the company modal, and an empty-bodied 500 with no UI feedback at all when adding a to-do. `TEXT_LIMITS` gains `companyName`, `companyAddress`, `companyIndustry`, `companyLogoUrl`, `companyContactEmail`, `companySize`, `companyNeedPosition`, `companyNeedPeriod` and `todoTitle`, used in the server schema and the client schema; `goalTemplates`' own `MAX_TITLE` (300, sliced before the write) becomes `TEXT_LIMITS.todoTitle` so a shared goal cannot outgrow the task title it is copied into. `POST /api/todos` is wrapped **including its `getServerSession` call** — the jwt callback queries the DB on every request, so that was the likeliest throw — and a failed to-do now raises a toast, translated from the status via `apiErrorMessage` rather than echoing the route's English literal. The company inputs deliberately carry no `maxLength`: the browser applies it silently on paste, which replaced the validation error with a quietly truncated name. `e2e/text-limits-columns.unit.spec.ts` reads **every** `String` column of `Company`, `CompanyNeed`, `ProjectTask` and `ProjectTaskTemplate` out of `prisma/schema.prisma` and fails on any that is neither bound to a `TEXT_LIMITS` key nor exempted with a reason, so the next uncapped sibling breaks the test instead of shipping.",
   "notes": {
     "en": [
-      "Long company names and long to-do titles now stop at the field's limit with a clear message, instead of failing with \"Internal server error\" — or, when adding a to-do, failing with no message at all."
+      "Long company names, addresses, industries, logo URLs and to-do titles now stop at the field's limit with a clear message, instead of failing with \"Internal server error\" — or, when adding a to-do, failing with no message at all."
     ],
     "tr": [
-      "Uzun şirket adları ve uzun yapılacak başlıkları artık \"Internal server error\" ile düşmek yerine alanın sınırında anlaşılır bir uyarıyla duruyor — yapılacak eklerken hiçbir şey söylemeden başarısız olma durumu da bitti."
+      "Uzun şirket adları, adresler, sektörler, logo adresleri ve yapılacak başlıkları artık \"Internal server error\" ile düşmek yerine alanın sınırında anlaşılır bir uyarıyla duruyor — yapılacak eklerken hiçbir şey söylemeden başarısız olma durumu da bitti."
     ],
     "de": [
-      "Lange Firmennamen und lange Aufgabentitel stoppen jetzt mit einem verständlichen Hinweis an der Feldgrenze, statt mit „Internal server error“ zu scheitern — und beim Hinzufügen einer Aufgabe scheitert nichts mehr kommentarlos."
+      "Lange Firmennamen, Adressen, Branchen, Logo-Adressen und Aufgabentitel stoppen jetzt mit einem verständlichen Hinweis an der Feldgrenze, statt mit „Internal server error“ zu scheitern — und beim Hinzufügen einer Aufgabe scheitert nichts mehr kommentarlos."
     ]
   }
 }

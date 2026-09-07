@@ -177,14 +177,20 @@ const createSchema = z
 // POST — put a to-do on a list: mine (a line for myself) or my mentee's (what I
 // want them to do, hand-written or from the shared pool).
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  // Everything below is wrapped (#1433): an unhandled throw here left Next to
+  // Everything is inside the try (#1433): an unhandled throw here left Next to
   // answer with a 500 that had NO BODY, so the client's `res.json()` failed too
   // and the add silently did nothing. A 500 now always carries JSON, which is
   // what every other create endpoint already did.
+  //
+  // `getServerSession` is INSIDE it on purpose, matching
+  // /api/companies POST: the JWT callback hits `prisma.user.findUnique` on every
+  // request for the `sessionsValidFrom` revocation check, so a pool timeout
+  // (P2024) or a MySQL restart rejects *here*, before any of the work below —
+  // the exact empty-bodied 500 this wrapper exists to rule out.
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     return await withTenantScope(session, async () => {
       const parsed = createSchema.safeParse(await request.json().catch(() => null));
       if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
