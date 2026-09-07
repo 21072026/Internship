@@ -180,6 +180,15 @@ workaround, #636, and it compiled on every PR push).
 - **Schema first**: change `prisma/schema.prisma`, run `prisma format && prisma validate &&
   prisma generate`. This project uses **`db push`**, there is **no `migrations/` folder** — do
   not author SQL migrations.
+- **"Additive" is not the same as "appliable"** (#2298): `db push` outright *refuses* — not
+  warns, and `--accept-data-loss` does not cover it — a new **required** column whose default
+  is client-side (`@default(cuid()/uuid()/nanoid())`) or absent, and any `@id`/`@@id` change,
+  on a table that already has rows; the step is perfectly legal against the empty database of
+  a topic env, which is why #2249 was green everywhere and then stalled every prod and preview
+  deploy for 13 commits. `npm run check:schema-push` (in CI) diffs the schema against the
+  merge-base with `origin/main` and names the offending model + field; the fix is expand →
+  backfill → contract (`prisma/push-company-interest-expand.mjs` is the worked example), not an
+  `EXEMPT` entry in the guard.
 - **Do not run `db push` against the shared preview/prod DB** without explicit confirmation;
   CI handles DB sync on deploy.
 - **Never commit secrets.** Real values live only in server-side env / GitHub secrets.
