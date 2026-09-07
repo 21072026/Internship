@@ -33,6 +33,10 @@ export default function AdminSettingsPage() {
   const [blindReview, setBlindReview] = useState(false);
   const [earlyAccessWindowDays, setEarlyAccessWindowDays] = useState('7');
   const [premiumAnalytics, setPremiumAnalytics] = useState(false);
+  // Monthly AI call budget (#1625). A real, enforced setting — the AI gate
+  // refuses calls once the month's pool is spent — that until now had no UI at
+  // all, so it could only be changed with an API call or a DB write.
+  const [aiMonthlyQuota, setAiMonthlyQuota] = useState('200');
   const [savingSettings, setSavingSettings] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -125,6 +129,7 @@ export default function AdminSettingsPage() {
       setSelfRegistration(settings.selfRegistration ?? 'auto');
       setEarlyAccessWindowDays(settings.earlyAccessWindowDays ?? '7');
       setPremiumAnalytics(settings.premiumAnalytics === 'true');
+      setAiMonthlyQuota(settings.aiMonthlyQuota ?? '200');
       setOutcomeAutoSend(settings.outcomeAutoSend === 'true');
       setBlindReview(settings.blindReview === 'true');
     }
@@ -137,7 +142,7 @@ export default function AdminSettingsPage() {
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false' }),
+        body: JSON.stringify({ reminderDays, retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', require2fa, selfRegistration, earlyAccessWindowDays, premiumAnalytics: premiumAnalytics ? 'true' : 'false', outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', aiMonthlyQuota }),
       });
       if (res.ok) setFlash(t.settings.saved);
     } finally {
@@ -256,6 +261,9 @@ export default function AdminSettingsPage() {
               </label>
               <p className="text-xs text-gray-500 mt-1">{t.settings.premiumAnalyticsHint}</p>
             </div>
+            {/* max 999999 mirrors the API's `\d{1,6}` regex, which stays the
+                authority — the number attribute only keeps the form honest. */}
+            <Input label={t.settings.aiMonthlyQuota} type="number" min={0} max={999999} step={1} value={aiMonthlyQuota} onChange={(e) => setAiMonthlyQuota(e.target.value)} hint={t.settings.aiMonthlyQuotaHint} data-testid="ai-monthly-quota" />
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
           </form>
           <div className="mt-6 pt-4 border-t border-gray-100">
