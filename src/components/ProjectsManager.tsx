@@ -140,6 +140,13 @@ export function ProjectsManager({ isAdmin }: { isAdmin: boolean }) {
 
       {showForm && (
         <ProjectForm
+          // Remount when the edit target changes (#2270). `edit(p)` only sets
+          // `editing`/`showForm`, and the cards stay rendered below the open
+          // form — so clicking a second pencil kept the same ProjectForm
+          // instance, whose field state is seeded once from the prop. The
+          // header said "Edit project" for B while every input still held A,
+          // and Save wrote A's values (owner included) onto B.
+          key={editing?.id ?? 'new'}
           project={editing}
           canEditProtected={!editing || isOwnerOf(editing)}
           showOwnerPicker={isAdmin}

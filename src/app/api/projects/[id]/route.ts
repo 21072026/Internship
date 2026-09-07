@@ -108,6 +108,27 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
     }
 
+    // The two programme-level flags stay with an admin, whoever owns the
+    // project (#2270). POST refuses them from a mentee at creation; without the
+    // same rule here a mentee owner could create a private, gated project and
+    // then simply PUT `isPublic: true` / `contributorTermsRequired: false`
+    // back. The portal form sends neither field, so this cannot fire from the
+    // UI — it closes the API path.
+    if (session.user.role === 'MENTEE') {
+      const programmeSent = (['isPublic', 'contributorTermsKey', 'contributorTermsRequired'] as const)
+        .filter((k) => d[k] !== undefined);
+      if (programmeSent.length > 0) {
+        return NextResponse.json(
+          {
+            error: 'An admin decides whether a project is published and which contributor terms it uses',
+            fields: programmeSent,
+            code: 'programme_only',
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const data: Record<string, unknown> = {};
     if (d.name !== undefined) data.name = d.name;
     if (d.description !== undefined) data.description = d.description || null;

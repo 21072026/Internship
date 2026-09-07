@@ -1,0 +1,21 @@
+{
+  "bump": "patch",
+  "changelog": "- **Follow-ups from the review of mentee-owned projects** (#2270). Four holes the shipped change left behind. (1) The project-level IP gate is now withheld from a MENTEE server-side, symmetrically with `isPublic`: `POST /api/projects` ignores `contributorTermsRequired` / `contributorTermsKey` from a mentee creator, and `PUT /api/projects/[id]` refuses either field (plus `isPublic`) from a mentee owner with 403 `programme_only`. Only the portal form hid the picker before, so a hand-rolled `{\"contributorTermsRequired\": false}` created a project nobody joining it was ever asked to accept terms for — and one that dropped out of the admin acceptance report, which counts `contributorTermsRequired: true` rows only. (2) `canManageMembers()` in `[id]/members` now honours the legacy `ownerUserId` pointer, like `isProjectOwner()` and like the `isLead` test on `/projects/[id]`: it read OWNER `ProjectMember` rows only, so on every topic/preview environment (the demo seeder sets `ownerUserId` alone and no deploy script runs `backfill-project-members.mjs`) the demo owner got the members panel rendered and a 403 from every fetch behind it — a silently empty roster. (3) `ProjectForm` is keyed on the edit target in `ProjectsManager`, so switching pencils with the form open no longer saves project A's values (owner included) onto project B — the extracted form seeds its state once, where the old inline form re-populated it in `edit()`. (4) The advice given to a mentee owner is now true: a private project cannot receive join requests (`not_public`), and only an admin can publish a mentee-created one, so the members panel says so for a private project (new `projects.ownerInviteAskAdmin`, EN/TR/DE), the `mentee_owner_invite` 403 names that step, and the `menteeOwnProject` feature-catalogue copy no longer promises a join-request flow that cannot occur while the project is private. No schema change.",
+  "notes": {
+    "en": [
+      "A project's contributor-terms setting is now the programme's decision on the server too, not just in the form — a mentee-created project always keeps the platform default.",
+      "A project owner whose membership row predates the member list is no longer locked out of their own roster.",
+      "Editing one project and then clicking the pencil on another no longer carries the first project's values over."
+    ],
+    "tr": [
+      "Bir projenin katkı sözleşmesi ayarı artık yalnızca formda değil sunucuda da programın kararı — mentee'nin açtığı proje her zaman platform varsayılanını korur.",
+      "Üye listesinden eski olan sahiplik kaydına sahip proje sahipleri artık kendi ekip listesinden dışlanmıyor.",
+      "Bir projeyi düzenlerken başka bir projenin kalemine basmak artık ilk projenin değerlerini taşımıyor."
+    ],
+    "de": [
+      "Die Contributor-Terms-Einstellung eines Projekts entscheidet das Programm jetzt auch serverseitig, nicht nur im Formular — ein von einem Mentee angelegtes Projekt behält immer die Plattform-Vorgabe.",
+      "Projekt-Eigentümer, deren Eigentum nur über den alten Zeiger hinterlegt ist, werden nicht mehr aus ihrer eigenen Mitgliederliste ausgesperrt.",
+      "Wer ein Projekt bearbeitet und dann auf den Stift eines anderen klickt, überträgt nicht mehr die Werte des ersten Projekts."
+    ]
+  }
+}

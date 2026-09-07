@@ -126,6 +126,9 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
+  // A mentee creates only for themselves, and the two programme-level flags
+  // below (`isPublic`, `contributorTerms*`) are not theirs to set.
+  const menteeCreator = session.user.role === 'MENTEE';
 
   // Resolve & authorize ownership (no orphan projects).
   let owner;
@@ -161,12 +164,24 @@ export async function POST(request: Request) {
       // showcase and into sitemap.xml, next to the owner's real full name. A
       // mentee publishing their own work is a policy decision for the programme,
       // not a side effect of opening self-service creation.
-      isPublic: session.user.role === 'MENTEE' ? false : d.isPublic ?? false,
+      isPublic: menteeCreator ? false : d.isPublic ?? false,
       goals: d.goals || null,
       startDate: d.startDate ? new Date(d.startDate) : null,
       endDate: d.endDate ? new Date(d.endDate) : null,
-      contributorTermsKey: d.contributorTermsKey || null,
-      ...(d.contributorTermsRequired !== undefined ? { contributorTermsRequired: d.contributorTermsRequired } : {}),
+      // The project-level IP gate is the programme's call, not the
+      // contributor's (#2270) — same reasoning as `isPublic`, and now enforced
+      // the same way. The portal form hides the picker, but that was the only
+      // thing stopping a mentee from posting `contributorTermsRequired: false`
+      // (or a `contributorTermsKey` with no document behind it, which disables
+      // the gate through the documented "key with no text" fallback): nobody
+      // joining the project would ever be asked to accept terms, and the
+      // project would drop out of the admin acceptance report, which only
+      // counts `contributorTermsRequired: true` rows. A mentee-created project
+      // therefore keeps the platform default until an admin says otherwise.
+      contributorTermsKey: menteeCreator ? null : d.contributorTermsKey || null,
+      ...(!menteeCreator && d.contributorTermsRequired !== undefined
+        ? { contributorTermsRequired: d.contributorTermsRequired }
+        : {}),
       ...owner,
     },
     include,
