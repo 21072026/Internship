@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
@@ -250,35 +251,58 @@ async function notificationWindowFor(orgId: string | null): Promise<number> {
 export async function pruneNotifications(ctx: RetentionContext): Promise<RetentionOutcome> {
   // Users with no org (a single-tenant installation, and anybody not bound to
   // one) resolve against the global settings layer — that is the `null` scope,
-  // and it is last so the tenants get first call on the run's budget.
+  // and it is a scope like any other from here on.
   const orgs = await prisma.organization.findMany({ select: { id: true }, orderBy: { id: 'asc' } });
   const scopes: (string | null)[] = [...orgs.map((o) => o.id), null];
 
-  let deleted = 0;
-  let capped = false;
+  // ONE SELECT PER DISTINCT WINDOW, NOT ONE PER TENANT. Resolving the setting is
+  // per scope and must stay that way (#1561); the QUERY does not have to be.
+  // Every scope that lands on the same cutoff is swept together, so an instance
+  // where nobody overrode the default — the normal case, however many orgs it
+  // has — walks the index once a night instead of once per org. What the loop
+  // costs is not hypothetical: the rows this sweep may never delete (unread
+  // ones, the retained types, anything belonging to a keep-forever tenant) stay
+  // inside the scanned range for good, so every extra pass re-walks a prefix
+  // that only grows.
+  const groups = new Map<number, { cutoff: Date; orgIds: string[]; includeNull: boolean }>();
   let keepForever = 0;
 
   for (const orgId of scopes) {
+    const cutoff = notificationRetentionCutoff(ctx.now, await notificationWindowFor(orgId));
+    if (!cutoff) {
+      keepForever += 1;
+      continue;
+    }
+    const group = groups.get(cutoff.getTime()) ?? { cutoff, orgIds: [], includeNull: false };
+    if (orgId === null) group.includeNull = true;
+    else group.orgIds.push(orgId);
+    groups.set(cutoff.getTime(), group);
+  }
+
+  let deleted = 0;
+  let capped = false;
+
+  for (const group of groups.values()) {
     const budget = ctx.budget - deleted;
     if (budget <= 0) {
       capped = true;
       break;
     }
 
-    const cutoff = notificationRetentionCutoff(ctx.now, await notificationWindowFor(orgId));
-    if (!cutoff) {
-      keepForever += 1;
-      continue;
-    }
+    // Notification has no orgId of its own; it is tenant data through its
+    // owner, which is where the scope comes from. `orgId: { in: [] }` matches
+    // nothing and `in` never matches NULL, so the two halves are separate
+    // branches rather than one clause.
+    const owners: Prisma.NotificationWhereInput[] = [];
+    if (group.orgIds.length > 0) owners.push({ user: { orgId: { in: group.orgIds } } });
+    if (group.includeNull) owners.push({ user: { orgId: null } });
 
-    const where = {
-      createdAt: { lt: cutoff },
+    const where: Prisma.NotificationWhereInput = {
+      createdAt: { lt: group.cutoff },
       // Rail 1. Never an unread row, at any age.
       read: true,
       type: { notIn: [...RETAINED_NOTIFICATION_TYPES] },
-      // Notification has no orgId of its own; it is tenant data through its
-      // owner, which is where the scope comes from.
-      user: { orgId },
+      OR: owners,
     };
 
     const outcome = await pruneInBatches({
@@ -304,9 +328,12 @@ export async function pruneNotifications(ctx: RetentionContext): Promise<Retenti
   return {
     deleted,
     capped,
-    // Short on purpose: it shares ActivityLog.detail's 191 characters with every
-    // other entry's counts.
-    note: keepForever > 0 ? `${keepForever} scope(s) keep forever` : undefined,
+    // Terse on purpose: `formatRetentionSummary` puts this in the nightly
+    // `retention.pruned` row, which shares ActivityLog.detail's 191 characters
+    // with every other entry's counts. It is the only thing that tells an
+    // operator "this window is switched off here" apart from "it ran and found
+    // nothing" — both of which are otherwise `notification=0`, i.e. nothing.
+    note: keepForever > 0 ? `off:${keepForever}/${scopes.length}` : undefined,
   };
 }
 

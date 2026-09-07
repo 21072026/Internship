@@ -829,10 +829,17 @@ model Notification {
   @@index([userId])
   @@index([announcementId])
   // The nightly retention sweep (#1646) selects the oldest out-of-window rows
-  // (`createdAt < cutoff`, oldest first) in bounded batches. Without this index
-  // every batch is a filesort over the whole table — the exact shape of load
-  // the batching exists to avoid.
-  @@index([createdAt])
+  // in bounded batches. Without an index every batch is a filesort over the
+  // whole table — the exact shape of load the batching exists to avoid.
+  //
+  // `read` LEADS, and it is not cosmetic: the sweep's predicate is
+  // `read = 1 AND createdAt < cutoff ORDER BY createdAt ASC`, and an unread row
+  // is never deleted at any age. On a bare `[createdAt]` those permanently
+  // undeletable rows sit inside the scanned range for good, so the prefix each
+  // batch walks grows every night instead of shrinking. With `read` as the
+  // equality prefix they are not in the range at all, and `createdAt` still
+  // supplies both the range and the ordering.
+  @@index([read, createdAt])
 }
 
 // One Web Push endpoint a user has granted us (#1464, #675 Kademe 2).

@@ -200,6 +200,11 @@ test('searching the notification history narrows it to the matching text and cle
     // empty inbox.
     await page.getByTestId('notifications-search').fill(`no such notification ${suffix}`);
     await expect(page.getByTestId('notifications-empty')).toHaveText('No notification matches your search.');
+    // …and it says WHY it might have matched nothing. `q` reads
+    // `Notification.text`, which only announcements and legacy rows have; an
+    // unqualified no-match over a templated row that is sitting right there
+    // unfiltered reads as a broken search rather than a narrow one.
+    await expect(page.getByTestId('notifications-search-scope')).toBeVisible();
 
     // The search is part of "clear filters", not a separate control.
     await page.getByRole('button', { name: 'Clear filters' }).click();

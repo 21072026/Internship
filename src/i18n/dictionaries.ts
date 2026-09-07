@@ -1849,6 +1849,7 @@ const en = {
     searchLabel: 'Search',
     searchPlaceholder: 'Search notification text…',
     searchNone: 'No notification matches your search.',
+    searchHint: 'Only notifications that carry their own text — announcements — can be searched. Use the type filter for everything else.',
     types: {
       deadline: 'Deadline',
       retention: 'Retention',
@@ -6463,6 +6464,7 @@ const tr: Dict = {
     searchLabel: 'Ara',
     searchPlaceholder: 'Bildirim metninde ara…',
     searchNone: 'Aramanızla eşleşen bildirim yok.',
+    searchHint: 'Yalnızca kendi metnini taşıyan bildirimler — duyurular — aranabilir. Diğerleri için tür filtresini kullanın.',
     types: {
       deadline: 'Son tarih',
       retention: 'Elde tutma',
@@ -11036,6 +11038,7 @@ const de: Dict = {
     searchLabel: 'Suchen',
     searchPlaceholder: 'Benachrichtigungstext durchsuchen…',
     searchNone: 'Keine Benachrichtigung passt zu Ihrer Suche.',
+    searchHint: 'Durchsuchbar sind nur Benachrichtigungen mit eigenem Text — Ankündigungen. Für alles andere nutzen Sie den Typfilter.',
     types: {
       deadline: 'Frist',
       retention: 'Bindung',

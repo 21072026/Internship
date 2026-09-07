@@ -16,7 +16,9 @@ import {
 //   2. `0` means keep forever, not "delete everything".
 //
 // (The third rail — an unread row is never deleted — is a `where` clause in the
-// entry, exercised against a real database, not a decision this module makes.)
+// entry, not a decision this module makes. It is asserted against a real
+// database in `e2e/retention-prune.spec.ts`, alongside the retained types and
+// the per-tenant resolution of the window.)
 
 const NOW = new Date('2026-09-07T03:20:00.000Z');
 

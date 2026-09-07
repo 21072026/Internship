@@ -31,6 +31,12 @@ const MAX_SEARCH_LENGTH = 100;
 // re-rendering every row in every locale on the server, which is a different
 // feature (deliberately out of scope here). The type filter is the usable
 // handle on templated rows.
+//
+// That limitation is stated to the READER too, not only here: /notifications
+// carries it as a hint under the search box and repeats it when a search
+// matches nothing (`notifications.searchHint`). A silent "no notification
+// matches your search" over a row that is sitting unfiltered one keystroke away
+// reads as a broken search, which is worse than a narrow one.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
