@@ -157,3 +157,115 @@ test('GET /api/notifications enforces the caller\'s own userId and paginates', a
     await cleanupByEmail(otherEmail);
   }
 });
+
+// ── Search (#1646) ───────────────────────────────────────────────────────────
+//
+// `data-testid`, never `input[type="search"]`: AdminNav renders its own sidebar
+// filter box with that type on every admin page, and an unscoped selector picks
+// it up instead of the page's own box.
+
+test('searching the notification history narrows it to the matching text and clears again', async ({ page }) => {
+  const email = uniqueEmail('notifhist-search');
+  const me = await seedUser(email, 'MenteePass123', 'MENTEE', 'Notif History Search');
+  const suffix = Date.now().toString(36);
+
+  try {
+    const wanted = `Quarterly zeppelin review ${suffix}`;
+    const other = `Ordinary weekly standup ${suffix}`;
+    const third = `Another unrelated note ${suffix}`;
+
+    await prisma.notification.createMany({
+      data: [
+        { userId: me.id, type: 'message', text: wanted, read: false },
+        { userId: me.id, type: 'message', text: other, read: false },
+        { userId: me.id, type: 'deadline', text: third, read: true },
+      ],
+    });
+
+    await signIn(page, email, 'MenteePass123');
+    await page.goto('/notifications');
+
+    const list = page.getByTestId('notifications-list');
+    await expect(list.getByText(wanted, { exact: true })).toBeVisible();
+
+    await page.getByTestId('notifications-search').fill('zeppelin');
+
+    await expect(list.getByText(wanted, { exact: true })).toBeVisible();
+    await expect(list.getByText(other, { exact: true })).toHaveCount(0);
+    await expect(list.getByText(third, { exact: true })).toHaveCount(0);
+    // The badge and the range readout follow the filtered total, not the table.
+    await expect(page.getByText('1 notifications', { exact: true })).toBeVisible();
+
+    // A search that matches nothing says so, and says it differently from an
+    // empty inbox.
+    await page.getByTestId('notifications-search').fill(`no such notification ${suffix}`);
+    await expect(page.getByTestId('notifications-empty')).toHaveText('No notification matches your search.');
+
+    // The search is part of "clear filters", not a separate control.
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(page.getByTestId('notifications-search')).toHaveValue('');
+    await expect(list.getByText(wanted, { exact: true })).toBeVisible();
+    await expect(list.getByText(other, { exact: true })).toBeVisible();
+    await expect(list.getByText(third, { exact: true })).toBeVisible();
+  } finally {
+    await prisma.notification.deleteMany({ where: { userId: me.id } });
+    await cleanupByEmail(email);
+  }
+});
+
+test('a search sends the reader back to page 1, and only searches their own rows', async ({ page }) => {
+  const meEmail = uniqueEmail('notifhist-search-page');
+  const otherEmail = uniqueEmail('notifhist-search-other');
+  const me = await seedUser(meEmail, 'MenteePass123', 'MENTEE', 'Notif Search Paging');
+  const other = await seedUser(otherEmail, 'MenteePass123', 'MENTEE', 'Notif Search Other');
+  const suffix = Date.now().toString(36);
+
+  try {
+    const needle = `Sole zeppelin match ${suffix}`;
+    await prisma.notification.createMany({
+      data: [
+        ...Array.from({ length: 24 }, (_, i) => ({
+          userId: me.id,
+          type: 'message',
+          text: `Filler notification ${i} ${suffix}`,
+          read: false,
+        })),
+        { userId: me.id, type: 'message', text: needle, read: false },
+        // Same word, different owner: it must never surface in my search.
+        { userId: other.id, type: 'message', text: `Foreign zeppelin match ${suffix}`, read: false },
+      ],
+    });
+
+    await signIn(page, meEmail, 'MenteePass123');
+    await page.goto('/notifications');
+
+    // 25 rows over two pages; walk to the second one first.
+    await expect(page.getByText('1–20 / 25 notifications')).toBeVisible();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByText('21–25 / 25 notifications')).toBeVisible();
+
+    await page.getByTestId('notifications-search').fill('zeppelin');
+
+    // Page 3 of the old result set means nothing for the new one: back to 1.
+    await expect(page.getByText('1–1 / 1 notifications')).toBeVisible();
+    await expect(page.getByTestId('notifications-list').getByText(needle, { exact: true })).toBeVisible();
+    await expect(page.getByText(`Foreign zeppelin match ${suffix}`, { exact: true })).toHaveCount(0);
+
+    // And the API agrees, including on the default shape the bell depends on.
+    const searched = await page.request.get('/api/notifications?q=zeppelin');
+    const searchedBody = await searched.json();
+    expect(searchedBody.total).toBe(1);
+    expect(searchedBody.items).toHaveLength(1);
+
+    const unfiltered = await page.request.get('/api/notifications');
+    const unfilteredBody = await unfiltered.json();
+    expect(unfilteredBody.total).toBe(25);
+    expect(unfilteredBody.items).toHaveLength(20);
+    expect(unfilteredBody).toHaveProperty('unread');
+    expect(unfilteredBody).toHaveProperty('types');
+  } finally {
+    await prisma.notification.deleteMany({ where: { userId: { in: [me.id, other.id] } } });
+    await cleanupByEmail(meEmail);
+    await cleanupByEmail(otherEmail);
+  }
+});

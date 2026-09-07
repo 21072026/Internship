@@ -287,6 +287,45 @@ ile değiştirilir.
 | `PushSubscription` | `pushSubscriptionStaleDays` | 180 gün | Şema yorumunun kendi deyimiyle "ölü ağırlık". Asıl temizlik push sağlayıcısının reddinde oluyor (`src/lib/webPush.ts`: 404/410 anında siler, 5 ardışık hatadan sonra da siler); bu girdi yalnızca hiç push gönderilmemiş satırı yakalar. |
 | `Job` (`SUCCEEDED`/`CANCELLED`) | `jobRetentionDays` | 30 gün | Biten bir iş günler içinde okunur, kuyruk ise üründeki en hareketli tablo. `DEAD_LETTER` **asla** silinmez — operatörün ihtiyacı olan satırlar onlar; `FAILED` de silinmez, çünkü ya yeniden denenecek ya da bir teşhistir. |
 | `EmailLog` | *(ayar yok)* | 90 gün | Ürün kararı (#1211), operatör düğmesi değil. Değişmedi; yalnızca 09:00 tick'inden buraya taşındı. |
+| `Notification` | `notificationRetentionDays` | 180 gün | Bir bildirim satırı, biri hakkında yazılmış bir cümle ve kaydına giden bir link — `EmailLog`'un budanma gerekçesiyle aynı türden kişisel veri, ama #1646'ya kadar hiç silinmeyen tek tablo. 180 gün, diğer kullanıcı bazlı geçmiş tablosu olan `PageView` ile aynı; ürün iki sayı yerine bir sayı savunuyor. **Okunmamış satır silinmez**, 30 günden yeni satır silinmez, onay ve hesaba erişim bildirimleri hiç silinmez (aşağıya bakın). `0` = sonsuza kadar sakla. |
+
+### Bildirim penceresinin iki freni ve tek istisnası (#1646)
+
+`notificationRetentionDays`, yukarıdaki dördün aksine **yönetici ayar formunda**:
+bir zilin geçmişini ne kadar tuttuğu, hakkında fikri olan bir program kararı.
+Forma girilen bir sayı denetimden geçmeden gecelik işe ulaştığı için kural iki
+freni kodun içinde taşıyor ve hiçbir ayar bunları gevşetemez:
+
+1. **Okunmamış bir satır asla silinmez.** O hâlâ kişinin görmediği bildirim;
+   fazla hevesli bir pencere, birinin birazdan açacağı zili boşaltamamalı.
+2. **30 günden yeni hiçbir satır silinmez** (`NOTIFICATION_RETENTION_FLOOR_DAYS`).
+   Bu bir taban, varsayılan değil — en kötü yazım hatasını yaşanabilir kılan şey.
+
+Bir de tür bazlı istisna var (`RETAINED_NOTIFICATION_TYPES`,
+`src/lib/notificationRetention.ts`). Çoğu bildirim bir kolaylıktır: arkasındaki
+olgu başka bir satırda durur, bildirim ona giden işaretçidir. Şu üçü değil —
+onlarda **bildirimin kendisi**, kişiye bir şey söylediğimizin kaydı:
+
+- `retention.confirm` — KVKK/GDPR yeniden onay istemi. Link'i yenileme jetonunu
+  taşıdığı için yanıtlanmamış olanı hâlâ açık bir iş; aynı bildirimin e-posta
+  kopyası zaten 90 günde budanıyor ve `User.retentionReminderSentAt` yalnızca bir
+  tarih tutuyor, kişiye **ne sorulduğunu** gösteremiyor.
+- `impersonation.accessed` / `impersonation.accessedWithReason` — bir yöneticinin
+  hesaba girdiğinin şeffaflık bildirimi. Operatör tarafındaki karşılığı
+  (`impersonate.start`) `ActivityLog`'da duruyor ama oraya yalnızca yönetici
+  bakabiliyor: bu satır **hesap sahibinin tek kopyası**, ve öznesinin artık
+  göremediği bir şeffaflık bildirimi şeffaflık bildirimi olmaktan çıkar.
+
+`security.*` bildirimleri bilerek bu listede **değil**: karşılıkları güvenlik
+defterinde kendi (daha uzun) penceresiyle duruyor ve kullanıcıya giden kopya
+bilgilendirmedir — kullanılmış bir hakkı da verilmiş bir onayı da kaydetmez.
+Listeyi gerçekten tek kanıt olan satırların ötesine genişletmek, pencereyi
+sessizce kapatmak olurdu.
+
+Pencere **kiracı başına** çözülür: `pruneNotifications` org'ları tek tek dolaşır
+ve her biri için ayarı yeniden okur. Kayıt mekanizmasının girdi başına tek
+pencere çözen `resolveDays`'i telemetri tabloları için doğru, burada yanlış
+olurdu — ilk kiracının tercihi herkese uygulanırdı (#1561).
 
 ### Denetim kaydı silinmiyor — kimliklendiriciler siliniyor
 
@@ -319,19 +358,20 @@ prune modülü açılmıyor. Yeni bir tablo **tek bir `registerRetention()`
 
 ```ts
 registerRetention({
-  key: 'notification',
-  settingKey: 'notificationRetentionDays',
+  key: 'domainEvent',
+  settingKey: 'domainEventRetentionDays',
   defaultDays: 90,
   reason: 'Neden bu süre — bir cümle. Zorunlu.',
   run: async (ctx) => { /* ctx.cutoff, ctx.batchSize, ctx.budget */ return { deleted: n }; },
 });
 ```
 
-Girdi bir **fonksiyondur**, `{ tablo, tarih alanı }` tanımı değil. Sıradaki dört
-tablonun hiçbiri düz bir `deleteMany` değil: #1646 okunmamış bildirimi asla
-silmemeli, #2056 satırı silmiyor `deletedForEveryoneAt` ile **maskeliyor**,
-#1585'in kendi ayrı penceresi var, #1691 basit ama aynı kapıdan giriyor.
-Yalnızca `deleteMany` yapabilen bir tasarım bunların hiçbirini ifade edemezdi.
+Girdi bir **fonksiyondur**, `{ tablo, tarih alanı }` tanımı değil. Bu kapıdan
+geçen tabloların hiçbiri düz bir `deleteMany` değil: #1646 okunmamış bildirimi
+asla silmiyor ve pencereyi kiracı başına çözüyor, #2056 satırı silmiyor
+`deletedForEveryoneAt` ile **maskeliyor**, #1585'in kendi ayrı penceresi var,
+#1691 basit ama aynı kapıdan giriyor. Yalnızca `deleteMany` yapabilen bir
+tasarım bunların hiçbirini ifade edemezdi.
 
 Üç kural girdiden bağımsız olarak koşucunun garantisi:
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
+import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
@@ -24,6 +25,12 @@ interface NotificationItem {
 
 const PAGE_SIZE = 20;
 
+// Wait this long after the last keystroke before asking the server (#1646).
+// Short enough to feel live, long enough that typing a word is one request
+// instead of one per letter — and every one of those requests is a `contains`
+// scan on a TEXT column.
+const SEARCH_DEBOUNCE_MS = 300;
+
 // Shared focus/hover/touch-target treatment for every clickable notification
 // row (card or link) — WCAG 2.2 minimum target size is 44x44px.
 const ROW_INTERACTIVE_CLASSES =
@@ -38,6 +45,11 @@ export default function NotificationsPage() {
   const [page, setPage] = useState(1);
   const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [typeFilter, setTypeFilter] = useState('');
+  // Two pieces of state on purpose: `search` is what the box shows (so typing
+  // never lags), `query` is what has actually been sent. Only the second one is
+  // a dependency of `load`.
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -47,6 +59,7 @@ export default function NotificationsPage() {
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE), read: readFilter });
       if (typeFilter) params.set('type', typeFilter);
+      if (query) params.set('q', query);
       const res = await fetch(`/api/notifications?${params}`);
       if (!res.ok) throw new Error('failed');
       const data = await res.json();
@@ -58,16 +71,34 @@ export default function NotificationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, readFilter, typeFilter]);
+  }, [page, readFilter, typeFilter, query]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  // Debounce the box into `query`; the trailing edge is what gets searched.
+  //
+  // The page reset happens in the same tick as the query change, not in a second
+  // effect watching `query`: two state updates in one handler are batched into a
+  // single render and therefore a single fetch, where a follow-up effect would
+  // fire one request for "page 2 of the new search" before correcting itself.
+  // Keyed off the keystroke means it only ever runs while somebody is typing —
+  // paging through an existing result set never resets itself.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setQuery(search.trim());
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [search]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(page * PAGE_SIZE, total);
-  const filtersActive = readFilter !== 'all' || typeFilter !== '';
+  const filtersActive = readFilter !== 'all' || typeFilter !== '' || search !== '';
+  // Tell "you have no notifications" apart from "this search matched none".
+  const searching = query !== '';
 
   const markRead = async (id: string) => {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
@@ -82,6 +113,8 @@ export default function NotificationsPage() {
   const clearFilters = () => {
     setReadFilter('all');
     setTypeFilter('');
+    setSearch('');
+    setQuery('');
     setPage(1);
   };
 
@@ -113,6 +146,19 @@ export default function NotificationsPage() {
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
+        <div className="flex-1 min-w-0">
+          {/* data-testid, not `input[type="search"]`: AdminNav renders its own
+              sidebar search box on every admin page and an unscoped selector
+              picks that one up instead. */}
+          <Input
+            label={t.notifications.searchLabel}
+            type="search"
+            data-testid="notifications-search"
+            placeholder={t.notifications.searchPlaceholder}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         <div className="flex-1 min-w-0">
           <Select
             label={t.notifications.filterStatus}
@@ -161,7 +207,9 @@ export default function NotificationsPage() {
         </Card>
       ) : items.length === 0 ? (
         <Card>
-          <p className="text-sm text-gray-400 text-center py-10">{t.notifications.none}</p>
+          <p className="text-sm text-gray-400 text-center py-10" data-testid="notifications-empty">
+            {searching ? t.notifications.searchNone : t.notifications.none}
+          </p>
         </Card>
       ) : (
         <div className="space-y-3" data-testid="notifications-list">

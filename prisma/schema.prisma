@@ -828,6 +828,11 @@ model Notification {
 
   @@index([userId])
   @@index([announcementId])
+  // The nightly retention sweep (#1646) selects the oldest out-of-window rows
+  // (`createdAt < cutoff`, oldest first) in bounded batches. Without this index
+  // every batch is a filesort over the whole table — the exact shape of load
+  // the batching exists to avoid.
+  @@index([createdAt])
 }
 
 // One Web Push endpoint a user has granted us (#1464, #675 Kademe 2).

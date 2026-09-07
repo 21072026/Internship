@@ -42,6 +42,12 @@ const schema = z.object({
   pageViewRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
   pushSubscriptionStaleDays: z.string().regex(/^\d{1,4}$/).optional(),
   jobRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
+  // Notification history (#1646). Unlike the four above, this one IS on the
+  // settings form — how long a bell keeps its history is a programme decision
+  // an org has an opinion about. `0` means keep forever; the prune raises
+  // anything else to its 30-day floor and never touches an unread row, so no
+  // value posted here can empty a bell.
+  notificationRetentionDays: z.string().regex(/^\d{1,4}$/).optional(),
 });
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.

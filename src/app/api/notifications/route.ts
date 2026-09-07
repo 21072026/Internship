@@ -10,10 +10,27 @@ const markReadSchema = z.object({
 
 const READ_FILTERS = new Set(['all', 'read', 'unread']);
 
+// Longest `q` the search accepts (#1646). A `contains` on a TEXT column is a
+// scan; the cap keeps the pattern short and makes the parameter uninteresting
+// to anyone probing it. Longer input is truncated rather than rejected — a
+// pasted paragraph should narrow the list, not error.
+const MAX_SEARCH_LENGTH = 100;
+
 // GET — the current user's notifications. With no query params this returns
 // the last 20 (unfiltered) + unread count, exactly as before (NotificationBell
-// depends on this default shape). Optional `page`/`pageSize`/`read`/`type`
-// params add pagination and filtering for the /notifications history page.
+// depends on this default shape). Optional `page`/`pageSize`/`read`/`type`/`q`
+// params add pagination, filtering and text search for the /notifications
+// history page.
+//
+// WHAT `q` CAN AND CANNOT SEE. It matches `Notification.text`, and `text` is
+// null on every row written through the i18n contract (#921): those carry
+// `params` and are rendered from the dictionary in the READER'S locale at
+// display time, so the sentence the user is searching for exists only in the
+// browser and never in a column. `q` therefore finds announcements and legacy
+// rows, and misses the templated ones — searching the rendered label would mean
+// re-rendering every row in every locale on the server, which is a different
+// feature (deliberately out of scope here). The type filter is the usable
+// handle on templated rows.
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -24,11 +41,14 @@ export async function GET(request: Request) {
   const readParam = searchParams.get('read') || 'all';
   const read = READ_FILTERS.has(readParam) ? readParam : 'all';
   const type = searchParams.get('type') || undefined;
+  const q = (searchParams.get('q') || '').trim().slice(0, MAX_SEARCH_LENGTH);
 
   const where = {
     userId: session.user.id,
     ...(read === 'unread' ? { read: false } : read === 'read' ? { read: true } : {}),
     ...(type ? { type } : {}),
+    // See the note above: only rows that actually store their sentence.
+    ...(q ? { text: { contains: q } } : {}),
   };
 
   const [items, total, unread, typeRows] = await Promise.all([
