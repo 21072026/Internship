@@ -116,6 +116,15 @@ jobs:
       # clause at a time (#1750).
       - name: the billable pair means exactly one thing (#1750)
         run: npm run test:metering
+      # The notification catalogue and the `notifications.events` dictionary are
+      # two halves of one contract, and the type system only sees one of them: a
+      # dictionary is an object literal, so adding or removing a key there is a
+      # compile error nowhere. An event with no catalogue entry cannot be
+      # published at all, an entry with no template renders as the generic
+      # fallback, and a template that gains a `{placeholder}` in ONE locale
+      # renders it literally to that locale's readers only (#1710).
+      - name: the notification catalogue matches the dictionary (#1710)
+        run: npm run test:notification-catalog
       - name: auth path reads only the columns it needs (#1150)
         run: npm run check:auth-reads
       # An API-key request has no session, so nothing resolves a tenant for it
