@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
 import { RoleConvertButton } from '@/components/RoleConvertButton';
+import { UserQuickActions } from '@/components/UserQuickActions';
 import { useT } from '@/i18n/client';
 
 interface MentorRelation {
@@ -66,16 +67,21 @@ export default function AdminMentorDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           {t.mentorDetail.back}
         </Link>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.fullName}</h1>
-            <p className="text-gray-500">{user.email}{user.department ? ` · ${user.department}` : ''}</p>
+        {/* Same header shape as the candidate profile: the identity column is
+            the one allowed to give (min-w-0 + break-words), because the action
+            column now holds four controls with long labels (#1305). */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{user.fullName}</h1>
+            <p className="text-gray-500 break-words">{user.email}{user.department ? ` · ${user.department}` : ''}</p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Badge variant={atCapacity ? 'warning' : 'info'} className="flex items-center gap-1">
               <Users className="h-3 w-3" />
               {active.length}{cap != null ? `/${cap}` : ''} {t.mentors.mentee}
             </Badge>
+            {/* Message / view-as shortcuts, right where the profile is read (#51). */}
+            <UserQuickActions userId={user.id} role={user.role} />
             {/* Convert right where the person is looked at (#1252). */}
             <RoleConvertButton userId={user.id} fullName={user.fullName} role={user.role} onDone={load} />
           </div>

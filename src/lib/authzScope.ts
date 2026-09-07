@@ -82,8 +82,14 @@ const BUILDERS: {
     }),
     // The public showcase, plus every project this mentee actually works on —
     // a private project they were added to used to be invisible to them (#51).
+    // `ownerUserId` is listed first because a mentee can OWN a project now
+    // (#2270, and admin-assigned since #1222): without it, an owner's own
+    // private project is visible only for as long as their OWNER ProjectMember
+    // row exists, so a seeder, a backfill or a member removal would leave them
+    // able to edit a project by id that their list refuses to show.
     MENTEE: async (u) => ({
       OR: [
+        { ownerUserId: u.id },
         { isPublic: true },
         { members: { some: { userId: u.id } } },
         { relations: { some: { menteeId: u.id } } },

@@ -281,7 +281,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 <p className="mt-1.5 text-xs text-gray-400">{interns} {t.projects.members}</p>
               </div>
 
-              {isLead && session && <ProjectMembersPanel projectId={id} myId={session.user.id} />}
+              {/* A MENTEE owner manages their roster too, minus the add pickers:
+                  the member POST refuses them on purpose (#2270) and they grow
+                  the team through join requests instead. */}
+              {isLead && session && (
+                <ProjectMembersPanel projectId={id} myId={session.user.id} canAdd={role !== 'MENTEE'} />
+              )}
 
               {isLead && <ProjectJoinRequests projectId={id} />}
 

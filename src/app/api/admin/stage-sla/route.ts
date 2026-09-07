@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { getLocale } from '@/i18n/server';
 import { resolveStageSlas } from '@/lib/stageSla';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
@@ -37,7 +38,9 @@ export async function GET() {
   }
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
-    const stages = await resolvePipelineStages(orgId);
+    // The labels are printed straight into the settings card, so they need the
+    // viewer's locale — without it the whole list read English (#2268).
+    const stages = await resolvePipelineStages(orgId, await getLocale());
     const slas = await resolveStageSlas(orgId);
     // Every stage is listed, configured or not, so the form shows the whole
     // pipeline rather than only the rules that already exist.

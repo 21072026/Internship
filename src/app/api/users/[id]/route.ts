@@ -11,6 +11,7 @@ import { notify } from '@/lib/notify';
 import { roleHome } from '@/lib/roleHome';
 import { sendRoleChangeEmail } from '@/services/emailService';
 import { isStageTransition } from '@/lib/stageChange';
+import { getLastContacts } from '@/lib/lastContact';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -92,11 +93,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       // the address and send the activation link (#1123).
       const { password, ...rest } = user;
 
+      // "Next action" on the candidate page counts from the last CONTACT, which
+      // includes the 1:1 message thread and not only the interaction log — the
+      // same rule the mentor's attention queue applies (lib/lastContact.ts).
+      // Sent alongside `interactions` rather than derived from it on the client,
+      // because the messages themselves are not in this payload.
+      const lastContacts = await getLastContacts(
+        rest.menteeRelations.map((relation) => ({ id: relation.id, menteeId: relation.menteeId })),
+      );
+
       return NextResponse.json({
         user: {
           ...rest,
           menteeRelations: rest.menteeRelations.map((relation) => ({
             ...relation,
+            lastContactAt: lastContacts.get(relation.id)?.at ?? null,
             statusChanges: relation.statusChanges.filter((change) =>
               isStageTransition(change.fromStatus, change.toStatus)
             ),

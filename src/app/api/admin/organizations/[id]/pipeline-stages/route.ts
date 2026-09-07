@@ -4,9 +4,10 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { isHexColor } from '@/lib/branding';
-import { resolvePipelineStages, defaultPipelineStages } from '@/lib/pipelineStages';
+import { resolvePipelineStages, defaultPipelineStages, isDefaultLabel } from '@/lib/pipelineStages';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
+import { getLocale } from '@/i18n/server';
 
 // Per-tenant pipeline-stage management (#747). Admin-only; premium-gated (custom
 // stages require a paid plan). Phase A: label / order / color / on-path grouping
@@ -37,7 +38,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
   const count = await prisma.pipelineStage.count({ where: { orgId: id } });
-  const stages = await resolvePipelineStages(id);
+  // The editor prefills its inputs from this response, so it has to speak the
+  // admin's language — a locale-less resolve handed them English labels to save
+  // back verbatim, freezing English for the whole tenant (#2268).
+  const stages = await resolvePipelineStages(id, await getLocale());
   return NextResponse.json({ stages, custom: count > 0, plan: gate.org.plan });
 }
 
@@ -83,7 +87,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       data: stages.map((s) => ({
         orgId: id,
         key: s.key,
-        label: s.label.trim(),
+        // A label that is still one of ours is stored blank, which means "use
+        // the built-in localized label" — so saving a colour or a reorder does
+        // not pin a language (#2268). Only a label the admin actually typed is
+        // persisted, and it renders verbatim to everyone.
+        label: isDefaultLabel(s.key, s.label) ? '' : s.label.trim(),
         order: s.order,
         isTerminal: s.isTerminal ?? false,
         isOffPath: s.isOffPath ?? false,
@@ -92,7 +100,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     }),
   ]);
 
-  const resolved = await resolvePipelineStages(id);
+  const resolved = await resolvePipelineStages(id, await getLocale());
   return NextResponse.json({ stages: resolved, custom: true });
 }
 
@@ -103,5 +111,5 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
   await prisma.pipelineStage.deleteMany({ where: { orgId: id } });
-  return NextResponse.json({ stages: defaultPipelineStages(), custom: false });
+  return NextResponse.json({ stages: defaultPipelineStages(await getLocale()), custom: false });
 }

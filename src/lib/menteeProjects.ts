@@ -29,8 +29,19 @@ export interface MenteeProject {
   repoUrl: string | null;
   demoUrl: string | null;
   boardUrl: string | null;
+  goals: string | null;
+  /** ISO strings, not Dates: these feed a client component's form (#2270). */
+  startDate: string | null;
+  endDate: string | null;
   /** Display name of the owning company or person, when there is one. */
   owner: string | null;
+  /**
+   * Whether this mentee owns the project — the OWNER member row, or the legacy
+   * `ownerUserId` pointer. Derived here rather than in the browser: GET
+   * /api/projects strips `members` from a mentee's response, so a client-side
+   * ownership check would silently evaluate false (#2270).
+   */
+  isOwner: boolean;
   team: TeamMember[];
   internCount: number;
 }
@@ -66,7 +77,11 @@ export async function loadMenteeProjects(userId: string, take?: number): Promise
       repoUrl: true,
       demoUrl: true,
       boardUrl: true,
+      goals: true,
+      startDate: true,
+      endDate: true,
       ownerType: true,
+      ownerUserId: true,
       ownerUser: { select: { fullName: true } },
       ownerCompany: { select: { name: true } },
       members: {
@@ -97,7 +112,12 @@ export async function loadMenteeProjects(userId: string, take?: number): Promise
       repoUrl: p.repoUrl,
       demoUrl: p.demoUrl,
       boardUrl: p.boardUrl,
+      goals: p.goals,
+      startDate: p.startDate ? p.startDate.toISOString() : null,
+      endDate: p.endDate ? p.endDate.toISOString() : null,
       owner: p.ownerType === 'COMPANY' ? p.ownerCompany?.name ?? null : p.ownerUser?.fullName ?? null,
+      isOwner:
+        p.ownerUserId === userId || p.members.some((m) => m.user.id === userId && m.role === 'OWNER'),
       team,
       internCount: internCount(team),
     };

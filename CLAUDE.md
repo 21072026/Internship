@@ -266,6 +266,16 @@ workaround, #636, and it compiled on every PR push).
   İki sınır tartışmaya kapalıdır: **üçüncü mail yok** (gönderen alan adının itibarı) ve
   **otomatik aşama değişikliği / kapatma yok**. Herhangi bir yaşam belirtisi (mentee mesajı,
   yanıtsız soru, bekleyen toplantı, aşama ilerlemesi) damgayı ve sayaçları sıfırlar.
+- **"Son temas" tek bir kuraldır** (`docs/last-contact.md`, #2275): mentor panosundaki
+  *Yakın zamanda temas yok* rozeti, günlük durgunluk hatırlatması, haftalık özet, mentee
+  kartları ve `/admin/candidates/[id]` "Sıradaki aksiyon" — hepsi
+  `src/lib/lastContact.ts`'ten okur (kuralın kendisi bağımlılıksız `lastContactRule.ts`'te,
+  birim testli). Temas = **en yenisi**: `InteractionLog` kaydı, mentorluk başlığındaki
+  **birebir (DIRECT)** mesaj (her iki yönde) ve **mentee'nin kendi yazdığı grup mesajı**.
+  Başkasının grup mesajı bilinçli olarak temas **değildir** — grup sohbeti bir yayındır,
+  mentorun tek satırı dokuz mentee ile temas sayılsa listeyi hepsi için birden susturur.
+  Etkileşim **sayaçları** ("Toplam Etkileşim", `/mentor/interactions`) hâlâ yalnızca
+  `InteractionLog` satırlarını sayar: orası bir kayıt defteri, değişen şey tazelik.
 - **Feature catalogue**: when a user-visible feature ships, add/update its entry in
   `src/lib/features.ts` (+ `featureCatalog` i18n block) — the landing cards and the `/features`
   page are both fed from that single source. Same discipline as CHANGELOG/releaseNotes.
