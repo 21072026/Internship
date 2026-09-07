@@ -118,6 +118,60 @@ Both are a *different* pair on pages #1299 does not name, and folding them into
   glyphs, so 1.4.11's 3:1 is the applicable threshold and both clear it.
 
 
+## The mode switcher's active pill, re-measured (#1343)
+
+#1343 was filed against two entries frozen into `e2e/a11y-baseline.json` by
+#826:
+
+```
+/admin#dark            : color-contrast ×1  →  .dark\:bg-gray-700
+/admin/candidates#dark : color-contrast ×1  →  .dark\:bg-gray-700
+```
+
+**Both entries are `{}` today and have been since #1482** — so, as with #1299
+above, nothing came *out* of the baseline when this was picked up and this
+report's counts are unchanged. What #1482 changed is the node axe was really
+reporting. `.dark\:bg-gray-700` is the active pill's own class and the shortest
+unique selector axe could name that node by, but the failing pair was the
+*unselected* segments beside it: they were `text-gray-500 dark:text-gray-400`,
+and in dark mode `html.dark .text-gray-500` (0,2,1) outranks Tailwind's
+`.dark .dark\:text-gray-400` (0,2,0) — #9ca3af on the group's `bg-gray-100`,
+itself remapped to #374151, i.e. **4.06:1**. #1482 raised the pair to
+`text-gray-700 dark:text-gray-300`, which resolves to #d1d5db on #374151, **7.00:1**.
+
+Re-measured across every state the component has, from the resolved cascade:
+
+| State | Light | Dark |
+| --- | --- | --- |
+| Active pill, admin | `accent-700` on white — 5.02–6.98:1 across the six accents (green and amber are the floor) | `blue-200` #bfdbfe on #111827 — 12.48:1 |
+| Active pill, mentor | `green-700` #15803d on white — 5.02:1 | `green-200` #bbf7d0 on #111827 — 14.64:1 |
+| Active pill, mentee | `purple-700` #7e22ce on white — 6.98:1 | `purple-200` #e9d5ff on #111827 — 13.03:1 |
+| Unselected segments | `gray-700` on `gray-100` — 9.37:1 | #d1d5db on #374151 — 7.00:1 |
+
+Two things are worth carrying forward, because both are invisible in the diff of
+any future change to this component:
+
+- The pill's `bg-white dark:bg-gray-700` renders as **gray-900 (#111827)**, not
+  gray-700: `html.dark .bg-white` is (0,2,1) and outranks
+  `.dark .dark\:bg-gray-700` at (0,2,0), the same trap as the text remap above.
+  Forcing the authored gray-700 through would *lower* the pill-vs-track
+  separation (1.42:1 as authored, 1.72:1 as rendered) while the label stays
+  fine either way (7.25:1 on gray-700), so it is deliberately left alone.
+- The pill-vs-track separation is below the 3:1 of WCAG 1.4.11 in **both**
+  themes (1.72:1 dark, 1.10:1 light — white on `gray-100`). The active state is
+  additionally carried by `aria-current="page"`, by an accent-coloured label
+  where the others are neutral grey, and by `shadow-sm`; making the boundary
+  itself measurable is a design change on a shared control and is **not** part
+  of #1343. Recorded here so the next audit does not have to re-derive it.
+
+`e2e/contrast-1343.spec.ts` now pins all four rows above in the rendered
+document — three modes × two themes, asserting the ratio it computed rather
+than only asking axe. The a11y scan cannot do this on its own: it counts one
+violation per *rule* per page, so the pill and the segments next to it share a
+single `color-contrast` count, and its bare admin fixture never renders the
+mentee pill at all.
+
+
 ## Manual assistive-technology review — board and calendar (#2047)
 
 An empty axe report is not an AA claim. Three WCAG categories are structurally
