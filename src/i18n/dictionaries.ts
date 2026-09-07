@@ -77,10 +77,11 @@ const en = {
     resultsShownOne: '1 result shown',
     noResultsShown: 'No results',
     scrollableColumns: 'Pipeline stage columns',
-    // The app shell's mobile drawer controls (components/ResponsiveShell.tsx).
-    // `publicNav` has its own pair for the marketing header — these are the
-    // signed-in shell's, which is a client component and cannot read a
-    // server-only namespace.
+    // The app shell's mobile drawer controls (components/ResponsiveShell.tsx),
+    // which were hardcoded English aria-labels until #1377. `publicNav` has a
+    // pair with the same wording, but that namespace belongs to the marketing
+    // header (landing/PublicHeader.tsx) — the signed-in shell reading out of it
+    // would couple two unrelated surfaces, so the shell gets its own.
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
   },
