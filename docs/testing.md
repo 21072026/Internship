@@ -14,6 +14,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Smoke / functional (E2E)** | App boots, auth works, core pages render without errors | `e2e/*.spec.ts` (Playwright) | CI (`e2e.yml`) on every PR |
 | **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics, status messages (4.1.3), reflow at 320px; OS media preferences (reduced motion, increased contrast, forced colors) | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/live-region.spec.ts`, `e2e/mobile-layout-audit.spec.ts`, `e2e/a11y-media-preferences.spec.ts` | with E2E |
 | **Security** | Headers, IDOR/RBAC, rate limiting, 2FA, login hardening | `e2e/security-headers.spec.ts`, `e2e/authz-idor.spec.ts`, `e2e/idor-hardening.spec.ts`, `e2e/rate-limit.spec.ts`, `e2e/login-security.spec.ts`, `e2e/two-factor-*.spec.ts` | with E2E |
+| **Protocol round trips against a stub** | Third-party protocols we cannot reach from CI, driven end to end against a local server that speaks the real wire format: Google Calendar OAuth, and SAML/OIDC SSO with signed assertions and ID tokens | `e2e/support/google-mock.mjs` + `e2e/google-calendar.spec.ts`, `e2e/support/idp-mock.mjs` + `e2e/sso-roundtrip.spec.ts` | with E2E (the SAML happy path is `@smoke`) |
 | **XSS / injection** | User input is escaped, never executed as HTML/JS | `e2e/xss-injection.spec.ts` | with E2E |
 | **Responsive / mobile** | Layout at small viewports | `e2e/mobile.spec.ts`, `e2e/users-responsive.spec.ts` | with E2E |
 | **PWA / offline** | Manifest, service worker, offline page | `e2e/pwa.spec.ts`, `e2e/offline-page.spec.ts` | with E2E |
@@ -24,7 +25,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Demo-seed fidelity** | Every differentiating screen has demo rows behind it | `scripts/check-demo-fidelity.mjs` + `scripts/demo-fidelity.json` | CI (`ci.yml`, `demo-fidelity` job) on every PR |
 | **Architecture guards** | One-way rules the type system cannot state — among them: no file under `src/` may reach the webhook dispatcher (`dispatchWebhook`/`deliverToWebhook`) beyond the ten call sites the script lists by name and count; those ten move onto `emit()` when #1693 lands (#1697) | `scripts/check-events.mjs` (`npm run check:events`) and the sibling `check:*` scripts | CI (`ci.yml`) on every PR |
 
-The first ten are **functional / correctness** tests: given an input, is the output
+The first eleven are **functional / correctness** tests: given an input, is the output
 right? The two load rows are **non-functional**: the app may be correct yet too slow or
 fragile under load — those catch that. They are not redundant with each other.
 The final two rows are neither: they never run the app, they read the source tree and the
@@ -32,6 +33,38 @@ demo data and assert a rule about their *shape*.
 `stress-test.mjs` is a flat hammer (fixed concurrency, one aggregate p95, weekly);
 the k6 scenario adds a *ramp* (where does latency start to bend?), *per-endpoint*
 budgets, and a threshold engine that names exactly which budget broke.
+
+## Stub servers for third-party protocols
+
+Two integrations cannot be reached from CI at all: Google Calendar needs a Cloud
+project and a human at a consent screen, and Enterprise SSO needs somebody's
+identity provider. Both are covered the same way — a small Node server under
+`e2e/support/` that speaks the real wire format, started by the `webServer`
+array in `playwright.config.ts`:
+
+| Stub | Speaks | Driven by |
+|------|--------|-----------|
+| `e2e/support/google-mock.mjs` | Google's OAuth token/revoke endpoints and the Calendar API | `e2e/google-calendar.spec.ts` (endpoints are redirected with env vars) |
+| `e2e/support/idp-mock.mjs` | SAML 2.0 (redirect + HTTP-POST bindings, signed assertions) and OIDC (discovery, JWKS, authorize, token) | `e2e/sso-roundtrip.spec.ts` (the IdP endpoint is per-tenant config, so the spec seeds it into the org row) |
+
+Rules of thumb when adding one:
+
+- **Generate key material at start-up, never commit it.** `idp-mock.mjs` mints an
+  RSA key pair and a self-signed X.509 certificate on boot and hands the
+  certificate to the spec over HTTP; the spec stores it on the tenant exactly as
+  a customer would paste in their IdP's.
+- **Never weaken the app to make the stub work.** If a check makes the round trip
+  hard to stub, that check is the feature — make the stub more faithful instead.
+  (`sso-roundtrip` seeds the tenant row directly rather than through the admin
+  API, because `validateSsoConfig()` rightly refuses a non-https entry point and
+  the stub serves plain HTTP.)
+- **Cover the refusals, with a control.** A harness that only proves the happy
+  path lets every check regress. Each negative case in `sso-roundtrip` is
+  preceded by an otherwise-identical assertion the app must *accept*, so a
+  broken harness cannot masquerade as working security.
+- **Say what the stub does not prove.** See the caveat sections of
+  [`docs/sso-saml.md`](sso-saml.md), [`docs/sso-oidc.md`](sso-oidc.md) and
+  [`docs/google-calendar.md`](google-calendar.md).
 
 ## Async UI states
 
