@@ -2709,6 +2709,11 @@ const en = {
     automatic: 'Automatic',
     openLink: 'Open',
     by: 'by {name}',
+    // Two templates on purpose: a named person and a bare role do not compose
+    // the same way in every language (German contracts "von dem Mentor" to
+    // "vom Mentor"), so the role forms carry their own preposition where the
+    // language needs one and `byRole` is the identity template there.
+    byRole: 'by {role}',
     weekOf: 'Week of {date}',
     kind: {
       stage: 'Stage',
@@ -7261,6 +7266,7 @@ const tr: Dict = {
     automatic: 'Otomatik',
     openLink: 'Aç',
     by: '{name} tarafından',
+    byRole: '{role} tarafından',
     weekOf: '{date} haftası',
     kind: {
       stage: 'Aşama',
@@ -11779,7 +11785,7 @@ const de: Dict = {
   activityFeed: { title: 'Aktivität', none: 'Noch keine Aktivität', neverActive: 'Noch keine Aktivität erfasst.', inactiveDays: 'Seit {d} Tagen inaktiv — kontaktiere sie.' },
   relationTimeline: {
     title: 'Zeitleiste',
-    description: 'Phasenwechsel, Kontakte, Meetings, Ziele, Berichte und Angebote in einem chronologischen Verlauf.',
+    description: 'Phasenwechsel, Interaktionen, Meetings, Ziele, Berichte und Angebote in einem chronologischen Verlauf.',
     empty: 'Für diese Zuordnung wurde noch nichts erfasst.',
     emptyFiltered: 'Zu dieser Art wurde noch nichts erfasst.',
     error: 'Die Zeitleiste konnte nicht geladen werden.',
@@ -11791,10 +11797,11 @@ const de: Dict = {
     automatic: 'Automatisch',
     openLink: 'Öffnen',
     by: 'von {name}',
+    byRole: '{role}',
     weekOf: 'Woche vom {date}',
     kind: {
       stage: 'Phase',
-      interaction: 'Kontakt',
+      interaction: 'Interaktion',
       meeting: 'Meeting',
       goal: 'Ziel',
       report: 'Bericht',
@@ -11803,9 +11810,9 @@ const de: Dict = {
     },
     event: {
       stage_change: 'Phase gewechselt',
-      interaction_logged: 'Kontakt erfasst',
+      interaction_logged: 'Interaktion protokolliert',
       meeting_scheduled: 'Meeting geplant',
-      meeting_held: 'Meeting stattgefunden',
+      meeting_held: 'Meeting abgehalten',
       meeting_room: 'Meetingraum erstellt',
       goal_created: 'Ziel gesetzt',
       goal_completed: 'Ziel erreicht',
@@ -11818,7 +11825,7 @@ const de: Dict = {
       offer_withdrawn: 'Angebot zurückgezogen',
       note_added: 'Interne Notiz hinzugefügt',
     },
-    actorRole: { ADMIN: 'einem Admin', MENTOR: 'dem Mentor', MENTEE: 'dem Mentee' },
+    actorRole: { ADMIN: 'von einem Admin', MENTOR: 'vom Mentor', MENTEE: 'vom Mentee' },
   },
   relationStatus: { ACTIVE: 'Aktiv', COMPLETED: 'Abgeschlossen' },
   interactionTypes: { Meeting: 'Meeting', Feedback: 'Feedback', Email: 'E-Mail', Call: 'Anruf', WhatsApp: 'WhatsApp' },

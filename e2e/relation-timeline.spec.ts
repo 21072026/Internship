@@ -174,3 +174,48 @@ test('a page of history ends with a cursor the next page continues from', async 
     await fixture.cleanup();
   }
 });
+
+test('the load-more button pages the panel forward instead of re-fetching page one', async ({ page }) => {
+  const fixture = await seedPairing('tl4');
+  try {
+    // The panel's own page size is DEFAULT_TIMELINE_LIMIT (20) and the UI has
+    // no way to shrink it, so the second page has to be earned with real rows.
+    // 22 interactions + the 4 seeded entries = 26 → exactly two pages.
+    const base = Date.now() - 60 * 24 * 60 * 60 * 1000;
+    await prisma.interactionLog.createMany({
+      data: Array.from({ length: 22 }, (_, i) => ({
+        relationId: fixture.relation.id,
+        date: new Date(base + i * 60_000),
+        notes: `Paged interaction ${i}`,
+        type: 'Email' as const,
+      })),
+    });
+
+    await signInAndSettle(page, fixture.emails.adminEmail, 'AdminPass123!', '/admin');
+    await gotoSettled(page, `/admin/candidates/${fixture.mentee.id}`);
+
+    const panel = page.getByTestId('relation-timeline');
+    const entries = panel.getByTestId('timeline-entry');
+    await expect(entries).toHaveCount(20);
+
+    // A stale cursor would re-serve page 1 and append it to itself: the count
+    // would still climb (to 40), so counting alone cannot catch that bug.
+    // Capture the ids and require the second page to be entirely new ones.
+    const idsOf = async () =>
+      entries.evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-entry-id') ?? ''));
+    const firstPage = await idsOf();
+
+    await panel.getByTestId('timeline-load-more').click();
+    await expect(entries).toHaveCount(26);
+
+    const all = await idsOf();
+    expect(new Set(all).size).toBe(all.length); // nothing served twice
+    expect(all.slice(0, firstPage.length)).toEqual(firstPage); // page 1 untouched
+
+    // 26 of 26 are in — the panel now says it has reached the beginning.
+    await expect(panel.getByTestId('timeline-end')).toBeVisible();
+    await expect(panel.getByTestId('timeline-load-more')).toHaveCount(0);
+  } finally {
+    await fixture.cleanup();
+  }
+});

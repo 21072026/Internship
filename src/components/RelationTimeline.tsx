@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CalendarClock,
@@ -19,7 +19,7 @@ import { AsyncSection } from '@/components/ui/AsyncSection';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { useT, useLocale } from '@/i18n/client';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
-import { formatDateTime, relativeTime } from '@/lib/relativeTime';
+import { formatDate, formatDateTime, relativeTime } from '@/lib/relativeTime';
 import type { TimelineEntry, TimelineKind } from '@/lib/relationTimeline';
 
 // The merged history of one pairing (#1702). Presentational only: the ordering,
@@ -70,45 +70,67 @@ export function RelationTimeline({ relationId }: { relationId: string }) {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A failed *pagination* request must not take the panel over: AsyncSection
+  // renders its error box INSTEAD of its children, so putting a load-more
+  // failure in `error` would blank the pages already on screen. Two slots: the
+  // initial load owns the panel, the next page owns one line under the button.
+  const [moreError, setMoreError] = useState<string | null>(null);
+  // Monotonic request id. Two loads can be in flight after a fast filter
+  // switch and nothing orders their responses, so a late one must not write
+  // the list (or the cursor) the newer one already owns.
+  const requestRef = useRef(0);
 
-  // One request per (relation, filter). `more` appends the next cursor page;
-  // otherwise the list is replaced, which is also what a retry does.
+  // One request per (relation, filter). The cursor is a PARAMETER, never read
+  // from state inside: a callback that closed over it would keep whatever
+  // `cursor` was when it was last created — null at mount — and every
+  // "load older" click would re-fetch page 1 and append it to itself.
+  // `fromCursor === null` means "first page", which is also what a retry does.
   const load = useCallback(
-    async (more = false) => {
-      if (more) setLoadingMore(true);
-      else {
+    async (fromCursor: string | null) => {
+      const more = fromCursor !== null;
+      const requestId = ++requestRef.current;
+      if (more) {
+        setLoadingMore(true);
+        setMoreError(null);
+      } else {
         setLoading(true);
         setError(null);
+        setMoreError(null);
       }
       try {
         const qs = new URLSearchParams();
         if (filter !== 'all') qs.set('kinds', filter);
-        if (more && cursor) qs.set('cursor', cursor);
+        if (fromCursor) qs.set('cursor', fromCursor);
         const res = await fetch(`/api/mentorship/${relationId}/timeline?${qs.toString()}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: TimelineResponse = await res.json();
+        if (requestId !== requestRef.current) return; // superseded mid-flight
         setEntries((prev) => (more ? [...prev, ...(data.entries ?? [])] : data.entries ?? []));
         setCursor(data.nextCursor ?? null);
         if (data.kinds?.length) setKinds(data.kinds);
       } catch {
-        if (!more) setEntries([]);
-        setError(t.relationTimeline.error);
+        if (requestId !== requestRef.current) return;
+        if (more) setMoreError(t.relationTimeline.error);
+        else {
+          setEntries([]);
+          setError(t.relationTimeline.error);
+        }
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        // The newer request owns the spinners; clearing them here would flash
+        // the loaded state while it is still running.
+        if (requestId === requestRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
-    // `cursor` is read inside but must not re-trigger the effect below — the
-    // load-more button is the only caller that uses it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [relationId, filter, t]
   );
 
   useEffect(() => {
     setCursor(null);
-    load(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [relationId, filter]);
+    load(null);
+  }, [load]);
 
   const chips = useMemo<(TimelineKind | 'all')[]>(() => ['all', ...kinds], [kinds]);
 
@@ -156,7 +178,7 @@ export function RelationTimeline({ relationId }: { relationId: string }) {
           </p>
         }
         retryText={t.relationTimeline.retry}
-        onRetry={() => load(false)}
+        onRetry={() => load(null)}
       >
         <ol className="space-y-3">
           {entries.map((entry) => (
@@ -164,9 +186,14 @@ export function RelationTimeline({ relationId }: { relationId: string }) {
           ))}
         </ol>
 
-        <div className="mt-4 flex items-center justify-center">
+        <div className="mt-4 flex flex-col items-center gap-2">
+          {moreError && (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400" data-testid="timeline-more-error">
+              {moreError}
+            </p>
+          )}
           {cursor ? (
-            <Button variant="outline" size="sm" loading={loadingMore} onClick={() => load(true)} data-testid="timeline-load-more">
+            <Button variant="outline" size="sm" loading={loadingMore} onClick={() => load(cursor)} data-testid="timeline-load-more">
               {t.relationTimeline.loadMore}
             </Button>
           ) : (
@@ -199,10 +226,24 @@ function TimelineRow({
   const roles = t.relationTimeline.actorRole as Record<string, string | undefined>;
   const reportStatus = t.weeklyReports.status as Record<string, string | undefined>;
   const dropoffReasons = t.dropoff.reasons as Record<string, string | undefined>;
-  const actor = entry.actor ?? (entry.actorRole ? roles[entry.actorRole] ?? null : null);
+  // A named person and a bare role need different templates: German contracts
+  // "von dem Mentor" to "vom Mentor", so the role forms carry their own
+  // preposition and `byRole` is the identity template there.
+  const roleActor = entry.actor ? null : entry.actorRole ? roles[entry.actorRole] ?? null : null;
+  const byline = entry.actor
+    ? t.relationTimeline.by.replace('{name}', entry.actor)
+    : roleActor
+      ? t.relationTimeline.byRole.replace('{role}', roleActor)
+      : null;
 
   return (
-    <li className="flex gap-3" data-testid="timeline-entry" data-kind={entry.kind} data-event={entry.event}>
+    <li
+      className="flex gap-3"
+      data-testid="timeline-entry"
+      data-entry-id={entry.id}
+      data-kind={entry.kind}
+      data-event={entry.event}
+    >
       <span
         className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${ICON_TONES[entry.kind]}`}
         aria-hidden="true"
@@ -256,16 +297,20 @@ function TimelineRow({
           </time>
         </div>
 
-        {entry.title && (
+        {/* The week a report covers is shipped as an ISO instant and formatted
+            here, so it reads in the app's locale date format like every other
+            date on the row — not as a bare "2026-09-01" next to "01.09.2026". */}
+        {entry.kind === 'report' && entry.weekStart && (
           <p className="mt-0.5 truncate text-sm text-gray-700">
-            {entry.kind === 'report' ? t.relationTimeline.weekOf.replace('{date}', entry.title) : entry.title}
+            {t.relationTimeline.weekOf.replace('{date}', formatDate(entry.weekStart, locale))}
           </p>
         )}
+        {entry.title && <p className="mt-0.5 truncate text-sm text-gray-700">{entry.title}</p>}
         {entry.detail && <p className="mt-0.5 text-xs text-gray-500">{entry.detail}</p>}
 
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
           <span>{formatDateTime(entry.at, locale)}</span>
-          {actor && <span>· {t.relationTimeline.by.replace('{name}', actor)}</span>}
+          {byline && <span>· {byline}</span>}
           {entry.href && (
             <a
               href={entry.href}

@@ -83,6 +83,12 @@ export interface TimelineEntry {
   toStage?: string | null;
   /** Row status (offer/goal/report), rendered as a badge. */
   status?: string | null;
+  /**
+   * Report rows only: ISO instant of the Monday the week starts on. Shipped as
+   * an instant rather than a pre-formatted "2026-09-01" so the client can write
+   * it in the viewer's locale, like every other date on the row.
+   */
+  weekStart?: string | null;
   /** Optional link to the underlying object. */
   href?: string | null;
   /** True when the system wrote the row rather than a person. */
@@ -355,7 +361,7 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
     ),
     ...reports.map((r) =>
       row('report', 'report_submitted', r.id, r.createdAt, {
-        title: r.weekStart.toISOString().slice(0, 10),
+        weekStart: r.weekStart.toISOString(),
         detail: trim(r.summary),
         status: r.status,
       })
