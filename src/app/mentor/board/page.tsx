@@ -14,6 +14,7 @@ import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
+import { StageClockChip } from '@/components/StageClockChip';
 
 interface Mentee {
   id: string;
@@ -23,7 +24,17 @@ interface Mentee {
 
 interface Relation {
   id: string;
+  status?: string;
   pipelineStatus: string;
+  // The stage clock (#1724), both served by GET /api/mentorship inside the
+  // caller's existing scope. `stageDeadline` is the org's per-stage SLA once
+  // one is configured (lib/stageSla.ts); `daysInStage` is the shared
+  // days-in-stage number the aging report and the analytics export also use.
+  stageDeadline?: string | null;
+  daysInStage?: number | null;
+  // The mentee is in the re-engagement pool (#834): an agreed "we'll write in
+  // September", so the clock shows but never turns red.
+  stageClockPaused?: boolean;
   mentee: Mentee;
   _count: { interactions: number };
 }
@@ -123,14 +134,24 @@ export default function MentorBoardPage() {
       data-testid="board-card"
       className="bg-white border border-gray-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-300 hover:shadow-sm transition"
     >
-      {/* The name is a real link so the card is reachable (and openable) by keyboard. */}
-      <Link
-        href={`/mentor/mentees/${r.id}`}
-        onClick={(e) => e.stopPropagation()}
-        className="block text-sm font-medium text-gray-900 truncate hover:underline"
-      >
-        {r.mentee.fullName}
-      </Link>
+      <div className="flex items-start justify-between gap-2">
+        {/* The name is a real link so the card is reachable (and openable) by keyboard. */}
+        <Link
+          href={`/mentor/mentees/${r.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="block min-w-0 text-sm font-medium text-gray-900 truncate hover:underline"
+        >
+          {r.mentee.fullName}
+        </Link>
+        <StageClockChip
+          testId={`stage-clock-${r.id}`}
+          daysInStage={r.daysInStage}
+          stageDeadline={r.stageDeadline}
+          pipelineStatus={r.pipelineStatus}
+          relationStatus={r.status}
+          paused={r.stageClockPaused}
+        />
+      </div>
       {r.mentee.university && (
         <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
       )}

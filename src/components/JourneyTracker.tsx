@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Check, Compass, Trophy } from 'lucide-react';
+import { ArrowRight, Check, Clock, Compass, Trophy } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { pipelineGuidance, onPathKeys } from '@/lib/pipeline';
 import { OUTCOME_ACTIONS, isCelebratory, outcomeForStage } from '@/lib/outcomeComms';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { useT, useLocale } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 // Key achievement stages that warrant a milestone banner
 // (EPIC: achievements / milestone recognition, roadmap #370). Canonical keys +
@@ -19,7 +20,24 @@ const MILESTONE_STAGES = new Set([
   'EMPLOYED_700',
 ]);
 
-export function JourneyTracker({ status }: { status: string }) {
+export function JourneyTracker({
+  status,
+  daysInStage,
+  stageDeadline,
+}: {
+  status: string;
+  /**
+   * The stage clock (#1724), mentee side. Deliberately a different feature
+   * from the mentor board's chip even though the number is the same one: a
+   * mentee is told how long they have been here and what comes next, and is
+   * NEVER shown a breach state. A red "overdue" badge about your own
+   * application is a support ticket, not a feature — so there is no tone
+   * classification here at all, and a deadline that has already passed is
+   * simply not mentioned.
+   */
+  daysInStage?: number | null;
+  stageDeadline?: string | null;
+}) {
   const t = useT();
   const locale = useLocale();
   const stages = useResolvedStages();
@@ -111,6 +129,40 @@ export function JourneyTracker({ status }: { status: string }) {
           )}
 
           {next && <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t.portal.journey.next}: {label(next)}</p>}
+
+          {daysInStage != null && (
+            <div
+              data-testid="portal-stage-clock"
+              className="mb-4 flex items-start gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 px-3 py-2.5"
+            >
+              <Clock className="h-4 w-4 text-gray-500 flex-shrink-0 mt-0.5" aria-hidden />
+              <div>
+                <p className="text-xs font-semibold text-gray-700">{t.stageClock.mentee.title}</p>
+                <p className="text-sm text-gray-700 mt-0.5" data-testid="portal-stage-clock-days">
+                  {daysInStage === 0
+                    ? t.stageClock.mentee.today
+                    : daysInStage === 1
+                      ? t.stageClock.mentee.oneDay
+                      : t.stageClock.mentee.days.replace('{n}', String(daysInStage))}
+                </p>
+                {next && (
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    {t.stageClock.mentee.nextUp.replace('{stage}', label(next))}
+                  </p>
+                )}
+                {/* Only a deadline still ahead of us is worth saying out loud.
+                    A date that has already gone by would read as "your mentor
+                    missed it", which is exactly the message this half of the
+                    feature exists not to send. */}
+                {stageDeadline && new Date(stageDeadline).getTime() >= Date.now() && (
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    {t.stageClock.mentee.expectedBy.replace('{date}', formatDate(stageDeadline, locale))}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">{t.stageClock.mentee.reassure}</p>
+              </div>
+            </div>
+          )}
 
           <ol className="space-y-1.5">
             {PATH.map((s, i) => {

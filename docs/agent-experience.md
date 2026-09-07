@@ -5940,6 +5940,58 @@ aynı yazılır. Böyle bir assertion, kimsenin dokunmadığı bir sayfada zaman
 kırmızıya çevirir. Dil geçişini kanıtlamak istiyorsan `<html lang>`'e bak, metinlerin
 birbirinden farklı olmasına değil.
 
+## 2026-09-07 — Aynı sayıyı üçüncü kez yazmadan önce ikisinin ayrıştığını fark et (#1724)
+
+**"Formülü kopyala" görevinde önce mevcut kopyaların birbirini tutup tutmadığına bak.**
+Görev "admin panosundaki kuralı mentor panosuna taşı" idi; iki kopya buldum
+(`api/admin/analytics/aging` ve `api/mentor/analytics`) ve **zaten ayrışmışlardı** —
+biri negatif süreyi 0'a kırpıyordu, diğeri negatif döndürüyordu. Üçüncü bir kopya
+eklemek sorunu görünmez kılardı. Ortak yardımcıyı (`src/lib/stageClock.ts`) yazarken
+"son hareket, yoksa başlangıç" yerine **ikisinin maksimumu**nu almak, ayrışmanın
+kaynağını (geriye tarihlenmiş `startDate`) tek satırda kapatıyor.
+
+**Prisma'da `include` kullanan bir sorgu tüm skaler alanları zaten döndürür.** Issue
+"`stageDeadline`'ı payload'a ekle" diyordu; `GET /api/mentorship` `include` kullandığı
+için alan **zaten oradaydı**. Eklenmesi gereken tek şey türetilmiş `daysInStage` idi.
+Bir alanı "eklemeden" önce yanıtı gerçekten oku — yoksa var olan bir şeyi ikinci kez
+seçersin.
+
+**`bg-*-50` + `text-*-600` aynı elemanda ise globals.css seni kurtarmıyordu.** Bileşik
+override listesi `-600` için yalnızca **descendant** (`.bg-red-50 .text-red-600`) biçimini
+içeriyordu; admin panosunun gecikme rozeti tek bir `<span class="bg-red-50 text-red-600">`
+olduğu için karanlık modda koyu-üstüne-koyu kalıyordu. Yeni bir çip yazarken listeyi
+gözle kontrol et: `-700/-800/-900/-500` aynı elemanda kapsanmış, `-600` kapsanmamıştı.
+
+**İki izleyicili bir özellikte dil, stil değil kuraldır.** Aynı sayı mentor'a "kuyruk
+yaşlanıyor" (son tarih geçtiyse kırmızı), mentee'ye "şu an buradasın, sırada şu var"
+olarak gösteriliyor; mentee tarafında geçmiş bir son tarih **hiç yazılmıyor**. Bunu bir
+prop'un JSDoc'una yazmak, sonraki ajanın çipi "yeniden kullanmasını" engelleyen tek şey.
+
+### Aynı PR'ın kod incelemesinden çıkanlar
+
+**Bir "fallback" kümesine koyduğun istisna, önündeki arama her zaman kazanıyorsa ölü
+koddur.** `stageClockStopped()` önce çözümlenmiş aşamalara bakıp bulursa dönüyordu;
+istisna (`HIRED_660`) ise yalnızca **bulunamazsa** okunan kümedeydi. Bütün UI çağrıları
+`useResolvedStages()` veriyor ve o hook hiçbir zaman boş liste döndürmüyor — yani istisna
+hiç çalışmadı, işe alınmış aday kırmızı "süre doldu" rozetiyle göründü. Testi de yalnızca
+`EMPLOYED_700` ile yazmıştım; **bayrağı gerçekten set edilen** örnek, carve-out'un sessizce
+çalışmadığını gösteremez. Kural: istisnayı, onu geçersiz kılabilecek aramanın **önüne** koy
+ve testte tam olarak "bayraksız ama yine de durmuş" olan anahtarı seç.
+
+**Varsayılan kurulumda hangi alanların boş olduğunu hesaba katmadan eşik koyma.** Stage
+SLA'ları opt-in olduğu için varsayılan bir kurulumda `stageDeadline` neredeyse her ilişkide
+`null`; "30 gündür kimse dokunmadı → kehribar" kuralı bu yüzden 4 aylık stajın tamamını
+kehribara boyuyordu. Bir sayaç için "güvenli yön" diye yazdığın taraf, alanın varsayılanı
+boşsa **çoğunluk** demektir. Tek düz eşik yerine ya istenen iki durumu gönder, ya da
+`computeStageAging`'in ürettiği gözlemlenmiş medyan gibi gerçek bir kaynağa bağla.
+
+**Bir raporun bilerek dışladığı kişileri yeni ekran içeri almamalı.** Yaşlanma raporu
+yeniden temas havuzundaki (#834) adayları `overdue` listesinden çıkarıyor ("eylülde
+yazacağız" sözü verilmiş kişi geç kalmış sayılmaz). Yeni çip bunu bilmediği için mentor'a
+tam da kovalamaması söylenen kişiyi kırmızı gösteriyordu. Aynı kuralı paylaşmanın bedeli
+küçük: tarihi sunucuda oku, yanıta **yalnızca boolean** koy ve onu da havuzu zaten
+görebilen rollere ver — payload genişlemiyor.
+
 ## 2026-09-07 — Bir protokolü, tarayıcı olmadan da doğrulayabilirsin (#1936)
 
 **Playwright koşamadığın bir konteynerde bile kripto yolunu gerçekten test et.** Bu turda

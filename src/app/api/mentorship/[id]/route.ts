@@ -63,6 +63,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
               referredBy: { select: { fullName: true } },
               source: { select: { name: true } },
               cvUrl: true,
+              // Only to derive `stageClockPaused` below — destructured out
+              // before the response, like `password` above (#1724).
+              reEngageAt: true,
             },
           },
           company: true,
@@ -98,7 +101,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // A mentee the mentor typed in has a sentinel where the hash goes and can
       // never sign in; the detail page offers to fix the address and send the
       // activation link (#1123). The sentinel itself stays server-side.
-      const { password: menteePassword, ...mentee } = relation.mentee;
+      const { password: menteePassword, reEngageAt, ...mentee } = relation.mentee;
+
+      // The re-engagement pool (#834) reaching the stage clock in the header:
+      // somebody agreed a "we'll write in September" date with this mentee, so
+      // the chip shows the days but never a breach — the same people the admin
+      // aging report keeps out of its overdue list. Only the boolean ships, and
+      // only to the roles that can already list the pool (GET /api/re-engagement).
+      const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
 
       return NextResponse.json({
         relation: {
@@ -108,6 +118,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           ),
           mentee: { ...mentee, pendingActivation: isPendingActivation({ password: menteePassword }) },
           companyInterest,
+          ...(seesPool ? { stageClockPaused: reEngageAt != null } : {}),
         },
       });
     });

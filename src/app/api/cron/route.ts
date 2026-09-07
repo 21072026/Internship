@@ -21,6 +21,7 @@ import { sweepMeetingInteractionLogs } from '@/lib/meetingAutoLog';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { sweepDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { runDeadLetterAlert } from '@/lib/jobs/dlqAlert';
+import { runRetentionPrune } from '@/lib/retentionEntries';
 
 export async function GET(request: Request) {
   try {
@@ -73,6 +74,14 @@ export async function GET(request: Request) {
     // mail a day, and it is silent when the queue is clean either way.
     if (job === 'dlq-alert') {
       return NextResponse.json({ message: 'Dead-letter alert ran', dlqAlert: await runDeadLetterAlert() });
+    }
+    // Retention (#1678) — named only, deliberately NOT part of the batch
+    // below, for the same reason as the dead-letter alert: the batch is "run
+    // everything now" and an admin may click it several times while fixing
+    // something, while this one deletes rows. Irreversible work asks to be
+    // asked for.
+    if (job === 'retention') {
+      return NextResponse.json({ message: 'Retention prune ran', retentionPrune: await runRetentionPrune() });
     }
     if (job === 'missing-documents') {
       const missingDocuments = await sendWeeklyMissingDocumentReminders();

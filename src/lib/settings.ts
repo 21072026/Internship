@@ -93,6 +93,31 @@ export const SETTING_DEFAULTS = {
   newsletterAudience: 'MENTEE',
   // Local hour of day an auto-queued issue is scheduled for (0-23).
   newsletterSendHour: '9',
+  // Retention windows for the telemetry tables, in days (#1678). The daily
+  // `retention.prune` job reads these; the reason for each number lives on its
+  // registry entry in src/lib/retentionEntries.ts and in
+  // docs/pii-access-lifecycle.md, which is the page an operator is pointed at
+  // before changing one. They are deliberately NOT on the settings form: these
+  // are operator decisions with a data-protection consequence, not preferences,
+  // and a number typed into a form without the reasoning next to it is how a
+  // published retention promise gets contradicted by accident.
+  //
+  // A value of 0, a negative or an unparseable one falls back to the entry's
+  // default rather than deleting everything — a corrupted setting row must not
+  // be able to empty a table.
+  //
+  // The security ledger: longest window, because it is what an incident review
+  // reads. Evidence rows survive it; their ip/userAgent do not.
+  activityLogRetentionDays: '365',
+  // Per-user browsing history: shortest window, because it is the most invasive
+  // and the least useful old — the one surface that reads it looks back 30 days
+  // at most.
+  pageViewRetentionDays: '180',
+  // A push subscription neither delivered to nor re-confirmed within this
+  // window, whose owner has also been quiet for it, is dead weight.
+  pushSubscriptionStaleDays: '180',
+  // Finished queue rows (SUCCEEDED/CANCELLED). DEAD_LETTER is never pruned.
+  jobRetentionDays: '30',
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

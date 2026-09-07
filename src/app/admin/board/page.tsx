@@ -17,11 +17,16 @@ import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
+import { isStageOverdue } from '@/lib/stageClock';
 
 interface Relation {
   id: string;
   pipelineStatus: string;
   stageDeadline?: string | null;
+  // Served by GET /api/mentorship since #1724: the mentee sits in the
+  // re-engagement pool, so this card can never read as a breach — the same
+  // exclusion the admin aging report applies to its own overdue list.
+  stageClockPaused?: boolean;
   mentee: { id: string; fullName: string; university?: string };
   mentor: { id: string; fullName: string };
   _count: { interactions: number };
@@ -163,7 +168,15 @@ export default function AdminBoardPage() {
   const activeStage = mobileStage || stages[0]?.key || '';
 
   const renderCard = (r: Relation) => {
-    const overdue = !!r.stageDeadline && new Date(r.stageDeadline).getTime() < now;
+    // Shared rule (src/lib/stageClock.ts, #1724). Terminal and off-path stages
+    // never read as overdue — an accepted offer or a dropped candidate is not a
+    // queue anybody is late on, which is what the candidate-detail chip has
+    // always done and what this card used to miss.
+    const overdue = isStageOverdue(
+      { stageDeadline: r.stageDeadline, pipelineStatus: r.pipelineStatus, paused: r.stageClockPaused },
+      stages,
+      now
+    );
     return (
       <div
         key={r.id}

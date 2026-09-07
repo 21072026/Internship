@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
+import { daysInStage } from '@/lib/stageClock';
 
 // GET — mentor-scoped analytics: their own pipeline funnel, goal summary and
 // engagement stats (EPIC: mentor analytics / pipeline funnel, roadmap #370).
@@ -134,18 +135,16 @@ export async function GET(request: Request) {
     }
 
     // Per-mentee rows: what the export writes, computed server-side so the
-    // spreadsheet and the screen are the same numbers. Days in stage is the
-    // same formula as the admin aging report — since the last recorded move,
-    // else since the relation started.
-    const DAY_MS = 24 * 60 * 60 * 1000;
+    // spreadsheet and the screen are the same numbers. Days in stage comes from
+    // the shared clock (src/lib/stageClock.ts) — since the last recorded move,
+    // else since the relation started — so this report, the admin aging report
+    // and the board can never quote three different numbers for one mentee.
     const rows = relations.map((r) => {
-      const last = r.statusChanges[r.statusChanges.length - 1];
-      const enteredStageAt = last ? last.createdAt : r.startDate;
       return {
         menteeId: r.mentee.id,
         menteeName: r.mentee.fullName,
         pipelineStatus: r.pipelineStatus,
-        daysInStage: Math.max(0, Math.floor((now.getTime() - enteredStageAt.getTime()) / DAY_MS)),
+        daysInStage: daysInStage(r, now.getTime()),
         interactions: interactionsPerRelation.get(r.id) ?? 0,
         goalsDone: goalsDonePerRelation.get(r.id) ?? 0,
       };

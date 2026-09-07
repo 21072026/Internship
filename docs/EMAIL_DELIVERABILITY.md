@@ -264,7 +264,10 @@ The body is deliberately not stored — metadata only.
 discipline as the rest of the personal data:
 
 - a daily job prunes anything older than `EMAIL_LOG_RETENTION_DAYS` (90) —
-  `pruneEmailLog()`, registered on the 09:00 schedule;
+  `pruneEmailLog()`, batched, and since #1678 an entry in the product's one
+  retention registry (`src/lib/retentionEntries.ts`, 03:20 UTC) rather than a
+  line inside the 09:00 mail tick. The window is unchanged and stays a product
+  decision with no operator setting; see `docs/pii-access-lifecycle.md`;
 - account erasure clears the address explicitly (`src/lib/accountErasure.ts`).
   The log is keyed by address rather than by a relation, so **nothing cascades
   to it** — without that call an erased person's address outlives their account.
