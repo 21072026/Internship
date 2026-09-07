@@ -59,11 +59,14 @@ import type { Locale } from '@/i18n/config';
  * that keeps src/lib/pipeline.ts client-importable). The only writer of a stage
  * set is the existing editor endpoint,
  * `PUT /api/admin/organizations/[id]/pipeline-stages`, and `templateStagePayload()`
- * below produces exactly the body it accepts. That endpoint replaces the set
- * with deleteMany + createMany and remaps no relation, so applying a template
- * over a programme that is already running strands every mentee on a stage key
- * that no longer exists — read `templateApplyBlockers()` before wiring an apply
- * button to it.
+ * below produces exactly the body it accepts; the only writer of a service
+ * level is `PUT /api/admin/stage-sla`, and `templateSlaPayload()` produces that
+ * one. That first endpoint replaces the stage set with deleteMany + createMany
+ * and remaps no relation, so applying a template over a programme that is
+ * already running strands every mentee on a stage key that no longer exists —
+ * and because `StageSla.stageKey` carries no foreign key, an existing service
+ * level outlives the stage it named and silently starts blanking deadlines.
+ * Read `templateApplyBlockers()` before wiring an apply button to any of this.
  */
 
 // The three languages every curated string ships in. Derived from an exhaustive
@@ -107,11 +110,17 @@ export interface ProgramTemplate {
   documentRequirements?: TemplateDocumentRequirement[];
 }
 
-// Stage keys are validated by the editor endpoint as /^[A-Za-z0-9_]+$/, max 60
-// characters, max 50 stages per set. Mirrored here so a malformed template
-// fails the catalogue test rather than a 400 at apply time.
+// The editor endpoint's own limits, mirrored here so a malformed template fails
+// the catalogue test rather than a 400 at apply time. Every one of these is a
+// bound in that route's zod schema (`stageSchema` / `putSchema` in
+// src/app/api/admin/organizations/[id]/pipeline-stages/route.ts) — if a bound
+// moves there, move it here in the same PR, or the guard stops guarding.
 const STAGE_KEY_RE = /^[A-Za-z0-9_]+$/;
 const MAX_KEY_LENGTH = 60;
+// Labels are the realistic overrun: German is the longest of the three locales
+// and a compound stage name passes 120 characters easily.
+const MAX_LABEL_LENGTH = 120;
+const MAX_ORDER = 1000;
 const MAX_STAGES = 50;
 const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -550,6 +559,30 @@ export function templateStagePayload(template: ProgramTemplate, locale: Locale =
   };
 }
 
+/**
+ * The body `PUT /api/admin/stage-sla` accepts, so a template's own service
+ * levels actually reach the database instead of living only in this file.
+ *
+ * Every stage is listed, with `days: null` for the ones the template sets no
+ * SLA on — that is the shape that route's editor form submits, and null is how
+ * it REMOVES a rule. Listing the whole set therefore also clears whatever the
+ * org had configured on a stage the template leaves unmanaged, so applying a
+ * template never leaves half of an older ruleset behind.
+ *
+ * Call it AFTER the stage payload has landed: the route validates every
+ * stageKey against the org's resolved stages, so the template's keys have to
+ * exist first.
+ */
+export function templateSlaPayload(template: ProgramTemplate) {
+  const days = new Map(template.slas.map((sla) => [sla.stageKey, sla.days]));
+  return {
+    slas: templateStages(template).map((s) => ({
+      stageKey: s.key,
+      days: days.get(s.key) ?? null,
+    })),
+  };
+}
+
 // ── Applying a template safely ───────────────────────────────────────────────
 
 /**
@@ -561,27 +594,63 @@ export function templateStagePayload(template: ProgramTemplate, locale: Locale =
  *     `pipelineStatus` would point at a stage that no longer exists: no board
  *     column, no funnel row, no way out. This is a REFUSAL, not a warning —
  *     move or finish those people first.
+ *   · `stale_slas` — the organization has a `StageSla` row for a stage this
+ *     template does not contain. Also a REFUSAL, and for a nastier reason than
+ *     it sounds: `StageSla.stageKey` is a plain string with no FK to
+ *     `PipelineStage`, so the row SURVIVES the stage swap. `resolveStageSlas()`
+ *     then still returns a non-empty map, which is what
+ *     `stageDeadlineUpdate()` (src/lib/stageSla.ts) reads as "this org is
+ *     SLA-managed" — and since no new stage has an SLA, every subsequent stage
+ *     move writes `stageDeadline: null`, quietly wiping the deadlines a human
+ *     typed. The orphan is unrepairable afterwards, too: `/api/admin/stage-sla`
+ *     lists one row per RESOLVED stage and its PUT refuses a stageKey that is
+ *     no longer a stage, so the row can never be submitted for deletion. That
+ *     is why this has to be caught BEFORE the swap — clear those service
+ *     levels while their stages still exist, then apply.
  *   · `unconfirmed_replace` — the organization already customised its stages
  *     and the admin has not confirmed that applying replaces them. Overridable
  *     by an explicit confirmation that says what will happen, never by a
  *     default-on checkbox.
  */
-export type ProgramApplyBlocker = 'stranded_relations' | 'unconfirmed_replace';
+export type ProgramApplyBlocker = 'stranded_relations' | 'stale_slas' | 'unconfirmed_replace';
 
 export interface ProgramApplyTarget {
   /** Custom `PipelineStage` rows the org has today (0 = still on the built-ins). */
   existingStageCount: number;
   /** Distinct stage keys relations currently sit on. Empty for a fresh programme. */
   occupiedStageKeys: string[];
+  /**
+   * Stage keys the org has a `StageSla` row for today (`SELECT stageKey FROM
+   * StageSla WHERE orgId = …`). Required rather than optional on purpose: an
+   * org still on the built-in stages can already have configured service
+   * levels, so "I did not look" and "there are none" must not be the same
+   * value — an omitted field would have made the empty, always-safe answer the
+   * default. Pass `[]` only when you actually read zero rows.
+   */
+  configuredSlaKeys: string[];
   /** The admin confirmed, in words, that applying replaces the current stages. */
   confirmed?: boolean;
 }
 
 /**
  * Every reason this template cannot be applied to this organization right now.
- * Empty means it is safe. Pure — the caller supplies the two counts, so the
- * rule is testable without a database and identical on the client and the
- * server.
+ *
+ * Empty means the STAGE SWAP is safe — that is, `templateStagePayload()` may be
+ * PUT to the editor endpoint without stranding a relation or orphaning a
+ * service level. It is not a promise that the org ends up fully configured:
+ * applying a template is deliberately more than one call, because this module
+ * has no writer of its own (see the header). The full sequence #1643 owns is
+ *
+ *   1. `templateStagePayload()` → PUT /api/admin/organizations/[id]/pipeline-stages
+ *   2. `templateSlaPayload()`   → PUT /api/admin/stage-sla   (after step 1: that
+ *      route validates every stageKey against the org's RESOLVED stages)
+ *
+ * and `reminderDays` / `documentRequirements` are catalogue metadata that no
+ * endpoint consumes yet — a picker that shows them must not imply they were
+ * applied.
+ *
+ * Pure: the caller supplies the org's three facts, so the rule is testable
+ * without a database and identical on the client and the server.
  */
 export function templateApplyBlockers(
   template: ProgramTemplate,
@@ -590,8 +659,15 @@ export function templateApplyBlockers(
   const blockers: ProgramApplyBlocker[] = [];
   const keys = new Set(template.stages.map((s) => s.key));
   if (target.occupiedStageKeys.some((k) => !keys.has(k))) blockers.push('stranded_relations');
+  if (target.configuredSlaKeys.some((k) => !keys.has(k))) blockers.push('stale_slas');
   if (target.existingStageCount > 0 && !target.confirmed) blockers.push('unconfirmed_replace');
   return blockers;
+}
+
+/** The `StageSla` rows this template would orphan, so the UI can name them. */
+export function staleSlaKeys(template: ProgramTemplate, configuredSlaKeys: string[]): string[] {
+  const keys = new Set(template.stages.map((s) => s.key));
+  return configuredSlaKeys.filter((k) => !keys.has(k));
 }
 
 /** Convenience for a caller that only needs the yes/no. */
@@ -632,13 +708,20 @@ export function validateProgramTemplate(template: ProgramTemplate): string[] {
     }
     if (!Number.isInteger(stage.order) || stage.order < 0) {
       problems.push(at(`stage "${stage.key}" has a non-ordinal order`));
+    } else if (stage.order > MAX_ORDER) {
+      problems.push(at(`stage "${stage.key}" has an order above ${MAX_ORDER}`));
     }
     if (stage.color !== null && !HEX_COLOR_RE.test(stage.color)) {
       problems.push(at(`stage "${stage.key}" has a non-hex color`));
     }
     for (const locale of TEMPLATE_LOCALES) {
-      if (!stage.labels[locale]?.trim()) {
+      // Length is measured on the raw string, not the trimmed one: that is what
+      // the endpoint's `z.string().max(120)` sees (it trims only when storing).
+      const label = stage.labels[locale];
+      if (!label?.trim()) {
         problems.push(at(`stage "${stage.key}" has no ${locale} label`));
+      } else if (label.length > MAX_LABEL_LENGTH) {
+        problems.push(at(`stage "${stage.key}" ${locale} label exceeds ${MAX_LABEL_LENGTH} chars`));
       }
     }
   }
@@ -719,5 +802,12 @@ export function programTemplateCopy(
   dict: { programTemplates: { items: Record<string, ProgramTemplateCopy> } },
   key: string
 ): ProgramTemplateCopy | null {
-  return dict.programTemplates.items[key] ?? null;
+  // Resolve the template first, so this helper and `programTemplate()` can
+  // never disagree — and so a prototype member name ("constructor",
+  // "toString") cannot index its way out of the plain dictionary object and
+  // return an inherited function where the signature promises null.
+  if (!programTemplate(key)) return null;
+  return Object.prototype.hasOwnProperty.call(dict.programTemplates.items, key)
+    ? dict.programTemplates.items[key] ?? null
+    : null;
 }

@@ -5,6 +5,8 @@ import {
   programTemplate,
   programTemplateCopy,
   templateApplyBlockers,
+  staleSlaKeys,
+  templateSlaPayload,
   templateStagePayload,
   templateStages,
   validateProgramTemplate,
@@ -104,6 +106,30 @@ test('a malformed template is reported, not silently shipped', async () => {
   expect(
     validateProgramTemplate(clone((t) => { t.stages.forEach((s) => { s.isTerminal = false; }); return t; })).join(' ')
   ).toContain('terminal on-path stage');
+
+  // A label past the endpoint's `z.string().max(120)`. German is the realistic
+  // trigger: it is the longest of the three locales and a compound stage name
+  // overruns 120 easily — and a template that only fails in one language is
+  // exactly the kind of 400 this validator exists to turn into a red build.
+  expect(
+    validateProgramTemplate(clone((t) => { t.stages[0].labels.de = 'A'.repeat(121); return t; })).join(' ')
+  ).toContain('de label exceeds 120 chars');
+
+  // An order past the endpoint's `z.number().int().min(0).max(1000)`.
+  expect(
+    validateProgramTemplate(clone((t) => { t.stages[0].order = 5000; return t; })).join(' ')
+  ).toContain('order above 1000');
+});
+
+test('an unknown or prototype template key resolves to null, in both helpers', async () => {
+  // `programTemplateCopy()` indexes a plain dictionary object, so a prototype
+  // member name used to come back as an inherited function — a picker reading
+  // ?template=toString would have rendered a template called "toString" and
+  // then thrown on `copy.desc.trim()`. Both lookups must agree on null.
+  for (const key of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__', 'nope']) {
+    expect(programTemplate(key), key).toBeNull();
+    expect(programTemplateCopy(dictionaries.en, key), key).toBeNull();
+  }
 });
 
 test('a template resolves to the editor payload, in the reader’s language', async () => {
@@ -125,15 +151,16 @@ test('a template resolves to the editor payload, in the reader’s language', as
 
 test('applying over a running programme is refused, and replacing one asks first', async () => {
   const template = programTemplate('career_transition')!;
+  const fresh = { existingStageCount: 0, occupiedStageKeys: [], configuredSlaKeys: [] };
 
-  // A fresh programme: nothing customised, nobody in the pipeline.
-  expect(templateApplyBlockers(template, { existingStageCount: 0, occupiedStageKeys: [] })).toEqual([]);
+  // A fresh programme: nothing customised, nobody in the pipeline, no SLAs.
+  expect(templateApplyBlockers(template, fresh)).toEqual([]);
 
   // Stages already customised — the editor endpoint replaces the set with
   // deleteMany + createMany, so this needs an explicit confirmation.
-  expect(templateApplyBlockers(template, { existingStageCount: 7, occupiedStageKeys: [] }))
+  expect(templateApplyBlockers(template, { ...fresh, existingStageCount: 7 }))
     .toEqual(['unconfirmed_replace']);
-  expect(templateApplyBlockers(template, { existingStageCount: 7, occupiedStageKeys: [], confirmed: true }))
+  expect(templateApplyBlockers(template, { ...fresh, existingStageCount: 7, confirmed: true }))
     .toEqual([]);
 
   // Someone is sitting on a stage the template does not have. Confirmation does
@@ -141,14 +168,47 @@ test('applying over a running programme is refused, and replacing one asks first
   // longer exists — no board column, no funnel row, no way out (#1634).
   expect(
     templateApplyBlockers(template, {
-      existingStageCount: 0,
+      ...fresh,
       occupiedStageKeys: ['SOME_OTHER_STAGE'],
       confirmed: true,
     })
   ).toContain('stranded_relations');
 
   // Relations already on this template's own stages are fine — nothing strands.
-  expect(
-    templateApplyBlockers(template, { existingStageCount: 0, occupiedStageKeys: ['SWITCH_APPLYING'] })
-  ).toEqual([]);
+  expect(templateApplyBlockers(template, { ...fresh, occupiedStageKeys: ['SWITCH_APPLYING'] })).toEqual([]);
+});
+
+test('a service level on a stage the template drops is refused before the swap', async () => {
+  const template = programTemplate('graduate_internship')!;
+  const fresh = { existingStageCount: 0, occupiedStageKeys: [], configuredSlaKeys: [] };
+
+  // An org still on the BUILT-IN stages can already have configured service
+  // levels — /api/admin/stage-sla resolves against the built-ins, so this needs
+  // no custom stage at all. `StageSla.stageKey` has no foreign key, so that row
+  // survives deleteMany + createMany; `resolveStageSlas()` then still returns a
+  // non-empty map, `stageDeadlineUpdate()` reads the org as SLA-managed, and
+  // every later stage move writes `stageDeadline: null` over a hand-typed date.
+  // The row is unreachable from the SLA editor afterwards, so it has to be a
+  // refusal here rather than a warning, and confirmation must not unlock it.
+  const withOldSla = { ...fresh, configuredSlaKeys: ['APPLICATION_100'], confirmed: true };
+  expect(templateApplyBlockers(template, withOldSla)).toContain('stale_slas');
+  expect(staleSlaKeys(template, ['APPLICATION_100', 'GRAD_APPLIED'])).toEqual(['APPLICATION_100']);
+
+  // Service levels that name stages the template keeps are not orphaned.
+  expect(templateApplyBlockers(template, { ...fresh, configuredSlaKeys: ['GRAD_APPLIED'] })).toEqual([]);
+
+  // And the template's own service levels have a payload to travel in — every
+  // stage listed, null where the template sets no rule (that is how the SLA
+  // route removes one), so no stale rule survives the apply.
+  const payload = templateSlaPayload(template);
+  expect(payload.slas.map((s) => s.stageKey)).toEqual(templateStages(template).map((s) => s.key));
+  for (const sla of template.slas) {
+    expect(payload.slas.find((s) => s.stageKey === sla.stageKey)?.days).toBe(sla.days);
+  }
+  const unmanaged = templateStages(template)
+    .map((s) => s.key)
+    .filter((k) => !template.slas.some((sla) => sla.stageKey === k));
+  for (const key of unmanaged) {
+    expect(payload.slas.find((s) => s.stageKey === key)?.days).toBeNull();
+  }
 });
