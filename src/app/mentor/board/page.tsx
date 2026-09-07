@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap, LayoutGrid } from 'lucide-react';
+import { GraduationCap, LayoutGrid, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
@@ -15,10 +15,13 @@ import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { HorizontalScrollArea } from '@/components/board/HorizontalScrollArea';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { StageClockChip } from '@/components/StageClockChip';
+import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
+import { foldSearchText, matchesMenteeQuery } from '@/lib/menteeFilter';
 
 interface Mentee {
   id: string;
   fullName: string;
+  email?: string;
   university?: string;
 }
 
@@ -53,6 +56,11 @@ export default function MentorBoardPage() {
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [mobileStage, setMobileStage] = useState('');
+  // Client-side by design: this page fetches the mentor's whole relation list
+  // (GET /api/mentorship pages only for callers that pass `page`), so the box
+  // searches every mentee, not a visible page. The matching rule is shared with
+  // /mentor/mentees — see src/lib/menteeFilter.ts.
+  const [search, setSearch] = useState('');
 
   const fetchRelations = useCallback(async () => {
     const res = await fetch('/api/mentorship');
@@ -121,9 +129,36 @@ export default function MentorBoardPage() {
     }
   };
 
+  // WCAG 4.1.3, same as the admin board: the box re-filters every column in
+  // place and moves no focus, so the outcome is announced once typing settles.
+  const q = foldSearchText(search);
+  // Counted over the stage keys the columns actually walk, not over `relations`.
+  // A row can carry a key the org's resolved catalogue no longer holds (stages
+  // are per-tenant since #747 — an admin renamed or removed one after the row
+  // was stamped), and no column ever renders such a row. Counting it made the
+  // banner and the live region claim "1 result shown" over a board with nothing
+  // on it and every count badge at 0.
+  const matchCount = useMemo(() => {
+    if (!q) return 0;
+    const known = new Set(stages.map((s) => s.key));
+    return relations.filter((r) => known.has(r.pipelineStatus) && matchesMenteeQuery(r, q)).length;
+  }, [relations, q, stages]);
+  useFilterAnnouncement(
+    q
+      ? matchCount === 0
+        ? t.a11y.noResultsShown
+        : matchCount === 1
+          ? t.a11y.resultsShownOne
+          : t.a11y.resultsShown.replace('{count}', String(matchCount))
+      : null,
+  );
+
   if (loading) return <div className="text-center py-12 text-gray-400">{t.common.loading}</div>;
 
-  const itemsFor = (status: string) => relations.filter((r) => r.pipelineStatus === status);
+  // Search ∩ stage. Every column header count is derived from this, so the
+  // numbers describe what is actually on screen rather than the unfiltered set.
+  const itemsFor = (status: string) =>
+    relations.filter((r) => r.pipelineStatus === status && matchesMenteeQuery(r, q));
 
   const renderCard = (r: Relation) => (
     <div
@@ -169,6 +204,11 @@ export default function MentorBoardPage() {
 
   // Phone: one stage at a time as a list (13 columns don't fit at 390px).
   const activeStage = mobileStage || stages[0]?.key || '';
+  // ...which means a search whose only match sits in another stage rendered as
+  // "no cards in this stage" while the no-match hint was suppressed (matchCount
+  // was non-zero), so a successful search looked like a broken one. The stages
+  // holding the matches are named instead, each one a tap away.
+  const stagesWithMatches = q ? stages.filter((s) => itemsFor(s.key).length > 0) : [];
 
   return (
     <div>
@@ -178,6 +218,28 @@ export default function MentorBoardPage() {
           {t.mentor.boardSubtitle}
         </p>
       </div>
+
+      {relations.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="relative w-full sm:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              data-testid="mentor-board-search"
+              aria-label={t.mentor.menteeBoardSearchPlaceholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t.mentor.menteeBoardSearchPlaceholder}
+              className="min-h-11 w-full rounded-lg border border-gray-300 pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+            />
+          </div>
+          {q && matchCount === 0 && (
+            <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="mentor-board-no-match">
+              {t.mentor.noMatchingMentees}
+            </span>
+          )}
+        </div>
+      )}
 
       {relations.length === 0 ? (
         /* Day one for a mentor: no assignment yet, so no board. Deliberately no
@@ -201,15 +263,39 @@ export default function MentorBoardPage() {
           />
           <div className="space-y-2">
             {itemsFor(activeStage).map(renderCard)}
-            {itemsFor(activeStage).length === 0 && (
-              <EmptyState
-                testId="mentor-board-stage"
-                size="sm"
-                icon={LayoutGrid}
-                title={t.emptyStates.boardStage.title}
-                body={t.emptyStates.boardStage.body}
-              />
-            )}
+            {itemsFor(activeStage).length === 0 &&
+              (stagesWithMatches.length > 0 ? (
+                /* bg-amber-50 + text-amber-800, and bg-white + text-amber-900 on
+                   the taps: both pairs are already retinted by the flat
+                   html.dark rules in globals.css. */
+                <div
+                  className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                  data-testid="mentor-board-matches-elsewhere"
+                >
+                  <p>{t.mentor.menteeBoardMatchesElsewhere}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {stagesWithMatches.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setMobileStage(s.key)}
+                        data-testid={`board-jump-to-${s.key}`}
+                        className="min-h-11 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900"
+                      >
+                        {s.label} ({itemsFor(s.key).length})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <EmptyState
+                  testId="mentor-board-stage"
+                  size="sm"
+                  icon={LayoutGrid}
+                  title={t.emptyStates.boardStage.title}
+                  body={t.emptyStates.boardStage.body}
+                />
+              ))}
           </div>
         </div>
       ) : (
@@ -220,6 +306,7 @@ export default function MentorBoardPage() {
             return (
               <div
                 key={status}
+                data-testid={`board-column-${status}`}
                 // See the admin board: forced-colors drops the bg-blue-50 drop
                 // target highlight, so mark the state for globals.css (#2045).
                 data-drop-active={dragOver === status ? 'true' : undefined}
@@ -240,7 +327,12 @@ export default function MentorBoardPage() {
               >
                 <div className="flex items-center justify-between mb-3 px-1">
                   <span className="text-xs font-semibold text-gray-700">{label(status)}</span>
-                  <span className="text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5">
+                  {/* Derived from the same filtered `items` the column renders,
+                      so the badge never claims rows the search has hidden. */}
+                  <span
+                    data-testid={`board-column-count-${status}`}
+                    className="text-xs text-gray-400 bg-white border border-gray-200 rounded-full px-2 py-0.5"
+                  >
                     {items.length}
                   </span>
                 </div>

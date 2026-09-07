@@ -1,11 +1,11 @@
 'use client';
 import { useT } from "@/i18n/client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Users, MessageSquare } from 'lucide-react';
+import { Users, MessageSquare, Search } from 'lucide-react';
 import Link from 'next/link';
 import { ApplyLinkBox } from '@/components/ApplyLinkBox';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -13,6 +13,17 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { StageClockChip } from '@/components/StageClockChip';
+import { SavedViews } from '@/components/SavedViews';
+import { useResolvedStages } from '@/lib/pipelineStagesClient';
+import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
+import {
+  EMPTY_MENTEE_FILTERS,
+  MENTEE_STATUS_FILTERS,
+  filterMenteeRows,
+  hasActiveMenteeFilters,
+  type MenteeFilters,
+  type MenteeStatusFilter,
+} from '@/lib/menteeFilter';
 
 interface MentorshipRelation {
   id: string;
@@ -50,6 +61,12 @@ export default function MenteesPage() {
   // The toggle is always one click away, and it counts them, so "where did they
   // go?" is answered on the screen rather than in a support message.
   const [showDormant, setShowDormant] = useState(false);
+  // Search + status + stage, all client-side over the full list this page
+  // already loads (GET /api/mentorship only paginates for callers that ask for
+  // a page, and this one never does). See src/lib/menteeFilter.ts for why the
+  // matching itself lives outside this component.
+  const [filters, setFilters] = useState<MenteeFilters>(EMPTY_MENTEE_FILTERS);
+  const stages = useResolvedStages();
 
   const fetchRelations = useCallback(async () => {
     const res = await fetch('/api/mentorship');
@@ -63,7 +80,51 @@ export default function MenteesPage() {
   }, [fetchRelations]);
 
   const dormantCount = relations.filter((rel) => rel.dormantSince).length;
-  const visibleRelations = showDormant ? relations : relations.filter((rel) => !rel.dormantSince);
+  // Dormant first (that toggle is about who belongs on the screen at all), then
+  // the mentor's own filters — so the dormant count keeps counting everyone.
+  const visibleRelations = useMemo(
+    () =>
+      filterMenteeRows(
+        showDormant ? relations : relations.filter((rel) => !rel.dormantSince),
+        filters,
+      ),
+    [relations, showDormant, filters],
+  );
+  const filtering = hasActiveMenteeFilters(filters);
+
+  // ...but a filter the dormant toggle silently overrules is worse than no
+  // filter: typing an exact substring of a dormant mentee's name used to render
+  // "clear the filters to see everyone again" plus a Clear-filters button that
+  // brought back everyone EXCEPT her. So count the rows the toggle is holding
+  // back that DO match, and say so — the way out of that screen is "show
+  // dormant", not "clear filters", and both surfaces now offer the right one.
+  const hiddenDormantMatches = useMemo(
+    () =>
+      showDormant
+        ? 0
+        : filterMenteeRows(relations.filter((rel) => rel.dormantSince), filters).length,
+    [relations, showDormant, filters],
+  );
+  const dormantMatchText =
+    hiddenDormantMatches === 1
+      ? t.mentor.menteeDormantMatchOne
+      : t.mentor.menteeDormantMatchMany.replace('{n}', String(hiddenDormantMatches));
+
+  // WCAG 4.1.3: typing rewrites the grid in place and moves no focus, so a
+  // screen-reader user is told how many rows survived (debounced by the hook).
+  // "No results" would be a lie whenever the only matches are dormant, so that
+  // case announces the same sentence the banner shows.
+  useFilterAnnouncement(
+    filtering
+      ? visibleRelations.length === 0
+        ? hiddenDormantMatches > 0
+          ? dormantMatchText
+          : t.a11y.noResultsShown
+        : visibleRelations.length === 1
+          ? t.a11y.resultsShownOne
+          : t.a11y.resultsShown.replace('{count}', String(visibleRelations.length))
+      : null,
+  );
 
   return (
     <div>
@@ -95,8 +156,111 @@ export default function MenteesPage() {
         </div>
       )}
 
+      {!loading && relations.length > 0 && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 mb-3" data-testid="mentee-filter-bar">
+            {MENTEE_STATUS_FILTERS.map((sf) => (
+              <button
+                key={sf}
+                onClick={() => setFilters((f) => ({ ...f, status: sf }))}
+                aria-pressed={filters.status === sf}
+                data-testid={`mentee-status-filter-${sf}`}
+                className={`min-h-11 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  filters.status === sf
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {sf === 'ALL' ? t.usersAdmin.all : sf === 'ACTIVE' ? t.mentorships.active : t.mentorships.completed}
+              </button>
+            ))}
+            {/* The org's OWN stages (#747) — never the canonical enum. */}
+            <select
+              data-testid="mentee-stage-filter"
+              aria-label={t.mentor.menteeStageFilter}
+              value={filters.stage}
+              onChange={(e) => setFilters((f) => ({ ...f, stage: e.target.value }))}
+              className="min-h-11 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+            >
+              <option value="">{t.mentor.menteeAllStages}</option>
+              {stages.map((stage) => (
+                <option key={stage.key} value={stage.key}>{stage.label}</option>
+              ))}
+            </select>
+            <div className="relative ml-auto w-full sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="search"
+                data-testid="mentee-search"
+                aria-label={t.mentor.menteeSearchPlaceholder}
+                value={filters.search}
+                onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+                placeholder={t.mentor.menteeSearchPlaceholder}
+                className="min-h-11 w-full rounded-lg border border-gray-300 pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+              />
+            </div>
+          </div>
+          <div className="mb-4">
+            <SavedViews
+              storageKey="mentor-mentees-views"
+              current={{ search: filters.search, status: filters.status, stage: filters.stage }}
+              onApply={(f) =>
+                setFilters({
+                  search: f.search || '',
+                  status: (MENTEE_STATUS_FILTERS as readonly string[]).includes(f.status)
+                    ? (f.status as MenteeStatusFilter)
+                    : 'ALL',
+                  // A saved view can name a stage the org has since renamed or
+                  // removed; keeping it would filter the grid down to nothing
+                  // with no visible cause, so an unknown key falls back to all.
+                  stage: stages.some((stage) => stage.key === f.stage) ? f.stage : '',
+                })
+              }
+            />
+          </div>
+        </>
+      )}
+
+      {/* Matches the toggle is hiding, while other rows survived: without this the
+          mentor sees 3 of 4 and has no way to know a fourth exists. bg-amber-50 +
+          text-amber-800 is already retinted by the flat html.dark rules. */}
+      {!loading && filtering && visibleRelations.length > 0 && hiddenDormantMatches > 0 && (
+        <div
+          className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+          data-testid="mentee-dormant-matches"
+        >
+          <span>{dormantMatchText}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowDormant(true)}
+            data-testid="show-dormant-matches"
+          >
+            {t.mentor.menteeShowDormantMatches}
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <Card><SkeletonRows rows={6} /></Card>
+      ) : visibleRelations.length === 0 && filtering ? (
+        /* Filtered to nothing — a different situation from "no mentees yet", and
+           the way out is clearing the filter, not adding a mentee. Unless the
+           matches are all dormant, in which case clearing the filters would not
+           reveal them either and the honest action is the toggle. */
+        <Card>
+          <EmptyState
+            testId="mentor-mentees-no-match"
+            icon={Search}
+            title={t.mentor.noMatchingMentees}
+            body={hiddenDormantMatches > 0 ? dormantMatchText : t.mentor.noMatchingMenteesHint}
+            action={
+              hiddenDormantMatches > 0
+                ? { label: t.mentor.menteeShowDormantMatches, onClick: () => setShowDormant(true) }
+                : { label: t.mentor.clearMenteeFilters, onClick: () => setFilters(EMPTY_MENTEE_FILTERS) }
+            }
+          />
+        </Card>
       ) : visibleRelations.length === 0 ? (
         <Card>
           <EmptyState
@@ -108,9 +272,9 @@ export default function MenteesPage() {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-testid="mentee-list">
           {visibleRelations.map((rel) => (
-            <Card key={rel.id}>
+            <Card key={rel.id} data-testid={`mentee-card-${rel.id}`}>
               <div className="flex items-start justify-between gap-2 mb-4">
                 {/* `min-w-0` + `truncate`: a long address ran out of the card,
                     because the text block would not shrink next to the status
