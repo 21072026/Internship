@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { currentOrgId, runWithOrg } from '@/lib/orgContext';
+import { ambientOrgId, runUnscoped } from '@/lib/tenantAmbient';
 
 // ── Settings resolution (#1553) ──────────────────────────────────────────────
 //
@@ -27,6 +27,12 @@ import { currentOrgId, runWithOrg } from '@/lib/orgContext';
 // is computed here from `settingOrgId()`, never taken from request input. The
 // registration still earns its keep: any *other* code that touches
 // `prisma.setting` directly stays auto-scoped to its own tenant.
+//
+// Both of those come from `@/lib/tenantAmbient` rather than straight from
+// `orgContext`: this module is reachable from a client component (a constant in
+// documentAccess.ts, via retention.ts), and orgContext imports node:async_hooks,
+// which webpack refuses to bundle for a client graph. The seam has no imports of
+// its own; orgContext fills it in when it loads.
 
 // Known settings with their defaults. Stored as strings; parsed on read.
 export const SETTING_DEFAULTS = {
@@ -96,15 +102,15 @@ export type SettingKey = keyof typeof SETTING_DEFAULTS;
 // tenant; otherwise none.
 export function settingOrgId(orgId?: string | null): string | null {
   if (orgId !== undefined) return orgId;
-  return currentOrgId() ?? null;
+  return ambientOrgId() ?? null;
 }
 
 // Run a Setting query with the tenant auto-filter switched off — see the header:
-// the global fallback row (orgId = NULL) is invisible to a scoped query.
-// `runWithOrg(null, …)` binds an empty tenant context, which the middleware
-// skips; with enforcement off it is a plain passthrough.
+// the global fallback row (orgId = NULL) is invisible to a scoped query. This
+// binds an empty tenant context, which the middleware skips; with enforcement
+// off (or the engine not loaded at all) it is a plain passthrough.
 function unscopedSettings<T>(fn: () => Promise<T>): Promise<T> {
-  return runWithOrg(null, fn);
+  return runUnscoped(fn);
 }
 
 type SettingRow = { orgId: string | null; key: string; value: string };

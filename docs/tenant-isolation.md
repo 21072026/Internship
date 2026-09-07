@@ -144,6 +144,19 @@ module computes the org itself, from the bound context, and never from request
 input: `PUT /api/admin/settings` passes no org at all, so a tenant admin can only
 ever write their own row.
 
+It reaches both of those through `src/lib/tenantAmbient.ts` rather than importing
+`orgContext.ts` directly, and that indirection is load-bearing rather than
+stylistic. `orgContext.ts` imports `node:async_hooks`, and `settings.ts` sits in a
+**client** module graph — a client component imports a constant from
+`documentAccess.ts`, which reaches `settings.ts` via `retention.ts` — so a direct
+import fails the production build outright with `Reading from "node:async_hooks"
+is not handled by plugins`. `tenantAmbient.ts` imports nothing, holds two function
+slots, and `orgContext.ts` fills them as a side effect of being loaded; every
+request that binds a tenant has loaded it, because `withTenantScope` lives there.
+If it was never loaded, the fallbacks (no bound org, call `fn` directly) are the
+right answers anyway — there is no middleware installed to escape from. The same
+seam is the way in for any other client-reachable module that needs the bound org.
+
 Uniqueness has a MySQL wrinkle worth knowing: the pair is enforced by
 `@@unique([orgId, key])`, and MySQL treats `NULL`s as distinct in a unique index.
 The constraint therefore binds the per-tenant rows only; the global layer stays
